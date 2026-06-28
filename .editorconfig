@@ -1,0 +1,32 @@
+# SOE — MM Negócios | .editorconfig
+#
+# name: EDITORCONFIG
+# purpose: >
+#   Padroniza a formatação de arquivos em todos os editores da equipe:
+#   indentação, charset, fim de linha e espaço em branco final.
+#   Garante que diffs sejam sobre conteúdo, não formatação.
+# version: 0.1.0
+# status: ativo
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = 100
+
+[*.{yaml,yml}]
+indent_size = 2
+
+[*.json]
+indent_size = 2
+
+[Makefile]
+indent_style = tab

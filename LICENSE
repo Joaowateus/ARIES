@@ -1,0 +1,19 @@
+---
+name: LICENSE
+purpose: >
+  Define os termos legais de uso, distribuição e modificação do código e
+  documentação deste repositório. Protege a propriedade intelectual da MM Negócios
+  e delimita o que terceiros podem ou não fazer com os artefatos deste projeto.
+responsibility: >
+  Jurídico da MM Negócios com aprovação da Diretoria Executiva.
+relationships:
+  - docs/15-compliance/regulatory-map.md  # conformidade legal mais ampla
+  - docs/09-security/security-policy.md   # política de acesso e confidencialidade
+version: 1.0.0
+status: pendente-aprovacao-juridica
+priority: crítica
+---
+
+> **[DOCUMENTO EM ESTRUTURAÇÃO]**
+> Licença a ser definida pelo jurídico da MM Negócios.
+> Candidatos: Proprietária (recomendado para sistema interno), MIT, Apache 2.0.

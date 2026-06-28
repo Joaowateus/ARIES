@@ -1,0 +1,57 @@
+# SOE — MM Negócios | .gitignore
+#
+# name: GITIGNORE
+# purpose: >
+#   Define quais arquivos e diretórios NÃO devem ser versionados no repositório.
+#   Previne commit acidental de segredos, dependências, builds e arquivos locais.
+# version: 0.1.0
+# status: ativo
+
+# Dependências
+node_modules/
+vendor/
+.venv/
+__pycache__/
+
+# Builds e artefatos
+dist/
+build/
+*.egg-info/
+.next/
+out/
+
+# Ambiente local
+.env
+.env.local
+.env.*.local
+*.local.yaml
+*.local.json
+
+# Secrets — NUNCA versionar
+*.pem
+*.key
+*.p12
+secrets/
+.secrets/
+
+# IDEs e editores
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Testes e cobertura
+coverage/
+.nyc_output/
+*.lcov
+
+# Logs
+*.log
+logs/
+
+# Temporários
+tmp/
+temp/
+.cache/

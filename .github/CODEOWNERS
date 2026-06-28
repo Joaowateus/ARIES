@@ -1,0 +1,18 @@
+# CODEOWNERS — Define os responsáveis por revisar mudanças em cada área
+#
+# name: CODEOWNERS
+# purpose: >
+#   Define automaticamente os revisores obrigatórios de cada Pull Request
+#   com base na área do repositório modificada. Garante que nenhuma mudança
+#   em área crítica passe sem revisão do responsável designado.
+# responsibility: Arquiteto Líder — atualizado a cada mudança de equipe.
+# relationships:
+#   - docs/01-governance/roles-and-responsibilities.md  # papéis mapeados aqui
+#   - .github/PULL_REQUEST_TEMPLATE.md                  # processo de revisão
+# version: 0.1.0
+# status: draft
+# priority: alta
+#
+# ─── A SER PREENCHIDO COM OS USERNAMES DO GITHUB DA EQUIPE ───────────────────
+
+* @joaowateus
