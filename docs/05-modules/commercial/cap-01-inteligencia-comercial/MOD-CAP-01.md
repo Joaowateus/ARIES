@@ -1,389 +1,752 @@
 ---
 id: MOD-CAP-01
-titulo: "Módulo Operacional — Inteligência Comercial"
-versao: "1.0.0"
+titulo: "CAP-01 — Inteligência de Mercado"
+versao: "2.0.0"
 status: aprovado
-categoria: C3-Operacional
+categoria: Commercial-OS-Module
 autor: Guardião da Documentação Técnica
 criado-em: 2026-06-28
-atualizado-em: 2026-06-28
+atualizado-em: 2026-06-29
 dependencias:
-  - MOD-CAP-02
-  - MOD-CAP-06
-  - MOD-CAP-08
-tags: [inteligencia-comercial, icp, mercado, prospeccao, estrategia]
+  - ARC-ENG-000
+  - ARC-ENG-001
+  - ARC-ENG-002
+  - ARC-ENG-003
+  - ARC-ENG-004
+  - ARC-ENG-005
+  - ARC-ENG-006
+  - ARC-ENG-009
+  - ARC-ENG-010
+tags: [commercial-os, cap-01, market-intelligence, icp, segmentacao, win-loss, inteligencia-competitiva]
 ---
 
-# MOD-CAP-01 — Inteligência Comercial
+# CAP-01 — Inteligência de Mercado
 
----
-
-## 1. Objetivo da Capacidade
-
-Produzir conhecimento sistemático sobre mercado, concorrência, perfil de cliente ideal (ICP) e oportunidades de negócio, transformando dados brutos em inteligência acionável que orienta todas as decisões comerciais do SOE.
-
-A Inteligência Comercial é a fundação epistêmica do Núcleo Comercial: sem ela, as demais capacidades operam com base em suposições, gerando desperdício de esforço comercial, precificação inadequada e abordagem de clientes errados.
-
----
-
-## 2. Resultado Esperado
-
-| # | Resultado | Critério de Aceitação |
-|---|-----------|----------------------|
-| R1 | ICP atualizado e validado | Revisado no mínimo trimestralmente com dados reais de clientes ganhos/perdidos |
-| R2 | Mapa competitivo ativo | Monitoramento contínuo de pelo menos 5 concorrentes diretos |
-| R3 | Segmentação de mercado viva | Segmentos priorizados com TAM/SAM/SOM calculados |
-| R4 | Inteligência de mercado distribuída | Equipe comercial consome e contribui com inteligência semanalmente |
-| R5 | Ciclo de retroalimentação funcional | Win/loss analysis executada em 100% das oportunidades fechadas |
-
-**Definição de Sucesso:** A equipe comercial é capaz de identificar e qualificar um lead dentro do ICP em menos de 15 minutos, com base em critérios documentados e disponíveis no CRM.
+> **Módulo do Commercial Operating System**
+> Infraestrutura compartilhada: `docs/02-architecture/engine-autogestao/`
+> Contrato de integração: `ENGINE-CONTRATO-DE-INTEGRACAO.md` (ARC-ENG-099)
 
 ---
 
-## 3. Entradas Necessárias
+## 1. Identificação
 
-### 3.1 Entradas Primárias
-| Entrada | Fonte | Formato | Frequência |
-|---------|-------|---------|-----------|
-| Base histórica de clientes | CRM / Financeiro | Estruturado | Contínua |
-| Dados de win/loss por oportunidade | Processo de Vendas (CAP-03) | Estruturado | Por evento |
-| Feedbacks de reuniões e propostas | Equipe Comercial | Semiestruturado | Por evento |
-| Dados de churn e expansão | Gestão de Clientes (CAP-05) | Estruturado | Mensal |
-| NPS e pesquisas de satisfação | CAP-05 | Estruturado | Trimestral |
-
-### 3.2 Entradas Secundárias
-| Entrada | Fonte | Formato | Frequência |
-|---------|-------|---------|-----------|
-| Relatórios de setor / tendências | Fontes externas, consultorias | Não estruturado | Mensal |
-| Monitoramento de redes sociais e mídia | Ferramentas de monitoramento | Semiestruturado | Semanal |
-| Dados de comportamento em website/marketing | Marketing | Estruturado | Semanal |
-| Movimentações de concorrentes | Pesquisa ativa, alertas | Semiestruturado | Semanal |
-| Benchmarks de mercado | Associações, relatórios | Não estruturado | Semestral |
-
-### 3.3 Pré-condições
-- CRM operacional com histórico de pelo menos 6 meses
-- Equipe comercial treinada para registrar dados de qualificação padronizados
-- Acesso a pelo menos uma fonte de inteligência de mercado externa
+| Campo | Valor |
+|-------|-------|
+| **ID do Módulo** | CAP-01 |
+| **Nome** | Inteligência de Mercado |
+| **Domínio** | Epistêmico — Fundação do Commercial OS |
+| **Versão** | 2.0.0 |
+| **Tier** | Core — obrigatório para todos os demais módulos |
+| **Posição na cadeia** | Upstream de todos os módulos comerciais |
+| **Registro na Engine** | `ENGINE-REGISTRATION.yaml` (seção 16) |
 
 ---
 
-## 4. Saídas Obrigatórias
+## 2. Objetivo
 
-### 4.1 Documentos e Artefatos
-| Saída | Destinatário | Periodicidade | SLA |
-|-------|-------------|--------------|-----|
-| ICP Document (Perfil Ideal de Cliente) | Toda a equipe comercial | Trimestral (ou por evento crítico) | 5 dias úteis após trigger |
-| Competitive Intelligence Report | Liderança + Comercial | Mensal | Dia 5 do mês seguinte |
-| Market Segmentation Map | Liderança estratégica | Semestral | 10 dias úteis após período |
-| Win/Loss Analysis por oportunidade | Gerente Comercial + CAP-08 | Por evento | 48h após fechamento |
-| Weekly Intelligence Digest | Equipe Comercial | Semanal | Segunda-feira 9h |
+Prover ao Commercial OS a **base de conhecimento de mercado** necessária para que todos os outros módulos operem com precisão estratégica. O CAP-01 é a camada epistêmica do sistema: ele define quem é o cliente ideal, como o mercado está segmentado, o que a concorrência faz, por que negócios são ganhos ou perdidos, e quais sinais de mercado devem alterar o comportamento dos demais módulos.
 
-### 4.2 Dados Alimentados no CRM
-- ICP score por lead/conta
-- Tags de segmento de mercado
-- Posicionamento competitivo relevante por conta
-- Atualizações de contexto de setor por conta
+Sem o CAP-01, os outros módulos operam no escuro — gerando leads sem critério de qualidade, vendendo para perfis inadequados, precificando sem referência competitiva e perdendo negócios por razões que nunca foram compreendidas.
 
-### 4.3 Saídas para Outros Módulos
-| Módulo Destino | Saída Fornecida |
-|---------------|----------------|
-| CAP-02 (Gestão de Demanda) | Critérios de ICP para qualificação de leads |
-| CAP-03 (Processo de Vendas) | Inteligência competitiva para objeções |
-| CAP-06 (Oferta e Precificação) | Benchmarks de preço e posicionamento |
-| CAP-08 (Performance) | Dados de mercado para metas e contexto |
+**O CAP-01 não vende. Ele garante que o sistema saiba para quem, como e por quê vender.**
 
 ---
 
-## 5. Regras de Negócio
+## 3. Escopo
 
-### RN-01: Definição e Atualização do ICP
-- O ICP DEVE ser definido com base em dados reais de clientes, não em suposições
-- O ICP DEVE ser revisado sempre que: (a) taxa de win rate cair >15% em 2 meses consecutivos, (b) surgir novo segmento com >3 clientes ativos, (c) ocorrer mudança estratégica na empresa
-- O ICP DEVE conter obrigatoriamente: setor, porte (faturamento e headcount), maturidade digital, dores primárias, tomador de decisão, critério de compra, tempo médio de ciclo de venda
+### 3.1 Dentro do Escopo
+- Definição, versionamento e publicação do Perfil de Cliente Ideal (ICP)
+- Definição e manutenção da segmentação de mercado (segmentos, verticais, personas)
+- Coleta, análise e síntese de inteligência competitiva
+- Execução do protocolo de análise Win/Loss em oportunidades encerradas
+- Identificação e processamento de sinais de mercado (mudanças regulatórias, tecnológicas, competitivas)
+- Manutenção do catálogo de perguntas de qualificação por segmento
+- Calibração periódica do ICP com base em dados reais de resultado
 
-### RN-02: Protocolo de Win/Loss Analysis
-- TODA oportunidade fechada (ganha ou perdida) DEVE ter win/loss analysis registrada no CRM
-- Win/loss analysis DEVE ser feita pelo vendedor responsável em até 48h após o fechamento
-- Oportunidades acima de R$ [THRESHOLD_DEFINIDO_EM_CAP-06] DEVEM ter análise validada pelo gerente
-
-### RN-03: Curadoria de Inteligência Competitiva
-- Concorrentes diretos DEVEM ser monitorados semanalmente (alertas de Google, LinkedIn, site)
-- Qualquer mudança crítica de concorrente (novo produto, mudança de preço, case novo) DEVE ser comunicada à equipe em até 24h via canal dedicado
-- O mapa competitivo NÃO PODE ter dados com mais de 90 dias sem atualização
-
-### RN-04: Propriedade e Acesso
-- O ICP Document é de propriedade do Gerente Comercial e DEVE ser aprovado pela Liderança antes de distribuição
-- Todo dado de inteligência DEVE ser centralizado no CRM ou repositório oficial (NUNCA em spreadsheets pessoais)
-
-### RN-05: Confidencialidade
-- Dados de inteligência competitiva DEVEM ser marcados como confidenciais
-- Análises de win/loss com dados de clientes específicos DEVEM respeitar acordos de confidencialidade
+### 3.2 Fora do Escopo
+- Geração de leads → CAP-02
+- Qualificação individual de leads → CAP-02
+- Definição de preços → CAP-06
+- Definição da oferta de produtos/serviços → CAP-06
+- Onboarding e retenção de clientes → CAP-05
+- Análise de performance de vendedores → CAP-07
 
 ---
 
-## 6. Fluxo Operacional Completo
+## 4. Responsabilidades
 
-```
-ENTRADA
-│
-├─► [Coleta Contínua]
-│     ├─ CRM: dados históricos de clientes e oportunidades
-│     ├─ Equipe: feedbacks de campo (reuniões, objeções, concorrentes mencionados)
-│     ├─ Fontes externas: relatórios, alertas, monitoramento
-│     └─ CAP-05: dados de churn, NPS, expansão
-│
-▼
-PROCESSAMENTO
-│
-├─► [Análise e Síntese — semanal]
-│     ├─ Consolidação de sinais de mercado
-│     ├─ Atualização do mapa competitivo
-│     ├─ Identificação de padrões em win/loss
-│     └─ Scoring de ICP vs. base atual
-│
-├─► [Revisão Periódica — trimestral]
-│     ├─ Validação estatística do ICP com base de clientes ativos
-│     ├─ Revisão de segmentação e TAM/SAM/SOM
-│     ├─ Análise de tendências de setor
-│     └─ Benchmark competitivo completo
-│
-▼
-DECISÃO
-│
-├─► [O ICP mudou?]
-│     ├─ SIM → Acionar processo de atualização de ICP (RN-01)
-│     └─ NÃO → Manter e distribuir digest semanal
-│
-├─► [Há ameaça competitiva crítica?]
-│     ├─ SIM → Comunicar imediatamente (RN-03) + acionar CAP-06
-│     └─ NÃO → Registrar no relatório mensal
-│
-▼
-SAÍDA
-│
-├─► ICP Document atualizado → distribuído para CAP-02, CAP-03, CAP-06
-├─► Intelligence Digest → publicado semanalmente
-├─► Win/Loss Analysis → registrada no CRM
-└─► Competitive Report → entregue à liderança
-│
-▼
-REGISTRO
-│
-├─► Todas as análises versionadas no repositório oficial
-├─► Histórico de versões do ICP mantido (DocSemVer)
-└─► Win/loss registrada no CRM com campos padronizados
-│
-▼
-AUDITORIA
-│
-└─► Verificação mensal: completude das win/loss, atualidade do mapa competitivo,
-    consumo do digest pela equipe, versão ativa do ICP
+| # | Responsabilidade | Frequência |
+|---|-----------------|-----------|
+| R-01 | Manter o ICP atualizado com critérios objetivos e mensuráveis | Revisão trimestral obrigatória |
+| R-02 | Publicar `mercado.icp.atualizado` sempre que o ICP mudar | Por mudança |
+| R-03 | Executar análise Win/Loss em 100% das oportunidades encerradas | Por evento de encerramento |
+| R-04 | Manter o mapa competitivo com pelo menos 3 concorrentes monitorados | Contínuo |
+| R-05 | Manter segmentação de mercado com critérios de entrada/saída explícitos | Revisão semestral |
+| R-06 | Identificar padrões de Win/Loss e publicar insights para ENG-10 | Mensal |
+| R-07 | Calibrar perguntas de qualificação com base nos padrões aprendidos | Trimestral |
+| R-08 | Responder a sinais de mercado com atualização de posicionamento | Por sinal detectado |
+| R-09 | Manter o scoring model do ICP com pesos validados empiricamente | Revisão semestral |
+
+---
+
+## 5. Capacidades Internas
+
+### CAP-01.1 — Gestão do ICP (Ideal Customer Profile)
+
+O ICP é a especificação formal do cliente para o qual o Commercial OS está otimizado. Ele opera como um **contrato epistêmico** que todos os módulos devem respeitar.
+
+**Estrutura do ICP:**
+```yaml
+icp_definition:
+  versao: "3.1.0"
+  valido_a_partir: "2026-07-01"
+
+  criterios_firmograficos:
+    - dimensao: "porte_empresa"
+      operador: "entre"
+      valores: ["50_funcionarios", "500_funcionarios"]
+      peso: 0.25
+    - dimensao: "setor"
+      operador: "in"
+      valores: ["manufatura", "distribuicao", "varejo_b2b", "servicos_profissionais"]
+      peso: 0.20
+    - dimensao: "faturamento_anual"
+      operador: "maior_que"
+      valor: "R$5.000.000"
+      peso: 0.20
+    - dimensao: "maturidade_comercial"
+      operador: "minimo"
+      valor: "equipe_comercial_dedicada"
+      peso: 0.15
+
+  criterios_comportamentais:
+    - dimensao: "dor_principal"
+      valores: ["previsibilidade_receita", "controle_funil", "eficiencia_time_comercial"]
+      peso: 0.10
+    - dimensao: "ciclo_decisao"
+      operador: "menor_que"
+      valor: "90_dias"
+      peso: 0.10
+
+  scoring:
+    formula: "soma_ponderada(criterios)"
+    escala: "0_a_10"
+    limiares:
+      icp_forte: ">= 7.5"
+      icp_adequado: ">= 5.0"
+      fora_do_icp: "< 5.0"
+
+  exclusoes_absolutas:
+    - "startups com menos de 12 meses de operação"
+    - "empresas com processo judicial relevante em andamento"
+
+  fonte_de_calibracao: "analise_win_loss_ultimos_90_dias"
+  ultima_calibracao: "2026-06-15"
+  proxima_revisao: "2026-09-15"
 ```
 
----
+### CAP-01.2 — Segmentação de Mercado
 
-## 7. Indicadores de Desempenho (KPIs)
+Mantém a taxonomia de segmentos que estrutura todas as análises do Commercial OS.
 
-### 7.1 KPIs Primários
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-IC-01 | Cobertura de Win/Loss Analysis | Oportunidades com análise / Total fechadas × 100 | ≥ 95% | Mensal |
-| KPI-IC-02 | Aderência ao ICP (novos clientes) | Clientes dentro do ICP / Total novos clientes × 100 | ≥ 80% | Trimestral |
-| KPI-IC-03 | Win Rate geral | Oportunidades ganhas / Total oportunidades qualificadas × 100 | Meta por segmento | Mensal |
-| KPI-IC-04 | Win Rate por segmento de ICP | Ganhas em segmento / Total em segmento × 100 | Acima da média geral | Trimestral |
-
-### 7.2 KPIs de Qualidade da Inteligência
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-IC-05 | Atualidade do mapa competitivo | % concorrentes atualizados nos últimos 30 dias | 100% | Mensal |
-| KPI-IC-06 | Consumo do Intelligence Digest | % da equipe que abre / acessa o digest | ≥ 80% | Semanal |
-| KPI-IC-07 | Precisão do ICP Score | Correlação ICP Score ≥ 7 com clientes que fecharam | ≥ 70% | Trimestral |
-
-### 7.3 KPIs de Impacto Downstream
-| Código | Indicador | Meta |
-|--------|-----------|------|
-| KPI-IC-08 | Redução do ciclo médio de vendas (leads dentro do ICP vs. fora) | ≥ 20% mais curto |
-| KPI-IC-09 | Taxa de qualificação de leads (MQL → SQL) | ≥ definida em CAP-02 |
-
----
-
-## 8. Gatilhos e Alertas Operacionais
-
-### 8.1 Alertas Automáticos
-| Código | Condição | Ação | Responsável |
-|--------|----------|------|-------------|
-| ALT-IC-01 | Win rate cai >15% em relação ao mês anterior | Revisão emergencial do ICP + análise de objeções recentes | Gerente Comercial |
-| ALT-IC-02 | >20% das oportunidades fechadas sem win/loss analysis em 72h | Notificação para vendedor + escalonamento para gerente | Sistema / Gerente |
-| ALT-IC-03 | Concorrente lança produto ou muda preço significativamente | Comunicado urgente para toda equipe + revisão do pitch | Responsável de IC |
-| ALT-IC-04 | ICP score médio dos novos leads cai abaixo de 5 por 4 semanas | Revisão de fontes de geração de leads (CAP-02) | Gerente Comercial |
-| ALT-IC-05 | Taxa de leads fora do ICP supera 40% | Reunião de revisão de estratégia de prospecção | Liderança + Comercial |
-
-### 8.2 Gatilhos de Revisão
-| Gatilho | Ação Disparada |
-|---------|---------------|
-| Novo segmento com >3 clientes ativos | Inclusão formal do segmento no ICP Document |
-| Mudança estratégica da empresa | Revisão completa do ICP e segmentação |
-| Saída de cliente estratégico (churn) | Win/loss analysis especial + revisão de critérios |
-| Entrada de novo concorrente relevante | Adição ao mapa competitivo + briefing para equipe |
-
----
-
-## 9. Diagnóstico de Desvios e Análise de Causa Raiz
-
-### 9.1 Mapa de Desvios
-
-| Desvio Observado | Possíveis Causas Raiz | Método de Diagnóstico |
-|-----------------|----------------------|----------------------|
-| Win rate abaixo da meta | ICP desatualizado; proposta inadequada; concorrência mais agressiva; qualificação ruim | Análise de win/loss últimos 90 dias; comparação com períodos anteriores |
-| Alta % de leads fora do ICP | Geração de leads sem critério; marketing desalinhado com ICP; prospecção ativa sem foco | Auditoria da fonte dos leads; revisão do processo em CAP-02 |
-| Equipe não consome inteligência | Formato inadequado; sobrecarga; canal errado; conteúdo irrelevante | Pesquisa de utilidade com equipe; análise de abertura/acesso |
-| Win/loss incompleto | Cultura de não-registro; falta de tempo; ferramenta difícil; sem consequência por omissão | Revisão do processo e ferramentas; reforço de cultura |
-| ICP não reflete a realidade | Critérios subjetivos; dados insuficientes; ausência de validação estatística | Análise de correlação entre ICP score e conversão real |
-
-### 9.2 Protocolo de Diagnóstico (5 Whys)
-1. Identificar o desvio com dados concretos (KPI abaixo da meta)
-2. Mapear o contexto: quando começou, magnitude, escopo
-3. Aplicar 5 Whys com dados (não suposições)
-4. Classificar causa raiz: Processo / Pessoa / Ferramenta / Dado / Estratégia
-5. Documentar diagnóstico no DECISION_LOG com evidências
-
----
-
-## 10. Planos de Ação Padronizados para Cada Tipo de Desvio
-
-### PA-IC-01: Win Rate Abaixo da Meta por 2 Meses Consecutivos
-```
-Semana 1: Levantar todas as win/loss dos últimos 60 dias → identificar padrão de objeções
-Semana 2: Convocar equipe para sessão de diagnóstico colaborativo
-Semana 3: Revisar ICP e pitch com base nos padrões encontrados
-Semana 4: Treinar equipe nas respostas às objeções recorrentes
-Mês 2: Monitorar nova taxa de win rate
+**Estrutura de segmento:**
+```yaml
+segmento_definition:
+  id: "SEG-001"
+  nome: "Identificador do segmento"
+  criterios_entrada:
+    - "dimensão: operador: valor"
+  proposta_de_valor_principal: "benefício central para este segmento"
+  personas_compradoras:
+    - id: "PERSONA-ID"
+      titulo: "Título do comprador"
+      dores_principais: []
+      gatilhos_de_compra: []
+  perguntas_de_qualificacao: []
+  objecoes_comuns:
+    - objecao: "texto da objeção"
+      resposta_posicionamento: "como responder"
+  kpis_benchmark:
+    win_rate_esperado: null
+    ciclo_medio_dias: null
+    ticket_medio: null
 ```
 
-### PA-IC-02: Base de Leads Fora do ICP (>40%)
+### CAP-01.3 — Protocolo de Análise Win/Loss
+
+Análise estruturada de **todas** as oportunidades encerradas — ganhas e perdidas.
+
+**Ciclo de vida:**
 ```
-Imediato: Pausar campanhas de prospecção ativa mal segmentadas
-Semana 1: Auditar fontes de leads dos últimos 90 dias
-Semana 2: Redefinir critérios de ICP Score no CRM
-Semana 3: Realinhar com marketing / CAP-02 sobre critérios de geração
-Semana 4: Reativar prospecção com novos critérios e monitorar
+OPORTUNIDADE_ENCERRADA → PENDENTE_ANALISE → EM_ANALISE → ANALISADA → INSIGHTS_PUBLICADOS
+                                                               ↓
+                                                   DESCARTADA (dados insuficientes — registrar motivo)
 ```
 
-### PA-IC-03: Inteligência Competitiva Desatualizada
+**Estrutura da análise:**
+```yaml
+win_loss_analysis:
+  oportunidade_id: "OPP-ID"
+  resultado: "won | lost"
+  segmento_id: "SEG-ID"
+  valor_estimado: 0
+  ciclo_dias: 0
+
+  razao_primaria: "categoria principal"
+  razao_secundaria: "categoria secundária"
+  razao_terciaria: "categoria terciária"
+  concorrente_vencedor: null  # se lost
+
+  fatores_negativos: []
+  fatores_positivos: []
+  sinais_de_alerta_ignorados: []
+  aprendizados: []
+
+  ia_sugestao_json: {}        # sugestão da ENG-10 — requer validação humana
+  validado_por: "responsável"
+  fonte_evento: "oportunidade.encerrada"
 ```
-Imediato: Atualizar mapa competitivo dos 5 principais concorrentes
-Semana 1: Configurar alertas automáticos (Google Alerts, LinkedIn)
-Semana 2: Definir responsável semanal por curadoria
-Semana 3: Criar template padrão de competitive card por concorrente
+
+### CAP-01.4 — Inteligência Competitiva
+
+Mapa estruturado dos concorrentes relevantes com atualização contínua.
+
+```yaml
+competitive_map:
+  concorrente_id: "COMP-ID"
+  nome: "Nome do concorrente"
+  tier: "direto | indireto | substituto | entrante"
+  posicionamento: "como se posiciona no mercado"
+  preco_referencia: "faixa de preço"
+  pontos_fortes: []
+  pontos_fracos: []
+  como_vencer: []
+  win_rate_contra: null       # calculado a partir do Win/Loss
+  ultima_atualizacao: "data"
+  fonte_ultima_atualizacao: "win_loss | pesquisa | cliente | outra"
 ```
+
+### CAP-01.5 — Monitoramento de Sinais de Mercado
+
+| Tipo | Exemplos | Impacto no Sistema |
+|------|---------|-------------------|
+| Regulatório | Nova legislação, norma setorial | ICP exclusion, proposta de valor |
+| Tecnológico | Novo concorrente com IA, automação | Mapa competitivo, posicionamento |
+| Econômico | Crise setorial, câmbio, juros | Segmento prioridade, pricing |
+| Competitivo | Concorrente lança produto, faz M&A | Battlecard, objeções |
+| Comportamental | Mudança no processo de compra B2B | Perguntas qualificação, ciclo |
 
 ---
 
-## 11. Procedimentos de Auditoria
+## 6. Fluxo Operacional
 
-### 11.1 Auditoria Mensal (Interna — Gerente Comercial)
-**Checklist:**
-- [ ] 100% das oportunidades fechadas no mês têm win/loss analysis registrada
-- [ ] Mapa competitivo atualizado (nenhum concorrente com >30 dias sem atualização)
-- [ ] ICP Document está na versão vigente e foi comunicado à equipe
-- [ ] Todos os KPIs primários foram calculados e registrados
-- [ ] Intelligence Digest foi publicado em todas as semanas do mês
+```
+[FLUXO A — CICLO DE VIDA DO ICP]
 
-**Output:** Relatório de Auditoria Mensal — IC (arquivado no repositório)
+[TRIGGER: trimestral obrigatório OU sinal de mercado crítico OU queda de KPI]
+│
+├─► Coletar dados para calibração (via ENG-10 + ENG-02):
+│   ├─ Win Rate dos últimos 90 dias por perfil de cliente
+│   ├─ NRR por tier de ICP (via CAP-04 → ENG-02)
+│   ├─ Health Score médio por ICP tier (via CAP-05 → ENG-02)
+│   └─ Churn Rate por perfil de cliente (via CAP-05 → ENG-02)
+│
+├─► Análise: quais características dos clientes ganhos/retidos diferem
+│   dos perdidos/churned? → Ajustar pesos dos critérios
+│
+├─► Propor nova versão do ICP (mantendo histórico — imutabilidade ENG-01)
+│
+├─► Aprovação: responsável do módulo CAP-01 → DECISION_LOG (ENG-09)
+│
+└─► Publicar: mercado.icp.atualizado
+    ├─► CAP-02 recalibra critérios de qualificação
+    ├─► CAP-06 revisa posicionamento de preço por segmento
+    └─► ENG-10 indexa nova versão como conhecimento institucional
 
-### 11.2 Auditoria Trimestral (Gestão — Liderança)
-**Checklist:**
-- [ ] Win rate por segmento analisado vs. metas
-- [ ] Aderência ao ICP calculada para novos clientes do trimestre
-- [ ] ICP foi revisado com dados do trimestre
-- [ ] Análise de tendências de mercado documentada
-- [ ] ROI da função de Inteligência Comercial estimado
 
-**Output:** Relatório de Inteligência Comercial Trimestral
+[FLUXO B — ANÁLISE WIN/LOSS]
 
-### 11.3 Auditoria Anual (Estratégica — Conselho / Fundadores)
-**Checklist:**
-- [ ] Evolução histórica do ICP documentada (versões anteriores preservadas)
-- [ ] TAM/SAM/SOM revisado com dados do ano
-- [ ] Posicionamento competitivo reavaliado
-- [ ] Gaps de inteligência identificados e priorizados para o próximo ano
+[TRIGGER: oportunidade.encerrada recebido de CAP-03]
+│
+├─► Criar instância de análise (status: pendente_analise) via ENG-01
+│
+├─► Coletar dados automaticamente (ENG-07 + ENG-08 → CONN-CRM-PRINCIPAL):
+│   ├─ Dados da oportunidade (payload do evento recebido)
+│   ├─ Histórico de interações no CRM
+│   ├─ Estágio em que encerrou e por quê
+│   └─ Concorrentes mencionados durante o ciclo
+│
+├─► ENG-10 sugere: razão provável, padrões similares a casos anteriores
+│
+├─► Responsável valida/complementa análise (formulário estruturado)
+│
+├─► Atualizar métricas (ENG-02):
+│   ├─ KPI-MI-01 (cobertura)
+│   ├─ KPI-MI-02/03 (win rate geral e por segmento)
+│   └─ KPI-MI-04 (win rate vs. concorrente)
+│
+├─► Se padrão detectado (3+ ocorrências iguais):
+│   └─► Publicar: mercado.win_loss.padrao_identificado → ENG-09
+│
+└─► Publicar: mercado.win_loss.analisado
+
+
+[FLUXO C — DETECÇÃO DE SINAL DE MERCADO]
+
+[TRIGGER: entrada manual OU fonte automatizada (feed de notícias, alerta)]
+│
+├─► Classificar: tipo, urgência, segmentos impactados
+│
+├─► Avaliar impacto em: ICP, segmentação, posicionamento, mapa competitivo
+│
+├─► Se impacto alto ou crítico:
+│   ├─► Criar alerta via ENG-03
+│   └─► Publicar: mercado.sinal.detectado
+│
+└─► Registrar sinal na base de conhecimento (ENG-10)
+```
 
 ---
 
-## 12. Possibilidades de Automação
+## 7. Estados
 
-### 12.1 CRM
-| Automação | Ferramenta | Trigger | Ação |
-|-----------|----------|---------|------|
-| ICP Scoring automático | CRM (campos customizados + fórmula) | Criação/atualização de lead | Calcula e atualiza ICP Score |
-| Alerta de win/loss pendente | CRM | Oportunidade fechada há 48h sem análise | Notificação para vendedor e gerente |
-| Tag de segmento automático | CRM | ICP Score calculado | Aplica tag de segmento correspondente |
+### 7.1 Estados do ICP
+```
+RASCUNHO → EM_REVISAO → APROVADO → ATIVO
+                                     ↓
+                              DESCONTINUADO (ao ser substituído por versão nova)
+                              (versão anterior arquivada — nunca deletada)
+```
 
-### 12.2 Inteligência Artificial
-| Automação | Aplicação |
-|-----------|----------|
-| Sumarização de win/loss | IA processa notas brutas do vendedor e extrai padrões de objeção |
-| Competitive monitoring | IA monitora menções de concorrentes e gera alertas classificados por relevância |
-| ICP Score preditivo | Modelo de ML treinado com histórico de conversões para scoring em tempo real |
-| Geração do Intelligence Digest | IA agrega sinais da semana e gera rascunho do digest para revisão humana |
+### 7.2 Estados da Análise Win/Loss
+```
+PENDENTE_ANALISE → EM_ANALISE → ANALISADA → INSIGHTS_PUBLICADOS
+                                    ↓
+                             DESCARTADA (dados insuficientes — motivo registrado)
+```
 
-### 12.3 Dashboards
-| Dashboard | Métricas | Público | Frequência |
-|-----------|---------|---------|-----------|
-| IC Overview | Win rate, ICP adherence, competitive map | Gerente Comercial | Tempo real |
-| Intelligence Health | Cobertura win/loss, atualidade mapa, consumo digest | Liderança | Semanal |
-| Segment Performance | Win rate por segmento, ciclo por segmento | Estratégico | Mensal |
+### 7.3 Estados do Segmento de Mercado
+```
+PROPOSTO → VALIDADO → ATIVO → EM_REVISAO → DESCONTINUADO
+```
 
-### 12.4 Workflows e Integrações
-- **CRM → Repositório:** Exportação automática de win/loss consolidado mensalmente
-- **Alertas externos → CRM:** Integração com Google Alerts / LinkedIn para alimentar competitive cards
-- **NPS → IC:** Dados de satisfação de CAP-05 automaticamente disponíveis para análise de padrão de clientes
+### 7.4 Estados do Concorrente
+```
+ATIVO → DESATUALIZADO (> 180 dias sem atualização) → MONITORAMENTO_REDUZIDO | DESCONTINUADO
+```
 
 ---
 
-## 13. Interfaces e Dependências com Outros Módulos
+## 8. Regras de Negócio
 
-### 13.1 Diagrama de Dependências
+### RN-01 — ICP com Critérios Objetivos e Mensuráveis
+Todo critério do ICP DEVE ser expresso com: dimensão + operador + valor(es) + peso. Critérios subjetivos sem operacionalização mensurável são proibidos. Um ICP não operacionalizável é equivalente a não ter ICP.
 
+### RN-02 — Versionamento Obrigatório do ICP
+Cada alteração no ICP gera nova versão semântica (major.minor.patch). A versão anterior é arquivada, nunca deletada. Módulos dependentes devem referenciar a versão utilizada até concluírem migração para a nova versão.
+
+### RN-03 — Cobertura de 100% das Análises Win/Loss
+Toda oportunidade encerrada — ganha ou perdida — DEVE passar pelo protocolo de Win/Loss. A taxa de cobertura é KPI primário deste módulo. Oportunidades sem análise em até 10 dias úteis após encerramento geram alerta automático.
+
+### RN-04 — ICP Calibrado por Dados, Não por Opinião
+A revisão trimestral DEVE ser fundamentada em dados dos últimos 90 dias (Win Rate, NRR, Churn por perfil). Ajustes sem evidência requerem aprovação e registro no DECISION_LOG (ENG-09).
+
+### RN-05 — Mínimo de 3 Concorrentes Ativos no Mapa Competitivo
+O módulo DEVE manter pelo menos 3 concorrentes com informações atualizadas (últimos 6 meses). Concorrente sem atualização há mais de 6 meses entra em status `desatualizado` e gera alerta.
+
+### RN-06 — ICP É Contrato, Não Recomendação
+O ICP não é sugestão. É o contrato operacional que define comportamento de CAP-02, CAP-03, CAP-06 e CAP-09. Desvios do ICP requerem aprovação explícita e registro no DECISION_LOG.
+
+### RN-07 — Separação Obrigatória entre ICP e Persona
+ICP define a organização (firmografia, comportamento, maturidade). Persona define o comprador individual dentro dessa organização. Os dois coexistem mas não são intercambiáveis. Um ICP pode ter múltiplas personas.
+
+### RN-08 — Win/Loss Não Nomeia Indivíduos como Causa de Perda
+O protocolo identifica causas sistêmicas, processuais e estruturais. Nunca nomeia indivíduos como responsáveis por perdas. (Princípio de segurança psicológica — RG-06 da ENG-09.)
+
+### RN-09 — Sinal de Mercado Requer Avaliação de Impacto Declarada
+Todo sinal registrado DEVE ter avaliação de impacto: qual elemento é afetado (ICP, segmentação, mapa competitivo, perguntas de qualificação) e urgência de revisão (imediata / próxima revisão programada / monitorar).
+
+---
+
+## 9. Eventos Publicados
+
+| Evento | Quando | Payload Principal |
+|--------|--------|-----------------|
+| `mercado.icp.atualizado` | Nova versão de ICP aprovada e ativada | `{icp_versao_nova, icp_versao_anterior, criterios_alterados[], segmentos_impactados[]}` |
+| `mercado.icp.revisao_solicitada` | Gatilho de revisão disparado | `{motivo, prazo_conclusao, dados_contexto_json}` |
+| `mercado.segmento.atualizado` | Segmento criado, alterado ou descontinuado | `{segmento_id, acao: criado\|alterado\|descontinuado, diferencas_json}` |
+| `mercado.win_loss.analisado` | Análise de oportunidade concluída | `{oportunidade_id, resultado: won\|lost, razao_primaria, segmento_id, concorrente_vencedor?}` |
+| `mercado.win_loss.padrao_identificado` | Padrão recorrente detectado (≥ 3×) | `{padrao_tipo, frequencia, segmentos_afetados[], recomendacao}` |
+| `mercado.competidor.atualizado` | Dado de concorrente atualizado | `{concorrente_id, campos_alterados[], nova_ameaca: boolean}` |
+| `mercado.sinal.detectado` | Sinal de mercado avaliado | `{sinal_tipo, urgencia: baixa\|media\|alta\|critica, elementos_impactados[], descricao}` |
+| `mercado.qualificacao.criterios_atualizados` | Perguntas de qualificação revisadas | `{segmento_id, criterios_anteriores, criterios_novos, motivo}` |
+
+---
+
+## 10. Eventos Consumidos
+
+| Evento | Origem | Ação ao Receber |
+|--------|--------|----------------|
+| `oportunidade.encerrada` | CAP-03 | Criar instância de análise Win/Loss |
+| `cliente.churned` | CAP-05 | Criar análise Win/Loss retroativa; atualizar perfil de risco do segmento |
+| `cliente.expandido` | CAP-05 | Registrar como dado de calibração positiva do ICP |
+| `kpi.limiar.cruzado` | ENG-02 | Se KPI é `KPI-MI-02` ou `KPI-MI-08`: avaliar revisão antecipada do ICP |
+| `melhoria.item.implementado` | ENG-09 | Se melhoria afeta CAP-01: revisar elementos impactados |
+| `sistema.periodo_encerrado` | Scheduler | Calcular KPIs e iniciar revisão trimestral do ICP |
+
+---
+
+## 11. KPIs
+
+> Registrados e calculados via ENG-02. Definições completas no ENGINE-REGISTRATION.yaml (seção 16).
+
+| ID | Nome | Fórmula | Meta | Frequência |
+|----|------|---------|------|-----------|
+| KPI-MI-01 | Taxa de Cobertura Win/Loss | `análises_concluídas / oportunidades_encerradas × 100` | ≥ 95% | Mensal |
+| KPI-MI-02 | Win Rate Geral | `oportunidades_ganhas / oportunidades_encerradas × 100` | Baseline por segmento | Mensal |
+| KPI-MI-03 | Win Rate por Segmento | `ganhas_seg / encerradas_seg × 100` | Definido por segmento | Mensal |
+| KPI-MI-04 | Win Rate por Concorrente | `ganhas_vs_comp / total_vs_comp × 100` | ≥ 50% vs. cada direto | Mensal |
+| KPI-MI-05 | Precisão do ICP Score | `clientes_high_icp_sucesso / total_high_icp × 100` | ≥ 80% | Trimestral |
+| KPI-MI-06 | Tempo Médio de Análise Win/Loss | `média(conclusão - criação)` | ≤ 5 dias úteis | Mensal |
+| KPI-MI-07 | Freshness do Mapa Competitivo | `concorrentes_atualizados_6m / total × 100` | 100% | Mensal |
+| KPI-MI-08 | Aderência ao ICP no Pipeline | `oportunidades_icp_adequado / total_pipeline × 100` | ≥ 70% | Semanal |
+| KPI-MI-09 | NRR por Tier de ICP | `NRR_high_icp vs NRR_low_icp` | High ICP > Low ICP | Trimestral |
+
+---
+
+## 12. Alertas
+
+> Gerenciados pela ENG-03.
+
+| ID | Condição | Severidade | Ação Padrão |
+|----|---------|-----------|------------|
+| ALT-MI-01 | KPI-MI-01 < 80% | WARNING | Notificar responsável; listar pendências |
+| ALT-MI-02 | KPI-MI-01 < 60% | CRITICAL | Escalar para gestor; bloquear fechamento do período |
+| ALT-MI-03 | Análise Win/Loss pendente > 10 dias úteis | WARNING | Notificar analista; criar tarefa com prazo |
+| ALT-MI-04 | Win Rate cai > 15pp vs. trimestre anterior | CRITICAL | Disparar diagnóstico automático (ENG-04) |
+| ALT-MI-05 | Win Rate vs. concorrente específico < 30% | WARNING | Solicitar atualização do battlecard |
+| ALT-MI-06 | ICP não revisado há > 120 dias | WARNING | Notificar responsável; criar agenda de revisão |
+| ALT-MI-07 | Concorrente sem atualização > 180 dias | WARNING | Solicitar pesquisa competitiva |
+| ALT-MI-08 | Aderência ao ICP no pipeline < 50% | CRITICAL | Notificar CAP-02; revisar critérios de qualificação |
+| ALT-MI-09 | Padrão Win/Loss recorrente detectado (≥ 3×) | WARNING | Publicar `mercado.win_loss.padrao_identificado`; criar item em ENG-09 |
+
+---
+
+## 13. Planos de Ação Automáticos
+
+> Executados via ENG-05.
+
+### PA-MI-01 — Queda de Win Rate (Gatilho: ALT-MI-04)
+```yaml
+plano_acao:
+  tipo: diagnostico_e_correcao
+  prazo_dias: 30
+  tarefas:
+    - "ENG-04: coletar Win/Loss dos últimos 60 dias e identificar concentração"
+    - "Analisar: queda é generalizada ou concentrada em segmento/concorrente específico?"
+    - "Se concentrada em concorrente: atualizar battlecard; publicar mercado.competidor.atualizado"
+    - "Se generalizada: revisar perguntas de qualificação e critérios de avanço de funil (CAP-03)"
+    - "Se associada a mudança recente de ICP: avaliar se calibração foi prematura"
+  metrica_sucesso: "Win Rate retorna ao baseline em 60 dias"
 ```
-                    ┌─────────────────────┐
-                    │   CAP-01            │
-                    │ Inteligência        │
-                    │ Comercial           │
-                    └────────┬────────────┘
-                             │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-          ▼                  ▼                  ▼
-    ┌──────────┐      ┌──────────┐      ┌──────────────┐
-    │  CAP-02  │      │  CAP-03  │      │   CAP-06     │
-    │ Gestão   │      │ Processo │      │ Oferta e     │
-    │ Demanda  │      │ Vendas   │      │ Precificação │
-    └──────────┘      └──────────┘      └──────────────┘
-                             │
-                             ▼
-                      ┌──────────┐
-                      │  CAP-08  │
-                      │Performance│
-                      └──────────┘
+
+### PA-MI-02 — Cobertura Win/Loss Baixa (Gatilho: ALT-MI-02)
+```yaml
+plano_acao:
+  tipo: correcao_operacional
+  prazo_dias: 15
+  tarefas:
+    - "Listar todas as oportunidades encerradas sem análise"
+    - "Notificar responsáveis com prazo de 5 dias úteis por oportunidade"
+    - "Verificar se workflow WF-MI-01 está disparando corretamente para oportunidade.encerrada"
+    - "Se falha sistêmica: abrir NC na ENG-06; acionar ENG-08 para diagnóstico do conector CRM"
+  metrica_sucesso: "Cobertura ≥ 90% até fim do mês"
 ```
 
-### 13.2 Matriz de Interfaces
+### PA-MI-03 — ICP Desatualizado (Gatilho: ALT-MI-06)
+```yaml
+plano_acao:
+  tipo: revisao_programada
+  prazo_dias: 20
+  tarefas:
+    - "Extrair: Win Rate, NRR, Churn dos últimos 90 dias por perfil de cliente (ENG-02)"
+    - "Convocar sessão de revisão do ICP com stakeholders"
+    - "Conduzir análise: critérios atuais predizem sucesso ou precisam ajuste?"
+    - "Publicar nova versão OU confirmar versão atual como válida (registrar no DECISION_LOG)"
+  metrica_sucesso: "ICP revisado e publicado com evidências documentadas"
+```
 
-| Módulo | Tipo de Relação | CAP-01 Fornece | CAP-01 Recebe |
-|--------|----------------|----------------|---------------|
-| CAP-02 Gestão de Demanda | Bilateral | Critérios de ICP, segmentos prioritários | Dados de leads qualificados, taxas de conversão MQL→SQL |
-| CAP-03 Processo de Vendas | Bilateral | Inteligência competitiva, perfil de comprador | Win/loss bruto, objeções coletadas |
-| CAP-04 Gestão de Receita | Recebe | — | Dados de NRR e expansão por segmento |
-| CAP-05 Gestão de Clientes | Bilateral | ICP refinado baseado em clientes ativos | NPS, churn, padrões de sucesso e fracasso |
-| CAP-06 Oferta e Precificação | Bilateral | Benchmarks competitivos de preço | Dados de win/loss por pricing |
-| CAP-07 Equipe Comercial | Fornece | Treinamento em ICP e inteligência competitiva | — |
-| CAP-08 Performance e Autogestão | Bilateral | Dados de mercado para contexto de metas | KPIs de IC para dashboard de performance |
+---
 
-### 13.3 Protocolo de Comunicação entre Módulos
-- **Formato padrão:** Todos os dados trafegam via CRM ou repositório oficial (nunca e-mail/WhatsApp pessoal)
-- **SLA de resposta:** Solicitações de inteligência ad hoc respondidas em até 2 dias úteis
-- **Ciclo de sincronização:** Reunião mensal de alinhamento entre responsáveis de CAP-01, CAP-02 e CAP-06
+## 14. Automações
+
+> Executadas via ENG-07 (Workflows) + ENG-08 (Conectores).
+
+| ID | Trigger | Ação Automatizada | Conector |
+|----|---------|-----------------|---------|
+| AUT-MI-01 | `oportunidade.encerrada` | Criar instância Win/Loss; coletar dados do CRM | CONN-CRM-PRINCIPAL |
+| AUT-MI-02 | Análise Win/Loss pendente > 5 dias | Enviar lembrete ao responsável | CONN-MENSAGERIA |
+| AUT-MI-03 | `sistema.periodo_encerrado` (trimestral) | Gerar relatório Win Rate por segmento/concorrente | CONN-EMAIL-TRANSACIONAL |
+| AUT-MI-04 | `mercado.icp.atualizado` publicado | Notificar módulos dependentes; atualizar scoring no CRM | CONN-CRM-PRINCIPAL, CONN-MENSAGERIA |
+| AUT-MI-05 | Padrão Win/Loss detectado (≥ 3 ocorrências iguais) | Publicar `mercado.win_loss.padrao_identificado`; criar item ENG-09 | Barramento SOE |
+| AUT-MI-06 | `sistema.periodo_encerrado` (mensal) | Calcular KPI-MI-01 a KPI-MI-09; publicar para ENG-02 | ENG-02 |
+
+---
+
+## 15. Auditoria Operacional
+
+> Executada via ENG-06.
+
+### Checklist Mensal — CAP-01-AUD-MENSAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | ICP revisado nos últimos 90 dias | `icp_definitions.ultima_revisao` | Data ≤ 90 dias |
+| 2 | Cobertura Win/Loss ≥ 95% | KPI-MI-01 | Valor do KPI |
+| 3 | Análises Win/Loss concluídas em ≤ 5 dias úteis | KPI-MI-06 | Valor do KPI |
+| 4 | Mapa competitivo: todos os concorrentes atualizados nos últimos 6 meses | KPI-MI-07 | 100% de freshness |
+| 5 | Padrões Win/Loss encaminhados para ENG-09 | Log de eventos `mercado.win_loss.padrao_identificado` | Registro no período |
+| 6 | Alertas do mês tratados dentro do SLA da ENG-03 | Taxa de resolução | ≥ 90% no SLA |
+
+### Checklist Trimestral — CAP-01-AUD-TRIMESTRAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | Revisão do ICP concluída com base em dados | Ata de revisão + versão publicada | Documento de revisão com dados |
+| 2 | Segmentação revisada | Datas de atualização dos segmentos | ≤ 180 dias |
+| 3 | Win Rate por segmento calculado e comunicado | KPI-MI-03 publicado | Relatório trimestral |
+| 4 | Perguntas de qualificação alinhadas ao ICP atual | Versão do catálogo de qualificação | Documento atualizado |
+| 5 | Relatório de inteligência competitiva emitido | Verificar relatório do período | Relatório datado |
+
+---
+
+## 16. ENGINE-REGISTRATION.yaml
+
+```yaml
+# ENGINE-REGISTRATION.yaml — CAP-01 Inteligência de Mercado
+# Ref: ARC-ENG-099 (ENGINE-CONTRATO-DE-INTEGRACAO.md)
+
+modulo:
+  id: "CAP-01"
+  nome: "Inteligência de Mercado"
+  versao: "2.0.0"
+  tier: "core"
+  status: "ativo"
+
+dependencias:
+  engines:
+    - id: "ENG-01"
+      uso: "rastreamento de instâncias de análise Win/Loss e revisões de ICP"
+    - id: "ENG-02"
+      uso: "registro e cálculo de KPIs KPI-MI-01 a KPI-MI-09"
+    - id: "ENG-03"
+      uso: "gestão de alertas ALT-MI-01 a ALT-MI-09"
+    - id: "ENG-04"
+      uso: "diagnóstico de queda de win rate e padrões sistêmicos"
+    - id: "ENG-05"
+      uso: "execução de planos de ação PA-MI-01 a PA-MI-03"
+    - id: "ENG-06"
+      uso: "auditoria mensal e trimestral do módulo"
+    - id: "ENG-07"
+      uso: "workflows AUT-MI-01 a AUT-MI-06"
+    - id: "ENG-08"
+      uso: "integração com CRM para coleta de dados de oportunidades"
+    - id: "ENG-09"
+      uso: "encaminhamento de padrões aprendidos para melhoria contínua"
+    - id: "ENG-10"
+      uso: "indexação de Win/Loss, ICP e inteligência competitiva"
+
+eventos_publicados:
+  - evento: "mercado.icp.atualizado"
+    condicao: "nova versão de ICP aprovada e ativada"
+  - evento: "mercado.icp.revisao_solicitada"
+    condicao: "gatilho trimestral ou manual"
+  - evento: "mercado.segmento.atualizado"
+    condicao: "segmento criado, alterado ou descontinuado"
+  - evento: "mercado.win_loss.analisado"
+    condicao: "análise Win/Loss concluída"
+  - evento: "mercado.win_loss.padrao_identificado"
+    condicao: "padrão detectado em 3+ análises"
+  - evento: "mercado.competidor.atualizado"
+    condicao: "dados de concorrente alterados"
+  - evento: "mercado.sinal.detectado"
+    condicao: "sinal de mercado registrado e avaliado"
+  - evento: "mercado.qualificacao.criterios_atualizados"
+    condicao: "critérios de qualificação revisados"
+
+eventos_consumidos:
+  - evento: "oportunidade.encerrada"
+    origem: "CAP-03"
+    acao: "iniciar protocolo Win/Loss"
+  - evento: "cliente.churned"
+    origem: "CAP-05"
+    acao: "análise Win/Loss retroativa; atualizar perfil de risco"
+  - evento: "cliente.expandido"
+    origem: "CAP-05"
+    acao: "calibração positiva do ICP"
+  - evento: "kpi.limiar.cruzado"
+    origem: "ENG-02"
+    acao: "avaliar revisão antecipada do ICP se KPI-MI-02 ou KPI-MI-08"
+  - evento: "melhoria.item.implementado"
+    origem: "ENG-09"
+    acao: "revisar elementos afetados do módulo"
+  - evento: "sistema.periodo_encerrado"
+    origem: "Scheduler"
+    acao: "calcular KPIs e preparar revisão trimestral do ICP"
+
+kpis_registrados:
+  - id: "KPI-MI-01"
+    nome: "Taxa de Cobertura Win/Loss"
+    formula: "analises_concluidas / oportunidades_encerradas * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 95
+    limiar_warning: 80
+    limiar_critical: 60
+  - id: "KPI-MI-02"
+    nome: "Win Rate Geral"
+    formula: "oportunidades_ganhas / oportunidades_encerradas * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: null
+    meta_nota: "baseline histórico por segmento"
+    limiar_warning: "queda_15pp_trimestre_anterior"
+  - id: "KPI-MI-03"
+    nome: "Win Rate por Segmento"
+    formula: "ganhas_segmento / encerradas_segmento * 100"
+    unidade: "percentual"
+    dimensao: "segmento_id"
+    frequencia_calculo: "mensal"
+  - id: "KPI-MI-04"
+    nome: "Win Rate por Concorrente"
+    formula: "ganhas_vs_concorrente / total_vs_concorrente * 100"
+    unidade: "percentual"
+    dimensao: "concorrente_id"
+    frequencia_calculo: "mensal"
+    limiar_warning: 30
+  - id: "KPI-MI-05"
+    nome: "Precisão do ICP Score"
+    formula: "clientes_high_icp_com_sucesso / total_clientes_high_icp * 100"
+    unidade: "percentual"
+    frequencia_calculo: "trimestral"
+    meta_padrao: 80
+  - id: "KPI-MI-06"
+    nome: "Tempo Médio de Análise Win/Loss"
+    formula: "media(data_conclusao - data_criacao)"
+    unidade: "dias_uteis"
+    frequencia_calculo: "mensal"
+    meta_padrao: 5
+    limiar_warning: 7
+    limiar_critical: 10
+  - id: "KPI-MI-07"
+    nome: "Freshness do Mapa Competitivo"
+    formula: "concorrentes_atualizados_6m / total_concorrentes * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 100
+    limiar_warning: 80
+  - id: "KPI-MI-08"
+    nome: "Aderência ao ICP no Pipeline"
+    formula: "oportunidades_icp_adequado / total_oportunidades * 100"
+    unidade: "percentual"
+    frequencia_calculo: "semanal"
+    meta_padrao: 70
+    limiar_warning: 60
+    limiar_critical: 50
+  - id: "KPI-MI-09"
+    nome: "NRR por Tier de ICP"
+    formula: "nrr_high_icp comparado a nrr_low_icp"
+    unidade: "comparativo"
+    frequencia_calculo: "trimestral"
+
+alertas_registrados:
+  - id: "ALT-MI-01"
+    kpi_ref: "KPI-MI-01"
+    condicao: "< 80"
+    severidade: "warning"
+    owner: "responsavel_cap01"
+  - id: "ALT-MI-02"
+    kpi_ref: "KPI-MI-01"
+    condicao: "< 60"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-MI-03"
+    condicao: "analise_win_loss.dias_pendente > 10"
+    severidade: "warning"
+    owner: "responsavel_cap01"
+  - id: "ALT-MI-04"
+    kpi_ref: "KPI-MI-02"
+    condicao: "variacao_vs_trimestre_anterior < -15pp"
+    severidade: "critical"
+    owner: "gestor_comercial"
+    acao_automatica: "disparar_diagnostico_eng04"
+  - id: "ALT-MI-05"
+    kpi_ref: "KPI-MI-04"
+    condicao: "< 30 para qualquer concorrente_id"
+    severidade: "warning"
+    owner: "responsavel_cap01"
+  - id: "ALT-MI-06"
+    condicao: "icp.dias_sem_revisao > 120"
+    severidade: "warning"
+    owner: "responsavel_cap01"
+  - id: "ALT-MI-07"
+    condicao: "competidor.dias_sem_atualizacao > 180"
+    severidade: "warning"
+    owner: "responsavel_cap01"
+  - id: "ALT-MI-08"
+    kpi_ref: "KPI-MI-08"
+    condicao: "< 50"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-MI-09"
+    condicao: "padrao_win_loss.ocorrencias >= 3"
+    severidade: "warning"
+    owner: "responsavel_cap01"
+    acao_automatica: "publicar_padrao_identificado"
+
+workflows_registrados:
+  - id: "WF-MI-01"
+    nome: "Análise Win/Loss Automática"
+    gatilho: "oportunidade.encerrada"
+    descricao: "coleta dados CRM, cria instância, agenda análise, envia lembrete se pendente"
+  - id: "WF-MI-02"
+    nome: "Revisão Trimestral do ICP"
+    gatilho: "sistema.periodo_encerrado (trimestral)"
+    descricao: "coleta dados de calibração, gera relatório, agenda sessão de revisão"
+  - id: "WF-MI-03"
+    nome: "Propagação de ICP Atualizado"
+    gatilho: "mercado.icp.atualizado"
+    descricao: "notifica módulos dependentes, atualiza CRM, registra no ENG-10"
+
+auditoria_checklists:
+  - id: "CAP-01-AUD-MENSAL"
+    tipo: "mensal"
+    itens_count: 6
+  - id: "CAP-01-AUD-TRIMESTRAL"
+    tipo: "trimestral"
+    itens_count: 5
+
+conectores_utilizados:
+  - "CONN-CRM-PRINCIPAL"
+  - "CONN-MENSAGERIA"
+  - "CONN-EMAIL-TRANSACIONAL"
+
+permissoes_necessarias:
+  - recurso: "icp_definitions"
+    acoes: ["read", "write", "version"]
+  - recurso: "win_loss_analyses"
+    acoes: ["read", "write"]
+  - recurso: "competitive_map"
+    acoes: ["read", "write"]
+  - recurso: "segment_definitions"
+    acoes: ["read", "write"]
+  - recurso: "qualification_catalog"
+    acoes: ["read", "write"]
+  - recurso: "kpi_values.KPI-MI-*"
+    acoes: ["read", "write_via_eng02"]
+  - recurso: "eventos_barramento"
+    acoes: ["publish", "subscribe"]
+```
 
 ---
 
@@ -391,4 +754,5 @@ Semana 3: Criar template padrão de competitive card por concorrente
 
 | Versão | Data | Autor | Descrição |
 |--------|------|-------|-----------|
-| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial do Módulo Operacional CAP-01 |
+| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial do módulo operacional |
+| 2.0.0 | 2026-06-29 | Guardião da Documentação | Redesenho como microserviço do Commercial OS — infraestrutura extraída para Engine de Autogestão, arquitetura orientada a eventos, 16 seções obrigatórias, ENGINE-REGISTRATION.yaml integrado |

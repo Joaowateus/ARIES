@@ -1,358 +1,791 @@
 ---
 id: MOD-CAP-04
-titulo: "Módulo Operacional — Gestão de Receita"
-versao: "1.0.0"
+titulo: "CAP-04 — Gestão de Receita"
+versao: "2.0.0"
 status: aprovado
-categoria: C3-Operacional
+categoria: Commercial-OS-Module
 autor: Guardião da Documentação Técnica
 criado-em: 2026-06-28
-atualizado-em: 2026-06-28
+atualizado-em: 2026-06-29
 dependencias:
+  - ARC-ENG-000
+  - ARC-ENG-001
+  - ARC-ENG-002
+  - ARC-ENG-003
+  - ARC-ENG-004
+  - ARC-ENG-005
+  - ARC-ENG-006
+  - ARC-ENG-007
+  - ARC-ENG-008
   - MOD-CAP-03
   - MOD-CAP-05
   - MOD-CAP-06
-  - MOD-CAP-08
-tags: [receita, faturamento, cobranca, mrr, arr, nrr, churn, expansion, revenue]
+tags: [commercial-os, cap-04, receita, mrr, arr, nrr, faturamento, cobranca, inadimplencia, financeiro]
 ---
 
-# MOD-CAP-04 — Gestão de Receita
+# CAP-04 — Gestão de Receita
 
----
-
-## 1. Objetivo da Capacidade
-
-Garantir que toda receita contratada seja cobrada corretamente, no tempo certo, e que o crescimento da receita recorrente seja maximizado através do controle rigoroso de MRR/ARR, redução do churn de receita, expansão de contas existentes e previsão confiável de receita futura.
+> **Módulo do Commercial Operating System**
+> Infraestrutura compartilhada: `docs/02-architecture/engine-autogestao/`
+> Contrato de integração: `ENGINE-CONTRATO-DE-INTEGRACAO.md` (ARC-ENG-099)
 
 ---
 
-## 2. Resultado Esperado
+## 1. Identificação
 
-| # | Resultado | Critério de Aceitação |
-|---|-----------|----------------------|
-| R1 | Faturamento 100% correto e no prazo | 0% de contratos não faturados; ≤ 2% de erros de faturamento por mês |
-| R2 | Inadimplência controlada | Taxa de inadimplência (>30 dias) ≤ [X]% da receita mensal |
-| R3 | NRR (Net Revenue Retention) acima da meta | NRR ≥ [meta definida em CAP-08] — tipicamente ≥ 100% para SaaS/serviços recorrentes |
-| R4 | Previsão de receita confiável | Desvio entre forecast e receita realizada ≤ 10% |
-| R5 | Churn de receita monitorado e tratado | MRR Churn ≤ meta mensal; todo churn com causa documentada |
-
-**Definição de Sucesso:** A empresa tem visibilidade completa de toda a receita contratada, recorrente e previsível, com 0% de oportunidade de cobrança perdida e NRR crescente mês a mês.
-
----
-
-## 3. Entradas Necessárias
-
-### 3.1 Entradas Primárias
-| Entrada | Fonte | Formato | Frequência |
-|---------|-------|---------|-----------|
-| Contrato assinado com condições | CAP-03 (Processo de Vendas) | Documento + CRM | Por evento |
-| Dados de entrega e satisfação do cliente | CAP-05 (Gestão de Clientes) | Estruturado | Mensal |
-| Solicitações de expansão (upsell/cross-sell) | CAP-05 (Gestão de Clientes) | CRM | Por evento |
-| Avisos de cancelamento ou churn | CAP-05 (Gestão de Clientes) | CRM + Alerta | Por evento |
-| Tabela de preços vigente | CAP-06 (Oferta e Precificação) | Documento | Por atualização |
-| Metas de receita | CAP-08 (Performance) | Estruturado | Mensal |
+| Campo | Valor |
+|-------|-------|
+| **ID do Módulo** | CAP-04 |
+| **Nome** | Gestão de Receita |
+| **Domínio** | Financeiro Comercial — Faturamento, Cobrança e Reconhecimento de Receita |
+| **Versão** | 2.0.0 |
+| **Tier** | Core |
+| **Posição na cadeia** | Downstream de CAP-03; Paralelo a CAP-05 |
+| **Registro na Engine** | `ENGINE-REGISTRATION.yaml` (seção 16) |
 
 ---
 
-## 4. Saídas Obrigatórias
+## 2. Objetivo
 
-### 4.1 Saídas Operacionais
-| Saída | Destinatário | SLA |
-|-------|-------------|-----|
-| Nota fiscal / Fatura emitida | Cliente + Financeiro | Conforme data de vencimento contratual |
-| Relatório de MRR/ARR | Liderança + CAP-08 | Até dia 5 do mês seguinte |
-| Relatório de NRR | Liderança + CAP-08 | Mensal |
-| Alerta de inadimplência | Gerente Comercial + CAP-05 | Imediato ao vencimento |
-| Revenue Forecast | Liderança + CAP-08 | Semanal (rolling 3 meses) |
+Garantir que toda receita contratada seja **reconhecida, faturada, cobrada e reconciliada** de forma precisa e no tempo correto — mantendo o MRR/ARR como a métrica mais confiável do sistema e protegendo a saúde financeira da operação através de controle rigoroso de inadimplência e receita recorrente.
 
-### 4.2 Métricas Calculadas e Publicadas
-- MRR (Monthly Recurring Revenue) — total e por tipo (New, Expansion, Churn, Contraction)
-- ARR (Annual Recurring Revenue)
-- NRR (Net Revenue Retention)
-- GRR (Gross Revenue Retention)
-- MRR Churn Rate
-- ARPU (Average Revenue per Unit/Customer)
+O CAP-04 é a camada de conversão entre compromisso contratual e caixa real. Ele fecha o ciclo comercial: o que CAP-03 fechou, CAP-04 transforma em receita reconhecida e paga. Sem CAP-04 operando com precisão, a empresa tem vendas sem dinheiro — ou dinheiro sem visibilidade de onde veio.
+
+**O CAP-04 não vende nem retém. Ele garante que o que foi vendido vira receita — e que a receita é mensurada com exatidão.**
 
 ---
 
-## 5. Regras de Negócio
+## 3. Escopo
 
-### RN-01: Faturamento Baseado em Contrato
-- Todo faturamento DEVE ser baseado em contrato assinado vigente
-- NENHUM valor pode ser cobrado sem contrato (exceto com aprovação formal da liderança)
-- Condições de pagamento no boleto/fatura DEVEM espelhar exatamente o contrato
+### 3.1 Dentro do Escopo
+- Reconhecimento de receita a partir de contratos assinados (MRR/ARR)
+- Faturamento recorrente e pontual
+- Gestão do ciclo de cobrança (dunning)
+- Controle e gestão de inadimplência
+- Reconciliação financeira entre faturado e recebido
+- Cálculo e reporte de MRR Bridge (New + Expansion − Churn − Contraction)
+- Monitoramento de NRR (Net Revenue Retention) e GRR (Gross Revenue Retention)
+- Gestão de reembolsos e estornos
+- Integração com sistema ERP/financeiro
 
-### RN-02: Calendário de Faturamento
-- Faturas recorrentes DEVEM ser emitidas [X] dias antes do vencimento
-- Fatura em atraso por erro interno (não emitida no prazo) NÃO pode gerar multa ou juros ao cliente — a responsabilidade é interna
-- Faturamento de serviços adicionais DEVE ser feito no ciclo normal mais próximo, nunca retroativo sem aprovação
-
-### RN-03: Gestão de Inadimplência
-- Dia +1 após vencimento: e-mail automático de lembrete
-- Dia +5: contato manual pelo responsável da conta (CAP-05)
-- Dia +15: escalonamento para gerente comercial
-- Dia +30: avaliação de suspensão do serviço (conforme contrato) + juridico
-- Baixa de crédito DEVE ser aprovada pela liderança
-
-### RN-04: Reconhecimento de Receita
-- Receita recorrente é reconhecida no período de competência (mês de prestação do serviço)
-- Receita de implantação/setup é reconhecida conforme entregáveis definidos no contrato
-- Contratos anuais pagos à vista DEVEM ser reconhecidos como MRR proporcional mensalmente (não como receita única)
-
-### RN-05: Expansão de Receita
-- Toda expansão (upsell/cross-sell) DEVE gerar aditivo contratual ou novo contrato
-- Expansão informalmente acordada sem formalização contratual NÃO pode ser reconhecida como receita
-
-### RN-06: Cancelamento e Churn
-- Solicitação de cancelamento DEVE ser recebida formalmente (e-mail ou formulário)
-- Período de aviso prévio definido no contrato DEVE ser respeitado
-- MRR Churn de contratos cancelados DEVE ser registrado na data de vigência do cancelamento (não da solicitação)
+### 3.2 Fora do Escopo
+- Definição de preços e condições comerciais → CAP-06
+- Negociação de contratos → CAP-03
+- Onboarding de clientes → CAP-05
+- Gestão de churn → CAP-05
+- Expansão de receita → CAP-05
+- Contabilidade e fiscal → Sistema ERP externo
 
 ---
 
-## 6. Fluxo Operacional Completo
+## 4. Responsabilidades
 
+| # | Responsabilidade | Frequência |
+|---|-----------------|-----------|
+| R-01 | Reconhecer MRR/ARR ao receber `cliente.contrato_assinado` | Por contrato |
+| R-02 | Emitir fatura no prazo correto para cada cliente ativo | Por competência |
+| R-03 | Executar ciclo de cobrança (dunning) para faturas em atraso | Por fatura vencida |
+| R-04 | Manter inadimplência dentro do limite definido | Contínuo |
+| R-05 | Calcular e publicar MRR Bridge mensalmente | Mensal |
+| R-06 | Calcular NRR e GRR por coorte de clientes | Mensal |
+| R-07 | Reconciliar faturamento com recebimentos do ERP | Mensal |
+| R-08 | Atualizar MRR ao receber eventos de expansão ou contração de CAP-05 | Por evento |
+| R-09 | Publicar `receita.mrr_atualizado` ao processar qualquer mudança de receita | Por mudança |
+
+---
+
+## 5. Capacidades Internas
+
+### CAP-04.1 — Reconhecimento de Receita
+
+Processo de transformação de contratos em MRR/ARR reconhecido pelo sistema.
+
+**MRR Bridge — a identidade contábil da receita recorrente:**
 ```
-ENTRADA
-│
-└─► Contrato assinado recebido de CAP-03
-│
-▼
-REGISTRO DO CONTRATO NO SISTEMA DE RECEITA
-│
-├─► Cadastrar cliente no sistema de faturamento
-├─► Configurar recorrência conforme contrato (mensal/anual/trimestral)
-├─► Definir datas de vencimento
-├─► Registrar no CRM como "Cliente Ativo" com MRR correspondente
-└─► Atualizar MRR total (New MRR)
-│
-▼
-CICLO MENSAL — FATURAMENTO
-│
-├─► [Dia -X do vencimento] Gerar e emitir fatura/NF
-├─► Conferir se condições da fatura = condições do contrato
-├─► Enviar fatura ao cliente (e-mail + portal se disponível)
-└─► Registrar emissão no sistema
-│
-▼
-MONITORAMENTO DE PAGAMENTO
-│
-├─► [Dia 0 — vencimento] Verificar status do pagamento
-│
-├─► [PAGO]
-│     ├─ Registrar pagamento no sistema
-│     ├─ Reconciliar com extrato bancário
-│     └─ Atualizar status no CRM
-│
-└─► [NÃO PAGO]
-      ├─ Dia +1: Lembrete automático (e-mail)
-      ├─ Dia +5: Contato manual pelo CS (CAP-05)
-      ├─ Dia +15: Escalonamento gerente
-      └─ Dia +30: Avaliação de suspensão / jurídico
-│
-▼
-EVENTOS DE RECEITA (PARALELO)
-│
-├─► [Expansão recebida de CAP-05]
-│     ├─ Gerar aditivo / novo contrato (CAP-03.5)
-│     ├─ Atualizar MRR (Expansion MRR)
-│     └─ Atualizar NRR
-│
-├─► [Cancelamento recebido de CAP-05]
-│     ├─ Registrar data de vigência do cancelamento
-│     ├─ Emitir fatura final conforme aviso prévio
-│     └─ Atualizar MRR (Churn MRR)
-│
-└─► [Contração — redução de escopo]
-      ├─ Formalizar via aditivo contratual
-      └─ Atualizar MRR (Contraction MRR)
-│
-▼
-CONSOLIDAÇÃO MENSAL
-│
-├─► Calcular MRR bridge (New + Expansion − Churn − Contraction)
-├─► Calcular NRR e GRR
-├─► Gerar Revenue Forecast (rolling 3 meses)
-├─► Publicar relatório para liderança e CAP-08
-└─► Comparar forecast vs. realizado do mês anterior
-│
-▼
-REGISTRO
-│
-├─► Todos os movimentos de receita registrados com data e tipo
-├─► Contratos, faturas e comprovantes arquivados no repositório oficial
-└─► MRR histórico preservado para análise de tendência
-│
-▼
-AUDITORIA
-│
-└─► Verificação mensal: reconciliação bancária,
-    0 contratos sem fatura, NRR calculado, forecast atualizado
+MRR_FINAL = MRR_INICIAL
+           + NEW_MRR          (novos contratos)
+           + EXPANSION_MRR    (expansões de clientes existentes)
+           − CHURN_MRR        (cancelamentos)
+           − CONTRACTION_MRR  (reduções de contrato)
 ```
 
----
+**Regras de reconhecimento:**
+```yaml
+regras_reconhecimento:
+  novo_contrato:
+    trigger: "cliente.contrato_assinado"
+    tipo: "new_mrr"
+    valor: "contrato.valor_mensal_recorrente"
+    data_inicio: "contrato.data_inicio"
 
-## 7. Indicadores de Desempenho (KPIs)
+  expansao:
+    trigger: "cliente.expandido"
+    tipo: "expansion_mrr"
+    valor: "delta_mrr_positivo"
+    data_inicio: "data_efetiva_expansao"
 
-### 7.1 KPIs de Receita Recorrente
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-RV-01 | MRR Total | Soma de toda receita recorrente mensal ativa | Meta de CAP-08 | Mensal |
-| KPI-RV-02 | New MRR | MRR de contratos novos no mês | Meta de CAP-08 | Mensal |
-| KPI-RV-03 | Expansion MRR | MRR adicional de expansões no mês | Meta de CAP-08 | Mensal |
-| KPI-RV-04 | Churn MRR | MRR perdido por cancelamentos no mês | ≤ Meta de CAP-08 | Mensal |
-| KPI-RV-05 | MRR Net Growth | New MRR + Expansion MRR − Churn MRR − Contraction MRR | Positivo (crescimento) | Mensal |
-| KPI-RV-06 | ARR | MRR × 12 | Meta anual | Mensal |
+  reducao:
+    trigger: "cliente.contrato_reduzido"
+    tipo: "contraction_mrr"
+    valor: "delta_mrr_negativo (absoluto)"
+    data_inicio: "data_efetiva_reducao"
 
-### 7.2 KPIs de Retenção
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-RV-07 | NRR (Net Revenue Retention) | (MRR início + Expansion − Churn − Contraction) / MRR início × 100 | ≥ [meta] — idealmente ≥ 100% | Mensal |
-| KPI-RV-08 | GRR (Gross Revenue Retention) | (MRR início − Churn − Contraction) / MRR início × 100 | ≥ [meta] — idealmente ≥ 85% | Mensal |
-| KPI-RV-09 | MRR Churn Rate | Churn MRR / MRR total × 100 | ≤ [meta] | Mensal |
+  cancelamento:
+    trigger: "cliente.churned"
+    tipo: "churn_mrr"
+    valor: "contrato.valor_mensal_recorrente"
+    data_fim: "data_efetiva_cancelamento"
 
-### 7.3 KPIs de Faturamento e Cobrança
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-RV-10 | Taxa de inadimplência | Faturas em atraso >30 dias / Receita total × 100 | ≤ [X]% | Mensal |
-| KPI-RV-11 | Acuracidade do faturamento | (1 − Erros de fatura / Total faturas) × 100 | ≥ 98% | Mensal |
-| KPI-RV-12 | Acuracidade do forecast | (1 − |Forecast − Realizado| / Realizado) × 100 | ≥ 90% | Mensal |
-
----
-
-## 8. Gatilhos e Alertas Operacionais
-
-| Código | Condição | Ação | Responsável |
-|--------|----------|------|-------------|
-| ALT-RV-01 | Fatura não paga no vencimento | Lembrete automático ao cliente | Sistema |
-| ALT-RV-02 | Fatura em atraso >5 dias | Notificação para CS responsável (CAP-05) | Sistema |
-| ALT-RV-03 | Fatura em atraso >15 dias | Escalonamento para Gerente Comercial | Sistema |
-| ALT-RV-04 | Fatura em atraso >30 dias | Alerta para liderança + avaliação jurídica | Sistema + Gerente |
-| ALT-RV-05 | MRR Churn Rate acima da meta por 2 meses | Reunião emergencial: CAP-04 + CAP-05 + Liderança | Liderança |
-| ALT-RV-06 | NRR abaixo de 95% no mês | Análise de causa raiz imediata + plano de expansão acelerado | Gerente + CAP-05 |
-| ALT-RV-07 | Contrato vence em 30 dias sem sinal de renovação | Alerta para CS + início de processo de renovação | Sistema → CAP-05 |
-| ALT-RV-08 | Desvio forecast vs. realizado >15% | Revisão da metodologia de forecast | Responsável de Receita |
-
----
-
-## 9. Diagnóstico de Desvios e Análise de Causa Raiz
-
-| Desvio Observado | Possíveis Causas Raiz | Método de Diagnóstico |
-|-----------------|----------------------|----------------------|
-| NRR abaixo de 100% | Churn alto; ausência de expansão; contração de contratos | Decomposição do MRR bridge; análise de motivos de churn |
-| Alta inadimplência | Fluxo de caixa dos clientes; problemas com a fatura; processo de cobrança ineficaz | Análise por segmento, por faixa de valor, por tipo de cliente |
-| Forecast impreciso | Critérios de pipeline mal definidos; oportunidades superavaliadas; sazonalidade não considerada | Análise de forecast vs. realizado histórico por fonte de dados |
-| Erro de faturamento alto | Processo manual; dados do contrato mal cadastrados; múltiplos sistemas desconectados | Auditoria de processo de cadastro e emissão de fatura |
-| Churn MRR crescente | Baixo valor percebido; problemas de entrega (CAP-05); concorrência; preço | Análise de motivos de cancelamento + NPS dos churned customers |
-
----
-
-## 10. Planos de Ação Padronizados
-
-### PA-RV-01: NRR Abaixo de 100% por 2 Meses Consecutivos
-```
-Semana 1: Decomposição completa do MRR bridge dos últimos 2 meses
-Semana 2: Análise detalhada dos motivos de churn (entrevistas com churned customers)
-Semana 3: Identificar 10 clientes com maior risco de churn (CAP-05) → intervenção proativa
-Semana 4: Lançar iniciativa de expansão nas 20 maiores contas ativas
-Mês 2: Monitorar NRR semanalmente
+  reconhecimento_proporcional:
+    regra: "contrato iniciado no meio do mês é reconhecido pro-rata"
+    formula: "mrr_mensal * (dias_restantes_mes / dias_no_mes)"
 ```
 
-### PA-RV-02: Inadimplência Acima de [Meta]
-```
-Imediato: Listar todas as faturas em atraso + responsável por conta
-Semana 1: Contato direto em todas as faturas >15 dias (CAP-05)
-Semana 2: Renegociação de prazo para faturas >30 dias (com aprovação da liderança)
-Semana 3: Avaliação jurídica para faturas >60 dias
-Paralelo: Revisar processo de cobrança e canais de pagamento disponíveis
+### CAP-04.2 — Faturamento Recorrente
+
+Geração e envio de faturas para clientes ativos.
+
+```yaml
+fatura:
+  id: "FAT-ID"
+  cliente_id: "CLI-ID"
+  contrato_id: "CTR-ID"
+  competencia: "YYYY-MM"
+  status: "gerada | enviada | visualizada | paga | em_atraso | cancelada | estornada"
+
+  valor_bruto: 0.0
+  impostos_json: {}         # cálculo de impostos pelo ERP
+  valor_liquido: 0.0
+  valor_pago: 0.0
+  valor_pendente: 0.0
+
+  data_vencimento: ""
+  data_pagamento: null
+  dias_em_atraso: 0
+
+  forma_pagamento: "boleto | cartao_recorrente | pix | transferencia | cheque"
+  codigo_barras: null
+  link_pagamento: null
+
+  tentativas_cobranca: 0
+  proxima_tentativa: null
+
+  gerada_em: ""
+  enviada_em: null
+  paga_em: null
 ```
 
-### PA-RV-03: Forecast Desvio >15%
+### CAP-04.3 — Ciclo de Cobrança (Dunning)
+
+Processo estruturado de recuperação de faturas em atraso.
+
+```yaml
+dunning_policy:
+  D0:
+    evento: "fatura emitida"
+    acao: "enviar fatura ao cliente com link de pagamento"
+    canal: "email + portal do cliente"
+
+  D_plus_1:
+    gatilho: "1 dia após vencimento sem pagamento"
+    acao: "lembrete gentil de fatura em aberto"
+    canal: "email"
+    tom: "informativo"
+
+  D_plus_5:
+    gatilho: "5 dias em atraso"
+    acao: "lembrete de urgência com opção de negociação"
+    canal: "email + mensageria"
+    tom: "urgente"
+
+  D_plus_15:
+    gatilho: "15 dias em atraso"
+    acao: "contato ativo do time financeiro; oferta de parcelamento"
+    canal: "ligação + email"
+    tom: "formal"
+    escalacao_interna: "CS do cliente (via CAP-05) é notificado"
+
+  D_plus_30:
+    gatilho: "30 dias em atraso"
+    acao: "notificação de suspensão de serviço; escalação para gestor"
+    canal: "email formal + mensageria"
+    tom: "legal"
+    escalacao_interna: "gestor comercial + CS"
+    risco_churn: "alto — publicar alerta para CAP-05"
+
+  D_plus_60:
+    gatilho: "60 dias em atraso"
+    acao: "suspensão de serviço conforme contrato; encaminhar para cobrança externa"
+    canal: "notificação formal"
+    escalacao: "jurídico / cobrança externa"
 ```
-Semana 1: Revisar critérios de probabilidade por etapa do funil
-Semana 2: Recalibrar pesos do modelo de forecast com base em dados históricos
-Semana 3: Implementar revisão semanal de forecast (não apenas mensal)
+
+### CAP-04.4 — NRR e GRR (Net/Gross Revenue Retention)
+
+Métricas de retenção de receita por coorte de clientes.
+
+```yaml
+nrr_calculation:
+  formula: "(MRR_inicio_periodo + Expansion_MRR - Churn_MRR - Contraction_MRR) / MRR_inicio_periodo * 100"
+  benchmark_saas: "> 100%"
+  benchmark_servicos: "> 95%"
+  frequencia: "mensal e rolling 12 meses"
+  dimensoes:
+    - por_segmento
+    - por_coorte_mes_contratacao
+    - por_plano
+
+grr_calculation:
+  formula: "(MRR_inicio_periodo - Churn_MRR - Contraction_MRR) / MRR_inicio_periodo * 100"
+  nota: "GRR mede retenção sem expansão — indica saúde de retenção pura"
+  frequencia: "mensal"
+```
+
+### CAP-04.5 — Reconciliação Financeira
+
+Processo de comparação entre faturamento emitido e recebimentos confirmados no ERP.
+
+```yaml
+reconciliacao:
+  frequencia: "mensal (até dia 5 do mês seguinte)"
+  fontes:
+    - "faturas emitidas pelo CAP-04"
+    - "recebimentos confirmados no ERP (via CONN-ERP-FINANCEIRO)"
+    - "recebimentos no gateway de pagamento (via CONN-GATEWAY-PAGAMENTO)"
+
+  processo:
+    - "listar todas as faturas do mês com status"
+    - "cruzar com recebimentos do ERP e gateway"
+    - "identificar divergências: fatura paga mas não baixada | recebimento sem fatura | valor divergente"
+    - "registrar divergências para tratamento"
+    - "produzir relatório de reconciliação aprovado"
+
+  sla: "reconciliação concluída até dia 5 do mês seguinte"
 ```
 
 ---
 
-## 11. Procedimentos de Auditoria
+## 6. Fluxo Operacional
 
-### 11.1 Auditoria Mensal (Responsável de Receita / Financeiro)
-**Checklist:**
-- [ ] Reconciliação bancária: pagamentos recebidos vs. faturas emitidas
-- [ ] 0 contratos ativos sem fatura emitida no mês
-- [ ] MRR bridge calculado e publicado (New, Expansion, Churn, Contraction)
-- [ ] NRR e GRR calculados
-- [ ] Lista de inadimplentes atualizada (>30 dias) com status de tratamento
-- [ ] Forecast do próximo mês publicado
-
-### 11.2 Auditoria Trimestral (Liderança)
-**Checklist:**
-- [ ] Tendência de NRR (3 meses)
-- [ ] Análise de cohort de churn: quais segmentos/perfis churnam mais
-- [ ] Revisão da estratégia de expansão de receita
-- [ ] ARPU por segmento calculado e comparado com meta de CAP-06
-- [ ] ARR projetado para próximos 12 meses
-
-### 11.3 Auditoria Anual (Liderança + Conselho)
-**Checklist:**
-- [ ] ARR realizado vs. meta do ano
-- [ ] Evolução histórica do NRR (12 meses)
-- [ ] Análise de concentração de receita (nenhum cliente >20% do total)
-- [ ] Previsão de ARR para o próximo ano com premissas documentadas
-
----
-
-## 12. Possibilidades de Automação
-
-### 12.1 Faturamento e Cobrança
-| Automação | Ferramenta | Trigger | Ação |
-|-----------|----------|---------|------|
-| Emissão automática de NF/fatura | ERP/Financeiro integrado | Data de faturamento do contrato | Emite, envia ao cliente e registra |
-| Lembretes automáticos de pagamento | ERP/CRM | +1, +5, +15 dias de atraso | E-mail automático escalonado |
-| Cobrança recorrente automática | Gateway de pagamento (Stripe, PagSeguro) | Data de vencimento | Débito automático no cartão/débito |
-| Reconciliação bancária automática | ERP + API bancária | Diariamente | Baixa faturas pagas automaticamente |
-
-### 12.2 Inteligência Artificial
-| Automação | Aplicação |
-|-----------|----------|
-| Previsão de churn por cliente | ML identifica padrões de comportamento que precedem cancelamento |
-| Forecast de receita preditivo | Modelo de ML calcula forecast mais preciso que cálculo manual |
-| Identificação de oportunidades de expansão | IA identifica clientes com alto potencial de upsell (uso, engajamento, NPS) |
-
-### 12.3 Dashboards
-| Dashboard | Métricas | Público |
-|-----------|---------|---------|
-| Revenue Overview | MRR, ARR, NRR, GRR, Churn Rate | Liderança (tempo real) |
-| MRR Bridge | New/Expansion/Churn/Contraction visual | Gerente + Liderança (mensal) |
-| Cobrança e Inadimplência | Faturas em aberto, tempo médio de pagamento | Financeiro + Gerente (diário) |
-| Revenue Forecast | Pipeline de receita por mês (rolling 3M) | Liderança (semanal) |
-
-### 12.4 Integrações
-- **CAP-03 (Contratos) → Faturamento:** Contrato assinado aciona automaticamente o cadastro no sistema de faturamento
-- **CAP-05 (Clientes) → CAP-04:** Cancelamentos e expansões notificam automaticamente o módulo de receita
-- **CAP-04 → CAP-08:** MRR e NRR publicados automaticamente no dashboard de performance
-
----
-
-## 13. Interfaces e Dependências com Outros Módulos
-
-### 13.1 Matriz de Interfaces
-
-| Módulo | Tipo | CAP-04 Fornece | CAP-04 Recebe |
-|--------|------|----------------|---------------|
-| CAP-03 Processo de Vendas | Recebe | — | Contratos assinados com condições de faturamento |
-| CAP-05 Gestão de Clientes | Bilateral | Alertas de inadimplência para o CS responsável | Eventos de expansão, cancelamento e contração |
-| CAP-06 Oferta e Precificação | Recebe | Dados de ARPU e ticket médio realizado (feedback) | Tabela de preços vigente |
-| CAP-08 Performance e Autogestão | Fornece | MRR, ARR, NRR, Forecast, Churn Rate | Metas de receita e crescimento |
-| CAP-01 Inteligência Comercial | Fornece | Dados de NRR e churn por segmento | — |
-
-### 13.2 Sequência Crítica de Dependências
 ```
-CAP-03 (Contrato assinado)
-    → CAP-04 (Registra MRR + agenda faturamento)
-    → CAP-05 (Cliente ativo = ativado para success)
-    → CAP-08 (MRR adicionado ao dashboard de performance)
+[FLUXO A — RECONHECIMENTO DE RECEITA E FATURAMENTO]
+
+[TRIGGER: cliente.contrato_assinado recebido de CAP-03]
+│
+├─► Criar registro de receita recorrente:
+│   ├─ tipo: new_mrr
+│   ├─ valor: contrato.mrr
+│   └─ data_inicio: contrato.data_inicio
+│
+├─► Atualizar MRR Bridge: + new_mrr
+│
+├─► Agendar ciclo de faturamento recorrente (via ENG-07):
+│   ├─ competência e data de vencimento conforme contrato
+│   └─ forma de pagamento configurada
+│
+├─► Publicar: receita.mrr_atualizado
+│
+└─► [CICLO MENSAL — para cada cliente ativo]
+    ├─► Gerar fatura (ENG-07 trigger: dia do faturamento)
+    ├─► Calcular impostos (via CONN-ERP-FINANCEIRO)
+    ├─► Enviar fatura ao cliente (CONN-EMAIL-TRANSACIONAL + portal)
+    └─► Iniciar monitoramento de pagamento
+
+
+[FLUXO B — COBRANÇA E DUNNING]
+
+[TRIGGER: fatura.vencida (data_vencimento < hoje e status ≠ paga)]
+│
+├─► D+1: lembrete de vencimento → email automático
+│
+├─► D+5: alerta de atraso → email + mensageria
+│
+├─► D+15:
+│   ├─► Contato ativo do time financeiro
+│   └─► Notificar CS do cliente (via evento `receita.inadimplencia.d15`)
+│       └─► CAP-05 recebe e registra risco financeiro no health score do cliente
+│
+├─► D+30:
+│   ├─► Notificação formal de suspensão
+│   ├─► Escalar para gestor + CS
+│   └─► Publicar: receita.inadimplencia.critica → CAP-05 aplica protocolo de retenção de emergência
+│
+└─► D+60:
+    ├─► Executar suspensão conforme contrato
+    └─► Encaminhar para cobrança externa / jurídico
+
+
+[FLUXO C — ATUALIZAÇÃO DE MRR POR EVENTO DE CLIENTE]
+
+[TRIGGER: cliente.expandido | cliente.contrato_reduzido | cliente.churned]
+│
+├─► cliente.expandido:
+│   ├─► Registrar expansion_mrr = delta_mrr_positivo
+│   └─► Atualizar MRR Bridge: + expansion_mrr
+│
+├─► cliente.contrato_reduzido:
+│   ├─► Registrar contraction_mrr = delta_mrr_negativo
+│   └─► Atualizar MRR Bridge: − contraction_mrr
+│
+└─► cliente.churned:
+    ├─► Registrar churn_mrr = contrato.mrr
+    ├─► Atualizar MRR Bridge: − churn_mrr
+    ├─► Cancelar ciclo de faturamento recorrente
+    └─► Emitir nota de cancelamento se aplicável
+│
+[Em todos os casos] → Publicar: receita.mrr_atualizado
+
+
+[FLUXO D — RECONCILIAÇÃO MENSAL]
+
+[TRIGGER: sistema.periodo_encerrado (mensal)]
+│
+├─► Coletar: faturas emitidas do mês (status por fatura)
+├─► Coletar: recebimentos do ERP (CONN-ERP-FINANCEIRO)
+├─► Coletar: confirmações do gateway de pagamento (CONN-GATEWAY-PAGAMENTO)
+├─► Cruzar e identificar divergências
+├─► Tratar divergências (baixar pagamentos, ajustar status de faturas)
+├─► Produzir relatório de reconciliação
+└─► Publicar: receita.reconciliacao_concluida
+```
+
+---
+
+## 7. Estados
+
+### 7.1 Estados da Fatura
+
+```
+GERADA → ENVIADA → [VISUALIZADA] → PAGA
+                         │
+                    EM_ATRASO (vencida sem pagamento)
+                         │
+              D+1 → D+5 → D+15 → D+30 → D+60
+                                            │
+                                     SUSPENSA | CANCELADA | ESTORNADA
+```
+
+### 7.2 Estados da Receita por Contrato
+
+```
+RECONHECIDA → ATIVA → [EXPANDED | CONTRACTED] → CHURNED
+```
+
+### 7.3 Estados da Reconciliação
+
+```
+PENDENTE → EM_ANDAMENTO → CONCLUIDA_COM_DIVERGENCIAS | CONCLUIDA_OK
+```
+
+---
+
+## 8. Regras de Negócio
+
+### RN-01 — Reconhecimento de MRR Vinculado ao Contrato Assinado
+MRR só é reconhecido após receber o evento `cliente.contrato_assinado` de CAP-03. Não existe receita reconhecida sem contrato formalizado. MRR de contratos sem assinatura é proibido.
+
+### RN-02 — Faturamento no Prazo Contratual
+A fatura DEVE ser gerada e enviada no prazo definido no contrato (geralmente no início ou no final do período de competência). Fatura enviada com atraso de mais de 3 dias úteis é uma não-conformidade operacional.
+
+### RN-03 — Dunning Automatizado e Imutável
+O ciclo de dunning (D+1, D+5, D+15, D+30, D+60) é automatizado e não pode ser pulado manualmente sem aprovação do gestor financeiro e registro no DECISION_LOG. A consistência do dunning é fundamental para a previsibilidade de recebimento.
+
+### RN-04 — Inadimplência Comunicada ao CS em D+15
+Em D+15 de atraso, o CS responsável pelo cliente DEVE ser notificado. A inadimplência financeira é um sinal de risco de churn. CAP-05 e CAP-04 cooperam neste ponto via evento, não por integração direta.
+
+### RN-05 — NRR É Calculado por Coorte, Não Apenas Global
+O NRR global mascara problemas por segmento. O CAP-04 DEVE calcular NRR por: segmento de cliente, coorte de mês de contratação, e plano/produto. NRR apenas global é métrica insuficiente para diagnóstico.
+
+### RN-06 — Reconciliação Mensal Obrigatória
+A reconciliação financeira DEVE ser concluída até o dia 5 do mês seguinte. Reconciliação não executada é não-conformidade. Divergências identificadas na reconciliação DEVEM ser tratadas antes do fechamento do período.
+
+### RN-07 — MRR Bridge É a Fonte de Verdade
+O MRR Bridge (New + Expansion − Churn − Contraction) é o único cálculo oficial de MRR. Qualquer outra forma de calcular MRR deve ser alinhada ao Bridge antes de ser comunicada. Divergências entre o MRR do Bridge e o MRR reportado são não-conformidades.
+
+### RN-08 — Reembolso Requer Aprovação e Registro
+Todo reembolso ou estorno DEVE ser aprovado pelo gestor financeiro ou comercial (conforme valor) e registrado com motivo estruturado. Reembolso não registrado impacta o NRR sem justificativa visível.
+
+### RN-09 — Suspensão de Serviço em D+60 É Automática
+Após 60 dias de inadimplência, a suspensão do serviço é executada automaticamente conforme cláusula contratual. A suspensão não é negociável sem um acordo de parcelamento formal aprovado pelo gestor — e o acordo deve ser registrado com novo plano de pagamento.
+
+---
+
+## 9. Eventos Publicados
+
+| Evento | Quando | Payload Principal |
+|--------|--------|-----------------|
+| `receita.mrr_atualizado` | Qualquer mudança no MRR | `{tipo: new\|expansion\|contraction\|churn, valor_delta, mrr_total_novo, cliente_id, contrato_id}` |
+| `receita.fatura_emitida` | Fatura gerada e enviada | `{fatura_id, cliente_id, valor, competencia, data_vencimento, forma_pagamento}` |
+| `receita.fatura_paga` | Pagamento confirmado | `{fatura_id, cliente_id, valor_pago, data_pagamento, forma_pagamento}` |
+| `receita.inadimplencia.d1` | Fatura 1 dia em atraso | `{fatura_id, cliente_id, valor, dias_atraso}` |
+| `receita.inadimplencia.d15` | Fatura 15 dias em atraso — CS notificado | `{fatura_id, cliente_id, valor, dias_atraso, cs_responsavel}` |
+| `receita.inadimplencia.critica` | Fatura 30+ dias em atraso | `{fatura_id, cliente_id, valor, dias_atraso, risco_churn: alto}` |
+| `receita.mrr_bridge.calculado` | MRR Bridge do mês calculado | `{periodo, mrr_inicial, new_mrr, expansion_mrr, churn_mrr, contraction_mrr, mrr_final, nrr}` |
+| `receita.reconciliacao_concluida` | Reconciliação mensal finalizada | `{periodo, faturas_total, recebimentos_confirmados, divergencias_count, status: ok\|com_divergencias}` |
+| `receita.suspensao_executada` | Serviço suspenso por inadimplência | `{cliente_id, contrato_id, dias_atraso, valor_pendente}` |
+
+---
+
+## 10. Eventos Consumidos
+
+| Evento | Origem | Ação ao Receber |
+|--------|--------|----------------|
+| `receita.contrato_novo` | CAP-03 | Reconhecer new_mrr; agendar faturamento recorrente |
+| `cliente.expandido` | CAP-05 | Reconhecer expansion_mrr; atualizar faturamento |
+| `cliente.contrato_reduzido` | CAP-05 | Reconhecer contraction_mrr; ajustar faturamento |
+| `cliente.churned` | CAP-05 | Reconhecer churn_mrr; cancelar faturamento recorrente |
+| `oferta.tabela_precos.atualizada` | CAP-06 | Atualizar base de cálculo para novos contratos |
+| `sistema.periodo_encerrado` | Scheduler (mensal) | Iniciar reconciliação; calcular MRR Bridge; calcular NRR/GRR |
+| `melhoria.item.implementado` | ENG-09 | Revisar processos impactados |
+
+---
+
+## 11. KPIs
+
+| ID | Nome | Fórmula | Meta | Frequência |
+|----|------|---------|------|-----------|
+| KPI-RV-01 | MRR (Monthly Recurring Revenue) | `MRR_Bridge` | Crescente | Mensal |
+| KPI-RV-02 | ARR (Annual Recurring Revenue) | `MRR × 12` | Crescente | Mensal |
+| KPI-RV-03 | New MRR | `soma(new_mrr_do_mes)` | Por plano | Mensal |
+| KPI-RV-04 | Expansion MRR | `soma(expansion_mrr_do_mes)` | Crescente | Mensal |
+| KPI-RV-05 | Churn MRR | `soma(churn_mrr_do_mes)` | Decrescente | Mensal |
+| KPI-RV-06 | MRR Churn Rate | `churn_mrr / mrr_inicio_periodo × 100` | < 2% | Mensal |
+| KPI-RV-07 | NRR (Net Revenue Retention) | `(MRR_inicio + Exp − Churn − Contr) / MRR_inicio × 100` | > 100% | Mensal |
+| KPI-RV-08 | GRR (Gross Revenue Retention) | `(MRR_inicio − Churn − Contr) / MRR_inicio × 100` | > 90% | Mensal |
+| KPI-RV-09 | Taxa de Inadimplência | `valor_em_atraso / mrr × 100` | < 3% | Mensal |
+| KPI-RV-10 | Days Sales Outstanding (DSO) | `(contas_a_receber / receita_periodo) × dias` | < 30 dias | Mensal |
+| KPI-RV-11 | Taxa de Recuperação de Inadimplentes | `valor_recuperado / valor_em_atraso × 100` | > 70% | Mensal |
+| KPI-RV-12 | Acurácia da Reconciliação | `faturas_sem_divergencia / total_faturas × 100` | 100% | Mensal |
+
+---
+
+## 12. Alertas
+
+| ID | Condição | Severidade | Ação |
+|----|---------|-----------|------|
+| ALT-RV-01 | MRR Churn Rate > 3% no mês | CRITICAL | Escalar para liderança; acionar protocolo retenção em CAP-05 |
+| ALT-RV-02 | NRR < 95% no mês | WARNING | Diagnóstico: churn alto ou expansão insuficiente? |
+| ALT-RV-03 | NRR < 90% no mês | CRITICAL | Escalar para liderança; plano de retenção emergencial |
+| ALT-RV-04 | Taxa de inadimplência > 5% | CRITICAL | Acionar revisão do dunning; escalar para gestor |
+| ALT-RV-05 | Fatura em atraso D+30 | WARNING | Escalar para CS + gestor; protocolo de suspensão ativado |
+| ALT-RV-06 | MRR com queda por 2 meses consecutivos | CRITICAL | Diagnóstico ENG-04: churn > new_mrr ou expansion insuficiente? |
+| ALT-RV-07 | Reconciliação com divergências > 2% do faturamento | WARNING | Investigar e tratar antes do fechamento |
+| ALT-RV-08 | DSO > 45 dias | WARNING | Revisar eficácia do dunning; verificar formas de pagamento |
+
+---
+
+## 13. Planos de Ação Automáticos
+
+### PA-RV-01 — MRR em Queda (Gatilho: ALT-RV-06)
+```yaml
+plano_acao:
+  tipo: diagnostico_e_correcao
+  prazo_dias: 30
+  tarefas:
+    - "Decompor MRR Bridge: queda vem de churn_mrr alto, expansion insuficiente, ou new_mrr baixo?"
+    - "Se churn alto: acionar CAP-05 com alerta prioritário para protocolo de retenção"
+    - "Se expansion baixa: verificar com CAP-05 se oportunidades de expansão estão sendo trabalhadas"
+    - "Se new_mrr baixo: verificar funil de CAP-02 e CAP-03 (volume de SQLs e conversão)"
+  metrica_sucesso: "MRR retorna a crescimento em 60 dias"
+```
+
+### PA-RV-02 — Inadimplência Alta (Gatilho: ALT-RV-04)
+```yaml
+plano_acao:
+  tipo: correcao_operacional
+  prazo_dias: 30
+  tarefas:
+    - "Listar todos os clientes em atraso por faixa (D+1 a D+60)"
+    - "Para clientes D+15: verificar se CS foi notificado e está agindo"
+    - "Para clientes D+30+: reunião semanal de cobrança com gestor"
+    - "Analisar se inadimplência está concentrada em segmento/produto específico"
+    - "Se problema sistêmico: revisar processo de onboarding financeiro (forma de pagamento, recorrência)"
+  metrica_sucesso: "Taxa de inadimplência < 3% em 60 dias"
+```
+
+---
+
+## 14. Automações
+
+| ID | Trigger | Ação Automatizada | Conector |
+|----|---------|-----------------|---------|
+| AUT-RV-01 | `receita.contrato_novo` recebido | Reconhecer MRR; criar ciclo de faturamento recorrente | CONN-ERP-FINANCEIRO |
+| AUT-RV-02 | Dia de faturamento do cliente | Gerar fatura; calcular impostos; enviar ao cliente | CONN-ERP-FINANCEIRO, CONN-EMAIL-TRANSACIONAL |
+| AUT-RV-03 | Fatura D+1 sem pagamento | Enviar lembrete de vencimento | CONN-EMAIL-TRANSACIONAL |
+| AUT-RV-04 | Fatura D+5 sem pagamento | Enviar alerta de urgência + mensageria | CONN-EMAIL-TRANSACIONAL, CONN-MENSAGERIA |
+| AUT-RV-05 | Fatura D+15 sem pagamento | Notificar CS do cliente; publicar `receita.inadimplencia.d15` | CONN-MENSAGERIA, Barramento SOE |
+| AUT-RV-06 | Fatura D+30 sem pagamento | Publicar `receita.inadimplencia.critica`; notificação formal de suspensão | Barramento SOE, CONN-EMAIL-TRANSACIONAL |
+| AUT-RV-07 | Fatura D+60 sem pagamento | Executar suspensão de serviço; publicar `receita.suspensao_executada` | CONN-ERP-FINANCEIRO, Barramento SOE |
+| AUT-RV-08 | `cliente.expandido` recebido | Atualizar MRR; ajustar faturamento futuro | CONN-ERP-FINANCEIRO |
+| AUT-RV-09 | `cliente.churned` recebido | Registrar churn_mrr; cancelar faturamento recorrente | CONN-ERP-FINANCEIRO |
+| AUT-RV-10 | `sistema.periodo_encerrado` (mensal) | Calcular MRR Bridge; calcular NRR/GRR; iniciar reconciliação | ENG-02 |
+
+---
+
+## 15. Auditoria Operacional
+
+### Checklist Mensal — CAP-04-AUD-MENSAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | MRR Bridge calculado e publicado | Evento `receita.mrr_bridge.calculado` | Registro do evento com valores |
+| 2 | 100% das faturas geradas no prazo contratual | Log de faturamento | Zero faturas com atraso > 3 dias úteis |
+| 3 | Ciclo de dunning executado conforme política | Log de ações por fatura em atraso | 100% das faturas com dunning correto |
+| 4 | Reconciliação concluída até dia 5 do mês | `receita.reconciliacao_concluida` | Evento registrado com data |
+| 5 | Taxa de inadimplência dentro do limite | KPI-RV-09 | < 3% |
+| 6 | NRR calculado por segmento e coorte | KPI-RV-07 com dimensões | Relatório com breakdown |
+| 7 | Clientes D+15+ têm CS notificado | Log de eventos `receita.inadimplencia.d15` | 100% dos casos com CS notificado |
+| 8 | Alertas tratados dentro do SLA da ENG-03 | Taxa de resolução | ≥ 90% no SLA |
+
+---
+
+## 16. ENGINE-REGISTRATION.yaml
+
+```yaml
+# ENGINE-REGISTRATION.yaml — CAP-04 Gestão de Receita
+# Ref: ARC-ENG-099
+
+modulo:
+  id: "CAP-04"
+  nome: "Gestão de Receita"
+  versao: "2.0.0"
+  tier: "core"
+  status: "ativo"
+
+dependencias:
+  modulos:
+    - id: "CAP-03"
+      uso: "receber contratos assinados para reconhecimento de MRR"
+    - id: "CAP-05"
+      uso: "receber eventos de expansão, contração e churn; notificar CS sobre inadimplência"
+    - id: "CAP-06"
+      uso: "tabela de preços vigente para cálculo de faturamento"
+  engines:
+    - id: "ENG-01"
+      uso: "instâncias de faturamento e ciclos de cobrança"
+    - id: "ENG-02"
+      uso: "KPIs KPI-RV-01 a KPI-RV-12"
+    - id: "ENG-03"
+      uso: "alertas ALT-RV-01 a ALT-RV-08"
+    - id: "ENG-04"
+      uso: "diagnóstico de queda de MRR e inadimplência"
+    - id: "ENG-05"
+      uso: "planos de ação PA-RV-01 a PA-RV-02"
+    - id: "ENG-06"
+      uso: "auditoria mensal"
+    - id: "ENG-07"
+      uso: "workflows AUT-RV-01 a AUT-RV-10"
+    - id: "ENG-08"
+      uso: "ERP financeiro, gateway de pagamento, email transacional, mensageria"
+
+eventos_publicados:
+  - evento: "receita.mrr_atualizado"
+    condicao: "qualquer mudança no MRR"
+  - evento: "receita.fatura_emitida"
+    condicao: "fatura gerada e enviada"
+  - evento: "receita.fatura_paga"
+    condicao: "pagamento confirmado"
+  - evento: "receita.inadimplencia.d1"
+    condicao: "fatura 1 dia em atraso"
+  - evento: "receita.inadimplencia.d15"
+    condicao: "fatura 15 dias em atraso"
+  - evento: "receita.inadimplencia.critica"
+    condicao: "fatura 30+ dias em atraso"
+  - evento: "receita.mrr_bridge.calculado"
+    condicao: "MRR Bridge mensal calculado"
+  - evento: "receita.reconciliacao_concluida"
+    condicao: "reconciliação mensal finalizada"
+  - evento: "receita.suspensao_executada"
+    condicao: "serviço suspenso por inadimplência D+60"
+
+eventos_consumidos:
+  - evento: "receita.contrato_novo"
+    origem: "CAP-03"
+    acao: "reconhecer new_mrr; agendar faturamento"
+  - evento: "cliente.expandido"
+    origem: "CAP-05"
+    acao: "reconhecer expansion_mrr; atualizar faturamento"
+  - evento: "cliente.contrato_reduzido"
+    origem: "CAP-05"
+    acao: "reconhecer contraction_mrr; ajustar faturamento"
+  - evento: "cliente.churned"
+    origem: "CAP-05"
+    acao: "reconhecer churn_mrr; cancelar faturamento"
+  - evento: "oferta.tabela_precos.atualizada"
+    origem: "CAP-06"
+    acao: "atualizar base de cálculo para novos contratos"
+  - evento: "sistema.periodo_encerrado"
+    origem: "Scheduler"
+    acao: "calcular MRR Bridge, NRR, GRR; iniciar reconciliação"
+  - evento: "melhoria.item.implementado"
+    origem: "ENG-09"
+    acao: "revisar processos impactados"
+
+kpis_registrados:
+  - id: "KPI-RV-01"
+    nome: "MRR"
+    formula: "mrr_bridge_valor_final"
+    unidade: "moeda"
+    frequencia_calculo: "mensal"
+  - id: "KPI-RV-02"
+    nome: "ARR"
+    formula: "mrr * 12"
+    unidade: "moeda"
+    frequencia_calculo: "mensal"
+  - id: "KPI-RV-03"
+    nome: "New MRR"
+    formula: "soma(new_mrr_do_mes)"
+    unidade: "moeda"
+    frequencia_calculo: "mensal"
+  - id: "KPI-RV-04"
+    nome: "Expansion MRR"
+    formula: "soma(expansion_mrr_do_mes)"
+    unidade: "moeda"
+    frequencia_calculo: "mensal"
+  - id: "KPI-RV-05"
+    nome: "Churn MRR"
+    formula: "soma(churn_mrr_do_mes)"
+    unidade: "moeda"
+    frequencia_calculo: "mensal"
+  - id: "KPI-RV-06"
+    nome: "MRR Churn Rate"
+    formula: "churn_mrr / mrr_inicio_periodo * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 2
+    limiar_warning: 3
+    limiar_critical: 5
+  - id: "KPI-RV-07"
+    nome: "NRR"
+    formula: "(mrr_inicio + expansion - churn - contraction) / mrr_inicio * 100"
+    unidade: "percentual"
+    dimensoes: ["global", "segmento_id", "coorte_mes"]
+    frequencia_calculo: "mensal"
+    meta_padrao: 100
+    limiar_warning: 95
+    limiar_critical: 90
+  - id: "KPI-RV-08"
+    nome: "GRR"
+    formula: "(mrr_inicio - churn - contraction) / mrr_inicio * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 90
+    limiar_warning: 85
+  - id: "KPI-RV-09"
+    nome: "Taxa de Inadimplência"
+    formula: "valor_em_atraso / mrr * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 3
+    limiar_warning: 5
+  - id: "KPI-RV-10"
+    nome: "DSO"
+    formula: "(contas_a_receber / receita_periodo) * dias_periodo"
+    unidade: "dias"
+    frequencia_calculo: "mensal"
+    meta_padrao: 30
+    limiar_warning: 45
+  - id: "KPI-RV-11"
+    nome: "Taxa de Recuperação de Inadimplentes"
+    formula: "valor_recuperado / valor_em_atraso * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 70
+  - id: "KPI-RV-12"
+    nome: "Acurácia da Reconciliação"
+    formula: "faturas_sem_divergencia / total_faturas * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 100
+
+alertas_registrados:
+  - id: "ALT-RV-01"
+    kpi_ref: "KPI-RV-06"
+    condicao: "> 3"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-RV-02"
+    kpi_ref: "KPI-RV-07"
+    condicao: "< 95"
+    severidade: "warning"
+    owner: "responsavel_cap04"
+  - id: "ALT-RV-03"
+    kpi_ref: "KPI-RV-07"
+    condicao: "< 90"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-RV-04"
+    kpi_ref: "KPI-RV-09"
+    condicao: "> 5"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-RV-05"
+    condicao: "fatura.dias_atraso >= 30"
+    severidade: "warning"
+    owner: "gestor_financeiro + cs_responsavel"
+  - id: "ALT-RV-06"
+    kpi_ref: "KPI-RV-01"
+    condicao: "queda por 2 meses consecutivos"
+    severidade: "critical"
+    owner: "gestor_comercial"
+    acao_automatica: "disparar_diagnostico_eng04"
+  - id: "ALT-RV-07"
+    condicao: "reconciliacao.divergencias_percentual > 2"
+    severidade: "warning"
+    owner: "responsavel_cap04"
+  - id: "ALT-RV-08"
+    kpi_ref: "KPI-RV-10"
+    condicao: "> 45"
+    severidade: "warning"
+    owner: "responsavel_cap04"
+
+workflows_registrados:
+  - id: "WF-RV-01"
+    nome: "Reconhecimento de Receita e Agendamento de Faturamento"
+    gatilho: "receita.contrato_novo"
+    descricao: "reconhece MRR, cria ciclo de faturamento recorrente"
+  - id: "WF-RV-02"
+    nome: "Emissão e Envio de Fatura"
+    gatilho: "dia de faturamento do cliente"
+    descricao: "gera fatura, calcula impostos, envia ao cliente"
+  - id: "WF-RV-03"
+    nome: "Ciclo de Dunning"
+    gatilho: "fatura.data_vencimento < hoje AND status != paga"
+    descricao: "executa D+1, D+5, D+15, D+30, D+60 com ações progressivas"
+  - id: "WF-RV-04"
+    nome: "Atualização de MRR por Evento"
+    gatilho: "cliente.expandido | cliente.contrato_reduzido | cliente.churned"
+    descricao: "reconhece mudança de MRR, atualiza faturamento"
+  - id: "WF-RV-05"
+    nome: "Reconciliação Mensal"
+    gatilho: "sistema.periodo_encerrado (mensal)"
+    descricao: "cruza faturamento com ERP e gateway, trata divergências"
+
+auditoria_checklists:
+  - id: "CAP-04-AUD-MENSAL"
+    tipo: "mensal"
+    itens_count: 8
+
+conectores_utilizados:
+  - "CONN-ERP-FINANCEIRO"
+  - "CONN-GATEWAY-PAGAMENTO"
+  - "CONN-EMAIL-TRANSACIONAL"
+  - "CONN-MENSAGERIA"
+  - "CONN-BANCO"
+
+permissoes_necessarias:
+  - recurso: "faturas"
+    acoes: ["read", "write", "send", "cancel"]
+  - recurso: "receita_reconhecida"
+    acoes: ["read", "write"]
+  - recurso: "mrr_bridge"
+    acoes: ["read", "write"]
+  - recurso: "reconciliacoes"
+    acoes: ["read", "write"]
+  - recurso: "kpi_values.KPI-RV-*"
+    acoes: ["read", "write_via_eng02"]
+  - recurso: "eventos_barramento"
+    acoes: ["publish", "subscribe"]
 ```
 
 ---
@@ -361,4 +794,5 @@ CAP-03 (Contrato assinado)
 
 | Versão | Data | Autor | Descrição |
 |--------|------|-------|-----------|
-| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial do Módulo Operacional CAP-04 |
+| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial |
+| 2.0.0 | 2026-06-29 | Guardião da Documentação | Redesenho como microserviço do Commercial OS — 16 seções, arquitetura orientada a eventos, ENGINE-REGISTRATION.yaml |

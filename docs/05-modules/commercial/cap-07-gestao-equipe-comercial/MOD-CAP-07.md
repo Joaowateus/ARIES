@@ -1,322 +1,633 @@
 ---
 id: MOD-CAP-07
-titulo: "Módulo Operacional — Gestão da Equipe Comercial"
-versao: "1.0.0"
+titulo: "CAP-07 — Gestão da Equipe Comercial"
+versao: "2.0.0"
 status: aprovado
-categoria: C3-Operacional
+categoria: Commercial-OS-Module
 autor: Guardião da Documentação Técnica
 criado-em: 2026-06-28
-atualizado-em: 2026-06-28
+atualizado-em: 2026-06-29
 dependencias:
-  - MOD-CAP-08
-tags: [equipe, comercial, vendedores, recrutamento, treinamento, onboarding, remuneracao, comissao, coaching, capacidade]
+  - ARC-ENG-000
+  - ARC-ENG-002
+  - ARC-ENG-003
+  - ARC-ENG-005
+  - ARC-ENG-006
+  - ARC-ENG-009
+  - MOD-CAP-02
+  - MOD-CAP-03
+tags: [commercial-os, cap-07, equipe, headcount, ramp-up, comissao, coaching, capacidade, treinamento]
 ---
 
-# MOD-CAP-07 — Gestão da Equipe Comercial
+# CAP-07 — Gestão da Equipe Comercial
 
----
-
-## 1. Objetivo da Capacidade
-
-Recrutar, desenvolver, reter e gerir a equipe comercial de forma que cada integrante opere com máxima performance, tenha clareza sobre metas e critérios de sucesso, receba o suporte necessário para atingi-los, e seja remunerado de forma justa e alinhada aos objetivos da empresa.
-
----
-
-## 2. Resultado Esperado
-
-| # | Resultado | Critério de Aceitação |
-|---|-----------|----------------------|
-| R1 | Equipe dimensionada corretamente | Capacidade de atendimento da equipe ≥ volume de demanda gerada (CAP-02 + CAP-05) |
-| R2 | Ramp-up de novos integrantes dentro do prazo | 100% dos novos membros atingem quota mínima até o fim do período de ramp-up |
-| R3 | Time treinado e certificado | 100% da equipe com treinamento de portfólio, processo e ferramentas completo |
-| R4 | Remuneração correta e no prazo | 0% de erros de cálculo de comissão; pagamento dentro do prazo acordado |
-| R5 | Turnover controlado | Turnover voluntário da equipe comercial ≤ [meta]% ao ano |
-
-**Definição de Sucesso:** A empresa consegue escalar ou redirecionar a equipe comercial em resposta a mudanças de mercado, sem dependência de pessoas-chave insubstituíveis.
+> **Módulo do Commercial Operating System**
+> Infraestrutura compartilhada: `docs/02-architecture/engine-autogestao/`
+> Contrato de integração: `ENGINE-CONTRATO-DE-INTEGRACAO.md` (ARC-ENG-099)
 
 ---
 
-## 3. Entradas Necessárias
+## 1. Identificação
 
-### 3.1 Entradas Primárias
-| Entrada | Fonte | Formato | Frequência |
-|---------|-------|---------|-----------|
-| Metas de receita e capacidade necessária | CAP-08 (Performance) | Estruturado | Anual / revisão |
-| Volume de demanda gerada | CAP-02 (Gestão de Demanda) | Estruturado | Mensal |
-| Portfólio atualizado e política de descontos | CAP-06 (Oferta e Precificação) | Documento | Por versão |
-| ICP Document e inteligência de mercado | CAP-01 (Inteligência Comercial) | Documento | Trimestral |
-| Performance individual (KPIs) | CAP-08 + CRM | Estruturado | Mensal |
-
----
-
-## 4. Saídas Obrigatórias
-
-### 4.1 Saídas para Operação
-| Saída | Destinatário | Periodicidade |
-|-------|-------------|--------------|
-| Capacidade de atendimento disponível | CAP-02 + CAP-05 | Mensal |
-| Resultado individual de comissões | Cada integrante + Financeiro | Mensal |
-| Plano de desenvolvimento individual (PDI) | Cada integrante | Trimestral |
-| Relatório de capacidade e headcount | Liderança + CAP-08 | Mensal |
+| Campo | Valor |
+|-------|-------|
+| **ID do Módulo** | CAP-07 |
+| **Nome** | Gestão da Equipe Comercial |
+| **Domínio** | People Operations Comercial |
+| **Versão** | 2.0.0 |
+| **Tier** | Core |
+| **Posição na cadeia** | Habilitador transversal — serve CAP-02, CAP-03, CAP-05, CAP-09 |
+| **Registro na Engine** | `ENGINE-REGISTRATION.yaml` (seção 16) |
 
 ---
 
-## 5. Regras de Negócio
+## 2. Objetivo
 
-### RN-01: Dimensionamento de Equipe
-- O número de vendedores/SDRs/CSs DEVE ser calculado com base na capacidade de atendimento necessária vs. volume de demanda
-- A empresa NÃO PODE operar com capacidade >80% por >2 meses consecutivos sem iniciar processo de contratação
-- Fórmula de capacidade: [volume de SQLs esperado por mês] / [SQLs por vendedor por mês] = nº mínimo de vendedores
+Garantir que o Commercial OS opere com a **capacidade, competência e motivação** corretas em todos os papéis comerciais — dimensionando o time de forma adequada às metas, acelerando o tempo de produtividade de novos membros e mantendo a performance individual dentro dos padrões esperados.
 
-### RN-02: Ramp-up de Novos Integrantes
-- Todo novo integrante da equipe comercial DEVE passar por programa de ramp-up estruturado antes de operar de forma independente
-- Período de ramp-up: [N] meses (a definir conforme complexidade do produto/venda)
-- Durante o ramp-up, o novo integrante opera com meta proporcional: [X]% no mês 1, [Y]% no mês 2, etc.
-- Se não atingir a meta mínima ao final do ramp-up, ativar PDI de correção (não demitir imediatamente sem processo)
-
-### RN-03: Estrutura de Remuneração
-- A política de comissionamento DEVE ser documentada e comunicada antes do início do período de avaliação
-- Comissão DEVE ser calculada com base em critérios objetivos e auditáveis registrados no CRM
-- Nenhuma mudança de regra de comissão pode ser retroativa
-- Comissão é devida no mês de fechamento/faturamento conforme política definida (não pode haver "calote" de comissão por motivos não previstos na política)
-
-### RN-04: Treinamento e Certificação
-- Equipe DEVE ser treinada sempre que: (a) novo produto/solução lançado, (b) processo de vendas atualizado significativamente, (c) novo membro ingressa na equipe
-- Certificação de portfólio é obrigatória antes de o integrante poder vender de forma independente
-- Treinamentos DEVEM ser documentados com lista de presença e avaliação de aprendizagem
-
-### RN-05: Feedback e Coaching
-- Gerente comercial DEVE realizar reunião 1:1 com cada integrante no mínimo mensalmente
-- Revisão de pipeline em grupo DEVE ocorrer semanalmente
-- Integrante com performance abaixo de [X]% da meta por 2 meses DEVE ter PDI formal ativado
-- PDI DEVE ter metas claras, prazo e critérios de avaliação
-
-### RN-06: Desligamento
-- Desligamento por performance DEVE ser precedido de PDI ativado, documentado e com prazo justo
-- Processo de offboarding DEVE garantir a transferência de carteira e o registro de todas as oportunidades ativas
+O CAP-07 trata o time comercial como um ativo gerenciado: não apenas contrata e demite, mas planeja capacidade, acelera ramp-up, mede performance individual, administra incentivos e executa intervenções de coaching antes que problemas se tornem irreversíveis.
 
 ---
 
-## 6. Fluxo Operacional Completo
+## 3. Escopo
 
-```
-CICLO 1 — CONTRATAÇÃO E INTEGRAÇÃO (por evento)
-│
-├─► [Identificação da necessidade de contratação]
-│     └─ Capacidade da equipe < volume necessário (RN-01)
-│
-├─► [Recrutamento]
-│     ├─ Definir perfil do cargo (baseado no ICP e processo de vendas)
-│     ├─ Divulgar vaga e selecionar candidatos
-│     └─ Entrevistas + avaliações técnicas e comportamentais
-│
-├─► [Onboarding Estruturado]
-│     ├─ Semana 1: Cultura, propósito, estrutura da empresa
-│     ├─ Semana 2: Portfólio de soluções (CAP-06) + Ferramenta CRM
-│     ├─ Semana 3: Processo de vendas (CAP-03) + roleplay
-│     ├─ Semana 4: ICP e Inteligência Comercial (CAP-01) + primeiros clientes acompanhados
-│     └─ Certificação: avaliação prática antes de operar independentemente
-│
-├─► [Período de Ramp-up] — meses 1 a N com meta proporcional
-└─► [Full quota] — integrante operando com meta completa
-│
-▼
-CICLO 2 — GESTÃO CONTÍNUA (mensal)
-│
-├─► [Distribuição de leads/oportunidades] — conforme CAP-02
-├─► [Pipeline Review semanal] — gerente + equipe
-├─► [1:1 mensal] — gerente + cada integrante
-│     ├─ Revisão de KPIs individuais
-│     ├─ Identificação de obstáculos
-│     └─ Feedback e direcionamento
-├─► [Cálculo e pagamento de comissões] — até dia [N] do mês seguinte
-└─► [Atualização do PDI se necessário]
-│
-▼
-CICLO 3 — DESENVOLVIMENTO (trimestral)
-│
-├─► [Avaliação de performance trimestral]
-├─► [Atualização do PDI — metas de desenvolvimento]
-├─► [Treinamentos planejados] — portfólio, habilidades, ferramentas
-└─► [Calibração de metas para próximo trimestre]
-│
-▼
-EVENTO — Desempenho Abaixo da Meta
-│
-├─► 1 mês abaixo: feedback no 1:1 + ajuste de abordagem
-├─► 2 meses abaixo: ativação formal do PDI
-└─► PDI não cumprido: processo de desligamento com documentação
-│
-▼
-REGISTRO
-│
-├─► Todos os treinamentos registrados com data, participantes e avaliação
-├─► Todos os 1:1s registrados (resumo + compromissos) no sistema de RH ou CRM
-└─► Cálculos de comissão arquivados por mês com memória de cálculo
-│
-▼
-AUDITORIA
-│
-└─► Mensal: capacidade da equipe, ramp-up em andamento, comissões calculadas
-    Trimestral: PDIs ativos, turnover, treinamentos concluídos
+### 3.1 Dentro do Escopo
+- Planejamento de capacidade do time (headcount vs. metas)
+- Gestão do ciclo de ramp-up de novos membros
+- Modelo de comissões e incentivos comerciais
+- Acompanhamento de performance individual por papel
+- Identificação de gaps de competência e coaching
+- Planejamento de treinamentos e capacitações
+- Gestão de turnover e impacto na operação
+
+### 3.2 Fora do Escopo
+- Contratação e demissão formal → RH/gestão
+- Definição de metas → CAP-08
+- Auditoria de processo de vendas → CAP-03
+- Definição de ICP → CAP-01
+
+---
+
+## 4. Responsabilidades
+
+| # | Responsabilidade | Frequência |
+|---|-----------------|-----------|
+| R-01 | Calcular capacidade necessária vs. headcount atual | Mensal |
+| R-02 | Publicar `equipe.capacidade_insuficiente` quando headcount é insuficiente | Por cálculo |
+| R-03 | Gerir ramp-up de novos membros com milestones e critérios | Por novo membro |
+| R-04 | Calcular e comunicar comissões mensalmente | Mensal |
+| R-05 | Monitorar performance individual e identificar low performers | Mensal |
+| R-06 | Executar planos de coaching para membros abaixo da meta | Por identificação |
+| R-07 | Planejar e executar treinamentos com base em gaps identificados | Trimestral |
+| R-08 | Reportar impacto de turnover na capacidade operacional | Por saída |
+
+---
+
+## 5. Capacidades Internas
+
+### CAP-07.1 — Planejamento de Capacidade
+
+```yaml
+capacidade_model:
+  formula_headcount_necessario:
+    descricao: "meta_sqls_mes / sqls_por_rep_mes / (1 - taxa_ramp)"
+    variaveis:
+      meta_sqls_mes: "de CAP-08 / CAP-02"
+      sqls_por_rep_mes: "benchmark por papel em ramp completo"
+      taxa_ramp: "percentual do time ainda em ramp-up"
+      utilizacao_maxima: 0.80  # não usar 100% da capacidade
+
+  papeis:
+    - papel: "SDR"
+      responsabilidade: "qualificação de leads (MQL → SQL)"
+      capacidade_padrao: "X MQLs/mês → Y SQLs/mês"
+      tempo_ramp_meses: 3
+
+    - papel: "Executivo_de_Contas"
+      responsabilidade: "condução do funil E1-E6"
+      capacidade_padrao: "X SQLs/mês; Y pipeline simultâneo"
+      tempo_ramp_meses: 6
+
+    - papel: "CS"
+      responsabilidade: "onboarding e retenção"
+      capacidade_padrao: "X clientes por CS (ratio cliente:CS)"
+      tempo_ramp_meses: 2
+
+    - papel: "Gestor_Comercial"
+      responsabilidade: "liderança e coaching do time"
+      span_of_control: "6-8 ICs por gestor"
+      tempo_ramp_meses: 3
 ```
 
----
+### CAP-07.2 — Ramp-Up de Novos Membros
 
-## 7. Indicadores de Desempenho (KPIs)
+```yaml
+ramp_up_plan:
+  id: "RAMP-ID"
+  membro_id: "MEMBRO-ID"
+  papel: "SDR | Executivo_de_Contas | CS | Gestor"
+  data_inicio: ""
+  status: "em_ramp | concluido | em_risco | encerrado"
 
-### 7.1 KPIs de Capacidade
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-EC-01 | Utilização da capacidade | SQLs recebidos / Capacidade máxima da equipe × 100 | 60–80% (faixa ideal) | Mensal |
-| KPI-EC-02 | Headcount disponível vs. necessário | Nº de vendedores ativos / Nº necessário para atingir meta | ≥ 100% | Mensal |
+  milestones:
+    - semana: 1
+      descricao: "onboarding cultural e de processos"
+      criterios: ["leu todos os playbooks", "entende o ICP", "conhece o produto"]
 
-### 7.2 KPIs de Performance Individual
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-EC-03 | Atingimento de quota individual | Receita fechada / Quota × 100 | ≥ 100% | Mensal |
-| KPI-EC-04 | % da equipe acima de quota | Nº membros ≥ 100% quota / Total × 100 | ≥ 70% | Mensal |
-| KPI-EC-05 | Ramp-up concluído no prazo | Novos membros que atingiram quota mínima no ramp-up / Total novos × 100 | ≥ 80% | Por coorte |
+    - semana: 2
+      descricao: "shadowing e certificação técnica"
+      criterios: ["assistiu X demos", "passou na certificação de produto"]
 
-### 7.3 KPIs de Retenção e Desenvolvimento
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-EC-06 | Turnover voluntário | Saídas voluntárias / Headcount médio × 100 | ≤ [meta]% ao ano | Trimestral |
-| KPI-EC-07 | Cobertura de treinamento | Membros com treinamento concluído / Total × 100 | 100% (treinamentos obrigatórios) | Por evento |
-| KPI-EC-08 | PDIs ativos vs. resolvidos | PDIs abertos / PDIs ativados nos últimos 6 meses | ≤ [X] PDIs abertos simultaneamente | Mensal |
+    - mes: 1
+      descricao: "primeiros resultados"
+      criterios:
+        SDR: ["X MQLs qualificados", "Y touchpoints de cadência executados"]
+        Executivo: ["X reuniões de descoberta realizadas", "pipeline de R$Y aberto"]
+        CS: ["X clientes mapeados", "Y kickoffs realizados"]
 
-### 7.4 KPIs de Remuneração
-| Código | Indicador | Meta | Frequência |
-|--------|-----------|------|-----------|
-| KPI-EC-09 | Acuracidade de cálculo de comissão | 0 erros de cálculo por mês | Mensal |
-| KPI-EC-10 | Pagamento de comissão dentro do prazo | 100% no prazo | Mensal |
+    - mes: 3
+      descricao: "produtividade parcial (50%)"
+      meta_percentual_da_meta_full: 50
 
----
-
-## 8. Gatilhos e Alertas Operacionais
-
-| Código | Condição | Ação | Responsável |
-|--------|----------|------|-------------|
-| ALT-EC-01 | Utilização da equipe >80% por 2 meses | Iniciar processo de recrutamento | Gerente + Liderança |
-| ALT-EC-02 | Membro da equipe com quota < 70% por 2 meses | Ativar PDI formal | Gerente |
-| ALT-EC-03 | < 50% da equipe acima de quota por 2 meses | Revisão do processo comercial e/ou das metas | Liderança + Gerente |
-| ALT-EC-04 | Novo membro sem completar onboarding em >4 semanas | Alerta para gerente + revisão do plano de onboarding | Gerente |
-| ALT-EC-05 | Turnover acumulado >10% em 3 meses | Investigação de causas + plano de retenção emergencial | Liderança |
-| ALT-EC-06 | 1:1 mensal não realizado com algum membro | Alerta para gerente | Sistema |
-
----
-
-## 9. Diagnóstico de Desvios e Análise de Causa Raiz
-
-| Desvio Observado | Possíveis Causas Raiz | Método de Diagnóstico |
-|-----------------|----------------------|----------------------|
-| Equipe abaixo de quota | Metas irreais; processo inadequado; treinamento insuficiente; qualidade dos leads; produto fraco | Análise por etapa do funil individual; comparação com peer group |
-| Alto turnover | Remuneração abaixo do mercado; cultura; metas inalcançáveis; falta de reconhecimento; má gestão | Entrevistas de desligamento; pesquisa de clima |
-| Ramp-up lento | Treinamento inadequado; onboarding mal estruturado; produto muito complexo; metas de ramp irreais | Análise de coorte de novas contratações |
-| Erros de comissão | Processo manual; dados do CRM incorretos; regras de comissão ambíguas | Auditoria do processo de cálculo; revisão das regras |
-
----
-
-## 10. Planos de Ação Padronizados
-
-### PA-EC-01: Equipe com < 50% Acima de Quota por 2 Meses
-```
-Semana 1: Análise individual — quem está abaixo e em qual etapa do funil está o problema
-Semana 2: Diagnóstico — é processo, metas, leads, produto, ou treinamento?
-Semana 3: Se metas irreais → recalibrar com liderança (com dados)
-           Se processo → workshop de revisão com a equipe
-           Se treinamento → programa de capacitação intensivo
-Semana 4: Implementar ação prioritária
-Mês 2: Monitorar semanalmente
+    - mes: 6:  # ou conforme papel
+      descricao: "ramp concluído — produtividade plena"
+      meta_percentual_da_meta_full: 100
+      criterio_encerramento_ramp: "atingiu 80% da meta em 2 meses consecutivos"
 ```
 
-### PA-EC-02: Turnover Acima da Meta
-```
-Imediato: Entrevista de desligamento aprofundada (últimas saídas)
-Semana 1: Pesquisa de clima com equipe atual (anônima)
-Semana 2: Análise comparativa de remuneração vs. mercado
-Semana 3: Plano de ação específico (pode ser remuneração, cultura, processo, gestão)
-Mês 2: Implementar e monitorar satisfação da equipe
+### CAP-07.3 — Modelo de Comissões
+
+```yaml
+comissao_model:
+  principios:
+    - "comissão é imutável após fechamento do mês — sem ajustes retroativos"
+    - "calculada com base apenas em receita efetivamente faturada e paga"
+    - "transparente: cada membro pode calcular sua própria comissão a qualquer momento"
+
+  estrutura_padrao:
+    base_calculo: "receita_nova_faturada_no_mes"
+    percentual_base: null  # configurado por empresa/papel
+
+    aceleradores:
+      - condicao: "meta_100%_atingida"
+        multiplicador: 1.0
+      - condicao: "meta_110%_atingida"
+        multiplicador: 1.25
+      - condicao: "meta_125%_atingida"
+        multiplicador: 1.5
+
+    bonos_adicionais:
+      - descricao: "bônus de produto estratégico"
+        valor_adicional_por_contrato: null
+      - descricao: "bônus de novo segmento"
+        condicao: "primeiro contrato em segmento novo"
+
+    claw_back:
+      regra: "churn do cliente em < 90 dias → estorno de X% da comissão"
+      percentual_estorno: null
 ```
 
-### PA-EC-03: Ativação de PDI
-```
-Reunião 1: Gerente apresenta dados objetivos de performance abaixo da meta
-Acordo: Metas específicas para os próximos [30/60/90] dias
-Suporte: Coaching semanal, acompanhamento de calls, revisão de propostas
-Avaliação: Reunião de avaliação ao final do prazo
-Desfecho: PDI cumprido → seguir; não cumprido → processo de desligamento
+### CAP-07.4 — Performance Individual
+
+```yaml
+performance_model:
+  frequencia_avaliacao: "mensal"
+  metricas_por_papel:
+    SDR:
+      - id: "KPI-EC-SDR-01"
+        nome: "SQLs gerados no mês"
+        peso: 0.50
+      - id: "KPI-EC-SDR-02"
+        nome: "SLA de primeiro contato atingido"
+        peso: 0.20
+      - id: "KPI-EC-SDR-03"
+        nome: "Taxa de conversão MQL→SQL"
+        peso: 0.30
+
+    Executivo_de_Contas:
+      - id: "KPI-EC-EA-01"
+        nome: "Receita nova no mês"
+        peso: 0.50
+      - id: "KPI-EC-EA-02"
+        nome: "Win rate"
+        peso: 0.25
+      - id: "KPI-EC-EA-03"
+        nome: "Ciclo médio de venda"
+        peso: 0.25
+
+  classificacao:
+    top_performer: "≥ 110% da meta"
+    on_track: "90-110% da meta"
+    below_target: "70-90% da meta"
+    low_performer: "< 70% da meta por 2 meses"
+
+  protocolo_low_performer:
+    mes_1: "conversa de alinhamento com gestor"
+    mes_2: "PIP (Performance Improvement Plan) formal"
+    mes_3: "decisão: manter (com evidência de melhora) ou desligar"
 ```
 
 ---
 
-## 11. Procedimentos de Auditoria
+## 6. Fluxo Operacional
 
-### 11.1 Auditoria Mensal (Gerente Comercial)
-**Checklist:**
-- [ ] Atingimento de quota de cada integrante calculado e registrado
-- [ ] Comissões calculadas com memória de cálculo documentada
-- [ ] Comissões pagas dentro do prazo
-- [ ] 1:1 mensal realizado com todos os integrantes
-- [ ] Capacidade da equipe vs. volume de demanda calculados
+```
+[FLUXO A — AVALIAÇÃO MENSAL DE CAPACIDADE]
 
-### 11.2 Auditoria Trimestral (Gerente + Liderança)
-**Checklist:**
-- [ ] Avaliação de performance trimestral realizada para todos
-- [ ] PDIs ativos revisados e atualizados
-- [ ] Treinamentos planejados para o trimestre seguinte
-- [ ] Turnover calculado e analisado
-- [ ] Satisfação da equipe verificada (pesquisa ou 1:1 aprofundado)
-- [ ] Capacidade prevista vs. metas do próximo trimestre: precisa contratar?
+[TRIGGER: sistema.periodo_encerrado (mensal)]
+│
+├─► Coletar: meta de SQLs do período (de CAP-08 / CAP-02)
+├─► Calcular: headcount necessário = meta / capacidade_por_rep / (1 - taxa_ramp)
+├─► Comparar com headcount atual e em ramp
+│
+├─► Se headcount suficiente (utilização ≤ 80%): OK — monitorar
+├─► Se headcount insuficiente (utilização > 80%):
+│   ├─► Publicar: equipe.capacidade_insuficiente
+│   └─► Criar item de ação para planejamento de contratação
+└─► Atualizar KPI-EC-08 (utilização de capacidade)
 
-### 11.3 Auditoria Anual (Liderança + RH)
-**Checklist:**
-- [ ] Política de comissionamento revisada e validada
-- [ ] Benchmark de remuneração realizado
-- [ ] Análise de coorte de contratações do ano
-- [ ] Plano de headcount para o próximo ano definido
-- [ ] Top performers identificados e com plano de retenção específico
+
+[FLUXO B — RAMP-UP DE NOVO MEMBRO]
+
+[TRIGGER: equipe.novo_membro_contratado]
+│
+├─► Criar plano de ramp-up (template por papel)
+├─► Designar buddy/mentor
+├─► Executar onboarding semana a semana (ENG-07 → milestones)
+│
+├─► [Para cada milestone]
+│   ├─► Verificar critérios de conclusão
+│   ├─► Milestone atrasado → notificar gestor
+│   └─► Ramp concluído (80% da meta em 2 meses) → publicar: equipe.membro_em_producao
+│
+└─► Incluir membro no cálculo de capacidade como "em produção"
+
+
+[FLUXO C — AVALIAÇÃO MENSAL DE PERFORMANCE]
+
+[TRIGGER: sistema.periodo_encerrado (mensal)]
+│
+├─► Calcular performance de cada membro (KPIs por papel vs. meta)
+├─► Classificar: top / on_track / below / low_performer
+│
+├─► Para low_performers (< 70% por 2 meses):
+│   ├─► Publicar: equipe.low_performer_identificado
+│   └─► Iniciar protocolo de PIP (plano de ação via ENG-05)
+│
+└─► Calcular comissões do mês → publicar: equipe.comissoes_calculadas
+
+
+[FLUXO D — TREINAMENTO E COACHING]
+
+[TRIGGER: gap de competência identificado OU solicitação do gestor]
+│
+├─► Identificar gap: individual (avaliação de performance) ou sistêmico (KPI de módulo)
+├─► Planejar treinamento: formato, facilitador, conteúdo, data
+├─► Executar e registrar participação
+└─► Medir impacto após 30 dias: KPI melhorou?
+```
 
 ---
 
-## 12. Possibilidades de Automação
+## 7. Estados
 
-### 12.1 CRM e Sistemas de RH
-| Automação | Trigger | Ação |
-|-----------|---------|------|
-| Cálculo automático de comissão | Oportunidade marcada como "Ganha" | Calcula comissão do vendedor conforme regras da política e gera relatório |
-| Tracking de quota | Mensal | Dashboard individual com atingimento em tempo real |
-| Alerta de desempenho | Performance < [X]% da quota | Notificação automática para gerente |
-| Checklist de onboarding | Novo membro cadastrado | Cria trilha de onboarding com tarefas e prazos no sistema |
+### 7.1 Estados do Membro da Equipe
 
-### 12.2 Inteligência Artificial
-| Automação | Aplicação |
-|-----------|----------|
-| Coaching assistido por IA | IA analisa gravações de reuniões de vendas e gera feedback estruturado para o gerente dar no 1:1 |
-| Previsão de atingimento | ML prevê probabilidade de cada vendedor atingir quota no mês com base no pipeline atual |
-| Identificação de padrão de top performer | IA identifica comportamentos dos top performers para replicar com a equipe |
+```
+CONTRATADO → EM_RAMP → EM_PRODUCAO → [EM_PIP] → ATIVO | DESLIGADO
+```
 
-### 12.3 Dashboards
-| Dashboard | Métricas | Público |
-|-----------|---------|---------|
-| Team Performance | Quota × realizado por vendedor, ranking | Gerente (tempo real) |
-| Individual Dashboard | Pipeline, atividades, forecast pessoal | Vendedor (diário) |
-| Headcount Planning | Capacidade atual vs. necessária, projeção | Liderança (mensal) |
+### 7.2 Estados do Plano de Ramp-Up
+
+```
+CRIADO → EM_ANDAMENTO → CONCLUIDO | EM_RISCO | INTERROMPIDO
+```
+
+### 7.3 Estados do PIP
+
+```
+CRIADO → EM_ANDAMENTO → APROVADO (membro recuperado) | ENCERRADO (desligamento)
+```
 
 ---
 
-## 13. Interfaces e Dependências com Outros Módulos
+## 8. Regras de Negócio
 
-### 13.1 Matriz de Interfaces
+### RN-01 — Capacidade Máxima de 80%
+O time comercial não deve operar acima de 80% da capacidade teórica. O excedente é reserva para variações, doença, férias e ramp-up. Utilização acima de 80% por 2 meses consecutivos aciona planejamento de contratação.
 
-| Módulo | Tipo | CAP-07 Fornece | CAP-07 Recebe |
-|--------|------|----------------|---------------|
-| CAP-01 Inteligência Comercial | Recebe | — | Treinamento em ICP e inteligência competitiva |
-| CAP-02 Gestão de Demanda | Fornece | Capacidade de atendimento disponível | — |
-| CAP-03 Processo de Vendas | Recebe | Equipe treinada e certificada no processo | — |
-| CAP-05 Gestão de Clientes | Fornece | Capacidade de CS disponível | — |
-| CAP-06 Oferta e Precificação | Recebe | Equipe treinada no portfólio e política de descontos | — |
-| CAP-08 Performance e Autogestão | Bilateral | KPIs individuais e de equipe; headcount; capacidade | Metas individuais e coletivas; relatórios de performance |
+### RN-02 — Ramp-Up com Milestones Definidos por Papel
+Todo novo membro tem plano de ramp-up formal com milestones e critérios de conclusão. Ramp sem plano formal é não-conformidade. O gestor é responsável pela execução do ramp-up do seu time.
+
+### RN-03 — Comissão É Imutável Após Fechamento
+A comissão do mês é calculada e comunicada até o dia 10 do mês seguinte. Após comunicada, não há ajuste retroativo — exceto para claw-back por churn em < 90 dias. A imutabilidade da comissão é fundamental para a confiança do time.
+
+### RN-04 — Low Performer Tem Protocolo, Não Punição
+Membro com < 70% da meta por 2 meses consecutivos não é desligado imediatamente. O protocolo é: conversa de alinhamento → PIP formal → decisão baseada em evidência. O objetivo é recuperar, não punir.
+
+### RN-05 — Turnover É Calculado e Monitorado
+O turnover do time comercial é KPI primário. Turnover de top performers é especialmente crítico. Todo desligamento tem motivo estruturado registrado.
+
+### RN-06 — Span of Control Monitorado
+O número de ICs por gestor é monitorado. Span of control acima de 8 por mais de 2 meses é alerta — gestores sobrecarregados têm menor qualidade de coaching, o que impacta performance do time.
+
+---
+
+## 9. Eventos Publicados
+
+| Evento | Quando | Payload Principal |
+|--------|--------|-----------------|
+| `equipe.capacidade_insuficiente` | Headcount insuficiente para a meta | `{headcount_atual, headcount_necessario, deficit, utilizacao_atual}` |
+| `equipe.novo_membro_contratado` | Novo membro registrado | `{membro_id, papel, data_inicio, gestor_id}` |
+| `equipe.membro_em_producao` | Ramp-up concluído | `{membro_id, papel, duracao_ramp_dias, meta_atingida_percentual}` |
+| `equipe.low_performer_identificado` | Membro < 70% por 2 meses | `{membro_id, papel, performance_percentual, meses_abaixo}` |
+| `equipe.comissoes_calculadas` | Comissões do mês calculadas | `{periodo, total_comissoes, detalhes_por_membro_json}` |
+| `equipe.membro_desligado` | Membro saiu do time | `{membro_id, papel, motivo_estruturado, tipo: voluntario\|involuntario, impacto_capacidade}` |
+| `equipe.treinamento_concluido` | Treinamento realizado | `{treinamento_id, participantes[], tema, impacto_esperado}` |
+
+---
+
+## 10. Eventos Consumidos
+
+| Evento | Origem | Ação ao Receber |
+|--------|--------|----------------|
+| `sistema.periodo_encerrado` | Scheduler (mensal) | Calcular capacidade, performance individual e comissões |
+| `kpi.limiar.cruzado` | ENG-02 | Se KPI é de conversão ou ciclo de venda: identificar gap de competência |
+| `melhoria.item.implementado` | ENG-09 | Revisar processos impactados |
+
+---
+
+## 11. KPIs
+
+| ID | Nome | Fórmula | Meta | Frequência |
+|----|------|---------|------|-----------|
+| KPI-EC-01 | Headcount Atual vs. Necessário | `headcount_em_producao / headcount_necessario × 100` | ≥ 90% | Mensal |
+| KPI-EC-02 | Utilização de Capacidade | `demanda_atual / capacidade_disponivel × 100` | ≤ 80% | Mensal |
+| KPI-EC-03 | Tempo Médio de Ramp-Up | `média(dias_em_producao - data_contratacao)` | Por papel | Mensal |
+| KPI-EC-04 | Taxa de Conclusão de Ramp no Prazo | `ramps_concluidos_no_prazo / total_ramps × 100` | ≥ 80% | Mensal |
+| KPI-EC-05 | Performance Média do Time | `média(performance_individual_percentual)` | ≥ 90% da meta | Mensal |
+| KPI-EC-06 | Percentual de Low Performers | `low_performers / total_time × 100` | < 10% | Mensal |
+| KPI-EC-07 | Turnover Anualizado | `saidas_12m / headcount_medio × 100` | < 15% | Mensal |
+| KPI-EC-08 | Turnover de Top Performers | `saidas_top / total_top × 100` | < 5% | Anual |
+| KPI-EC-09 | Span of Control | `ics_por_gestor` | 6-8 | Mensal |
+| KPI-EC-10 | % do Time Acima da Meta | `membros_acima_meta / total_time × 100` | > 60% | Mensal |
+
+---
+
+## 12. Alertas
+
+| ID | Condição | Severidade | Ação |
+|----|---------|-----------|------|
+| ALT-EC-01 | Utilização de capacidade > 85% | WARNING | Iniciar planejamento de contratação |
+| ALT-EC-02 | Utilização de capacidade > 95% | CRITICAL | Contratar ou reduzir metas; escalar para diretoria |
+| ALT-EC-03 | % low performers > 15% | CRITICAL | Revisão do time; diagnóstico de causa raiz |
+| ALT-EC-04 | Turnover anualizado > 20% | WARNING | Pesquisa de clima; revisão de remuneração e cultura |
+| ALT-EC-05 | Top performer sai do time | WARNING | Investigar causa; plano de retenção para demais top performers |
+| ALT-EC-06 | Ramp-up atrasado > 30 dias | WARNING | Identificar bloqueio; apoio do gestor |
+| ALT-EC-07 | Span of control > 10 por gestor | WARNING | Contratar gestor adicional |
+
+---
+
+## 13. Planos de Ação Automáticos
+
+### PA-EC-01 — Alto Percentual de Low Performers (Gatilho: ALT-EC-03)
+```yaml
+plano_acao:
+  tipo: diagnostico_e_coaching
+  prazo_dias: 45
+  tarefas:
+    - "ENG-04: analisar se low performance é sistêmica (processo, ferramentas, ICP) ou individual"
+    - "Se sistêmica: corrigir processo via CAP-02/CAP-03; não penalizar indivíduos"
+    - "Se individual: verificar se ramp-up foi adequado e se houve coaching suficiente"
+    - "Iniciar PIP individual para cada low performer com plano específico"
+    - "Revisar qualidade do coaching dos gestores (span of control, 1:1s)"
+  metrica_sucesso: "< 10% low performers em 60 dias"
+```
+
+---
+
+## 14. Automações
+
+| ID | Trigger | Ação Automatizada | Conector |
+|----|---------|-----------------|---------|
+| AUT-EC-01 | `equipe.novo_membro_contratado` | Criar plano de ramp-up; agendar onboarding; designar buddy | CONN-MENSAGERIA |
+| AUT-EC-02 | `sistema.periodo_encerrado` (mensal) | Calcular performance individual; identificar low performers; calcular comissões | ENG-02 |
+| AUT-EC-03 | `equipe.low_performer_identificado` | Notificar gestor; criar tarefa de conversa de alinhamento | CONN-MENSAGERIA |
+| AUT-EC-04 | `sistema.periodo_encerrado` (mensal) | Calcular e comunicar comissões ao time | CONN-EMAIL-TRANSACIONAL |
+
+---
+
+## 15. Auditoria Operacional
+
+### Checklist Mensal — CAP-07-AUD-MENSAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | Utilização de capacidade ≤ 80% | KPI-EC-02 | Valor do KPI |
+| 2 | Performance individual calculada para todos os membros | Log de avaliações | 100% dos membros avaliados |
+| 3 | Low performers identificados têm protocolo iniciado | Lista de PIPs ativos | 100% com protocolo |
+| 4 | Comissões calculadas e comunicadas até dia 10 | Log de comunicação | Data de envio ≤ dia 10 |
+| 5 | Planos de ramp-up ativos com milestones em dia | Status dos planos | Zero planos sem milestone atualizado |
+| 6 | Alertas tratados dentro do SLA | Taxa de resolução | ≥ 90% |
+
+---
+
+## 16. ENGINE-REGISTRATION.yaml
+
+```yaml
+# ENGINE-REGISTRATION.yaml — CAP-07 Gestão da Equipe Comercial
+# Ref: ARC-ENG-099
+
+modulo:
+  id: "CAP-07"
+  nome: "Gestão da Equipe Comercial"
+  versao: "2.0.0"
+  tier: "core"
+  status: "ativo"
+
+dependencias:
+  engines:
+    - id: "ENG-02"
+      uso: "KPIs KPI-EC-01 a KPI-EC-10"
+    - id: "ENG-03"
+      uso: "alertas ALT-EC-01 a ALT-EC-07"
+    - id: "ENG-05"
+      uso: "PIPs (Performance Improvement Plans)"
+    - id: "ENG-06"
+      uso: "auditoria mensal"
+    - id: "ENG-07"
+      uso: "workflows AUT-EC-01 a AUT-EC-04"
+    - id: "ENG-09"
+      uso: "melhoria contínua de processos de people ops comercial"
+
+eventos_publicados:
+  - evento: "equipe.capacidade_insuficiente"
+    condicao: "headcount insuficiente para a meta"
+  - evento: "equipe.novo_membro_contratado"
+    condicao: "novo membro registrado"
+  - evento: "equipe.membro_em_producao"
+    condicao: "ramp-up concluído"
+  - evento: "equipe.low_performer_identificado"
+    condicao: "membro < 70% por 2 meses"
+  - evento: "equipe.comissoes_calculadas"
+    condicao: "comissões do mês calculadas"
+  - evento: "equipe.membro_desligado"
+    condicao: "membro saiu do time"
+  - evento: "equipe.treinamento_concluido"
+    condicao: "treinamento realizado"
+
+eventos_consumidos:
+  - evento: "sistema.periodo_encerrado"
+    origem: "Scheduler"
+    acao: "calcular capacidade, performance e comissões"
+  - evento: "kpi.limiar.cruzado"
+    origem: "ENG-02"
+    acao: "identificar gap de competência se KPI é de conversão"
+  - evento: "melhoria.item.implementado"
+    origem: "ENG-09"
+    acao: "revisar processos impactados"
+
+kpis_registrados:
+  - id: "KPI-EC-01"
+    nome: "Headcount Atual vs. Necessário"
+    formula: "headcount_em_producao / headcount_necessario * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 90
+  - id: "KPI-EC-02"
+    nome: "Utilização de Capacidade"
+    formula: "demanda_atual / capacidade_disponivel * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 80
+    limiar_warning: 85
+    limiar_critical: 95
+  - id: "KPI-EC-03"
+    nome: "Tempo Médio de Ramp-Up"
+    formula: "media(dias_em_producao - data_contratacao)"
+    unidade: "dias"
+    dimensao: "papel"
+    frequencia_calculo: "mensal"
+  - id: "KPI-EC-04"
+    nome: "Taxa de Conclusão de Ramp no Prazo"
+    formula: "ramps_concluidos_no_prazo / total_ramps * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 80
+  - id: "KPI-EC-05"
+    nome: "Performance Média do Time"
+    formula: "media(performance_individual_percentual)"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 90
+  - id: "KPI-EC-06"
+    nome: "Percentual de Low Performers"
+    formula: "low_performers / total_time * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 10
+    limiar_warning: 15
+    limiar_critical: 25
+  - id: "KPI-EC-07"
+    nome: "Turnover Anualizado"
+    formula: "saidas_12m / headcount_medio * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal_rolling_12m"
+    meta_padrao: 15
+    limiar_warning: 20
+  - id: "KPI-EC-08"
+    nome: "Turnover de Top Performers"
+    formula: "saidas_top / total_top * 100"
+    unidade: "percentual"
+    frequencia_calculo: "anual"
+    meta_padrao: 5
+  - id: "KPI-EC-09"
+    nome: "Span of Control"
+    formula: "ics_por_gestor"
+    unidade: "quantidade"
+    frequencia_calculo: "mensal"
+    meta_padrao: 7
+    limiar_warning: 9
+    limiar_critical: 11
+  - id: "KPI-EC-10"
+    nome: "% do Time Acima da Meta"
+    formula: "membros_acima_meta / total_time * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 60
+
+alertas_registrados:
+  - id: "ALT-EC-01"
+    kpi_ref: "KPI-EC-02"
+    condicao: "> 85"
+    severidade: "warning"
+    owner: "gestor_comercial"
+  - id: "ALT-EC-02"
+    kpi_ref: "KPI-EC-02"
+    condicao: "> 95"
+    severidade: "critical"
+    owner: "diretoria_comercial"
+  - id: "ALT-EC-03"
+    kpi_ref: "KPI-EC-06"
+    condicao: "> 15"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-EC-04"
+    kpi_ref: "KPI-EC-07"
+    condicao: "> 20"
+    severidade: "warning"
+    owner: "gestor_comercial"
+  - id: "ALT-EC-05"
+    condicao: "membro_desligado.classificacao = top_performer"
+    severidade: "warning"
+    owner: "diretoria_comercial"
+  - id: "ALT-EC-06"
+    condicao: "ramp_up.dias_atrasado > 30"
+    severidade: "warning"
+    owner: "gestor_responsavel"
+  - id: "ALT-EC-07"
+    kpi_ref: "KPI-EC-09"
+    condicao: "> 10"
+    severidade: "warning"
+    owner: "diretoria_comercial"
+
+workflows_registrados:
+  - id: "WF-EC-01"
+    nome: "Iniciação de Ramp-Up"
+    gatilho: "equipe.novo_membro_contratado"
+    descricao: "cria plano de ramp-up, agenda onboarding, designa buddy"
+  - id: "WF-EC-02"
+    nome: "Avaliação Mensal de Performance e Comissões"
+    gatilho: "sistema.periodo_encerrado (mensal)"
+    descricao: "calcula KPIs individuais, classifica, identifica low performers, calcula comissões"
+  - id: "WF-EC-03"
+    nome: "Protocolo de Low Performer"
+    gatilho: "equipe.low_performer_identificado"
+    descricao: "notifica gestor, cria tarefa de conversa, inicia PIP no mês seguinte"
+
+auditoria_checklists:
+  - id: "CAP-07-AUD-MENSAL"
+    tipo: "mensal"
+    itens_count: 6
+
+conectores_utilizados:
+  - "CONN-MENSAGERIA"
+  - "CONN-EMAIL-TRANSACIONAL"
+
+permissoes_necessarias:
+  - recurso: "equipe_membros"
+    acoes: ["read", "write"]
+  - recurso: "ramp_up_plans"
+    acoes: ["read", "write"]
+  - recurso: "comissoes"
+    acoes: ["read", "write"]
+  - recurso: "performance_individual"
+    acoes: ["read", "write"]
+  - recurso: "kpi_values.KPI-EC-*"
+    acoes: ["read", "write_via_eng02"]
+  - recurso: "eventos_barramento"
+    acoes: ["publish", "subscribe"]
+```
 
 ---
 
@@ -324,4 +635,5 @@ Desfecho: PDI cumprido → seguir; não cumprido → processo de desligamento
 
 | Versão | Data | Autor | Descrição |
 |--------|------|-------|-----------|
-| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial do Módulo Operacional CAP-07 |
+| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial |
+| 2.0.0 | 2026-06-29 | Guardião da Documentação | Redesenho como microserviço do Commercial OS |

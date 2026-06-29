@@ -1,388 +1,825 @@
 ---
 id: MOD-CAP-03
-titulo: "Módulo Operacional — Gestão do Processo de Vendas"
-versao: "1.0.0"
+titulo: "CAP-03 — Gestão do Processo de Vendas"
+versao: "2.0.0"
 status: aprovado
-categoria: C3-Operacional
+categoria: Commercial-OS-Module
 autor: Guardião da Documentação Técnica
 criado-em: 2026-06-28
-atualizado-em: 2026-06-28
+atualizado-em: 2026-06-29
 dependencias:
+  - ARC-ENG-000
+  - ARC-ENG-001
+  - ARC-ENG-002
+  - ARC-ENG-003
+  - ARC-ENG-004
+  - ARC-ENG-005
+  - ARC-ENG-006
+  - ARC-ENG-007
+  - ARC-ENG-008
+  - ARC-ENG-010
   - MOD-CAP-01
   - MOD-CAP-02
-  - MOD-CAP-04
   - MOD-CAP-06
-tags: [vendas, processo, pipeline, proposta, negociacao, fechamento, contrato]
+tags: [commercial-os, cap-03, sales-process, funil, oportunidade, negociacao, fechamento, contrato]
 ---
 
-# MOD-CAP-03 — Gestão do Processo de Vendas
+# CAP-03 — Gestão do Processo de Vendas
 
-> **Nota:** Este módulo contempla também CAP-03.5 (Gestão de Contratos) como subprocesso final integrado ao ciclo de vendas.
-
----
-
-## 1. Objetivo da Capacidade
-
-Conduzir oportunidades comerciais qualificadas desde o primeiro contato até o fechamento e formalização contratual, através de um processo estruturado, reproduzível e mensurável que maximize a taxa de conversão, minimize o ciclo de vendas e garanta a entrega de valor prometida ao cliente antes mesmo da assinatura.
+> **Módulo do Commercial Operating System**
+> Infraestrutura compartilhada: `docs/02-architecture/engine-autogestao/`
+> Contrato de integração: `ENGINE-CONTRATO-DE-INTEGRACAO.md` (ARC-ENG-099)
 
 ---
 
-## 2. Resultado Esperado
+## 1. Identificação
 
-| # | Resultado | Critério de Aceitação |
-|---|-----------|----------------------|
-| R1 | Pipeline convertido em receita | Taxa de fechamento (SQL → Cliente) ≥ meta definida em CAP-08 |
-| R2 | Ciclo de vendas dentro do SLA | Ciclo médio ≤ benchmark por segmento definido em CAP-01 |
-| R3 | Proposta entregue dentro do prazo | 100% das propostas entregues em até [SLA definido por segmento] dias após reunião de discovery |
-| R4 | Processo registrado no CRM | 100% das etapas e interações registradas; nenhuma oportunidade "na cabeça" do vendedor |
-| R5 | Contratos formalizados antes do início | 0% de clientes em operação sem contrato assinado |
-
-**Definição de Sucesso:** Qualquer oportunidade pode ser auditada a qualquer momento no CRM, com histórico completo de todas as interações, etapa atual, próxima ação e data prevista de fechamento.
-
----
-
-## 3. Entradas Necessárias
-
-### 3.1 Entradas Primárias
-| Entrada | Fonte | Formato | Frequência |
-|---------|-------|---------|-----------|
-| SQL qualificado com contexto de qualificação | CAP-02 (Gestão de Demanda) | CRM | Por evento |
-| Portfólio de soluções e tabela de preços | CAP-06 (Oferta e Precificação) | Documento | Por atualização |
-| Inteligência competitiva e materiais de apoio | CAP-01 (Inteligência Comercial) | Documento/CRM | Por atualização |
-| Capacidade de atendimento pós-venda | CAP-05 (Gestão de Clientes) | Estruturado | Mensal |
-
-### 3.2 Entradas por Etapa do Processo
-| Etapa | Entrada Necessária |
-|-------|-------------------|
-| Discovery | ICP Document, roteiro de perguntas de discovery |
-| Proposta | Tabela de preços, template de proposta, autorização de desconto |
-| Negociação | Limites de desconto aprovados, BATNA documentado |
-| Fechamento | Proposta aceita, dados do cliente para contrato |
-| Contrato | Template de contrato, dados fiscais do cliente, condições negociadas |
+| Campo | Valor |
+|-------|-------|
+| **ID do Módulo** | CAP-03 |
+| **Nome** | Gestão do Processo de Vendas |
+| **Domínio** | Conversão — Transformação de Oportunidades em Receita |
+| **Versão** | 2.0.0 |
+| **Tier** | Core |
+| **Posição na cadeia** | Downstream de CAP-02; Upstream de CAP-04 e CAP-05 |
+| **Registro na Engine** | `ENGINE-REGISTRATION.yaml` (seção 16) |
 
 ---
 
-## 4. Saídas Obrigatórias
+## 2. Objetivo
 
-### 4.1 Saídas Principais
-| Saída | Destinatário | SLA |
-|-------|-------------|-----|
-| Contrato assinado | CAP-04 (Receita) + CAP-05 (Clientes) | Até 3 dias úteis após aceite da proposta |
-| Briefing de onboarding | CAP-05 (Gestão de Clientes) | Junto com o contrato assinado |
-| Registro completo da oportunidade no CRM | Todos os módulos | Atualizado em tempo real |
-| Win/loss analysis | CAP-01 (Inteligência Comercial) | 48h após fechamento |
+Converter SQLs entregues por CAP-02 em **contratos assinados e clientes ativos**, através de um processo de vendas estruturado, rastreável e auditável — com estágios bem definidos, critérios de avanço objetivos, controle de negociação e formalização contratual.
 
-### 4.2 Dados Obrigatórios no CRM por Oportunidade
-- Histórico de todas as interações (ligações, reuniões, e-mails, WhatsApp)
-- Proposta(s) enviada(s) com versão e data
-- Objeções levantadas e respostas dadas
-- Decisores identificados e mapeados
-- Motivo de ganho ou perda (ao fechar)
-- Valor contratado e condições acordadas
+O CAP-03 é o núcleo de geração de receita do Commercial OS: ele transforma o trabalho epistêmico de CAP-01 e o trabalho de qualificação de CAP-02 em resultado financeiro real. Sua eficiência determina o ROI de toda a operação comercial.
+
+**O CAP-03 converte. Cada oportunidade processada é um ativo gerenciado com disciplina — não um evento aleatório dependente de talento individual.**
 
 ---
 
-## 5. Regras de Negócio
+## 3. Escopo
 
-### RN-01: Etapas Obrigatórias do Funil de Vendas
-O processo de vendas possui [N] etapas padronizadas que DEVEM ser seguidas sequencialmente:
-```
-[1] Primeiro Contato → [2] Discovery → [3] Análise de Fit →
-[4] Proposta → [5] Negociação → [6] Fechamento → [7] Contrato
-```
-- Não é permitido "pular" etapas sem justificativa documentada no CRM
-- Cada etapa tem critérios de saída (exit criteria) que DEVEM ser atendidos antes de avançar
+### 3.1 Dentro do Escopo
+- Gestão do funil de vendas com estágios e critérios de exit definidos
+- Condução estruturada de reuniões de descoberta, apresentação, proposta e negociação
+- Controle de descontos e níveis de autorização
+- Gestão de propostas comerciais (geração, envio, acompanhamento, expiração)
+- Formalização contratual (geração, assinatura eletrônica, arquivamento)
+- Forecast de receita baseado no funil
+- Análise de oportunidades perdidas (via publicação de evento para CAP-01)
+- Rastreamento de ciclo de venda por segmento
 
-### RN-02: Limites de Desconto
-- Descontos de até [X]% podem ser concedidos pelo próprio vendedor
-- Descontos entre [X+1]% e [Y]% requerem aprovação do gerente comercial
-- Descontos acima de [Y]% requerem aprovação da liderança
-- NENHUM desconto é válido se não estiver registrado na proposta oficial
-
-### RN-03: Prazo de Validade da Proposta
-- Toda proposta emitida tem validade de [15/30] dias
-- Proposta vencida NÃO pode ser executada sem nova aprovação
-- Reemissão de proposta com condições alteradas DEVE ser feita com nova numeração e versão
-
-### RN-04: Formalização Contratual (CAP-03.5)
-- NENHUM serviço ou produto pode ser iniciado sem contrato assinado pelas duas partes
-- Contratos DEVEM utilizar apenas os templates aprovados pelo jurídico (se aplicável)
-- Alterações de escopo pós-contrato DEVEM ser formalizadas via aditivo contratual
-- Contrato original DEVE ser arquivado em repositório oficial (não apenas em e-mail)
-
-### RN-05: Múltiplos Decisores
-- Em oportunidades com ticket acima de [THRESHOLD], DEVE ser mapeado o comitê de compra (todos os influenciadores e decisores)
-- A proposta DEVE ser apresentada ao decisor final (não apenas ao influenciador)
-
-### RN-06: Atualização de Pipeline
-- Toda oportunidade DEVE ter a data de "próxima ação" atualizada no CRM
-- Oportunidade sem atualização por >5 dias úteis gera alerta automático
-- Forecast (previsão de fechamento) DEVE ser revisado semanalmente pelo gerente
+### 3.2 Fora do Escopo
+- Qualificação inicial de leads → CAP-02
+- Onboarding do cliente pós-fechamento → CAP-05
+- Gestão financeira e cobranças → CAP-04
+- Definição de preços e descontos permitidos → CAP-06
+- Análise Win/Loss detalhada → CAP-01
+- Comissão de vendedores → CAP-07
 
 ---
 
-## 6. Fluxo Operacional Completo
+## 4. Responsabilidades
 
-```
-ENTRADA
-│
-└─► SQL recebido de CAP-02 (com contexto de qualificação)
-│
-▼
-ETAPA 1 — PRIMEIRO CONTATO
-│
-├─► Vendedor contacta lead em até 4h após recebimento do SQL
-├─► Objetivo: confirmar interesse, apresentar brevemente, agendar Discovery
-└─► CRM: registra contato, agenda próxima ação
-│
-▼
-ETAPA 2 — DISCOVERY (Reunião de Diagnóstico)
-│
-├─► Reunião estruturada com roteiro padronizado de perguntas
-├─► Mapear: dores, contexto atual, resultados esperados, decisores, orçamento, prazo
-├─► Confirmar ou reclassificar o ICP Score
-└─► CRM: registra achados, próxima ação, avança etapa
-│
-▼
-DECISÃO — Fit Real?
-│
-├─► SIM → Avançar para proposta
-└─► NÃO → Desqualificar com motivo + Win/Loss + retroalimentar CAP-01
-│
-▼
-ETAPA 3 — PROPOSTA
-│
-├─► Elaborar proposta personalizada baseada no discovery
-├─► Aplicar regras de precificação de CAP-06
-├─► Obter aprovação de desconto se necessário (RN-02)
-├─► Enviar proposta formal dentro do SLA
-└─► CRM: registra envio, versão, validade, próxima ação (apresentação)
-│
-▼
-ETAPA 4 — APRESENTAÇÃO E NEGOCIAÇÃO
-│
-├─► Apresentar proposta ao(s) decisor(es)
-├─► Registrar todas as objeções e respostas no CRM
-├─► Negociar dentro dos limites autorizados
-└─► CRM: registra posição da negociação, objeções, próximos passos
-│
-▼
-DECISÃO — Proposta Aceita?
-│
-├─► SIM → Avançar para fechamento
-├─► NÃO (objeções tratáveis) → Iterar proposta (max 2 revisões sem aprovação)
-└─► NÃO (sem evolução) → Desqualificar + Win/Loss
-│
-▼
-ETAPA 5 — FECHAMENTO
-│
-├─► Confirmar todos os termos acordados por escrito (e-mail de confirmação)
-├─► Formalizar aprovação do cliente
-└─► CRM: marcar como "Ganho" com valor e condições
-│
-▼
-ETAPA 6 — CONTRATO (CAP-03.5)
-│
-├─► Gerar contrato usando template aprovado
-├─► Preencher com condições exatas acordadas
-├─► Enviar para assinatura do cliente (assinatura eletrônica preferencialmente)
-├─► Aguardar retorno assinado
-└─► Arquivar contrato assinado no repositório oficial
-│
-▼
-SAÍDA
-│
-├─► Contrato assinado → CAP-04 (Receita) para faturamento
-├─► Briefing de onboarding → CAP-05 (Clientes)
-├─► Win/Loss Analysis → CAP-01 (Inteligência)
-└─► CRM atualizado com status "Cliente Ativo"
-│
-▼
-REGISTRO
-│
-├─► Toda a jornada da oportunidade registrada no CRM
-├─► Contrato arquivado em repositório oficial com índice
-└─► Receita lançada no pipeline de receita (CAP-04)
-│
-▼
-AUDITORIA
-│
-└─► Verificação mensal: completude do CRM, contratos sem assinatura,
-    oportunidades paradas, aderência ao processo por etapa
+| # | Responsabilidade | Frequência |
+|---|-----------------|-----------|
+| R-01 | Receber SQLs de CAP-02 e abrir oportunidades no funil | Por evento recebido |
+| R-02 | Garantir que cada oportunidade avance apenas com exit criteria atendidos | Por transição de estágio |
+| R-03 | Controlar descontos dentro dos limites autorizados por nível | Por proposta gerada |
+| R-04 | Formalizar contratos em 100% dos negócios fechados | Por fechamento |
+| R-05 | Manter ciclo de venda dentro dos benchmarks por segmento | Contínuo |
+| R-06 | Produzir forecast semanal baseado em probabilidade por estágio | Semanal |
+| R-07 | Publicar `oportunidade.encerrada` ao fechar ou perder um negócio | Por encerramento |
+| R-08 | Publicar `oportunidade.ganha` ao fechar contrato assinado | Por fechamento |
+| R-09 | Garantir que todos os contratos assinados são roteados para CAP-05 | Por contrato assinado |
+
+---
+
+## 5. Capacidades Internas
+
+### CAP-03.1 — Funil de Vendas com Exit Criteria
+
+O funil é a estrutura sequencial que cada oportunidade percorre. **Cada estágio tem exit criteria objetivos** que devem ser satisfeitos antes do avanço.
+
+**Estrutura padrão do funil (configurável por segmento):**
+
+```yaml
+funil_definition:
+  id: "FUNIL-PADRAO"
+  nome: "Funil Comercial Padrão"
+  segmento_ref: null  # null = aplica a todos; ou SEG-ID específico
+
+  estagios:
+    - id: "E1"
+      nome: "Descoberta"
+      descricao: "Entender contexto, dores e objetivos do prospect"
+      probabilidade_ponderada: 0.10
+      sla_dias: 7
+      exit_criteria:
+        - "dor principal identificada e documentada"
+        - "stakeholders do processo de decisão mapeados"
+        - "timeline de decisão estimado"
+        - "ICP score confirmado ≥ 5.0"
+
+    - id: "E2"
+      nome: "Qualificação Aprofundada"
+      descricao: "Confirmar budget, autoridade, necessidade e timeline"
+      probabilidade_ponderada: 0.20
+      sla_dias: 10
+      exit_criteria:
+        - "budget disponível ou liberável confirmado"
+        - "decision maker identificado e engajado"
+        - "necessidade validada e alinhada à proposta de valor"
+        - "timeline de decisão definido (≤ 90 dias)"
+
+    - id: "E3"
+      nome: "Apresentação de Solução"
+      descricao: "Demonstrar como a solução resolve as dores identificadas"
+      probabilidade_ponderada: 0.35
+      sla_dias: 14
+      exit_criteria:
+        - "demo ou apresentação realizada para decision maker"
+        - "proposta de valor validada pelo prospect"
+        - "objeções técnicas mapeadas e respondidas"
+        - "próximos passos acordados com data"
+
+    - id: "E4"
+      nome: "Proposta Comercial"
+      descricao: "Envio e negociação da proposta formal"
+      probabilidade_ponderada: 0.60
+      sla_dias: 10
+      exit_criteria:
+        - "proposta enviada formalmente"
+        - "proposta recebida e revisada pelo prospect"
+        - "objeções comerciais mapeadas"
+        - "desconto aplicado dentro do nível autorizado"
+
+    - id: "E5"
+      nome: "Negociação"
+      descricao: "Alinhamento final de condições comerciais e contratuais"
+      probabilidade_ponderada: 0.80
+      sla_dias: 14
+      exit_criteria:
+        - "condições comerciais acordadas (valor, prazo, forma de pagamento)"
+        - "cláusulas contratuais revisadas"
+        - "aprovação interna de desconto obtida (se aplicável)"
+
+    - id: "E6"
+      nome: "Fechamento"
+      descricao: "Assinatura do contrato e ativação do cliente"
+      probabilidade_ponderada: 1.00
+      sla_dias: 7
+      exit_criteria:
+        - "contrato assinado por ambas as partes"
+        - "primeiro pagamento confirmado ou faturado"
+        - "dados de onboarding coletados"
 ```
 
----
+### CAP-03.2 — Gestão de Propostas
 
-## 7. Indicadores de Desempenho (KPIs)
+Controle do ciclo de vida de propostas comerciais.
 
-### 7.1 KPIs de Conversão
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-PV-01 | Win Rate (SQL → Cliente) | Oportunidades ganhas / SQLs recebidos × 100 | Meta por segmento (CAP-01) | Mensal |
-| KPI-PV-02 | Taxa de conversão por etapa | Oportunidades que avançam / Total em cada etapa × 100 | Benchmark por etapa | Semanal |
-| KPI-PV-03 | Taxa de proposta enviada | SQLs que chegaram à etapa proposta / Total SQLs × 100 | ≥ 60% | Mensal |
+```yaml
+proposta:
+  id: "PROP-ID"
+  oportunidade_id: "OPP-ID"
+  versao: 1
+  status: "rascunho | enviada | visualizada | em_negociacao | aceita | recusada | expirada"
 
-### 7.2 KPIs de Velocidade
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-PV-04 | Ciclo médio de vendas | Dias da entrada do SQL ao fechamento (média) | ≤ Benchmark por segmento | Mensal |
-| KPI-PV-05 | Tempo até primeiro contato | Minutos/horas entre recebimento do SQL e 1º contato | ≤ 4h (100% dos casos) | Semanal |
-| KPI-PV-06 | Tempo até proposta enviada | Dias entre Discovery e envio da proposta | ≤ SLA por segmento | Mensal |
+  valor_total: 0.0
+  valor_com_desconto: 0.0
+  desconto_percentual: 0.0
+  nivel_desconto_aplicado: "N0 | N1 | N2 | N3"  # ref: CAP-06
+  aprovador_desconto: null  # preenchido se N2 ou N3
 
-### 7.3 KPIs de Receita
-| Código | Indicador | Fórmula | Meta | Frequência |
-|--------|-----------|---------|------|-----------|
-| KPI-PV-07 | Ticket médio por segmento | Receita total / Nº de clientes novos por segmento | Meta definida em CAP-06 | Mensal |
-| KPI-PV-08 | Desconto médio concedido | Soma de descontos / Soma do valor cheio × 100 | ≤ [X]% | Mensal |
-| KPI-PV-09 | Receita nova mensal (New MRR) | Soma de MRR de novos contratos assinados no mês | Meta de CAP-08 | Mensal |
+  validade_dias: 30
+  expira_em: ""
+  enviada_em: null
+  aceita_em: null
 
-### 7.4 KPIs de Conformidade (CAP-03.5)
-| Código | Indicador | Meta | Frequência |
-|--------|-----------|------|-----------|
-| KPI-CT-01 | Clientes ativos sem contrato assinado | 0% | Mensal |
-| KPI-CT-02 | Contratos assinados dentro do SLA (3 dias úteis após aceite) | ≥ 95% | Mensal |
-| KPI-CT-03 | Contratos arquivados no repositório oficial | 100% | Mensal |
-
----
-
-## 8. Gatilhos e Alertas Operacionais
-
-| Código | Condição | Ação | Responsável |
-|--------|----------|------|-------------|
-| ALT-PV-01 | SQL sem primeiro contato após 4h | Alerta para vendedor + gerente | Sistema |
-| ALT-PV-02 | Oportunidade sem atualização no CRM por >5 dias úteis | Alerta para vendedor + revisão de forecast | Sistema |
-| ALT-PV-03 | Proposta com mais de [15] dias sem resposta | Alerta para follow-up ativo ou desqualificação | Vendedor |
-| ALT-PV-04 | Win Rate abaixo de [meta - 15%] por 6 semanas | Revisão do processo + coaching individual | Gerente |
-| ALT-PV-05 | Desconto médio acima de [Y+5]% | Revisão de autorização de descontos + reunião com liderança | Gerente + Liderança |
-| ALT-PV-06 | Cliente ativo sem contrato assinado identificado | Regularização imediata obrigatória | Gerente + Jurídico |
-| ALT-PV-07 | Proposta enviada há >30 dias sem fechamento | Definir: avançar, renegociar ou desqualificar | Vendedor + Gerente |
-
----
-
-## 9. Diagnóstico de Desvios e Análise de Causa Raiz
-
-| Desvio Observado | Possíveis Causas Raiz | Método de Diagnóstico |
-|-----------------|----------------------|----------------------|
-| Win Rate abaixo da meta | Discovery superficial; proposta inadequada; concorrência; qualificação ruim (vem de CAP-02); habilidade de fechamento | Análise de win/loss por etapa de desistência |
-| Ciclo longo de vendas | Múltiplos decisores não mapeados; proposta não adequada ao contexto; follow-up insuficiente | Análise do tempo médio por etapa; oportunidades "paradas" |
-| Alto desconto médio | Falta de diferenciação de valor; pressão de concorrência; vendedor sem confiança no preço | Análise desconto vs. motivo no CRM |
-| Baixa taxa de proposta | Discovery não aprofundado; desqualificação prematura; falta de processo pós-discovery | Funil por etapa; gravação/revisão de reuniões de discovery |
-| Contratos sem assinatura | Processo manual; cliente procrastina; sem urgência; template inadequado | Auditoria de contratos abertos; análise de tempo entre envio e assinatura |
-
----
-
-## 10. Planos de Ação Padronizados
-
-### PA-PV-01: Win Rate Abaixo da Meta por 6+ Semanas
-```
-Semana 1: Análise de todas as oportunidades perdidas (onde no funil cada uma saiu)
-Semana 2: Sessão de diagnóstico colaborativo com a equipe (padrões de objeção)
-Semana 3: Revisar roteiro de discovery e proposta com insights encontrados
-Semana 4: Coaching individual para vendedores com maior desvio
-Mês 2: Medir nova taxa de win rate por vendedor e geral
+  itens_json: []  # produtos/serviços com valores individuais
+  condicoes_pagamento: ""
+  observacoes_negociacao: ""
 ```
 
-### PA-PV-02: Ciclo de Vendas Acima do Benchmark
-```
-Imediato: Mapear todas as oportunidades abertas com >2× o ciclo médio esperado
-Semana 1: Identificar etapa onde as oportunidades "travam"
-Semana 2: Implementar exit criteria mais rigorosos para não avançar sem critério
-Semana 3: Definir prazo máximo por etapa com alerta automático
+**Regra de aprovação de descontos (recebe limites de CAP-06):**
+| Nível | Desconto Máximo | Aprovador |
+|-------|----------------|-----------|
+| N0 | 0% (preço de tabela) | Vendedor |
+| N1 | Até limite N1 (configurado por CAP-06) | Vendedor |
+| N2 | Até limite N2 | Gestor comercial |
+| N3 | Acima do limite N2 | Diretoria |
+
+### CAP-03.3 — Formalização Contratual
+
+Gestão do ciclo de vida de contratos desde geração até assinatura.
+
+```yaml
+contrato:
+  id: "CTR-ID"
+  oportunidade_id: "OPP-ID"
+  proposta_id: "PROP-ID"
+  status: "rascunho | enviado_para_assinatura | assinado | cancelado | expirado"
+
+  tipo: "novo_cliente | renovacao | expansao | aditivo"
+  template_id: "TMPL-CTR-ID"
+
+  valor_total: 0.0
+  valor_mensal_recorrente: 0.0
+  duracao_meses: 0
+  data_inicio: ""
+  data_fim: ""
+  renovacao_automatica: false
+
+  signatarios_json: []  # lista de signatários com status individual
+  assinado_cliente_em: null
+  assinado_empresa_em: null
+  url_documento_assinado: ""  # armazenado em CONN-REPOSITORIO-DOCS
+
+  enviado_em: null
+  assinado_em: null
 ```
 
-### PA-PV-03: Cliente Ativo Sem Contrato Detectado
-```
-Imediato: Parar entrega até regularização (exceto se comprometer cliente criticamente)
-48h: Enviar contrato retroativo para assinatura
-Paralelo: Investigar como a situação foi criada; corrigir o processo
+### CAP-03.4 — Forecast de Receita
+
+Projeção de fechamento baseada no pipeline ponderado por probabilidade de estágio.
+
+```yaml
+forecast:
+  periodo: "mês/trimestre"
+  data_geracao: ""
+
+  pipeline_ponderado:
+    formula: "soma(valor_oportunidade × probabilidade_estagio)"
+    valor_total: 0.0
+
+  forecast_conservador:
+    formula: "soma(valor × prob se prob >= 0.80)"
+    valor: 0.0
+
+  forecast_realista:
+    formula: "soma(valor × prob)"
+    valor: 0.0
+
+  forecast_otimista:
+    formula: "soma(valor × prob) + soma(valor de E3/E4 com alta confiança)"
+    valor: 0.0
+
+  accuracy_historica:
+    mes_anterior: null  # % de acurácia do forecast anterior
+    trimestre_anterior: null
+
+  principais_riscos: []  # oportunidades grandes em risco de slip
 ```
 
 ---
 
-## 11. Procedimentos de Auditoria
+## 6. Fluxo Operacional
 
-### 11.1 Auditoria Semanal (Vendedor + Gerente — Pipeline Review)
-**Checklist:**
-- [ ] Todas as oportunidades têm "próxima ação" definida com data
-- [ ] Nenhuma oportunidade parada há >5 dias úteis sem justificativa
-- [ ] Forecast do mês atualizado (oportunidades marcadas como provável fechamento)
-- [ ] Todos os SQLs recebidos tiveram primeiro contato registrado
+```
+[FLUXO A — CICLO DE VIDA DA OPORTUNIDADE]
 
-### 11.2 Auditoria Mensal (Gerente Comercial)
-**Checklist:**
-- [ ] KPIs de conversão (PV-01 a PV-03) calculados e registrados
-- [ ] KPIs de velocidade (PV-04 a PV-06) calculados
-- [ ] Desconto médio calculado (PV-08)
-- [ ] 100% das oportunidades fechadas têm win/loss analysis
-- [ ] KPI-CT-01: 0 clientes sem contrato assinado
-- [ ] Contratos do mês arquivados no repositório oficial
+[TRIGGER: demanda.lead.qualificado_sql recebido de CAP-02]
+│
+├─► Criar oportunidade no funil (estágio E1 — Descoberta)
+│   └─► ENG-01 cria instância de processo com SLA de E1
+│
+├─► [E1 — DESCOBERTA]
+│   ├─► Vendedor conduz reunião de descoberta
+│   ├─► Preencher exit criteria de E1 no sistema
+│   ├─► Exit criteria atendidos? → avançar para E2
+│   └─► Exit criteria não atendidos após SLA → ALT-VP-02 (oportunidade parada)
+│
+├─► [E2 — QUALIFICAÇÃO APROFUNDADA]
+│   ├─► Confirmar BANT com decision maker
+│   ├─► Exit criteria atendidos? → avançar para E3
+│   └─► Não atendidos → rebaixar para nurturing | descartar
+│
+├─► [E3 — APRESENTAÇÃO DE SOLUÇÃO]
+│   ├─► Realizar demo/apresentação para decision maker
+│   ├─► Mapear e responder objeções técnicas
+│   ├─► Exit criteria atendidos? → avançar para E4
+│   └─► Solicitação de desconto > N1 → fluxo de aprovação
+│
+├─► [E4 — PROPOSTA COMERCIAL]
+│   ├─► Gerar proposta (ENG-07 → template + dados da oportunidade)
+│   ├─► Validar desconto aplicado (verificar limites de CAP-06)
+│   ├─► Se desconto N2 ou N3: solicitar aprovação → ENG-07 pausa e notifica aprovador
+│   ├─► Enviar proposta ao cliente (ENG-08 → CONN-EMAIL-TRANSACIONAL)
+│   ├─► Iniciar SLA de follow-up (3 dias sem resposta = lembrete automático)
+│   └─► Exit criteria atendidos? → avançar para E5
+│
+├─► [E5 — NEGOCIAÇÃO]
+│   ├─► Registrar todas as contrapropostas e condições negociadas
+│   ├─► Se desconto aumenta: verificar autorização
+│   └─► Exit criteria atendidos (acordo fechado) → avançar para E6
+│
+└─► [E6 — FECHAMENTO]
+    ├─► Gerar contrato (ENG-07 → template contratual)
+    ├─► Enviar para assinatura eletrônica (ENG-08 → CONN-ASSINATURA-ELETRONICA)
+    ├─► Monitorar assinaturas (SLA: 7 dias para ambas as partes)
+    ├─► Contrato assinado por ambos:
+    │   ├─► Publicar: oportunidade.ganha
+    │   ├─► Publicar: oportunidade.encerrada (tipo: won)
+    │   ├─► Publicar: cliente.contrato_assinado → CAP-05 inicia onboarding
+    │   └─► Publicar: receita.contrato_novo → CAP-04 registra receita
+    └─► Oportunidade perdida (em qualquer estágio):
+        ├─► Registrar motivo de perda (campo estruturado obrigatório)
+        ├─► Publicar: oportunidade.encerrada (tipo: lost)
+        └─► CAP-01 recebe para análise Win/Loss
 
-### 11.3 Auditoria Trimestral (Liderança)
-**Checklist:**
-- [ ] Análise de tendência de win rate por segmento
-- [ ] Comparação de ciclo de vendas vs. benchmark de mercado
-- [ ] Avaliação da eficácia do processo (etapas, critérios, templates)
-- [ ] Revisão dos templates de proposta e contrato
+
+[FLUXO B — FORECAST SEMANAL]
+
+[TRIGGER: sistema.periodo_encerrado (semanal)]
+│
+├─► Coletar estado atual do pipeline (todas as oportunidades ativas com valor e estágio)
+├─► Calcular pipeline ponderado por probabilidade de estágio
+├─► Comparar com meta de fechamento do período
+├─► Identificar principais riscos (oportunidades grandes sem movimentação há > 7 dias)
+├─► Publicar: forecast.atualizado
+└─► Notificar equipe com relatório de forecast (ENG-08 → CONN-EMAIL-TRANSACIONAL)
+
+
+[FLUXO C — APROVAÇÃO DE DESCONTO (N2/N3)]
+
+[TRIGGER: proposta com desconto > limite N1]
+│
+├─► ENG-07 pausa o workflow de geração de proposta
+├─► Notificar aprovador definido com: oportunidade, valor, desconto solicitado, justificativa
+├─► Aprovador responde (aprovado | rejeitado | contraoferta)
+│   ├─► Aprovado → retomar workflow; gerar proposta com desconto aprovado; registrar no DECISION_LOG
+│   ├─► Rejeitado → notificar vendedor; vendedor negocia nova condição
+│   └─► Timeout (48h sem resposta) → escalar para próximo nível
+└─► Todo desconto N2+ é registrado permanentemente na oportunidade
+```
 
 ---
 
-## 12. Possibilidades de Automação
+## 7. Estados
 
-### 12.1 CRM
-| Automação | Trigger | Ação |
-|-----------|---------|------|
-| Alerta de SQL sem contato | SQL criado + 4h sem atividade | Push notification para vendedor + gerente |
-| Alerta de oportunidade parada | >5 dias sem atualização | Notificação automática |
-| Forecast automático | Probabilidade de fechamento por etapa | Relatório semanal de forecast gerado automaticamente |
-| Template de proposta pré-preenchido | Oportunidade avança para etapa "Proposta" | CRM preenche proposta com dados da oportunidade |
+### 7.1 Estados da Oportunidade
 
-### 12.2 Inteligência Artificial
-| Automação | Aplicação |
-|-----------|----------|
-| Sugestão de próxima ação | IA analisa histórico da oportunidade e sugere melhor próxima ação |
-| Análise de sentimento em e-mails | IA avalia tom das respostas do prospect para prever probabilidade de fechamento |
-| Resumo de reunião automático | IA transcreve e resume reuniões de discovery; preenche campos do CRM |
-| Score preditivo de fechamento | ML calcula probabilidade de fechamento por oportunidade com base em padrões históricos |
+```
+ABERTA_E1 → ABERTA_E2 → ABERTA_E3 → ABERTA_E4 → ABERTA_E5 → ABERTA_E6
+                                                                    │
+                                                              ┌─────┴─────┐
+                                                              ▼           ▼
+                                                            GANHA       PERDIDA
+```
 
-### 12.3 Gestão de Contratos (CAP-03.5)
-| Automação | Aplicação |
-|-----------|----------|
-| Assinatura eletrônica | Integração com DocuSign / ClickSign / Assina.Online para envio e captura de assinatura |
-| Template automático | Contrato gerado automaticamente com dados do CRM ao marcar oportunidade como "Ganha" |
-| Alerta de vencimento | Alerta automático para renovação 60/30/15 dias antes do vencimento |
-| Arquivo automático | Contrato assinado arquivado automaticamente no repositório oficial |
+*(Oportunidade pode ser perdida em qualquer estágio)*
 
-### 12.4 Dashboards
-| Dashboard | Métricas | Público |
-|-----------|---------|---------|
-| Pipeline de Vendas | Funil por etapa, valor total, % de probabilidade | Equipe + Gerente (tempo real) |
-| Performance Individual | Win rate, ciclo médio, desconto médio por vendedor | Gerente (semanal) |
-| Forecast Report | Previsão de receita do mês com % de confiança | Liderança (semanal) |
-| Conformidade Contratual | Contratos assinados vs. clientes ativos | Gerente + Jurídico (mensal) |
+### 7.2 Estados da Proposta
+
+```
+RASCUNHO → ENVIADA → VISUALIZADA → EM_NEGOCIACAO → ACEITA | RECUSADA | EXPIRADA
+```
+
+### 7.3 Estados do Contrato
+
+```
+RASCUNHO → ENVIADO_PARA_ASSINATURA → ASSINADO | CANCELADO | EXPIRADO
+```
+
+### 7.4 Estados da Aprovação de Desconto
+
+```
+SOLICITADA → PENDENTE → APROVADA | REJEITADA | EXPIRADA (timeout 48h → escala)
+```
 
 ---
 
-## 13. Interfaces e Dependências com Outros Módulos
+## 8. Regras de Negócio
 
-### 13.1 Matriz de Interfaces
+### RN-01 — Exit Criteria Como Gate Inegociável
+Nenhuma oportunidade pode avançar de estágio sem que todos os exit criteria do estágio atual estejam preenchidos. O sistema bloqueia o avanço se os campos obrigatórios não estiverem preenchidos. Override requer aprovação do gestor e registro de justificativa.
 
-| Módulo | Tipo | CAP-03 Fornece | CAP-03 Recebe |
-|--------|------|----------------|---------------|
-| CAP-01 Inteligência Comercial | Bilateral | Win/loss analysis, objeções de campo | Inteligência competitiva, materiais de apoio |
-| CAP-02 Gestão de Demanda | Recebe | Feedback sobre qualidade dos SQLs | SQLs qualificados com contexto |
-| CAP-04 Gestão de Receita | Fornece | Contratos assinados, valor e condições de pagamento | — |
-| CAP-05 Gestão de Clientes | Fornece | Briefing de onboarding do novo cliente | Capacidade de atendimento disponível |
-| CAP-06 Oferta e Precificação | Recebe | Feedback de mercado sobre preço (objeções de preço) | Portfólio, tabela de preços, limites de desconto |
-| CAP-07 Equipe Comercial | Recebe | — | Capacidade, disponibilidade e habilidades da equipe |
-| CAP-08 Performance e Autogestão | Bilateral | KPIs de vendas (win rate, ciclo, ticket médio) | Metas de fechamento e receita |
+### RN-02 — Desconto Dentro do Nível Autorizado
+Todo desconto aplicado deve estar dentro do nível autorizado para o papel do vendedor (conforme configurado por CAP-06). Descontos acima do nível autorizado requerem fluxo de aprovação e só podem ser aplicados após aprovação registrada. Proposta enviada com desconto não autorizado é uma não-conformidade grave.
 
-### 13.2 Protocolo de Handoff CAP-03 → CAP-05 (Onboarding)
-O handoff de vendas para gestão do cliente é crítico e DEVE conter:
-- Resumo do processo de vendas (dores identificadas, promessas feitas, expectativas criadas)
-- Condições contratuais resumidas (escopo, prazo, valor, forma de pagamento)
-- Histórico de interações relevantes (acessível via CRM)
-- Próximos passos acordados com o cliente
-- Data esperada de início da entrega
+### RN-03 — Oportunidade Parada Gera Alerta
+Oportunidade sem movimentação (mudança de estágio ou atividade registrada) por mais de X dias (configurado por estágio) gera alerta automático. Oportunidade parada não é uma oportunidade ativa — é ruído no funil que distorce o forecast.
+
+### RN-04 — Contrato Obrigatório para Todo Negócio Fechado
+Nenhum negócio pode ser marcado como fechado sem contrato assinado por ambas as partes. Receita de oportunidade fechada sem contrato assinado não é reconhecida pelo CAP-04. O contrato é o único documento que formaliza o compromisso mútuo.
+
+### RN-05 — Motivo de Perda Obrigatório e Estruturado
+Toda oportunidade perdida DEVE ter motivo de perda registrado em campo estruturado antes de ser encerrada. Motivos em texto livre são proibidos. Taxonomia padrão: preco, concorrente, sem_budget, timing, nao_viu_valor, perdeu_sponsor, produto_inadequado, processo_cancelado, sem_contato.
+
+### RN-06 — Proposta com Validade Máxima de 30 Dias
+Propostas comerciais têm validade máxima de 30 dias (configurável por segmento). Proposta expirada não pode ser aceita sem reemissão com condições vigentes. O sistema alerta o vendedor 5 dias antes da expiração.
+
+### RN-07 — Forecast Baseado em Probabilidade de Estágio
+O forecast de receita é calculado automaticamente pelo sistema usando as probabilidades ponderadas de cada estágio. Ajustes manuais no forecast requerem justificativa e são registrados. O forecast é uma projeção matemática, não uma opinião.
+
+### RN-08 — Oportunidade Sem Decision Maker Não Avança para E3
+A identificação e o engajamento do decision maker são exit criteria obrigatórios do E2. Realizar apresentação para um influenciador sem o decision maker presente é contra as regras e pode ser registrado como desvio de processo auditável.
+
+### RN-09 — Ciclo de Venda Máximo por Segmento
+Cada segmento tem um ciclo máximo de venda configurado. Oportunidade que ultrapassa o ciclo máximo sem fechar entra em revisão obrigatória: continuar com plano específico (aprovado pelo gestor) ou encerrar como perdida. Oportunidade zumbi distorce pipeline e forecast.
+
+---
+
+## 9. Eventos Publicados
+
+| Evento | Quando | Payload Principal |
+|--------|--------|-----------------|
+| `oportunidade.aberta` | SQL recebido e oportunidade criada no funil | `{oportunidade_id, sql_id, segmento_id, valor_estimado, responsavel}` |
+| `oportunidade.estagio_avancado` | Exit criteria atendidos; oportunidade avança | `{oportunidade_id, estagio_anterior, estagio_novo, dias_no_estagio}` |
+| `oportunidade.parada_detectada` | Sem atividade por > limite do estágio | `{oportunidade_id, estagio_atual, dias_parada, valor_estimado}` |
+| `oportunidade.proposta_enviada` | Proposta enviada formalmente ao prospect | `{oportunidade_id, proposta_id, valor_proposto, desconto_percentual, validade_dias}` |
+| `oportunidade.ganha` | Contrato assinado por ambas as partes | `{oportunidade_id, contrato_id, valor_total, mrr, segmento_id, ciclo_dias}` |
+| `oportunidade.encerrada` | Oportunidade encerrada (ganha ou perdida) | `{oportunidade_id, resultado: won\|lost, motivo, estagio_encerramento, valor, segmento_id}` |
+| `cliente.contrato_assinado` | Contrato assinado — cliente oficializado | `{contrato_id, cliente_id, valor_total, mrr, data_inicio, data_fim, responsavel_cs}` |
+| `receita.contrato_novo` | Novo contrato para registro financeiro | `{contrato_id, valor_total, mrr, data_inicio, forma_pagamento, condicoes_json}` |
+| `forecast.atualizado` | Forecast semanal calculado | `{periodo, pipeline_ponderado, forecast_conservador, forecast_realista, meta_periodo}` |
+| `desconto.aprovacao_solicitada` | Desconto acima do nível autorizado requer aprovação | `{oportunidade_id, proposta_id, desconto_percentual, nivel_requerido, aprovador_id}` |
+
+---
+
+## 10. Eventos Consumidos
+
+| Evento | Origem | Ação ao Receber |
+|--------|--------|----------------|
+| `demanda.lead.qualificado_sql` | CAP-02 | Criar oportunidade no funil (E1) |
+| `mercado.icp.atualizado` | CAP-01 | Recalcular ICP tier das oportunidades ativas; alertar sobre mudanças |
+| `oferta.tabela_precos.atualizada` | CAP-06 | Atualizar limites de desconto; reprovar propostas com descontos agora inválidos |
+| `oferta.politica_desconto.atualizada` | CAP-06 | Atualizar níveis de autorização de desconto |
+| `kpi.limiar.cruzado` | ENG-02 | Se KPI afetado é win_rate ou ciclo_venda: criar diagnóstico |
+| `sistema.periodo_encerrado` | Scheduler (semanal) | Gerar forecast semanal |
+| `melhoria.item.implementado` | ENG-09 | Revisar processos impactados |
+
+---
+
+## 11. KPIs
+
+| ID | Nome | Fórmula | Meta | Frequência |
+|----|------|---------|------|-----------|
+| KPI-VP-01 | Taxa de Conversão SQL → Ganho | `ganhos / sqls_recebidos × 100` | Por segmento | Mensal |
+| KPI-VP-02 | Ciclo Médio de Venda | `média(data_fechamento - data_abertura)` | Por segmento (dias) | Mensal |
+| KPI-VP-03 | Ticket Médio | `soma(valor_ganhos) / count(ganhos)` | Por segmento | Mensal |
+| KPI-VP-04 | Taxa de Oportunidades Paradas | `opps_paradas / total_ativas × 100` | < 10% | Semanal |
+| KPI-VP-05 | Aderência aos Exit Criteria | `transicoes_com_ec_completos / total_transicoes × 100` | ≥ 95% | Mensal |
+| KPI-VP-06 | Desconto Médio Aplicado | `média(desconto_percentual)` | Definido por CAP-06 | Mensal |
+| KPI-VP-07 | Acurácia do Forecast | `\|forecast_realista - receita_real\| / receita_real × 100` | ≤ 15% | Mensal |
+| KPI-VP-08 | Taxa de Contratos Formalizados | `contratos_assinados / ganhos × 100` | 100% | Mensal |
+| KPI-VP-09 | Velocidade do Pipeline | `soma(valor × prob) / ciclo_médio` | Crescente | Semanal |
+| KPI-VP-10 | Pipeline Slip Rate | `opps_que_sliparam_periodo / total_forecast_periodo × 100` | < 20% | Mensal |
+
+---
+
+## 12. Alertas
+
+| ID | Condição | Severidade | Ação |
+|----|---------|-----------|------|
+| ALT-VP-01 | Oportunidade sem atividade > limite do estágio | WARNING | Notificar vendedor + gestor |
+| ALT-VP-02 | Oportunidade parada > 2× o limite do estágio | CRITICAL | Escalar para gestor; iniciar revisão |
+| ALT-VP-03 | Taxa de oportunidades paradas > 20% do funil | CRITICAL | Diagnóstico de funil; reunião de pipeline |
+| ALT-VP-04 | Acurácia do forecast < 85% por 2 meses | WARNING | Revisar metodologia de forecast; ENG-04 |
+| ALT-VP-05 | Ciclo de venda > 150% do benchmark do segmento | WARNING | Identificar estágio gargalo; plano de ação |
+| ALT-VP-06 | Desconto médio > limite configurado por CAP-06 | WARNING | Revisar política de desconto; treinamento |
+| ALT-VP-07 | Proposta expirada sem resposta do cliente | WARNING | Notificar vendedor; ação de follow-up |
+| ALT-VP-08 | Taxa de formalização de contratos < 95% | CRITICAL | Identificar negócios sem contrato; NC ENG-06 |
+| ALT-VP-09 | Taxa de conversão SQL→Ganho cai > 10pp | CRITICAL | Disparar diagnóstico ENG-04 |
+
+---
+
+## 13. Planos de Ação Automáticos
+
+### PA-VP-01 — Queda de Conversão SQL→Ganho (Gatilho: ALT-VP-09)
+```yaml
+plano_acao:
+  tipo: diagnostico_e_correcao
+  prazo_dias: 30
+  tarefas:
+    - "ENG-04: identificar em qual estágio ocorre a maior perda de oportunidades"
+    - "Analisar: perda é por qualidade (SQLs desqualificados) ou por processo (estágio específico)?"
+    - "Se qualidade: solicitar revisão dos critérios SQL para CAP-02"
+    - "Se processo: revisar exit criteria e scripts do estágio com maior drop-off"
+    - "Se negociação: analisar descontos médios e posicionamento de preço (CAP-06)"
+  metrica_sucesso: "Conversão SQL→Ganho retorna ao baseline em 60 dias"
+```
+
+### PA-VP-02 — Funil Travado (Gatilho: ALT-VP-03)
+```yaml
+plano_acao:
+  tipo: revisao_operacional
+  prazo_dias: 14
+  tarefas:
+    - "Listar todas as oportunidades paradas com mais de 2× o limite do estágio"
+    - "Para cada oportunidade: decisão binária — continuar (com plano específico) ou encerrar"
+    - "Atualizar pipeline com posição real (eliminar oportunidades zumbi)"
+    - "Realizar sessão de revisão de pipeline com a equipe"
+  metrica_sucesso: "Taxa de oportunidades paradas < 10% do funil em 14 dias"
+```
+
+### PA-VP-03 — Desconto Médio Alto (Gatilho: ALT-VP-06)
+```yaml
+plano_acao:
+  tipo: revisao_estrategica
+  prazo_dias: 21
+  tarefas:
+    - "Identificar: desconto alto é em etapa específica (negociação) ou desde a proposta?"
+    - "Analisar se a proposta de valor está sendo comunicada corretamente (antes do preço)"
+    - "Verificar se a política de desconto de CAP-06 está atualizada e comunicada ao time"
+    - "Se treinamento necessário: acionar CAP-07 para sessão de negociação de valor"
+  metrica_sucesso: "Desconto médio dentro do limite configurado em 60 dias"
+```
+
+---
+
+## 14. Automações
+
+| ID | Trigger | Ação Automatizada | Conector |
+|----|---------|-----------------|---------|
+| AUT-VP-01 | `demanda.lead.qualificado_sql` recebido | Criar oportunidade; notificar vendedor; iniciar SLA de E1 | CONN-CRM-PRINCIPAL, CONN-MENSAGERIA |
+| AUT-VP-02 | Proposta aceita (estágio E4 concluído) | Gerar contrato a partir do template; enviar para assinatura | CONN-ASSINATURA-ELETRONICA |
+| AUT-VP-03 | Proposta sem resposta após 3 dias | Enviar lembrete automático ao cliente | CONN-EMAIL-TRANSACIONAL |
+| AUT-VP-04 | Proposta a 5 dias de expirar | Notificar vendedor para ação de follow-up | CONN-MENSAGERIA |
+| AUT-VP-05 | Contrato assinado por ambas as partes | Publicar oportunidade.ganha + cliente.contrato_assinado + receita.contrato_novo | Barramento SOE |
+| AUT-VP-06 | Oportunidade sem atividade > limite do estágio | Criar alerta; notificar vendedor + gestor | ENG-03 |
+| AUT-VP-07 | `sistema.periodo_encerrado` (semanal) | Calcular e publicar forecast.atualizado | ENG-02 |
+| AUT-VP-08 | Desconto solicitado > nível N1 | Pausar geração de proposta; notificar aprovador; iniciar timer 48h | CONN-MENSAGERIA, ENG-07 |
+
+---
+
+## 15. Auditoria Operacional
+
+### Checklist Semanal — CAP-03-AUD-SEMANAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | Forecast semanal gerado e publicado | Evento `forecast.atualizado` | Registro do evento |
+| 2 | Oportunidades paradas < 10% do funil | KPI-VP-04 | Valor do KPI |
+| 3 | Propostas próximas de expirar tratadas | Log de alertas de expiração | Ações registradas |
+| 4 | Pipeline review realizada com a equipe | Ata ou registro de reunião | Documento datado |
+
+### Checklist Mensal — CAP-03-AUD-MENSAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | 100% dos negócios fechados têm contrato assinado | KPI-VP-08 | 100% |
+| 2 | 100% das oportunidades perdidas têm motivo estruturado | Verificar campo motivo_perda | Zero nulos |
+| 3 | Aderência a exit criteria ≥ 95% | KPI-VP-05 | Valor do KPI |
+| 4 | Todos os descontos N2+ têm aprovação registrada | Verificar log de aprovações | Zero exceções |
+| 5 | Acurácia do forecast dentro do limite | KPI-VP-07 | ≤ 15% de desvio |
+| 6 | Alertas tratados dentro do SLA da ENG-03 | Taxa de resolução | ≥ 90% no SLA |
+
+---
+
+## 16. ENGINE-REGISTRATION.yaml
+
+```yaml
+# ENGINE-REGISTRATION.yaml — CAP-03 Gestão do Processo de Vendas
+# Ref: ARC-ENG-099
+
+modulo:
+  id: "CAP-03"
+  nome: "Gestão do Processo de Vendas"
+  versao: "2.0.0"
+  tier: "core"
+  status: "ativo"
+
+dependencias:
+  modulos:
+    - id: "CAP-01"
+      uso: "ICP vigente para qualificação de oportunidades"
+    - id: "CAP-02"
+      uso: "receber SQLs para abrir oportunidades"
+    - id: "CAP-06"
+      uso: "tabela de preços e limites de desconto por nível"
+  engines:
+    - id: "ENG-01"
+      uso: "instâncias de oportunidades, SLA por estágio, exit criteria"
+    - id: "ENG-02"
+      uso: "KPIs KPI-VP-01 a KPI-VP-10"
+    - id: "ENG-03"
+      uso: "alertas ALT-VP-01 a ALT-VP-09"
+    - id: "ENG-04"
+      uso: "diagnóstico de queda de conversão e gargalos de estágio"
+    - id: "ENG-05"
+      uso: "planos de ação PA-VP-01 a PA-VP-03"
+    - id: "ENG-06"
+      uso: "auditoria semanal e mensal"
+    - id: "ENG-07"
+      uso: "workflows AUT-VP-01 a AUT-VP-08"
+    - id: "ENG-08"
+      uso: "CRM, assinatura eletrônica, email, mensageria"
+    - id: "ENG-10"
+      uso: "sugestões de abordagem baseadas em casos similares"
+
+eventos_publicados:
+  - evento: "oportunidade.aberta"
+    condicao: "SQL recebido e oportunidade criada"
+  - evento: "oportunidade.estagio_avancado"
+    condicao: "exit criteria atendidos e estágio avançado"
+  - evento: "oportunidade.parada_detectada"
+    condicao: "sem atividade > limite do estágio"
+  - evento: "oportunidade.proposta_enviada"
+    condicao: "proposta enviada formalmente"
+  - evento: "oportunidade.ganha"
+    condicao: "contrato assinado por ambas as partes"
+  - evento: "oportunidade.encerrada"
+    condicao: "oportunidade encerrada (won ou lost)"
+  - evento: "cliente.contrato_assinado"
+    condicao: "contrato assinado — cliente oficializado"
+  - evento: "receita.contrato_novo"
+    condicao: "novo contrato para registro financeiro"
+  - evento: "forecast.atualizado"
+    condicao: "forecast semanal calculado"
+  - evento: "desconto.aprovacao_solicitada"
+    condicao: "desconto acima do nível autorizado"
+
+eventos_consumidos:
+  - evento: "demanda.lead.qualificado_sql"
+    origem: "CAP-02"
+    acao: "criar oportunidade no funil em E1"
+  - evento: "mercado.icp.atualizado"
+    origem: "CAP-01"
+    acao: "recalcular ICP tier das oportunidades ativas"
+  - evento: "oferta.tabela_precos.atualizada"
+    origem: "CAP-06"
+    acao: "atualizar limites de desconto"
+  - evento: "oferta.politica_desconto.atualizada"
+    origem: "CAP-06"
+    acao: "atualizar níveis de autorização"
+  - evento: "kpi.limiar.cruzado"
+    origem: "ENG-02"
+    acao: "criar diagnóstico se KPI é win_rate ou ciclo_venda"
+  - evento: "sistema.periodo_encerrado"
+    origem: "Scheduler"
+    acao: "gerar forecast semanal"
+  - evento: "melhoria.item.implementado"
+    origem: "ENG-09"
+    acao: "revisar processos impactados"
+
+kpis_registrados:
+  - id: "KPI-VP-01"
+    nome: "Taxa de Conversão SQL → Ganho"
+    formula: "ganhos / sqls_recebidos * 100"
+    unidade: "percentual"
+    dimensao: "segmento_id"
+    frequencia_calculo: "mensal"
+  - id: "KPI-VP-02"
+    nome: "Ciclo Médio de Venda"
+    formula: "media(data_fechamento - data_abertura)"
+    unidade: "dias"
+    dimensao: "segmento_id"
+    frequencia_calculo: "mensal"
+  - id: "KPI-VP-03"
+    nome: "Ticket Médio"
+    formula: "soma(valor_ganhos) / count(ganhos)"
+    unidade: "moeda"
+    dimensao: "segmento_id"
+    frequencia_calculo: "mensal"
+  - id: "KPI-VP-04"
+    nome: "Taxa de Oportunidades Paradas"
+    formula: "opps_paradas / total_ativas * 100"
+    unidade: "percentual"
+    frequencia_calculo: "semanal"
+    meta_padrao: 10
+    limiar_warning: 15
+    limiar_critical: 20
+  - id: "KPI-VP-05"
+    nome: "Aderência aos Exit Criteria"
+    formula: "transicoes_com_ec_completos / total_transicoes * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 95
+    limiar_warning: 90
+  - id: "KPI-VP-06"
+    nome: "Desconto Médio Aplicado"
+    formula: "media(desconto_percentual_das_propostas)"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: "configurado por CAP-06"
+  - id: "KPI-VP-07"
+    nome: "Acurácia do Forecast"
+    formula: "abs(forecast_realista - receita_real) / receita_real * 100"
+    unidade: "percentual_desvio"
+    frequencia_calculo: "mensal"
+    meta_padrao: 15
+    limiar_warning: 20
+  - id: "KPI-VP-08"
+    nome: "Taxa de Contratos Formalizados"
+    formula: "contratos_assinados / negócios_ganhos * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 100
+    limiar_critical: 95
+  - id: "KPI-VP-09"
+    nome: "Velocidade do Pipeline"
+    formula: "soma(valor * prob_estagio) / ciclo_medio_dias"
+    unidade: "moeda_por_dia"
+    frequencia_calculo: "semanal"
+  - id: "KPI-VP-10"
+    nome: "Pipeline Slip Rate"
+    formula: "opps_slipadas / total_forecast_periodo * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    limiar_warning: 20
+
+alertas_registrados:
+  - id: "ALT-VP-01"
+    condicao: "oportunidade.dias_sem_atividade > limite_estagio"
+    severidade: "warning"
+    owner: "vendedor_responsavel + gestor"
+  - id: "ALT-VP-02"
+    condicao: "oportunidade.dias_sem_atividade > 2x_limite_estagio"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-VP-03"
+    kpi_ref: "KPI-VP-04"
+    condicao: "> 20"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-VP-04"
+    kpi_ref: "KPI-VP-07"
+    condicao: "> 20 por 2 meses consecutivos"
+    severidade: "warning"
+    owner: "responsavel_cap03"
+  - id: "ALT-VP-05"
+    condicao: "ciclo_venda_opp > 1.5x benchmark_segmento"
+    severidade: "warning"
+    owner: "gestor_comercial"
+  - id: "ALT-VP-06"
+    kpi_ref: "KPI-VP-06"
+    condicao: "> limite_cap06"
+    severidade: "warning"
+    owner: "gestor_comercial"
+  - id: "ALT-VP-07"
+    condicao: "proposta.dias_para_expirar <= 5"
+    severidade: "warning"
+    owner: "vendedor_responsavel"
+  - id: "ALT-VP-08"
+    kpi_ref: "KPI-VP-08"
+    condicao: "< 95"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-VP-09"
+    kpi_ref: "KPI-VP-01"
+    condicao: "queda > 10pp vs baseline"
+    severidade: "critical"
+    owner: "gestor_comercial"
+    acao_automatica: "disparar_diagnostico_eng04"
+
+workflows_registrados:
+  - id: "WF-VP-01"
+    nome: "Abertura de Oportunidade a partir de SQL"
+    gatilho: "demanda.lead.qualificado_sql"
+    descricao: "cria oportunidade E1, notifica vendedor, inicia SLA"
+  - id: "WF-VP-02"
+    nome: "Geração e Envio de Proposta"
+    gatilho: "exit criteria E3 atendidos"
+    descricao: "gera proposta, valida desconto, solicita aprovação se necessário, envia"
+  - id: "WF-VP-03"
+    nome: "Follow-up de Proposta"
+    gatilho: "proposta sem resposta após 3 dias"
+    descricao: "envia lembrete automático ao cliente"
+  - id: "WF-VP-04"
+    nome: "Geração e Assinatura de Contrato"
+    gatilho: "proposta aceita"
+    descricao: "gera contrato, envia para assinatura eletrônica, monitora"
+  - id: "WF-VP-05"
+    nome: "Ativação de Cliente Pós-Fechamento"
+    gatilho: "contrato assinado por ambas as partes"
+    descricao: "publica eventos de ganho, contrato e receita; notifica CAP-05"
+  - id: "WF-VP-06"
+    nome: "Forecast Semanal"
+    gatilho: "sistema.periodo_encerrado (semanal)"
+    descricao: "calcula e publica forecast ponderado"
+
+auditoria_checklists:
+  - id: "CAP-03-AUD-SEMANAL"
+    tipo: "semanal"
+    itens_count: 4
+  - id: "CAP-03-AUD-MENSAL"
+    tipo: "mensal"
+    itens_count: 6
+
+conectores_utilizados:
+  - "CONN-CRM-PRINCIPAL"
+  - "CONN-ASSINATURA-ELETRONICA"
+  - "CONN-EMAIL-TRANSACIONAL"
+  - "CONN-MENSAGERIA"
+  - "CONN-REPOSITORIO-DOCS"
+
+permissoes_necessarias:
+  - recurso: "oportunidades"
+    acoes: ["read", "write", "update_status"]
+  - recurso: "propostas"
+    acoes: ["read", "write", "send"]
+  - recurso: "contratos"
+    acoes: ["read", "write", "send_for_signature"]
+  - recurso: "funil_definitions"
+    acoes: ["read"]
+  - recurso: "politica_descontos"
+    acoes: ["read"]
+  - recurso: "kpi_values.KPI-VP-*"
+    acoes: ["read", "write_via_eng02"]
+  - recurso: "eventos_barramento"
+    acoes: ["publish", "subscribe"]
+```
 
 ---
 
@@ -390,4 +827,5 @@ O handoff de vendas para gestão do cliente é crítico e DEVE conter:
 
 | Versão | Data | Autor | Descrição |
 |--------|------|-------|-----------|
-| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial do Módulo Operacional CAP-03 (inclui CAP-03.5 Contratos) |
+| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial |
+| 2.0.0 | 2026-06-29 | Guardião da Documentação | Redesenho como microserviço do Commercial OS — 16 seções, arquitetura orientada a eventos, ENGINE-REGISTRATION.yaml |

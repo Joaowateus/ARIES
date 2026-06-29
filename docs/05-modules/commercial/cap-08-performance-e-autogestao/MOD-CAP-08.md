@@ -1,13 +1,18 @@
 ---
 id: MOD-CAP-08
-titulo: "Módulo Operacional — Gestão de Performance e Autogestão"
-versao: "1.0.0"
+titulo: "CAP-08 — Performance e Autogestão"
+versao: "2.0.0"
 status: aprovado
-categoria: C3-Operacional
+categoria: Commercial-OS-Module
 autor: Guardião da Documentação Técnica
 criado-em: 2026-06-28
-atualizado-em: 2026-06-28
+atualizado-em: 2026-06-29
 dependencias:
+  - ARC-ENG-000
+  - ARC-ENG-002
+  - ARC-ENG-003
+  - ARC-ENG-006
+  - ARC-ENG-009
   - MOD-CAP-01
   - MOD-CAP-02
   - MOD-CAP-03
@@ -15,408 +20,664 @@ dependencias:
   - MOD-CAP-05
   - MOD-CAP-06
   - MOD-CAP-07
-tags: [performance, autogestao, kpis, metas, okr, dashboard, decisao, ciclo-pdca, governanca]
+  - MOD-CAP-09
+tags: [commercial-os, cap-08, performance, okr, scorecard, ritmo-operacional, autogestao, forecast, decisao]
 ---
 
-# MOD-CAP-08 — Gestão de Performance e Autogestão
+# CAP-08 — Performance e Autogestão
 
----
-
-## 1. Objetivo da Capacidade
-
-Consolidar, analisar e distribuir os dados de performance de todo o Núcleo Comercial de forma que a empresa opere com visibilidade completa, tome decisões baseadas em dados e execute ciclos de melhoria contínua — reduzindo a dependência de decisões intuitivas e aproximando a operação de um sistema de autogestão empresarial.
-
-Este módulo é o **sistema nervoso central** do Núcleo Comercial: recebe dados de todos os outros módulos, calcula metas, detecta desvios, aciona alertas e gera o ciclo de aprendizagem organizacional.
+> **Módulo do Commercial Operating System**
+> Infraestrutura compartilhada: `docs/02-architecture/engine-autogestao/`
+> Contrato de integração: `ENGINE-CONTRATO-DE-INTEGRACAO.md` (ARC-ENG-099)
 
 ---
 
-## 2. Resultado Esperado
+## 1. Identificação
 
-| # | Resultado | Critério de Aceitação |
-|---|-----------|----------------------|
-| R1 | Visibilidade completa em tempo real | Dashboard de performance atualizado diariamente; nenhum KPI crítico sem dado |
-| R2 | Metas definidas, comunicadas e monitoradas | 100% dos KPIs com meta definida, responsável e frequência de monitoramento |
-| R3 | Ciclo de revisão executado sistematicamente | Reuniões de performance realizadas conforme cadência definida (semanal, mensal, trimestral) |
-| R4 | Desvios identificados e tratados | 100% dos desvios críticos com plano de ação registrado em até 5 dias úteis |
-| R5 | Aprendizagem organizacional documentada | Decisões estratégicas registradas no DECISION_LOG; retrospectivas executadas trimestralmente |
-
-**Definição de Sucesso:** Qualquer stakeholder (líder, gerente, investidor) consegue entender a performance atual do Núcleo Comercial em menos de 5 minutos, com dados confiáveis e atualizados.
-
----
-
-## 3. Entradas Necessárias
-
-### 3.1 Dados Recebidos de Cada Módulo
-| Módulo | Dados Recebidos | Frequência |
-|--------|----------------|-----------|
-| CAP-01 Inteligência Comercial | Win rate por segmento, cobertura win/loss, atualidade do mapa competitivo | Mensal |
-| CAP-02 Gestão de Demanda | Volume de leads, SQLs, taxa de conversão, CPL, pipeline total (R$) | Semanal |
-| CAP-03 Processo de Vendas | Win rate, ciclo médio, ticket médio, desconto médio, new MRR | Mensal |
-| CAP-04 Gestão de Receita | MRR, ARR, NRR, GRR, Churn MRR, forecast de receita | Mensal |
-| CAP-05 Gestão de Clientes | Churn rate, NPS, health score médio, expansion MRR, onboarding SLA | Mensal |
-| CAP-06 Oferta e Precificação | Ticket médio realizado, margem bruta, aderência ao portfólio | Trimestral |
-| CAP-07 Equipe Comercial | Atingimento individual de quota, capacidade, headcount, turnover | Mensal |
-
-### 3.2 Entradas Estratégicas
-| Entrada | Fonte | Frequência |
-|---------|-------|-----------|
-| Metas anuais e trimestrais (OKRs) | Liderança / Planejamento estratégico | Anual + revisão trimestral |
-| Orçamento comercial | Financeiro | Anual |
-| Benchmarks de mercado | CAP-01 + fontes externas | Trimestral |
+| Campo | Valor |
+|-------|-------|
+| **ID do Módulo** | CAP-08 |
+| **Nome** | Performance e Autogestão |
+| **Domínio** | Orquestração e Inteligência Executiva do Commercial OS |
+| **Versão** | 2.0.0 |
+| **Tier** | Meta-módulo — agrega e orquestra todos os outros |
+| **Posição na cadeia** | Downstream de todos os módulos; upstream de decisões estratégicas |
+| **Registro na Engine** | `ENGINE-REGISTRATION.yaml` (seção 16) |
 
 ---
 
-## 4. Saídas Obrigatórias
+## 2. Objetivo
 
-### 4.1 Relatórios e Dashboards
-| Saída | Destinatário | Periodicidade | SLA |
-|-------|-------------|--------------|-----|
-| Dashboard de Performance (tempo real) | Toda a equipe comercial | Contínua | Atualização diária |
-| Relatório Semanal de Pipeline | Gerente + Liderança | Semanal | Segunda-feira 9h |
-| Relatório Mensal de Performance | Liderança + Conselho | Mensal | Dia 7 do mês seguinte |
-| Relatório Trimestral (Business Review) | Liderança + Conselho | Trimestral | 10 dias após o trimestre |
-| Revenue Forecast (rolling 3M) | Liderança | Semanal | Segunda-feira |
-| DECISION_LOG atualizado | Repositório / Equipe | Por evento de decisão | Até 24h após a decisão |
+Ser o **painel de controle e o ritmo operacional** do Commercial OS — consolidando a visão unificada de performance de todos os módulos, estabelecendo o ciclo de gestão (reuniões, dashboards, revisões), gerenciando metas e OKRs do núcleo comercial, e garantindo que o sistema seja capaz de se auto-regular com mínima intervenção humana.
 
-### 4.2 Metas e Objetivos Distribuídos
-| Saída | Destinatário | Periodicidade |
-|-------|-------------|--------------|
-| Metas mensais individuais e de equipe | CAP-07 (Equipe Comercial) | Mensal |
-| Metas de geração de demanda | CAP-02 | Mensal |
-| Metas de receita e retenção | CAP-04 + CAP-05 | Mensal |
-| Limites de CPL e ticket mínimo | CAP-06 | Por atualização estratégica |
+O CAP-08 não gera leads, não vende, não retém. Ele garante que todos os módulos que fazem essas coisas estejam **calibrados, coordenados e funcionando como um sistema coerente**. Quando um módulo desvia, CAP-08 detecta, diagnostica (via ENG-04) e coordena a correção. É o sistema nervoso central do Commercial OS.
 
 ---
 
-## 5. Regras de Negócio
+## 3. Escopo
 
-### RN-01: Definição de Metas
-- Metas DEVEM ser definidas com base em dados históricos + benchmarks de mercado + ambição estratégica
-- Metas DEVEM ser SMART: Específicas, Mensuráveis, Atingíveis, Relevantes e Temporais
-- Nenhuma meta pode ser alterada durante o período de vigência sem aprovação da liderança e registro no DECISION_LOG
-- Metas individuais DEVEM ser comunicadas a cada integrante antes do início do período
+### 3.1 Dentro do Escopo
+- Definição e gestão de metas do núcleo comercial (OKRs, metas de receita, metas de KPI)
+- Dashboard consolidado de performance (todos os módulos em uma visão)
+- Ritmo operacional: daily, weekly, monthly, quarterly, annual
+- Revisão de performance e tomada de decisão baseada em dados
+- Gestão de OKRs trimestrais do núcleo comercial
+- Registro de decisões estratégicas no DECISION_LOG (ENG-09)
+- Publicação de metas para todos os módulos
+- Identificação de desvios sistêmicos e coordenação de planos de correção
+- Relatório executivo do Commercial OS
 
-### RN-02: Cadência de Revisão (Ritmo Operacional)
-```
-DIÁRIO:   Dashboard atualizado; alertas críticos monitorados
-SEMANAL:  Pipeline Review (30 min — equipe + gerente)
-MENSAL:   Reunião de performance mensal (90 min — análise de KPIs + decisões táticas)
-TRIMESTRAL: Business Review (3h — análise estratégica + revisão de metas + planejamento)
-ANUAL:    Planejamento estratégico do Núcleo Comercial (1 dia)
-```
-
-### RN-03: Registro de Decisões
-- Toda decisão que afeta o Núcleo Comercial DEVE ser registrada no DECISION_LOG com: data, decisão, contexto, responsável, impacto esperado
-- Decisões sem registro são consideradas informais e não vinculantes
-- O DECISION_LOG é imutável (não se altera o que foi decidido — se mudar, registra nova decisão)
-
-### RN-04: Qualidade dos Dados
-- Um KPI sem fonte confiável não pode ser publicado como dado oficial
-- Dados do CRM são fonte primária; planilhas pessoais NÃO são fontes válidas para KPIs oficiais
-- Responsável pelo módulo que alimenta o dado é responsável pela qualidade do mesmo
-
-### RN-05: Resposta a Desvios
-- Desvio crítico (KPI abaixo de [X]% da meta) DEVE ter plano de ação documentado em até 5 dias úteis
-- Plano de ação DEVE conter: causa raiz identificada, ações específicas, responsável, prazo e KPI de controle
-- Desvio crítico recorrente (>2 meses) DEVE ser escalado para liderança com análise aprofundada
-
-### RN-06: Retrospectiva Obrigatória
-- Ao final de cada trimestre, DEVE ser realizada retrospectiva do Núcleo Comercial: o que funcionou, o que não funcionou, o que aprender
-- Resultado da retrospectiva DEVE ser documentado e alimentar o planejamento do próximo trimestre
+### 3.2 Fora do Escopo
+- Execução dos processos dos módulos individuais
+- Análise detalhada de causa raiz → ENG-04
+- Planos de ação detalhados → ENG-05
 
 ---
 
-## 6. Fluxo Operacional Completo
+## 4. Responsabilidades
 
-```
-ENTRADA — Coleta de Dados (automática + manual)
-│
-├─► CRM: dados de pipeline, oportunidades, win/loss (automático)
-├─► CAP-04: MRR, NRR, faturamento (automático ou mensal)
-├─► CAP-05: Health Score, Churn, NPS (mensal)
-├─► CAP-07: Atingimento individual, headcount (mensal)
-└─► CAP-01/02/03/06: dados específicos por frequência definida
-│
-▼
-PROCESSAMENTO — Consolidação e Análise
-│
-├─► [Dashboard] — atualizado diariamente com dados de CRM
-├─► [Relatório Semanal] — consolidação manual/automática às sextas
-├─► [Relatório Mensal] — consolidação completa de todos os módulos até dia 5
-└─► [Forecast] — atualizado toda segunda com dados de pipeline
-│
-▼
-PUBLICAÇÃO E DISTRIBUIÇÃO
-│
-├─► Dashboard disponível para todos os stakeholders (self-service)
-├─► Relatório enviado por e-mail / canal oficial para destinatários
-└─► Alertas enviados quando KPIs cruzam limites críticos
-│
-▼
-CICLO DE REVISÃO — Reunião de Performance
-│
-├─► [SEMANAL — Pipeline Review]
-│     ├─ O que está para fechar esta semana?
-│     ├─ Há oportunidades em risco? O que fazer?
-│     └─ O pipeline está acima de 3× a meta do mês?
-│
-├─► [MENSAL — Performance Review]
-│     ├─ KPIs do mês vs. metas: o que atingimos? o que não?
-│     ├─ Diagnóstico dos desvios: causa raiz
-│     ├─ Decisões táticas + registrar no DECISION_LOG
-│     └─ Comunicar metas do próximo mês
-│
-└─► [TRIMESTRAL — Business Review]
-      ├─ Análise do trimestre: o que aprendemos?
-      ├─ Revisão e calibração de metas do próximo trimestre
-      ├─ Retrospectiva: what worked / what didn't / what to change
-      └─ Atualizar planejamento estratégico
-│
-▼
-TRATAMENTO DE DESVIOS
-│
-├─► Desvio identificado → analisar causa raiz (ver seção 9)
-├─► Plano de ação criado → documentar + responsável + prazo
-├─► Monitoramento semanal do plano
-└─► KPI volta ao normal → documentar aprendizado; atualizar processo
-│
-▼
-REGISTRO
-│
-├─► DECISION_LOG: todas as decisões registradas imutavelmente
-├─► Relatórios mensais arquivados no repositório oficial
-├─► Retrospectivas trimestrais documentadas
-└─► Histórico de KPIs preservado para análise de tendência
-│
-▼
-AUDITORIA
-│
-└─► Trimestral: qualidade dos dados, aderência ao ritmo operacional,
-    completude do DECISION_LOG, retrospectivas realizadas
-```
+| # | Responsabilidade | Frequência |
+|---|-----------------|-----------|
+| R-01 | Manter e publicar metas do núcleo comercial | Por planejamento |
+| R-02 | Consolidar KPIs de todos os módulos em dashboard único | Tempo real |
+| R-03 | Conduzir o ritmo operacional (daily, weekly, monthly, QBR, annual) | Por cadência |
+| R-04 | Identificar desvios de meta e coordenar diagnóstico e correção | Por desvio detectado |
+| R-05 | Registrar decisões no DECISION_LOG da ENG-09 | Por decisão |
+| R-06 | Produzir relatório executivo mensal e trimestral | Mensal/Trimestral |
+| R-07 | Publicar metas atualizadas para os módulos quando houver revisão | Por mudança |
+| R-08 | Monitorar saúde global do Commercial OS (todos os KPIs críticos) | Contínuo |
 
 ---
 
-## 7. Indicadores de Desempenho (KPIs)
+## 5. Capacidades Internas
 
-### 7.1 KPI Master — Scorecard do Núcleo Comercial
+### CAP-08.1 — Estrutura de Metas do Núcleo Comercial
 
-> Este módulo consolida e monitora todos os KPIs dos demais módulos. Os KPIs abaixo são os indicadores de nível estratégico do Núcleo Comercial como um todo.
+```yaml
+meta_structure:
+  ciclo: "anual com revisão trimestral"
 
-| Perspectiva | Código | Indicador | Meta | Frequência |
-|-------------|--------|-----------|------|-----------|
-| **Crescimento** | KPI-PA-01 | MRR Total | Meta anual / 12 | Mensal |
-| **Crescimento** | KPI-PA-02 | New MRR | Meta mensal | Mensal |
-| **Crescimento** | KPI-PA-03 | ARR | Meta anual | Mensal |
-| **Eficiência** | KPI-PA-04 | Win Rate global | ≥ meta por segmento | Mensal |
-| **Eficiência** | KPI-PA-05 | Ciclo médio de vendas | ≤ benchmark | Mensal |
-| **Eficiência** | KPI-PA-06 | CAC (Custo de Aquisição de Cliente) | ≤ [meta] | Mensal |
-| **Eficiência** | KPI-PA-07 | LTV (Lifetime Value) | ≥ [meta]; LTV/CAC ≥ 3 | Trimestral |
-| **Retenção** | KPI-PA-08 | NRR | ≥ [meta] | Mensal |
-| **Retenção** | KPI-PA-09 | Churn Rate | ≤ [meta] | Mensal |
-| **Satisfação** | KPI-PA-10 | NPS | ≥ [meta] | Trimestral |
-| **Pipeline** | KPI-PA-11 | Pipeline Total (R$) | ≥ 3× meta de fechamento | Semanal |
-| **Previsão** | KPI-PA-12 | Acuracidade do Forecast | ≥ 90% | Mensal |
-| **Equipe** | KPI-PA-13 | % da equipe acima de quota | ≥ 70% | Mensal |
+  meta_nivel_1:  # Meta máster
+    mrr_alvo_ano: 0.0
+    arr_alvo_ano: 0.0
+    nrr_alvo: 100  # percentual
 
-### 7.2 Fórmulas Estratégicas Derivadas
-| Indicador | Fórmula |
-|-----------|---------|
-| CAC | (Custo total de Sales + Marketing) / Nº de novos clientes no período |
-| LTV | ARPU × Margem Bruta × (1 / Churn Rate mensal) |
-| LTV/CAC | LTV / CAC — deve ser ≥ 3 para saúde do negócio |
-| Payback Period | CAC / (ARPU × Margem Bruta) — meses para recuperar o CAC |
+  meta_nivel_2:  # Por módulo
+    CAP-02:
+      sqls_mes: 0
+      cobertura_pipeline: 3.0
+    CAP-03:
+      taxa_conversao_sql_ganho: 0.0
+      ticket_medio: 0.0
+      ciclo_medio_dias: 0
+    CAP-04:
+      mrr_churn_rate: 0.02
+      inadimplencia: 0.03
+    CAP-05:
+      churn_rate: 0.02
+      nps: 40
+      expansion_mrr_rate: 0.05
+
+  okr_trimestral:
+    objetivo: "texto do objetivo"
+    key_results:
+      - descricao: "KR1"
+        metrica_ref: "KPI-ID"
+        valor_atual: null
+        valor_alvo: null
+        prazo: "data"
+        status: "nao_iniciado | em_andamento | atingido | atrasado"
+```
+
+### CAP-08.2 — Dashboard de Performance
+
+O dashboard consolida os KPIs mais críticos de todos os módulos em tempo real.
+
+**KPIs primários do Commercial OS (para o dashboard):**
+```yaml
+dashboard_kpis:
+  saude_receita:
+    - KPI-RV-01  # MRR
+    - KPI-RV-07  # NRR
+    - KPI-RV-06  # MRR Churn Rate
+
+  saude_aquisicao:
+    - KPI-DM-06  # Cobertura de pipeline
+    - KPI-VP-01  # Taxa de conversão SQL→Ganho
+    - KPI-VP-02  # Ciclo médio de venda
+
+  saude_clientes:
+    - KPI-CS-01  # Churn Rate
+    - KPI-CS-06  # Distribuição Health Score
+    - KPI-CS-04  # NPS
+
+  saude_equipe:
+    - KPI-EC-02  # Utilização de capacidade
+    - KPI-EC-05  # Performance média do time
+
+  metricas_financeiras_avancadas:
+    - KPI-PA-CAC: "Custo de Aquisição de Cliente = total_investimento_comercial / novos_clientes"
+    - KPI-PA-LTV: "Lifetime Value = ticket_medio * margem * (1 / churn_rate)"
+    - KPI-PA-LTVCAC: "LTV/CAC ratio = LTV / CAC"
+    - KPI-PA-PAYBACK: "Meses para recuperar CAC = CAC / MRR_médio_por_cliente"
+```
+
+### CAP-08.3 — Ritmo Operacional
+
+O ritmo operacional é o conjunto de cadências que mantém o sistema auto-regulado.
+
+```yaml
+ritmo_operacional:
+  daily:
+    nome: "Daily Comercial"
+    duracao_minutos: 15
+    participantes: ["time comercial"]
+    pauta:
+      - "O que fechei ontem?"
+      - "O que farei hoje?"
+      - "Há algum bloqueio?"
+    metricas_de_referencia: ["pipeline do dia", "SQLs do dia", "SLA violações"]
+
+  weekly:
+    nome: "Pipeline Review"
+    duracao_minutos: 60
+    participantes: ["time comercial", "gestores"]
+    pauta:
+      - "Revisão de forecast vs. meta da semana"
+      - "Oportunidades paradas: decidir ou encerrar"
+      - "Pipeline de entrada: volume e qualidade"
+      - "Alertas da semana: o que precisa de atenção?"
+    metricas_de_referencia: ["KPI-DM-06", "KPI-VP-04", "forecast.atualizado"]
+
+  monthly:
+    nome: "Monthly Performance Review"
+    duracao_minutos: 120
+    participantes: ["gestores", "liderança"]
+    pauta:
+      - "Fechamento do mês: MRR, NRR, Churn"
+      - "Performance por módulo vs. meta"
+      - "Desvios identificados: diagnóstico e planos"
+      - "OKRs: status e riscos"
+      - "Decisões do mês que precisam de registro"
+    metricas_de_referencia: ["todos os KPIs críticos do dashboard"]
+    output: "relatório mensal + DECISION_LOG atualizado"
+
+  quarterly:
+    nome: "Quarterly Business Review (QBR)"
+    duracao_minutos: 180
+    participantes: ["liderança", "stakeholders"]
+    pauta:
+      - "Retrospectiva do trimestre (ENG-09)"
+      - "OKRs do trimestre: atingidos/parciais/perdidos"
+      - "Definição de OKRs do próximo trimestre"
+      - "Revisão de ICP e segmentação (CAP-01)"
+      - "Revisão de metas para o próximo período"
+    output: "novos OKRs + metas revisadas + DECISION_LOG"
+
+  annual:
+    nome: "Planejamento Anual Comercial"
+    duracao_horas: 8
+    participantes: ["liderança", "heads de cada módulo"]
+    pauta:
+      - "Retrospectiva do ano (ENG-09)"
+      - "Revisão de ICP e estratégia go-to-market"
+      - "Definição de metas anuais por módulo"
+      - "Revisão de estrutura de pricing (CAP-06)"
+      - "Plano de capacidade do time (CAP-07)"
+      - "Revisão de portfólio de parceiros (CAP-09)"
+    output: "metas anuais + OKRs Q1 + plano de headcount"
+```
+
+### CAP-08.4 — Métricas Financeiras Avançadas
+
+| ID | Métrica | Fórmula | Interpretação |
+|----|---------|---------|--------------|
+| KPI-PA-01 | CAC | `total_custo_comercial / novos_clientes` | Quanto custa adquirir um cliente |
+| KPI-PA-02 | LTV | `ticket_medio × margem_bruta / churn_rate` | Quanto um cliente gera ao longo da vida |
+| KPI-PA-03 | LTV/CAC | `LTV / CAC` | Meta: ≥ 3× (viabilidade do modelo) |
+| KPI-PA-04 | Payback Period | `CAC / mrr_medio_por_cliente` | Meses para recuperar o investimento |
+| KPI-PA-05 | Burn Multiple | `queima_de_caixa / new_arr` | Eficiência de crescimento (early stage) |
+| KPI-PA-06 | Rule of 40 | `crescimento_arr% + margem_ebitda%` | Saúde geral do negócio |
 
 ---
 
-## 8. Gatilhos e Alertas Operacionais
-
-| Código | Condição | Ação | Responsável |
-|--------|----------|------|-------------|
-| ALT-PA-01 | Qualquer KPI primário (PA-01 a PA-13) cai >20% vs. meta por 1 mês | Alerta para liderança + análise de causa raiz obrigatória | Responsável de Performance |
-| ALT-PA-02 | Pipeline < 2× meta de fechamento | Convocação de reunião emergencial de pipeline | Gerente Comercial |
-| ALT-PA-03 | Forecast desvio >15% vs. realizado por 2 meses | Revisão da metodologia de forecast | Responsável de Performance |
-| ALT-PA-04 | LTV/CAC cai abaixo de 2 | Alerta crítico para liderança — revisão de estratégia | Liderança |
-| ALT-PA-05 | Reunião de performance não realizada em prazo | Alerta para gerente com cobrança de reagendamento | Sistema |
-| ALT-PA-06 | Desvio crítico sem plano de ação em >5 dias úteis | Escalonamento para liderança | Sistema |
-
----
-
-## 9. Diagnóstico de Desvios e Análise de Causa Raiz
-
-### 9.1 Framework de Diagnóstico Sistêmico
-
-Para qualquer desvio de KPI nível PA, seguir:
+## 6. Fluxo Operacional
 
 ```
-1. IDENTIFICAR: Qual KPI está desviando? Em quanto? Desde quando?
-2. ISOLAR: É um problema de todo o Núcleo ou de um módulo específico?
-3. DECOMPOR: Decompor o KPI nos seus componentes elementares
-4. RASTREAR: Qual módulo é a fonte primária do desvio?
-5. DIAGNOSTICAR: Aplicar 5 Whys no módulo responsável
-6. DECIDIR: Escolher plano de ação com evidência, não intuição
-7. REGISTRAR: DECISION_LOG com diagnóstico + ação + responsável + prazo
-```
+[FLUXO A — RITMO SEMANAL AUTOMÁTICO]
 
-### 9.2 Mapa de Desvios Estratégicos
+[TRIGGER: sistema.periodo_encerrado (semanal)]
+│
+├─► Consolidar KPIs da semana (via ENG-02):
+│   ├─ Cobertura de pipeline (KPI-DM-06)
+│   ├─ SQLs gerados vs. meta
+│   ├─ Forecast atualizado (KPI-VP forecast)
+│   ├─ SLA violations (KPI-DM-07)
+│   └─ Health Scores da base (KPI-CS-06)
+│
+├─► Identificar desvios vs. meta e alertas críticos ativos
+│
+├─► Gerar relatório de pipeline review automático
+│
+└─► Publicar: performance.relatorio_semanal
+    └─► Notificar gestores com link para o relatório
 
-| Desvio de KPI | Módulos a Investigar Primeiro |
-|---------------|------------------------------|
-| MRR abaixo da meta | CAP-03 (win rate), CAP-04 (churn), CAP-02 (volume de SQLs) |
-| NRR abaixo de 100% | CAP-04 (churn MRR), CAP-05 (health score, expansão) |
-| CAC alto | CAP-02 (CPL, eficiência de qualificação), CAP-03 (ciclo longo) |
-| LTV/CAC < 3 | CAP-05 (retenção, tempo de vida), CAP-06 (ticket médio, margem) |
-| Win Rate baixo | CAP-01 (qualidade da inteligência), CAP-03 (processo), CAP-06 (preço) |
-| Pipeline baixo | CAP-02 (geração de demanda), CAP-07 (capacidade da equipe) |
 
----
+[FLUXO B — REVISÃO MENSAL]
 
-## 10. Planos de Ação Padronizados
+[TRIGGER: sistema.periodo_encerrado (mensal)]
+│
+├─► Consolidar todos os KPIs do mês (todos os módulos via ENG-02)
+│
+├─► Comparar vs. metas e OKRs:
+│   ├─► KPIs dentro da meta → registrar como positivo
+│   └─► KPIs fora da meta → solicitar diagnóstico via ENG-04
+│
+├─► Calcular métricas avançadas: CAC, LTV, LTV/CAC, Payback
+│
+├─► Gerar relatório executivo mensal
+│
+├─► Identificar decisões a registrar no DECISION_LOG (ENG-09)
+│
+└─► Publicar: performance.relatorio_mensal
+    └─► Distribuir para liderança e stakeholders
 
-### PA-PA-01: MRR Abaixo da Meta por 2 Meses Consecutivos
-```
-Semana 1: Decomposição do MRR bridge — qual componente é o problema?
-  → Se New MRR baixo: investigar CAP-02 e CAP-03
-  → Se Churn alto: investigar CAP-04 e CAP-05
-  → Se Expansion baixo: investigar CAP-05
-Semana 2: Diagnóstico aprofundado no módulo responsável
-Semana 3: Plano de ação específico + responsável + prazo
-Semana 4: Inicio da execução + monitoramento semanal
-```
 
-### PA-PA-02: LTV/CAC Caindo Abaixo de 3
-```
-Semana 1: Recalcular CAC e LTV com dados atualizados
-Semana 2: Identificar se é problema de custo de aquisição (CAC alto) ou retenção/expansão (LTV baixo)
-Semana 3:
-  → CAC alto: revisar eficiência de canais (CAP-02) + ciclo de vendas (CAP-03)
-  → LTV baixo: revisar churn (CAP-05) + ticket médio (CAP-06) + margens (CAP-06)
-Semana 4: Plano de ação aprovado pela liderança com métricas de controle
-```
+[FLUXO C — DESVIO DE META CRÍTICO]
 
-### PA-PA-03: Ritmo Operacional Quebrado (Reuniões não realizadas)
-```
-Imediato: Identificar por que a reunião não aconteceu
-Semana 1: Reagendar + reforçar compromisso com a cadência
-Paralelo: Verificar se é problema estrutural (agenda sobrecarregada, sem facilitador)
-Solução: Designar facilitador fixo; blocar agenda como recorrente inamovível
-```
+[TRIGGER: kpi.limiar.cruzado de qualquer módulo com severidade CRITICAL]
+│
+├─► Classificar o desvio: qual módulo, qual KPI, qual o desvio em relação à meta
+│
+├─► Solicitar diagnóstico via ENG-04:
+│   └─► Qual a causa raiz? É pontual ou sistêmico?
+│
+├─► Baseado no diagnóstico:
+│   ├─► Desvio pontual → responsável do módulo trata
+│   ├─► Desvio sistêmico → coordenar plano de ação cross-módulo
+│   └─► Desvio com impacto em meta anual → revisão de meta ou plano de recuperação
+│
+└─► Registrar diagnóstico e decisão no DECISION_LOG (ENG-09)
 
----
 
-## 11. Procedimentos de Auditoria
+[FLUXO D — REVISÃO TRIMESTRAL DE METAS (QBR)]
 
-### 11.1 Auditoria Semanal (Auto — Dashboard)
-**Checklist:**
-- [ ] Dashboard atualizado com dados do dia anterior
-- [ ] Pipeline Review realizado
-- [ ] Alertas ativos monitorados e tratados
-
-### 11.2 Auditoria Mensal (Gerente + Liderança)
-**Checklist:**
-- [ ] Todos os KPIs do scorecard calculados e publicados
-- [ ] Reunião mensal de performance realizada na cadência definida
-- [ ] Desvios identificados têm plano de ação documentado
-- [ ] DECISION_LOG atualizado com decisões do mês
-- [ ] Metas do próximo mês comunicadas a todos os módulos
-
-### 11.3 Auditoria Trimestral (Liderança + Conselho)
-**Checklist:**
-- [ ] Business Review realizado com todos os stakeholders relevantes
-- [ ] Retrospectiva documentada
-- [ ] Metas do próximo trimestre definidas com base em dados
-- [ ] LTV/CAC calculado e avaliado
-- [ ] Qualidade dos dados auditada (fontes, completude, confiabilidade)
-- [ ] Processos do ritmo operacional avaliados (reuniões aconteceram? foram eficazes?)
-
-### 11.4 Auditoria Anual (Conselho + Founders)
-**Checklist:**
-- [ ] Análise histórica de KPIs do ano completa
-- [ ] Planejamento estratégico do Núcleo Comercial para o próximo ano aprovado
-- [ ] Benchmarks de mercado atualizados
-- [ ] Metas anuais definidas e comunicadas
-
----
-
-## 12. Possibilidades de Automação
-
-### 12.1 Coleta e Consolidação de Dados
-| Automação | Trigger | Ação |
-|-----------|---------|------|
-| Coleta automática de KPIs do CRM | Diariamente | Atualiza dashboard com dados do dia anterior |
-| Consolidação mensal | Dia 1 do mês | Gera rascunho do relatório mensal com dados dos módulos |
-| Alertas de KPI | KPI cruza limite crítico | Notificação em tempo real para responsável |
-| Forecast automático | Semanal | Atualiza revenue forecast com dados de pipeline |
-
-### 12.2 Inteligência Artificial
-| Automação | Aplicação |
-|-----------|----------|
-| Análise preditiva de performance | ML prevê atingimento de metas mensais com 2 semanas de antecedência |
-| Diagnóstico automático de desvio | IA identifica qual módulo é a causa raiz de um desvio de KPI master |
-| Geração de relatório | IA gera rascunho do relatório mensal com análise narrativa dos dados para revisão humana |
-| Detecção de padrões sazonais | ML identifica sazonalidade histórica para calibrar metas com mais precisão |
-
-### 12.3 Dashboards Centrais
-| Dashboard | Métricas | Público | Frequência |
-|-----------|---------|---------|-----------|
-| Executive Scorecard | Todos os KPIs PA-01 a PA-13 | Liderança + Conselho | Tempo real |
-| Commercial Operations | Pipeline, win rate, ciclo, equipe | Gerente Comercial | Tempo real |
-| Revenue Intelligence | MRR bridge, NRR, forecast, churn | Liderança + Financeiro | Tempo real |
-| Customer Health | Health score, NPS, churn, expansion | Liderança + CS | Mensal |
-
-### 12.4 Integrações do Hub de Performance
-```
-CRM → CAP-08: dados de oportunidades, win/loss, pipeline (automático)
-CAP-04 → CAP-08: MRR, NRR, ARR, churn (mensal automático)
-CAP-05 → CAP-08: health score, NPS, churn de clientes (mensal)
-CAP-07 → CAP-08: atingimento individual, headcount (mensal)
-CAP-08 → Todos: metas, KPIs consolidados, alertas (contínuo)
+[TRIGGER: sistema.periodo_encerrado (trimestral)]
+│
+├─► Preparar pauta do QBR com dados do trimestre
+├─► OKRs do trimestre: calcular % de conclusão de cada KR
+├─► Definir OKRs do próximo trimestre com base em:
+│   ├─ Performance real do trimestre
+│   ├─ Capacidade do time (CAP-07)
+│   ├─ Pipeline disponível (CAP-02/CAP-03)
+│   └─ Aprendizados da ENG-09
+│
+├─► Publicar metas do próximo trimestre
+│   └─► Publicar: performance.metas_atualizadas → todos os módulos recebem
+│
+└─► Registrar OKRs aprovados no DECISION_LOG
 ```
 
 ---
 
-## 13. Interfaces e Dependências com Outros Módulos
+## 7. Estados
 
-### 13.1 CAP-08 como Hub Central
+### 7.1 Estados dos OKRs
 
 ```
-                          ┌─────────────────────┐
-    CAP-01 ──────────────►│                     │
-    CAP-02 ──────────────►│      CAP-08         │
-    CAP-03 ──────────────►│  Performance e      │
-    CAP-04 ──────────────►│  Autogestão         │◄──── Liderança / Conselho
-    CAP-05 ──────────────►│                     │
-    CAP-06 ──────────────►│  (Hub de Dados +    │
-    CAP-07 ──────────────►│   Centro de Decisão)│
-                          └──────────┬──────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    │                │                │
-                    ▼                ▼                ▼
-               Metas p/           Alertas         Relatórios
-               todos os         para todos        para todos
-               módulos          os módulos        os stakeholders
+NAO_INICIADO → EM_ANDAMENTO → ATINGIDO | PARCIALMENTE_ATINGIDO | NAO_ATINGIDO
 ```
 
-### 13.2 Matriz de Interfaces
+### 7.2 Estados das Metas
 
-| Módulo | CAP-08 Fornece | CAP-08 Recebe |
-|--------|----------------|---------------|
-| CAP-01 | Metas de win rate, ICP adherence | KPIs de IC (cobertura, win rate) |
-| CAP-02 | Metas de volume de SQLs, CPL | KPIs de demanda (volume, conversão, CPL) |
-| CAP-03 | Metas de win rate, ciclo, ticket | KPIs de vendas (win rate, ciclo, new MRR) |
-| CAP-04 | Metas de MRR, NRR, churn | KPIs de receita (MRR, ARR, NRR, forecast) |
-| CAP-05 | Metas de churn, NPS, expansion | KPIs de clientes (health, NPS, churn, expansion) |
-| CAP-06 | Metas de ticket médio, margem | KPIs de oferta (ticket médio, margem, desconto) |
-| CAP-07 | Metas individuais e de equipe | KPIs de equipe (quota, headcount, turnover) |
+```
+PROPOSTA → APROVADA → VIGENTE → EM_REVISAO → REVISADA | ENCERRADA
+```
 
-### 13.3 Protocolo de Escalação de Decisões
+---
+
+## 8. Regras de Negócio
+
+### RN-01 — Uma Meta de MRR é a Referência de Todos os Módulos
+O MRR alvo do período é a referência que todos os módulos usam para dimensionar suas metas derivadas. Toda meta derivada (SQLs, cobertura de pipeline, conversão, churn) deve ser coerente com a meta de MRR. Metas incoerentes geram expectativas impossíveis.
+
+### RN-02 — OKRs Trimestrais São Imutáveis Durante o Trimestre
+OKRs aprovados no início do trimestre não podem ser alterados durante o trimestre — exceto em caso de mudança material do contexto externo (crise de mercado, mudança regulatória). Alteração de OKR sem evidência sólida é ilusão de gestão. Ao final do trimestre, OKRs são avaliados honestamente — não ajustados retroativamente.
+
+### RN-03 — Decisões Nível 2+ São Registradas no DECISION_LOG
+Toda decisão que afeta metas, estrutura de produto, política comercial ou definição estratégica (nível 2 ou acima) DEVE ser registrada no DECISION_LOG da ENG-09. Decisões operacionais rotineiras (nível 1) não precisam de registro. O DECISION_LOG é o repositório de decisões importantes do Commercial OS.
+
+### RN-04 — LTV/CAC ≥ 3 É a Viabilidade do Modelo
+O ratio LTV/CAC abaixo de 3 indica modelo comercial insustentável — o custo de aquisição supera o retorno ao longo da vida do cliente. Qualquer LTV/CAC < 3 por 2 trimestres consecutivos exige revisão estrutural: pricing, custo de aquisição, churn, ou ticket médio.
+
+### RN-05 — Ritmo Operacional Não É Opcional
+As cadências do ritmo operacional (daily, weekly, monthly, quarterly, annual) são parte do contrato operacional do Commercial OS. Cadências não executadas são não-conformidades registradas pela ENG-06. O sistema que não se reúne para revisar perde sua capacidade de auto-regulação.
+
+### RN-06 — Relatórios São Baseados em Dados, Não em Percepção
+Todo relatório produzido pelo CAP-08 é baseado em KPIs calculados pela ENG-02 — não em percepções subjetivas. Dados divergentes entre o relatório e a percepção da equipe devem ser investigados: ou o KPI está errado, ou a percepção está errada. Nunca substituir o dado pela percepção.
+
+---
+
+## 9. Eventos Publicados
+
+| Evento | Quando | Payload Principal |
+|--------|--------|-----------------|
+| `performance.metas_atualizadas` | Novas metas aprovadas para o período | `{periodo, meta_mrr, meta_por_modulo_json, okrs_json}` |
+| `performance.relatorio_semanal` | Pipeline review semanal gerado | `{semana, kpis_criticos_json, desvios[], alertas_ativos[]}` |
+| `performance.relatorio_mensal` | Relatório mensal consolidado gerado | `{mes, todos_kpis_json, cac, ltv, ltvcac, payback, okrs_status_json}` |
+| `performance.relatorio_trimestral` | QBR concluído | `{trimestre, okrs_resultado_json, metas_proximo_trimestre_json, decisoes_registradas[]}` |
+| `performance.desvio_critico_detectado` | KPI crítico fora da meta por 2+ períodos | `{kpi_id, modulo, valor_atual, meta, desvio_percentual, periodos_fora}` |
+| `performance.okr.atualizado` | Status de OKR atualizado | `{okr_id, key_result_id, valor_anterior, valor_atual, status}` |
+
+---
+
+## 10. Eventos Consumidos
+
+| Evento | Origem | Ação ao Receber |
+|--------|--------|----------------|
+| `kpi.limiar.cruzado` | ENG-02 (de qualquer módulo) | Registrar desvio; avaliar se requer diagnóstico ou revisão de meta |
+| `kpi.valor.calculado` | ENG-02 | Atualizar dashboard em tempo real |
+| `forecast.atualizado` | CAP-03 | Incorporar no dashboard; comparar com meta de MRR |
+| `receita.mrr_bridge.calculado` | CAP-04 | Atualizar KPI-PA-01 a KPI-PA-06 |
+| `melhoria.retrospectiva.concluida` | ENG-09 | Incorporar aprendizados no planejamento |
+| `sistema.periodo_encerrado` | Scheduler | Disparar geração de relatório (semanal, mensal, trimestral, anual) |
+| `equipe.capacidade_insuficiente` | CAP-07 | Avaliar impacto nas metas; considerar ajuste de meta ou contratação |
+
+---
+
+## 11. KPIs
+
+> O CAP-08 monitora os KPIs de todos os módulos. KPIs próprios do módulo:
+
+| ID | Nome | Fórmula | Meta | Frequência |
+|----|------|---------|------|-----------|
+| KPI-PA-01 | CAC | `custo_comercial_total / novos_clientes` | Tendência decrescente | Mensal |
+| KPI-PA-02 | LTV | `ticket_medio × margem_bruta / churn_rate_anual` | Tendência crescente | Mensal |
+| KPI-PA-03 | LTV/CAC | `LTV / CAC` | ≥ 3× | Mensal |
+| KPI-PA-04 | Payback Period | `CAC / mrr_medio_por_cliente` | ≤ 18 meses | Mensal |
+| KPI-PA-05 | Rule of 40 | `crescimento_arr_percentual + margem_ebitda_percentual` | ≥ 40 | Trimestral |
+| KPI-PA-06 | % OKRs Atingidos | `key_results_atingidos / total_key_results × 100` | ≥ 70% | Trimestral |
+| KPI-PA-07 | Aderência ao Ritmo Operacional | `cadencias_executadas / cadencias_programadas × 100` | 100% | Mensal |
+| KPI-PA-08 | Desvios Críticos Não Resolvidos | `alertas_critical_abertos > 30 dias` | Zero | Mensal |
+
+---
+
+## 12. Alertas
+
+| ID | Condição | Severidade | Ação |
+|----|---------|-----------|------|
+| ALT-PA-01 | LTV/CAC < 3 por 2 trimestres | CRITICAL | Revisão estrutural do modelo comercial |
+| ALT-PA-02 | Payback Period > 24 meses | WARNING | Revisar CAC ou churn |
+| ALT-PA-03 | % OKRs atingidos < 40% ao final do trimestre | WARNING | Retrospectiva de OKRs; revisar metodologia de definição |
+| ALT-PA-04 | Cadência de ritmo operacional não executada | WARNING | NC no ENG-06; reagendar imediatamente |
+| ALT-PA-05 | Alerta crítico aberto há > 30 dias sem plano de ação | CRITICAL | Escalar para liderança; plano de ação obrigatório |
+| ALT-PA-06 | MRR com crescimento < 0% por 2 meses (negativo) | CRITICAL | Reunião emergencial; revisão completa do sistema |
+
+---
+
+## 13. Planos de Ação Automáticos
+
+### PA-PA-01 — LTV/CAC Abaixo de 3 (Gatilho: ALT-PA-01)
+```yaml
+plano_acao:
+  tipo: revisao_estrutural
+  prazo_dias: 45
+  tarefas:
+    - "Decompor: LTV/CAC < 3 vem de CAC alto, LTV baixo, ou ambos?"
+    - "Se CAC alto: revisar eficiência dos canais de aquisição (CAP-02); comparar CPL por canal"
+    - "Se LTV baixo: revisar churn (CAP-05) ou ticket médio (CAP-06)"
+    - "Modelar: qual alavanca tem maior impacto? (análise de sensibilidade)"
+    - "Propor e aprovar plano de melhoria específico para a alavanca identificada"
+    - "Registrar decisão no DECISION_LOG"
+  metrica_sucesso: "LTV/CAC ≥ 3 em 2 trimestres"
 ```
-Nível 1 (Gerente Comercial): Decisões táticas de KPIs de módulos individuais
-Nível 2 (Liderança Comercial): Decisões que afetam múltiplos módulos ou metas
-Nível 3 (Conselho/Founders): Decisões que afetam a estratégia do Núcleo Comercial
+
+---
+
+## 14. Automações
+
+| ID | Trigger | Ação Automatizada | Conector |
+|----|---------|-----------------|---------|
+| AUT-PA-01 | `sistema.periodo_encerrado` (semanal) | Consolidar KPIs; gerar relatório semanal; distribuir para gestores | ENG-02, CONN-EMAIL-TRANSACIONAL |
+| AUT-PA-02 | `sistema.periodo_encerrado` (mensal) | Consolidar todos os KPIs; calcular métricas avançadas; gerar relatório mensal | ENG-02, CONN-EMAIL-TRANSACIONAL |
+| AUT-PA-03 | `sistema.periodo_encerrado` (trimestral) | Calcular % OKRs; preparar pauta QBR; atualizar status dos OKRs | ENG-02, CONN-MENSAGERIA |
+| AUT-PA-04 | `kpi.limiar.cruzado` (severidade CRITICAL) | Registrar desvio; solicitar diagnóstico ENG-04; notificar liderança | ENG-04, CONN-MENSAGERIA |
+| AUT-PA-05 | `receita.mrr_bridge.calculado` | Calcular CAC, LTV, LTV/CAC, Payback; atualizar dashboard | ENG-02 |
+
+---
+
+## 15. Auditoria Operacional
+
+### Checklist Mensal — CAP-08-AUD-MENSAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | Todas as cadências do mês executadas | KPI-PA-07 | 100% |
+| 2 | Relatório mensal gerado e distribuído | Evento `performance.relatorio_mensal` | Registro e confirmação de entrega |
+| 3 | Desvios críticos com plano de ação ativo | KPI-PA-08 | Zero alertas críticos > 30 dias sem plano |
+| 4 | DECISION_LOG atualizado com decisões do mês | ENG-09 | Registros do período |
+| 5 | LTV/CAC calculado e dentro do limite | KPI-PA-03 | ≥ 3 |
+| 6 | OKRs com status atualizado | Status dos OKRs | 100% atualizados |
+
+### Checklist Trimestral — CAP-08-AUD-TRIMESTRAL
+
+| # | Item | Método | Evidência Esperada |
+|---|------|--------|-------------------|
+| 1 | QBR realizado com pauta e output documentados | Ata do QBR | Documento datado |
+| 2 | OKRs do trimestre avaliados honestamente | Relatório de OKRs | % atingido calculado |
+| 3 | OKRs do próximo trimestre definidos e publicados | Evento `performance.metas_atualizadas` | Evento registrado |
+| 4 | Todos os módulos receberam metas atualizadas | Log de eventos recebidos por módulo | 100% dos módulos |
+
+---
+
+## 16. ENGINE-REGISTRATION.yaml
+
+```yaml
+# ENGINE-REGISTRATION.yaml — CAP-08 Performance e Autogestão
+# Ref: ARC-ENG-099
+
+modulo:
+  id: "CAP-08"
+  nome: "Performance e Autogestão"
+  versao: "2.0.0"
+  tier: "meta-modulo"
+  status: "ativo"
+
+dependencias:
+  modulos:
+    - id: "CAP-01"
+      uso: "dados de win rate, market intelligence para planejamento"
+    - id: "CAP-02"
+      uso: "KPIs de geração de demanda e pipeline"
+    - id: "CAP-03"
+      uso: "forecast de receita, win rate, ciclo de venda"
+    - id: "CAP-04"
+      uso: "MRR Bridge, NRR, receita realizada"
+    - id: "CAP-05"
+      uso: "churn rate, NPS, health score da base"
+    - id: "CAP-06"
+      uso: "mix de produto, ticket médio, margem"
+    - id: "CAP-07"
+      uso: "capacidade do time, performance individual"
+    - id: "CAP-09"
+      uso: "receita de canais e parceiros"
+  engines:
+    - id: "ENG-02"
+      uso: "consolidação de todos os KPIs do sistema; cálculo de métricas avançadas"
+    - id: "ENG-03"
+      uso: "alertas ALT-PA-01 a ALT-PA-06"
+    - id: "ENG-04"
+      uso: "diagnóstico de desvios críticos"
+    - id: "ENG-06"
+      uso: "auditoria de ritmo operacional e do módulo"
+    - id: "ENG-09"
+      uso: "DECISION_LOG; retrospectivas; melhoria contínua do sistema"
+
+eventos_publicados:
+  - evento: "performance.metas_atualizadas"
+    condicao: "novas metas aprovadas"
+  - evento: "performance.relatorio_semanal"
+    condicao: "pipeline review semanal gerado"
+  - evento: "performance.relatorio_mensal"
+    condicao: "relatório mensal consolidado"
+  - evento: "performance.relatorio_trimestral"
+    condicao: "QBR concluído"
+  - evento: "performance.desvio_critico_detectado"
+    condicao: "KPI crítico fora da meta por 2+ períodos"
+  - evento: "performance.okr.atualizado"
+    condicao: "status de OKR atualizado"
+
+eventos_consumidos:
+  - evento: "kpi.limiar.cruzado"
+    origem: "ENG-02"
+    acao: "registrar desvio; avaliar diagnóstico ou revisão de meta"
+  - evento: "kpi.valor.calculado"
+    origem: "ENG-02"
+    acao: "atualizar dashboard em tempo real"
+  - evento: "forecast.atualizado"
+    origem: "CAP-03"
+    acao: "incorporar no dashboard; comparar com meta"
+  - evento: "receita.mrr_bridge.calculado"
+    origem: "CAP-04"
+    acao: "calcular métricas avançadas (CAC, LTV, LTV/CAC, Payback)"
+  - evento: "melhoria.retrospectiva.concluida"
+    origem: "ENG-09"
+    acao: "incorporar aprendizados no planejamento"
+  - evento: "sistema.periodo_encerrado"
+    origem: "Scheduler"
+    acao: "disparar geração de relatórios por frequência"
+  - evento: "equipe.capacidade_insuficiente"
+    origem: "CAP-07"
+    acao: "avaliar impacto nas metas; considerar ajuste ou contratação"
+
+kpis_registrados:
+  - id: "KPI-PA-01"
+    nome: "CAC"
+    formula: "custo_comercial_total / novos_clientes"
+    unidade: "moeda"
+    frequencia_calculo: "mensal"
+  - id: "KPI-PA-02"
+    nome: "LTV"
+    formula: "ticket_medio * margem_bruta / churn_rate_anual"
+    unidade: "moeda"
+    frequencia_calculo: "mensal"
+  - id: "KPI-PA-03"
+    nome: "LTV/CAC"
+    formula: "LTV / CAC"
+    unidade: "multiplicador"
+    frequencia_calculo: "mensal"
+    meta_padrao: 3.0
+    limiar_warning: 2.5
+    limiar_critical: 2.0
+  - id: "KPI-PA-04"
+    nome: "Payback Period"
+    formula: "CAC / mrr_medio_por_cliente"
+    unidade: "meses"
+    frequencia_calculo: "mensal"
+    meta_padrao: 18
+    limiar_warning: 24
+  - id: "KPI-PA-05"
+    nome: "Rule of 40"
+    formula: "crescimento_arr_pct + margem_ebitda_pct"
+    unidade: "pontos"
+    frequencia_calculo: "trimestral"
+    meta_padrao: 40
+  - id: "KPI-PA-06"
+    nome: "% OKRs Atingidos"
+    formula: "key_results_atingidos / total_key_results * 100"
+    unidade: "percentual"
+    frequencia_calculo: "trimestral"
+    meta_padrao: 70
+  - id: "KPI-PA-07"
+    nome: "Aderência ao Ritmo Operacional"
+    formula: "cadencias_executadas / cadencias_programadas * 100"
+    unidade: "percentual"
+    frequencia_calculo: "mensal"
+    meta_padrao: 100
+    limiar_critical: 90
+  - id: "KPI-PA-08"
+    nome: "Desvios Críticos Não Resolvidos"
+    formula: "count(alertas_critical_abertos > 30 dias)"
+    unidade: "quantidade"
+    frequencia_calculo: "mensal"
+    meta_padrao: 0
+
+alertas_registrados:
+  - id: "ALT-PA-01"
+    kpi_ref: "KPI-PA-03"
+    condicao: "< 3 por 2 trimestres consecutivos"
+    severidade: "critical"
+    owner: "diretoria"
+  - id: "ALT-PA-02"
+    kpi_ref: "KPI-PA-04"
+    condicao: "> 24"
+    severidade: "warning"
+    owner: "gestor_comercial"
+  - id: "ALT-PA-03"
+    kpi_ref: "KPI-PA-06"
+    condicao: "< 40 ao final do trimestre"
+    severidade: "warning"
+    owner: "diretoria"
+  - id: "ALT-PA-04"
+    kpi_ref: "KPI-PA-07"
+    condicao: "< 100"
+    severidade: "warning"
+    owner: "responsavel_cap08"
+  - id: "ALT-PA-05"
+    kpi_ref: "KPI-PA-08"
+    condicao: "> 0"
+    severidade: "critical"
+    owner: "gestor_comercial"
+  - id: "ALT-PA-06"
+    kpi_ref: "KPI-RV-01"
+    condicao: "crescimento_mensal < 0 por 2 meses"
+    severidade: "critical"
+    owner: "diretoria"
+
+workflows_registrados:
+  - id: "WF-PA-01"
+    nome: "Relatório Semanal de Pipeline"
+    gatilho: "sistema.periodo_encerrado (semanal)"
+    descricao: "consolida KPIs, identifica desvios, gera e distribui relatório"
+  - id: "WF-PA-02"
+    nome: "Relatório Mensal de Performance"
+    gatilho: "sistema.periodo_encerrado (mensal)"
+    descricao: "consolida todos os KPIs, calcula métricas avançadas, gera relatório"
+  - id: "WF-PA-03"
+    nome: "Preparação e Follow-up do QBR"
+    gatilho: "sistema.periodo_encerrado (trimestral)"
+    descricao: "calcula OKRs, prepara pauta, publica metas do próximo trimestre"
+  - id: "WF-PA-04"
+    nome: "Escalonamento de Desvio Crítico"
+    gatilho: "kpi.limiar.cruzado (severidade CRITICAL)"
+    descricao: "registra desvio, solicita diagnóstico, notifica liderança"
+
+auditoria_checklists:
+  - id: "CAP-08-AUD-MENSAL"
+    tipo: "mensal"
+    itens_count: 6
+  - id: "CAP-08-AUD-TRIMESTRAL"
+    tipo: "trimestral"
+    itens_count: 4
+
+conectores_utilizados:
+  - "CONN-EMAIL-TRANSACIONAL"
+  - "CONN-MENSAGERIA"
+
+permissoes_necessarias:
+  - recurso: "metas_anuais"
+    acoes: ["read", "write", "version"]
+  - recurso: "okrs"
+    acoes: ["read", "write"]
+  - recurso: "dashboard_config"
+    acoes: ["read", "write"]
+  - recurso: "kpi_values.*"
+    acoes: ["read"]
+  - recurso: "kpi_values.KPI-PA-*"
+    acoes: ["read", "write_via_eng02"]
+  - recurso: "eventos_barramento"
+    acoes: ["publish", "subscribe"]
 ```
-Toda decisão ≥ Nível 2 DEVE ser registrada no DECISION_LOG.
 
 ---
 
@@ -424,4 +685,5 @@ Toda decisão ≥ Nível 2 DEVE ser registrada no DECISION_LOG.
 
 | Versão | Data | Autor | Descrição |
 |--------|------|-------|-----------|
-| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial do Módulo Operacional CAP-08 |
+| 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação inicial |
+| 2.0.0 | 2026-06-29 | Guardião da Documentação | Redesenho como meta-módulo do Commercial OS |
