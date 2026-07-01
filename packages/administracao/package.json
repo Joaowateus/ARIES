@@ -1,0 +1,12 @@
+{
+  "name": "@soe/administracao",
+  "version": "0.1.0",
+  "description": "Sprint 3 — Administração: usuários, times, filiais e controle de acesso",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0"
+  }
+}

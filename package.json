@@ -15,7 +15,8 @@
     "packages/cap-08",
     "packages/cap-09",
     "packages/implantacao",
-    "packages/dashboards"
+    "packages/dashboards",
+    "packages/administracao"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
