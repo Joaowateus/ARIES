@@ -13,7 +13,8 @@
     "packages/cap-06",
     "packages/cap-07",
     "packages/cap-08",
-    "packages/cap-09"
+    "packages/cap-09",
+    "packages/implantacao"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
