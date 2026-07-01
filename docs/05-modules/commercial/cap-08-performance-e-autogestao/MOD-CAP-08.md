@@ -366,8 +366,8 @@ Todo relatório produzido pelo CAP-08 é baseado em KPIs calculados pela ENG-02 
 | `performance.relatorio_semanal` | Pipeline review semanal gerado | `{semana, kpis_criticos_json, desvios[], alertas_ativos[]}` |
 | `performance.relatorio_mensal` | Relatório mensal consolidado gerado | `{mes, todos_kpis_json, cac, ltv, ltvcac, payback, okrs_status_json}` |
 | `performance.relatorio_trimestral` | QBR concluído | `{trimestre, okrs_resultado_json, metas_proximo_trimestre_json, decisoes_registradas[]}` |
-| `performance.desvio_critico_detectado` | KPI crítico fora da meta por 2+ períodos | `{kpi_id, modulo, valor_atual, meta, desvio_percentual, periodos_fora}` |
-| `performance.okr.atualizado` | Status de OKR atualizado | `{okr_id, key_result_id, valor_anterior, valor_atual, status}` |
+| `performance.desvio.detectado` | KPI fora da meta por 2+ períodos | `{kpi_id, modulo, valor_atual, meta, desvio_percentual, periodos_fora, severidade: ALERTA\|CRITICO}` |
+| `performance.okrs.atualizados` | Status de OKR atualizado | `{okr_id, key_result_id, valor_anterior, valor_atual, status}` |
 
 ---
 
@@ -522,9 +522,9 @@ eventos_publicados:
     condicao: "relatório mensal consolidado"
   - evento: "performance.relatorio_trimestral"
     condicao: "QBR concluído"
-  - evento: "performance.desvio_critico_detectado"
+  - evento: "performance.desvio.detectado"
     condicao: "KPI crítico fora da meta por 2+ períodos"
-  - evento: "performance.okr.atualizado"
+  - evento: "performance.okrs.atualizados"
     condicao: "status de OKR atualizado"
 
 eventos_consumidos:

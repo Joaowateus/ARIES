@@ -286,9 +286,9 @@ competitive_map:
 │   └─ KPI-MI-04 (win rate vs. concorrente)
 │
 ├─► Se padrão detectado (3+ ocorrências iguais):
-│   └─► Publicar: mercado.win_loss.padrao_identificado → ENG-09
+│   └─► Publicar: mercado.analise_resultado.padrao_identificado → ENG-09
 │
-└─► Publicar: mercado.win_loss.analisado
+└─► Publicar: mercado.analise_resultado.registrada
 
 
 [FLUXO C — DETECÇÃO DE SINAL DE MERCADO]
@@ -375,8 +375,8 @@ Todo sinal registrado DEVE ter avaliação de impacto: qual elemento é afetado 
 | `mercado.icp.atualizado` | Nova versão de ICP aprovada e ativada | `{icp_versao_nova, icp_versao_anterior, criterios_alterados[], segmentos_impactados[]}` |
 | `mercado.icp.revisao_solicitada` | Gatilho de revisão disparado | `{motivo, prazo_conclusao, dados_contexto_json}` |
 | `mercado.segmento.atualizado` | Segmento criado, alterado ou descontinuado | `{segmento_id, acao: criado\|alterado\|descontinuado, diferencas_json}` |
-| `mercado.win_loss.analisado` | Análise de oportunidade concluída | `{oportunidade_id, resultado: won\|lost, razao_primaria, segmento_id, concorrente_vencedor?}` |
-| `mercado.win_loss.padrao_identificado` | Padrão recorrente detectado (≥ 3×) | `{padrao_tipo, frequencia, segmentos_afetados[], recomendacao}` |
+| `mercado.analise_resultado.registrada` | Análise de oportunidade concluída | `{oportunidade_id, resultado: won\|lost, razao_primaria, segmento_id, concorrente_vencedor?}` |
+| `mercado.analise_resultado.padrao_identificado` | Padrão recorrente detectado (≥ 3×) | `{padrao_tipo, frequencia, segmentos_afetados[], recomendacao}` |
 | `mercado.competidor.atualizado` | Dado de concorrente atualizado | `{concorrente_id, campos_alterados[], nova_ameaca: boolean}` |
 | `mercado.sinal.detectado` | Sinal de mercado avaliado | `{sinal_tipo, urgencia: baixa\|media\|alta\|critica, elementos_impactados[], descricao}` |
 | `mercado.qualificacao.criterios_atualizados` | Perguntas de qualificação revisadas | `{segmento_id, criterios_anteriores, criterios_novos, motivo}` |
@@ -388,7 +388,7 @@ Todo sinal registrado DEVE ter avaliação de impacto: qual elemento é afetado 
 | Evento | Origem | Ação ao Receber |
 |--------|--------|----------------|
 | `oportunidade.encerrada` | CAP-03 | Criar instância de análise Win/Loss |
-| `cliente.churned` | CAP-05 | Criar análise Win/Loss retroativa; atualizar perfil de risco do segmento |
+| `cliente.cancelamento.confirmado` | CAP-05 | Criar análise Win/Loss retroativa; atualizar perfil de risco do segmento |
 | `cliente.expandido` | CAP-05 | Registrar como dado de calibração positiva do ICP |
 | `kpi.limiar.cruzado` | ENG-02 | Se KPI é `KPI-MI-02` ou `KPI-MI-08`: avaliar revisão antecipada do ICP |
 | `melhoria.item.implementado` | ENG-09 | Se melhoria afeta CAP-01: revisar elementos impactados |
@@ -428,7 +428,7 @@ Todo sinal registrado DEVE ter avaliação de impacto: qual elemento é afetado 
 | ALT-MI-06 | ICP não revisado há > 120 dias | WARNING | Notificar responsável; criar agenda de revisão |
 | ALT-MI-07 | Concorrente sem atualização > 180 dias | WARNING | Solicitar pesquisa competitiva |
 | ALT-MI-08 | Aderência ao ICP no pipeline < 50% | CRITICAL | Notificar CAP-02; revisar critérios de qualificação |
-| ALT-MI-09 | Padrão Win/Loss recorrente detectado (≥ 3×) | WARNING | Publicar `mercado.win_loss.padrao_identificado`; criar item em ENG-09 |
+| ALT-MI-09 | Padrão Win/Loss recorrente detectado (≥ 3×) | WARNING | Publicar `mercado.analise_resultado.padrao_identificado`; criar item em ENG-09 |
 
 ---
 
@@ -488,7 +488,7 @@ plano_acao:
 | AUT-MI-02 | Análise Win/Loss pendente > 5 dias | Enviar lembrete ao responsável | CONN-MENSAGERIA |
 | AUT-MI-03 | `sistema.periodo_encerrado` (trimestral) | Gerar relatório Win Rate por segmento/concorrente | CONN-EMAIL-TRANSACIONAL |
 | AUT-MI-04 | `mercado.icp.atualizado` publicado | Notificar módulos dependentes; atualizar scoring no CRM | CONN-CRM-PRINCIPAL, CONN-MENSAGERIA |
-| AUT-MI-05 | Padrão Win/Loss detectado (≥ 3 ocorrências iguais) | Publicar `mercado.win_loss.padrao_identificado`; criar item ENG-09 | Barramento SOE |
+| AUT-MI-05 | Padrão Win/Loss detectado (≥ 3 ocorrências iguais) | Publicar `mercado.analise_resultado.padrao_identificado`; criar item ENG-09 | Barramento SOE |
 | AUT-MI-06 | `sistema.periodo_encerrado` (mensal) | Calcular KPI-MI-01 a KPI-MI-09; publicar para ENG-02 | ENG-02 |
 
 ---
@@ -505,7 +505,7 @@ plano_acao:
 | 2 | Cobertura Win/Loss ≥ 95% | KPI-MI-01 | Valor do KPI |
 | 3 | Análises Win/Loss concluídas em ≤ 5 dias úteis | KPI-MI-06 | Valor do KPI |
 | 4 | Mapa competitivo: todos os concorrentes atualizados nos últimos 6 meses | KPI-MI-07 | 100% de freshness |
-| 5 | Padrões Win/Loss encaminhados para ENG-09 | Log de eventos `mercado.win_loss.padrao_identificado` | Registro no período |
+| 5 | Padrões Win/Loss encaminhados para ENG-09 | Log de eventos `mercado.analise_resultado.padrao_identificado` | Registro no período |
 | 6 | Alertas do mês tratados dentro do SLA da ENG-03 | Taxa de resolução | ≥ 90% no SLA |
 
 ### Checklist Trimestral — CAP-01-AUD-TRIMESTRAL
@@ -563,9 +563,9 @@ eventos_publicados:
     condicao: "gatilho trimestral ou manual"
   - evento: "mercado.segmento.atualizado"
     condicao: "segmento criado, alterado ou descontinuado"
-  - evento: "mercado.win_loss.analisado"
+  - evento: "mercado.analise_resultado.registrada"
     condicao: "análise Win/Loss concluída"
-  - evento: "mercado.win_loss.padrao_identificado"
+  - evento: "mercado.analise_resultado.padrao_identificado"
     condicao: "padrão detectado em 3+ análises"
   - evento: "mercado.competidor.atualizado"
     condicao: "dados de concorrente alterados"
@@ -578,7 +578,7 @@ eventos_consumidos:
   - evento: "oportunidade.encerrada"
     origem: "CAP-03"
     acao: "iniciar protocolo Win/Loss"
-  - evento: "cliente.churned"
+  - evento: "cliente.cancelamento.confirmado"
     origem: "CAP-05"
     acao: "análise Win/Loss retroativa; atualizar perfil de risco"
   - evento: "cliente.expandido"

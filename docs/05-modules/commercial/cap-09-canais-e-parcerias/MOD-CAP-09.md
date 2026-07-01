@@ -244,7 +244,7 @@ onboarding_marcos:
   FALHA_ATIVACAO:
     trigger: "M4 não atingido em 90 dias"
     acao: "Protocolo de reavaliação ou desativação"
-    evento_publicado: "parceiro.ativacao_falhou"
+    evento_publicado: "parceiro.ativacao.falhou"
 ```
 
 ### 5.4 Capacitação e Certificação
@@ -484,9 +484,9 @@ Fim do trimestre (evento sistema.periodo_encerrado)
 | **EVT-CP-PUB-03** | `parceiro.desativado` | parceiro_id, motivo, data_desativacao, comissoes_pendentes, aprovador_id | ENG-02, ENG-06, CAP-08 |
 | **EVT-CP-PUB-04** | `parceiro.tier_alterado` | parceiro_id, tier_anterior, tier_novo, motivo, data_alteracao | ENG-02, ENG-06 |
 | **EVT-CP-PUB-05** | `parceiro.comissao_calculada` | parceiro_id, oportunidade_id, valor_comissao, base_calculo, tipo_comissao, periodo | CAP-04, ENG-06 |
-| **EVT-CP-PUB-06** | `parceiro.inativo_detectado` | parceiro_id, dias_sem_leads, ultimo_lead_data, tier_atual | ENG-03, ENG-05 |
-| **EVT-CP-PUB-07** | `parceiro.pip_iniciado` | parceiro_id, motivo, meta_pip, prazo_pip, gestor_responsavel | ENG-06, CAP-07 |
-| **EVT-CP-PUB-08** | `parceiro.ativacao_falhou` | parceiro_id, motivo, dias_decorridos, marcos_nao_atingidos | ENG-03, ENG-05 |
+| **EVT-CP-PUB-06** | `parceiro.inatividade.detectada` | parceiro_id, dias_sem_leads, ultimo_lead_data, tier_atual | ENG-03, ENG-05 |
+| **EVT-CP-PUB-07** | `parceiro.pip.iniciado` | parceiro_id, motivo, meta_pip, prazo_pip, gestor_responsavel | ENG-06, CAP-07 |
+| **EVT-CP-PUB-08** | `parceiro.ativacao.falhou` | parceiro_id, motivo, dias_decorridos, marcos_nao_atingidos | ENG-03, ENG-05 |
 | **EVT-CP-PUB-09** | `parceiro.certificacao_vencida` | parceiro_id, certificacao_id, data_vencimento, impacto_tier | ENG-03 |
 | **EVT-CP-PUB-10** | `parceiro.avaliacao_trimestral_concluida` | parceiro_id, trimestre, score, classificacao, tier_resultante, kpis_periodo | ENG-06, CAP-08 |
 | **EVT-CP-PUB-11** | `ecossistema.relatorio_publicado` | periodo, total_parceiros_ativos, leads_gerados, receita_atribuida, top_parceiros | CAP-08, ENG-06 |
@@ -503,11 +503,12 @@ Fim do trimestre (evento sistema.periodo_encerrado)
 | `oferta.produto.descontinuado` | CAP-06 | Notificar parceiros que vendem o produto descontinuado e atualizar certificações |
 | `oportunidade.ganha` | CAP-03 | Verificar atribuição a parceiro e iniciar cálculo de comissão se aplicável |
 | `oportunidade.encerrada` | CAP-03 | Registrar desfecho de lead de parceiro; atualizar taxa de conversão do parceiro |
-| `cliente.churned` | CAP-05 | Verificar se cliente é atribuído a parceiro; calcular estorno de comissão se churn < 90 dias |
+| `cliente.cancelamento.confirmado` | CAP-05 | Verificar se cliente é atribuído a parceiro; calcular estorno de comissão se churn < 90 dias |
 | `kpi.limiar.cruzado` | ENG-02 | Processar alertas de KPIs de canal que cruzaram limiares críticos |
 | `sistema.periodo_encerrado` | Scheduler | Disparar avaliação trimestral de todos os parceiros ativos |
 | `alerta.emitido` | ENG-03 | Processar alertas de inatividade, performance ou certificação de parceiros |
 | `plano_acao.concluido` | ENG-05 | Verificar se PIP de parceiro foi concluído e avaliar resultado |
+| `performance.metas_atualizadas` | CAP-08 | Atualizar meta de receita de canal e volume de leads de parceiros; recalibrar limiares de alerta do ecossistema |
 
 ---
 
@@ -645,7 +646,7 @@ dependencies:
         - oportunidade.encerrada
     - source: MOD-CAP-05
       events:
-        - cliente.churned
+        - cliente.cancelamento.confirmado
     - source: ENG-02
       events:
         - kpi.limiar.cruzado
@@ -658,6 +659,9 @@ dependencies:
     - source: Scheduler
       events:
         - sistema.periodo_encerrado
+    - source: MOD-CAP-08
+      events:
+        - performance.metas_atualizadas
 
 published_events:
   - id: EVT-CP-PUB-01
@@ -674,15 +678,16 @@ published_events:
     consumers: [ENG-02, ENG-06]
   - id: EVT-CP-PUB-05
     name: parceiro.comissao_calculada
-    consumers: [MOD-CAP-04, ENG-06]
+    consumers: [ENG-06, ENG-08]
+    nota: "ENG-08 processa via CONN-ERP-FINANCEIRO para registro de contas a pagar (comissão é passivo, não receita). CAP-04 não é consumidor direto — não confundir com receita de clientes."
   - id: EVT-CP-PUB-06
-    name: parceiro.inativo_detectado
+    name: parceiro.inatividade.detectada
     consumers: [ENG-03, ENG-05]
   - id: EVT-CP-PUB-07
-    name: parceiro.pip_iniciado
+    name: parceiro.pip.iniciado
     consumers: [ENG-06, MOD-CAP-07]
   - id: EVT-CP-PUB-08
-    name: parceiro.ativacao_falhou
+    name: parceiro.ativacao.falhou
     consumers: [ENG-03, ENG-05]
   - id: EVT-CP-PUB-09
     name: parceiro.certificacao_vencida

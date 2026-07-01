@@ -268,7 +268,7 @@ timestamp           TIMESTAMP
 | Evento | Origem | Ação ao Receber |
 |--------|--------|----------------|
 | `sql.criado` | CAP-02 | Instanciar processo PROC-CAP03-VENDAS |
-| `cliente.contrato_assinado` | CAP-03 | Instanciar processo PROC-CAP05-ONBOARDING |
+| `oportunidade.ganha` | CAP-03 | CAP-05 consome e instancia processo PROC-CAP05-ONBOARDING; CAP-04 consome e instancia processo de faturamento |
 | `cliente.churn_risco_detectado` | ENG-03 | Instanciar processo PROC-CAP05-SALVAMENTO |
 | `parceiro.cadastrado` | CAP-09 | Instanciar processo PROC-CAP09-ONBOARDING-PARCEIRO |
 | `colaborador.contratado` | CAP-07 | Instanciar processo PROC-CAP07-RAMPUP |

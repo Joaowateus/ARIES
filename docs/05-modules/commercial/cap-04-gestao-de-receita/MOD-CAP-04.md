@@ -82,7 +82,7 @@ O CAP-04 é a camada de conversão entre compromisso contratual e caixa real. El
 
 | # | Responsabilidade | Frequência |
 |---|-----------------|-----------|
-| R-01 | Reconhecer MRR/ARR ao receber `cliente.contrato_assinado` | Por contrato |
+| R-01 | Reconhecer MRR/ARR ao receber `oportunidade.ganha` de CAP-03 | Por contrato |
 | R-02 | Emitir fatura no prazo correto para cada cliente ativo | Por competência |
 | R-03 | Executar ciclo de cobrança (dunning) para faturas em atraso | Por fatura vencida |
 | R-04 | Manter inadimplência dentro do limite definido | Contínuo |
@@ -113,7 +113,7 @@ MRR_FINAL = MRR_INICIAL
 ```yaml
 regras_reconhecimento:
   novo_contrato:
-    trigger: "cliente.contrato_assinado"
+    trigger: "oportunidade.ganha"
     tipo: "new_mrr"
     valor: "contrato.valor_mensal_recorrente"
     data_inicio: "contrato.data_inicio"
@@ -131,7 +131,7 @@ regras_reconhecimento:
     data_inicio: "data_efetiva_reducao"
 
   cancelamento:
-    trigger: "cliente.churned"
+    trigger: "cliente.cancelamento.confirmado"
     tipo: "churn_mrr"
     valor: "contrato.valor_mensal_recorrente"
     data_fim: "data_efetiva_cancelamento"
@@ -270,7 +270,7 @@ reconciliacao:
 ```
 [FLUXO A — RECONHECIMENTO DE RECEITA E FATURAMENTO]
 
-[TRIGGER: cliente.contrato_assinado recebido de CAP-03]
+[TRIGGER: oportunidade.ganha recebido de CAP-03]
 │
 ├─► Criar registro de receita recorrente:
 │   ├─ tipo: new_mrr
@@ -302,13 +302,13 @@ reconciliacao:
 │
 ├─► D+15:
 │   ├─► Contato ativo do time financeiro
-│   └─► Notificar CS do cliente (via evento `receita.inadimplencia.d15`)
+│   └─► Notificar CS do cliente (via evento `receita.inadimplencia.nivel_alerta_atingido`)
 │       └─► CAP-05 recebe e registra risco financeiro no health score do cliente
 │
 ├─► D+30:
 │   ├─► Notificação formal de suspensão
 │   ├─► Escalar para gestor + CS
-│   └─► Publicar: receita.inadimplencia.critica → CAP-05 aplica protocolo de retenção de emergência
+│   └─► Publicar: receita.inadimplencia.escalada → CAP-05 aplica protocolo de retenção de emergência
 │
 └─► D+60:
     ├─► Executar suspensão conforme contrato
@@ -317,7 +317,7 @@ reconciliacao:
 
 [FLUXO C — ATUALIZAÇÃO DE MRR POR EVENTO DE CLIENTE]
 
-[TRIGGER: cliente.expandido | cliente.contrato_reduzido | cliente.churned]
+[TRIGGER: cliente.expandido | cliente.contrato_reduzido | cliente.cancelamento.confirmado]
 │
 ├─► cliente.expandido:
 │   ├─► Registrar expansion_mrr = delta_mrr_positivo
@@ -327,7 +327,7 @@ reconciliacao:
 │   ├─► Registrar contraction_mrr = delta_mrr_negativo
 │   └─► Atualizar MRR Bridge: − contraction_mrr
 │
-└─► cliente.churned:
+└─► cliente.cancelamento.confirmado:
     ├─► Registrar churn_mrr = contrato.mrr
     ├─► Atualizar MRR Bridge: − churn_mrr
     ├─► Cancelar ciclo de faturamento recorrente
@@ -382,7 +382,7 @@ PENDENTE → EM_ANDAMENTO → CONCLUIDA_COM_DIVERGENCIAS | CONCLUIDA_OK
 ## 8. Regras de Negócio
 
 ### RN-01 — Reconhecimento de MRR Vinculado ao Contrato Assinado
-MRR só é reconhecido após receber o evento `cliente.contrato_assinado` de CAP-03. Não existe receita reconhecida sem contrato formalizado. MRR de contratos sem assinatura é proibido.
+MRR só é reconhecido após receber o evento `oportunidade.ganha` de CAP-03, que transporta o contrato assinado e todos os dados financeiros. Não existe receita reconhecida sem contrato formalizado. MRR de contratos sem assinatura é proibido.
 
 ### RN-02 — Faturamento no Prazo Contratual
 A fatura DEVE ser gerada e enviada no prazo definido no contrato (geralmente no início ou no final do período de competência). Fatura enviada com atraso de mais de 3 dias úteis é uma não-conformidade operacional.
@@ -417,9 +417,8 @@ Após 60 dias de inadimplência, a suspensão do serviço é executada automatic
 | `receita.mrr_atualizado` | Qualquer mudança no MRR | `{tipo: new\|expansion\|contraction\|churn, valor_delta, mrr_total_novo, cliente_id, contrato_id}` |
 | `receita.fatura_emitida` | Fatura gerada e enviada | `{fatura_id, cliente_id, valor, competencia, data_vencimento, forma_pagamento}` |
 | `receita.fatura_paga` | Pagamento confirmado | `{fatura_id, cliente_id, valor_pago, data_pagamento, forma_pagamento}` |
-| `receita.inadimplencia.d1` | Fatura 1 dia em atraso | `{fatura_id, cliente_id, valor, dias_atraso}` |
-| `receita.inadimplencia.d15` | Fatura 15 dias em atraso — CS notificado | `{fatura_id, cliente_id, valor, dias_atraso, cs_responsavel}` |
-| `receita.inadimplencia.critica` | Fatura 30+ dias em atraso | `{fatura_id, cliente_id, valor, dias_atraso, risco_churn: alto}` |
+| `receita.inadimplencia.nivel_alerta_atingido` | Fatura em atraso — nível de alerta atingido (D1, D5, D15, D30) | `{fatura_id, cliente_id, valor, dias_atraso, nivel: D1\|D5\|D15\|D30, cs_responsavel?}` |
+| `receita.inadimplencia.escalada` | Fatura 30+ dias em atraso — protocolo de suspensão ativado | `{fatura_id, cliente_id, valor, dias_atraso, nivel: D60, risco_churn: alto}` |
 | `receita.mrr_bridge.calculado` | MRR Bridge do mês calculado | `{periodo, mrr_inicial, new_mrr, expansion_mrr, churn_mrr, contraction_mrr, mrr_final, nrr}` |
 | `receita.reconciliacao_concluida` | Reconciliação mensal finalizada | `{periodo, faturas_total, recebimentos_confirmados, divergencias_count, status: ok\|com_divergencias}` |
 | `receita.suspensao_executada` | Serviço suspenso por inadimplência | `{cliente_id, contrato_id, dias_atraso, valor_pendente}` |
@@ -430,10 +429,10 @@ Após 60 dias de inadimplência, a suspensão do serviço é executada automatic
 
 | Evento | Origem | Ação ao Receber |
 |--------|--------|----------------|
-| `receita.contrato_novo` | CAP-03 | Reconhecer new_mrr; agendar faturamento recorrente |
+| `oportunidade.ganha` | CAP-03 | Reconhecer new_mrr a partir do campo `mrr` do payload; agendar faturamento recorrente |
 | `cliente.expandido` | CAP-05 | Reconhecer expansion_mrr; atualizar faturamento |
 | `cliente.contrato_reduzido` | CAP-05 | Reconhecer contraction_mrr; ajustar faturamento |
-| `cliente.churned` | CAP-05 | Reconhecer churn_mrr; cancelar faturamento recorrente |
+| `cliente.cancelamento.confirmado` | CAP-05 | Reconhecer churn_mrr; cancelar faturamento recorrente |
 | `oferta.tabela_precos.atualizada` | CAP-06 | Atualizar base de cálculo para novos contratos |
 | `sistema.periodo_encerrado` | Scheduler (mensal) | Iniciar reconciliação; calcular MRR Bridge; calcular NRR/GRR |
 | `melhoria.item.implementado` | ENG-09 | Revisar processos impactados |
@@ -509,15 +508,15 @@ plano_acao:
 
 | ID | Trigger | Ação Automatizada | Conector |
 |----|---------|-----------------|---------|
-| AUT-RV-01 | `receita.contrato_novo` recebido | Reconhecer MRR; criar ciclo de faturamento recorrente | CONN-ERP-FINANCEIRO |
+| AUT-RV-01 | `oportunidade.ganha` recebido | Reconhecer MRR; criar ciclo de faturamento recorrente | CONN-ERP-FINANCEIRO |
 | AUT-RV-02 | Dia de faturamento do cliente | Gerar fatura; calcular impostos; enviar ao cliente | CONN-ERP-FINANCEIRO, CONN-EMAIL-TRANSACIONAL |
 | AUT-RV-03 | Fatura D+1 sem pagamento | Enviar lembrete de vencimento | CONN-EMAIL-TRANSACIONAL |
 | AUT-RV-04 | Fatura D+5 sem pagamento | Enviar alerta de urgência + mensageria | CONN-EMAIL-TRANSACIONAL, CONN-MENSAGERIA |
-| AUT-RV-05 | Fatura D+15 sem pagamento | Notificar CS do cliente; publicar `receita.inadimplencia.d15` | CONN-MENSAGERIA, Barramento SOE |
-| AUT-RV-06 | Fatura D+30 sem pagamento | Publicar `receita.inadimplencia.critica`; notificação formal de suspensão | Barramento SOE, CONN-EMAIL-TRANSACIONAL |
-| AUT-RV-07 | Fatura D+60 sem pagamento | Executar suspensão de serviço; publicar `receita.suspensao_executada` | CONN-ERP-FINANCEIRO, Barramento SOE |
+| AUT-RV-05 | Fatura D+15 sem pagamento | Notificar CS do cliente; publicar `receita.inadimplencia.nivel_alerta_atingido` | CONN-MENSAGERIA, Barramento SOE |
+| AUT-RV-06 | Fatura D+30 sem pagamento | Publicar `receita.inadimplencia.escalada`; notificação formal de suspensão | Barramento SOE, CONN-EMAIL-TRANSACIONAL |
+| AUT-RV-07 | Fatura D+60 sem pagamento | Comandar suspensão de acesso via CONN-PLATAFORMA-PRODUTO; publicar `receita.suspensao_executada` somente após confirmação do conector | CONN-PLATAFORMA-PRODUTO, Barramento SOE |
 | AUT-RV-08 | `cliente.expandido` recebido | Atualizar MRR; ajustar faturamento futuro | CONN-ERP-FINANCEIRO |
-| AUT-RV-09 | `cliente.churned` recebido | Registrar churn_mrr; cancelar faturamento recorrente | CONN-ERP-FINANCEIRO |
+| AUT-RV-09 | `cliente.cancelamento.confirmado` recebido | Registrar churn_mrr; cancelar faturamento recorrente | CONN-ERP-FINANCEIRO |
 | AUT-RV-10 | `sistema.periodo_encerrado` (mensal) | Calcular MRR Bridge; calcular NRR/GRR; iniciar reconciliação | ENG-02 |
 
 ---
@@ -534,7 +533,7 @@ plano_acao:
 | 4 | Reconciliação concluída até dia 5 do mês | `receita.reconciliacao_concluida` | Evento registrado com data |
 | 5 | Taxa de inadimplência dentro do limite | KPI-RV-09 | < 3% |
 | 6 | NRR calculado por segmento e coorte | KPI-RV-07 com dimensões | Relatório com breakdown |
-| 7 | Clientes D+15+ têm CS notificado | Log de eventos `receita.inadimplencia.d15` | 100% dos casos com CS notificado |
+| 7 | Clientes D+15+ têm CS notificado | Log de eventos `receita.inadimplencia.nivel_alerta_atingido` | 100% dos casos com CS notificado |
 | 8 | Alertas tratados dentro do SLA da ENG-03 | Taxa de resolução | ≥ 90% no SLA |
 
 ---
@@ -585,11 +584,9 @@ eventos_publicados:
     condicao: "fatura gerada e enviada"
   - evento: "receita.fatura_paga"
     condicao: "pagamento confirmado"
-  - evento: "receita.inadimplencia.d1"
-    condicao: "fatura 1 dia em atraso"
-  - evento: "receita.inadimplencia.d15"
-    condicao: "fatura 15 dias em atraso"
-  - evento: "receita.inadimplencia.critica"
+  - evento: "receita.inadimplencia.nivel_alerta_atingido"
+    condicao: "fatura em atraso — atingiu nível D1, D5, D15 ou D30 (campo nivel no payload)"
+  - evento: "receita.inadimplencia.escalada"
     condicao: "fatura 30+ dias em atraso"
   - evento: "receita.mrr_bridge.calculado"
     condicao: "MRR Bridge mensal calculado"
@@ -599,16 +596,16 @@ eventos_publicados:
     condicao: "serviço suspenso por inadimplência D+60"
 
 eventos_consumidos:
-  - evento: "receita.contrato_novo"
+  - evento: "oportunidade.ganha"
     origem: "CAP-03"
-    acao: "reconhecer new_mrr; agendar faturamento"
+    acao: "reconhecer new_mrr a partir do campo mrr do payload; agendar faturamento recorrente"
   - evento: "cliente.expandido"
     origem: "CAP-05"
     acao: "reconhecer expansion_mrr; atualizar faturamento"
   - evento: "cliente.contrato_reduzido"
     origem: "CAP-05"
     acao: "reconhecer contraction_mrr; ajustar faturamento"
-  - evento: "cliente.churned"
+  - evento: "cliente.cancelamento.confirmado"
     origem: "CAP-05"
     acao: "reconhecer churn_mrr; cancelar faturamento"
   - evento: "oferta.tabela_precos.atualizada"
@@ -620,6 +617,9 @@ eventos_consumidos:
   - evento: "melhoria.item.implementado"
     origem: "ENG-09"
     acao: "revisar processos impactados"
+  - evento: "performance.metas_atualizadas"
+    origem: "CAP-08"
+    acao: "atualizar meta de MRR de referência; recalibrar limiares de alerta de inadimplência e churn"
 
 kpis_registrados:
   - id: "KPI-RV-01"
@@ -742,7 +742,7 @@ alertas_registrados:
 workflows_registrados:
   - id: "WF-RV-01"
     nome: "Reconhecimento de Receita e Agendamento de Faturamento"
-    gatilho: "receita.contrato_novo"
+    gatilho: "oportunidade.ganha"
     descricao: "reconhece MRR, cria ciclo de faturamento recorrente"
   - id: "WF-RV-02"
     nome: "Emissão e Envio de Fatura"
@@ -754,7 +754,7 @@ workflows_registrados:
     descricao: "executa D+1, D+5, D+15, D+30, D+60 com ações progressivas"
   - id: "WF-RV-04"
     nome: "Atualização de MRR por Evento"
-    gatilho: "cliente.expandido | cliente.contrato_reduzido | cliente.churned"
+    gatilho: "cliente.expandido | cliente.contrato_reduzido | cliente.cancelamento.confirmado"
     descricao: "reconhece mudança de MRR, atualiza faturamento"
   - id: "WF-RV-05"
     nome: "Reconciliação Mensal"
@@ -769,6 +769,9 @@ auditoria_checklists:
 conectores_utilizados:
   - "CONN-ERP-FINANCEIRO"
   - "CONN-GATEWAY-PAGAMENTO"
+  - id: "CONN-PLATAFORMA-PRODUTO"
+    tipo: OUTBOUND
+    proposito: "Executar suspensão e reativação de acesso ao serviço por inadimplência; receita.suspensao_executada só é publicado após confirmação deste conector"
   - "CONN-EMAIL-TRANSACIONAL"
   - "CONN-MENSAGERIA"
   - "CONN-BANCO"

@@ -90,7 +90,7 @@ O CAP-03 é o núcleo de geração de receita do Commercial OS: ele transforma o
 | R-06 | Produzir forecast semanal baseado em probabilidade por estágio | Semanal |
 | R-07 | Publicar `oportunidade.encerrada` ao fechar ou perder um negócio | Por encerramento |
 | R-08 | Publicar `oportunidade.ganha` ao fechar contrato assinado | Por fechamento |
-| R-09 | Garantir que todos os contratos assinados são roteados para CAP-05 | Por contrato assinado |
+| R-09 | Garantir que `oportunidade.ganha` contém todos os campos necessários para CAP-04 e CAP-05 derivarem seus fluxos | Por fechamento |
 
 ---
 
@@ -318,10 +318,8 @@ forecast:
     ├─► Enviar para assinatura eletrônica (ENG-08 → CONN-ASSINATURA-ELETRONICA)
     ├─► Monitorar assinaturas (SLA: 7 dias para ambas as partes)
     ├─► Contrato assinado por ambos:
-    │   ├─► Publicar: oportunidade.ganha
-    │   ├─► Publicar: oportunidade.encerrada (tipo: won)
-    │   ├─► Publicar: cliente.contrato_assinado → CAP-05 inicia onboarding
-    │   └─► Publicar: receita.contrato_novo → CAP-04 registra receita
+    │   ├─► Publicar: oportunidade.ganha (payload completo — contrato, MRR, cliente, CS)
+    │   └─► Publicar: oportunidade.encerrada (tipo: won)
     └─► Oportunidade perdida (em qualquer estágio):
         ├─► Registrar motivo de perda (campo estruturado obrigatório)
         ├─► Publicar: oportunidade.encerrada (tipo: lost)
@@ -428,10 +426,8 @@ Cada segmento tem um ciclo máximo de venda configurado. Oportunidade que ultrap
 | `oportunidade.estagio_avancado` | Exit criteria atendidos; oportunidade avança | `{oportunidade_id, estagio_anterior, estagio_novo, dias_no_estagio}` |
 | `oportunidade.parada_detectada` | Sem atividade por > limite do estágio | `{oportunidade_id, estagio_atual, dias_parada, valor_estimado}` |
 | `oportunidade.proposta_enviada` | Proposta enviada formalmente ao prospect | `{oportunidade_id, proposta_id, valor_proposto, desconto_percentual, validade_dias}` |
-| `oportunidade.ganha` | Contrato assinado por ambas as partes | `{oportunidade_id, contrato_id, valor_total, mrr, segmento_id, ciclo_dias}` |
+| `oportunidade.ganha` | Contrato assinado por ambas as partes | `{oportunidade_id, contrato_id, cliente_id, valor_total, mrr, segmento_id, ciclo_dias, data_inicio, data_fim, forma_pagamento, condicoes_json, responsavel_cs_id}` |
 | `oportunidade.encerrada` | Oportunidade encerrada (ganha ou perdida) | `{oportunidade_id, resultado: won\|lost, motivo, estagio_encerramento, valor, segmento_id}` |
-| `cliente.contrato_assinado` | Contrato assinado — cliente oficializado | `{contrato_id, cliente_id, valor_total, mrr, data_inicio, data_fim, responsavel_cs}` |
-| `receita.contrato_novo` | Novo contrato para registro financeiro | `{contrato_id, valor_total, mrr, data_inicio, forma_pagamento, condicoes_json}` |
 | `forecast.atualizado` | Forecast semanal calculado | `{periodo, pipeline_ponderado, forecast_conservador, forecast_realista, meta_periodo}` |
 | `desconto.aprovacao_solicitada` | Desconto acima do nível autorizado requer aprovação | `{oportunidade_id, proposta_id, desconto_percentual, nivel_requerido, aprovador_id}` |
 
@@ -536,7 +532,7 @@ plano_acao:
 | AUT-VP-02 | Proposta aceita (estágio E4 concluído) | Gerar contrato a partir do template; enviar para assinatura | CONN-ASSINATURA-ELETRONICA |
 | AUT-VP-03 | Proposta sem resposta após 3 dias | Enviar lembrete automático ao cliente | CONN-EMAIL-TRANSACIONAL |
 | AUT-VP-04 | Proposta a 5 dias de expirar | Notificar vendedor para ação de follow-up | CONN-MENSAGERIA |
-| AUT-VP-05 | Contrato assinado por ambas as partes | Publicar oportunidade.ganha + cliente.contrato_assinado + receita.contrato_novo | Barramento SOE |
+| AUT-VP-05 | Contrato assinado por ambas as partes | Publicar `oportunidade.ganha` com payload completo (inclui contrato_id, mrr, cliente_id, cs_id) | Barramento SOE |
 | AUT-VP-06 | Oportunidade sem atividade > limite do estágio | Criar alerta; notificar vendedor + gestor | ENG-03 |
 | AUT-VP-07 | `sistema.periodo_encerrado` (semanal) | Calcular e publicar forecast.atualizado | ENG-02 |
 | AUT-VP-08 | Desconto solicitado > nível N1 | Pausar geração de proposta; notificar aprovador; iniciar timer 48h | CONN-MENSAGERIA, ENG-07 |
@@ -618,13 +614,9 @@ eventos_publicados:
   - evento: "oportunidade.proposta_enviada"
     condicao: "proposta enviada formalmente"
   - evento: "oportunidade.ganha"
-    condicao: "contrato assinado por ambas as partes"
+    condicao: "contrato assinado por ambas as partes (payload inclui todos os campos necessários para CAP-04 e CAP-05)"
   - evento: "oportunidade.encerrada"
     condicao: "oportunidade encerrada (won ou lost)"
-  - evento: "cliente.contrato_assinado"
-    condicao: "contrato assinado — cliente oficializado"
-  - evento: "receita.contrato_novo"
-    condicao: "novo contrato para registro financeiro"
   - evento: "forecast.atualizado"
     condicao: "forecast semanal calculado"
   - evento: "desconto.aprovacao_solicitada"
@@ -652,6 +644,9 @@ eventos_consumidos:
   - evento: "melhoria.item.implementado"
     origem: "ENG-09"
     acao: "revisar processos impactados"
+  - evento: "performance.metas_atualizadas"
+    origem: "CAP-08"
+    acao: "atualizar meta de fechamento de referência; recalibrar limiares de alerta de pipeline e forecast"
 
 kpis_registrados:
   - id: "KPI-VP-01"

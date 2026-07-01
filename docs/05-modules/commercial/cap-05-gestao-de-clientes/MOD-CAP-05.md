@@ -80,13 +80,13 @@ O CAP-05 fecha o ciclo do Commercial OS: ele começa onde CAP-03 termina (contra
 
 | # | Responsabilidade | Frequência |
 |---|-----------------|-----------|
-| R-01 | Iniciar onboarding imediatamente após `cliente.contrato_assinado` | Por evento |
+| R-01 | Iniciar onboarding imediatamente após `oportunidade.ganha` | Por evento |
 | R-02 | Manter Health Score atualizado para 100% dos clientes ativos | Semanal |
 | R-03 | Executar touchpoints de relacionamento conforme cadência por Health Score tier | Contínuo |
 | R-04 | Intervir em clientes em risco (Health Score vermelho) em até 48h | Por detecção |
 | R-05 | Identificar e propor expansões em clientes com Health Score verde e gatilhos de expansão | Contínuo |
 | R-06 | Executar protocolo de cancelamento com tentativa de reversão | Por solicitação |
-| R-07 | Publicar `cliente.churned` quando cancelamento é confirmado | Por cancelamento |
+| R-07 | Publicar `cliente.cancelamento.confirmado` quando cancelamento é confirmado | Por cancelamento |
 | R-08 | Publicar `cliente.expandido` quando expansão é confirmada | Por expansão |
 | R-09 | Coletar NPS/CSAT e encaminhar feedback para CAP-01 e ENG-10 | Trimestral / por evento |
 
@@ -294,7 +294,7 @@ nps_collection:
 ```
 [FLUXO A — ONBOARDING DE NOVO CLIENTE]
 
-[TRIGGER: cliente.contrato_assinado recebido de CAP-03]
+[TRIGGER: oportunidade.ganha recebido de CAP-03]
 │
 ├─► Criar plano de onboarding (template por segmento/produto)
 ├─► Designar CS responsável
@@ -353,7 +353,7 @@ nps_collection:
 │   │
 │   └─► Cliente mantém cancelamento → processar cancelamento
 │       ├─► Registrar todos os motivos na base de conhecimento (ENG-10)
-│       ├─► Publicar: cliente.churned → CAP-04 e CAP-01 recebem
+│       ├─► Publicar: cliente.cancelamento.confirmado → CAP-04 e CAP-01 recebem
 │       └─► Publicar: cliente.encerrado
 
 
@@ -416,7 +416,7 @@ IDENTIFICADA → EM_PROGRESSO → GANHA | PERDIDA
 ## 8. Regras de Negócio
 
 ### RN-01 — Onboarding Iniciado em até 3 Dias Úteis
-O kickoff do onboarding DEVE ser agendado em até 3 dias úteis após `cliente.contrato_assinado`. Onboarding não iniciado nesse prazo é não-conformidade e gera alerta. A velocidade de início do onboarding é um dos maiores preditores de sucesso do cliente.
+O kickoff do onboarding DEVE ser agendado em até 3 dias úteis após `oportunidade.ganha`. Onboarding não iniciado nesse prazo é não-conformidade e gera alerta. A velocidade de início do onboarding é um dos maiores preditores de sucesso do cliente.
 
 ### RN-02 — Health Score Calculado Semanalmente para Todos os Clientes Ativos
 Nenhum cliente ativo pode estar sem Health Score atualizado. O cálculo é automático (ENG-02) e o CS pode complementar manualmente com informações qualitativas. O Health Score é a fonte de verdade sobre a saúde do cliente — não a percepção subjetiva do CS.
@@ -437,7 +437,7 @@ O protocolo de salvamento de cancelamento é focado em entender e resolver, não
 Qualquer NPS de 0 a 6 (detrator) DEVE acionar protocolo de contato em 24 horas. NPS detrator não atendido é uma oportunidade de churn não detectada. O CS contacta para entender, não para argumentar.
 
 ### RN-08 — Evento de Churn Publicado com Dados Completos
-O evento `cliente.churned` DEVE conter: motivo estruturado, data efetiva, valor de MRR perdido, health score na semana do churn, se houve tentativa de retenção e resultado. Esses dados são críticos para CAP-01 (análise Win/Loss retroativa) e CAP-04 (MRR Bridge).
+O evento `cliente.cancelamento.confirmado` DEVE conter: motivo estruturado, data efetiva, valor de MRR perdido, health score na semana do churn, se houve tentativa de retenção e resultado. Esses dados são críticos para CAP-01 (análise Win/Loss retroativa) e CAP-04 (MRR Bridge).
 
 ### RN-09 — Expansão Publicada Antes de Faturar
 O evento `cliente.expandido` deve ser publicado pelo CAP-05 ANTES de CAP-04 ajustar o faturamento. A origem do expansion_mrr é sempre o CAP-05 — CAP-04 apenas executa o faturamento.
@@ -457,7 +457,7 @@ O evento `cliente.expandido` deve ser publicado pelo CAP-05 ANTES de CAP-04 ajus
 | `cliente.contrato_reduzido` | Contrato reduzido (contração) | `{cliente_id, motivo, delta_mrr_negativo, nova_data_fim?}` |
 | `cliente.cancelamento_solicitado` | Cancelamento solicitado formalmente | `{cliente_id, motivo_declarado, data_solicitacao, cs_responsavel}` |
 | `cliente.retido` | Cancelamento revertido com sucesso | `{cliente_id, motivo_original, solucao_aplicada, desconto_concedido?}` |
-| `cliente.churned` | Cancelamento confirmado — cliente saiu | `{cliente_id, motivo_estruturado, mrr_perdido, health_score_semana_churn, tentativa_retencao: boolean}` |
+| `cliente.cancelamento.confirmado` | Cancelamento confirmado — cliente saiu | `{cliente_id, motivo_estruturado, mrr_perdido, health_score_semana_churn, tentativa_retencao: boolean}` |
 | `cliente.encerrado` | Conta encerrada no sistema | `{cliente_id, data_encerramento, tipo: churned\|encerrado_por_cliente}` |
 
 ---
@@ -466,9 +466,9 @@ O evento `cliente.expandido` deve ser publicado pelo CAP-05 ANTES de CAP-04 ajus
 
 | Evento | Origem | Ação ao Receber |
 |--------|--------|----------------|
-| `cliente.contrato_assinado` | CAP-03 | Iniciar onboarding; designar CS; agendar kickoff |
-| `receita.inadimplencia.d15` | CAP-04 | Notificar CS; registrar risco financeiro no Health Score |
-| `receita.inadimplencia.critica` | CAP-04 | Escalar para gestor de CS; protocolo de retenção de emergência |
+| `oportunidade.ganha` | CAP-03 | Iniciar onboarding; designar CS; agendar kickoff |
+| `receita.inadimplencia.nivel_alerta_atingido` | CAP-04 | Notificar CS; registrar risco financeiro no Health Score |
+| `receita.inadimplencia.escalada` | CAP-04 | Escalar para gestor de CS; protocolo de retenção de emergência |
 | `receita.suspensao_executada` | CAP-04 | Acionar CS para comunicação formal ao cliente |
 | `mercado.icp.atualizado` | CAP-01 | Recalcular fit dos clientes ativos com o novo ICP; identificar clientes que mudaram de tier |
 | `kpi.limiar.cruzado` | ENG-02 | Se KPI é churn_rate ou NRR: escalar para gestor; avaliar protocolo de retenção |
@@ -483,8 +483,8 @@ O evento `cliente.expandido` deve ser publicado pelo CAP-05 ANTES de CAP-04 ajus
 | ID | Nome | Fórmula | Meta | Frequência |
 |----|------|---------|------|-----------|
 | KPI-CS-01 | Churn Rate (Clientes) | `clientes_churned / clientes_inicio × 100` | < 2% | Mensal |
-| KPI-CS-02 | Churn MRR Rate | `churn_mrr / mrr_inicio × 100` | < 2% | Mensal |
-| KPI-CS-03 | NRR | `referência CAP-04 KPI-RV-07` | > 100% | Mensal |
+| KPI-CS-02 | Churn MRR Rate | `→ referência KPI-RV-06 (CAP-04, fonte única)` | < 2% | Mensal |
+| KPI-CS-03 | NRR | `→ referência KPI-RV-07 (CAP-04, fonte única)` | > 100% | Mensal |
 | KPI-CS-04 | NPS | `% promotores - % detratores` | > 40 | Trimestral |
 | KPI-CS-05 | CSAT | `respostas_satisfeitos / total_respostas × 100` | > 85% | Por evento |
 | KPI-CS-06 | Taxa de Clientes por Tier de Health | `dist. verde/amarelo/vermelho` | Verde > 70% | Semanal |
@@ -549,11 +549,11 @@ plano_acao:
 
 | ID | Trigger | Ação Automatizada | Conector |
 |----|---------|-----------------|---------|
-| AUT-CS-01 | `cliente.contrato_assinado` recebido | Criar plano de onboarding; notificar CS; enviar boas-vindas ao cliente | CONN-CRM-PRINCIPAL, CONN-MENSAGERIA, CONN-EMAIL-TRANSACIONAL |
+| AUT-CS-01 | `oportunidade.ganha` recebido | Criar plano de onboarding; notificar CS; enviar boas-vindas ao cliente | CONN-CRM-PRINCIPAL, CONN-MENSAGERIA, CONN-EMAIL-TRANSACIONAL |
 | AUT-CS-02 | Milestone de onboarding próximo (3 dias) | Lembrar CS do prazo | CONN-MENSAGERIA |
 | AUT-CS-03 | `sistema.periodo_encerrado` (semanal) | Calcular Health Scores de todos os clientes ativos | ENG-02 |
 | AUT-CS-04 | Health Score cai para vermelho | Publicar `cliente.health_score_vermelho`; notificar CS e gestor | Barramento SOE, CONN-MENSAGERIA |
-| AUT-CS-05 | `receita.inadimplencia.d15` recebido | Notificar CS; registrar impacto no Health Score (dimensão financeira) | CONN-MENSAGERIA |
+| AUT-CS-05 | `receita.inadimplencia.nivel_alerta_atingido` recebido | Notificar CS; registrar impacto no Health Score (dimensão financeira) | CONN-MENSAGERIA |
 | AUT-CS-06 | `sistema.periodo_encerrado` (trimestral) | Disparar coleta de NPS para todos os clientes ativos | CONN-PESQUISA-NPS |
 | AUT-CS-07 | NPS ≤ 6 recebido | Notificar CS para contato em 24h; publicar evento | Barramento SOE, CONN-MENSAGERIA |
 | AUT-CS-08 | Gatilho de expansão detectado | Criar oportunidade de expansão; notificar CS | CONN-CRM-PRINCIPAL, CONN-MENSAGERIA |
@@ -645,19 +645,19 @@ eventos_publicados:
     condicao: "cancelamento solicitado formalmente"
   - evento: "cliente.retido"
     condicao: "cancelamento revertido"
-  - evento: "cliente.churned"
+  - evento: "cliente.cancelamento.confirmado"
     condicao: "cancelamento confirmado"
   - evento: "cliente.encerrado"
     condicao: "conta encerrada no sistema"
 
 eventos_consumidos:
-  - evento: "cliente.contrato_assinado"
+  - evento: "oportunidade.ganha"
     origem: "CAP-03"
     acao: "iniciar onboarding; designar CS; agendar kickoff"
-  - evento: "receita.inadimplencia.d15"
+  - evento: "receita.inadimplencia.nivel_alerta_atingido"
     origem: "CAP-04"
     acao: "notificar CS; registrar impacto no health score"
-  - evento: "receita.inadimplencia.critica"
+  - evento: "receita.inadimplencia.escalada"
     origem: "CAP-04"
     acao: "escalar para gestor de CS; protocolo de emergência"
   - evento: "receita.suspensao_executada"
@@ -675,6 +675,9 @@ eventos_consumidos:
   - evento: "melhoria.item.implementado"
     origem: "ENG-09"
     acao: "revisar processos impactados"
+  - evento: "performance.metas_atualizadas"
+    origem: "CAP-08"
+    acao: "atualizar metas de churn, NRR e health score de referência; recalibrar limiares de alerta"
 
 kpis_registrados:
   - id: "KPI-CS-01"
@@ -687,17 +690,14 @@ kpis_registrados:
     limiar_critical: 5
   - id: "KPI-CS-02"
     nome: "Churn MRR Rate"
-    formula: "churn_mrr / mrr_inicio * 100"
-    unidade: "percentual"
-    frequencia_calculo: "mensal"
-    meta_padrao: 2
-    limiar_warning: 3
+    referencia_externa: "KPI-RV-06"
+    modulo_origem: "CAP-04"
+    nota: "CAP-04 é o único dono deste KPI; CAP-05 lê o valor calculado via ENG-02"
   - id: "KPI-CS-03"
     nome: "NRR"
-    formula: "referencia KPI-RV-07 do CAP-04"
-    unidade: "percentual"
-    frequencia_calculo: "mensal"
-    meta_padrao: 100
+    referencia_externa: "KPI-RV-07"
+    modulo_origem: "CAP-04"
+    nota: "CAP-04 é o único dono deste KPI; CAP-05 lê o valor calculado via ENG-02"
   - id: "KPI-CS-04"
     nome: "NPS"
     formula: "percentual_promotores - percentual_detratores"
@@ -801,7 +801,7 @@ alertas_registrados:
 workflows_registrados:
   - id: "WF-CS-01"
     nome: "Iniciação de Onboarding"
-    gatilho: "cliente.contrato_assinado"
+    gatilho: "oportunidade.ganha"
     descricao: "cria plano, designa CS, envia boas-vindas, agenda kickoff"
   - id: "WF-CS-02"
     nome: "Monitoramento de Milestones"

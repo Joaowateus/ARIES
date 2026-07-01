@@ -1,7 +1,7 @@
 ---
 id: ARC-ENG-099
 titulo: "Engine de Autogestão — Contrato de Integração e Barramento de Eventos"
-versao: "1.0.0"
+versao: "1.1.0"
 status: aprovado
 categoria: C2-Estratégica
 autor: Guardião da Documentação Técnica
@@ -73,24 +73,33 @@ Exemplos:
 ```
 
 ### 3.2 Schema Base de Todo Evento
+
 ```json
 {
-  "id": "UUID v4 — identificador único do evento",
+  "event_id": "UUID v4 — identificador único e imutável do evento; usado para deduplicação",
   "tipo": "string — nome do evento no formato dominio.entidade.acao",
-  "versao_schema": "string — versão do schema do evento (SemVer)",
+  "versao_schema": "string — versão do schema do payload (SemVer: ex. '1.0.0')",
   "timestamp": "ISO 8601 com timezone",
   "origem": {
-    "engine": "string — ENG-01 a ENG-10, ou código do módulo",
+    "engine": "string — ENG-01 a ENG-10, ou código do módulo (ex. CAP-03)",
     "instancia_id": "UUID — ID da instância de processo, KPI, alerta, etc."
   },
-  "correlacao_id": "UUID — ID que rastreia a cadeia de eventos relacionados",
-  "payload": "object — dados específicos do tipo de evento",
+  "correlacao_id": "UUID — ID que rastreia toda a cadeia de eventos causalmente relacionados",
+  "payload": "object — dados específicos do tipo de evento (campos definidos por schema versionado)",
   "metadata": {
     "ambiente": "producao | staging | desenvolvimento",
-    "tenant_id": "string — para multi-tenant futuro"
+    "tenant_id": "string — para multi-tenant"
   }
 }
 ```
+
+**Campos obrigatórios em todos os eventos:** `event_id`, `tipo`, `versao_schema`, `timestamp`, `origem`, `correlacao_id`.
+
+> **Política de Deduplicação (obrigatória para todos os consumidores)**
+> O barramento opera com garantia at-least-once. O mesmo evento pode ser entregue mais de uma vez. **Todo consumidor DEVE implementar deduplicação por `event_id`**: ao receber um evento, verificar se `event_id` já foi processado; se sim, descartar silenciosamente e confirmar recebimento sem reprocessar. O `event_id` é gerado pelo produtor e é imutável — retransmissões do mesmo evento carregam o mesmo `event_id`.
+
+> **Política de Compatibilidade de Schema (forward compatibility)**
+> Campos novos adicionados a um schema existente DEVEM ser sempre opcionais (`required: false`). Todo consumidor DEVE ignorar campos desconhecidos no payload (não deve falhar por campos extras). Mudanças que removem campos obrigatórios ou alteram tipos de campos existentes requerem incremento de versão major do schema e período de coexistência mínimo de 30 dias.
 
 ### 3.3 Tabela de Todos os Eventos por Engine
 
@@ -378,8 +387,92 @@ Este arquivo de registro é a "declaração de dependências" do módulo em rela
 
 ---
 
+---
+
+## 8. Serviços de Sistema Declarados
+
+Serviços de sistema são componentes de infraestrutura que publicam eventos no barramento mas não são módulos operacionais nem engines. Devem ser declarados aqui para que todos os consumidores saibam sua origem e garantias.
+
+### 8.1 Scheduler (SOE-SYS-SCHEDULER)
+
+| Campo | Valor |
+|---|---|
+| **ID** | SOE-SYS-SCHEDULER |
+| **Responsável técnico** | Infraestrutura / ENG-01 (quando integrado ao runtime de processos) |
+| **Timezone padrão** | UTC (módulos convertem para timezone local se necessário) |
+| **Garantia de entrega** | At-least-once; retry automático em caso de falha |
+| **Política de retry** | 3 tentativas com backoff exponencial (1min, 5min, 15min); após 3 falhas: alerta crítico para equipe técnica |
+| **Reativação manual** | Operadores autorizados podem re-disparar eventos de período via comando administrativo com registro em ENG-06 |
+
+**Evento publicado:**
+
+```json
+{
+  "tipo": "sistema.periodo.encerrado",
+  "versao_schema": "1.0.0",
+  "payload": {
+    "tipo_periodo": "DIARIO | SEMANAL | MENSAL | TRIMESTRAL | ANUAL",
+    "periodo_id": "string — ex: '2026-Q2', '2026-06', '2026-W26'",
+    "data_inicio": "ISO 8601",
+    "data_fim": "ISO 8601",
+    "ano": "integer",
+    "mes": "integer | null",
+    "trimestre": "integer | null",
+    "semana_iso": "integer | null"
+  }
+}
+```
+
+> **Nota de migração:** módulos existentes que consomem `sistema.periodo_encerrado` (underscore) devem ser atualizados para `sistema.periodo.encerrado` (dot-notation) na próxima revisão de cada módulo. Ambos os nomes serão suportados pelo barramento durante o período de transição de 60 dias.
+
+---
+
+## 9. Constantes Sistêmicas
+
+Parâmetros de negócio compartilhados por múltiplos módulos. Alterações requerem aprovação formal (workflow ENG-07) e atualização simultânea de todos os módulos consumidores.
+
+| Constante | Valor Padrão | Utilização | Módulos Afetados |
+|---|---|---|---|
+| `JANELA_CLAWBACK_DIAS` | `90` | Janela em dias para estorno de comissão em caso de churn do cliente | CAP-07 (equipe), CAP-09 (parceiros) |
+| `PIPELINE_COBERTURA_MINIMA` | `3.0` | Múltiplo mínimo de cobertura do pipeline sobre a meta de fechamento | CAP-02 |
+| `PIPELINE_COBERTURA_ALERTA` | `2.5` | Múltiplo de cobertura que dispara alerta de pipeline insuficiente | CAP-02 |
+| `SLA_PRIMEIRO_CONTATO_INTERESSE_EXPLICITO_H` | `1` | SLA em horas para primeiro contato em leads com interesse explícito | CAP-02 |
+| `SLA_PRIMEIRO_CONTATO_OUTROS_H` | `24` | SLA em horas para primeiro contato em demais leads | CAP-02 |
+| `HEALTH_SCORE_VERDE_MIN` | `70` | Pontuação mínima para classificação Verde | CAP-05 |
+| `HEALTH_SCORE_AMARELO_MIN` | `40` | Pontuação mínima para classificação Amarelo | CAP-05 |
+| `PROPOSTA_VALIDADE_DIAS` | `30` | Validade padrão de proposta comercial em dias | CAP-03, CAP-06 |
+| `PARCEIRO_ATIVACAO_PRAZO_DIAS` | `90` | Prazo máximo para parceiro gerar primeiro lead qualificado | CAP-09 |
+| `PARCEIRO_INATIVIDADE_ALERTA_DIAS` | `90` | Dias sem leads para disparar alerta de inatividade de parceiro | CAP-09 |
+| `LTV_CAC_MINIMO` | `3.0` | Razão mínima LTV/CAC para viabilidade do modelo comercial | CAP-08 |
+| `PAYBACK_MAXIMO_MESES` | `18` | Payback máximo aceitável em meses | CAP-08 |
+
+---
+
+## 10. Políticas de Workflows e Aprovação
+
+### 10.1 Política de Timeout de Workflows de Aprovação
+
+Todo workflow de aprovação gerenciado por ENG-07 deve declarar uma política de timeout. A ausência de resposta dentro do SLA NÃO implica aprovação automática — a ação padrão é escalamento.
+
+| Categoria de Workflow | SLA | Ação no Timeout | Escalonamento |
+|---|---|---|---|
+| Aprovação de desconto N2 (gestor) | 24 horas | Escalar para N3 | Diretor + notificação do vendedor |
+| Aprovação de desconto N3 (diretor) | 48 horas | Suspender proposta + alertar | CAP-08 recebe `performance.desvio.detectado` |
+| Aprovação de novo parceiro | 5 dias úteis | Rejeitar candidatura temporariamente | Re-abertura possível em 30 dias |
+| Desativação de parceiro | 3 dias úteis | Escalar para gestor de canal | Registro em ENG-06 |
+| Contestação de atribuição de lead | 5 dias úteis | Atribuir ao canal com registro mais antigo | Decisão registrada em ENG-06 |
+| Aprovação de exclusividade territorial | 7 dias úteis | Negar por omissão | Solicitante notificado; nova solicitação em 60 dias |
+| Aprovação de revisão de preço | 10 dias úteis | Escalar para diretoria | CAP-08 informado |
+
+### 10.2 Política de DECISION_LOG
+
+Toda decisão de nível 2 ou superior — definida como qualquer decisão que afeta KPIs de mais de um módulo, altera uma constante sistêmica, cria exceção a uma regra de negócio, ou tem impacto financeiro acima do threshold configurado — deve ser registrada no DECISION_LOG via evento `melhoria.decisao.registrada` (ENG-09) com campos obrigatórios: `decisor_id`, `contexto`, `alternativas_consideradas`, `justificativa`, `impacto_estimado`, `data_vigencia`.
+
+---
+
 ## Histórico de Alterações
 
 | Versão | Data | Autor | Descrição |
 |--------|------|-------|-----------|
+| 1.1.0 | 2026-07-01 | Auditoria Arquitetural | Adição de política de deduplicação, forward compatibility, Scheduler como Serviço de Sistema, constantes sistêmicas, políticas de timeout de workflows |
 | 1.0.0 | 2026-06-28 | Guardião da Documentação | Criação do contrato de integração e barramento de eventos |

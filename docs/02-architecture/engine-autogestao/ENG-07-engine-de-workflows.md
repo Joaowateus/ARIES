@@ -285,7 +285,7 @@ erro_descricao      TEXT
 |--------|--------|----------------|
 | `lead.criado` | CAP-02 / CRM | Verificar workflows com gatilho correspondente |
 | `oportunidade.ganha` | CAP-03 / CRM | Verificar workflows de pós-venda |
-| `cliente.contrato_assinado` | CAP-03 | Acionar workflow de ativação de cliente |
+| `oportunidade.ganha` | CAP-03 | Acionar workflow de ativação de cliente (CAP-05 e CAP-04 derivam seus eventos internos) |
 | `kpi.limiar_cruzado` | ENG-02 | Acionar workflows de resposta automática a desvio |
 | `processo.sla_violado` | ENG-01 | Acionar workflow de escalonamento automático |
 | `alerta.criado` | ENG-03 | Acionar workflows de resposta a alertas específicos |

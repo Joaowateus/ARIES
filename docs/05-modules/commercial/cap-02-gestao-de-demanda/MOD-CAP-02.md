@@ -413,7 +413,7 @@ Ao receber `mercado.icp.atualizado`, o módulo DEVE recalcular o ICP Score de to
 | `demanda.lead.em_qualificacao` | Lead adequado em processo de descoberta adicional | `{lead_id, icp_score, responsavel_sdr}` |
 | `demanda.lead.descartado` | Lead descartado (fora ICP ou sem potencial) | `{lead_id, motivo_descarte, canal_id, icp_score}` |
 | `demanda.lead.sla_violado` | Primeiro contato não realizado no prazo | `{lead_id, canal_id, sla_configurado_horas, tempo_decorrido_horas, responsavel}` |
-| `demanda.pipeline.abaixo_minimo` | Volume do pipeline < 2.5× a meta | `{cobertura_atual, meta_cobertura, deficit_leads, segmentos_deficitarios[]}` |
+| `demanda.pipeline.minimo_violado` | Volume do pipeline < 2.5× a meta | `{cobertura_atual, meta_cobertura, deficit_leads, segmentos_deficitarios[]}` |
 | `demanda.pipeline.recalibrado` | Pipeline recalculado após ICP atualizado | `{icp_versao_anterior, icp_versao_nova, leads_reclassificados, mudancas_resumo_json}` |
 | `demanda.canal.em_avaliacao` | Canal com CPL acima do limite por 2 meses | `{canal_id, cpl_atual, cpl_limite, meses_acima}` |
 | `demanda.cadencia.convertida` | Cadência outbound gerou lead qualificado | `{cadencia_id, lead_id, touchpoint_conversao, tentativas_ate_conversao}` |
@@ -460,7 +460,7 @@ Ao receber `mercado.icp.atualizado`, o módulo DEVE recalcular o ICP Score de to
 | ID | Condição | Severidade | Ação |
 |----|---------|-----------|------|
 | ALT-DM-01 | SLA de primeiro contato violado | WARNING | Notificar SDR + gestor imediatamente |
-| ALT-DM-02 | Cobertura de pipeline < 2.5× | WARNING | Publicar `demanda.pipeline.abaixo_minimo`; revisar canais |
+| ALT-DM-02 | Cobertura de pipeline < 2.5× | WARNING | Publicar `demanda.pipeline.minimo_violado`; revisar canais |
 | ALT-DM-03 | Cobertura de pipeline < 2× | CRITICAL | Escalar para liderança; plano de demanda emergencial |
 | ALT-DM-04 | Taxa de leads dentro do ICP < 50% | WARNING | Revisar fontes de captação; verificar calibração do ICP score |
 | ALT-DM-05 | Taxa de conversão MQL→SQL < 30% | WARNING | Disparar diagnóstico ENG-04; revisar critérios SQL |
@@ -611,7 +611,7 @@ eventos_publicados:
     condicao: "lead descartado com motivo estruturado"
   - evento: "demanda.lead.sla_violado"
     condicao: "primeiro contato não realizado no prazo"
-  - evento: "demanda.pipeline.abaixo_minimo"
+  - evento: "demanda.pipeline.minimo_violado"
     condicao: "cobertura de pipeline < 2.5×"
   - evento: "demanda.pipeline.recalibrado"
     condicao: "recalculado após ICP atualizado"
@@ -642,6 +642,9 @@ eventos_consumidos:
   - evento: "melhoria.item.implementado"
     origem: "ENG-09"
     acao: "revisar processos impactados"
+  - evento: "performance.metas_atualizadas"
+    origem: "CAP-08"
+    acao: "atualizar meta de volume de leads e pipeline coverage de referência; recalibrar limiares de alerta"
 
 kpis_registrados:
   - id: "KPI-DM-01"
@@ -788,6 +791,9 @@ conectores_utilizados:
   - "CONN-LINKEDIN"
   - "CONN-MENSAGERIA"
   - "CONN-ADS"
+  - id: "CONN-MARKETING-AUTOMATION"
+    tipo: BIDIRECTIONAL
+    proposito: "Transferir leads em estado em_nutricao para sistema externo de automação de marketing; receber notificação quando lead re-qualificado retorna ao pipeline"
 
 permissoes_necessarias:
   - recurso: "leads"

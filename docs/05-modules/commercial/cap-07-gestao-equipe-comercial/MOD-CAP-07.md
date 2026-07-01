@@ -486,6 +486,9 @@ eventos_consumidos:
   - evento: "melhoria.item.implementado"
     origem: "ENG-09"
     acao: "revisar processos impactados"
+  - evento: "performance.metas_atualizadas"
+    origem: "CAP-08"
+    acao: "atualizar metas de headcount e produtividade por papel; recalibrar planejamento de capacidade"
 
 kpis_registrados:
   - id: "KPI-EC-01"
