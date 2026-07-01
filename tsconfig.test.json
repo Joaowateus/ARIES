@@ -29,7 +29,9 @@
       "@soe/cap-07": ["./packages/cap-07/src/index.ts"],
       "@soe/cap-07/*": ["./packages/cap-07/src/*"],
       "@soe/cap-08": ["./packages/cap-08/src/index.ts"],
-      "@soe/cap-08/*": ["./packages/cap-08/src/*"]
+      "@soe/cap-08/*": ["./packages/cap-08/src/*"],
+      "@soe/cap-09": ["./packages/cap-09/src/index.ts"],
+      "@soe/cap-09/*": ["./packages/cap-09/src/*"]
     }
   },
   "include": [
@@ -49,6 +51,7 @@
     "packages/cap-06/tests/**/*",
     "packages/cap-07/src/**/*",
     "packages/cap-08/src/**/*",
+    "packages/cap-09/src/**/*",
     "tests/**/*"
   ]
 }

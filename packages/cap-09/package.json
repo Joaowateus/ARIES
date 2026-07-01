@@ -1,0 +1,13 @@
+{
+  "name": "@soe/cap-09",
+  "version": "0.1.0",
+  "description": "CAP-09 — Governança e Configuração do Commercial OS",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0",
+    "zod": "^3.25.67"
+  }
+}
