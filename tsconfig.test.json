@@ -33,7 +33,9 @@
       "@soe/cap-09": ["./packages/cap-09/src/index.ts"],
       "@soe/cap-09/*": ["./packages/cap-09/src/*"],
       "@soe/implantacao": ["./packages/implantacao/src/index.ts"],
-      "@soe/implantacao/*": ["./packages/implantacao/src/*"]
+      "@soe/implantacao/*": ["./packages/implantacao/src/*"],
+      "@soe/dashboards": ["./packages/dashboards/src/index.ts"],
+      "@soe/dashboards/*": ["./packages/dashboards/src/*"]
     }
   },
   "include": [
@@ -55,6 +57,7 @@
     "packages/cap-08/src/**/*",
     "packages/cap-09/src/**/*",
     "packages/implantacao/src/**/*",
+    "packages/dashboards/src/**/*",
     "tests/**/*"
   ]
 }
