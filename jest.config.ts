@@ -24,6 +24,8 @@ const paths = {
   '@soe/cap-05/*': ['./packages/cap-05/src/*'],
   '@soe/cap-06': ['./packages/cap-06/src/index.ts'],
   '@soe/cap-06/*': ['./packages/cap-06/src/*'],
+  '@soe/cap-08': ['./packages/cap-08/src/index.ts'],
+  '@soe/cap-08/*': ['./packages/cap-08/src/*'],
 }
 
 const config: Config = {
@@ -37,6 +39,7 @@ const config: Config = {
     '<rootDir>/packages/cap-04/tests/**/*.test.ts',
     '<rootDir>/packages/cap-05/tests/**/*.test.ts',
     '<rootDir>/packages/cap-06/tests/**/*.test.ts',
+    '<rootDir>/packages/cap-08/src/tests/**/*.test.ts',
     '<rootDir>/tests/business-flows/**/*.test.ts',
   ],
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
@@ -55,6 +58,8 @@ const config: Config = {
     '!packages/cap-05/src/index.ts',
     'packages/cap-06/src/**/*.ts',
     '!packages/cap-06/src/index.ts',
+    'packages/cap-08/src/**/*.ts',
+    '!packages/cap-08/src/index.ts',
   ],
   coverageThreshold: {
     global: { branches: 80, functions: 80, lines: 80, statements: 80 },
