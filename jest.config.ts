@@ -14,6 +14,7 @@ const paths = {
   '@soe/core-health': ['./packages/core/health/src/index.ts'],
   '@soe/core-observability': ['./packages/core/observability/src/index.ts'],
   '@soe/cap-01': ['./packages/cap-01/src/index.ts'],
+  '@soe/cap-02': ['./packages/cap-02/src/index.ts'],
 }
 
 const config: Config = {
@@ -22,6 +23,7 @@ const config: Config = {
   testMatch: [
     '<rootDir>/packages/core/*/tests/**/*.test.ts',
     '<rootDir>/packages/cap-01/tests/**/*.test.ts',
+    '<rootDir>/packages/cap-02/tests/**/*.test.ts',
   ],
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
   collectCoverageFrom: [
@@ -29,6 +31,8 @@ const config: Config = {
     '!packages/core/*/src/index.ts',
     'packages/cap-01/src/**/*.ts',
     '!packages/cap-01/src/index.ts',
+    'packages/cap-02/src/**/*.ts',
+    '!packages/cap-02/src/index.ts',
   ],
   coverageThreshold: {
     global: { branches: 80, functions: 80, lines: 80, statements: 80 },

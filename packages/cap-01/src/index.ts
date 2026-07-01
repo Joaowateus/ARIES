@@ -44,3 +44,11 @@ export { CAP01_EVENT_TYPES } from './infrastructure/events/cap01-events'
 
 // Business rules
 export * from './domain/rules/BusinessRules'
+
+// Bootstrap
+export { bootstrapCap01 } from './bootstrap'
+export type { Cap01Container } from './bootstrap'
+
+// Event handlers
+export { OportunidadeEncerradaHandler } from './infrastructure/handlers/OportunidadeEncerradaHandler'
+export type { OportunidadeEncerradaPayload } from './infrastructure/handlers/OportunidadeEncerradaHandler'

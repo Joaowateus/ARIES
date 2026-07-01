@@ -5,7 +5,8 @@
   "description": "ARIES — Commercial OS (Sales Operating Engine)",
   "workspaces": [
     "packages/core/*",
-    "packages/cap-01"
+    "packages/cap-01",
+    "packages/cap-02"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
