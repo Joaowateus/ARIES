@@ -1,0 +1,26 @@
+{
+  "name": "@soe/cap-01",
+  "version": "2.0.0",
+  "description": "CAP-01 — Inteligência de Mercado: base epistêmica do Commercial OS",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@soe/core-config": "*",
+    "@soe/core-logger": "*",
+    "@soe/core-errors": "*",
+    "@soe/core-time": "*",
+    "@soe/core-identity": "*",
+    "@soe/core-validation": "*",
+    "@soe/core-events": "*",
+    "@soe/core-audit": "*",
+    "@soe/core-health": "*",
+    "@soe/core-observability": "*",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {}
+}

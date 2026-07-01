@@ -13,16 +13,22 @@ const paths = {
   '@soe/core-audit': ['./packages/core/audit/src/index.ts'],
   '@soe/core-health': ['./packages/core/health/src/index.ts'],
   '@soe/core-observability': ['./packages/core/observability/src/index.ts'],
+  '@soe/cap-01': ['./packages/cap-01/src/index.ts'],
 }
 
 const config: Config = {
   testEnvironment: 'node',
   rootDir: '.',
-  testMatch: ['<rootDir>/packages/core/*/tests/**/*.test.ts'],
+  testMatch: [
+    '<rootDir>/packages/core/*/tests/**/*.test.ts',
+    '<rootDir>/packages/cap-01/tests/**/*.test.ts',
+  ],
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
   collectCoverageFrom: [
     'packages/core/*/src/**/*.ts',
     '!packages/core/*/src/index.ts',
+    'packages/cap-01/src/**/*.ts',
+    '!packages/cap-01/src/index.ts',
   ],
   coverageThreshold: {
     global: { branches: 80, functions: 80, lines: 80, statements: 80 },
