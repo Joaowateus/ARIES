@@ -1,0 +1,15 @@
+{
+  "name": "@soe/core-config",
+  "version": "1.0.0",
+  "description": "CORE-01 — Configuration Engine: centraliza toda configuração do SOE",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {}
+}

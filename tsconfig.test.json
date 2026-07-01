@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "paths": {
+      "@soe/core-config": ["./packages/core/config/src/index.ts"],
+      "@soe/core-logger": ["./packages/core/logger/src/index.ts"],
+      "@soe/core-errors": ["./packages/core/errors/src/index.ts"],
+      "@soe/core-time": ["./packages/core/time/src/index.ts"],
+      "@soe/core-identity": ["./packages/core/identity/src/index.ts"],
+      "@soe/core-validation": ["./packages/core/validation/src/index.ts"],
+      "@soe/core-events": ["./packages/core/events/src/index.ts"],
+      "@soe/core-audit": ["./packages/core/audit/src/index.ts"],
+      "@soe/core-health": ["./packages/core/health/src/index.ts"],
+      "@soe/core-observability": ["./packages/core/observability/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/core/*/src/**/*",
+    "packages/core/*/tests/**/*"
+  ]
+}

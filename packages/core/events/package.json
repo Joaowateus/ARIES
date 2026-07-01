@@ -1,0 +1,20 @@
+{
+  "name": "@soe/core-events",
+  "version": "1.0.0",
+  "description": "CORE-04 — Event Publisher: publicador oficial do CUE com validação e idempotência",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@soe/core-time": "*",
+    "@soe/core-logger": "*",
+    "@soe/core-errors": "*",
+    "@soe/core-validation": "*",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {}
+}

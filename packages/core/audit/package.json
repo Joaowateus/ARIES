@@ -1,0 +1,19 @@
+{
+  "name": "@soe/core-audit",
+  "version": "1.0.0",
+  "description": "CORE-06 — Audit Engine: auditoria automática de toda alteração persistida",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@soe/core-time": "*",
+    "@soe/core-identity": "*",
+    "@soe/core-events": "*",
+    "@soe/core-logger": "*",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {}
+}

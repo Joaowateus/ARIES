@@ -1,0 +1,16 @@
+{
+  "name": "@soe/core-logger",
+  "version": "1.0.0",
+  "description": "CORE-02 — Logging Engine: logs estruturados com rastreabilidade completa",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@soe/core-time": "*",
+    "@soe/core-identity": "*"
+  },
+  "devDependencies": {}
+}

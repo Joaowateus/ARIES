@@ -1,0 +1,17 @@
+{
+  "name": "@soe/core-observability",
+  "version": "1.0.0",
+  "description": "CORE-10 — Observability: métricas, tracing e correlação distribuída",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@soe/core-time": "*",
+    "@soe/core-identity": "*",
+    "@soe/core-logger": "*"
+  },
+  "devDependencies": {}
+}

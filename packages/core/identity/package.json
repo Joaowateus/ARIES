@@ -1,0 +1,13 @@
+{
+  "name": "@soe/core-identity",
+  "version": "1.0.0",
+  "description": "CORE-05 — Identity Layer: abstração de identidade e contexto de execução",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

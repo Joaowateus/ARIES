@@ -1,0 +1,17 @@
+{
+  "name": "@soe/core-health",
+  "version": "1.0.0",
+  "description": "CORE-09 — Health Engine: health checks centralizados e ISA (Índice de Saúde Arquitetural)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@soe/core-time": "*",
+    "@soe/core-logger": "*",
+    "@soe/core-config": "*"
+  },
+  "devDependencies": {}
+}
