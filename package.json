@@ -7,7 +7,8 @@
     "packages/core/*",
     "packages/cap-01",
     "packages/cap-02",
-    "packages/cap-03"
+    "packages/cap-03",
+    "packages/cap-04"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",

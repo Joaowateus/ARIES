@@ -13,11 +13,28 @@
       "@soe/core-events": ["./packages/core/events/src/index.ts"],
       "@soe/core-audit": ["./packages/core/audit/src/index.ts"],
       "@soe/core-health": ["./packages/core/health/src/index.ts"],
-      "@soe/core-observability": ["./packages/core/observability/src/index.ts"]
+      "@soe/core-observability": ["./packages/core/observability/src/index.ts"],
+      "@soe/cap-01": ["./packages/cap-01/src/index.ts"],
+      "@soe/cap-01/*": ["./packages/cap-01/src/*"],
+      "@soe/cap-02": ["./packages/cap-02/src/index.ts"],
+      "@soe/cap-02/*": ["./packages/cap-02/src/*"],
+      "@soe/cap-03": ["./packages/cap-03/src/index.ts"],
+      "@soe/cap-03/*": ["./packages/cap-03/src/*"],
+      "@soe/cap-04": ["./packages/cap-04/src/index.ts"],
+      "@soe/cap-04/*": ["./packages/cap-04/src/*"]
     }
   },
   "include": [
     "packages/core/*/src/**/*",
-    "packages/core/*/tests/**/*"
+    "packages/core/*/tests/**/*",
+    "packages/cap-01/src/**/*",
+    "packages/cap-01/tests/**/*",
+    "packages/cap-02/src/**/*",
+    "packages/cap-02/tests/**/*",
+    "packages/cap-03/src/**/*",
+    "packages/cap-03/tests/**/*",
+    "packages/cap-04/src/**/*",
+    "packages/cap-04/tests/**/*",
+    "tests/**/*"
   ]
 }

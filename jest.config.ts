@@ -16,6 +16,10 @@ const paths = {
   '@soe/cap-01': ['./packages/cap-01/src/index.ts'],
   '@soe/cap-02': ['./packages/cap-02/src/index.ts'],
   '@soe/cap-03': ['./packages/cap-03/src/index.ts'],
+  '@soe/cap-04': ['./packages/cap-04/src/index.ts'],
+  '@soe/cap-04/*': ['./packages/cap-04/src/*'],
+  '@soe/cap-02/*': ['./packages/cap-02/src/*'],
+  '@soe/cap-03/*': ['./packages/cap-03/src/*'],
 }
 
 const config: Config = {
@@ -26,6 +30,8 @@ const config: Config = {
     '<rootDir>/packages/cap-01/tests/**/*.test.ts',
     '<rootDir>/packages/cap-02/tests/**/*.test.ts',
     '<rootDir>/packages/cap-03/tests/**/*.test.ts',
+    '<rootDir>/packages/cap-04/tests/**/*.test.ts',
+    '<rootDir>/tests/business-flows/**/*.test.ts',
   ],
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
   collectCoverageFrom: [
@@ -37,6 +43,8 @@ const config: Config = {
     '!packages/cap-02/src/index.ts',
     'packages/cap-03/src/**/*.ts',
     '!packages/cap-03/src/index.ts',
+    'packages/cap-04/src/**/*.ts',
+    '!packages/cap-04/src/index.ts',
   ],
   coverageThreshold: {
     global: { branches: 80, functions: 80, lines: 80, statements: 80 },

@@ -1,0 +1,13 @@
+{
+  "name": "@soe/cap-04",
+  "version": "1.0.0",
+  "description": "CAP-04 — Gestão de Receita (MRR/ARR)",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "uuid": "^10.0.0",
+    "zod": "^3.23.0"
+  }
+}
