@@ -1,0 +1,13 @@
+{
+  "name": "@soe/configuracao",
+  "version": "0.1.0",
+  "description": "Sprint 4 — Configuração: produtos, metas, políticas, motivos de perda e segmentos",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@soe/cap-06": "*",
+    "uuid": "^11.1.0"
+  }
+}

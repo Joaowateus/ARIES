@@ -36,6 +36,8 @@ const paths = {
   '@soe/dashboards/*': ['./packages/dashboards/src/*'],
   '@soe/administracao': ['./packages/administracao/src/index.ts'],
   '@soe/administracao/*': ['./packages/administracao/src/*'],
+  '@soe/configuracao': ['./packages/configuracao/src/index.ts'],
+  '@soe/configuracao/*': ['./packages/configuracao/src/*'],
 }
 
 const config: Config = {
@@ -55,6 +57,7 @@ const config: Config = {
     '<rootDir>/packages/implantacao/src/tests/**/*.test.ts',
     '<rootDir>/packages/dashboards/src/tests/**/*.test.ts',
     '<rootDir>/packages/administracao/src/tests/**/*.test.ts',
+    '<rootDir>/packages/configuracao/src/tests/**/*.test.ts',
     '<rootDir>/tests/business-flows/**/*.test.ts',
   ],
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
@@ -85,6 +88,8 @@ const config: Config = {
     '!packages/dashboards/src/index.ts',
     'packages/administracao/src/**/*.ts',
     '!packages/administracao/src/index.ts',
+    'packages/configuracao/src/**/*.ts',
+    '!packages/configuracao/src/index.ts',
   ],
   coverageThreshold: {
     global: { branches: 80, functions: 80, lines: 80, statements: 80 },
