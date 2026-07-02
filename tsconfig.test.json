@@ -39,7 +39,9 @@
       "@soe/administracao": ["./packages/administracao/src/index.ts"],
       "@soe/administracao/*": ["./packages/administracao/src/*"],
       "@soe/configuracao": ["./packages/configuracao/src/index.ts"],
-      "@soe/configuracao/*": ["./packages/configuracao/src/*"]
+      "@soe/configuracao/*": ["./packages/configuracao/src/*"],
+      "@soe/inteligencia": ["./packages/inteligencia/src/index.ts"],
+      "@soe/inteligencia/*": ["./packages/inteligencia/src/*"]
     }
   },
   "include": [
@@ -64,6 +66,7 @@
     "packages/dashboards/src/**/*",
     "packages/administracao/src/**/*",
     "packages/configuracao/src/**/*",
+    "packages/inteligencia/src/**/*",
     "tests/**/*"
   ]
 }

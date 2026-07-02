@@ -1,0 +1,13 @@
+{
+  "name": "@soe/inteligencia",
+  "version": "0.1.0",
+  "description": "Sprint 5 — Centro de Inteligência: surface layer sobre CAP-08 e CAP-09",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@soe/cap-08": "*",
+    "@soe/cap-09": "*"
+  }
+}

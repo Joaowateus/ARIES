@@ -38,6 +38,8 @@ const paths = {
   '@soe/administracao/*': ['./packages/administracao/src/*'],
   '@soe/configuracao': ['./packages/configuracao/src/index.ts'],
   '@soe/configuracao/*': ['./packages/configuracao/src/*'],
+  '@soe/inteligencia': ['./packages/inteligencia/src/index.ts'],
+  '@soe/inteligencia/*': ['./packages/inteligencia/src/*'],
 }
 
 const config: Config = {
@@ -58,6 +60,7 @@ const config: Config = {
     '<rootDir>/packages/dashboards/src/tests/**/*.test.ts',
     '<rootDir>/packages/administracao/src/tests/**/*.test.ts',
     '<rootDir>/packages/configuracao/src/tests/**/*.test.ts',
+    '<rootDir>/packages/inteligencia/src/tests/**/*.test.ts',
     '<rootDir>/tests/business-flows/**/*.test.ts',
   ],
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
@@ -90,6 +93,8 @@ const config: Config = {
     '!packages/administracao/src/index.ts',
     'packages/configuracao/src/**/*.ts',
     '!packages/configuracao/src/index.ts',
+    'packages/inteligencia/src/**/*.ts',
+    '!packages/inteligencia/src/index.ts',
   ],
   coverageThreshold: {
     global: { branches: 80, functions: 80, lines: 80, statements: 80 },

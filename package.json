@@ -17,7 +17,8 @@
     "packages/implantacao",
     "packages/dashboards",
     "packages/administracao",
-    "packages/configuracao"
+    "packages/configuracao",
+    "packages/inteligencia"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
