@@ -43,7 +43,7 @@ export interface Oportunidade {
   valor?: number
   observacoes?: string
   responsavel?: { id: string; nome: string }
-  produto?: { id: string; nome: string; marca?: string; modelo?: string }
+  unidade?: { id: string; nome: string; marca?: string; modelo?: string; ano?: number; cor?: string; precoBase?: number }
   criadaEm: string
   atualizadaEm: string
 }
@@ -55,8 +55,37 @@ export interface Produto {
   marca?: string
   modelo?: string
   ano?: number
+  cor?: string
+  chassi?: string
+  placa?: string
+  km?: number
   precoBase?: number
+  situacao: string
+}
+
+export interface Contrato {
+  id: string
+  nomeCliente: string
+  cpfCliente?: string
+  telefoneCliente?: string
+  valorTotal: number
+  entrada: number
+  parcelas: number
   status: string
+  criadoEm: string
+  unidade?: { id: string; nome: string; marca?: string; modelo?: string }
+  vendedor?: { id: string; nome: string }
+  contasReceber: ContaReceber[]
+}
+
+export interface ContaReceber {
+  id: string
+  descricao: string
+  valor: number
+  vencimento: string
+  status: string
+  pago?: number
+  pagoEm?: string
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -102,13 +131,40 @@ export const api = {
       }),
   },
   produtos: {
-    listar: () => request<Produto[]>('/produtos'),
+    listar: (situacao?: string) => {
+      const qs = situacao ? `?situacao=${situacao}` : ''
+      return request<Produto[]>(`/produtos${qs}`)
+    },
     criar: (data: object) =>
       request<Produto>('/produtos', { method: 'POST', body: JSON.stringify(data) }),
     editar: (id: string, data: object) =>
       request<{ ok: boolean }>(`/produtos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) =>
       request<{ ok: boolean }>(`/produtos/${id}`, { method: 'DELETE' }),
+  },
+  contratos: {
+    listar: () => request<Contrato[]>('/contratos'),
+    criar: (data: object) => request<Contrato>('/contratos', { method: 'POST', body: JSON.stringify(data) }),
+    get: (id: string) => request<Contrato>(`/contratos/${id}`),
+  },
+  financeiro: {
+    contasReceber: (status?: string) => {
+      const qs = status ? `?status=${status}` : ''
+      return request<(ContaReceber & { contrato: { id: string; nomeCliente: string; unidade?: { nome: string } } })[]>(`/financeiro/contas-receber${qs}`)
+    },
+    baixar: (id: string, valorPago: number) =>
+      request<ContaReceber>(`/financeiro/contas-receber/${id}/baixa`, {
+        method: 'PATCH',
+        body: JSON.stringify({ valorPago }),
+      }),
+    resumo: () => request<{
+      totalRecebido: number
+      totalPendente: number
+      totalAtrasado: number
+      contasAtrasadas: number
+      receitaMes: number
+      previsaoMes: number
+    }>('/financeiro/resumo'),
   },
   oportunidades: {
     listar: (params?: { estagio?: string; responsavelId?: string }) => {

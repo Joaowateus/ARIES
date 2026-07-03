@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aries-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aries
+      POSTGRES_USER: aries
+      POSTGRES_PASSWORD: aries2026dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - aries-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aries -d aries"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  aries-pgdata:

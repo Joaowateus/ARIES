@@ -67,8 +67,8 @@ export default function FunilPage() {
                 {itens.map(op => (
                   <div key={op.id} className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
                     <div className="font-medium text-sm text-gray-900 truncate">{op.nomeCliente}</div>
-                    {op.produto && (
-                      <div className="text-xs text-gray-500 mt-0.5 truncate">{op.produto.nome}</div>
+                    {op.unidade && (
+                      <div className="text-xs text-gray-500 mt-0.5 truncate">{op.unidade.nome}</div>
                     )}
                     {op.valor && (
                       <div className="text-xs font-medium text-green-700 mt-1">

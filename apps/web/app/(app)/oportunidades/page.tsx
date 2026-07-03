@@ -105,7 +105,7 @@ export default function OportunidadesPage() {
                       {ESTAGIO_LABEL[op.estagio]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{op.produto?.nome ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{op.unidade?.nome ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{op.responsavel?.nome ?? '—'}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">
                     {op.valor ? op.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}

@@ -3,99 +3,153 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Empresa {
-  id          String   @id @default(cuid())
-  nome        String
-  cnpj        String?  @unique
-  segmento    String   @default("motos")
-  criadaEm   DateTime @default(now())
+  id           String   @id @default(cuid())
+  nome         String
+  cnpj         String?  @unique
+  segmento     String   @default("motos")
+  criadaEm    DateTime @default(now())
   atualizadaEm DateTime @updatedAt
 
-  usuarios    Usuario[]
-  produtos    Produto[]
-  metas       Meta[]
+  usuarios      Usuario[]
+  unidades      Unidade[]
+  metas         Meta[]
   oportunidades Oportunidade[]
+  contratos     Contrato[]
+  contasReceber ContaReceber[]
 
   @@map("empresas")
 }
 
 model Usuario {
-  id          String   @id @default(cuid())
-  empresaId   String
-  nome        String
-  email       String   @unique
-  senhaHash   String
-  papel       String   @default("VENDEDOR")
-  status      String   @default("ATIVO")
-  criadoEm   DateTime @default(now())
+  id           String   @id @default(cuid())
+  empresaId    String
+  nome         String
+  email        String   @unique
+  senhaHash    String
+  papel        String   @default("VENDEDOR")
+  status       String   @default("ATIVO")
+  criadoEm    DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  empresa      Empresa       @relation(fields: [empresaId], references: [id])
   oportunidades Oportunidade[]
+  contratos    Contrato[]
 
   @@map("usuarios")
 }
 
-model Produto {
-  id          String   @id @default(cuid())
-  empresaId   String
-  nome        String
-  categoria   String   @default("MOTO")
-  marca       String?
-  modelo      String?
-  ano         Int?
-  precoBase   Float?
-  status      String   @default("ATIVO")
-  criadoEm   DateTime @default(now())
+// Unidade = moto específica em estoque (com chassi, placa, etc.)
+model Unidade {
+  id           String   @id @default(cuid())
+  empresaId    String
+  nome         String                       // ex: "Honda CG 160 Titan 2024 Vermelha"
+  categoria    String   @default("MOTO")
+  marca        String?
+  modelo       String?
+  ano          Int?
+  cor          String?
+  chassi       String?  @unique
+  placa        String?
+  km           Int?     @default(0)
+  precoBase    Float?
+  situacao     String   @default("DISPONIVEL") // DISPONIVEL | RESERVADA | VENDIDA | INATIVO
+  criadoEm    DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  empresa      Empresa       @relation(fields: [empresaId], references: [id])
   oportunidades Oportunidade[]
+  contratos    Contrato[]
 
-  @@map("produtos")
+  @@map("unidades")
 }
 
 model Meta {
-  id          String   @id @default(cuid())
-  empresaId   String
-  titulo      String
-  tipo        String   @default("QUANTIDADE")
-  valor       Float
-  periodo     String
-  inicioEm    DateTime
-  fimEm       DateTime
-  status      String   @default("ATIVA")
-  criadaEm   DateTime @default(now())
+  id         String   @id @default(cuid())
+  empresaId  String
+  titulo     String
+  tipo       String   @default("QUANTIDADE")
+  valor      Float
+  periodo    String
+  inicioEm   DateTime
+  fimEm      DateTime
+  status     String   @default("ATIVA")
+  criadaEm  DateTime @default(now())
 
-  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
 
   @@map("metas")
 }
 
 model Oportunidade {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   empresaId     String
   responsavelId String?
-  produtoId     String?
+  unidadeId     String?
   nomeCliente   String
   telefone      String?
   email         String?
-  estagio       String   @default("NOVO_LEAD")
-  origem        String   @default("MANUAL")
+  estagio       String    @default("NOVO_LEAD")
+  origem        String    @default("MANUAL")
   valor         Float?
   observacoes   String?
-  criadaEm     DateTime @default(now())
-  atualizadaEm DateTime @updatedAt
+  criadaEm     DateTime  @default(now())
+  atualizadaEm DateTime  @updatedAt
   fechadaEm    DateTime?
   statusFinal   String?
 
-  empresa      Empresa   @relation(fields: [empresaId], references: [id])
-  responsavel  Usuario?  @relation(fields: [responsavelId], references: [id])
-  produto      Produto?  @relation(fields: [produtoId], references: [id])
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  responsavel Usuario?   @relation(fields: [responsavelId], references: [id])
+  unidade     Unidade?   @relation(fields: [unidadeId], references: [id])
+  contrato    Contrato?
 
   @@map("oportunidades")
+}
+
+model Contrato {
+  id              String   @id @default(cuid())
+  empresaId       String
+  oportunidadeId  String   @unique
+  unidadeId       String?
+  vendedorId      String?
+  nomeCliente     String
+  cpfCliente      String?
+  telefoneCliente String?
+  valorTotal      Float
+  entrada         Float?   @default(0)
+  parcelas        Int?     @default(1)
+  observacoes     String?
+  status          String   @default("ATIVO")  // ATIVO | CANCELADO | ENCERRADO
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  empresa      Empresa        @relation(fields: [empresaId], references: [id])
+  oportunidade Oportunidade   @relation(fields: [oportunidadeId], references: [id])
+  unidade      Unidade?       @relation(fields: [unidadeId], references: [id])
+  vendedor     Usuario?       @relation(fields: [vendedorId], references: [id])
+  contasReceber ContaReceber[]
+
+  @@map("contratos")
+}
+
+model ContaReceber {
+  id         String    @id @default(cuid())
+  empresaId  String
+  contratoId String
+  descricao  String
+  valor      Float
+  vencimento DateTime
+  status     String    @default("PENDENTE")  // PENDENTE | PAGO | ATRASADO | CANCELADO
+  pago       Float?    @default(0)
+  pagoEm    DateTime?
+  criadaEm  DateTime  @default(now())
+
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  contrato   Contrato @relation(fields: [contratoId], references: [id])
+
+  @@map("contas_receber")
 }

@@ -16,7 +16,7 @@ export default function NovaOportunidadePage() {
     nomeCliente: '',
     telefone: '',
     email: '',
-    produtoId: '',
+    unidadeId: '',
     responsavelId: '',
     origem: 'MANUAL',
     valor: '',
@@ -42,7 +42,7 @@ export default function NovaOportunidadePage() {
       await api.oportunidades.criar({
         ...form,
         valor: form.valor ? Number(form.valor) : undefined,
-        produtoId: form.produtoId || undefined,
+        unidadeId: form.unidadeId || undefined,
         responsavelId: form.responsavelId || undefined,
         email: form.email || undefined,
       })
@@ -101,8 +101,8 @@ export default function NovaOportunidadePage() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Moto de interesse</label>
           <select
-            value={form.produtoId}
-            onChange={e => set('produtoId', e.target.value)}
+            value={form.unidadeId}
+            onChange={e => set('unidadeId', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="">Selecionar moto...</option>

@@ -19,8 +19,10 @@ const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
   { href: '/oportunidades', label: 'Oportunidades', icon: '🎯' },
-  { href: '/produtos', label: 'Motos / Produtos', icon: '🏍️' },
-  { href: '/vendedores', label: 'Vendedores', icon: '👥' },
+  { href: '/contratos', label: 'Contratos', icon: '📄' },
+  { href: '/financeiro', label: 'Financeiro', icon: '💰' },
+  { href: '/estoque', label: 'Estoque', icon: '🏍️' },
+  { href: '/vendedores', label: 'Equipe', icon: '👥' },
 ]
 
 export default function Sidebar() {

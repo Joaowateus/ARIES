@@ -11,26 +11,29 @@ const criarSchema = z.object({
   nomeCliente: z.string().min(2),
   telefone: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
-  produtoId: z.string().optional(),
+  unidadeId: z.string().optional(),
   responsavelId: z.string().optional(),
   origem: z.string().default('MANUAL'),
   valor: z.number().positive().optional(),
   observacoes: z.string().optional(),
 })
 
+const include = {
+  responsavel: { select: { id: true, nome: true } },
+  unidade: { select: { id: true, nome: true, marca: true, modelo: true, ano: true, cor: true, precoBase: true } },
+}
+
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const estagio = typeof req.query.estagio === 'string' ? req.query.estagio : undefined
   const responsavelId = typeof req.query.responsavelId === 'string' ? req.query.responsavelId : undefined
+
   const oportunidades = await prisma.oportunidade.findMany({
     where: {
       empresaId: req.user!.empresaId,
       ...(estagio ? { estagio } : {}),
       ...(responsavelId ? { responsavelId } : {}),
     },
-    include: {
-      responsavel: { select: { id: true, nome: true } },
-      produto: { select: { id: true, nome: true, marca: true, modelo: true } },
-    },
+    include,
     orderBy: { atualizadaEm: 'desc' },
   })
   res.json(oportunidades)
@@ -51,10 +54,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       responsavelId: data.responsavelId ?? req.user!.sub,
       estagio: 'NOVO_LEAD',
     },
-    include: {
-      responsavel: { select: { id: true, nome: true } },
-      produto: { select: { id: true, nome: true } },
-    },
+    include,
   })
   res.status(201).json(oportunidade)
 })
@@ -77,13 +77,18 @@ router.patch('/:id/estagio', requireAuth, async (req: Request, res: Response) =>
   const fechadaEm = ['GANHO', 'PERDIDO'].includes(estagio) ? new Date() : null
   const statusFinal = ['GANHO', 'PERDIDO'].includes(estagio) ? estagio : null
 
+  // Se GANHO e tem unidade, reservar a unidade
+  if (estagio === 'GANHO' && oportunidade.unidadeId) {
+    await prisma.unidade.update({
+      where: { id: oportunidade.unidadeId },
+      data: { situacao: 'RESERVADA' },
+    })
+  }
+
   const atualizada = await prisma.oportunidade.update({
     where: { id: String(req.params.id) },
     data: { estagio, fechadaEm, statusFinal },
-    include: {
-      responsavel: { select: { id: true, nome: true } },
-      produto: { select: { id: true, nome: true } },
-    },
+    include,
   })
   res.json(atualizada)
 })
