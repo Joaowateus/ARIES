@@ -1,6 +1,13 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
+import { pinoHttp } from 'pino-http'
+import { prisma } from './lib/prisma'
+import { logger } from './lib/logger'
+import { requestId } from './middleware/requestId'
+import { errorHandler, notFound } from './middleware/errorHandler'
 import authRoutes from './routes/auth'
 import empresaRoutes from './routes/empresa'
 import usuariosRoutes from './routes/usuarios'
@@ -12,15 +19,70 @@ import dashboardRoutes from './routes/dashboard'
 
 const app = express()
 
+// Security headers
+app.use(helmet())
+
+// Request ID — must be first so all middleware/handlers can use it
+app.use(requestId)
+
+// Structured HTTP logging
+app.use(pinoHttp({
+  logger,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  customProps: (req: any) => ({ traceId: req.requestId }),
+  quietReqLogger: true,
+}))
+
+// CORS
 app.use(cors({
   origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
   credentials: true,
 }))
-app.use(express.json())
 
-app.get('/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }))
+// Global rate limit — 200 req/min per IP
+app.use(rateLimit({
+  windowMs: 60_000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, code: 'RATE_LIMIT', message: 'Muitas requisições. Tente novamente em breve.' },
+}))
 
-app.use('/auth', authRoutes)
+// Stricter rate limit for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, code: 'RATE_LIMIT_AUTH', message: 'Muitas tentativas de login. Aguarde 15 minutos.' },
+})
+
+app.use(express.json({ limit: '1mb' }))
+
+// Health check
+const START_TIME = Date.now()
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    res.json({
+      status: 'ok',
+      database: 'ok',
+      version: process.env.npm_package_version ?? '1.0.0',
+      uptime: Math.floor((Date.now() - START_TIME) / 1000),
+      ts: new Date().toISOString(),
+    })
+  } catch {
+    res.status(503).json({
+      status: 'degraded',
+      database: 'error',
+      version: process.env.npm_package_version ?? '1.0.0',
+      uptime: Math.floor((Date.now() - START_TIME) / 1000),
+      ts: new Date().toISOString(),
+    })
+  }
+})
+
+app.use('/auth', authLimiter, authRoutes)
 app.use('/empresa', empresaRoutes)
 app.use('/usuarios', usuariosRoutes)
 app.use('/produtos', produtosRoutes)
@@ -29,9 +91,13 @@ app.use('/contratos', contratosRoutes)
 app.use('/financeiro', financeiroRoutes)
 app.use('/dashboard', dashboardRoutes)
 
+// 404 and error handlers must be last
+app.use(notFound)
+app.use(errorHandler)
+
 const PORT = Number(process.env.PORT ?? 3001)
 app.listen(PORT, () => {
-  console.log(`API ARIES rodando em http://localhost:${PORT}`)
+  logger.info({ port: PORT }, 'API ARIES iniciada')
 })
 
 export default app
