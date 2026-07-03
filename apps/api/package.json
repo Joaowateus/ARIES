@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "node --require ts-node/register src/index.ts",
-    "build": "tsc",
+    "build": "tsc && npx tsc --project tsconfig.seed.json",
     "start": "node dist/index.js",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
