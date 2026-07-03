@@ -68,7 +68,7 @@ function NovoContratoForm() {
     setErro('')
     setLoading(true)
     try {
-      const contrato = await api.contratos.criar({
+      await api.contratos.criar({
         oportunidadeId: form.oportunidadeId,
         nomeCliente: form.nomeCliente,
         cpfCliente: form.cpfCliente || undefined,
@@ -78,7 +78,7 @@ function NovoContratoForm() {
         parcelas,
         observacoes: form.observacoes || undefined,
       })
-      router.push(`/contratos`)
+      router.push('/contratos')
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Erro ao fechar venda')
     } finally {
