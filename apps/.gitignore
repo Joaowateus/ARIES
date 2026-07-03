@@ -1,0 +1,8 @@
+api/node_modules/
+api/dist/
+api/prisma/dev.db
+api/prisma/dev.db-journal
+api/.env
+web/node_modules/
+web/.next/
+web/.env.local

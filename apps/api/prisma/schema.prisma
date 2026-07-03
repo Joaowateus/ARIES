@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Empresa {
+  id          String   @id @default(cuid())
+  nome        String
+  cnpj        String?  @unique
+  segmento    String   @default("motos")
+  criadaEm   DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
+
+  usuarios    Usuario[]
+  produtos    Produto[]
+  metas       Meta[]
+  oportunidades Oportunidade[]
+
+  @@map("empresas")
+}
+
+model Usuario {
+  id          String   @id @default(cuid())
+  empresaId   String
+  nome        String
+  email       String   @unique
+  senhaHash   String
+  papel       String   @default("VENDEDOR")
+  status      String   @default("ATIVO")
+  criadoEm   DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  oportunidades Oportunidade[]
+
+  @@map("usuarios")
+}
+
+model Produto {
+  id          String   @id @default(cuid())
+  empresaId   String
+  nome        String
+  categoria   String   @default("MOTO")
+  marca       String?
+  modelo      String?
+  ano         Int?
+  precoBase   Float?
+  status      String   @default("ATIVO")
+  criadoEm   DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  oportunidades Oportunidade[]
+
+  @@map("produtos")
+}
+
+model Meta {
+  id          String   @id @default(cuid())
+  empresaId   String
+  titulo      String
+  tipo        String   @default("QUANTIDADE")
+  valor       Float
+  periodo     String
+  inicioEm    DateTime
+  fimEm       DateTime
+  status      String   @default("ATIVA")
+  criadaEm   DateTime @default(now())
+
+  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+
+  @@map("metas")
+}
+
+model Oportunidade {
+  id            String   @id @default(cuid())
+  empresaId     String
+  responsavelId String?
+  produtoId     String?
+  nomeCliente   String
+  telefone      String?
+  email         String?
+  estagio       String   @default("NOVO_LEAD")
+  origem        String   @default("MANUAL")
+  valor         Float?
+  observacoes   String?
+  criadaEm     DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
+  fechadaEm    DateTime?
+  statusFinal   String?
+
+  empresa      Empresa   @relation(fields: [empresaId], references: [id])
+  responsavel  Usuario?  @relation(fields: [responsavelId], references: [id])
+  produto      Produto?  @relation(fields: [produtoId], references: [id])
+
+  @@map("oportunidades")
+}

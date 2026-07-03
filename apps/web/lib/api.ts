@@ -1,0 +1,140 @@
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('aries_token')
+}
+
+export function setToken(token: string) {
+  localStorage.setItem('aries_token', token)
+}
+
+export function clearToken() {
+  localStorage.removeItem('aries_token')
+  localStorage.removeItem('aries_user')
+}
+
+export function getUser(): Usuario | null {
+  if (typeof window === 'undefined') return null
+  const raw = localStorage.getItem('aries_user')
+  return raw ? JSON.parse(raw) : null
+}
+
+export function setUser(user: Usuario) {
+  localStorage.setItem('aries_user', JSON.stringify(user))
+}
+
+export interface Usuario {
+  id: string
+  nome: string
+  email: string
+  papel: string
+  empresaId: string
+  status?: string
+}
+
+export interface Oportunidade {
+  id: string
+  nomeCliente: string
+  telefone?: string
+  email?: string
+  estagio: string
+  origem: string
+  valor?: number
+  observacoes?: string
+  responsavel?: { id: string; nome: string }
+  produto?: { id: string; nome: string; marca?: string; modelo?: string }
+  criadaEm: string
+  atualizadaEm: string
+}
+
+export interface Produto {
+  id: string
+  nome: string
+  categoria: string
+  marca?: string
+  modelo?: string
+  ano?: number
+  precoBase?: number
+  status: string
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken()
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers ?? {}),
+    },
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Erro inesperado')
+  return body as T
+}
+
+export const api = {
+  auth: {
+    login: (email: string, senha: string) =>
+      request<{ token: string; usuario: Usuario }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, senha }),
+      }),
+    me: () => request<Usuario>('/auth/me'),
+  },
+  empresa: {
+    setup: (data: object) =>
+      request<{ token: string; empresa: object; usuario: Usuario }>('/empresa/setup', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    get: () => request<object>('/empresa'),
+  },
+  usuarios: {
+    listar: () => request<Usuario[]>('/usuarios'),
+    criar: (data: object) =>
+      request<Usuario>('/usuarios', { method: 'POST', body: JSON.stringify(data) }),
+    alterarStatus: (id: string, status: string) =>
+      request<{ ok: boolean }>(`/usuarios/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+  },
+  produtos: {
+    listar: () => request<Produto[]>('/produtos'),
+    criar: (data: object) =>
+      request<Produto>('/produtos', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: object) =>
+      request<{ ok: boolean }>(`/produtos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remover: (id: string) =>
+      request<{ ok: boolean }>(`/produtos/${id}`, { method: 'DELETE' }),
+  },
+  oportunidades: {
+    listar: (params?: { estagio?: string; responsavelId?: string }) => {
+      const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : ''
+      return request<Oportunidade[]>(`/oportunidades${qs}`)
+    },
+    criar: (data: object) =>
+      request<Oportunidade>('/oportunidades', { method: 'POST', body: JSON.stringify(data) }),
+    moverEstagio: (id: string, estagio: string) =>
+      request<Oportunidade>(`/oportunidades/${id}/estagio`, {
+        method: 'PATCH',
+        body: JSON.stringify({ estagio }),
+      }),
+  },
+  dashboard: {
+    get: () => request<{
+      funil: Record<string, number>
+      totais: {
+        oportunidadesAtivas: number
+        vendasFechadas: number
+        taxaConversao: number
+        receitaFechada: number
+        vendedoresAtivos: number
+        produtosCadastrados: number
+      }
+      recentes: Array<{ id: string; nomeCliente: string; estagio: string; valor?: number }>
+    }>('/dashboard'),
+  },
+}
