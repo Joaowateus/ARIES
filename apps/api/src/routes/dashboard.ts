@@ -8,7 +8,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const empresaId = req.user!.empresaId
   const hoje = new Date()
 
-  const [oportunidades, usuarios, unidades, financeiro] = await Promise.all([
+  const [oportunidades, usuarios, unidades, financeiro, totalUnidades] = await Promise.all([
     prisma.oportunidade.findMany({ where: { empresaId } }),
     prisma.usuario.count({ where: { empresaId, status: 'ATIVO' } }),
     prisma.unidade.groupBy({ by: ['situacao'], where: { empresaId, situacao: { not: 'INATIVO' } }, _count: true }),
@@ -16,6 +16,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       where: { empresaId, status: 'PAGO' },
       _sum: { pago: true },
     }),
+    prisma.unidade.count({ where: { empresaId, situacao: { not: 'INATIVO' } } }),
   ])
 
   const funil: Record<string, number> = {
@@ -43,8 +44,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       oportunidadesAtivas: ativas.length,
       vendasFechadas: ganhas.length,
       taxaConversao,
-      receitaTotal: financeiro._sum.pago ?? 0,
+      receitaFechada: financeiro._sum.pago ?? 0,
       vendedoresAtivos: usuarios,
+      produtosCadastrados: totalUnidades,
       estoque,
     },
     recentes: oportunidades
