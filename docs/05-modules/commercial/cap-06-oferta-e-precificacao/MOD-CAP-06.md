@@ -22,6 +22,13 @@ tags: [commercial-os, cap-06, oferta, precificacao, pricing, tabela-precos, desc
 > **Módulo do Commercial Operating System**
 > Infraestrutura compartilhada: `docs/02-architecture/engine-autogestao/`
 > Contrato de integração: `ENGINE-CONTRATO-DE-INTEGRACAO.md` (ARC-ENG-099)
+>
+> **Especialização de negócio:** a metodologia genérica de oferta/tabela de preços/desconto
+> descrita neste módulo é especializada, para a vertical de compra e venda de motocicletas
+> da MM Negócios Veículos, em `ENGENHARIA-PRECIFICACAO-MOTOS-MM.md` — que define os 10
+> pilares de precificação (LP, margens em camadas, precificação dinâmica por dias de
+> estoque etc.) e é acompanhada da planilha operacional
+> `planilha-precificacao/MM-Negocios-Precificacao-Motos.xlsx`.
 
 ---
 
