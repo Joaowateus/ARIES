@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { PROTOCOLOS_SEED } from './seed-data/protocolos'
+import { PROTOCOLOS_SEED } from '../src/data/protocolos-padrao'
 
 const prisma = new PrismaClient()
 

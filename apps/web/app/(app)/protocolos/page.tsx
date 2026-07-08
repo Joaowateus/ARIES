@@ -12,12 +12,32 @@ export default function ProtocolosPage() {
   const podeGerir = !!user && PAPEIS_GESTAO.includes(user.papel)
   const [protocolos, setProtocolos] = useState<ProtocoloResumo[]>([])
   const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState('')
+  const [carregandoPadrao, setCarregandoPadrao] = useState(false)
 
   const carregar = useCallback(() => {
-    api.protocolos.listar().then(setProtocolos).finally(() => setLoading(false))
+    api.protocolos.listar().then(lista => {
+      setErro('')
+      setProtocolos(lista)
+    }).catch(err => {
+      setErro(err instanceof Error ? err.message : 'Erro ao carregar protocolos')
+    }).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
+
+  async function carregarPadrao() {
+    setCarregandoPadrao(true)
+    setErro('')
+    try {
+      await api.protocolos.carregarPadrao()
+      carregar()
+    } catch (err: unknown) {
+      setErro(err instanceof Error ? err.message : 'Erro ao carregar protocolos padrão')
+    } finally {
+      setCarregandoPadrao(false)
+    }
+  }
 
   if (loading) return <div className="p-8 text-sm text-gray-400">Carregando protocolos...</div>
 
@@ -43,9 +63,19 @@ export default function ProtocolosPage() {
         )}
       </div>
 
+      {erro && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700 mb-4">{erro}</div>
+      )}
+
       {protocolos.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
-          Nenhum protocolo cadastrado ainda.
+          <p className="mb-4">Nenhum protocolo cadastrado ainda.</p>
+          {podeGerir && (
+            <button onClick={carregarPadrao} disabled={carregandoPadrao}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {carregandoPadrao ? 'Carregando...' : 'Carregar os 5 Protocolos Padrão da MM Negócios'}
+            </button>
+          )}
         </div>
       ) : (
         Object.entries(porCategoria).map(([categoria, lista]) => (

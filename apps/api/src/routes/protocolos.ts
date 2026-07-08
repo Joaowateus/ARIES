@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
+import { PROTOCOLOS_SEED } from '../data/protocolos-padrao'
 
 const router = Router()
 
@@ -26,7 +27,7 @@ const etapasPop = z.array(z.object({
 const anexos = z.array(z.object({ titulo: z.string(), itens: z.array(z.string()) })).optional()
 
 const protocoloSchema = z.object({
-  categoria: z.string().default('Comercial'),
+  categoria: z.string().default('Protocolos Comerciais'),
   nome: z.string().min(2),
   versao: z.string().default('1.0.0'),
   status: z.enum(['rascunho', 'ativo', 'em_revisao', 'obsoleto']).default('ativo'),
@@ -154,6 +155,60 @@ router.patch('/:id', requireAuth, requirePapel(...PAPEIS_GESTAO), async (req: Re
     return
   }
   res.json({ ok: true })
+})
+
+// ---------------------------------------------------------------------------
+// Carga dos protocolos padrão (biblioteca inicial da MM Negócios) — útil como
+// rede de segurança quando o seed automático de deploy não roda (ex: serviço
+// hospedado sem hook de migração/seed). Idempotente por nome dentro da empresa.
+// ---------------------------------------------------------------------------
+
+router.post('/seed-padrao', requireAuth, requirePapel(...PAPEIS_GESTAO), async (req: Request, res: Response) => {
+  const empresaId = req.user!.empresaId
+  let criados = 0
+  let existentes = 0
+
+  for (const p of PROTOCOLOS_SEED) {
+    const jaExiste = await prisma.protocolo.findFirst({ where: { empresaId, nome: p.nome } })
+    if (jaExiste) {
+      existentes++
+      continue
+    }
+    await prisma.protocolo.create({
+      data: {
+        empresaId,
+        categoria: p.categoria,
+        nome: p.nome,
+        ordem: p.ordem,
+        objetivo: p.objetivo,
+        resultadoEsperado: p.resultadoEsperado,
+        responsaveis: p.responsaveis,
+        processo: p.processo,
+        pop: p.pop,
+        regras: p.regras,
+        ferramentas: p.ferramentas,
+        rotina: p.rotina,
+        sla: p.sla,
+        kpis: p.kpis,
+        auditoriaItens: p.auditoriaItens,
+        frequenciaAuditoria: p.frequenciaAuditoria,
+        criteriosConformidade: p.criteriosConformidade,
+        naoConformidadesCatalogo: p.naoConformidadesCatalogo,
+        reunioes: p.reunioes,
+        perguntasAnalise: p.perguntasAnalise,
+        riscos: p.riscos,
+        planoContingencia: p.planoContingencia,
+        revisaoFrequencia: p.revisaoFrequencia,
+        revisaoResponsavel: p.revisaoResponsavel,
+        oportunidadesMelhoriaNotas: p.oportunidadesMelhoriaNotas,
+        anexos: p.anexos,
+        criadoPorId: req.user!.sub,
+      },
+    })
+    criados++
+  }
+
+  res.json({ criados, existentes, total: PROTOCOLOS_SEED.length })
 })
 
 // ---------------------------------------------------------------------------

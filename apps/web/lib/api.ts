@@ -409,6 +409,8 @@ export const api = {
     criar: (data: object) => request<ProtocoloDetalhe>('/protocolos', { method: 'POST', body: JSON.stringify(data) }),
     editar: (id: string, data: object) =>
       request<{ ok: boolean }>(`/protocolos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    carregarPadrao: () =>
+      request<{ criados: number; existentes: number; total: number }>('/protocolos/seed-padrao', { method: 'POST' }),
     registrarAuditoria: (id: string, data: { conforme: boolean; itensVerificados?: { item: string; ok: boolean }[]; observacoes?: string }) =>
       request<AuditoriaProtocolo>(`/protocolos/${id}/auditorias`, { method: 'POST', body: JSON.stringify(data) }),
     registrarNaoConformidade: (id: string, data: { tipo: string; descricao?: string }) =>

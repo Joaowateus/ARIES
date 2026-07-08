@@ -40,7 +40,7 @@ export interface ProtocoloSeed {
 export const PROTOCOLOS_SEED: ProtocoloSeed[] = [
   {
     id: 'protocolo-agendamento-confirmacao-visita',
-    categoria: 'Comercial',
+    categoria: 'Protocolos Comerciais',
     nome: 'Agendamento e Confirmação de Visita Presencial',
     ordem: 1,
     objetivo:
@@ -153,7 +153,7 @@ export const PROTOCOLOS_SEED: ProtocoloSeed[] = [
 
   {
     id: 'protocolo-pre-vendas-blindagem-fechamento',
-    categoria: 'Comercial',
+    categoria: 'Protocolos Comerciais',
     nome: 'Pré-Vendas e Blindagem de Fechamento',
     ordem: 2,
     objetivo:
@@ -268,7 +268,7 @@ export const PROTOCOLOS_SEED: ProtocoloSeed[] = [
 
   {
     id: 'protocolo-fechamento-conducao-final-negociacao',
-    categoria: 'Comercial',
+    categoria: 'Protocolos Comerciais',
     nome: 'Fechamento & Condução Final da Negociação',
     ordem: 3,
     objetivo:
@@ -354,7 +354,7 @@ export const PROTOCOLOS_SEED: ProtocoloSeed[] = [
 
   {
     id: 'protocolo-entrega-tecnica-documental-probatoria',
-    categoria: 'Comercial',
+    categoria: 'Protocolos Comerciais',
     nome: 'Entrega Técnica, Documental e Probatória do Veículo',
     ordem: 4,
     objetivo:
@@ -477,7 +477,7 @@ export const PROTOCOLOS_SEED: ProtocoloSeed[] = [
 
   {
     id: 'protocolo-transferencia-propriedade-veiculo',
-    categoria: 'Comercial',
+    categoria: 'Protocolos Comerciais',
     nome: 'Transferência de Propriedade do Veículo',
     ordem: 5,
     objetivo:

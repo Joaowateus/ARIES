@@ -268,7 +268,7 @@ model HistoricoPrecificacao {
 model Protocolo {
   id        String @id @default(cuid())
   empresaId String
-  categoria String @default("Comercial")
+  categoria String @default("Protocolos Comerciais")
   nome      String
   versao    String @default("1.0.0")
   status    String @default("ativo") // rascunho | ativo | em_revisao | obsoleto
