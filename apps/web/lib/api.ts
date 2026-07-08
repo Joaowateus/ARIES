@@ -88,6 +88,104 @@ export interface ContaReceber {
   pagoEm?: string
 }
 
+export interface ParametrosPrecificacao {
+  id: string
+  margemEstrategica: number
+  margemComercial: number
+  margemNegociacao: number
+  margemLP: number
+  impostosPct: number
+  comissaoPadraoPct: number
+  marketingProvisionadoPct: number
+  reservaFinanceiraPct: number
+  taxaFinanceiraMensal: number
+  taxaOportunidadeMensal: number
+  diasEstoqueMeta: number
+  custoOperacionalRateio: number
+  fase1MaxDias: number
+  fase2MaxDias: number
+  fase3MaxDias: number
+  saudePremiumMaxDias: number
+  saudeSaudavelMaxDias: number
+  saudeAtencaoMaxDias: number
+}
+
+export interface PrecificacaoMoto {
+  id: string
+  nome: string
+  situacao: string
+  dadosIncompletos: boolean
+  mensagem?: string
+  dataCompra?: string
+  diasEmEstoque?: number | null
+  fase?: string
+  classificacaoSaude?: string
+  capitalParado?: number
+  custosDiretos?: number
+  custoFinanceiroProvisionado?: number
+  custoOperacionalRateado?: number
+  custoBase?: number
+  precoEstrategico?: number
+  precoComercial?: number
+  precoNegociacao?: number
+  lp?: number
+  precoSugeridoHoje?: number | null
+  revisaoGerencialObrigatoria?: boolean
+}
+
+export interface KpisPrecificacao {
+  lucroMedioPorMotoVendida: number
+  margemLiquidaMediaRealizada: number
+  descontoMedioPraticado: number
+  capitalInvestidoTotal: number
+  capitalParado: number
+  tempoMedioEstoqueVendidas: number
+  motosAcima90Dias: number
+  motosEstoqueCritico: number
+  motosEstoquePremium: number
+  pctVendasPrecoComercialOuAcima: number
+  vendasAbaixoDoLP: number
+  totalVendasAnalisadas: number
+}
+
+export interface RankingVendedor {
+  vendedorId: string
+  nome: string
+  qtdeVendas: number
+  ticketMedio: number
+  descontoMedio: number
+  margemLiquidaMediaRealizada: number
+  lucroTotalEntregue: number
+  pctVendasPrecoCheioOuAcima: number
+  rankingFinanceiro: number
+  rankingComercial: number
+}
+
+export interface HistoricoPrecificacao {
+  id: string
+  precoAnterior?: number
+  precoNovo: number
+  margemUtilizada: string
+  motivo: string
+  nivelAprovacao: string
+  criadoEm: string
+  solicitante?: { id: string; nome: string }
+  aprovador?: { id: string; nome: string }
+}
+
+export interface CustosMoto {
+  dataCompra?: string
+  valorCompra?: number
+  custoRevisao?: number
+  custoEstetica?: number
+  custoDocumentacao?: number
+  custoFrete?: number
+  custoCombustivel?: number
+  custoAcessorios?: number
+  custoOutros?: number
+  marketingInvestido?: number
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
@@ -192,5 +290,19 @@ export const api = {
       }
       recentes: Array<{ id: string; nomeCliente: string; estagio: string; valor?: number }>
     }>('/dashboard'),
+  },
+  precificacao: {
+    parametros: () => request<ParametrosPrecificacao>('/precificacao/parametros'),
+    atualizarParametros: (data: Partial<ParametrosPrecificacao>) =>
+      request<ParametrosPrecificacao>('/precificacao/parametros', { method: 'PUT', body: JSON.stringify(data) }),
+    listar: () => request<PrecificacaoMoto[]>('/precificacao'),
+    detalhe: (id: string) => request<PrecificacaoMoto>(`/precificacao/${id}`),
+    atualizarCustos: (id: string, data: CustosMoto) =>
+      request<{ ok: boolean }>(`/precificacao/${id}/custos`, { method: 'PATCH', body: JSON.stringify(data) }),
+    kpis: () => request<KpisPrecificacao>('/precificacao/relatorios/kpis'),
+    rankingVendedores: () => request<RankingVendedor[]>('/precificacao/relatorios/ranking-vendedores'),
+    historico: (unidadeId: string) => request<HistoricoPrecificacao[]>(`/precificacao/historico/${unidadeId}`),
+    registrarAlteracao: (data: { unidadeId: string; precoNovo: number; motivo: string; margemUtilizada?: string; aprovadorId?: string }) =>
+      request<HistoricoPrecificacao>('/precificacao/historico', { method: 'POST', body: JSON.stringify(data) }),
   },
 }

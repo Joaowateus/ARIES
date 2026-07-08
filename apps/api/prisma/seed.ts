@@ -76,34 +76,57 @@ async function main() {
 
   console.log(`✓ Usuários: ${admin.nome}, ${gerente.nome}, ${vendedor1.nome}, ${vendedor2.nome}`)
 
-  // Estoque de motos
+  // Parâmetros de precificação (Pilar 9 — fonte única de verdade da empresa).
+  // Valores de referência iguais aos usados no manual
+  // docs/05-modules/commercial/cap-06-oferta-e-precificacao/ENGENHARIA-PRECIFICACAO-MOTOS-MM.md
+  await prisma.parametroPrecificacao.upsert({
+    where: { empresaId: empresa.id },
+    update: {},
+    create: { empresaId: empresa.id },
+  })
+  console.log('✓ Parâmetros de precificação (valores de referência do manual)')
+
+  const diasAtras = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000)
+
+  // Estoque de motos — inclui dados de compra/custos para o motor de precificação.
+  // A "Honda CG 160 Titan" usa exatamente os valores da Moto-Modelo do manual
+  // (compra R$ 9.500, custos diretos R$ 450, 44 dias em estoque) para conferência cruzada.
   const motos = [
-    { nome: 'Honda CG 160 Titan', marca: 'Honda', modelo: 'CG 160 Titan', ano: 2024, cor: 'Vermelho', chassi: 'JHMSC59A5RN000001', precoBase: 14490 },
-    { nome: 'Honda CG 160 Fan', marca: 'Honda', modelo: 'CG 160 Fan', ano: 2024, cor: 'Preto', chassi: 'JHMSC59A5RN000002', precoBase: 12990 },
-    { nome: 'Honda Biz 125', marca: 'Honda', modelo: 'Biz 125', ano: 2024, cor: 'Azul', chassi: 'JHMSC59A5RN000003', precoBase: 10490 },
-    { nome: 'Yamaha Factor 150', marca: 'Yamaha', modelo: 'Factor 150', ano: 2024, cor: 'Branco', chassi: 'JYARK07E1RA000001', precoBase: 13490 },
-    { nome: 'Yamaha Fazer 250', marca: 'Yamaha', modelo: 'Fazer 250', ano: 2023, cor: 'Cinza', chassi: 'JYARK07E1RA000002', precoBase: 22990 },
-    { nome: 'Honda XRE 300', marca: 'Honda', modelo: 'XRE 300', ano: 2024, cor: 'Verde', chassi: 'JHMSC59A5RN000004', precoBase: 29990 },
-    { nome: 'Yamaha NMAX 160', marca: 'Yamaha', modelo: 'NMAX 160', ano: 2024, cor: 'Preto', chassi: 'JYARK07E1RA000003', precoBase: 18490 },
-    { nome: 'Honda PCX 150', marca: 'Honda', modelo: 'PCX 150', ano: 2023, cor: 'Prata', chassi: 'JHMSC59A5RN000005', precoBase: 16990 },
+    { nome: 'Honda CG 160 Titan', marca: 'Honda', modelo: 'CG 160 Titan', ano: 2024, cor: 'Vermelho', chassi: 'JHMSC59A5RN000001', precoBase: 14490,
+      valorCompra: 9500, dataCompra: diasAtras(44), custoRevisao: 200, custoEstetica: 150, custoDocumentacao: 100 },
+    { nome: 'Honda CG 160 Fan', marca: 'Honda', modelo: 'CG 160 Fan', ano: 2024, cor: 'Preto', chassi: 'JHMSC59A5RN000002', precoBase: 12990,
+      valorCompra: 8200, dataCompra: diasAtras(10), custoRevisao: 180, custoEstetica: 90, custoDocumentacao: 90 },
+    { nome: 'Honda Biz 125', marca: 'Honda', modelo: 'Biz 125', ano: 2024, cor: 'Azul', chassi: 'JHMSC59A5RN000003', precoBase: 10490,
+      valorCompra: 6800, dataCompra: diasAtras(55), custoRevisao: 150, custoEstetica: 80, custoDocumentacao: 90 },
+    { nome: 'Yamaha Factor 150', marca: 'Yamaha', modelo: 'Factor 150', ano: 2024, cor: 'Branco', chassi: 'JYARK07E1RA000001', precoBase: 13490,
+      valorCompra: 8600, dataCompra: diasAtras(70), custoRevisao: 200, custoEstetica: 120, custoDocumentacao: 90, marketingInvestido: 150 },
+    { nome: 'Yamaha Fazer 250', marca: 'Yamaha', modelo: 'Fazer 250', ano: 2023, cor: 'Cinza', chassi: 'JYARK07E1RA000002', precoBase: 22990,
+      valorCompra: 15800, dataCompra: diasAtras(100), custoRevisao: 300, custoEstetica: 200, custoDocumentacao: 100, marketingInvestido: 400 },
+    { nome: 'Honda XRE 300', marca: 'Honda', modelo: 'XRE 300', ano: 2024, cor: 'Verde', chassi: 'JHMSC59A5RN000004', precoBase: 29990,
+      valorCompra: 21000, dataCompra: diasAtras(5), custoRevisao: 250, custoEstetica: 150, custoDocumentacao: 100 },
+    { nome: 'Yamaha NMAX 160', marca: 'Yamaha', modelo: 'NMAX 160', ano: 2024, cor: 'Preto', chassi: 'JYARK07E1RA000003', precoBase: 18490,
+      valorCompra: 12500, dataCompra: diasAtras(35), custoRevisao: 220, custoEstetica: 130, custoDocumentacao: 90 },
+    { nome: 'Honda PCX 150', marca: 'Honda', modelo: 'PCX 150', ano: 2023, cor: 'Prata', chassi: 'JHMSC59A5RN000005', precoBase: 16990,
+      situacao: 'VENDIDA', valorCompra: 11500, dataCompra: diasAtras(40), custoRevisao: 200, custoEstetica: 100, custoDocumentacao: 90 },
   ]
 
   const unidadesCriadas: { id: string }[] = []
   for (const moto of motos) {
+    const { situacao, ...resto } = moto as typeof moto & { situacao?: string }
     const u = await prisma.unidade.upsert({
       where: { chassi: moto.chassi },
       update: {},
       create: {
         empresaId: empresa.id,
         categoria: 'MOTO',
-        situacao: 'DISPONIVEL',
+        situacao: situacao ?? 'DISPONIVEL',
         km: 0,
-        ...moto,
+        ...resto,
       },
     })
     unidadesCriadas.push(u)
   }
-  console.log(`✓ Estoque: ${unidadesCriadas.length} motos`)
+  console.log(`✓ Estoque: ${unidadesCriadas.length} motos (com dados de compra/custos para o motor de precificação)`)
 
   // Meta mensal
   const agora = new Date()
@@ -167,6 +190,41 @@ async function main() {
     })
   }
   console.log(`✓ Oportunidades de exemplo: ${ops.length}`)
+
+  // Venda fechada de exemplo — alimenta o Pilar 7 (Ranking de Vendedores) e os KPIs
+  // de reconciliação planejado vs. real (Seção 11.5 do manual de precificação).
+  const opGanha = await prisma.oportunidade.create({
+    data: {
+      empresaId: empresa.id,
+      nomeCliente: 'Juliana Rocha',
+      telefone: '(85) 99999-1006',
+      origem: 'LOJA',
+      estagio: 'GANHO',
+      statusFinal: 'GANHO',
+      responsavelId: vendedor2.id,
+      unidadeId: unidadesCriadas[7].id,
+      valor: 16200,
+      fechadaEm: diasAtras(10),
+    },
+  })
+
+  await prisma.contrato.create({
+    data: {
+      empresaId: empresa.id,
+      oportunidadeId: opGanha.id,
+      unidadeId: unidadesCriadas[7].id,
+      vendedorId: vendedor2.id,
+      nomeCliente: 'Juliana Rocha',
+      valorTotal: 16200,
+      entrada: 3000,
+      parcelas: 12,
+      criadoEm: diasAtras(10),
+      contasReceber: {
+        create: [{ empresaId: empresa.id, descricao: 'Entrada', valor: 3000, vencimento: diasAtras(10) }],
+      },
+    },
+  })
+  console.log('✓ Venda de exemplo registrada (Honda PCX 150 — alimenta ranking de vendedores e KPIs)')
 
   console.log('\n✅ Seed concluído!')
   console.log('\n📋 Credenciais de acesso:')

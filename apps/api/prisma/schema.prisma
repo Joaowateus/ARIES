@@ -12,15 +12,17 @@ model Empresa {
   nome         String
   cnpj         String?  @unique
   segmento     String   @default("motos")
-  criadaEm    DateTime @default(now())
+  criadaEm     DateTime @default(now())
   atualizadaEm DateTime @updatedAt
 
-  usuarios      Usuario[]
-  unidades      Unidade[]
-  metas         Meta[]
-  oportunidades Oportunidade[]
-  contratos     Contrato[]
-  contasReceber ContaReceber[]
+  usuarios              Usuario[]
+  unidades              Unidade[]
+  metas                 Meta[]
+  oportunidades         Oportunidade[]
+  contratos             Contrato[]
+  contasReceber         ContaReceber[]
+  parametroPrecificacao ParametroPrecificacao?
+  historicoPrecificacao HistoricoPrecificacao[]
 
   @@map("empresas")
 }
@@ -33,12 +35,14 @@ model Usuario {
   senhaHash    String
   papel        String   @default("VENDEDOR")
   status       String   @default("ATIVO")
-  criadoEm    DateTime @default(now())
+  criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  empresa      Empresa       @relation(fields: [empresaId], references: [id])
-  oportunidades Oportunidade[]
-  contratos    Contrato[]
+  empresa             Empresa                 @relation(fields: [empresaId], references: [id])
+  oportunidades       Oportunidade[]
+  contratos           Contrato[]
+  historicoSolicitado HistoricoPrecificacao[] @relation("HistoricoSolicitante")
+  historicoAprovado   HistoricoPrecificacao[] @relation("HistoricoAprovador")
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -49,7 +53,7 @@ model Usuario {
 model Unidade {
   id           String   @id @default(cuid())
   empresaId    String
-  nome         String                       // ex: "Honda CG 160 Titan 2024 Vermelha"
+  nome         String // ex: "Honda CG 160 Titan 2024 Vermelha"
   categoria    String   @default("MOTO")
   marca        String?
   modelo       String?
@@ -60,12 +64,26 @@ model Unidade {
   km           Int?     @default(0)
   precoBase    Float?
   situacao     String   @default("DISPONIVEL") // DISPONIVEL | RESERVADA | VENDIDA | INATIVO
-  criadoEm    DateTime @default(now())
+  criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  empresa      Empresa       @relation(fields: [empresaId], references: [id])
-  oportunidades Oportunidade[]
-  contratos    Contrato[]
+  // --- Engenharia de Precificação (CAP-06 especializado — ver
+  // docs/05-modules/commercial/cap-06-oferta-e-precificacao/ENGENHARIA-PRECIFICACAO-MOTOS-MM.md) ---
+  dataCompra         DateTime? // entrada no estoque — base do cálculo de dias em estoque
+  valorCompra        Float? // Pilar 1/8: preço pago pela moto (Custo Base)
+  custoRevisao       Float?    @default(0)
+  custoEstetica      Float?    @default(0)
+  custoDocumentacao  Float?    @default(0)
+  custoFrete         Float?    @default(0)
+  custoCombustivel   Float?    @default(0)
+  custoAcessorios    Float?    @default(0)
+  custoOutros        Float?    @default(0)
+  marketingInvestido Float?    @default(0) // Pilar 8.6 — verba real investida nesta moto
+
+  empresa               Empresa                 @relation(fields: [empresaId], references: [id])
+  oportunidades         Oportunidade[]
+  contratos             Contrato[]
+  historicoPrecificacao HistoricoPrecificacao[]
 
   @@index([empresaId])
   @@index([empresaId, situacao])
@@ -73,18 +91,18 @@ model Unidade {
 }
 
 model Meta {
-  id         String   @id @default(cuid())
-  empresaId  String
-  titulo     String
-  tipo       String   @default("QUANTIDADE")
-  valor      Float
-  periodo    String
-  inicioEm   DateTime
-  fimEm      DateTime
-  status     String   @default("ATIVA")
+  id        String   @id @default(cuid())
+  empresaId String
+  titulo    String
+  tipo      String   @default("QUANTIDADE")
+  valor     Float
+  periodo   String
+  inicioEm  DateTime
+  fimEm     DateTime
+  status    String   @default("ATIVA")
   criadaEm  DateTime @default(now())
 
-  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  empresa Empresa @relation(fields: [empresaId], references: [id])
 
   @@map("metas")
 }
@@ -101,14 +119,14 @@ model Oportunidade {
   origem        String    @default("MANUAL")
   valor         Float?
   observacoes   String?
-  criadaEm     DateTime  @default(now())
-  atualizadaEm DateTime  @updatedAt
-  fechadaEm    DateTime?
+  criadaEm      DateTime  @default(now())
+  atualizadaEm  DateTime  @updatedAt
+  fechadaEm     DateTime?
   statusFinal   String?
 
-  empresa     Empresa    @relation(fields: [empresaId], references: [id])
-  responsavel Usuario?   @relation(fields: [responsavelId], references: [id])
-  unidade     Unidade?   @relation(fields: [unidadeId], references: [id])
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  responsavel Usuario?  @relation(fields: [responsavelId], references: [id])
+  unidade     Unidade?  @relation(fields: [unidadeId], references: [id])
   contrato    Contrato?
 
   @@index([empresaId])
@@ -130,14 +148,14 @@ model Contrato {
   entrada         Float?   @default(0)
   parcelas        Int?     @default(1)
   observacoes     String?
-  status          String   @default("ATIVO")  // ATIVO | CANCELADO | ENCERRADO
-  criadoEm       DateTime @default(now())
-  atualizadoEm   DateTime @updatedAt
+  status          String   @default("ATIVO") // ATIVO | CANCELADO | ENCERRADO
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
 
-  empresa      Empresa        @relation(fields: [empresaId], references: [id])
-  oportunidade Oportunidade   @relation(fields: [oportunidadeId], references: [id])
-  unidade      Unidade?       @relation(fields: [unidadeId], references: [id])
-  vendedor     Usuario?       @relation(fields: [vendedorId], references: [id])
+  empresa       Empresa        @relation(fields: [empresaId], references: [id])
+  oportunidade  Oportunidade   @relation(fields: [oportunidadeId], references: [id])
+  unidade       Unidade?       @relation(fields: [unidadeId], references: [id])
+  vendedor      Usuario?       @relation(fields: [vendedorId], references: [id])
   contasReceber ContaReceber[]
 
   @@index([empresaId])
@@ -152,17 +170,76 @@ model ContaReceber {
   descricao  String
   valor      Float
   vencimento DateTime
-  status     String    @default("PENDENTE")  // PENDENTE | PAGO | ATRASADO | CANCELADO
+  status     String    @default("PENDENTE") // PENDENTE | PAGO | ATRASADO | CANCELADO
   pago       Float?    @default(0)
-  pagoEm    DateTime?
-  criadaEm  DateTime  @default(now())
+  pagoEm     DateTime?
+  criadaEm   DateTime  @default(now())
 
-  empresa    Empresa  @relation(fields: [empresaId], references: [id])
-  contrato   Contrato @relation(fields: [contratoId], references: [id])
+  empresa  Empresa  @relation(fields: [empresaId], references: [id])
+  contrato Contrato @relation(fields: [contratoId], references: [id])
 
   @@index([empresaId])
   @@index([empresaId, status])
   @@index([contratoId])
   @@index([vencimento, status])
   @@map("contas_receber")
+}
+
+// Engenharia Estratégica de Precificação (CAP-06 especializado para a vertical de motos).
+// Ver docs/05-modules/commercial/cap-06-oferta-e-precificacao/ENGENHARIA-PRECIFICACAO-MOTOS-MM.md
+// para a definição completa de cada parâmetro e do "método do divisor" usado em lib/precificacao.ts.
+model ParametroPrecificacao {
+  id        String @id @default(cuid())
+  empresaId String @unique
+
+  margemEstrategica        Float @default(0.25)
+  margemComercial          Float @default(0.16)
+  margemNegociacao         Float @default(0.09)
+  margemLP                 Float @default(0.04)
+  impostosPct              Float @default(0.06)
+  comissaoPadraoPct        Float @default(0.03)
+  marketingProvisionadoPct Float @default(0.025)
+  reservaFinanceiraPct     Float @default(0.02)
+  taxaFinanceiraMensal     Float @default(0.02)
+  taxaOportunidadeMensal   Float @default(0.015)
+  diasEstoqueMeta          Int   @default(45)
+  custoOperacionalRateio   Float @default(180)
+
+  fase1MaxDias         Int @default(30)
+  fase2MaxDias         Int @default(60)
+  fase3MaxDias         Int @default(90)
+  saudePremiumMaxDias  Int @default(20)
+  saudeSaudavelMaxDias Int @default(45)
+  saudeAtencaoMaxDias  Int @default(75)
+
+  atualizadoEm DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@map("parametros_precificacao")
+}
+
+// Governança da precificação (Pilar 9): toda alteração de preço fora do fluxo
+// automático (override manual de vendedor/gestor/diretoria) fica registrada aqui.
+model HistoricoPrecificacao {
+  id              String   @id @default(cuid())
+  empresaId       String
+  unidadeId       String
+  precoAnterior   Float?
+  precoNovo       Float
+  margemUtilizada String   @default("MANUAL") // ESTRATEGICA | COMERCIAL | NEGOCIACAO | LP | MANUAL
+  motivo          String
+  nivelAprovacao  String   @default("N0") // N0 | N1 | N2 | N3 — ver Pilar 9
+  solicitanteId   String?
+  aprovadorId     String?
+  criadoEm        DateTime @default(now())
+
+  empresa     Empresa  @relation(fields: [empresaId], references: [id])
+  unidade     Unidade  @relation(fields: [unidadeId], references: [id])
+  solicitante Usuario? @relation("HistoricoSolicitante", fields: [solicitanteId], references: [id])
+  aprovador   Usuario? @relation("HistoricoAprovador", fields: [aprovadorId], references: [id])
+
+  @@index([empresaId])
+  @@index([unidadeId])
+  @@map("historico_precificacao")
 }

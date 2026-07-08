@@ -16,6 +16,7 @@ import oportunidadesRoutes from './routes/oportunidades'
 import contratosRoutes from './routes/contratos'
 import financeiroRoutes from './routes/financeiro'
 import dashboardRoutes from './routes/dashboard'
+import precificacaoRoutes from './routes/precificacao'
 
 const app = express()
 
@@ -90,6 +91,7 @@ app.use('/oportunidades', oportunidadesRoutes)
 app.use('/contratos', contratosRoutes)
 app.use('/financeiro', financeiroRoutes)
 app.use('/dashboard', dashboardRoutes)
+app.use('/precificacao', precificacaoRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

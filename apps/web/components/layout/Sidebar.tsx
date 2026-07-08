@@ -22,6 +22,7 @@ const nav = [
   { href: '/contratos', label: 'Contratos', icon: '📄' },
   { href: '/financeiro', label: 'Financeiro', icon: '💰' },
   { href: '/estoque', label: 'Estoque', icon: '🏍️' },
+  { href: '/precificacao', label: 'Precificação', icon: '💲' },
   { href: '/vendedores', label: 'Equipe', icon: '👥' },
 ]
 
