@@ -166,18 +166,22 @@ async function main() {
   })
   console.log(`✓ Metas mensais criadas`)
 
-  // Oportunidades de exemplo
+  // Oportunidades de exemplo — id fixo + upsert para que reexecuções do seed
+  // (ex: reseed automático a cada deploy) não dupliquem os leads de demonstração.
   const ops = [
-    { nomeCliente: 'Pedro Alves', telefone: '(85) 99999-1001', origem: 'INSTAGRAM', estagio: 'CONTATO', responsavelId: vendedor1.id, unidadeIdx: 0, valor: 14490 },
-    { nomeCliente: 'Maria Santos', telefone: '(85) 99999-1002', origem: 'INDICACAO', estagio: 'VISITA_AGENDADA', responsavelId: vendedor2.id, unidadeIdx: 3, valor: 13490 },
-    { nomeCliente: 'Lucas Oliveira', telefone: '(85) 99999-1003', origem: 'WHATSAPP', estagio: 'PROPOSTA', responsavelId: vendedor1.id, unidadeIdx: 4, valor: 22990 },
-    { nomeCliente: 'Fernanda Lima', telefone: '(85) 99999-1004', origem: 'LOJA', estagio: 'NEGOCIACAO', responsavelId: vendedor2.id, unidadeIdx: 6, valor: 18490 },
-    { nomeCliente: 'Roberto Costa', telefone: '(85) 99999-1005', origem: 'MANUAL', estagio: 'NOVO_LEAD', responsavelId: vendedor1.id, valor: undefined },
+    { id: 'seed-op-pedro-alves', nomeCliente: 'Pedro Alves', telefone: '(85) 99999-1001', origem: 'INSTAGRAM', estagio: 'CONTATO', responsavelId: vendedor1.id, unidadeIdx: 0, valor: 14490 },
+    { id: 'seed-op-maria-santos', nomeCliente: 'Maria Santos', telefone: '(85) 99999-1002', origem: 'INDICACAO', estagio: 'VISITA_AGENDADA', responsavelId: vendedor2.id, unidadeIdx: 3, valor: 13490 },
+    { id: 'seed-op-lucas-oliveira', nomeCliente: 'Lucas Oliveira', telefone: '(85) 99999-1003', origem: 'WHATSAPP', estagio: 'PROPOSTA', responsavelId: vendedor1.id, unidadeIdx: 4, valor: 22990 },
+    { id: 'seed-op-fernanda-lima', nomeCliente: 'Fernanda Lima', telefone: '(85) 99999-1004', origem: 'LOJA', estagio: 'NEGOCIACAO', responsavelId: vendedor2.id, unidadeIdx: 6, valor: 18490 },
+    { id: 'seed-op-roberto-costa', nomeCliente: 'Roberto Costa', telefone: '(85) 99999-1005', origem: 'MANUAL', estagio: 'NOVO_LEAD', responsavelId: vendedor1.id, valor: undefined },
   ]
 
   for (const op of ops) {
-    await prisma.oportunidade.create({
-      data: {
+    await prisma.oportunidade.upsert({
+      where: { id: op.id },
+      update: {},
+      create: {
+        id: op.id,
         empresaId: empresa.id,
         nomeCliente: op.nomeCliente,
         telefone: op.telefone,
@@ -193,8 +197,12 @@ async function main() {
 
   // Venda fechada de exemplo — alimenta o Pilar 7 (Ranking de Vendedores) e os KPIs
   // de reconciliação planejado vs. real (Seção 11.5 do manual de precificação).
-  const opGanha = await prisma.oportunidade.create({
-    data: {
+  // Id fixo + upsert pelo mesmo motivo acima.
+  const opGanha = await prisma.oportunidade.upsert({
+    where: { id: 'seed-op-juliana-rocha' },
+    update: {},
+    create: {
+      id: 'seed-op-juliana-rocha',
       empresaId: empresa.id,
       nomeCliente: 'Juliana Rocha',
       telefone: '(85) 99999-1006',
@@ -208,8 +216,10 @@ async function main() {
     },
   })
 
-  await prisma.contrato.create({
-    data: {
+  await prisma.contrato.upsert({
+    where: { oportunidadeId: opGanha.id },
+    update: {},
+    create: {
       empresaId: empresa.id,
       oportunidadeId: opGanha.id,
       unidadeId: unidadesCriadas[7].id,
