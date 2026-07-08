@@ -23,6 +23,7 @@ model Empresa {
   contasReceber         ContaReceber[]
   parametroPrecificacao ParametroPrecificacao?
   historicoPrecificacao HistoricoPrecificacao[]
+  protocolos            Protocolo[]
 
   @@map("empresas")
 }
@@ -43,6 +44,9 @@ model Usuario {
   contratos           Contrato[]
   historicoSolicitado HistoricoPrecificacao[] @relation("HistoricoSolicitante")
   historicoAprovado   HistoricoPrecificacao[] @relation("HistoricoAprovador")
+  protocolosCriados   Protocolo[]
+  auditoriasProtocolo AuditoriaProtocolo[]
+  planosAcaoProtocolo PlanoAcaoProtocolo[]
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -242,4 +246,164 @@ model HistoricoPrecificacao {
   @@index([empresaId])
   @@index([unidadeId])
   @@map("historico_precificacao")
+}
+
+// =====================================================================
+// PROTOCOLOS COMERCIAIS
+//
+// Cada Protocolo é um processo operacional completo, documentado nos
+// 7 níveis / ~20 blocos do framework do Diretor Comercial (identidade,
+// estrutura operacional, gestão de execução, controle e auditoria,
+// gestão, risco e contingência, melhoria contínua). Os blocos variam de
+// forma real entre protocolos (checklists aninhados, kits anexos,
+// chaves de rotina/reuniões livres) — por isso cada bloco é guardado
+// como Json flexível em vez de colunas rígidas por sub-campo.
+//
+// Os registros "vivos" (Auditoria, NaoConformidade, PlanoAcao, Melhoria)
+// são o que transforma o protocolo de documento em ferramenta de
+// gestão: cada execução de auditoria, cada falha encontrada e cada
+// plano de ação vira um registro rastreável vinculado ao protocolo.
+// =====================================================================
+
+model Protocolo {
+  id        String @id @default(cuid())
+  empresaId String
+  categoria String @default("Comercial")
+  nome      String
+  versao    String @default("1.0.0")
+  status    String @default("ativo") // rascunho | ativo | em_revisao | obsoleto
+  ordem     Int?
+
+  // Nível 1 — Identidade do Processo
+  objetivo          String?
+  resultadoEsperado Json? // string[]
+  responsaveis      Json? // string[]
+
+  // Nível 2 — Estrutura Operacional
+  processo    Json? // string[] — fluxo macro sequencial
+  pop         Json? // {titulo: string, descricao?: string, checklist?: string[]}[]
+  regras      Json? // string[] — "7. Protocolo" (regras obrigatórias)
+  ferramentas Json? // string[]
+
+  // Nível 3 — Gestão de Execução
+  rotina Json? // {chave: string}  ex: {"Diária": "...", "Semanal": "..."}
+  sla    Json? // {item: string, prazo: string}[]
+  kpis   Json? // {categoria: string, indicador: string}[]
+
+  // Nível 4 — Controle e Auditoria
+  auditoriaItens           Json? // string[] — o que verificar
+  frequenciaAuditoria      String?
+  criteriosConformidade    Json? // string[]
+  naoConformidadesCatalogo Json? // string[] — tipos possíveis de falha
+
+  // Nível 5 — Gestão
+  reunioes         Json? // {chave: string}
+  perguntasAnalise Json? // string[]
+
+  // Nível 6 — Risco e Contingência
+  riscos            Json? // string[]
+  planoContingencia Json? // {cenario: string, acao: string}[]
+
+  // Nível 7 — Melhoria Contínua
+  oportunidadesMelhoriaNotas Json? // string[] — notas iniciais (backlog vivo está em MelhoriaProtocolo)
+  automacoesPossiveis        Json? // string[]
+  iaAplicavel                Json? // string[]
+  revisaoFrequencia          String?
+  revisaoResponsavel         String?
+
+  // Anexos livres (ex: "Kit Obrigatório de Entrega", "Checklist de Transferência")
+  anexos Json? // {titulo: string, itens: string[]}[]
+
+  criadoPorId  String?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  empresa          Empresa                    @relation(fields: [empresaId], references: [id])
+  criadoPor        Usuario?                   @relation(fields: [criadoPorId], references: [id])
+  auditorias       AuditoriaProtocolo[]
+  naoConformidades NaoConformidadeProtocolo[]
+  planosAcao       PlanoAcaoProtocolo[]
+  melhorias        MelhoriaProtocolo[]
+
+  @@index([empresaId])
+  @@index([empresaId, categoria])
+  @@map("protocolos")
+}
+
+model AuditoriaProtocolo {
+  id               String   @id @default(cuid())
+  empresaId        String
+  protocoloId      String
+  data             DateTime @default(now())
+  responsavelId    String?
+  conforme         Boolean
+  itensVerificados Json? // {item: string, ok: boolean}[]
+  observacoes      String?
+  criadoEm         DateTime @default(now())
+
+  protocolo   Protocolo @relation(fields: [protocoloId], references: [id])
+  responsavel Usuario?  @relation(fields: [responsavelId], references: [id])
+
+  @@index([empresaId])
+  @@index([protocoloId])
+  @@map("auditorias_protocolo")
+}
+
+model NaoConformidadeProtocolo {
+  id          String    @id @default(cuid())
+  empresaId   String
+  protocoloId String
+  tipo        String
+  descricao   String?
+  data        DateTime  @default(now())
+  status      String    @default("ABERTA") // ABERTA | EM_TRATAMENTO | RESOLVIDA
+  resolvidoEm DateTime?
+  criadoEm    DateTime  @default(now())
+
+  protocolo  Protocolo            @relation(fields: [protocoloId], references: [id])
+  planosAcao PlanoAcaoProtocolo[]
+
+  @@index([empresaId])
+  @@index([protocoloId])
+  @@index([protocoloId, status])
+  @@map("nao_conformidades_protocolo")
+}
+
+model PlanoAcaoProtocolo {
+  id                String    @id @default(cuid())
+  empresaId         String
+  protocoloId       String
+  naoConformidadeId String?
+  problema          String
+  causa             String?
+  solucao           String?
+  responsavelId     String?
+  prazo             DateTime?
+  status            String    @default("PENDENTE") // PENDENTE | EM_ANDAMENTO | CONCLUIDO | ATRASADO
+  concluidoEm       DateTime?
+  criadoEm          DateTime  @default(now())
+
+  protocolo       Protocolo                 @relation(fields: [protocoloId], references: [id])
+  naoConformidade NaoConformidadeProtocolo? @relation(fields: [naoConformidadeId], references: [id])
+  responsavel     Usuario?                  @relation(fields: [responsavelId], references: [id])
+
+  @@index([empresaId])
+  @@index([protocoloId])
+  @@index([protocoloId, status])
+  @@map("planos_acao_protocolo")
+}
+
+model MelhoriaProtocolo {
+  id          String   @id @default(cuid())
+  empresaId   String
+  protocoloId String
+  descricao   String
+  status      String   @default("ABERTA") // ABERTA | EM_ANALISE | IMPLEMENTADA | DESCARTADA
+  criadoEm    DateTime @default(now())
+
+  protocolo Protocolo @relation(fields: [protocoloId], references: [id])
+
+  @@index([empresaId])
+  @@index([protocoloId])
+  @@map("melhorias_protocolo")
 }

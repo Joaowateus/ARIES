@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { PROTOCOLOS_SEED } from './seed-data/protocolos'
 
 const prisma = new PrismaClient()
 
@@ -235,6 +236,46 @@ async function main() {
     },
   })
   console.log('✓ Venda de exemplo registrada (Honda PCX 150 — alimenta ranking de vendedores e KPIs)')
+
+  // Protocolos comerciais reais (id fixo + upsert com update:{} — não sobrescreve
+  // edições feitas depois pela interface a cada reseed/redeploy).
+  for (const p of PROTOCOLOS_SEED) {
+    await prisma.protocolo.upsert({
+      where: { id: p.id },
+      update: {},
+      create: {
+        id: p.id,
+        empresaId: empresa.id,
+        categoria: p.categoria,
+        nome: p.nome,
+        ordem: p.ordem,
+        objetivo: p.objetivo,
+        resultadoEsperado: p.resultadoEsperado,
+        responsaveis: p.responsaveis,
+        processo: p.processo,
+        pop: p.pop,
+        regras: p.regras,
+        ferramentas: p.ferramentas,
+        rotina: p.rotina,
+        sla: p.sla,
+        kpis: p.kpis,
+        auditoriaItens: p.auditoriaItens,
+        frequenciaAuditoria: p.frequenciaAuditoria,
+        criteriosConformidade: p.criteriosConformidade,
+        naoConformidadesCatalogo: p.naoConformidadesCatalogo,
+        reunioes: p.reunioes,
+        perguntasAnalise: p.perguntasAnalise,
+        riscos: p.riscos,
+        planoContingencia: p.planoContingencia,
+        revisaoFrequencia: p.revisaoFrequencia,
+        revisaoResponsavel: p.revisaoResponsavel,
+        oportunidadesMelhoriaNotas: p.oportunidadesMelhoriaNotas,
+        anexos: p.anexos,
+        criadoPorId: admin.id,
+      },
+    })
+  }
+  console.log(`✓ Protocolos comerciais: ${PROTOCOLOS_SEED.length}`)
 
   console.log('\n✅ Seed concluído!')
   console.log('\n📋 Credenciais de acesso:')

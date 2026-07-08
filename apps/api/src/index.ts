@@ -17,6 +17,7 @@ import contratosRoutes from './routes/contratos'
 import financeiroRoutes from './routes/financeiro'
 import dashboardRoutes from './routes/dashboard'
 import precificacaoRoutes from './routes/precificacao'
+import protocolosRoutes from './routes/protocolos'
 
 const app = express()
 
@@ -92,6 +93,7 @@ app.use('/contratos', contratosRoutes)
 app.use('/financeiro', financeiroRoutes)
 app.use('/dashboard', dashboardRoutes)
 app.use('/precificacao', precificacaoRoutes)
+app.use('/protocolos', protocolosRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

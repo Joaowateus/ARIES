@@ -186,6 +186,104 @@ export interface CustosMoto {
   marketingInvestido?: number
 }
 
+// --- Protocolos Comerciais ---
+
+export interface ProtocoloResumo {
+  id: string
+  categoria: string
+  nome: string
+  versao: string
+  status: string
+  naoConformidadesAbertas: number
+  planosAcaoPendentes: number
+  ultimaAuditoria: { protocoloId: string; data: string; conforme: boolean } | null
+}
+
+export interface ProtocoloPop { titulo: string; descricao?: string; checklist?: string[] }
+export interface ProtocoloSlaItem { item: string; prazo: string }
+export interface ProtocoloKpi { categoria: string; indicador: string }
+export interface ProtocoloContingencia { cenario: string; acao: string }
+export interface ProtocoloCadencia { chave: string; valor: string }
+export interface ProtocoloAnexo { titulo: string; itens: string[] }
+
+export interface AuditoriaProtocolo {
+  id: string
+  data: string
+  responsavel?: { id: string; nome: string }
+  conforme: boolean
+  itensVerificados?: { item: string; ok: boolean }[]
+  observacoes?: string
+}
+
+export interface PlanoAcaoProtocolo {
+  id: string
+  naoConformidadeId?: string
+  problema: string
+  causa?: string
+  solucao?: string
+  responsavel?: { id: string; nome: string }
+  prazo?: string
+  status: string
+  concluidoEm?: string
+  criadoEm: string
+}
+
+export interface NaoConformidadeProtocolo {
+  id: string
+  tipo: string
+  descricao?: string
+  data: string
+  status: string
+  planosAcao?: PlanoAcaoProtocolo[]
+}
+
+export interface MelhoriaProtocolo {
+  id: string
+  descricao: string
+  status: string
+  criadoEm: string
+}
+
+export interface ProtocoloDetalhe {
+  id: string
+  categoria: string
+  nome: string
+  versao: string
+  status: string
+  ordem?: number
+  objetivo?: string
+  resultadoEsperado?: string[]
+  responsaveis?: string[]
+  processo?: string[]
+  pop?: ProtocoloPop[]
+  regras?: string[]
+  ferramentas?: string[]
+  rotina?: ProtocoloCadencia[]
+  sla?: ProtocoloSlaItem[]
+  kpis?: ProtocoloKpi[]
+  auditoriaItens?: string[]
+  frequenciaAuditoria?: string
+  criteriosConformidade?: string[]
+  naoConformidadesCatalogo?: string[]
+  reunioes?: ProtocoloCadencia[]
+  perguntasAnalise?: string[]
+  riscos?: string[]
+  planoContingencia?: ProtocoloContingencia[]
+  oportunidadesMelhoriaNotas?: string[]
+  automacoesPossiveis?: string[]
+  iaAplicavel?: string[]
+  revisaoFrequencia?: string
+  revisaoResponsavel?: string
+  anexos?: ProtocoloAnexo[]
+  criadoPor?: { id: string; nome: string }
+  criadoEm: string
+  atualizadoEm: string
+  auditorias: AuditoriaProtocolo[]
+  naoConformidades: NaoConformidadeProtocolo[]
+  planosAcao: PlanoAcaoProtocolo[]
+  melhorias: MelhoriaProtocolo[]
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
@@ -304,5 +402,26 @@ export const api = {
     historico: (unidadeId: string) => request<HistoricoPrecificacao[]>(`/precificacao/historico/${unidadeId}`),
     registrarAlteracao: (data: { unidadeId: string; precoNovo: number; motivo: string; margemUtilizada?: string; aprovadorId?: string }) =>
       request<HistoricoPrecificacao>('/precificacao/historico', { method: 'POST', body: JSON.stringify(data) }),
+  },
+  protocolos: {
+    listar: () => request<ProtocoloResumo[]>('/protocolos'),
+    detalhe: (id: string) => request<ProtocoloDetalhe>(`/protocolos/${id}`),
+    criar: (data: object) => request<ProtocoloDetalhe>('/protocolos', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: object) =>
+      request<{ ok: boolean }>(`/protocolos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    registrarAuditoria: (id: string, data: { conforme: boolean; itensVerificados?: { item: string; ok: boolean }[]; observacoes?: string }) =>
+      request<AuditoriaProtocolo>(`/protocolos/${id}/auditorias`, { method: 'POST', body: JSON.stringify(data) }),
+    registrarNaoConformidade: (id: string, data: { tipo: string; descricao?: string }) =>
+      request<NaoConformidadeProtocolo>(`/protocolos/${id}/nao-conformidades`, { method: 'POST', body: JSON.stringify(data) }),
+    atualizarNaoConformidade: (id: string, ncId: string, status: string) =>
+      request<{ ok: boolean }>(`/protocolos/${id}/nao-conformidades/${ncId}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    registrarPlanoAcao: (id: string, data: { naoConformidadeId?: string; problema: string; causa?: string; solucao?: string; responsavelId?: string; prazo?: string }) =>
+      request<PlanoAcaoProtocolo>(`/protocolos/${id}/planos-acao`, { method: 'POST', body: JSON.stringify(data) }),
+    atualizarPlanoAcao: (id: string, planoId: string, data: { status?: string; causa?: string; solucao?: string }) =>
+      request<{ ok: boolean }>(`/protocolos/${id}/planos-acao/${planoId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    registrarMelhoria: (id: string, descricao: string) =>
+      request<MelhoriaProtocolo>(`/protocolos/${id}/melhorias`, { method: 'POST', body: JSON.stringify({ descricao }) }),
+    atualizarMelhoria: (id: string, melhoriaId: string, status: string) =>
+      request<{ ok: boolean }>(`/protocolos/${id}/melhorias/${melhoriaId}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   },
 }
