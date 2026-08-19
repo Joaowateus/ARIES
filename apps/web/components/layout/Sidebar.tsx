@@ -28,6 +28,8 @@ const nav = [
   { href: '/estoque', label: 'Estoque', icon: '🏍️' },
   { href: '/precificacao', label: 'Precificação', icon: '💲' },
   { href: '/protocolos', label: 'Protocolos', icon: '📋' },
+  { href: '/processos', label: 'Processos', icon: '🗺️' },
+  { href: '/treinamentos', label: 'Treinamentos', icon: '🎓' },
   { href: '/metas', label: 'Metas', icon: '🎯' },
   { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
   { href: '/rotinas', label: 'Gestão de Rotinas', icon: '🔁' },

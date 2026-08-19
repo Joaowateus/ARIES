@@ -77,6 +77,51 @@ export interface ConversaoFunil {
   etapas: EtapaConversao[]
 }
 
+export interface Processo {
+  id: string
+  nome: string
+  departamento?: string | null
+  cargo?: string | null
+  objetivo?: string | null
+  fluxo?: string[] | null
+  pop?: { titulo: string; descricao?: string; checklist?: string[] }[] | null
+  ferramentas?: string[] | null
+  kpis?: { categoria: string; indicador: string }[] | null
+  contingencia?: { cenario: string; acao: string }[] | null
+  protocolo?: { id: string; nome: string } | null
+  rotinas?: { id: string; nome: string }[]
+}
+
+export interface Treinamento {
+  id: string
+  nome: string
+  categoria?: string | null
+  descricao?: string | null
+  videoUrl?: string | null
+  pdfUrl?: string | null
+  documentoUrl?: string | null
+  link?: string | null
+}
+
+export interface TreinamentoProgresso {
+  id: string
+  status: 'DISPONIVEL' | 'INICIADO' | 'CONCLUIDO'
+  percentual: number
+  nota?: number | null
+}
+
+export interface TreinamentoComProgresso {
+  treinamento: Treinamento
+  progresso: TreinamentoProgresso
+}
+
+export interface ProgressoEquipeTreinamento {
+  usuario: { id: string; nome: string }
+  total: number
+  concluidos: number
+  percentual: number
+}
+
 export interface ContaAnuncio {
   id: string
   nome: string
@@ -588,6 +633,20 @@ export const api = {
       request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
     remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
+  },
+  processos: {
+    listar: () => request<Processo[]>('/processos'),
+    detalhe: (id: string) => request<Processo>(`/processos/${id}`),
+    criar: (data: object) => request<Processo>('/processos', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: object) => request<{ ok: boolean }>(`/processos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  treinamentos: {
+    listar: () => request<Treinamento[]>('/treinamentos'),
+    criar: (data: object) => request<Treinamento>('/treinamentos', { method: 'POST', body: JSON.stringify(data) }),
+    progresso: () => request<TreinamentoComProgresso[]>('/treinamentos/progresso'),
+    atualizarProgresso: (treinamentoId: string, data: object) =>
+      request<{ ok: boolean }>(`/treinamentos/progresso/${treinamentoId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    progressoEquipe: () => request<ProgressoEquipeTreinamento[]>('/treinamentos/progresso/equipe'),
   },
   marketplace: {
     contas: () => request<ContaAnuncio[]>('/marketplace/contas'),

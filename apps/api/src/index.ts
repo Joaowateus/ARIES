@@ -26,6 +26,8 @@ import rotinasRoutes from './routes/rotinas'
 import tarefasRoutes from './routes/tarefas'
 import marketplaceRoutes from './routes/marketplace'
 import socialMediaRoutes from './routes/socialMedia'
+import processosRoutes from './routes/processos'
+import treinamentosRoutes from './routes/treinamentos'
 
 const app = express()
 
@@ -110,6 +112,8 @@ app.use('/rotinas', rotinasRoutes)
 app.use('/tarefas', tarefasRoutes)
 app.use('/marketplace', marketplaceRoutes)
 app.use('/social-media', socialMediaRoutes)
+app.use('/processos', processosRoutes)
+app.use('/treinamentos', treinamentosRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)
