@@ -350,6 +350,39 @@ async function main() {
   }
   console.log(`✓ Protocolos comerciais: ${PROTOCOLOS_SEED.length}`)
 
+  // Rotina e treinamento de demonstração — sem isso, Minha Rotina e
+  // Treinamentos aparecem vazios no primeiro login.
+  await prisma.rotina.upsert({
+    where: { id: 'seed-rotina-vendedor' },
+    update: {},
+    create: {
+      id: 'seed-rotina-vendedor',
+      empresaId: empresa.id,
+      nome: 'Rotina do Vendedor',
+      papelAlvo: 'VENDEDOR',
+      frequencia: 'DIARIA',
+      criadoPorId: admin.id,
+      blocos: [
+        { titulo: 'BLOCO 01 — ABERTURA', itens: ['Conferir CRM', 'Conferir leads', 'Conferir follow-ups', 'Conferir agenda'] },
+        { titulo: 'BLOCO 02 — PROSPECÇÃO', itens: ['Realizar contatos', 'Responder leads', 'Realizar follow-ups'] },
+        { titulo: 'BLOCO 05 — ENCERRAMENTO', itens: ['Atualizar CRM', 'Registrar resultados'] },
+      ],
+    },
+  })
+  await prisma.treinamento.upsert({
+    where: { id: 'seed-treinamento-crm' },
+    update: {},
+    create: {
+      id: 'seed-treinamento-crm',
+      empresaId: empresa.id,
+      nome: 'Como usar o CRM da ARIES',
+      categoria: 'Onboarding',
+      papelAlvo: 'VENDEDOR',
+      descricao: 'Passo a passo do funil, follow-up e registro de atividades.',
+    },
+  })
+  console.log('✓ Rotina e treinamento de demonstração')
+
   console.log('\n✅ Seed concluído!')
   console.log('\n📋 Credenciais de acesso:')
   console.log('   Admin:    admin@ariesnegocios.com.br  / aries2026')

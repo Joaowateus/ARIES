@@ -21,6 +21,8 @@ export default function AuditoriasPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ entidadeTipo: 'CRM', entidadeId: '', conforme: 'true', observacoes: '' })
+  const [showFormPlano, setShowFormPlano] = useState(false)
+  const [formPlano, setFormPlano] = useState({ problema: '', causa: '', solucao: '', prazo: '' })
 
   const carregar = useCallback(() => {
     Promise.all([api.auditorias.resumo(), api.auditorias.listar(), api.auditorias.planosAcao()])
@@ -35,6 +37,18 @@ export default function AuditoriasPage() {
     await api.auditorias.criar({ ...form, conforme: form.conforme === 'true' })
     setForm(f => ({ ...f, entidadeId: '', observacoes: '' }))
     setShowForm(false)
+    carregar()
+  }
+
+  async function salvarPlano(e: React.FormEvent) {
+    e.preventDefault()
+    await api.auditorias.criarPlanoAcao({
+      ...formPlano,
+      origemTipo: 'MANUAL',
+      prazo: formPlano.prazo ? new Date(formPlano.prazo).toISOString() : undefined,
+    })
+    setFormPlano({ problema: '', causa: '', solucao: '', prazo: '' })
+    setShowFormPlano(false)
     carregar()
   }
 
@@ -111,7 +125,29 @@ export default function AuditoriasPage() {
         </div>
       )}
 
-      <h2 className="font-semibold text-gray-900 text-sm mb-3">Planos de Ação</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-gray-900 text-sm">Planos de Ação</h2>
+        <button onClick={() => setShowFormPlano(s => !s)} className="text-xs text-blue-600 hover:underline">
+          {showFormPlano ? 'Cancelar' : '+ Novo Plano de Ação'}
+        </button>
+      </div>
+
+      {showFormPlano && (
+        <form onSubmit={salvarPlano} className="bg-white rounded-xl border border-gray-200 p-5 mb-4 space-y-3">
+          <input value={formPlano.problema} onChange={e => setFormPlano(f => ({ ...f, problema: e.target.value }))} required placeholder="Problema identificado"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <div className="grid grid-cols-2 gap-3">
+            <input value={formPlano.causa} onChange={e => setFormPlano(f => ({ ...f, causa: e.target.value }))} placeholder="Causa (opcional)"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input value={formPlano.solucao} onChange={e => setFormPlano(f => ({ ...f, solucao: e.target.value }))} placeholder="Solução proposta (opcional)"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <input type="date" value={formPlano.prazo} onChange={e => setFormPlano(f => ({ ...f, prazo: e.target.value }))}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          <button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700">Criar Plano</button>
+        </form>
+      )}
+
       {planos.length === 0 ? (
         <p className="text-sm text-gray-400">Nenhum plano de ação aberto.</p>
       ) : (
