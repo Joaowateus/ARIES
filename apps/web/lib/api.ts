@@ -77,6 +77,57 @@ export interface ConversaoFunil {
   etapas: EtapaConversao[]
 }
 
+export interface ContaAnuncio {
+  id: string
+  nome: string
+  plataforma: string
+}
+
+export interface AnuncioProducao {
+  id: string
+  contaId: string
+  conta?: { id: string; nome: string }
+  produto?: string | null
+  quantidade: number
+  data: string
+}
+
+export interface ResumoMarketplace {
+  meta: number
+  produzido: number
+  restante: number
+  percentual: number
+  porConta: { contaId: string; nome: string; meta: number; produzido: number }[]
+}
+
+export interface ConteudoSocialMedia {
+  id: string
+  tipo: string
+  plataforma: string
+  status: string
+  link?: string | null
+  alcance?: number | null
+  visualizacoes?: number | null
+  interacoes?: number | null
+  leadsGerados?: number | null
+  vendasOriginadas?: number | null
+  observacoes?: string | null
+  data: string
+  usuario?: { id: string; nome: string }
+}
+
+export interface ResumoSocialMedia {
+  produzido: number
+  publicado: number
+  pendente: number
+  alcance: number
+  visualizacoes: number
+  interacoes: number
+  leadsGerados: number
+  vendasOriginadas: number
+  porTipo: { tipo: string; quantidade: number }[]
+}
+
 export interface RotinaBloco { titulo: string; itens: string[] }
 
 export interface Rotina {
@@ -537,6 +588,20 @@ export const api = {
       request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
     remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
+  },
+  marketplace: {
+    contas: () => request<ContaAnuncio[]>('/marketplace/contas'),
+    criarConta: (data: { nome: string; plataforma?: string }) =>
+      request<ContaAnuncio>('/marketplace/contas', { method: 'POST', body: JSON.stringify(data) }),
+    producao: () => request<AnuncioProducao[]>('/marketplace/producao'),
+    registrarProducao: (data: { contaId: string; unidadeId?: string; produto?: string; quantidade?: number }) =>
+      request<AnuncioProducao>('/marketplace/producao', { method: 'POST', body: JSON.stringify(data) }),
+    resumo: () => request<ResumoMarketplace>('/marketplace/resumo'),
+  },
+  socialMedia: {
+    listar: () => request<ConteudoSocialMedia[]>('/social-media'),
+    criar: (data: object) => request<ConteudoSocialMedia>('/social-media', { method: 'POST', body: JSON.stringify(data) }),
+    resumo: () => request<ResumoSocialMedia>('/social-media/resumo'),
   },
   rotinas: {
     listar: () => request<Rotina[]>('/rotinas'),

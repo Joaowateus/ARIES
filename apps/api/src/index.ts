@@ -24,6 +24,8 @@ import insightsRoutes from './routes/insights'
 import meuPainelRoutes from './routes/meuPainel'
 import rotinasRoutes from './routes/rotinas'
 import tarefasRoutes from './routes/tarefas'
+import marketplaceRoutes from './routes/marketplace'
+import socialMediaRoutes from './routes/socialMedia'
 
 const app = express()
 
@@ -106,6 +108,8 @@ app.use('/insights', insightsRoutes)
 app.use('/meu-painel', meuPainelRoutes)
 app.use('/rotinas', rotinasRoutes)
 app.use('/tarefas', tarefasRoutes)
+app.use('/marketplace', marketplaceRoutes)
+app.use('/social-media', socialMediaRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

@@ -32,6 +32,8 @@ const nav = [
   { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
   { href: '/rotinas', label: 'Gestão de Rotinas', icon: '🔁' },
   { href: '/tarefas', label: 'Tarefas', icon: '📌' },
+  { href: '/marketplace', label: 'Marketplace', icon: '🛵' },
+  { href: '/social-media', label: 'Social Media', icon: '📱' },
   { href: '/vendedores', label: 'Equipe', icon: '👥' },
 ]
 
