@@ -77,6 +77,32 @@ export interface ConversaoFunil {
   etapas: EtapaConversao[]
 }
 
+export interface AuditoriaGenerica {
+  id: string
+  entidadeTipo: string
+  entidadeId: string
+  conforme: boolean
+  observacoes?: string | null
+  data: string
+  responsavel?: { id: string; nome: string }
+}
+
+export interface ResumoAuditoriaArea {
+  entidadeTipo: string
+  total: number
+  percentualConformidade: number
+}
+
+export interface PlanoAcaoGenerico {
+  id: string
+  problema: string
+  causa?: string | null
+  solucao?: string | null
+  prazo?: string | null
+  status: string
+  responsavel?: { id: string; nome: string }
+}
+
 export interface Processo {
   id: string
   nome: string
@@ -633,6 +659,15 @@ export const api = {
       request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
     remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
+  },
+  auditorias: {
+    listar: (entidadeTipo?: string) => request<AuditoriaGenerica[]>(`/auditorias${entidadeTipo ? `?entidadeTipo=${entidadeTipo}` : ''}`),
+    criar: (data: object) => request<AuditoriaGenerica>('/auditorias', { method: 'POST', body: JSON.stringify(data) }),
+    resumo: () => request<ResumoAuditoriaArea[]>('/auditorias/resumo'),
+    planosAcao: () => request<PlanoAcaoGenerico[]>('/auditorias/planos-acao'),
+    criarPlanoAcao: (data: object) => request<PlanoAcaoGenerico>('/auditorias/planos-acao', { method: 'POST', body: JSON.stringify(data) }),
+    atualizarStatusPlano: (id: string, status: string) =>
+      request<{ ok: boolean }>(`/auditorias/planos-acao/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   },
   processos: {
     listar: () => request<Processo[]>('/processos'),

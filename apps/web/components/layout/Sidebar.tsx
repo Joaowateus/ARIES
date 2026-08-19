@@ -30,6 +30,7 @@ const nav = [
   { href: '/protocolos', label: 'Protocolos', icon: '📋' },
   { href: '/processos', label: 'Processos', icon: '🗺️' },
   { href: '/treinamentos', label: 'Treinamentos', icon: '🎓' },
+  { href: '/auditorias', label: 'Auditorias', icon: '🕵️' },
   { href: '/metas', label: 'Metas', icon: '🎯' },
   { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
   { href: '/rotinas', label: 'Gestão de Rotinas', icon: '🔁' },

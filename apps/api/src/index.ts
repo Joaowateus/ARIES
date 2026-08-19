@@ -28,6 +28,7 @@ import marketplaceRoutes from './routes/marketplace'
 import socialMediaRoutes from './routes/socialMedia'
 import processosRoutes from './routes/processos'
 import treinamentosRoutes from './routes/treinamentos'
+import auditoriasRoutes from './routes/auditorias'
 
 const app = express()
 
@@ -114,6 +115,7 @@ app.use('/marketplace', marketplaceRoutes)
 app.use('/social-media', socialMediaRoutes)
 app.use('/processos', processosRoutes)
 app.use('/treinamentos', treinamentosRoutes)
+app.use('/auditorias', auditoriasRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
 import { PAPEIS, PAPEIS_GESTAO } from '../lib/permissoes'
+import { registrarLog } from '../lib/logAuditoria'
 
 const router = Router()
 
@@ -89,14 +90,32 @@ router.patch('/:id', requireAuth, requirePapel(...PAPEIS_GESTAO), async (req: Re
       return
     }
   }
-  const atualizado = await prisma.usuario.updateMany({
+  const anterior = await prisma.usuario.findFirst({
     where: { id: String(req.params.id), empresaId: req.user!.empresaId },
-    data: parse.data,
+    select: { papel: true, gestorId: true },
   })
-  if (!atualizado.count) {
+  if (!anterior) {
     res.status(404).json({ error: 'Usuário não encontrado' })
     return
   }
+  await prisma.usuario.updateMany({
+    where: { id: String(req.params.id), empresaId: req.user!.empresaId },
+    data: parse.data,
+  })
+
+  if (parse.data.papel && parse.data.papel !== anterior.papel) {
+    await registrarLog({
+      empresaId: req.user!.empresaId, entidadeTipo: 'USUARIO', entidadeId: String(req.params.id), usuarioId: req.user!.sub,
+      acao: 'UPDATE', campoAlterado: 'papel', valorAnterior: anterior.papel, valorNovo: parse.data.papel,
+    })
+  }
+  if (parse.data.gestorId !== undefined && parse.data.gestorId !== anterior.gestorId) {
+    await registrarLog({
+      empresaId: req.user!.empresaId, entidadeTipo: 'USUARIO', entidadeId: String(req.params.id), usuarioId: req.user!.sub,
+      acao: 'UPDATE', campoAlterado: 'gestorId', valorAnterior: anterior.gestorId, valorNovo: parse.data.gestorId,
+    })
+  }
+
   res.json({ ok: true })
 })
 
