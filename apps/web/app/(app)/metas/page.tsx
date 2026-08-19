@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api, MetaComProgresso } from '@/lib/api'
+import { api, MetaComProgresso, Usuario } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
 const PERIODOS = [
@@ -22,6 +22,7 @@ function hojeISO(): string {
 export default function MetasPage() {
   const { user } = useAuth()
   const [metas, setMetas] = useState<MetaComProgresso[]>([])
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [erro, setErro] = useState('')
@@ -29,13 +30,14 @@ export default function MetasPage() {
 
   const [form, setForm] = useState({
     titulo: '', tipo: 'QUANTIDADE', valor: '', periodo: 'MENSAL',
-    inicioEm: hojeISO(), fimEm: hojeISO(),
+    inicioEm: hojeISO(), fimEm: hojeISO(), usuarioId: '',
   })
 
   const podeGerenciar = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL'].includes(user?.papel ?? '')
 
   const carregar = useCallback(() => {
     api.metas.progresso('todas').then(setMetas).finally(() => setLoading(false))
+    api.usuarios.listar().then(setUsuarios)
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
@@ -54,8 +56,9 @@ export default function MetasPage() {
         valor: Number(form.valor),
         inicioEm: new Date(form.inicioEm).toISOString(),
         fimEm: new Date(form.fimEm + 'T23:59:59').toISOString(),
+        usuarioId: form.usuarioId || null,
       })
-      setForm({ titulo: '', tipo: 'QUANTIDADE', valor: '', periodo: 'MENSAL', inicioEm: hojeISO(), fimEm: hojeISO() })
+      setForm({ titulo: '', tipo: 'QUANTIDADE', valor: '', periodo: 'MENSAL', inicioEm: hojeISO(), fimEm: hojeISO(), usuarioId: '' })
       setShowForm(false)
       carregar()
     } catch (err: unknown) {
@@ -75,7 +78,7 @@ export default function MetasPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Metas</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Metas da operação comercial — sempre por período, nunca por vendedor individual</p>
+          <p className="text-sm text-gray-500 mt-0.5">Metas por período — da operação como um todo ou de um colaborador específico</p>
         </div>
         {podeGerenciar && (
           <button
@@ -130,6 +133,14 @@ export default function MetasPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Atribuir a</label>
+            <select value={form.usuarioId} onChange={e => set('usuarioId', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">Toda a operação (meta da empresa)</option>
+              {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+            </select>
+          </div>
           {erro && <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">{erro}</div>}
           <button type="submit" disabled={salvando}
             className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
@@ -157,6 +168,8 @@ export default function MetasPage() {
                     <div className="font-medium text-gray-900">{m.titulo}</div>
                     <div className="text-xs text-gray-400 mt-0.5">
                       {PERIODOS.find(p => p.value === m.periodo)?.label} · {new Date(m.inicioEm).toLocaleDateString('pt-BR')} a {new Date(m.fimEm).toLocaleDateString('pt-BR')}
+                      {' · '}
+                      {m.usuarioId ? (usuarios.find(u => u.id === m.usuarioId)?.nome ?? 'Colaborador') : 'Toda a operação'}
                     </div>
                   </div>
                   <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${m.status === 'ATIVA' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>

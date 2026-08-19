@@ -17,6 +17,7 @@ const PAPEL_LABEL: Record<string, string> = {
 }
 
 const nav = [
+  { href: '/meu-painel', label: 'Meu Painel', icon: '🙋' },
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
   { href: '/oportunidades', label: 'Oportunidades', icon: '🎯' },
@@ -28,6 +29,9 @@ const nav = [
   { href: '/precificacao', label: 'Precificação', icon: '💲' },
   { href: '/protocolos', label: 'Protocolos', icon: '📋' },
   { href: '/metas', label: 'Metas', icon: '🎯' },
+  { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
+  { href: '/rotinas', label: 'Gestão de Rotinas', icon: '🔁' },
+  { href: '/tarefas', label: 'Tarefas', icon: '📌' },
   { href: '/vendedores', label: 'Equipe', icon: '👥' },
 ]
 

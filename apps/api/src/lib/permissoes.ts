@@ -37,9 +37,11 @@ export const NIVEL_HIERARQUICO: Record<string, number> = {
  * agora centralizado. */
 export const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL'] as const
 
-/** A partir de SUPERVISOR (nível 3) o usuário passa a enxergar dados de
- * equipe, não só os próprios. */
-export const NIVEL_MINIMO_VISAO_EQUIPE = 3
+/** A partir de COORDENADOR (nível 2) o usuário passa a enxergar dados de
+ * equipe, não só os próprios — Coordenador já "distribui tarefas" e
+ * "acompanha vendedores" no desenho original, então a visão de equipe
+ * começa nele, não só a partir de Supervisor. */
+export const NIVEL_MINIMO_VISAO_EQUIPE = 2
 
 export function nivelDe(papel: string): number {
   return NIVEL_HIERARQUICO[papel] ?? 0

@@ -21,6 +21,9 @@ import protocolosRoutes from './routes/protocolos'
 import metasRoutes from './routes/metas'
 import funilRoutes from './routes/funil'
 import insightsRoutes from './routes/insights'
+import meuPainelRoutes from './routes/meuPainel'
+import rotinasRoutes from './routes/rotinas'
+import tarefasRoutes from './routes/tarefas'
 
 const app = express()
 
@@ -100,6 +103,9 @@ app.use('/protocolos', protocolosRoutes)
 app.use('/metas', metasRoutes)
 app.use('/funil', funilRoutes)
 app.use('/insights', insightsRoutes)
+app.use('/meu-painel', meuPainelRoutes)
+app.use('/rotinas', rotinasRoutes)
+app.use('/tarefas', tarefasRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

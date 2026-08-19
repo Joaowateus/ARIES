@@ -77,6 +77,62 @@ export interface ConversaoFunil {
   etapas: EtapaConversao[]
 }
 
+export interface RotinaBloco { titulo: string; itens: string[] }
+
+export interface Rotina {
+  id: string
+  nome: string
+  descricao?: string | null
+  papelAlvo?: string | null
+  departamento?: string | null
+  frequencia: 'DIARIA' | 'SEMANAL' | 'MENSAL'
+  horario?: string | null
+  blocos: RotinaBloco[]
+  evidenciaNecessaria: boolean
+  status: string
+}
+
+export interface ItemExecucao { bloco: string; item: string; status: string }
+
+export interface RotinaExecucao {
+  id: string
+  rotinaId: string
+  data: string
+  itensStatus: ItemExecucao[]
+  status: string
+  evidencia?: string | null
+  observacao?: string | null
+  concluidoEm?: string | null
+}
+
+export interface RotinaComExecucao {
+  rotina: Rotina
+  execucao: RotinaExecucao
+}
+
+export interface Tarefa {
+  id: string
+  titulo: string
+  descricao?: string | null
+  prazo?: string | null
+  prioridade: 'BAIXA' | 'NORMAL' | 'ALTA' | 'URGENTE'
+  status: string
+  responsavel?: { id: string; nome: string }
+  criadoPor?: { id: string; nome: string }
+  criadoEm: string
+}
+
+export interface MeuPainel {
+  metas: { dia: MetaComProgresso | null; semana: MetaComProgresso | null; mes: MetaComProgresso[] }
+  leadsPendentes: number
+  followUpsPendentes: number
+  vendas: number
+  faturamentoGerado: number
+  anunciosProduzidosSemana: number
+  conteudosProduzidosSemana: number
+  tarefasPendentes: number
+}
+
 export interface Insight {
   tipo: string
   severidade: 'alto' | 'medio' | 'baixo'
@@ -98,6 +154,7 @@ export interface OportunidadeDetalhe extends Oportunidade {
 
 export interface Meta {
   id: string
+  usuarioId?: string | null
   titulo: string
   tipo: 'QUANTIDADE' | 'FATURAMENTO'
   valor: number
@@ -480,6 +537,25 @@ export const api = {
       request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
     remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
+  },
+  rotinas: {
+    listar: () => request<Rotina[]>('/rotinas'),
+    criar: (data: object) => request<Rotina>('/rotinas', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: object) => request<{ ok: boolean }>(`/rotinas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    arquivar: (id: string) => request<{ ok: boolean }>(`/rotinas/${id}/arquivar`, { method: 'PATCH' }),
+    minha: () => request<RotinaComExecucao[]>('/rotinas/minha'),
+    atualizarExecucao: (id: string, data: object) =>
+      request<RotinaExecucao>(`/rotinas/execucoes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  tarefas: {
+    listar: (status?: string) => request<Tarefa[]>(`/tarefas${status ? `?status=${status}` : ''}`),
+    criar: (data: object) => request<Tarefa>('/tarefas', { method: 'POST', body: JSON.stringify(data) }),
+    atualizarStatus: (id: string, status: string) =>
+      request<{ ok: boolean }>(`/tarefas/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    remover: (id: string) => request<{ ok: boolean }>(`/tarefas/${id}`, { method: 'DELETE' }),
+  },
+  meuPainel: {
+    get: () => request<MeuPainel>('/meu-painel'),
   },
   funil: {
     metas: () => request<MetaFunilEtapa[]>('/funil/metas'),

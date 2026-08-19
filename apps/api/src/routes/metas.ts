@@ -2,13 +2,13 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
-import { PAPEIS_GESTAO } from '../lib/permissoes'
+import { PAPEIS_GESTAO, escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
 
 const router = Router()
 
-// Metas são sempre da empresa/departamento comercial como um todo — nunca
-// atribuídas a um vendedor individual. O objetivo é acompanhar a operação,
-// não fazer ranking de cobrança individual (ver Pilar 7 do manual de precificação).
+// Metas podem ser da empresa/departamento como um todo (usuarioId nulo) ou
+// individuais (ver Pilar 7 do manual de precificação — a leitura de metas
+// individuais deve orientar treinamento, não virar cobrança pública).
 const metaSchema = z.object({
   titulo: z.string().min(2),
   tipo: z.enum(['QUANTIDADE', 'FATURAMENTO']).default('QUANTIDADE'),
@@ -16,12 +16,16 @@ const metaSchema = z.object({
   periodo: z.enum(['DIARIA', 'SEMANAL', 'MENSAL']),
   inicioEm: z.coerce.date(),
   fimEm: z.coerce.date(),
+  usuarioId: z.string().nullable().optional(),
 })
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const status = typeof req.query.status === 'string' ? req.query.status : undefined
+  const escopo = await escopoVisibilidade(prisma, req.user!)
+  const whereDono = escopo.tipo === 'todos' ? {} : { OR: [{ usuarioId: null }, escopoWhereDono(escopo, 'usuarioId')] }
+
   const metas = await prisma.meta.findMany({
-    where: { empresaId: req.user!.empresaId, ...(status ? { status } : {}) },
+    where: { empresaId: req.user!.empresaId, ...whereDono, ...(status ? { status } : {}) },
     orderBy: { inicioEm: 'desc' },
   })
   res.json(metas)
@@ -80,22 +84,14 @@ router.delete('/:id', requireAuth, requirePapel(...PAPEIS_GESTAO), async (req: R
 })
 
 // ---------------------------------------------------------------------------
-// Progresso das metas ativas — usado nas barras Dia/Semana/Mês do Dashboard
-// Executivo. Progresso é medido sobre vendas fechadas (GANHO) dentro da
-// janela [inicioEm, min(fimEm, agora)] da própria meta.
+// Progresso das metas — usado nas barras Dia/Semana/Mês do Dashboard
+// Executivo e do Meu Painel. Meta individual mede só as vendas do próprio
+// usuarioId; meta da empresa mede tudo.
 // ---------------------------------------------------------------------------
 
-router.get('/progresso', requireAuth, async (req: Request, res: Response) => {
-  const empresaId = req.user!.empresaId
+export async function calcularProgressoMetas(empresaId: string, metas: { id: string; tipo: string; valor: number; usuarioId: string | null; periodo: string; inicioEm: Date; fimEm: Date }[]) {
   const agora = new Date()
-  const status = typeof req.query.status === 'string' ? req.query.status : 'ATIVA'
-
-  const metas = await prisma.meta.findMany({
-    where: { empresaId, ...(status !== 'todas' ? { status } : {}) },
-    orderBy: { inicioEm: 'desc' },
-  })
-
-  const progresso = await Promise.all(
+  return Promise.all(
     metas.map(async meta => {
       const fimJanela = meta.fimEm < agora ? meta.fimEm : agora
       const contratos = await prisma.contrato.findMany({
@@ -103,6 +99,7 @@ router.get('/progresso', requireAuth, async (req: Request, res: Response) => {
           empresaId,
           status: { not: 'CANCELADO' },
           criadoEm: { gte: meta.inicioEm, lte: fimJanela },
+          ...(meta.usuarioId ? { vendedorId: meta.usuarioId } : {}),
         },
         select: { valorTotal: true },
       })
@@ -119,8 +116,20 @@ router.get('/progresso', requireAuth, async (req: Request, res: Response) => {
       }
     })
   )
+}
 
-  res.json(progresso)
+router.get('/progresso', requireAuth, async (req: Request, res: Response) => {
+  const empresaId = req.user!.empresaId
+  const status = typeof req.query.status === 'string' ? req.query.status : 'ATIVA'
+  const escopo = await escopoVisibilidade(prisma, req.user!)
+  const whereDono = escopo.tipo === 'todos' ? {} : { OR: [{ usuarioId: null }, escopoWhereDono(escopo, 'usuarioId')] }
+
+  const metas = await prisma.meta.findMany({
+    where: { empresaId, ...whereDono, ...(status !== 'todas' ? { status } : {}) },
+    orderBy: { inicioEm: 'desc' },
+  })
+
+  res.json(await calcularProgressoMetas(empresaId, metas))
 })
 
 export default router
