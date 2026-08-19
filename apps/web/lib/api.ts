@@ -77,6 +77,22 @@ export interface ConversaoFunil {
   etapas: EtapaConversao[]
 }
 
+export interface Notificacao {
+  id: string
+  tipo: string
+  titulo: string
+  mensagem: string
+  lida: boolean
+  criadoEm: string
+}
+
+export interface EventoCalendario {
+  tipo: string
+  titulo: string
+  data: string
+  entidadeId: string
+}
+
 export interface EquipeResumo {
   usuario: { id: string; nome: string; papel: string }
   vendasNoMes: number
@@ -684,6 +700,36 @@ export const api = {
       request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
     remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
+  },
+  notificacoes: {
+    listar: () => request<Notificacao[]>('/notificacoes'),
+    marcarLida: (id: string) => request<{ ok: boolean }>(`/notificacoes/${id}/lida`, { method: 'PATCH' }),
+    marcarTodasLidas: () => request<{ ok: boolean }>('/notificacoes/marcar-todas-lidas', { method: 'PATCH' }),
+  },
+  calendario: {
+    listar: (de?: string, ate?: string) => {
+      const qs = new URLSearchParams()
+      if (de) qs.set('de', de)
+      if (ate) qs.set('ate', ate)
+      const s = qs.toString()
+      return request<EventoCalendario[]>(`/calendario${s ? `?${s}` : ''}`)
+    },
+  },
+  relatorios: {
+    baixarCsv: async (tipo: 'oportunidades' | 'contratos' | 'tarefas') => {
+      const token = getToken()
+      const res = await fetch(`${BASE}/relatorios/${tipo}.csv`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error('Erro ao gerar relatório')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${tipo}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    },
   },
   gestao: {
     equipe: () => request<EquipeResumo[]>('/gestao/equipe'),

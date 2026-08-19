@@ -30,6 +30,9 @@ import processosRoutes from './routes/processos'
 import treinamentosRoutes from './routes/treinamentos'
 import auditoriasRoutes from './routes/auditorias'
 import gestaoRoutes from './routes/gestao'
+import notificacoesRoutes from './routes/notificacoes'
+import calendarioRoutes from './routes/calendario'
+import relatoriosRoutes from './routes/relatorios'
 
 const app = express()
 
@@ -118,6 +121,9 @@ app.use('/processos', processosRoutes)
 app.use('/treinamentos', treinamentosRoutes)
 app.use('/auditorias', auditoriasRoutes)
 app.use('/gestao', gestaoRoutes)
+app.use('/notificacoes', notificacoesRoutes)
+app.use('/calendario', calendarioRoutes)
+app.use('/relatorios', relatoriosRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

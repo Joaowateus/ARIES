@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
+import { criarNotificacao } from '../lib/notificacoes'
 
 const router = Router()
 
@@ -41,6 +42,12 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     data: { ...parse.data, empresaId: req.user!.empresaId, criadoPorId: req.user!.sub },
     include: { responsavel: { select: { id: true, nome: true } } },
   })
+  if (parse.data.responsavelId !== req.user!.sub) {
+    await criarNotificacao({
+      empresaId: req.user!.empresaId, usuarioId: parse.data.responsavelId, tipo: 'NOVA_TAREFA',
+      titulo: 'Nova tarefa atribuída', mensagem: tarefa.titulo, entidadeTipo: 'TAREFA', entidadeId: tarefa.id,
+    })
+  }
   res.status(201).json(tarefa)
 })
 
