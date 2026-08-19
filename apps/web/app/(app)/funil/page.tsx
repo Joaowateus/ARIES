@@ -3,16 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, Oportunidade } from '@/lib/api'
 import Link from 'next/link'
+import { COLUNAS_KANBAN, ESTAGIO_VENDA_FECHADA } from '@/lib/funil'
 
-const COLUNAS = [
-  { id: 'NOVO_LEAD', label: 'Novo Lead', cor: 'bg-gray-100 border-gray-300' },
-  { id: 'CONTATO', label: 'Contato', cor: 'bg-blue-50 border-blue-300' },
-  { id: 'VISITA_AGENDADA', label: 'Visita Agendada', cor: 'bg-yellow-50 border-yellow-300' },
-  { id: 'PROPOSTA', label: 'Proposta', cor: 'bg-orange-50 border-orange-300' },
-  { id: 'NEGOCIACAO', label: 'Negociação', cor: 'bg-purple-50 border-purple-300' },
-  { id: 'GANHO', label: '✅ Ganho', cor: 'bg-green-50 border-green-300' },
-  { id: 'PERDIDO', label: '❌ Perdido', cor: 'bg-red-50 border-red-300' },
-]
+const COLUNAS = COLUNAS_KANBAN
 
 export default function FunilPage() {
   const [oportunidades, setOportunidades] = useState<Oportunidade[]>([])
@@ -79,7 +72,7 @@ export default function FunilPage() {
                       <div className="text-xs text-gray-400 mt-1 truncate">👤 {op.responsavel.nome}</div>
                     )}
                     {/* Ações rápidas de movimento */}
-                    {col.id !== 'GANHO' && col.id !== 'PERDIDO' && (
+                    {col.id !== ESTAGIO_VENDA_FECHADA && col.id !== 'PERDIDO' && (
                       <div className="mt-2 flex gap-1">
                         <select
                           disabled={movendo === op.id}

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { DashboardExecutivo, MetaComProgresso } from '@/lib/api'
+import { ESTAGIO_LABEL, ESTAGIO_VENDA_FECHADA } from '@/lib/funil'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -62,7 +63,7 @@ export default function DashboardPage() {
       {/* Segunda linha */}
       <div className="grid grid-cols-3 gap-4">
         <MiniStat label="Leads no período" value={data?.segundaLinha.leads ?? 0} />
-        <MiniStat label="Agendamentos no período" value={data?.segundaLinha.agendamentos ?? 0} />
+        <MiniStat label="Simulações (SQL) no período" value={data?.segundaLinha.simulacoes ?? 0} />
         <MiniStat label="Fechamentos no período" value={data?.segundaLinha.fechamentos ?? 0} />
       </div>
       <p className="text-xs text-gray-400 -mt-3">
@@ -96,7 +97,7 @@ export default function DashboardPage() {
                   <div className="text-xs text-gray-500 w-28 shrink-0 truncate">{etapa.label}</div>
                   <div className="flex-1 bg-gray-100 rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full ${etapa.estagio === 'GANHO' ? 'bg-green-500' : 'bg-blue-500'}`}
+                      className={`h-2 rounded-full ${etapa.estagio === ESTAGIO_VENDA_FECHADA ? 'bg-green-500' : 'bg-blue-500'}`}
                       style={{ width: `${Math.round(etapa.conversaoDoTopo * 100)}%` }}
                     />
                   </div>
@@ -135,16 +136,6 @@ export default function DashboardPage() {
       </div>
     </div>
   )
-}
-
-const ESTAGIO_LABEL: Record<string, string> = {
-  NOVO_LEAD: 'Novo Lead',
-  CONTATO: 'Contato',
-  VISITA_AGENDADA: 'Visita Agendada',
-  PROPOSTA: 'Proposta',
-  NEGOCIACAO: 'Negociação',
-  GANHO: 'Ganho',
-  PERDIDO: 'Perdido',
 }
 
 function MetaBar({ label, meta }: { label: string; meta?: MetaComProgresso }) {

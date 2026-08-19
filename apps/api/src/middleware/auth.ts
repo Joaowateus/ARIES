@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { verifyToken, JwtPayload } from '../lib/jwt'
+import { nivelDe } from '../lib/permissoes'
 
 declare global {
   namespace Express {
@@ -26,6 +27,18 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 export function requirePapel(...papeis: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user || !papeis.includes(req.user.papel)) {
+      res.status(403).json({ error: 'Permissão insuficiente' })
+      return
+    }
+    next()
+  }
+}
+
+/** Alternativa a requirePapel para regras baseadas em nível hierárquico
+ * (ex: "supervisor pra cima") em vez de listar papel por papel. */
+export function requireNivelMinimo(nivelMinimo: number) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user || nivelDe(req.user.papel) < nivelMinimo) {
       res.status(403).json({ error: 'Permissão insuficiente' })
       return
     }

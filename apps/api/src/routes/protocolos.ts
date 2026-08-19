@@ -3,10 +3,9 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
 import { PROTOCOLOS_SEED } from '../data/protocolos-padrao'
+import { PAPEIS_GESTAO } from '../lib/permissoes'
 
 const router = Router()
-
-const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL']
 
 // ---------------------------------------------------------------------------
 // Protocolo — definição do processo (Pilares 1-3 e 5-7 do framework)

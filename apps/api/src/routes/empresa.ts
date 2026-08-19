@@ -77,7 +77,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const empresa = await prisma.empresa.findUnique({
     where: { id: req.user!.empresaId },
     include: {
-      _count: { select: { usuarios: true, produtos: true, oportunidades: true } },
+      _count: { select: { usuarios: true, unidades: true, oportunidades: true } },
     },
   })
   if (!empresa) {

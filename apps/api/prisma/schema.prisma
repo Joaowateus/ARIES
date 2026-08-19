@@ -25,6 +25,22 @@ model Empresa {
   historicoPrecificacao HistoricoPrecificacao[]
   protocolos            Protocolo[]
   estagioHistorico      EstagioHistorico[]
+  atividadesOportunidade AtividadeOportunidade[]
+  metasFunilEtapa       MetaFunilEtapa[]
+  contasAnuncio         ContaAnuncio[]
+  anunciosProducao      AnuncioProducao[]
+  conteudosSocialMedia  ConteudoSocialMedia[]
+  rotinas               Rotina[]
+  rotinaExecucoes       RotinaExecucao[]
+  tarefas               Tarefa[]
+  processos             Processo[]
+  treinamentos          Treinamento[]
+  treinamentoProgresso  TreinamentoProgresso[]
+  auditorias            Auditoria[]
+  planosAcao            PlanoAcao[]
+  notificacoes          Notificacao[]
+  scoreConfig           ScoreConfig?
+  logAuditoria          LogAuditoria[]
 
   @@map("empresas")
 }
@@ -37,10 +53,14 @@ model Usuario {
   senhaHash    String
   papel        String   @default("VENDEDOR")
   status       String   @default("ATIVO")
+  departamento String?
+  gestorId     String?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   empresa             Empresa                 @relation(fields: [empresaId], references: [id])
+  gestor              Usuario?                @relation("Hierarquia", fields: [gestorId], references: [id])
+  subordinados        Usuario[]               @relation("Hierarquia")
   oportunidades       Oportunidade[]
   contratos           Contrato[]
   historicoSolicitado HistoricoPrecificacao[] @relation("HistoricoSolicitante")
@@ -48,9 +68,22 @@ model Usuario {
   protocolosCriados   Protocolo[]
   auditoriasProtocolo AuditoriaProtocolo[]
   planosAcaoProtocolo PlanoAcaoProtocolo[]
+  metas               Meta[]
+  atividades          AtividadeOportunidade[]
+  rotinaExecucoes     RotinaExecucao[]
+  tarefas             Tarefa[]                @relation("TarefaResponsavel")
+  tarefasCriadas      Tarefa[]                @relation("TarefaCriador")
+  anuncios            AnuncioProducao[]
+  contasAnuncio       ContaAnuncio[]
+  conteudos           ConteudoSocialMedia[]
+  treinamentos        TreinamentoProgresso[]
+  notificacoes        Notificacao[]
+  auditorias          Auditoria[]
+  planosAcao          PlanoAcao[]
 
   @@index([empresaId])
   @@index([empresaId, status])
+  @@index([gestorId])
   @@map("usuarios")
 }
 
@@ -89,6 +122,7 @@ model Unidade {
   oportunidades         Oportunidade[]
   contratos             Contrato[]
   historicoPrecificacao HistoricoPrecificacao[]
+  anuncios              AnuncioProducao[]
 
   @@index([empresaId])
   @@index([empresaId, situacao])
@@ -98,6 +132,7 @@ model Unidade {
 model Meta {
   id        String   @id @default(cuid())
   empresaId String
+  usuarioId String? // null = meta da empresa/departamento; setado = meta individual do colaborador
   titulo    String
   tipo      String   @default("QUANTIDADE")
   valor     Float
@@ -107,38 +142,65 @@ model Meta {
   status    String   @default("ATIVA")
   criadaEm  DateTime @default(now())
 
-  empresa Empresa @relation(fields: [empresaId], references: [id])
+  empresa Empresa  @relation(fields: [empresaId], references: [id])
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
 
+  @@index([empresaId, usuarioId])
   @@map("metas")
 }
 
 model Oportunidade {
-  id            String    @id @default(cuid())
-  empresaId     String
-  responsavelId String?
-  unidadeId     String?
-  nomeCliente   String
-  telefone      String?
-  email         String?
-  estagio       String    @default("NOVO_LEAD")
-  origem        String    @default("MANUAL")
-  valor         Float?
-  observacoes   String?
-  criadaEm      DateTime  @default(now())
-  atualizadaEm  DateTime  @updatedAt
-  fechadaEm     DateTime?
-  statusFinal   String?
+  id                    String    @id @default(cuid())
+  empresaId             String
+  responsavelId         String?
+  unidadeId             String?
+  nomeCliente           String
+  telefone              String?
+  email                 String?
+  estagio               String    @default("NOVO_LEAD")
+  origem                String    @default("MANUAL")
+  valor                 Float?
+  observacoes           String?
+  ultimaInteracaoEm     DateTime?
+  proximaAcaoEm         DateTime?
+  proximaAcaoDescricao  String?
+  criadaEm              DateTime  @default(now())
+  atualizadaEm          DateTime  @updatedAt
+  fechadaEm             DateTime?
+  statusFinal           String?
 
-  empresa     Empresa               @relation(fields: [empresaId], references: [id])
-  responsavel Usuario?              @relation(fields: [responsavelId], references: [id])
-  unidade     Unidade?              @relation(fields: [unidadeId], references: [id])
-  contrato    Contrato?
+  empresa          Empresa                 @relation(fields: [empresaId], references: [id])
+  responsavel      Usuario?                @relation(fields: [responsavelId], references: [id])
+  unidade          Unidade?                @relation(fields: [unidadeId], references: [id])
+  contrato         Contrato?
   historicoEstagio EstagioHistorico[]
+  atividades       AtividadeOportunidade[]
 
   @@index([empresaId])
   @@index([empresaId, estagio])
   @@index([empresaId, responsavelId])
+  @@index([empresaId, proximaAcaoEm])
   @@map("oportunidades")
+}
+
+// Log de interação/follow-up (ligação, WhatsApp, visita, simulação...) — distinto
+// do EstagioHistorico, que só registra troca de etapa do funil.
+model AtividadeOportunidade {
+  id             String   @id @default(cuid())
+  empresaId      String
+  oportunidadeId String
+  usuarioId      String
+  tipo           String // LIGACAO | WHATSAPP | VISITA | SIMULACAO | EMAIL | OUTRO
+  descricao      String
+  criadoEm       DateTime @default(now())
+
+  empresa      Empresa      @relation(fields: [empresaId], references: [id])
+  oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id])
+  usuario      Usuario      @relation(fields: [usuarioId], references: [id])
+
+  @@index([empresaId])
+  @@index([oportunidadeId])
+  @@map("atividades_oportunidade")
 }
 
 // Trilha de transição de estágio — base para "tempo médio por etapa" e conversão
@@ -174,6 +236,7 @@ model Contrato {
   parcelas        Int?     @default(1)
   observacoes     String?
   status          String   @default("ATIVO") // ATIVO | CANCELADO | ENCERRADO
+  processoAdministrativoStatus String @default("PENDENTE") // PENDENTE | CONCLUIDO — etapa final do funil (transferência/documentação), meta 100% sem erro
   criadoEm        DateTime @default(now())
   atualizadoEm    DateTime @updatedAt
 
@@ -345,6 +408,8 @@ model Protocolo {
   naoConformidades NaoConformidadeProtocolo[]
   planosAcao       PlanoAcaoProtocolo[]
   melhorias        MelhoriaProtocolo[]
+  rotinas          Rotina[]
+  processos        Processo[]
 
   @@index([empresaId])
   @@index([empresaId, categoria])
@@ -427,4 +492,350 @@ model MelhoriaProtocolo {
   @@index([empresaId])
   @@index([protocoloId])
   @@map("melhorias_protocolo")
+}
+
+// =====================================================================
+// SISTEMA OPERACIONAL COMERCIAL INDIVIDUAL — CRM/rotina/produtividade por
+// colaborador, conectado à gestão gerencial via Usuario.gestorId.
+// =====================================================================
+
+// Meta de conversão configurável por etapa do funil de 8 estágios.
+model MetaFunilEtapa {
+  id           String   @id @default(cuid())
+  empresaId    String
+  etapa        String
+  metaPct      Float // 0-1
+  tipoMeta     String   @default("MINIMO") // MINIMO | MAXIMO_PERDA
+  atualizadoEm DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@unique([empresaId, etapa])
+  @@map("metas_funil_etapa")
+}
+
+model ContaAnuncio {
+  id         String   @id @default(cuid())
+  empresaId  String
+  usuarioId  String
+  nome       String
+  plataforma String   @default("MARKETPLACE")
+  ativa      Boolean  @default(true)
+  criadoEm   DateTime @default(now())
+
+  empresa  Empresa           @relation(fields: [empresaId], references: [id])
+  usuario  Usuario           @relation(fields: [usuarioId], references: [id])
+  anuncios AnuncioProducao[]
+
+  @@index([empresaId, usuarioId])
+  @@map("contas_anuncio")
+}
+
+model AnuncioProducao {
+  id         String   @id @default(cuid())
+  empresaId  String
+  usuarioId  String
+  contaId    String
+  unidadeId  String?
+  data       DateTime @default(now())
+  horario    String?
+  produto    String?
+  quantidade Int      @default(1)
+  status     String   @default("PUBLICADO") // PUBLICADO | REMOVIDO | ERRO
+  criadoEm   DateTime @default(now())
+
+  empresa Empresa      @relation(fields: [empresaId], references: [id])
+  usuario Usuario      @relation(fields: [usuarioId], references: [id])
+  conta   ContaAnuncio @relation(fields: [contaId], references: [id])
+  unidade Unidade?     @relation(fields: [unidadeId], references: [id])
+
+  @@index([empresaId, usuarioId])
+  @@index([empresaId, data])
+  @@map("anuncios_producao")
+}
+
+model ConteudoSocialMedia {
+  id               String   @id @default(cuid())
+  empresaId        String
+  usuarioId        String
+  tipo             String // STORY | REELS | POST | VIDEO | FOTO | OFERTA | EDUCATIVO | COMERCIAL
+  plataforma       String
+  data             DateTime @default(now())
+  objetivo         String?
+  status           String   @default("PUBLICADO") // PLANEJADO | PRODUZIDO | PUBLICADO
+  link             String?
+  alcance          Int?
+  visualizacoes    Int?
+  interacoes       Int?
+  leadsGerados     Int?     @default(0)
+  vendasOriginadas Int?     @default(0)
+  observacoes      String?
+  criadoEm         DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([empresaId, usuarioId])
+  @@index([empresaId, data])
+  @@map("conteudo_social_media")
+}
+
+// Rotina = definição do checklist recorrente (blocos ordenados). Blocos em
+// JSON — mesmo padrão de Protocolo.pop — porque a composição varia por
+// cargo/rotina (ex: BLOCO 01 — ABERTURA, BLOCO 02 — PROSPECÇÃO...).
+model Rotina {
+  id                  String   @id @default(cuid())
+  empresaId           String
+  nome                String
+  descricao           String?
+  papelAlvo           String?
+  departamento        String?
+  frequencia          String   @default("DIARIA") // DIARIA | SEMANAL | MENSAL
+  horario             String?
+  blocos              Json // [{ titulo, itens: [string] }]
+  evidenciaNecessaria Boolean  @default(false)
+  protocoloId         String?
+  processoId          String?
+  status              String   @default("ATIVA") // ATIVA | ARQUIVADA
+  criadoPorId         String?
+  criadoEm            DateTime @default(now())
+  atualizadoEm        DateTime @updatedAt
+
+  empresa   Empresa          @relation(fields: [empresaId], references: [id])
+  protocolo Protocolo?       @relation(fields: [protocoloId], references: [id])
+  processo  Processo?        @relation(fields: [processoId], references: [id])
+  execucoes RotinaExecucao[]
+
+  @@index([empresaId])
+  @@map("rotinas")
+}
+
+// Checklist do dia por usuário. `data` é sempre truncada para meia-noite pela
+// aplicação — é o que faz o @@unique funcionar como "uma execução por
+// rotina+usuário+dia".
+model RotinaExecucao {
+  id          String    @id @default(cuid())
+  empresaId   String
+  rotinaId    String
+  usuarioId   String
+  data        DateTime  @default(now())
+  itensStatus Json // [{ item: string, status: string }]
+  status      String    @default("PENDENTE") // PENDENTE | EM_ANDAMENTO | CONCLUIDA | ATRASADA | NAO_REALIZADA | CANCELADA
+  evidencia   String?
+  observacao  String?
+  concluidoEm DateTime?
+  criadoEm    DateTime  @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+  rotina  Rotina  @relation(fields: [rotinaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([rotinaId, usuarioId, data])
+  @@index([empresaId, usuarioId])
+  @@map("rotina_execucoes")
+}
+
+model Tarefa {
+  id            String    @id @default(cuid())
+  empresaId     String
+  titulo        String
+  descricao     String?
+  responsavelId String
+  criadoPorId   String
+  prazo         DateTime?
+  prioridade    String    @default("NORMAL") // BAIXA | NORMAL | ALTA | URGENTE
+  status        String    @default("PENDENTE") // PENDENTE | EM_ANDAMENTO | CONCLUIDA | ATRASADA | CANCELADA
+  vinculoTipo   String? // OPORTUNIDADE | ROTINA | PROTOCOLO | PROCESSO
+  vinculoId     String?
+  concluidoEm   DateTime?
+  criadoEm      DateTime  @default(now())
+
+  empresa     Empresa @relation(fields: [empresaId], references: [id])
+  responsavel Usuario @relation("TarefaResponsavel", fields: [responsavelId], references: [id])
+  criadoPor   Usuario @relation("TarefaCriador", fields: [criadoPorId], references: [id])
+
+  @@index([empresaId, responsavelId])
+  @@index([empresaId, status])
+  @@map("tarefas")
+}
+
+// Processo — separado de Protocolo (o protocolo é o "como fazer" oficial; o
+// processo é o desenho operacional do departamento, que pode referenciar um
+// protocolo e uma rotina).
+model Processo {
+  id            String   @id @default(cuid())
+  empresaId     String
+  nome          String
+  departamento  String?
+  responsavelId String?
+  cargo         String?
+  objetivo      String?
+  fluxo         Json?
+  pop           Json?
+  protocoloId   String?
+  ferramentas   Json?
+  kpis          Json?
+  auditoria     Json?
+  contingencia  Json?
+  status        String   @default("ativo")
+  criadoPorId   String?
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  empresa   Empresa    @relation(fields: [empresaId], references: [id])
+  protocolo Protocolo? @relation(fields: [protocoloId], references: [id])
+  rotinas   Rotina[]
+
+  @@index([empresaId])
+  @@map("processos")
+}
+
+model Treinamento {
+  id                   String   @id @default(cuid())
+  empresaId            String
+  nome                 String
+  categoria            String?
+  papelAlvo            String?
+  departamento         String?
+  descricao            String?
+  videoUrl             String?
+  pdfUrl               String?
+  documentoUrl         String?
+  link                 String?
+  materialComplementar Json?
+  avaliacao            Json?
+  status               String   @default("ativo")
+  criadoEm             DateTime @default(now())
+
+  empresa   Empresa                 @relation(fields: [empresaId], references: [id])
+  progresso TreinamentoProgresso[]
+
+  @@index([empresaId])
+  @@map("treinamentos")
+}
+
+model TreinamentoProgresso {
+  id            String    @id @default(cuid())
+  empresaId     String
+  treinamentoId String
+  usuarioId     String
+  status        String    @default("DISPONIVEL") // DISPONIVEL | INICIADO | CONCLUIDO
+  percentual    Float     @default(0)
+  nota          Float?
+  concluidoEm   DateTime?
+  atualizadoEm  DateTime  @updatedAt
+
+  empresa     Empresa     @relation(fields: [empresaId], references: [id])
+  treinamento Treinamento @relation(fields: [treinamentoId], references: [id])
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id])
+
+  @@unique([treinamentoId, usuarioId])
+  @@index([empresaId, usuarioId])
+  @@map("treinamento_progresso")
+}
+
+// Auditoria genérica (CRM/Rotina/Anúncio/Conteúdo/Treinamento/Processo).
+// AuditoriaProtocolo continua existindo à parte, sem mudança, só para
+// protocolos.
+model Auditoria {
+  id               String   @id @default(cuid())
+  empresaId        String
+  entidadeTipo     String // CRM | ROTINA | ANUNCIO | CONTEUDO | TREINAMENTO | PROCESSO
+  entidadeId       String
+  responsavelId    String?
+  data             DateTime @default(now())
+  conforme         Boolean
+  itensVerificados Json?
+  observacoes      String?
+  criadoEm         DateTime @default(now())
+
+  empresa     Empresa     @relation(fields: [empresaId], references: [id])
+  responsavel Usuario?    @relation(fields: [responsavelId], references: [id])
+  planosAcao  PlanoAcao[]
+
+  @@index([empresaId])
+  @@index([empresaId, entidadeTipo, entidadeId])
+  @@map("auditorias")
+}
+
+// Plano de ação genérico (mesmo padrão de PlanoAcaoProtocolo, para qualquer
+// não-conformidade fora do escopo de protocolo).
+model PlanoAcao {
+  id            String    @id @default(cuid())
+  empresaId     String
+  auditoriaId   String?
+  origemTipo    String? // AUDITORIA | INSIGHT | MANUAL
+  problema      String
+  causa         String?
+  solucao       String?
+  responsavelId String?
+  prazo         DateTime?
+  status        String    @default("PENDENTE") // PENDENTE | EM_ANDAMENTO | CONCLUIDO | ATRASADO
+  concluidoEm   DateTime?
+  criadoEm      DateTime  @default(now())
+
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  auditoria   Auditoria? @relation(fields: [auditoriaId], references: [id])
+  responsavel Usuario?   @relation(fields: [responsavelId], references: [id])
+
+  @@index([empresaId])
+  @@map("planos_acao")
+}
+
+model Notificacao {
+  id           String   @id @default(cuid())
+  empresaId    String
+  usuarioId    String
+  tipo         String
+  titulo       String
+  mensagem     String
+  lida         Boolean  @default(false)
+  entidadeTipo String?
+  entidadeId   String?
+  criadoEm     DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([empresaId, usuarioId, lida])
+  @@map("notificacoes")
+}
+
+// Pesos do score de performance — nunca só volume de vendas (ver Central de
+// Insights / Ranking). Defaults batem com o exemplo do prompt original.
+model ScoreConfig {
+  id                String   @id @default(cuid())
+  empresaId         String   @unique
+  pesoComercial     Float    @default(0.40)
+  pesoProdutividade Float    @default(0.20)
+  pesoProcessos     Float    @default(0.15)
+  pesoCrm           Float    @default(0.10)
+  pesoConteudo      Float    @default(0.05)
+  pesoTreinamentos  Float    @default(0.05)
+  pesoRotinas       Float    @default(0.05)
+  atualizadoEm      DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@map("score_config")
+}
+
+// Trilha genérica de alteração (quem/quando/valor anterior/valor novo),
+// gravada via hook do Prisma Client ($extends), não manualmente por rota.
+model LogAuditoria {
+  id            String   @id @default(cuid())
+  empresaId     String
+  entidadeTipo  String
+  entidadeId    String
+  usuarioId     String?
+  acao          String // CREATE | UPDATE | DELETE
+  campoAlterado String?
+  valorAnterior String?
+  valorNovo     String?
+  criadoEm      DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@index([empresaId, entidadeTipo, entidadeId])
+  @@map("log_auditoria")
 }

@@ -9,6 +9,7 @@ const PAPEIS = [
   { value: 'DIRETOR_COMERCIAL', label: 'Diretor Comercial' },
   { value: 'GERENTE_COMERCIAL', label: 'Gerente Comercial' },
   { value: 'SUPERVISOR', label: 'Supervisor' },
+  { value: 'COORDENADOR', label: 'Coordenador' },
   { value: 'VENDEDOR', label: 'Vendedor' },
   { value: 'CS', label: 'Customer Success' },
   { value: 'FINANCEIRO', label: 'Financeiro' },
@@ -20,6 +21,7 @@ const PAPEL_COR: Record<string, string> = {
   DIRETOR_COMERCIAL: 'bg-purple-100 text-purple-700',
   GERENTE_COMERCIAL: 'bg-blue-100 text-blue-700',
   SUPERVISOR: 'bg-indigo-100 text-indigo-700',
+  COORDENADOR: 'bg-cyan-100 text-cyan-700',
   VENDEDOR: 'bg-green-100 text-green-700',
   CS: 'bg-teal-100 text-teal-700',
   FINANCEIRO: 'bg-orange-100 text-orange-700',
@@ -33,8 +35,9 @@ export default function VendedoresPage() {
   const [showForm, setShowForm] = useState(false)
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
 
-  const [form, setForm] = useState({ nome: '', email: '', senha: '', papel: 'VENDEDOR' })
+  const [form, setForm] = useState({ nome: '', email: '', senha: '', papel: 'VENDEDOR', departamento: '', gestorId: '' })
 
   const podeGerenciar = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL'].includes(eu?.papel ?? '')
 
@@ -53,8 +56,8 @@ export default function VendedoresPage() {
     setErro('')
     setSalvando(true)
     try {
-      await api.usuarios.criar(form)
-      setForm({ nome: '', email: '', senha: '', papel: 'VENDEDOR' })
+      await api.usuarios.criar({ ...form, gestorId: form.gestorId || undefined, departamento: form.departamento || undefined })
+      setForm({ nome: '', email: '', senha: '', papel: 'VENDEDOR', departamento: '', gestorId: '' })
       setShowForm(false)
       carregar()
     } catch (err: unknown) {
@@ -69,12 +72,17 @@ export default function VendedoresPage() {
     carregar()
   }
 
+  async function atualizarCampo(id: string, campo: 'papel' | 'gestorId', valor: string) {
+    await api.usuarios.editar(id, { [campo]: valor || null })
+    carregar()
+  }
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Equipe</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{usuarios.length} membro{usuarios.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-500 mt-0.5">{usuarios.length} membro{usuarios.length !== 1 ? 's' : ''} — hierarquia usada para visão consolidada de supervisores e gerentes</p>
         </div>
         {podeGerenciar && (
           <button
@@ -106,12 +114,27 @@ export default function VendedoresPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Papel no sistema</label>
-            <select value={form.papel} onChange={e => set('papel', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-              {PAPEIS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Papel no sistema</label>
+              <select value={form.papel} onChange={e => set('papel', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                {PAPEIS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
+              <input type="text" value={form.departamento} onChange={e => set('departamento', e.target.value)} placeholder="Ex: Comercial"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reporta para</label>
+              <select value={form.gestorId} onChange={e => set('gestorId', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="">Sem gestor direto</option>
+                {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+            </div>
           </div>
           {erro && <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">{erro}</div>}
           <button type="submit" disabled={salvando}
@@ -136,6 +159,7 @@ export default function VendedoresPage() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Nome</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Email</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Papel</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Reporta para</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Status</th>
                 {podeGerenciar && <th className="px-4 py-3" />}
               </tr>
@@ -154,9 +178,35 @@ export default function VendedoresPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">{u.email}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${PAPEL_COR[u.papel] ?? 'bg-gray-100 text-gray-700'}`}>
-                      {PAPEIS.find(p => p.value === u.papel)?.label ?? u.papel}
-                    </span>
+                    {podeGerenciar && editandoId === u.id ? (
+                      <select
+                        value={u.papel}
+                        onChange={e => atualizarCampo(u.id, 'papel', e.target.value)}
+                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white"
+                      >
+                        {PAPEIS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                      </select>
+                    ) : (
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${PAPEL_COR[u.papel] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {PAPEIS.find(p => p.value === u.papel)?.label ?? u.papel}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {podeGerenciar && editandoId === u.id ? (
+                      <select
+                        value={u.gestorId ?? ''}
+                        onChange={e => atualizarCampo(u.id, 'gestorId', e.target.value)}
+                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white"
+                      >
+                        <option value="">Sem gestor direto</option>
+                        {usuarios.filter(x => x.id !== u.id).map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-gray-500 text-xs">
+                        {usuarios.find(x => x.id === u.gestorId)?.nome ?? '—'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${u.status === 'ATIVO' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -164,11 +214,17 @@ export default function VendedoresPage() {
                     </span>
                   </td>
                   {podeGerenciar && (
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right space-x-3">
+                      <button
+                        onClick={() => setEditandoId(editandoId === u.id ? null : u.id)}
+                        className="text-xs text-gray-500 hover:text-blue-600"
+                      >
+                        {editandoId === u.id ? 'Concluir' : 'Editar'}
+                      </button>
                       {u.id !== eu?.id && (
                         <button
                           onClick={() => toggleStatus(u.id, u.status ?? 'ATIVO')}
-                          className="text-xs text-gray-500 hover:text-blue-600"
+                          className="text-xs text-gray-500 hover:text-red-600"
                         >
                           {u.status === 'ATIVO' ? 'Desativar' : 'Reativar'}
                         </button>

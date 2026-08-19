@@ -27,7 +27,7 @@ function NovoContratoForm() {
   })
 
   useEffect(() => {
-    api.oportunidades.listar({ estagio: 'NEGOCIACAO' }).then(ops => {
+    api.oportunidades.listar({ estagio: 'MQL' }).then(ops => {
       setOportunidades(ops)
       if (oportunidadeIdParam) {
         const op = ops.find(o => o.id === oportunidadeIdParam)

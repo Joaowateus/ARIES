@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
+import { PAPEIS_GESTAO } from '../lib/permissoes'
 import {
   calcularPrecificacao,
   diasEmEstoque,
@@ -14,8 +15,6 @@ import {
 } from '../lib/precificacao'
 
 const router = Router()
-
-const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL']
 
 function obterParametros(empresaId: string) {
   return obterParametrosBase(prisma, empresaId)

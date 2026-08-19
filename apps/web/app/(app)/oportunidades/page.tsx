@@ -3,28 +3,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, Oportunidade } from '@/lib/api'
 import Link from 'next/link'
-
-const ESTAGIO_COR: Record<string, string> = {
-  NOVO_LEAD: 'bg-gray-100 text-gray-700',
-  CONTATO: 'bg-blue-100 text-blue-700',
-  VISITA_AGENDADA: 'bg-yellow-100 text-yellow-700',
-  PROPOSTA: 'bg-orange-100 text-orange-700',
-  NEGOCIACAO: 'bg-purple-100 text-purple-700',
-  GANHO: 'bg-green-100 text-green-700',
-  PERDIDO: 'bg-red-100 text-red-700',
-}
-
-const ESTAGIO_LABEL: Record<string, string> = {
-  NOVO_LEAD: 'Novo Lead',
-  CONTATO: 'Contato',
-  VISITA_AGENDADA: 'Visita Agendada',
-  PROPOSTA: 'Proposta',
-  NEGOCIACAO: 'Negociação',
-  GANHO: 'Ganho',
-  PERDIDO: 'Perdido',
-}
+import { useRouter } from 'next/navigation'
+import { ESTAGIO_COR, ESTAGIO_LABEL } from '@/lib/funil'
 
 export default function OportunidadesPage() {
+  const router = useRouter()
   const [oportunidades, setOportunidades] = useState<Oportunidade[]>([])
   const [loading, setLoading] = useState(true)
   const [filtroEstagio, setFiltroEstagio] = useState('')
@@ -90,12 +73,15 @@ export default function OportunidadesPage() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Estágio</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Produto</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Responsável</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Próxima ação</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Valor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {oportunidades.map(op => (
-                <tr key={op.id} className="hover:bg-gray-50">
+              {oportunidades.map(op => {
+                const atrasado = op.proximaAcaoEm && new Date(op.proximaAcaoEm) < new Date()
+                return (
+                <tr key={op.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/oportunidades/${op.id}`)}>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{op.nomeCliente}</div>
                     {op.telefone && <div className="text-xs text-gray-400">{op.telefone}</div>}
@@ -107,11 +93,19 @@ export default function OportunidadesPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">{op.unidade?.nome ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{op.responsavel?.nome ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    {op.proximaAcaoEm ? (
+                      <span className={`text-xs ${atrasado ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                        {atrasado ? '⚠ ' : ''}{new Date(op.proximaAcaoEm).toLocaleDateString('pt-BR')}
+                      </span>
+                    ) : <span className="text-xs text-gray-300">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">
                     {op.valor ? op.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

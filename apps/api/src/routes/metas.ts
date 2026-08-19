@@ -2,10 +2,9 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
+import { PAPEIS_GESTAO } from '../lib/permissoes'
 
 const router = Router()
-
-const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL']
 
 // Metas são sempre da empresa/departamento comercial como um todo — nunca
 // atribuídas a um vendedor individual. O objetivo é acompanhar a operação,

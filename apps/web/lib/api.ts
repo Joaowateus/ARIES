@@ -31,6 +31,9 @@ export interface Usuario {
   papel: string
   empresaId: string
   status?: string
+  departamento?: string | null
+  gestorId?: string | null
+  criadoEm?: string
 }
 
 export interface Oportunidade {
@@ -44,8 +47,53 @@ export interface Oportunidade {
   observacoes?: string
   responsavel?: { id: string; nome: string }
   unidade?: { id: string; nome: string; marca?: string; modelo?: string; ano?: number; cor?: string; precoBase?: number }
+  ultimaInteracaoEm?: string | null
+  proximaAcaoEm?: string | null
+  proximaAcaoDescricao?: string | null
   criadaEm: string
   atualizadaEm: string
+}
+
+export interface MetaFunilEtapa {
+  id: string
+  etapa: string
+  metaPct: number
+  tipoMeta: 'MINIMO' | 'MAXIMO_PERDA'
+}
+
+export interface EtapaConversao {
+  estagio: string
+  label: string
+  quantidade: number
+  conversaoReal: number
+  meta: number
+  tipoMeta: 'MINIMO' | 'MAXIMO_PERDA'
+  diferenca: number
+  status: 'verde' | 'amarelo' | 'vermelho'
+}
+
+export interface ConversaoFunil {
+  totalLeads: number
+  etapas: EtapaConversao[]
+}
+
+export interface Insight {
+  tipo: string
+  severidade: 'alto' | 'medio' | 'baixo'
+  mensagem: string
+}
+
+export interface AtividadeOportunidade {
+  id: string
+  tipo: string
+  descricao: string
+  criadoEm: string
+  usuario?: { id: string; nome: string }
+}
+
+export interface OportunidadeDetalhe extends Oportunidade {
+  atividades: AtividadeOportunidade[]
+  historicoEstagio: { id: string; estagioAnterior: string | null; estagioNovo: string; criadoEm: string }[]
 }
 
 export interface Meta {
@@ -82,7 +130,7 @@ export interface DashboardExecutivo {
     ticketMedio: number
     lucro: number
   }
-  segundaLinha: { leads: number; agendamentos: number; fechamentos: number }
+  segundaLinha: { leads: number; simulacoes: number; fechamentos: number }
   funil: FunilEtapa[]
   recentes: Array<{ id: string; nomeCliente: string; estagio: string; valor?: number }>
 }
@@ -364,6 +412,8 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       }),
+    editar: (id: string, data: object) =>
+      request<{ ok: boolean }>(`/usuarios/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   },
   produtos: {
     listar: (situacao?: string) => {
@@ -406,13 +456,18 @@ export const api = {
       const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : ''
       return request<Oportunidade[]>(`/oportunidades${qs}`)
     },
+    detalhe: (id: string) => request<OportunidadeDetalhe>(`/oportunidades/${id}`),
     criar: (data: object) =>
       request<Oportunidade>('/oportunidades', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: object) =>
+      request<{ ok: boolean }>(`/oportunidades/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     moverEstagio: (id: string, estagio: string) =>
       request<Oportunidade>(`/oportunidades/${id}/estagio`, {
         method: 'PATCH',
         body: JSON.stringify({ estagio }),
       }),
+    registrarAtividade: (id: string, data: { tipo: string; descricao: string; proximaAcaoEm?: string; proximaAcaoDescricao?: string }) =>
+      request<AtividadeOportunidade>(`/oportunidades/${id}/atividades`, { method: 'POST', body: JSON.stringify(data) }),
   },
   dashboard: {
     get: () => request<DashboardExecutivo>('/dashboard'),
@@ -425,6 +480,15 @@ export const api = {
       request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
     remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
+  },
+  funil: {
+    metas: () => request<MetaFunilEtapa[]>('/funil/metas'),
+    atualizarMeta: (etapa: string, metaPct: number) =>
+      request<MetaFunilEtapa>(`/funil/metas/${etapa}`, { method: 'PUT', body: JSON.stringify({ metaPct }) }),
+    conversao: () => request<ConversaoFunil>('/funil/conversao'),
+  },
+  insights: {
+    listar: () => request<Insight[]>('/insights'),
   },
   precificacao: {
     parametros: () => request<ParametrosPrecificacao>('/precificacao/parametros'),

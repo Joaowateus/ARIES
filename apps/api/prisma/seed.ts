@@ -218,10 +218,10 @@ async function main() {
   // Oportunidades de exemplo — id fixo + upsert para que reexecuções do seed
   // (ex: reseed automático a cada deploy) não dupliquem os leads de demonstração.
   const ops = [
-    { id: 'seed-op-pedro-alves', nomeCliente: 'Pedro Alves', telefone: '(85) 99999-1001', origem: 'INSTAGRAM', estagio: 'CONTATO', responsavelId: vendedor1.id, unidadeIdx: 0, valor: 14490 },
-    { id: 'seed-op-maria-santos', nomeCliente: 'Maria Santos', telefone: '(85) 99999-1002', origem: 'INDICACAO', estagio: 'VISITA_AGENDADA', responsavelId: vendedor2.id, unidadeIdx: 3, valor: 13490 },
-    { id: 'seed-op-lucas-oliveira', nomeCliente: 'Lucas Oliveira', telefone: '(85) 99999-1003', origem: 'WHATSAPP', estagio: 'PROPOSTA', responsavelId: vendedor1.id, unidadeIdx: 4, valor: 22990 },
-    { id: 'seed-op-fernanda-lima', nomeCliente: 'Fernanda Lima', telefone: '(85) 99999-1004', origem: 'LOJA', estagio: 'NEGOCIACAO', responsavelId: vendedor2.id, unidadeIdx: 6, valor: 18490 },
+    { id: 'seed-op-pedro-alves', nomeCliente: 'Pedro Alves', telefone: '(85) 99999-1001', origem: 'INSTAGRAM', estagio: 'NAO_RESPONDEU', responsavelId: vendedor1.id, unidadeIdx: 0, valor: 14490 },
+    { id: 'seed-op-maria-santos', nomeCliente: 'Maria Santos', telefone: '(85) 99999-1002', origem: 'INDICACAO', estagio: 'RESPONDEU', responsavelId: vendedor2.id, unidadeIdx: 3, valor: 13490 },
+    { id: 'seed-op-lucas-oliveira', nomeCliente: 'Lucas Oliveira', telefone: '(85) 99999-1003', origem: 'WHATSAPP', estagio: 'SQL', responsavelId: vendedor1.id, unidadeIdx: 4, valor: 22990 },
+    { id: 'seed-op-fernanda-lima', nomeCliente: 'Fernanda Lima', telefone: '(85) 99999-1004', origem: 'LOJA', estagio: 'MQL', responsavelId: vendedor2.id, unidadeIdx: 6, valor: 18490 },
     { id: 'seed-op-roberto-costa', nomeCliente: 'Roberto Costa', telefone: '(85) 99999-1005', origem: 'MANUAL', estagio: 'NOVO_LEAD', responsavelId: vendedor1.id, valor: undefined },
   ]
 
@@ -241,6 +241,21 @@ async function main() {
         valor: op.valor,
       },
     })
+    // Backfill de EstagioHistorico — sem isso, "Funil & Conversão" não conta
+    // esses leads de demonstração (a conversão real é calculada só a partir
+    // do histórico de transição, não do estágio atual).
+    await prisma.estagioHistorico.upsert({
+      where: { id: `${op.id}-hist-novo-lead` },
+      update: {},
+      create: { id: `${op.id}-hist-novo-lead`, empresaId: empresa.id, oportunidadeId: op.id, estagioAnterior: null, estagioNovo: 'NOVO_LEAD' },
+    })
+    if (op.estagio !== 'NOVO_LEAD') {
+      await prisma.estagioHistorico.upsert({
+        where: { id: `${op.id}-hist-atual` },
+        update: {},
+        create: { id: `${op.id}-hist-atual`, empresaId: empresa.id, oportunidadeId: op.id, estagioAnterior: 'NOVO_LEAD', estagioNovo: op.estagio },
+      })
+    }
   }
   console.log(`✓ Oportunidades de exemplo: ${ops.length}`)
 
@@ -256,13 +271,23 @@ async function main() {
       nomeCliente: 'Juliana Rocha',
       telefone: '(85) 99999-1006',
       origem: 'LOJA',
-      estagio: 'GANHO',
-      statusFinal: 'GANHO',
+      estagio: 'COMPRADO',
+      statusFinal: 'COMPRADO',
       responsavelId: vendedor2.id,
       unidadeId: unidadesCriadas[7].id,
       valor: 16200,
       fechadaEm: diasAtras(10),
     },
+  })
+  await prisma.estagioHistorico.upsert({
+    where: { id: `${opGanha.id}-hist-novo-lead` },
+    update: {},
+    create: { id: `${opGanha.id}-hist-novo-lead`, empresaId: empresa.id, oportunidadeId: opGanha.id, estagioAnterior: null, estagioNovo: 'NOVO_LEAD' },
+  })
+  await prisma.estagioHistorico.upsert({
+    where: { id: `${opGanha.id}-hist-comprado` },
+    update: {},
+    create: { id: `${opGanha.id}-hist-comprado`, empresaId: empresa.id, oportunidadeId: opGanha.id, estagioAnterior: 'NOVO_LEAD', estagioNovo: 'COMPRADO' },
   })
 
   await prisma.contrato.upsert({

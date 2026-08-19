@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
+import { ESTAGIO_VENDA_FECHADA } from '../lib/funil'
 
 const router = Router()
 
@@ -46,7 +47,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Oportunidade não encontrada' })
     return
   }
-  if (oportunidade.statusFinal === 'GANHO') {
+  if (oportunidade.statusFinal === ESTAGIO_VENDA_FECHADA) {
     // já tem contrato — checar
     const existente = await prisma.contrato.findUnique({ where: { oportunidadeId } })
     if (existente) {
@@ -104,10 +105,18 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       include: { contasReceber: true, unidade: { select: { id: true, nome: true } } },
     })
 
-    // Mover oportunidade para GANHO
+    // Mover oportunidade para Comprado
     await tx.oportunidade.update({
       where: { id: oportunidadeId },
-      data: { estagio: 'GANHO', statusFinal: 'GANHO', fechadaEm: new Date() },
+      data: { estagio: ESTAGIO_VENDA_FECHADA, statusFinal: ESTAGIO_VENDA_FECHADA, fechadaEm: new Date() },
+    })
+    await tx.estagioHistorico.create({
+      data: {
+        empresaId: req.user!.empresaId,
+        oportunidadeId,
+        estagioAnterior: oportunidade.estagio,
+        estagioNovo: ESTAGIO_VENDA_FECHADA,
+      },
     })
 
     // Marcar unidade como VENDIDA

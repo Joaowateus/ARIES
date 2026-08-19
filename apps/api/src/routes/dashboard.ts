@@ -2,19 +2,9 @@ import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { calcularPrecificacao, lucroLiquidoReal, diasEmEstoque, obterParametros as obterParametrosBase } from '../lib/precificacao'
+import { ETAPAS_FUNIL_ORDEM, ESTAGIO_LABEL, ESTAGIO_VENDA_FECHADA } from '../lib/funil'
 
 const router = Router()
-
-// Ordem do funil comercial atual. "PERDIDO" é um ramo de saída, não faz parte
-// da sequência linear de conversão.
-const ETAPAS_FUNIL = [
-  { estagio: 'NOVO_LEAD', label: 'Novo Lead' },
-  { estagio: 'CONTATO', label: 'Contato' },
-  { estagio: 'VISITA_AGENDADA', label: 'Visita Agendada' },
-  { estagio: 'PROPOSTA', label: 'Proposta' },
-  { estagio: 'NEGOCIACAO', label: 'Negociação' },
-  { estagio: 'GANHO', label: 'Ganho' },
-]
 
 function inicioDoMes(data: Date): Date {
   return new Date(data.getFullYear(), data.getMonth(), 1)
@@ -79,7 +69,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const faturamento = contratosPeriodo.reduce((soma, c) => soma + c.valorTotal, 0)
   const ticketMedio = vendasPeriodo > 0 ? faturamento / vendasPeriodo : 0
 
-  const ganhasPeriodo = oportunidadesPeriodo.filter(o => o.statusFinal === 'GANHO').length
+  const ganhasPeriodo = oportunidadesPeriodo.filter(o => o.statusFinal === ESTAGIO_VENDA_FECHADA).length
   const perdidasPeriodo = oportunidadesPeriodo.filter(o => o.statusFinal === 'PERDIDO').length
   const conversao = ganhasPeriodo + perdidasPeriodo > 0 ? ganhasPeriodo / (ganhasPeriodo + perdidasPeriodo) : 0
 
@@ -101,8 +91,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
   // --- Segunda linha (eventos do funil no período, via trilha de estágio) ---
   const leads = historicoPeriodo.filter(h => h.estagioNovo === 'NOVO_LEAD').length
-  const agendamentos = historicoPeriodo.filter(h => h.estagioNovo === 'VISITA_AGENDADA').length
-  const fechamentos = historicoPeriodo.filter(h => h.estagioNovo === 'GANHO').length
+  const simulacoes = historicoPeriodo.filter(h => h.estagioNovo === 'SQL').length
+  const fechamentos = historicoPeriodo.filter(h => h.estagioNovo === ESTAGIO_VENDA_FECHADA).length
 
   // --- Funil (distribuição atual do pipeline ativo) ---
   const contagemAtual: Record<string, number> = {}
@@ -110,12 +100,12 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
   const tempoMedio = tempoMedioPorEtapa(historicoPeriodo)
   const baseFunil = contagemAtual.NOVO_LEAD ?? 0
-  const funil = ETAPAS_FUNIL.map(etapa => ({
-    estagio: etapa.estagio,
-    label: etapa.label,
-    quantidade: contagemAtual[etapa.estagio] ?? 0,
-    conversaoDoTopo: baseFunil > 0 ? (contagemAtual[etapa.estagio] ?? 0) / baseFunil : 0,
-    tempoMedioDias: tempoMedio.has(etapa.estagio) ? Math.round(tempoMedio.get(etapa.estagio)! * 10) / 10 : null,
+  const funil = ETAPAS_FUNIL_ORDEM.map(estagio => ({
+    estagio,
+    label: ESTAGIO_LABEL[estagio],
+    quantidade: contagemAtual[estagio] ?? 0,
+    conversaoDoTopo: baseFunil > 0 ? (contagemAtual[estagio] ?? 0) / baseFunil : 0,
+    tempoMedioDias: tempoMedio.has(estagio) ? Math.round(tempoMedio.get(estagio)! * 10) / 10 : null,
   }))
 
   const recentes = todasOportunidades
@@ -126,7 +116,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   res.json({
     periodo: { inicio: inicioPeriodo, fim: agora, label: 'Este mês' },
     resumo: { faturamento, vendas: vendasPeriodo, conversao, ticketMedio, lucro },
-    segundaLinha: { leads, agendamentos, fechamentos },
+    segundaLinha: { leads, simulacoes, fechamentos },
     funil,
     recentes,
   })

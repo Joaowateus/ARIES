@@ -19,6 +19,8 @@ import dashboardRoutes from './routes/dashboard'
 import precificacaoRoutes from './routes/precificacao'
 import protocolosRoutes from './routes/protocolos'
 import metasRoutes from './routes/metas'
+import funilRoutes from './routes/funil'
+import insightsRoutes from './routes/insights'
 
 const app = express()
 
@@ -96,6 +98,8 @@ app.use('/dashboard', dashboardRoutes)
 app.use('/precificacao', precificacaoRoutes)
 app.use('/protocolos', protocolosRoutes)
 app.use('/metas', metasRoutes)
+app.use('/funil', funilRoutes)
+app.use('/insights', insightsRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)
