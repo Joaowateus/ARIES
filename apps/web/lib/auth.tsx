@@ -39,7 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(token)
     setUser(usuario)
     setUsuario(usuario)
-    router.push('/dashboard')
+    const papeisGestao = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL', 'SUPERVISOR', 'COORDENADOR']
+    router.push(papeisGestao.includes(usuario.papel) ? '/dashboard' : '/meu-painel')
   }
 
   function logout() {

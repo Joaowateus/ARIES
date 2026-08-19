@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, MetaComProgresso, Usuario } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { formatMoeda } from '@/lib/format'
+import ProgressBar from '@/components/ui/ProgressBar'
 
 const PERIODOS = [
   { value: 'DIARIA', label: 'Diária' },
@@ -160,7 +162,6 @@ export default function MetasPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {metas.map(m => {
             const pct = Math.round(m.percentual * 100)
-            const cor = pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-blue-500' : 'bg-orange-400'
             return (
               <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="flex items-start justify-between mb-3">
@@ -176,9 +177,7 @@ export default function MetasPage() {
                     {m.status === 'ATIVA' ? 'Ativa' : 'Encerrada'}
                   </span>
                 </div>
-                <div className="bg-gray-100 rounded-full h-3 mb-1">
-                  <div className={`h-3 rounded-full ${cor}`} style={{ width: `${Math.min(100, pct)}%` }} />
-                </div>
+                <div className="mb-1"><ProgressBar percentual={m.percentual} /></div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">
                     {m.tipo === 'FATURAMENTO' ? formatMoeda(m.realizado) : m.realizado} de {m.tipo === 'FATURAMENTO' ? formatMoeda(m.valor) : m.valor} ({pct}%)
@@ -196,8 +195,4 @@ export default function MetasPage() {
       )}
     </div>
   )
-}
-
-function formatMoeda(valor: number): string {
-  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }

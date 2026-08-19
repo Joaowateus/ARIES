@@ -16,37 +16,111 @@ const PAPEL_LABEL: Record<string, string> = {
   LEITOR: 'Leitor',
 }
 
-const nav = [
-  { href: '/meu-painel', label: 'Meu Painel', icon: '🙋' },
-  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
-  { href: '/oportunidades', label: 'Oportunidades', icon: '🎯' },
-  { href: '/conversao', label: 'Funil & Conversão', icon: '📈' },
-  { href: '/insights', label: 'Insights', icon: '💡' },
-  { href: '/contratos', label: 'Contratos', icon: '📄' },
-  { href: '/financeiro', label: 'Financeiro', icon: '💰' },
-  { href: '/estoque', label: 'Estoque', icon: '🏍️' },
-  { href: '/precificacao', label: 'Precificação', icon: '💲' },
-  { href: '/protocolos', label: 'Protocolos', icon: '📋' },
-  { href: '/processos', label: 'Processos', icon: '🗺️' },
-  { href: '/treinamentos', label: 'Treinamentos', icon: '🎓' },
-  { href: '/auditorias', label: 'Auditorias', icon: '🕵️' },
-  { href: '/painel-gerencial', label: 'Painel Gerencial', icon: '👔' },
-  { href: '/notificacoes', label: 'Notificações', icon: '🔔' },
-  { href: '/calendario', label: 'Calendário', icon: '📅' },
-  { href: '/relatorios', label: 'Relatórios', icon: '📄' },
-  { href: '/metas', label: 'Metas', icon: '🎯' },
-  { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
-  { href: '/rotinas', label: 'Gestão de Rotinas', icon: '🔁' },
-  { href: '/tarefas', label: 'Tarefas', icon: '📌' },
-  { href: '/marketplace', label: 'Marketplace', icon: '🛵' },
-  { href: '/social-media', label: 'Social Media', icon: '📱' },
-  { href: '/vendedores', label: 'Equipe', icon: '👥' },
+// Coordenador (nível 2) pra cima já enxerga equipe (ver lib/permissoes.ts no
+// backend — NIVEL_MINIMO_VISAO_EQUIPE) — mesmo corte usado aqui pra decidir
+// qual navegação mostrar.
+const PAPEIS_GESTAO_NAV = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL', 'SUPERVISOR', 'COORDENADOR']
+
+interface NavItem { href: string; label: string; icon: string }
+interface NavGrupo { titulo?: string; itens: NavItem[] }
+
+// Navegação do vendedor (seção 29 do desenho original) — o que ele executa.
+const NAV_VENDEDOR: NavGrupo[] = [
+  { itens: [{ href: '/meu-painel', label: 'Meu Painel', icon: '🙋' }] },
+  {
+    titulo: 'Comercial',
+    itens: [
+      { href: '/oportunidades', label: 'CRM', icon: '🎯' },
+      { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
+      { href: '/conversao', label: 'Funil & Conversão', icon: '📈' },
+      { href: '/metas', label: 'Minhas Metas', icon: '🎯' },
+    ],
+  },
+  {
+    titulo: 'Execução',
+    itens: [
+      { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
+      { href: '/tarefas', label: 'Tarefas', icon: '📌' },
+      { href: '/marketplace', label: 'Marketplace', icon: '🛵' },
+      { href: '/social-media', label: 'Social Media', icon: '📱' },
+    ],
+  },
+  {
+    titulo: 'Conhecimento',
+    itens: [
+      { href: '/protocolos', label: 'Protocolos', icon: '📋' },
+      { href: '/processos', label: 'Processos', icon: '🗺️' },
+      { href: '/treinamentos', label: 'Treinamentos', icon: '🎓' },
+    ],
+  },
+  {
+    titulo: 'Acompanhamento',
+    itens: [
+      { href: '/calendario', label: 'Calendário', icon: '📅' },
+      { href: '/notificacoes', label: 'Notificações', icon: '🔔' },
+      { href: '/relatorios', label: 'Relatórios', icon: '📄' },
+      { href: '/insights', label: 'Insights', icon: '💡' },
+    ],
+  },
+]
+
+// Navegação do gestor (seção 30) — o que ele controla/decide.
+const NAV_GESTOR: NavGrupo[] = [
+  { itens: [{ href: '/dashboard', label: 'Dashboard', icon: '📊' }] },
+  {
+    titulo: 'Comercial',
+    itens: [
+      { href: '/oportunidades', label: 'CRM', icon: '🎯' },
+      { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
+      { href: '/conversao', label: 'Funil & Conversão', icon: '📈' },
+      { href: '/contratos', label: 'Vendas', icon: '📄' },
+      { href: '/financeiro', label: 'Faturamento', icon: '💰' },
+      { href: '/estoque', label: 'Estoque', icon: '🏍️' },
+      { href: '/precificacao', label: 'Precificação', icon: '💲' },
+    ],
+  },
+  {
+    titulo: 'Equipe',
+    itens: [
+      { href: '/vendedores', label: 'Equipe', icon: '👥' },
+      { href: '/painel-gerencial', label: 'Painel Gerencial', icon: '👔' },
+      { href: '/metas', label: 'Metas', icon: '🎯' },
+      { href: '/rotinas', label: 'Gestão de Rotinas', icon: '🔁' },
+      { href: '/tarefas', label: 'Tarefas', icon: '📌' },
+    ],
+  },
+  {
+    titulo: 'Marketing',
+    itens: [
+      { href: '/marketplace', label: 'Marketplace', icon: '🛵' },
+      { href: '/social-media', label: 'Social Media', icon: '📱' },
+    ],
+  },
+  {
+    titulo: 'Governança',
+    itens: [
+      { href: '/protocolos', label: 'Protocolos', icon: '📋' },
+      { href: '/processos', label: 'Processos', icon: '🗺️' },
+      { href: '/treinamentos', label: 'Treinamentos', icon: '🎓' },
+      { href: '/auditorias', label: 'Auditorias', icon: '🕵️' },
+    ],
+  },
+  {
+    titulo: 'Acompanhamento',
+    itens: [
+      { href: '/calendario', label: 'Calendário', icon: '📅' },
+      { href: '/notificacoes', label: 'Notificações', icon: '🔔' },
+      { href: '/relatorios', label: 'Relatórios', icon: '📄' },
+      { href: '/insights', label: 'Insights', icon: '💡' },
+    ],
+  },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+
+  const grupos = PAPEIS_GESTAO_NAV.includes(user?.papel ?? '') ? NAV_GESTOR : NAV_VENDEDOR
 
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-white border-r border-gray-200 min-h-screen">
@@ -64,20 +138,29 @@ export default function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-2 space-y-0.5">
-        {nav.map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              pathname === item.href || pathname.startsWith(item.href + '/')
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <span className="text-base">{item.icon}</span>
-            {item.label}
-          </Link>
+      <nav className="flex-1 p-2 space-y-3 overflow-y-auto">
+        {grupos.map((grupo, i) => (
+          <div key={i}>
+            {grupo.titulo && (
+              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{grupo.titulo}</div>
+            )}
+            <div className="space-y-0.5">
+              {grupo.itens.map(item => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    pathname === item.href || pathname.startsWith(item.href + '/')
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <span className="text-base">{item.icon}</span>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 

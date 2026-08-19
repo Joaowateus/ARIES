@@ -6,6 +6,9 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { DashboardExecutivo, MetaComProgresso } from '@/lib/api'
 import { ESTAGIO_LABEL, ESTAGIO_VENDA_FECHADA } from '@/lib/funil'
+import { formatMoeda, formatPct } from '@/lib/format'
+import StatCard from '@/components/ui/StatCard'
+import ProgressBar from '@/components/ui/ProgressBar'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -53,11 +56,11 @@ export default function DashboardPage() {
 
       {/* Resumo executivo */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard label="Faturamento" value={formatMoeda(data?.resumo.faturamento ?? 0)} color="emerald" />
-        <KpiCard label="Vendas" value={data?.resumo.vendas ?? 0} color="blue" />
-        <KpiCard label="Conversão" value={formatPct(data?.resumo.conversao ?? 0)} color="purple" />
-        <KpiCard label="Ticket Médio" value={formatMoeda(data?.resumo.ticketMedio ?? 0)} color="orange" />
-        <KpiCard label="Lucro" value={formatMoeda(data?.resumo.lucro ?? 0)} color="slate" />
+        <StatCard label="Faturamento" value={formatMoeda(data?.resumo.faturamento ?? 0)} color="emerald" />
+        <StatCard label="Vendas" value={data?.resumo.vendas ?? 0} color="blue" />
+        <StatCard label="Conversão" value={formatPct(data?.resumo.conversao ?? 0)} color="purple" />
+        <StatCard label="Ticket Médio" value={formatMoeda(data?.resumo.ticketMedio ?? 0)} color="orange" />
+        <StatCard label="Lucro" value={formatMoeda(data?.resumo.lucro ?? 0)} color="slate" />
       </div>
 
       {/* Segunda linha */}
@@ -147,39 +150,15 @@ function MetaBar({ label, meta }: { label: string; meta?: MetaComProgresso }) {
       </div>
     )
   }
-  const pct = Math.round(meta.percentual * 100)
-  const cor = pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-blue-500' : 'bg-orange-400'
   return (
     <div>
       <div className="text-xs text-gray-400 mb-2">{label}</div>
-      <div className="bg-gray-100 rounded-full h-3 mb-1">
-        <div className={`h-3 rounded-full ${cor}`} style={{ width: `${Math.min(100, pct)}%` }} />
-      </div>
-      <div className="text-sm font-semibold text-gray-900">{pct}%</div>
+      <div className="mb-1"><ProgressBar percentual={meta.percentual} /></div>
+      <div className="text-sm font-semibold text-gray-900">{formatPct(meta.percentual)}</div>
       <div className="text-xs text-gray-400">
         {meta.tipo === 'FATURAMENTO' ? formatMoeda(meta.realizado) : meta.realizado} de{' '}
         {meta.tipo === 'FATURAMENTO' ? formatMoeda(meta.valor) : meta.valor}
       </div>
-    </div>
-  )
-}
-
-function KpiCard({ label, value, color }: { label: string; value: number | string; color: string }) {
-  const colors: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-green-50 text-green-700',
-    purple: 'bg-purple-50 text-purple-700',
-    emerald: 'bg-emerald-50 text-emerald-700',
-    orange: 'bg-orange-50 text-orange-700',
-    slate: 'bg-slate-50 text-slate-700',
-  }
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${colors[color]} mb-3`}>
-        <span className="font-bold text-lg">{typeof value === 'string' ? value[0] : value}</span>
-      </div>
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
     </div>
   )
 }
@@ -191,12 +170,4 @@ function MiniStat({ label, value }: { label: string; value: number }) {
       <span className="text-lg font-semibold text-gray-900">{value}</span>
     </div>
   )
-}
-
-function formatMoeda(valor: number): string {
-  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-function formatPct(valor: number): string {
-  return `${Math.round(valor * 100)}%`
 }
