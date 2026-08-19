@@ -77,6 +77,31 @@ export interface ConversaoFunil {
   etapas: EtapaConversao[]
 }
 
+export interface EquipeResumo {
+  usuario: { id: string; nome: string; papel: string }
+  vendasNoMes: number
+  faturamentoNoMes: number
+  leadsAtivos: number
+  tarefasPendentes: number
+  rotinaCumpridaHoje: number | null
+}
+
+export interface ScoreConfig {
+  pesoComercial: number
+  pesoProdutividade: number
+  pesoProcessos: number
+  pesoCrm: number
+  pesoConteudo: number
+  pesoTreinamentos: number
+  pesoRotinas: number
+}
+
+export interface ScorePessoa {
+  usuario: { id: string; nome: string; papel: string }
+  dimensoes: { comercial: number; produtividade: number; processos: number; crm: number; conteudo: number; treinamentos: number }
+  score: number
+}
+
 export interface AuditoriaGenerica {
   id: string
   entidadeTipo: string
@@ -659,6 +684,12 @@ export const api = {
       request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
     remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
+  },
+  gestao: {
+    equipe: () => request<EquipeResumo[]>('/gestao/equipe'),
+    scoreConfig: () => request<ScoreConfig>('/gestao/score-config'),
+    atualizarScoreConfig: (data: object) => request<ScoreConfig>('/gestao/score-config', { method: 'PUT', body: JSON.stringify(data) }),
+    score: () => request<ScorePessoa[]>('/gestao/score'),
   },
   auditorias: {
     listar: (entidadeTipo?: string) => request<AuditoriaGenerica[]>(`/auditorias${entidadeTipo ? `?entidadeTipo=${entidadeTipo}` : ''}`),

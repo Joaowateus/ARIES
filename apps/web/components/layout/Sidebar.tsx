@@ -31,6 +31,7 @@ const nav = [
   { href: '/processos', label: 'Processos', icon: '🗺️' },
   { href: '/treinamentos', label: 'Treinamentos', icon: '🎓' },
   { href: '/auditorias', label: 'Auditorias', icon: '🕵️' },
+  { href: '/painel-gerencial', label: 'Painel Gerencial', icon: '👔' },
   { href: '/metas', label: 'Metas', icon: '🎯' },
   { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
   { href: '/rotinas', label: 'Gestão de Rotinas', icon: '🔁' },
