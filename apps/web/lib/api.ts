@@ -48,6 +48,45 @@ export interface Oportunidade {
   atualizadaEm: string
 }
 
+export interface Meta {
+  id: string
+  titulo: string
+  tipo: 'QUANTIDADE' | 'FATURAMENTO'
+  valor: number
+  periodo: 'DIARIA' | 'SEMANAL' | 'MENSAL'
+  inicioEm: string
+  fimEm: string
+  status: string
+  criadaEm: string
+}
+
+export interface MetaComProgresso extends Meta {
+  realizado: number
+  percentual: number
+}
+
+export interface FunilEtapa {
+  estagio: string
+  label: string
+  quantidade: number
+  conversaoDoTopo: number
+  tempoMedioDias: number | null
+}
+
+export interface DashboardExecutivo {
+  periodo: { inicio: string; fim: string; label: string }
+  resumo: {
+    faturamento: number
+    vendas: number
+    conversao: number
+    ticketMedio: number
+    lucro: number
+  }
+  segundaLinha: { leads: number; agendamentos: number; fechamentos: number }
+  funil: FunilEtapa[]
+  recentes: Array<{ id: string; nomeCliente: string; estagio: string; valor?: number }>
+}
+
 export interface Produto {
   id: string
   nome: string
@@ -376,18 +415,16 @@ export const api = {
       }),
   },
   dashboard: {
-    get: () => request<{
-      funil: Record<string, number>
-      totais: {
-        oportunidadesAtivas: number
-        vendasFechadas: number
-        taxaConversao: number
-        receitaFechada: number
-        vendedoresAtivos: number
-        produtosCadastrados: number
-      }
-      recentes: Array<{ id: string; nomeCliente: string; estagio: string; valor?: number }>
-    }>('/dashboard'),
+    get: () => request<DashboardExecutivo>('/dashboard'),
+  },
+  metas: {
+    listar: (status?: string) => request<Meta[]>(`/metas${status ? `?status=${status}` : ''}`),
+    progresso: (status?: string) => request<MetaComProgresso[]>(`/metas/progresso${status ? `?status=${status}` : ''}`),
+    criar: (data: object) => request<Meta>('/metas', { method: 'POST', body: JSON.stringify(data) }),
+    atualizar: (id: string, data: object) =>
+      request<{ ok: boolean }>(`/metas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    encerrar: (id: string) => request<{ ok: boolean }>(`/metas/${id}/encerrar`, { method: 'PATCH' }),
+    remover: (id: string) => request<{ ok: boolean }>(`/metas/${id}`, { method: 'DELETE' }),
   },
   precificacao: {
     parametros: () => request<ParametrosPrecificacao>('/precificacao/parametros'),

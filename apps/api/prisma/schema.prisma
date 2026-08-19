@@ -24,6 +24,7 @@ model Empresa {
   parametroPrecificacao ParametroPrecificacao?
   historicoPrecificacao HistoricoPrecificacao[]
   protocolos            Protocolo[]
+  estagioHistorico      EstagioHistorico[]
 
   @@map("empresas")
 }
@@ -128,15 +129,35 @@ model Oportunidade {
   fechadaEm     DateTime?
   statusFinal   String?
 
-  empresa     Empresa   @relation(fields: [empresaId], references: [id])
-  responsavel Usuario?  @relation(fields: [responsavelId], references: [id])
-  unidade     Unidade?  @relation(fields: [unidadeId], references: [id])
+  empresa     Empresa               @relation(fields: [empresaId], references: [id])
+  responsavel Usuario?              @relation(fields: [responsavelId], references: [id])
+  unidade     Unidade?              @relation(fields: [unidadeId], references: [id])
   contrato    Contrato?
+  historicoEstagio EstagioHistorico[]
 
   @@index([empresaId])
   @@index([empresaId, estagio])
   @@index([empresaId, responsavelId])
   @@map("oportunidades")
+}
+
+// Trilha de transição de estágio — base para "tempo médio por etapa" e conversão
+// etapa-a-etapa do funil (Dashboard Executivo). Cada mudança de estágio grava um
+// registro; sem isso não dá pra medir velocidade do funil de forma honesta.
+model EstagioHistorico {
+  id              String   @id @default(cuid())
+  empresaId       String
+  oportunidadeId  String
+  estagioAnterior String?
+  estagioNovo     String
+  criadoEm        DateTime @default(now())
+
+  empresa      Empresa      @relation(fields: [empresaId], references: [id])
+  oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id])
+
+  @@index([empresaId])
+  @@index([oportunidadeId])
+  @@map("estagio_historico")
 }
 
 model Contrato {

@@ -18,6 +18,7 @@ import financeiroRoutes from './routes/financeiro'
 import dashboardRoutes from './routes/dashboard'
 import precificacaoRoutes from './routes/precificacao'
 import protocolosRoutes from './routes/protocolos'
+import metasRoutes from './routes/metas'
 
 const app = express()
 
@@ -94,6 +95,7 @@ app.use('/financeiro', financeiroRoutes)
 app.use('/dashboard', dashboardRoutes)
 app.use('/precificacao', precificacaoRoutes)
 app.use('/protocolos', protocolosRoutes)
+app.use('/metas', metasRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

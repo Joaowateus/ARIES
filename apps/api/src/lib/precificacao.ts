@@ -188,6 +188,15 @@ export function lucroLiquidoReal(args: {
   )
 }
 
+export async function obterParametros(
+  prisma: import('@prisma/client').PrismaClient,
+  empresaId: string
+): Promise<ParametrosPrecificacao & { id: string }> {
+  const existente = await prisma.parametroPrecificacao.findUnique({ where: { empresaId } })
+  if (existente) return existente
+  return prisma.parametroPrecificacao.create({ data: { empresaId, ...PARAMETROS_PADRAO } })
+}
+
 export const PARAMETROS_PADRAO: ParametrosPrecificacao = {
   margemEstrategica: 0.25,
   margemComercial: 0.16,

@@ -24,6 +24,7 @@ const nav = [
   { href: '/estoque', label: 'Estoque', icon: '🏍️' },
   { href: '/precificacao', label: 'Precificação', icon: '💲' },
   { href: '/protocolos', label: 'Protocolos', icon: '📋' },
+  { href: '/metas', label: 'Metas', icon: '🎯' },
   { href: '/vendedores', label: 'Equipe', icon: '👥' },
 ]
 

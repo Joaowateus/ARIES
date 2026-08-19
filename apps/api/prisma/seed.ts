@@ -129,18 +129,27 @@ async function main() {
   }
   console.log(`✓ Estoque: ${unidadesCriadas.length} motos (com dados de compra/custos para o motor de precificação)`)
 
-  // Meta mensal
+  // Limpeza de metas antigas com id fixo ("meta-julho-2026") de uma versão
+  // anterior do seed — ficavam presas no mês em que foram criadas pela
+  // primeira vez porque o upsert nunca as atualizava.
+  await prisma.meta.deleteMany({ where: { id: { in: ['meta-julho-2026', 'meta-julho-2026-receita'] } } })
+
+  // Metas do mês corrente — id derivado do mês para que cada reseed em um mês
+  // novo gere a meta certa, em vez de travar as datas no mês em que o seed
+  // rodou pela primeira vez.
   const agora = new Date()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
   const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0)
+  const chaveMes = inicioMes.toISOString().slice(0, 7) // "2026-08"
+  const nomeMes = inicioMes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 
   await prisma.meta.upsert({
-    where: { id: 'meta-julho-2026' },
+    where: { id: `meta-quantidade-${chaveMes}` },
     update: {},
     create: {
-      id: 'meta-julho-2026',
+      id: `meta-quantidade-${chaveMes}`,
       empresaId: empresa.id,
-      titulo: 'Meta Julho 2026 — Quantidade',
+      titulo: `Meta ${nomeMes} — Quantidade`,
       tipo: 'QUANTIDADE',
       valor: 30,
       periodo: 'MENSAL',
@@ -151,17 +160,56 @@ async function main() {
   })
 
   await prisma.meta.upsert({
-    where: { id: 'meta-julho-2026-receita' },
+    where: { id: `meta-faturamento-${chaveMes}` },
     update: {},
     create: {
-      id: 'meta-julho-2026-receita',
+      id: `meta-faturamento-${chaveMes}`,
       empresaId: empresa.id,
-      titulo: 'Meta Julho 2026 — Receita',
-      tipo: 'RECEITA',
+      titulo: `Meta ${nomeMes} — Faturamento`,
+      tipo: 'FATURAMENTO',
       valor: 400000,
       periodo: 'MENSAL',
       inicioEm: inicioMes,
       fimEm: fimMes,
+      status: 'ATIVA',
+    },
+  })
+  const inicioDia = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate())
+  const fimDia = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59)
+  const diaSemana = agora.getDay() // 0 = domingo
+  const inicioSemana = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - diaSemana)
+  const fimSemana = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - diaSemana + 6, 23, 59, 59)
+  const chaveDia = inicioDia.toISOString().slice(0, 10)
+  const chaveSemana = inicioSemana.toISOString().slice(0, 10)
+
+  await prisma.meta.upsert({
+    where: { id: `meta-quantidade-dia-${chaveDia}` },
+    update: {},
+    create: {
+      id: `meta-quantidade-dia-${chaveDia}`,
+      empresaId: empresa.id,
+      titulo: 'Meta do Dia — Vendas',
+      tipo: 'QUANTIDADE',
+      valor: 2,
+      periodo: 'DIARIA',
+      inicioEm: inicioDia,
+      fimEm: fimDia,
+      status: 'ATIVA',
+    },
+  })
+
+  await prisma.meta.upsert({
+    where: { id: `meta-quantidade-semana-${chaveSemana}` },
+    update: {},
+    create: {
+      id: `meta-quantidade-semana-${chaveSemana}`,
+      empresaId: empresa.id,
+      titulo: 'Meta da Semana — Vendas',
+      tipo: 'QUANTIDADE',
+      valor: 8,
+      periodo: 'SEMANAL',
+      inicioEm: inicioSemana,
+      fimEm: fimSemana,
       status: 'ATIVA',
     },
   })

@@ -9,8 +9,7 @@ import {
   classificacaoSaude,
   precoSugerido,
   lucroLiquidoReal,
-  PARAMETROS_PADRAO,
-  ParametrosPrecificacao,
+  obterParametros as obterParametrosBase,
   SAUDE,
 } from '../lib/precificacao'
 
@@ -18,10 +17,8 @@ const router = Router()
 
 const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL']
 
-async function obterParametros(empresaId: string): Promise<ParametrosPrecificacao & { id: string }> {
-  const existente = await prisma.parametroPrecificacao.findUnique({ where: { empresaId } })
-  if (existente) return existente
-  return prisma.parametroPrecificacao.create({ data: { empresaId, ...PARAMETROS_PADRAO } })
+function obterParametros(empresaId: string) {
+  return obterParametrosBase(prisma, empresaId)
 }
 
 // ---------------------------------------------------------------------------

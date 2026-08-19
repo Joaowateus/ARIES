@@ -46,15 +46,19 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     return
   }
   const data = parse.data
+  const empresaId = req.user!.empresaId
   const oportunidade = await prisma.oportunidade.create({
     data: {
       ...data,
       email: data.email || undefined,
-      empresaId: req.user!.empresaId,
+      empresaId,
       responsavelId: data.responsavelId ?? req.user!.sub,
       estagio: 'NOVO_LEAD',
     },
     include,
+  })
+  await prisma.estagioHistorico.create({
+    data: { empresaId, oportunidadeId: oportunidade.id, estagioAnterior: null, estagioNovo: 'NOVO_LEAD' },
   })
   res.status(201).json(oportunidade)
 })
@@ -89,6 +93,14 @@ router.patch('/:id/estagio', requireAuth, async (req: Request, res: Response) =>
     where: { id: String(req.params.id) },
     data: { estagio, fechadaEm, statusFinal },
     include,
+  })
+  await prisma.estagioHistorico.create({
+    data: {
+      empresaId: req.user!.empresaId,
+      oportunidadeId: atualizada.id,
+      estagioAnterior: oportunidade.estagio,
+      estagioNovo: estagio,
+    },
   })
   res.json(atualizada)
 })
