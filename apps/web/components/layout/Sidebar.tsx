@@ -32,7 +32,6 @@ const NAV_VENDEDOR: NavGrupo[] = [
     itens: [
       { href: '/oportunidades', label: 'CRM', icon: '🎯' },
       { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
-      { href: '/conversao', label: 'Funil & Conversão', icon: '📈' },
       { href: '/metas', label: 'Minhas Metas', icon: '🎯' },
     ],
   },
@@ -72,7 +71,6 @@ const NAV_GESTOR: NavGrupo[] = [
     itens: [
       { href: '/oportunidades', label: 'CRM', icon: '🎯' },
       { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
-      { href: '/conversao', label: 'Funil & Conversão', icon: '📈' },
       { href: '/contratos', label: 'Vendas', icon: '📄' },
       { href: '/financeiro', label: 'Faturamento', icon: '💰' },
       { href: '/estoque', label: 'Estoque', icon: '🏍️' },

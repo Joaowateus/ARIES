@@ -1,99 +1,139 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api, Oportunidade } from '@/lib/api'
-import Link from 'next/link'
-import { COLUNAS_KANBAN, ESTAGIO_VENDA_FECHADA } from '@/lib/funil'
+import { api, ConversaoFunil, EtapaConversao } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 
-const COLUNAS = COLUNAS_KANBAN
+const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL']
 
-export default function FunilPage() {
-  const [oportunidades, setOportunidades] = useState<Oportunidade[]>([])
+const STATUS_COR: Record<string, string> = { verde: '#22c55e', amarelo: '#f59e0b', vermelho: '#ef4444' }
+const STATUS_TEXTO: Record<string, string> = { verde: 'text-green-600', amarelo: 'text-amber-600', vermelho: 'text-red-600' }
+
+function pct(v: number): string {
+  return `${Math.round(v * 100)}%`
+}
+
+export default function FunilVendasPage() {
+  const { user } = useAuth()
+  const [dados, setDados] = useState<ConversaoFunil | null>(null)
   const [loading, setLoading] = useState(true)
-  const [movendo, setMovendo] = useState<string | null>(null)
+  const [editando, setEditando] = useState<string | null>(null)
+  const [valorEdicao, setValorEdicao] = useState('')
+
+  const podeGerenciar = PAPEIS_GESTAO.includes(user?.papel ?? '')
 
   const carregar = useCallback(() => {
-    api.oportunidades.listar().then(setOportunidades).finally(() => setLoading(false))
+    api.funil.conversao().then(setDados).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
 
-  async function mover(id: string, estagio: string) {
-    setMovendo(id)
-    try {
-      await api.oportunidades.moverEstagio(id, estagio)
-      carregar()
-    } finally {
-      setMovendo(null)
-    }
+  async function salvarMeta(etapa: string) {
+    const valor = Number(valorEdicao) / 100
+    if (!Number.isFinite(valor) || valor < 0 || valor > 1) return
+    await api.funil.atualizarMeta(etapa, valor)
+    setEditando(null)
+    carregar()
   }
 
-  const por = (estagio: string) => oportunidades.filter(o => o.estagio === estagio)
-
-  if (loading) return <div className="p-8 text-gray-400 text-sm">Carregando funil...</div>
+  if (loading) return <div className="p-8 text-sm text-gray-400">Carregando...</div>
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Funil de Vendas</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{oportunidades.length} oportunidade{oportunidades.length !== 1 ? 's' : ''} no total</p>
-        </div>
-        <Link
-          href="/oportunidades/nova"
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          + Novo Lead
-        </Link>
+    <div className="p-8">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-gray-900">Funil de Vendas</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Conversão por fase, a partir do total de leads que entraram no funil — direto do CRM
+        </p>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-4">
-        {COLUNAS.map(col => {
-          const itens = por(col.id)
-          return (
-            <div key={col.id} className={`shrink-0 w-56 rounded-xl border ${col.cor} flex flex-col`}>
-              <div className="px-3 py-2.5 border-b border-inherit">
-                <div className="text-xs font-semibold text-gray-700">{col.label}</div>
-                <div className="text-xs text-gray-400">{itens.length} oportunidade{itens.length !== 1 ? 's' : ''}</div>
+      {dados && dados.totalLeads < 5 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700 mb-6">
+          Ainda há poucos leads no histórico ({dados.totalLeads}) para uma leitura de conversão confiável. Os números vão ganhar precisão conforme o funil for usado.
+        </div>
+      )}
+
+      {dados && dados.etapas.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          {/* Colunas com números */}
+          <div className="grid" style={{ gridTemplateColumns: `repeat(${dados.etapas.length}, 1fr)` }}>
+            {dados.etapas.map(e => (
+              <div key={e.estagio} className="text-center px-1">
+                <div className="text-2xl font-bold text-gray-900">{e.quantidade}</div>
+                <div className="text-xs text-gray-500 truncate" title={e.label}>{e.label}</div>
+                <div className={`text-sm font-semibold ${STATUS_TEXTO[e.status]}`}>{pct(e.conversaoReal)}</div>
               </div>
-              <div className="flex-1 p-2 space-y-2 min-h-32">
-                {itens.map(op => (
-                  <div key={op.id} className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
-                    <div className="font-medium text-sm text-gray-900 truncate">{op.nomeCliente}</div>
-                    {op.unidade && (
-                      <div className="text-xs text-gray-500 mt-0.5 truncate">{op.unidade.nome}</div>
-                    )}
-                    {op.valor && (
-                      <div className="text-xs font-medium text-green-700 mt-1">
-                        {op.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </div>
-                    )}
-                    {op.responsavel && (
-                      <div className="text-xs text-gray-400 mt-1 truncate">👤 {op.responsavel.nome}</div>
-                    )}
-                    {/* Ações rápidas de movimento */}
-                    {col.id !== ESTAGIO_VENDA_FECHADA && col.id !== 'PERDIDO' && (
-                      <div className="mt-2 flex gap-1">
-                        <select
-                          disabled={movendo === op.id}
-                          defaultValue=""
-                          onChange={e => { if (e.target.value) mover(op.id, e.target.value) }}
-                          className="flex-1 text-xs border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-gray-50 cursor-pointer"
-                        >
-                          <option value="" disabled>Mover para...</option>
-                          {COLUNAS.filter(c => c.id !== col.id).map(c => (
-                            <option key={c.id} value={c.id}>{c.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+            ))}
+          </div>
+
+          {/* Gráfico de funil */}
+          <FunnelChart etapas={dados.etapas} />
+
+          {/* Metas por etapa */}
+          <div className="grid gap-1 mt-2" style={{ gridTemplateColumns: `repeat(${dados.etapas.length}, 1fr)` }}>
+            {dados.etapas.map(e => (
+              <div key={e.estagio} className="text-center">
+                {editando === e.estagio ? (
+                  <div className="flex items-center justify-center gap-1">
+                    <input
+                      type="number" autoFocus value={valorEdicao} onChange={ev => setValorEdicao(ev.target.value)}
+                      className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs text-center"
+                    />
+                    <button onClick={() => salvarMeta(e.estagio)} className="text-xs text-blue-600 font-medium">OK</button>
                   </div>
-                ))}
+                ) : (
+                  <button
+                    disabled={!podeGerenciar}
+                    onClick={() => { setEditando(e.estagio); setValorEdicao(String(Math.round(e.meta * 100))) }}
+                    className="text-[11px] text-gray-400 disabled:cursor-default hover:text-blue-600"
+                  >
+                    Meta: {pct(e.meta)}{e.tipoMeta === 'MAXIMO_PERDA' ? ' (máx.)' : ' (mín.)'}{podeGerenciar && ' ✎'}
+                  </button>
+                )}
               </div>
-            </div>
-          )
-        })}
-      </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Funil visual em CSS puro: um trapézio por segmento (clip-path), conectando
+ * a altura de uma etapa à próxima — sem depender de biblioteca de gráficos. */
+function FunnelChart({ etapas }: { etapas: EtapaConversao[] }) {
+  const max = Math.max(1, ...etapas.map(e => e.quantidade))
+  const ALTURA_MIN = 0.08
+  // Um lead pode pular etapa (o CRM permite mover pra qualquer coluna), então
+  // "quantos alcançaram cada etapa" nem sempre decresce estritamente. Um funil
+  // só faz sentido visualmente se ele nunca alarga de novo — por isso a altura
+  // usa o mínimo acumulado (nunca passa da etapa anterior). Os números e %
+  // exibidos continuam os reais, sem nenhum ajuste; só a silhueta é suavizada.
+  const quantidadesVisuais: number[] = []
+  for (const e of etapas) {
+    const anterior = quantidadesVisuais[quantidadesVisuais.length - 1] ?? e.quantidade
+    quantidadesVisuais.push(Math.min(e.quantidade, anterior))
+  }
+  const alturas = quantidadesVisuais.map(q => ALTURA_MIN + (1 - ALTURA_MIN) * Math.sqrt(q / max))
+  const n = etapas.length
+
+  return (
+    <div className="relative h-40 mt-3 flex">
+      {etapas.slice(0, n - 1).map((e, i) => {
+        const h1 = alturas[i] * 100
+        const h2 = alturas[i + 1] * 100
+        const corDestino = STATUS_COR[etapas[i + 1].status]
+        return (
+          <div
+            key={e.estagio}
+            className="flex-1 h-full"
+            style={{
+              clipPath: `polygon(0% ${50 - h1 / 2}%, 100% ${50 - h2 / 2}%, 100% ${50 + h2 / 2}%, 0% ${50 + h1 / 2}%)`,
+              background: `linear-gradient(to right, ${STATUS_COR[e.status]}, ${corDestino})`,
+            }}
+          />
+        )
+      })}
     </div>
   )
 }
