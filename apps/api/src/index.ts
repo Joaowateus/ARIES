@@ -19,6 +19,7 @@ import dashboardRoutes from './routes/dashboard'
 import precificacaoRoutes from './routes/precificacao'
 import protocolosRoutes from './routes/protocolos'
 import metasRoutes from './routes/metas'
+import metasComerciaisRoutes from './routes/metasComerciais'
 import funilRoutes from './routes/funil'
 import insightsRoutes from './routes/insights'
 import meuPainelRoutes from './routes/meuPainel'
@@ -110,6 +111,7 @@ app.use('/dashboard', dashboardRoutes)
 app.use('/precificacao', precificacaoRoutes)
 app.use('/protocolos', protocolosRoutes)
 app.use('/metas', metasRoutes)
+app.use('/metas-comerciais', metasComerciaisRoutes)
 app.use('/funil', funilRoutes)
 app.use('/insights', insightsRoutes)
 app.use('/meu-painel', meuPainelRoutes)

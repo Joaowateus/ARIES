@@ -41,6 +41,7 @@ model Empresa {
   notificacoes          Notificacao[]
   scoreConfig           ScoreConfig?
   logAuditoria          LogAuditoria[]
+  metaComercialPadrao   MetaComercialPadrao?
 
   @@map("empresas")
 }
@@ -147,6 +148,21 @@ model Meta {
 
   @@index([empresaId, usuarioId])
   @@map("metas")
+}
+
+// Padrão comercial único da empresa, aplicado a qualquer vendedor (supermeta
+// de vendas + meta de anúncios orgânicos) — mesmo padrão de "config de linha
+// única por empresa, com default, editável por gestão" do ParametroPrecificacao.
+model MetaComercialPadrao {
+  id                 String   @id @default(cuid())
+  empresaId          String   @unique
+  supermetaVendasMes Int      @default(10)
+  metaAnunciosMes    Int      @default(2000)
+  atualizadoEm       DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@map("metas_comerciais_padrao")
 }
 
 model Oportunidade {

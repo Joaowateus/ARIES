@@ -3,40 +3,12 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
 import { PAPEIS_GESTAO } from '../lib/permissoes'
-import { ETAPAS_FUNIL_ORDEM, ESTAGIO_LABEL, METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, tempoMedioPorEtapa } from '../lib/funil'
+import { METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, obterMetasFunil, montarConversaoFunil } from '../lib/funil'
 
 const router = Router()
 
-async function obterMetasFunil(empresaId: string) {
-  const existentes = await prisma.metaFunilEtapa.findMany({ where: { empresaId } })
-  const porEtapa = new Map(existentes.map(m => [m.etapa, m]))
-
-  const todasEtapas = new Set([...Object.keys(METAS_FUNIL_PADRAO), ...Object.keys(SLA_PADRAO_DIAS)])
-  const faltando = [...todasEtapas].filter(etapa => !porEtapa.has(etapa))
-  if (faltando.length) {
-    await prisma.$transaction(
-      faltando.map(etapa => {
-        const cfg = METAS_FUNIL_PADRAO[etapa]
-        return prisma.metaFunilEtapa.upsert({
-          where: { empresaId_etapa: { empresaId, etapa } },
-          update: {},
-          create: {
-            empresaId,
-            etapa,
-            metaPct: cfg?.metaPct ?? 0,
-            tipoMeta: cfg?.tipoMeta ?? 'MINIMO',
-            tempoMaximoDias: SLA_PADRAO_DIAS[etapa] ?? null,
-          },
-        })
-      })
-    )
-    return prisma.metaFunilEtapa.findMany({ where: { empresaId } })
-  }
-  return existentes
-}
-
 router.get('/metas', requireAuth, async (req: Request, res: Response) => {
-  const metas = await obterMetasFunil(req.user!.empresaId)
+  const metas = await obterMetasFunil(prisma, req.user!.empresaId)
   res.json(metas)
 })
 
@@ -80,7 +52,7 @@ router.put('/metas/:etapa', requireAuth, requirePapel(...PAPEIS_GESTAO), async (
 
 router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
   const empresaId = req.user!.empresaId
-  const metas = await obterMetasFunil(empresaId)
+  const metas = await obterMetasFunil(prisma, empresaId)
   const metaPorEtapa = new Map(metas.map(m => [m.etapa, m]))
 
   const historico = await prisma.estagioHistorico.findMany({
@@ -88,48 +60,7 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
     select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
   })
 
-  const totalLeads = new Set(historico.filter(h => h.estagioNovo === 'NOVO_LEAD').map(h => h.oportunidadeId)).size
-
-  const alcancados = new Map<string, Set<string>>()
-  for (const h of historico) {
-    if (!alcancados.has(h.estagioNovo)) alcancados.set(h.estagioNovo, new Set())
-    alcancados.get(h.estagioNovo)!.add(h.oportunidadeId)
-  }
-
-  const tempoMedio = tempoMedioPorEtapa(historico)
-
-  const etapas = ETAPAS_FUNIL_ORDEM.map(estagio => {
-    const quantidade = alcancados.get(estagio)?.size ?? 0
-    const conversaoReal = totalLeads > 0 ? quantidade / totalLeads : 0
-    const metaCfg = metaPorEtapa.get(estagio)
-    const metaPct = metaCfg?.metaPct ?? METAS_FUNIL_PADRAO[estagio]?.metaPct ?? 0
-    const tipoMeta = metaCfg?.tipoMeta ?? METAS_FUNIL_PADRAO[estagio]?.tipoMeta ?? 'MINIMO'
-    const tempoMaximoDias = metaCfg?.tempoMaximoDias ?? SLA_PADRAO_DIAS[estagio] ?? null
-
-    let status: 'verde' | 'amarelo' | 'vermelho' = 'verde'
-    if (tipoMeta === 'MAXIMO_PERDA') {
-      if (conversaoReal > metaPct * 1.15) status = 'vermelho'
-      else if (conversaoReal > metaPct) status = 'amarelo'
-    } else {
-      if (conversaoReal < metaPct * 0.85) status = 'vermelho'
-      else if (conversaoReal < metaPct) status = 'amarelo'
-    }
-
-    return {
-      estagio,
-      label: ESTAGIO_LABEL[estagio],
-      quantidade,
-      conversaoReal,
-      meta: metaPct,
-      tipoMeta,
-      diferenca: conversaoReal - metaPct,
-      status,
-      tempoMedioDias: tempoMedio.has(estagio) ? Math.round(tempoMedio.get(estagio)! * 10) / 10 : null,
-      tempoMaximoDias,
-    }
-  })
-
-  res.json({ totalLeads, etapas })
+  res.json(montarConversaoFunil(historico, metaPorEtapa))
 })
 
 export default router

@@ -118,3 +118,91 @@ export function diasNaEtapaAtualPorOportunidade(historico: HistoricoEntrada[]): 
   }
   return resultado
 }
+
+type PrismaClient = import('@prisma/client').PrismaClient
+
+/** Busca a config de meta+SLA por etapa da empresa, semeando com os padrões
+ * (`METAS_FUNIL_PADRAO`/`SLA_PADRAO_DIAS`) quando faltar alguma etapa. Único
+ * lugar que resolve essa config — usado pela rota /funil e pelo Meu Painel. */
+export async function obterMetasFunil(prisma: PrismaClient, empresaId: string) {
+  const existentes = await prisma.metaFunilEtapa.findMany({ where: { empresaId } })
+  const porEtapa = new Map(existentes.map(m => [m.etapa, m]))
+
+  const todasEtapas = new Set([...Object.keys(METAS_FUNIL_PADRAO), ...Object.keys(SLA_PADRAO_DIAS)])
+  const faltando = [...todasEtapas].filter(etapa => !porEtapa.has(etapa))
+  if (faltando.length) {
+    await prisma.$transaction(
+      faltando.map(etapa => {
+        const cfg = METAS_FUNIL_PADRAO[etapa]
+        return prisma.metaFunilEtapa.upsert({
+          where: { empresaId_etapa: { empresaId, etapa } },
+          update: {},
+          create: {
+            empresaId,
+            etapa,
+            metaPct: cfg?.metaPct ?? 0,
+            tipoMeta: cfg?.tipoMeta ?? 'MINIMO',
+            tempoMaximoDias: SLA_PADRAO_DIAS[etapa] ?? null,
+          },
+        })
+      })
+    )
+    return prisma.metaFunilEtapa.findMany({ where: { empresaId } })
+  }
+  return existentes
+}
+
+interface MetaEtapaCfg {
+  metaPct: number
+  tipoMeta: string
+  tempoMaximoDias: number | null
+}
+
+/** Monta o array de conversão por etapa (quantidade, % real, meta, semáforo,
+ * tempo médio) a partir de um histórico já filtrado — reaproveitado tanto
+ * pelo Funil de Vendas da empresa quanto pelo funil individual do Meu Painel,
+ * que passa só o histórico das oportunidades do próprio vendedor. */
+export function montarConversaoFunil(historico: HistoricoEntrada[], metaPorEtapa: Map<string, MetaEtapaCfg>) {
+  const totalLeads = new Set(historico.filter(h => h.estagioNovo === 'NOVO_LEAD').map(h => h.oportunidadeId)).size
+
+  const alcancados = new Map<string, Set<string>>()
+  for (const h of historico) {
+    if (!alcancados.has(h.estagioNovo)) alcancados.set(h.estagioNovo, new Set())
+    alcancados.get(h.estagioNovo)!.add(h.oportunidadeId)
+  }
+
+  const tempoMedio = tempoMedioPorEtapa(historico)
+
+  const etapas = ETAPAS_FUNIL_ORDEM.map(estagio => {
+    const quantidade = alcancados.get(estagio)?.size ?? 0
+    const conversaoReal = totalLeads > 0 ? quantidade / totalLeads : 0
+    const metaCfg = metaPorEtapa.get(estagio)
+    const metaPct = metaCfg?.metaPct ?? METAS_FUNIL_PADRAO[estagio]?.metaPct ?? 0
+    const tipoMeta = metaCfg?.tipoMeta ?? METAS_FUNIL_PADRAO[estagio]?.tipoMeta ?? 'MINIMO'
+    const tempoMaximoDias = metaCfg?.tempoMaximoDias ?? SLA_PADRAO_DIAS[estagio] ?? null
+
+    let status: 'verde' | 'amarelo' | 'vermelho' = 'verde'
+    if (tipoMeta === 'MAXIMO_PERDA') {
+      if (conversaoReal > metaPct * 1.15) status = 'vermelho'
+      else if (conversaoReal > metaPct) status = 'amarelo'
+    } else {
+      if (conversaoReal < metaPct * 0.85) status = 'vermelho'
+      else if (conversaoReal < metaPct) status = 'amarelo'
+    }
+
+    return {
+      estagio,
+      label: ESTAGIO_LABEL[estagio],
+      quantidade,
+      conversaoReal,
+      meta: metaPct,
+      tipoMeta,
+      diferenca: conversaoReal - metaPct,
+      status,
+      tempoMedioDias: tempoMedio.has(estagio) ? Math.round(tempoMedio.get(estagio)! * 10) / 10 : null,
+      tempoMaximoDias,
+    }
+  })
+
+  return { totalLeads, etapas }
+}

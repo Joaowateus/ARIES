@@ -289,6 +289,23 @@ export interface Tarefa {
   criadoEm: string
 }
 
+export interface ProducaoMensal {
+  mes: number
+  label: string
+  vendas: number
+  faturamento: number
+}
+
+export interface MetasComerciais {
+  supermetaVendasMes: number
+  vendasMes: number
+  metaAnunciosMes: number
+  anunciosMes: number
+  metaAnunciosQuinzena: number
+  anunciosQuinzenaAtual: number
+  quinzenaAtual: 1 | 2
+}
+
 export interface MeuPainel {
   metas: { dia: MetaComProgresso | null; semana: MetaComProgresso | null; mes: MetaComProgresso[] }
   leadsPendentes: number
@@ -298,6 +315,14 @@ export interface MeuPainel {
   anunciosProduzidosSemana: number
   conteudosProduzidosSemana: number
   tarefasPendentes: number
+  producaoMensal: ProducaoMensal[]
+  metasComerciais: MetasComerciais
+  funilProprio: ConversaoFunil
+}
+
+export interface MetaComercialPadrao {
+  supermetaVendasMes: number
+  metaAnunciosMes: number
 }
 
 export interface Insight {
@@ -796,6 +821,11 @@ export const api = {
   },
   meuPainel: {
     get: () => request<MeuPainel>('/meu-painel'),
+  },
+  metasComerciais: {
+    get: () => request<MetaComercialPadrao>('/metas-comerciais'),
+    atualizar: (dados: Partial<MetaComercialPadrao>) =>
+      request<MetaComercialPadrao>('/metas-comerciais', { method: 'PUT', body: JSON.stringify(dados) }),
   },
   funil: {
     metas: () => request<MetaFunilEtapa[]>('/funil/metas'),

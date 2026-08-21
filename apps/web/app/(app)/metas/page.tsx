@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api, MetaComProgresso, Usuario } from '@/lib/api'
+import { api, MetaComProgresso, Usuario, MetaComercialPadrao } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { formatMoeda } from '@/lib/format'
 import ProgressBar from '@/components/ui/ProgressBar'
+
+type CampoComercial = 'supermetaVendasMes' | 'metaAnunciosMes'
 
 const PERIODOS = [
   { value: 'DIARIA', label: 'Diária' },
@@ -30,6 +32,10 @@ export default function MetasPage() {
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
 
+  const [metaComercial, setMetaComercial] = useState<MetaComercialPadrao | null>(null)
+  const [editandoComercial, setEditandoComercial] = useState<CampoComercial | null>(null)
+  const [valorComercial, setValorComercial] = useState('')
+
   const [form, setForm] = useState({
     titulo: '', tipo: 'QUANTIDADE', valor: '', periodo: 'MENSAL',
     inicioEm: hojeISO(), fimEm: hojeISO(), usuarioId: '',
@@ -40,9 +46,24 @@ export default function MetasPage() {
   const carregar = useCallback(() => {
     api.metas.progresso('todas').then(setMetas).finally(() => setLoading(false))
     api.usuarios.listar().then(setUsuarios)
+    api.metasComerciais.get().then(setMetaComercial)
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
+
+  function iniciarEdicaoComercial(campo: CampoComercial, valorAtual: number) {
+    setEditandoComercial(campo)
+    setValorComercial(String(valorAtual))
+  }
+
+  async function salvarEdicaoComercial() {
+    if (!editandoComercial) return
+    const valor = Number(valorComercial)
+    if (!Number.isFinite(valor) || valor <= 0) return
+    const atualizado = await api.metasComerciais.atualizar({ [editandoComercial]: Math.round(valor) })
+    setMetaComercial(atualizado)
+    setEditandoComercial(null)
+  }
 
   function set(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -91,6 +112,37 @@ export default function MetasPage() {
           </button>
         )}
       </div>
+
+      {metaComercial && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h2 className="font-semibold text-gray-900 mb-1">Padrões Comerciais</h2>
+          <p className="text-xs text-gray-400 mb-4">Mesmo alvo pra qualquer vendedor da equipe — usado no Meu Painel de cada um</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <CampoComercialEditor
+              label="Supermeta de vendas (mensal)"
+              valor={metaComercial.supermetaVendasMes}
+              sufixo="vendas/mês"
+              editando={editandoComercial === 'supermetaVendasMes'}
+              podeGerenciar={podeGerenciar}
+              valorEdicao={valorComercial}
+              onValorEdicaoChange={setValorComercial}
+              onIniciar={() => iniciarEdicaoComercial('supermetaVendasMes', metaComercial.supermetaVendasMes)}
+              onSalvar={salvarEdicaoComercial}
+            />
+            <CampoComercialEditor
+              label="Anúncios orgânicos (mensal)"
+              valor={metaComercial.metaAnunciosMes}
+              sufixo={`anúncios/mês (${Math.round(metaComercial.metaAnunciosMes / 2)}/quinzena)`}
+              editando={editandoComercial === 'metaAnunciosMes'}
+              podeGerenciar={podeGerenciar}
+              valorEdicao={valorComercial}
+              onValorEdicaoChange={setValorComercial}
+              onIniciar={() => iniciarEdicaoComercial('metaAnunciosMes', metaComercial.metaAnunciosMes)}
+              onSalvar={salvarEdicaoComercial}
+            />
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={salvar} className="bg-white rounded-xl border border-gray-200 p-6 mb-6 space-y-4">
@@ -192,6 +244,44 @@ export default function MetasPage() {
             )
           })}
         </div>
+      )}
+    </div>
+  )
+}
+
+function CampoComercialEditor({
+  label, valor, sufixo, editando, podeGerenciar, valorEdicao, onValorEdicaoChange, onIniciar, onSalvar,
+}: {
+  label: string
+  valor: number
+  sufixo: string
+  editando: boolean
+  podeGerenciar: boolean
+  valorEdicao: string
+  onValorEdicaoChange: (v: string) => void
+  onIniciar: () => void
+  onSalvar: () => void
+}) {
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-1">{label}</div>
+      {editando ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="number" autoFocus value={valorEdicao} onChange={e => onValorEdicaoChange(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && onSalvar()}
+            className="w-24 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center"
+          />
+          <button onClick={onSalvar} className="text-sm text-blue-600 font-medium">OK</button>
+        </div>
+      ) : (
+        <button
+          disabled={!podeGerenciar}
+          onClick={onIniciar}
+          className="text-lg font-semibold text-gray-900 disabled:cursor-default hover:text-blue-600"
+        >
+          {valor} <span className="text-xs font-normal text-gray-400">{sufixo}</span>{podeGerenciar && ' ✎'}
+        </button>
       )}
     </div>
   )
