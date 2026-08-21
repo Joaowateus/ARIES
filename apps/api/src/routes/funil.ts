@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
 import { PAPEIS_GESTAO } from '../lib/permissoes'
-import { ETAPAS_FUNIL_ORDEM, ESTAGIO_LABEL, METAS_FUNIL_PADRAO } from '../lib/funil'
+import { ETAPAS_FUNIL_ORDEM, ESTAGIO_LABEL, METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, tempoMedioPorEtapa } from '../lib/funil'
 
 const router = Router()
 
@@ -11,16 +11,24 @@ async function obterMetasFunil(empresaId: string) {
   const existentes = await prisma.metaFunilEtapa.findMany({ where: { empresaId } })
   const porEtapa = new Map(existentes.map(m => [m.etapa, m]))
 
-  const faltando = Object.entries(METAS_FUNIL_PADRAO).filter(([etapa]) => !porEtapa.has(etapa))
+  const todasEtapas = new Set([...Object.keys(METAS_FUNIL_PADRAO), ...Object.keys(SLA_PADRAO_DIAS)])
+  const faltando = [...todasEtapas].filter(etapa => !porEtapa.has(etapa))
   if (faltando.length) {
     await prisma.$transaction(
-      faltando.map(([etapa, cfg]) =>
-        prisma.metaFunilEtapa.upsert({
+      faltando.map(etapa => {
+        const cfg = METAS_FUNIL_PADRAO[etapa]
+        return prisma.metaFunilEtapa.upsert({
           where: { empresaId_etapa: { empresaId, etapa } },
           update: {},
-          create: { empresaId, etapa, metaPct: cfg.metaPct, tipoMeta: cfg.tipoMeta },
+          create: {
+            empresaId,
+            etapa,
+            metaPct: cfg?.metaPct ?? 0,
+            tipoMeta: cfg?.tipoMeta ?? 'MINIMO',
+            tempoMaximoDias: SLA_PADRAO_DIAS[etapa] ?? null,
+          },
         })
-      )
+      })
     )
     return prisma.metaFunilEtapa.findMany({ where: { empresaId } })
   }
@@ -32,7 +40,10 @@ router.get('/metas', requireAuth, async (req: Request, res: Response) => {
   res.json(metas)
 })
 
-const metaFunilSchema = z.object({ metaPct: z.number().min(0).max(1) })
+const metaFunilSchema = z.object({
+  metaPct: z.number().min(0).max(1).optional(),
+  tempoMaximoDias: z.number().int().positive().nullable().optional(),
+})
 
 router.put('/metas/:etapa', requireAuth, requirePapel(...PAPEIS_GESTAO), async (req: Request, res: Response) => {
   const parse = metaFunilSchema.safeParse(req.body)
@@ -42,14 +53,21 @@ router.put('/metas/:etapa', requireAuth, requirePapel(...PAPEIS_GESTAO), async (
   }
   const etapa = String(req.params.etapa)
   const cfgPadrao = METAS_FUNIL_PADRAO[etapa]
-  if (!cfgPadrao) {
+  const temSlaPadrao = etapa in SLA_PADRAO_DIAS
+  if (!cfgPadrao && !temSlaPadrao) {
     res.status(400).json({ error: 'Etapa inválida' })
     return
   }
   const meta = await prisma.metaFunilEtapa.upsert({
     where: { empresaId_etapa: { empresaId: req.user!.empresaId, etapa } },
-    update: { metaPct: parse.data.metaPct },
-    create: { empresaId: req.user!.empresaId, etapa, metaPct: parse.data.metaPct, tipoMeta: cfgPadrao.tipoMeta },
+    update: parse.data,
+    create: {
+      empresaId: req.user!.empresaId,
+      etapa,
+      metaPct: parse.data.metaPct ?? cfgPadrao?.metaPct ?? 0,
+      tipoMeta: cfgPadrao?.tipoMeta ?? 'MINIMO',
+      tempoMaximoDias: parse.data.tempoMaximoDias ?? SLA_PADRAO_DIAS[etapa] ?? null,
+    },
   })
   res.json(meta)
 })
@@ -78,12 +96,15 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
     alcancados.get(h.estagioNovo)!.add(h.oportunidadeId)
   }
 
+  const tempoMedio = tempoMedioPorEtapa(historico)
+
   const etapas = ETAPAS_FUNIL_ORDEM.map(estagio => {
     const quantidade = alcancados.get(estagio)?.size ?? 0
     const conversaoReal = totalLeads > 0 ? quantidade / totalLeads : 0
     const metaCfg = metaPorEtapa.get(estagio)
     const metaPct = metaCfg?.metaPct ?? METAS_FUNIL_PADRAO[estagio]?.metaPct ?? 0
     const tipoMeta = metaCfg?.tipoMeta ?? METAS_FUNIL_PADRAO[estagio]?.tipoMeta ?? 'MINIMO'
+    const tempoMaximoDias = metaCfg?.tempoMaximoDias ?? SLA_PADRAO_DIAS[estagio] ?? null
 
     let status: 'verde' | 'amarelo' | 'vermelho' = 'verde'
     if (tipoMeta === 'MAXIMO_PERDA') {
@@ -103,6 +124,8 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
       tipoMeta,
       diferenca: conversaoReal - metaPct,
       status,
+      tempoMedioDias: tempoMedio.has(estagio) ? Math.round(tempoMedio.get(estagio)! * 10) / 10 : null,
+      tempoMaximoDias,
     }
   })
 

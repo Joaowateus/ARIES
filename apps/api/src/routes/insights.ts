@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { escopoVisibilidade, escopoWhereDono, veEquipe } from '../lib/permissoes'
-import { ESTAGIOS_FINAIS, ESTAGIO_LABEL, ETAPAS_FUNIL_ORDEM, METAS_FUNIL_PADRAO } from '../lib/funil'
+import { ESTAGIOS_FINAIS, ESTAGIO_LABEL, ETAPAS_FUNIL_ORDEM, METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, diasNaEtapaAtualPorOportunidade } from '../lib/funil'
 import { classificacaoSaude, diasEmEstoque, obterParametros, SAUDE } from '../lib/precificacao'
 
 export interface Insight {
@@ -40,6 +40,42 @@ export async function gerarInsights(empresaId: string, usuarioAuth: { sub: strin
       severidade: oportunidadesAtivas.length >= 10 ? 'alto' : 'medio',
       mensagem: `${oportunidadesAtivas.length} lead${oportunidadesAtivas.length > 1 ? 's estão' : ' está'} sem follow-up agendado ou com a próxima ação vencida.`,
     })
+  }
+
+  // --- Leads parados além do prazo (SLA) da etapa atual ---
+  const oportunidadesParaSla = await prisma.oportunidade.findMany({
+    where: { empresaId, ...whereDono, estagio: { notIn: [...ESTAGIOS_FINAIS] } },
+    select: { id: true, nomeCliente: true, estagio: true, responsavel: { select: { nome: true } } },
+  })
+  if (oportunidadesParaSla.length > 0) {
+    const historicoSla = await prisma.estagioHistorico.findMany({
+      where: { oportunidadeId: { in: oportunidadesParaSla.map(o => o.id) } },
+      select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
+    })
+    const diasPorOportunidade = diasNaEtapaAtualPorOportunidade(historicoSla)
+    const metasSla = await prisma.metaFunilEtapa.findMany({ where: { empresaId } })
+    const slaPorEtapa = new Map(metasSla.map(m => [m.etapa, m.tempoMaximoDias]))
+
+    const parados = oportunidadesParaSla
+      .map(o => ({ ...o, dias: diasPorOportunidade.get(o.id) }))
+      .filter(o => {
+        const sla = slaPorEtapa.get(o.estagio) ?? SLA_PADRAO_DIAS[o.estagio]
+        return sla != null && o.dias != null && o.dias > sla
+      })
+      .sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0))
+
+    if (parados.length > 0) {
+      const listados = parados.slice(0, 5).map(o => {
+        const quemNome = escopo.tipo === 'proprio' ? '' : ` (${o.responsavel?.nome ?? 'sem responsável'})`
+        return `${o.nomeCliente}${quemNome} — ${ESTAGIO_LABEL[o.estagio]}, ${Math.round(o.dias!)}d`
+      })
+      const resto = parados.length > 5 ? ` e mais ${parados.length - 5}` : ''
+      insights.push({
+        tipo: 'LEADS_PARADOS_SLA',
+        severidade: parados.length >= 5 ? 'alto' : 'medio',
+        mensagem: `${parados.length} lead${parados.length > 1 ? 's estão' : ' está'} parado${parados.length > 1 ? 's' : ''} além do prazo da etapa: ${listados.join('; ')}${resto}.`,
+      })
+    }
   }
 
   // --- Conversão do funil abaixo da meta (via /funil/conversao) ---

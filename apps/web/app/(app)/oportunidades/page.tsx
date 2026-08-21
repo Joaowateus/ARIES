@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { api, Oportunidade } from '@/lib/api'
+import { api, Oportunidade, MetaFunilEtapa } from '@/lib/api'
 import Link from 'next/link'
 import { COLUNAS_KANBAN, ESTAGIO_VENDA_FECHADA } from '@/lib/funil'
 
@@ -11,11 +11,13 @@ const COLUNAS = COLUNAS_KANBAN
 export default function CrmPage() {
   const router = useRouter()
   const [oportunidades, setOportunidades] = useState<Oportunidade[]>([])
+  const [metasSla, setMetasSla] = useState<MetaFunilEtapa[]>([])
   const [loading, setLoading] = useState(true)
   const [movendo, setMovendo] = useState<string | null>(null)
 
   const carregar = useCallback(() => {
     api.oportunidades.listar().then(setOportunidades).finally(() => setLoading(false))
+    api.funil.metas().then(setMetasSla)
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
@@ -61,6 +63,8 @@ export default function CrmPage() {
               <div className="flex-1 p-2 space-y-2 min-h-32">
                 {itens.map(op => {
                   const atrasado = op.proximaAcaoEm && new Date(op.proximaAcaoEm) < new Date()
+                  const sla = metasSla.find(m => m.etapa === col.id)?.tempoMaximoDias
+                  const estourouSla = sla != null && op.diasNaEtapaAtual != null && op.diasNaEtapaAtual > sla
                   return (
                   <div
                     key={op.id}
@@ -78,6 +82,11 @@ export default function CrmPage() {
                     )}
                     {op.responsavel && (
                       <div className="text-xs text-gray-400 mt-1 truncate">👤 {op.responsavel.nome}</div>
+                    )}
+                    {op.diasNaEtapaAtual != null && (
+                      <div className={`text-xs mt-1 ${estourouSla ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                        {estourouSla ? '🔥 ' : '⏱ '}{Math.round(op.diasNaEtapaAtual)}d nesta etapa{sla != null && estourouSla ? ` (limite: ${sla}d)` : ''}
+                      </div>
                     )}
                     {op.proximaAcaoEm && (
                       <div className={`text-xs mt-1 ${atrasado ? 'text-red-600 font-medium' : 'text-gray-400'}`}>

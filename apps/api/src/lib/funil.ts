@@ -55,3 +55,66 @@ export const METAS_FUNIL_PADRAO: Record<string, { metaPct: number; tipoMeta: 'MI
   COMPRADO: { metaPct: 0.2, tipoMeta: 'MINIMO' },
   PROCESSO_ADMINISTRATIVO: { metaPct: 1.0, tipoMeta: 'MINIMO' },
 }
+
+/** SLA padrão (dias) — quanto tempo um lead pode ficar parado numa etapa
+ * antes de virar alerta pro gestor (ver Central de Insights). */
+export const SLA_PADRAO_DIAS: Record<string, number> = {
+  NOVO_LEAD: 1,
+  NAO_RESPONDEU: 3,
+  FOLLOW_1_DIA: 2,
+  RESPONDEU: 2,
+  SQL: 3,
+  MQL: 5,
+  COMPRADO: 3,
+  PROCESSO_ADMINISTRATIVO: 5,
+}
+
+interface HistoricoEntrada {
+  oportunidadeId: string
+  estagioNovo: string
+  criadoEm: Date
+}
+
+/** Tempo médio (em dias) que oportunidades passam em cada etapa antes de sair
+ * dela — só conta transições completas (quem ainda está parado numa etapa
+ * não entra na média, senão puxaria o número pra baixo artificialmente). */
+export function tempoMedioPorEtapa(historico: HistoricoEntrada[]): Map<string, number> {
+  const porOportunidade = new Map<string, HistoricoEntrada[]>()
+  for (const h of historico) {
+    if (!porOportunidade.has(h.oportunidadeId)) porOportunidade.set(h.oportunidadeId, [])
+    porOportunidade.get(h.oportunidadeId)!.push(h)
+  }
+
+  const duracoesPorEtapa = new Map<string, number[]>()
+  for (const entradas of porOportunidade.values()) {
+    entradas.sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime())
+    for (let i = 0; i < entradas.length - 1; i++) {
+      const dias = (entradas[i + 1].criadoEm.getTime() - entradas[i].criadoEm.getTime()) / (24 * 60 * 60 * 1000)
+      const etapa = entradas[i].estagioNovo
+      if (!duracoesPorEtapa.has(etapa)) duracoesPorEtapa.set(etapa, [])
+      duracoesPorEtapa.get(etapa)!.push(dias)
+    }
+  }
+
+  const media = new Map<string, number>()
+  for (const [etapa, duracoes] of duracoesPorEtapa) {
+    media.set(etapa, duracoes.reduce((a, b) => a + b, 0) / duracoes.length)
+  }
+  return media
+}
+
+/** Para cada oportunidade ainda ativa, quantos dias faz desde que ela entrou
+ * na etapa em que está agora (baseado na entrada mais recente do histórico). */
+export function diasNaEtapaAtualPorOportunidade(historico: HistoricoEntrada[]): Map<string, number> {
+  const maisRecentePorOportunidade = new Map<string, Date>()
+  for (const h of historico) {
+    const atual = maisRecentePorOportunidade.get(h.oportunidadeId)
+    if (!atual || h.criadoEm > atual) maisRecentePorOportunidade.set(h.oportunidadeId, h.criadoEm)
+  }
+  const agora = new Date()
+  const resultado = new Map<string, number>()
+  for (const [id, data] of maisRecentePorOportunidade) {
+    resultado.set(id, (agora.getTime() - data.getTime()) / (24 * 60 * 60 * 1000))
+  }
+  return resultado
+}

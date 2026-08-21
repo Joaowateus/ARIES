@@ -2,38 +2,12 @@ import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { calcularPrecificacao, lucroLiquidoReal, diasEmEstoque, obterParametros as obterParametrosBase } from '../lib/precificacao'
-import { ETAPAS_FUNIL_ORDEM, ESTAGIO_LABEL, ESTAGIO_VENDA_FECHADA } from '../lib/funil'
+import { ETAPAS_FUNIL_ORDEM, ESTAGIO_LABEL, ESTAGIO_VENDA_FECHADA, tempoMedioPorEtapa } from '../lib/funil'
 
 const router = Router()
 
 function inicioDoMes(data: Date): Date {
   return new Date(data.getFullYear(), data.getMonth(), 1)
-}
-
-/** Tempo médio (em dias) que oportunidades passam em cada etapa antes de sair dela. */
-function tempoMedioPorEtapa(historico: { oportunidadeId: string; estagioNovo: string; criadoEm: Date }[]) {
-  const porOportunidade = new Map<string, { estagioNovo: string; criadoEm: Date }[]>()
-  for (const h of historico) {
-    if (!porOportunidade.has(h.oportunidadeId)) porOportunidade.set(h.oportunidadeId, [])
-    porOportunidade.get(h.oportunidadeId)!.push(h)
-  }
-
-  const duracoesPorEtapa = new Map<string, number[]>()
-  for (const entradas of porOportunidade.values()) {
-    entradas.sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime())
-    for (let i = 0; i < entradas.length - 1; i++) {
-      const dias = (entradas[i + 1].criadoEm.getTime() - entradas[i].criadoEm.getTime()) / (24 * 60 * 60 * 1000)
-      const etapa = entradas[i].estagioNovo
-      if (!duracoesPorEtapa.has(etapa)) duracoesPorEtapa.set(etapa, [])
-      duracoesPorEtapa.get(etapa)!.push(dias)
-    }
-  }
-
-  const media = new Map<string, number>()
-  for (const [etapa, duracoes] of duracoesPorEtapa) {
-    media.set(etapa, duracoes.reduce((a, b) => a + b, 0) / duracoes.length)
-  }
-  return media
 }
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {

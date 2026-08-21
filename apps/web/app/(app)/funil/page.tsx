@@ -13,11 +13,13 @@ function pct(v: number): string {
   return `${Math.round(v * 100)}%`
 }
 
+type CampoEdicao = 'meta' | 'sla'
+
 export default function FunilVendasPage() {
   const { user } = useAuth()
   const [dados, setDados] = useState<ConversaoFunil | null>(null)
   const [loading, setLoading] = useState(true)
-  const [editando, setEditando] = useState<string | null>(null)
+  const [editando, setEditando] = useState<{ etapa: string; campo: CampoEdicao } | null>(null)
   const [valorEdicao, setValorEdicao] = useState('')
 
   const podeGerenciar = PAPEIS_GESTAO.includes(user?.papel ?? '')
@@ -28,10 +30,22 @@ export default function FunilVendasPage() {
 
   useEffect(() => { carregar() }, [carregar])
 
-  async function salvarMeta(etapa: string) {
-    const valor = Number(valorEdicao) / 100
-    if (!Number.isFinite(valor) || valor < 0 || valor > 1) return
-    await api.funil.atualizarMeta(etapa, valor)
+  function iniciarEdicao(etapa: string, campo: CampoEdicao, valorAtual: number | null) {
+    setEditando({ etapa, campo })
+    setValorEdicao(campo === 'meta' ? String(Math.round((valorAtual ?? 0) * 100)) : String(valorAtual ?? ''))
+  }
+
+  async function salvarEdicao() {
+    if (!editando) return
+    if (editando.campo === 'meta') {
+      const valor = Number(valorEdicao) / 100
+      if (!Number.isFinite(valor) || valor < 0 || valor > 1) return
+      await api.funil.atualizarMeta(editando.etapa, { metaPct: valor })
+    } else {
+      const dias = valorEdicao.trim() === '' ? null : Number(valorEdicao)
+      if (dias !== null && (!Number.isFinite(dias) || dias <= 0)) return
+      await api.funil.atualizarMeta(editando.etapa, { tempoMaximoDias: dias })
+    }
     setEditando(null)
     carregar()
   }
@@ -69,25 +83,51 @@ export default function FunilVendasPage() {
           {/* Gráfico de funil */}
           <FunnelChart etapas={dados.etapas} />
 
-          {/* Metas por etapa */}
+          {/* Metas, tempo médio e SLA por etapa */}
           <div className="grid gap-1 mt-2" style={{ gridTemplateColumns: `repeat(${dados.etapas.length}, 1fr)` }}>
             {dados.etapas.map(e => (
-              <div key={e.estagio} className="text-center">
-                {editando === e.estagio ? (
+              <div key={e.estagio} className="text-center space-y-0.5">
+                {editando?.etapa === e.estagio && editando.campo === 'meta' ? (
                   <div className="flex items-center justify-center gap-1">
                     <input
                       type="number" autoFocus value={valorEdicao} onChange={ev => setValorEdicao(ev.target.value)}
+                      onKeyDown={ev => ev.key === 'Enter' && salvarEdicao()}
                       className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs text-center"
                     />
-                    <button onClick={() => salvarMeta(e.estagio)} className="text-xs text-blue-600 font-medium">OK</button>
+                    <button onClick={salvarEdicao} className="text-xs text-blue-600 font-medium">OK</button>
                   </div>
                 ) : (
                   <button
                     disabled={!podeGerenciar}
-                    onClick={() => { setEditando(e.estagio); setValorEdicao(String(Math.round(e.meta * 100))) }}
-                    className="text-[11px] text-gray-400 disabled:cursor-default hover:text-blue-600"
+                    onClick={() => iniciarEdicao(e.estagio, 'meta', e.meta)}
+                    className="text-[11px] text-gray-400 disabled:cursor-default hover:text-blue-600 block w-full"
                   >
                     Meta: {pct(e.meta)}{e.tipoMeta === 'MAXIMO_PERDA' ? ' (máx.)' : ' (mín.)'}{podeGerenciar && ' ✎'}
+                  </button>
+                )}
+
+                {e.tempoMedioDias != null && (
+                  <div className="text-[11px] text-gray-400">
+                    ⏱ média: {Math.round(e.tempoMedioDias * 10) / 10}d
+                  </div>
+                )}
+
+                {editando?.etapa === e.estagio && editando.campo === 'sla' ? (
+                  <div className="flex items-center justify-center gap-1">
+                    <input
+                      type="number" autoFocus value={valorEdicao} onChange={ev => setValorEdicao(ev.target.value)}
+                      onKeyDown={ev => ev.key === 'Enter' && salvarEdicao()}
+                      placeholder="dias" className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs text-center"
+                    />
+                    <button onClick={salvarEdicao} className="text-xs text-blue-600 font-medium">OK</button>
+                  </div>
+                ) : (
+                  <button
+                    disabled={!podeGerenciar}
+                    onClick={() => iniciarEdicao(e.estagio, 'sla', e.tempoMaximoDias ?? null)}
+                    className="text-[11px] text-gray-400 disabled:cursor-default hover:text-blue-600 block w-full"
+                  >
+                    Prazo: {e.tempoMaximoDias != null ? `${e.tempoMaximoDias}d` : '—'}{podeGerenciar && ' ✎'}
                   </button>
                 )}
               </div>

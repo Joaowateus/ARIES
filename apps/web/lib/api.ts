@@ -52,6 +52,7 @@ export interface Oportunidade {
   proximaAcaoDescricao?: string | null
   criadaEm: string
   atualizadaEm: string
+  diasNaEtapaAtual?: number | null
 }
 
 export interface MetaFunilEtapa {
@@ -59,6 +60,7 @@ export interface MetaFunilEtapa {
   etapa: string
   metaPct: number
   tipoMeta: 'MINIMO' | 'MAXIMO_PERDA'
+  tempoMaximoDias?: number | null
 }
 
 export interface EtapaConversao {
@@ -70,6 +72,8 @@ export interface EtapaConversao {
   tipoMeta: 'MINIMO' | 'MAXIMO_PERDA'
   diferenca: number
   status: 'verde' | 'amarelo' | 'vermelho'
+  tempoMedioDias: number | null
+  tempoMaximoDias: number | null
 }
 
 export interface ConversaoFunil {
@@ -795,8 +799,8 @@ export const api = {
   },
   funil: {
     metas: () => request<MetaFunilEtapa[]>('/funil/metas'),
-    atualizarMeta: (etapa: string, metaPct: number) =>
-      request<MetaFunilEtapa>(`/funil/metas/${etapa}`, { method: 'PUT', body: JSON.stringify({ metaPct }) }),
+    atualizarMeta: (etapa: string, dados: { metaPct?: number; tempoMaximoDias?: number | null }) =>
+      request<MetaFunilEtapa>(`/funil/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(dados) }),
     conversao: () => request<ConversaoFunil>('/funil/conversao'),
   },
   insights: {

@@ -501,12 +501,13 @@ model MelhoriaProtocolo {
 
 // Meta de conversão configurável por etapa do funil de 8 estágios.
 model MetaFunilEtapa {
-  id           String   @id @default(cuid())
-  empresaId    String
-  etapa        String
-  metaPct      Float // 0-1
-  tipoMeta     String   @default("MINIMO") // MINIMO | MAXIMO_PERDA
-  atualizadoEm DateTime @updatedAt
+  id             String   @id @default(cuid())
+  empresaId      String
+  etapa          String
+  metaPct        Float // 0-1
+  tipoMeta       String   @default("MINIMO") // MINIMO | MAXIMO_PERDA
+  tempoMaximoDias Int?    // SLA em dias — lead parado além disso vira alerta pro gestor
+  atualizadoEm   DateTime @updatedAt
 
   empresa Empresa @relation(fields: [empresaId], references: [id])
 

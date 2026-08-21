@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
-import { ESTAGIOS, ESTAGIOS_FINAIS, ESTAGIO_VENDA_FECHADA } from '../lib/funil'
+import { ESTAGIOS, ESTAGIOS_FINAIS, ESTAGIO_VENDA_FECHADA, diasNaEtapaAtualPorOportunidade } from '../lib/funil'
 import { escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
 
 const router = Router()
@@ -50,7 +50,17 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     include,
     orderBy: { atualizadaEm: 'desc' },
   })
-  res.json(oportunidades)
+
+  const historico = await prisma.estagioHistorico.findMany({
+    where: { oportunidadeId: { in: oportunidades.map(o => o.id) } },
+    select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
+  })
+  const diasPorOportunidade = diasNaEtapaAtualPorOportunidade(historico)
+
+  res.json(oportunidades.map(o => ({
+    ...o,
+    diasNaEtapaAtual: diasPorOportunidade.has(o.id) ? Math.round(diasPorOportunidade.get(o.id)! * 10) / 10 : null,
+  })))
 })
 
 router.get('/:id', requireAuth, async (req: Request, res: Response) => {
