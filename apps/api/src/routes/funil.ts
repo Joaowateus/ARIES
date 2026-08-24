@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
-import { PAPEIS_GESTAO } from '../lib/permissoes'
+import { PAPEIS_GESTAO, escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
 import { METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, obterMetasFunil, montarConversaoFunil } from '../lib/funil'
 
 const router = Router()
@@ -48,6 +48,10 @@ router.put('/metas/:etapa', requireAuth, requirePapel(...PAPEIS_GESTAO), async (
 // Conversão real por etapa — "quantos leads já passaram por aqui" (via
 // EstagioHistorico), não "quantos estão parados aqui agora" (isso já existe
 // no Dashboard Executivo). Semáforo compara contra a meta configurável.
+//
+// Usa o mesmo escopo de visibilidade do CRM (/oportunidades): vendedor só
+// vê o próprio funil, gestão vê equipe/empresa — pra este gráfico bater
+// exatamente com o que aparece no board do CRM de quem está olhando.
 // ---------------------------------------------------------------------------
 
 router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
@@ -55,8 +59,14 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
   const metas = await obterMetasFunil(prisma, empresaId)
   const metaPorEtapa = new Map(metas.map(m => [m.etapa, m]))
 
+  const escopo = await escopoVisibilidade(prisma, req.user!)
+  const oportunidadesEscopo = await prisma.oportunidade.findMany({
+    where: { empresaId, ...escopoWhereDono(escopo, 'responsavelId') },
+    select: { id: true },
+  })
+
   const historico = await prisma.estagioHistorico.findMany({
-    where: { empresaId },
+    where: { empresaId, oportunidadeId: { in: oportunidadesEscopo.map(o => o.id) } },
     select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
   })
 

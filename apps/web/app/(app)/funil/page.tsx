@@ -21,24 +21,24 @@ export default function FunilVendasPage() {
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<{ etapa: string; campo: CampoEdicao } | null>(null)
   const [valorEdicao, setValorEdicao] = useState('')
+  const [atualizando, setAtualizando] = useState(false)
 
   const podeGerenciar = PAPEIS_GESTAO.includes(user?.papel ?? '')
 
   const carregar = useCallback(() => {
-    api.funil.conversao().then(setDados).finally(() => setLoading(false))
+    return api.funil.conversao().then(setDados).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
 
-  // Atualização automática — o funil reflete o CRM em tempo quase real, sem
-  // precisar dar F5. Pausa enquanto o usuário está editando meta/SLA, pra não
-  // resetar o campo que ele está digitando.
-  useEffect(() => {
-    const intervalo = setInterval(() => {
-      if (!editando) carregar()
-    }, 20000)
-    return () => clearInterval(intervalo)
-  }, [carregar, editando])
+  async function atualizarManualmente() {
+    setAtualizando(true)
+    try {
+      await carregar()
+    } finally {
+      setAtualizando(false)
+    }
+  }
 
   function iniciarEdicao(etapa: string, campo: CampoEdicao, valorAtual: number | null) {
     setEditando({ etapa, campo })
@@ -64,11 +64,20 @@ export default function FunilVendasPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Funil de Vendas</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Conversão por fase, a partir do total de leads que entraram no funil — direto do CRM
-        </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Funil de Vendas</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Conversão por fase, a partir do total de leads que entraram no funil — direto do CRM
+          </p>
+        </div>
+        <button
+          onClick={atualizarManualmente}
+          disabled={atualizando}
+          className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors shrink-0"
+        >
+          {atualizando ? 'Atualizando...' : '🔄 Atualizar'}
+        </button>
       </div>
 
       {dados && dados.totalLeads < 5 && (
