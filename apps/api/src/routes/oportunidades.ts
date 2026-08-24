@@ -207,4 +207,46 @@ router.post('/:id/atividades', requireAuth, async (req: Request, res: Response) 
   res.status(201).json(atividade)
 })
 
+// ---------------------------------------------------------------------------
+// Apagar em lote — o vendedor seleciona cards no CRM e apaga de uma vez, em
+// vez de excluir um por um. Escopo de visibilidade já garante que ninguém
+// apaga oportunidade de outra pessoa (mesmo filtro usado em toda leitura/
+// escrita individual). Sem restrição por estágio: se o card tem contrato
+// fechado, o contrato (e as contas a receber dele) são apagados junto.
+// ---------------------------------------------------------------------------
+
+const deletarLoteSchema = z.object({ ids: z.array(z.string()).min(1) })
+
+router.delete('/', requireAuth, async (req: Request, res: Response) => {
+  const parse = deletarLoteSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+
+  const escopo = await escopoVisibilidade(prisma, req.user!)
+  const oportunidades = await prisma.oportunidade.findMany({
+    where: { id: { in: parse.data.ids }, empresaId: req.user!.empresaId, ...escopoWhereDono(escopo, 'responsavelId') },
+    select: { id: true },
+  })
+  const ids = oportunidades.map(o => o.id)
+  if (ids.length === 0) {
+    res.json({ apagadas: 0 })
+    return
+  }
+
+  const contratos = await prisma.contrato.findMany({ where: { oportunidadeId: { in: ids } }, select: { id: true } })
+  const contratoIds = contratos.map(c => c.id)
+
+  await prisma.$transaction([
+    prisma.contaReceber.deleteMany({ where: { contratoId: { in: contratoIds } } }),
+    prisma.contrato.deleteMany({ where: { oportunidadeId: { in: ids } } }),
+    prisma.atividadeOportunidade.deleteMany({ where: { oportunidadeId: { in: ids } } }),
+    prisma.estagioHistorico.deleteMany({ where: { oportunidadeId: { in: ids } } }),
+    prisma.oportunidade.deleteMany({ where: { id: { in: ids } } }),
+  ])
+
+  res.json({ apagadas: ids.length })
+})
+
 export default router

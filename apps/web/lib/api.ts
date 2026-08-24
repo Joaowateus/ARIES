@@ -717,6 +717,8 @@ export const api = {
       }),
     registrarAtividade: (id: string, data: { tipo: string; descricao: string; proximaAcaoEm?: string; proximaAcaoDescricao?: string }) =>
       request<AtividadeOportunidade>(`/oportunidades/${id}/atividades`, { method: 'POST', body: JSON.stringify(data) }),
+    apagarLote: (ids: string[]) =>
+      request<{ apagadas: number }>('/oportunidades', { method: 'DELETE', body: JSON.stringify({ ids }) }),
   },
   dashboard: {
     get: () => request<DashboardExecutivo>('/dashboard'),

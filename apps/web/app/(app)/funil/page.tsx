@@ -30,6 +30,16 @@ export default function FunilVendasPage() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Atualização automática — o funil reflete o CRM em tempo quase real, sem
+  // precisar dar F5. Pausa enquanto o usuário está editando meta/SLA, pra não
+  // resetar o campo que ele está digitando.
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      if (!editando) carregar()
+    }, 20000)
+    return () => clearInterval(intervalo)
+  }, [carregar, editando])
+
   function iniciarEdicao(etapa: string, campo: CampoEdicao, valorAtual: number | null) {
     setEditando({ etapa, campo })
     setValorEdicao(campo === 'meta' ? String(Math.round((valorAtual ?? 0) * 100)) : String(valorAtual ?? ''))

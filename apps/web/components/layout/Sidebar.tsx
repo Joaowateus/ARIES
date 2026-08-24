@@ -24,7 +24,10 @@ const PAPEIS_GESTAO_NAV = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERC
 interface NavItem { href: string; label: string; icon: string }
 interface NavGrupo { titulo?: string; itens: NavItem[] }
 
-// Navegação do vendedor (seção 29 do desenho original) — o que ele executa.
+// Navegação do vendedor (seção 29 do desenho original). Reduzida a pedido do
+// usuário enquanto o sistema é reorganizado aos poucos — os outros módulos
+// (Minha Rotina, Marketplace, Protocolos, Calendário etc.) continuam
+// existindo, só saem do menu do vendedor até serem reintroduzidos um a um.
 const NAV_VENDEDOR: NavGrupo[] = [
   { itens: [{ href: '/meu-painel', label: 'Meu Painel', icon: '🙋' }] },
   {
@@ -33,32 +36,6 @@ const NAV_VENDEDOR: NavGrupo[] = [
       { href: '/oportunidades', label: 'CRM', icon: '🎯' },
       { href: '/funil', label: 'Funil de Vendas', icon: '🔽' },
       { href: '/metas', label: 'Minhas Metas', icon: '🎯' },
-    ],
-  },
-  {
-    titulo: 'Execução',
-    itens: [
-      { href: '/minha-rotina', label: 'Minha Rotina', icon: '✅' },
-      { href: '/tarefas', label: 'Tarefas', icon: '📌' },
-      { href: '/marketplace', label: 'Marketplace', icon: '🛵' },
-      { href: '/social-media', label: 'Social Media', icon: '📱' },
-    ],
-  },
-  {
-    titulo: 'Conhecimento',
-    itens: [
-      { href: '/protocolos', label: 'Protocolos', icon: '📋' },
-      { href: '/processos', label: 'Processos', icon: '🗺️' },
-      { href: '/treinamentos', label: 'Treinamentos', icon: '🎓' },
-    ],
-  },
-  {
-    titulo: 'Acompanhamento',
-    itens: [
-      { href: '/calendario', label: 'Calendário', icon: '📅' },
-      { href: '/notificacoes', label: 'Notificações', icon: '🔔' },
-      { href: '/relatorios', label: 'Relatórios', icon: '📄' },
-      { href: '/insights', label: 'Insights', icon: '💡' },
     ],
   },
 ]

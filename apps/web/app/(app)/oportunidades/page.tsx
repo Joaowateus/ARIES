@@ -14,6 +14,9 @@ export default function CrmPage() {
   const [metasSla, setMetasSla] = useState<MetaFunilEtapa[]>([])
   const [loading, setLoading] = useState(true)
   const [movendo, setMovendo] = useState<string | null>(null)
+  const [selecionando, setSelecionando] = useState(false)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+  const [apagando, setApagando] = useState(false)
 
   const carregar = useCallback(() => {
     api.oportunidades.listar().then(setOportunidades).finally(() => setLoading(false))
@@ -32,6 +35,37 @@ export default function CrmPage() {
     }
   }
 
+  function alternarSelecao(id: string) {
+    setSelecionados(atual => {
+      const novo = new Set(atual)
+      if (novo.has(id)) novo.delete(id)
+      else novo.add(id)
+      return novo
+    })
+  }
+
+  function cancelarSelecao() {
+    setSelecionando(false)
+    setSelecionados(new Set())
+  }
+
+  async function apagarSelecionados() {
+    if (selecionados.size === 0) return
+    const confirmado = window.confirm(
+      `Apagar ${selecionados.size} card${selecionados.size > 1 ? 's' : ''} selecionado${selecionados.size > 1 ? 's' : ''}? ` +
+      'Isso também apaga contrato, contas a receber e histórico ligados a eles. Não tem como desfazer.'
+    )
+    if (!confirmado) return
+    setApagando(true)
+    try {
+      await api.oportunidades.apagarLote([...selecionados])
+      cancelarSelecao()
+      carregar()
+    } finally {
+      setApagando(false)
+    }
+  }
+
   const por = (estagio: string) => oportunidades.filter(o => o.estagio === estagio)
 
   if (loading) return <div className="p-8 text-gray-400 text-sm">Carregando CRM...</div>
@@ -43,12 +77,41 @@ export default function CrmPage() {
           <h1 className="text-xl font-bold text-gray-900">CRM</h1>
           <p className="text-sm text-gray-500 mt-0.5">{oportunidades.length} cliente{oportunidades.length !== 1 ? 's' : ''} na jornada de compra</p>
         </div>
-        <Link
-          href="/oportunidades/nova"
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          + Novo Lead
-        </Link>
+        <div className="flex items-center gap-2">
+          {selecionando ? (
+            <>
+              <span className="text-sm text-gray-500">{selecionados.size} selecionado{selecionados.size !== 1 ? 's' : ''}</span>
+              <button
+                onClick={apagarSelecionados}
+                disabled={selecionados.size === 0 || apagando}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {apagando ? 'Apagando...' : 'Apagar selecionados'}
+              </button>
+              <button
+                onClick={cancelarSelecao}
+                className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setSelecionando(true)}
+                className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Selecionar
+              </button>
+              <Link
+                href="/oportunidades/nova"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                + Novo Lead
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-4">
@@ -65,13 +128,25 @@ export default function CrmPage() {
                   const atrasado = op.proximaAcaoEm && new Date(op.proximaAcaoEm) < new Date()
                   const sla = metasSla.find(m => m.etapa === col.id)?.tempoMaximoDias
                   const estourouSla = sla != null && op.diasNaEtapaAtual != null && op.diasNaEtapaAtual > sla
+                  const selecionado = selecionados.has(op.id)
                   return (
                   <div
                     key={op.id}
-                    onClick={() => router.push(`/oportunidades/${op.id}`)}
-                    className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-pointer hover:border-blue-300 hover:shadow"
+                    onClick={() => selecionando ? alternarSelecao(op.id) : router.push(`/oportunidades/${op.id}`)}
+                    className={`relative bg-white rounded-lg border p-3 shadow-sm cursor-pointer hover:shadow ${
+                      selecionado ? 'border-red-400 ring-2 ring-red-200' : 'border-gray-200 hover:border-blue-300'
+                    }`}
                   >
-                    <div className="font-medium text-sm text-gray-900 truncate">{op.nomeCliente}</div>
+                    {selecionando && (
+                      <input
+                        type="checkbox"
+                        checked={selecionado}
+                        onChange={() => alternarSelecao(op.id)}
+                        onClick={e => e.stopPropagation()}
+                        className="absolute top-2 right-2 w-4 h-4 accent-red-600 cursor-pointer"
+                      />
+                    )}
+                    <div className="font-medium text-sm text-gray-900 truncate pr-5">{op.nomeCliente}</div>
                     {op.unidade && (
                       <div className="text-xs text-gray-500 mt-0.5 truncate">{op.unidade.nome}</div>
                     )}
