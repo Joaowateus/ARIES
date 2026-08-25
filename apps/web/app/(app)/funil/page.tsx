@@ -15,6 +15,25 @@ function pct(v: number): string {
 
 type CampoEdicao = 'meta' | 'sla'
 
+const PRESETS = [
+  { id: 'tudo', label: 'Tudo' },
+  { id: 'hoje', label: 'Hoje' },
+  { id: 'semana', label: 'Esta semana' },
+  { id: 'mes', label: 'Este mês' },
+] as const
+
+function isoData(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function periodoDoPreset(id: string): { inicio?: string; fim?: string } {
+  const hoje = new Date()
+  if (id === 'hoje') return { inicio: isoData(hoje), fim: isoData(hoje) }
+  if (id === 'semana') return { inicio: isoData(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - hoje.getDay())), fim: isoData(hoje) }
+  if (id === 'mes') return { inicio: isoData(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), fim: isoData(hoje) }
+  return {}
+}
+
 export default function FunilVendasPage() {
   const { user } = useAuth()
   const [dados, setDados] = useState<ConversaoFunil | null>(null)
@@ -22,12 +41,16 @@ export default function FunilVendasPage() {
   const [editando, setEditando] = useState<{ etapa: string; campo: CampoEdicao } | null>(null)
   const [valorEdicao, setValorEdicao] = useState('')
   const [atualizando, setAtualizando] = useState(false)
+  const [periodo, setPeriodo] = useState<{ inicio?: string; fim?: string }>({})
+  const [presetAtivo, setPresetAtivo] = useState<string>('tudo')
+  const [customInicio, setCustomInicio] = useState('')
+  const [customFim, setCustomFim] = useState('')
 
   const podeGerenciar = PAPEIS_GESTAO.includes(user?.papel ?? '')
 
   const carregar = useCallback(() => {
-    return api.funil.conversao().then(setDados).finally(() => setLoading(false))
-  }, [])
+    return api.funil.conversao(periodo).then(setDados).finally(() => setLoading(false))
+  }, [periodo])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -38,6 +61,19 @@ export default function FunilVendasPage() {
     } finally {
       setAtualizando(false)
     }
+  }
+
+  function selecionarPreset(id: string) {
+    setPresetAtivo(id)
+    setCustomInicio('')
+    setCustomFim('')
+    setPeriodo(periodoDoPreset(id))
+  }
+
+  function aplicarCustom() {
+    if (!customInicio && !customFim) return
+    setPresetAtivo('custom')
+    setPeriodo({ inicio: customInicio || undefined, fim: customFim || undefined })
   }
 
   function iniciarEdicao(etapa: string, campo: CampoEdicao, valorAtual: number | null) {
@@ -78,6 +114,40 @@ export default function FunilVendasPage() {
         >
           {atualizando ? 'Atualizando...' : '🔄 Atualizar'}
         </button>
+      </div>
+
+      {/* Período de análise */}
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        {PRESETS.map(p => (
+          <button
+            key={p.id}
+            onClick={() => selecionarPreset(p.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              presetAtivo === p.id ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+        <div className="flex items-center gap-1.5 ml-1">
+          <input
+            type="date" value={customInicio} onChange={e => setCustomInicio(e.target.value)}
+            className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+          />
+          <span className="text-xs text-gray-400">até</span>
+          <input
+            type="date" value={customFim} onChange={e => setCustomFim(e.target.value)}
+            className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+          />
+          <button
+            onClick={aplicarCustom}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              presetAtivo === 'custom' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            Aplicar período
+          </button>
+        </div>
       </div>
 
       {dados && dados.totalLeads < 5 && (

@@ -26,8 +26,9 @@ interface NavGrupo { titulo?: string; itens: NavItem[] }
 
 // Navegação do vendedor (seção 29 do desenho original). Reduzida a pedido do
 // usuário enquanto o sistema é reorganizado aos poucos — os outros módulos
-// (Minha Rotina, Marketplace, Protocolos, Calendário etc.) continuam
-// existindo, só saem do menu do vendedor até serem reintroduzidos um a um.
+// (Minha Rotina, Marketplace, Protocolos etc.) continuam existindo, só saem
+// do menu do vendedor até serem reintroduzidos um a um. Calendário voltou
+// a pedido, pra analisar follow-ups e próximas ações por data.
 const NAV_VENDEDOR: NavGrupo[] = [
   { itens: [{ href: '/meu-painel', label: 'Meu Painel', icon: '🙋' }] },
   {
@@ -38,6 +39,7 @@ const NAV_VENDEDOR: NavGrupo[] = [
       { href: '/metas', label: 'Minhas Metas', icon: '🎯' },
     ],
   },
+  { itens: [{ href: '/calendario', label: 'Calendário', icon: '📅' }] },
 ]
 
 // Navegação do gestor (seção 30) — o que ele controla/decide.

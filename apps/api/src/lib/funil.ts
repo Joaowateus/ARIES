@@ -161,9 +161,22 @@ interface MetaEtapaCfg {
 /** Monta o array de conversão por etapa (quantidade, % real, meta, semáforo,
  * tempo médio) a partir de um histórico já filtrado — reaproveitado tanto
  * pelo Funil de Vendas da empresa quanto pelo funil individual do Meu Painel,
- * que passa só o histórico das oportunidades do próprio vendedor. */
-export function montarConversaoFunil(historico: HistoricoEntrada[], metaPorEtapa: Map<string, MetaEtapaCfg>) {
-  const totalLeads = new Set(historico.filter(h => h.estagioNovo === 'NOVO_LEAD').map(h => h.oportunidadeId)).size
+ * que passa só o histórico das oportunidades do próprio vendedor.
+ *
+ * `totalLeadsRegistrados`, quando informado, substitui a contagem de Leads
+ * derivada do histórico (que soma/encolhe conforme cards são criados ou
+ * apagados no CRM) pelo contador permanente de LeadRegistrado — a etapa
+ * "Leads" e a base de 100% do funil passam a refletir todo mundo que já
+ * entrou, mesmo quem foi apagado do CRM depois. As demais etapas continuam
+ * vindo do histórico normalmente, porque essas sim devem refletir o estado
+ * atual das oportunidades. */
+export function montarConversaoFunil(
+  historico: HistoricoEntrada[],
+  metaPorEtapa: Map<string, MetaEtapaCfg>,
+  totalLeadsRegistrados?: number
+) {
+  const totalLeadsHistorico = new Set(historico.filter(h => h.estagioNovo === 'NOVO_LEAD').map(h => h.oportunidadeId)).size
+  const totalLeads = totalLeadsRegistrados ?? totalLeadsHistorico
 
   const alcancados = new Map<string, Set<string>>()
   for (const h of historico) {
@@ -174,7 +187,7 @@ export function montarConversaoFunil(historico: HistoricoEntrada[], metaPorEtapa
   const tempoMedio = tempoMedioPorEtapa(historico)
 
   const etapas = ETAPAS_FUNIL_ORDEM.map(estagio => {
-    const quantidade = alcancados.get(estagio)?.size ?? 0
+    const quantidade = estagio === 'NOVO_LEAD' ? totalLeads : (alcancados.get(estagio)?.size ?? 0)
     const conversaoReal = totalLeads > 0 ? quantidade / totalLeads : 0
     const metaCfg = metaPorEtapa.get(estagio)
     const metaPct = metaCfg?.metaPct ?? METAS_FUNIL_PADRAO[estagio]?.metaPct ?? 0
@@ -205,4 +218,24 @@ export function montarConversaoFunil(historico: HistoricoEntrada[], metaPorEtapa
   })
 
   return { totalLeads, etapas }
+}
+
+/** Conta o total de leads permanentemente registrados (LeadRegistrado), com
+ * filtro opcional de dono (escopoWhereDono) e período — usado pra alimentar
+ * o `totalLeadsRegistrados` de `montarConversaoFunil`. */
+export async function contarLeadsRegistrados(
+  prisma: PrismaClient,
+  empresaId: string,
+  whereDono: Record<string, unknown>,
+  periodo?: { inicio?: Date; fim?: Date }
+): Promise<number> {
+  return prisma.leadRegistrado.count({
+    where: {
+      empresaId,
+      ...whereDono,
+      ...(periodo?.inicio || periodo?.fim
+        ? { criadoEm: { ...(periodo.inicio ? { gte: periodo.inicio } : {}), ...(periodo.fim ? { lte: periodo.fim } : {}) } }
+        : {}),
+    },
+  })
 }

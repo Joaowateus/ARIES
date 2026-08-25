@@ -833,7 +833,12 @@ export const api = {
     metas: () => request<MetaFunilEtapa[]>('/funil/metas'),
     atualizarMeta: (etapa: string, dados: { metaPct?: number; tempoMaximoDias?: number | null }) =>
       request<MetaFunilEtapa>(`/funil/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(dados) }),
-    conversao: () => request<ConversaoFunil>('/funil/conversao'),
+    conversao: (periodo?: { inicio?: string; fim?: string }) => {
+      const qs = periodo?.inicio || periodo?.fim
+        ? '?' + new URLSearchParams({ ...(periodo.inicio ? { inicio: periodo.inicio } : {}), ...(periodo.fim ? { fim: periodo.fim } : {}) }).toString()
+        : ''
+      return request<ConversaoFunil>(`/funil/conversao${qs}`)
+    },
   },
   insights: {
     listar: () => request<Insight[]>('/insights'),

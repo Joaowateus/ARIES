@@ -77,7 +77,13 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Oportunidade não encontrada' })
     return
   }
-  res.json(oportunidade)
+  const diasPorOportunidade = diasNaEtapaAtualPorOportunidade(
+    oportunidade.historicoEstagio.map(h => ({ oportunidadeId: oportunidade.id, estagioNovo: h.estagioNovo, criadoEm: h.criadoEm }))
+  )
+  res.json({
+    ...oportunidade,
+    diasNaEtapaAtual: diasPorOportunidade.has(oportunidade.id) ? Math.round(diasPorOportunidade.get(oportunidade.id)! * 10) / 10 : null,
+  })
 })
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
@@ -88,19 +94,28 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   }
   const data = parse.data
   const empresaId = req.user!.empresaId
-  const oportunidade = await prisma.oportunidade.create({
-    data: {
-      ...data,
-      email: data.email || undefined,
-      empresaId,
-      responsavelId: data.responsavelId ?? req.user!.sub,
-      estagio: 'NOVO_LEAD',
-    },
-    include,
+  const responsavelId = data.responsavelId ?? req.user!.sub
+
+  const oportunidade = await prisma.$transaction(async tx => {
+    const nova = await tx.oportunidade.create({
+      data: {
+        ...data,
+        email: data.email || undefined,
+        empresaId,
+        responsavelId,
+        estagio: 'NOVO_LEAD',
+      },
+      include,
+    })
+    await tx.estagioHistorico.create({
+      data: { empresaId, oportunidadeId: nova.id, estagioAnterior: null, estagioNovo: 'NOVO_LEAD' },
+    })
+    // Contador permanente — nunca apagado, mesmo se este card for excluído
+    // do CRM depois (ver DELETE /oportunidades e lib/funil.ts).
+    await tx.leadRegistrado.create({ data: { empresaId, usuarioId: responsavelId } })
+    return nova
   })
-  await prisma.estagioHistorico.create({
-    data: { empresaId, oportunidadeId: oportunidade.id, estagioAnterior: null, estagioNovo: 'NOVO_LEAD' },
-  })
+
   res.status(201).json(oportunidade)
 })
 

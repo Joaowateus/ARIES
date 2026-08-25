@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
 import { PAPEIS_GESTAO, escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
-import { METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, obterMetasFunil, montarConversaoFunil } from '../lib/funil'
+import { METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, obterMetasFunil, montarConversaoFunil, contarLeadsRegistrados } from '../lib/funil'
 
 const router = Router()
 
@@ -52,12 +52,29 @@ router.put('/metas/:etapa', requireAuth, requirePapel(...PAPEIS_GESTAO), async (
 // Usa o mesmo escopo de visibilidade do CRM (/oportunidades): vendedor só
 // vê o próprio funil, gestão vê equipe/empresa — pra este gráfico bater
 // exatamente com o que aparece no board do CRM de quem está olhando.
+//
+// A etapa "Leads" (e a base de 100% do funil) vem do contador permanente
+// LeadRegistrado, não do histórico — assim ela nunca encolhe quando um card
+// é apagado do CRM. Aceita ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD pra analisar um
+// período específico (dia, semana, mês); sem os parâmetros, é o histórico
+// completo.
 // ---------------------------------------------------------------------------
+
+function parseDataQuery(valor: unknown): Date | undefined {
+  if (typeof valor !== 'string' || !valor) return undefined
+  const data = new Date(valor)
+  return Number.isNaN(data.getTime()) ? undefined : data
+}
 
 router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
   const empresaId = req.user!.empresaId
   const metas = await obterMetasFunil(prisma, empresaId)
   const metaPorEtapa = new Map(metas.map(m => [m.etapa, m]))
+
+  const inicio = parseDataQuery(req.query.inicio)
+  const fimQuery = parseDataQuery(req.query.fim)
+  // Fim inclusivo do dia inteiro, senão "até 25/08" excluiria o próprio 25/08.
+  const fim = fimQuery ? new Date(fimQuery.getFullYear(), fimQuery.getMonth(), fimQuery.getDate(), 23, 59, 59, 999) : undefined
 
   const escopo = await escopoVisibilidade(prisma, req.user!)
   const oportunidadesEscopo = await prisma.oportunidade.findMany({
@@ -66,11 +83,17 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
   })
 
   const historico = await prisma.estagioHistorico.findMany({
-    where: { empresaId, oportunidadeId: { in: oportunidadesEscopo.map(o => o.id) } },
+    where: {
+      empresaId,
+      oportunidadeId: { in: oportunidadesEscopo.map(o => o.id) },
+      ...(inicio || fim ? { criadoEm: { ...(inicio ? { gte: inicio } : {}), ...(fim ? { lte: fim } : {}) } } : {}),
+    },
     select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
   })
 
-  res.json(montarConversaoFunil(historico, metaPorEtapa))
+  const totalLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, escopoWhereDono(escopo, 'usuarioId'), { inicio, fim })
+
+  res.json(montarConversaoFunil(historico, metaPorEtapa, totalLeadsRegistrados))
 })
 
 export default router

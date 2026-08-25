@@ -24,6 +24,31 @@ function formatData(iso?: string | null): string {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function formatDias(dias: number): string {
+  const arredondado = Math.round(dias * 10) / 10
+  return `${arredondado}d`
+}
+
+interface EtapaComDuracao {
+  id: string
+  estagioAnterior: string | null
+  estagioNovo: string
+  criadoEm: string
+  dias: number
+  atual: boolean
+}
+
+/** Histórico já vem do backend ordenado do mais recente pro mais antigo.
+ * Duração em cada etapa = tempo entre entrar nela e sair pra próxima (ou,
+ * pra etapa atual, entre entrar e agora). */
+function comDuracao(historico: { id: string; estagioAnterior: string | null; estagioNovo: string; criadoEm: string }[]): EtapaComDuracao[] {
+  return historico.map((h, i) => {
+    const inicio = new Date(h.criadoEm).getTime()
+    const fim = i === 0 ? Date.now() : new Date(historico[i - 1].criadoEm).getTime()
+    return { ...h, dias: (fim - inicio) / (24 * 60 * 60 * 1000), atual: i === 0 }
+  })
+}
+
 export default function OportunidadeDetalhePage() {
   const params = useParams<{ id: string }>()
   const [op, setOp] = useState<OportunidadeDetalhe | null>(null)
@@ -83,6 +108,9 @@ export default function OportunidadeDetalhePage() {
             <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ESTAGIO_COR[op.estagio]}`}>
               {ESTAGIO_LABEL[op.estagio] ?? op.estagio}
             </span>
+            {op.diasNaEtapaAtual != null && (
+              <span className="text-xs text-gray-400">⏱ {formatDias(op.diasNaEtapaAtual)} nesta etapa</span>
+            )}
             {op.telefone && <span className="text-sm text-gray-500">{op.telefone}</span>}
           </div>
         </div>
@@ -140,10 +168,35 @@ export default function OportunidadeDetalhePage() {
         </button>
       </form>
 
-      {/* Timeline */}
+      {/* Jornada — registro de quando o card avançou pra cada etapa, e quanto
+          tempo ele ficou em cada uma. */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <h2 className="font-semibold text-gray-900 text-sm mb-3">Jornada do Cliente</h2>
+        {op.historicoEstagio.length === 0 ? (
+          <p className="text-sm text-gray-400">Sem registro de etapas ainda.</p>
+        ) : (
+          <div className="space-y-3">
+            {comDuracao(op.historicoEstagio).map(h => (
+              <div key={h.id} className="flex items-center justify-between text-sm border-b border-gray-50 pb-2 last:border-0">
+                <div>
+                  <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ESTAGIO_COR[h.estagioNovo] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {ESTAGIO_LABEL[h.estagioNovo] ?? h.estagioNovo}
+                  </span>
+                  <span className="text-xs text-gray-400 ml-2">{formatData(h.criadoEm)}</span>
+                </div>
+                <span className={`text-xs ${h.atual ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                  {h.atual ? `há ${formatDias(h.dias)}, ainda aqui` : `ficou ${formatDias(h.dias)}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Interações */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-900 text-sm mb-3">Histórico</h2>
-        {op.atividades.length === 0 && op.historicoEstagio.length === 0 ? (
+        <h2 className="font-semibold text-gray-900 text-sm mb-3">Interações</h2>
+        {op.atividades.length === 0 ? (
           <p className="text-sm text-gray-400">Nenhuma interação registrada ainda.</p>
         ) : (
           <div className="space-y-3">

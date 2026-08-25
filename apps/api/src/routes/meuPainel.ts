@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
-import { ESTAGIOS_FINAIS, obterMetasFunil, montarConversaoFunil } from '../lib/funil'
+import { ESTAGIOS_FINAIS, obterMetasFunil, montarConversaoFunil, contarLeadsRegistrados } from '../lib/funil'
 import { obterMetasComerciais } from '../lib/metasComerciais'
 import { calcularProgressoMetas } from './metas'
 
@@ -102,7 +102,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
   })
   const metaFunilPorEtapa = new Map(metasFunilEtapa.map(m => [m.etapa, m]))
-  const funilProprio = montarConversaoFunil(meuHistorico, metaFunilPorEtapa)
+  const meusLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, { usuarioId })
+  const funilProprio = montarConversaoFunil(meuHistorico, metaFunilPorEtapa, meusLeadsRegistrados)
 
   res.json({
     metas: {

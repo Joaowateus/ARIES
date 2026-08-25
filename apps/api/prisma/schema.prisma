@@ -42,6 +42,7 @@ model Empresa {
   scoreConfig           ScoreConfig?
   logAuditoria          LogAuditoria[]
   metaComercialPadrao   MetaComercialPadrao?
+  leadsRegistrados      LeadRegistrado[]
 
   @@map("empresas")
 }
@@ -81,6 +82,7 @@ model Usuario {
   notificacoes        Notificacao[]
   auditorias          Auditoria[]
   planosAcao          PlanoAcao[]
+  leadsRegistrados    LeadRegistrado[]
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -236,6 +238,26 @@ model EstagioHistorico {
   @@index([empresaId])
   @@index([oportunidadeId])
   @@map("estagio_historico")
+}
+
+// Contador permanente de leads registrados — uma linha por lead criado, pra
+// sempre. Ao contrário de Oportunidade/EstagioHistorico (que somem se o card
+// for apagado no CRM), este registro nunca é apagado: é a fonte do "total de
+// Leads" que o Funil de Vendas usa como base de 100%, pra não encolher
+// silenciosamente quando alguém limpa o board.
+model LeadRegistrado {
+  id        String   @id @default(cuid())
+  empresaId String
+  usuarioId String
+  criadoEm  DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([empresaId])
+  @@index([empresaId, usuarioId])
+  @@index([empresaId, criadoEm])
+  @@map("leads_registrados")
 }
 
 model Contrato {
