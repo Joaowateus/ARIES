@@ -34,6 +34,7 @@ import gestaoRoutes from './routes/gestao'
 import notificacoesRoutes from './routes/notificacoes'
 import calendarioRoutes from './routes/calendario'
 import relatoriosRoutes from './routes/relatorios'
+import proLaboreRoutes from './routes/proLabore'
 
 const app = express()
 
@@ -126,6 +127,8 @@ app.use('/gestao', gestaoRoutes)
 app.use('/notificacoes', notificacoesRoutes)
 app.use('/calendario', calendarioRoutes)
 app.use('/relatorios', relatoriosRoutes)
+app.use('/pro-labore/auth', authLimiter)
+app.use('/pro-labore', proLaboreRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)
