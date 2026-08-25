@@ -3,10 +3,10 @@
 export const ESTAGIO_LABEL: Record<string, string> = {
   NOVO_LEAD: 'Leads',
   NAO_RESPONDEU: 'Não Responderam',
-  FOLLOW_1_DIA: 'Follow — 01 dia',
+  FOLLOW_1_DIA: 'Follow',
   RESPONDEU: 'Responderam',
-  MQL: 'MQL — Qualificados',
-  SQL: 'SQL — Simulação',
+  MQL: 'MQL',
+  SQL: 'SQL',
   COMPRADO: 'Compraram',
   PROCESSO_ADMINISTRATIVO: 'Processo Administrativo',
   PERDIDO: 'Perdido',
