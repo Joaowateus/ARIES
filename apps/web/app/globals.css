@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
+/* ARIES é um app de tema claro fixo — nenhuma tela tem suporte a modo escuro
+ * de verdade. `color-scheme: light` avisa o navegador pra não tentar
+ * "adivinhar" um tema escuro sozinho (o que inverte cor de fundo/texto em
+ * campos, scrollbar etc. de forma inconsistente com o resto da tela). */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -12,15 +17,20 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Cor padrão pra qualquer input/select/textarea que não declare a própria —
+ * sem isso, o campo herda a cor de texto do body e pode ficar ilegível
+ * dependendo do tema do sistema do usuário. */
+@layer base {
+  input,
+  select,
+  textarea {
+    background-color: #ffffff;
+    color: #111827;
+  }
 }
