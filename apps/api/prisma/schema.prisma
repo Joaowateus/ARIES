@@ -856,3 +856,61 @@ model LogAuditoria {
   @@index([empresaId, entidadeTipo, entidadeId])
   @@map("log_auditoria")
 }
+
+// =====================================================================
+// PRÓ-LABORE — módulo pessoal de acompanhamento de liquidez do
+// faturamento da operação comercial. Independente do modelo multi-tenant
+// (Empresa/Usuario) do Commercial OS: usuário único, login próprio.
+// =====================================================================
+
+model ProLaboreUsuario {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  parametro    ParametroLiquidez?
+  faturamentos FaturamentoSemanal[]
+
+  @@map("pro_labore_usuarios")
+}
+
+// Percentuais aplicados sobre o faturamento bruto para chegar no líquido que
+// vira pró-labore — linha única por usuário, editável a qualquer momento.
+model ParametroLiquidez {
+  id                           String   @id @default(cuid())
+  usuarioId                    String   @unique
+  percentualImpostos           Float    @default(0.06)
+  percentualCustosOperacionais Float    @default(0.15)
+  percentualReservaCaixa       Float    @default(0.10)
+  atualizadoEm                 DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("pro_labore_parametros")
+}
+
+// Lançamento semanal de faturamento. Percentuais e valor líquido são
+// gravados no momento do lançamento (snapshot) — o histórico não muda
+// retroativamente se o usuário ajustar os parâmetros depois.
+model FaturamentoSemanal {
+  id                          String   @id @default(cuid())
+  usuarioId                   String
+  referenciaSemana            DateTime // segunda-feira da semana de referência
+  valorBruto                  Float
+  percentualImpostosAplicado  Float
+  percentualCustosAplicado    Float
+  percentualReservaAplicado   Float
+  valorLiquido                Float
+  observacao                  String?
+  criadoEm                    DateTime @default(now())
+  atualizadoEm                DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, referenciaSemana])
+  @@index([usuarioId, referenciaSemana])
+  @@map("pro_labore_faturamentos")
+}
