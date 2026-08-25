@@ -871,46 +871,39 @@ model ProLaboreUsuario {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  parametro    ParametroLiquidez?
-  faturamentos FaturamentoSemanal[]
+  parametro ParametroLiquidez?
+  vendas    Venda[]
 
   @@map("pro_labore_usuarios")
 }
 
-// Percentuais aplicados sobre o faturamento bruto para chegar no líquido que
-// vira pró-labore — linha única por usuário, editável a qualquer momento.
+// Teto de pró-labore que pode ser sacado por venda — linha única por
+// usuário, editável a qualquer momento.
 model ParametroLiquidez {
-  id                           String   @id @default(cuid())
-  usuarioId                    String   @unique
-  percentualImpostos           Float    @default(0.06)
-  percentualCustosOperacionais Float    @default(0.15)
-  percentualReservaCaixa       Float    @default(0.10)
-  atualizadoEm                 DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  usuarioId             String   @unique
+  tetoProLaborePorVenda Float    @default(900)
+  atualizadoEm          DateTime @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
 
   @@map("pro_labore_parametros")
 }
 
-// Lançamento semanal de faturamento. Percentuais e valor líquido são
-// gravados no momento do lançamento (snapshot) — o histórico não muda
-// retroativamente se o usuário ajustar os parâmetros depois.
-model FaturamentoSemanal {
-  id                          String   @id @default(cuid())
-  usuarioId                   String
-  referenciaSemana            DateTime // segunda-feira da semana de referência
-  valorBruto                  Float
-  percentualImpostosAplicado  Float
-  percentualCustosAplicado    Float
-  percentualReservaAplicado   Float
-  valorLiquido                Float
-  observacao                  String?
-  criadoEm                    DateTime @default(now())
-  atualizadoEm                DateTime @updatedAt
+// Cada venda/negociação fechada. O pró-labore sacado é decidido por venda,
+// nunca acima do teto configurado nem do valor da própria venda.
+model Venda {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  data           DateTime
+  valorVenda     Float
+  valorProLabore Float
+  observacao     String?
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
 
-  @@unique([usuarioId, referenciaSemana])
-  @@index([usuarioId, referenciaSemana])
-  @@map("pro_labore_faturamentos")
+  @@index([usuarioId, data])
+  @@map("pro_labore_vendas")
 }

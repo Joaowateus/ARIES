@@ -8,7 +8,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
 const NAV = [
   { href: '/pro-labore', label: 'Dashboard' },
-  { href: '/pro-labore/lancamentos', label: 'Lançamentos' },
+  { href: '/pro-labore/vendas', label: 'Vendas' },
   { href: '/pro-labore/configuracoes', label: 'Configurações' },
 ]
 

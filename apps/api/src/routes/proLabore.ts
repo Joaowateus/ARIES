@@ -7,25 +7,9 @@ import { requireProLaboreAuth } from '../middleware/authProLabore'
 
 const router = Router()
 
-const PARAMETROS_PADRAO = {
-  percentualImpostos: 0.06,
-  percentualCustosOperacionais: 0.15,
-  percentualReservaCaixa: 0.10,
-}
+const TETO_PRO_LABORE_PADRAO = 900
 
-function segundaFeiraDaSemana(data: Date): Date {
-  const d = new Date(data.getFullYear(), data.getMonth(), data.getDate())
-  const dia = d.getDay()
-  const diff = dia === 0 ? -6 : 1 - dia
-  d.setDate(d.getDate() + diff)
-  return d
-}
-
-function calcularLiquido(valorBruto: number, parametro: { percentualImpostos: number; percentualCustosOperacionais: number; percentualReservaCaixa: number }) {
-  const percentualRetido = parametro.percentualImpostos + parametro.percentualCustosOperacionais + parametro.percentualReservaCaixa
-  const valorLiquido = Math.round(valorBruto * (1 - percentualRetido) * 100) / 100
-  return { valorLiquido, percentualRetido }
-}
+const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
 // --- Autenticação (usuário único, independente do login multi-tenant do ARIES) ---
 
@@ -61,7 +45,7 @@ router.post('/auth/setup', async (req: Request, res: Response) => {
       nome,
       email,
       senhaHash,
-      parametro: { create: PARAMETROS_PADRAO },
+      parametro: { create: { tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO } },
     },
   })
 
@@ -116,15 +100,13 @@ router.get('/parametros', requireProLaboreAuth, async (req: Request, res: Respon
   const parametro = await prisma.parametroLiquidez.upsert({
     where: { usuarioId: req.proLaboreUser!.sub },
     update: {},
-    create: { usuarioId: req.proLaboreUser!.sub, ...PARAMETROS_PADRAO },
+    create: { usuarioId: req.proLaboreUser!.sub, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
   })
   res.json(parametro)
 })
 
 const parametrosSchema = z.object({
-  percentualImpostos: z.number().min(0).max(1).optional(),
-  percentualCustosOperacionais: z.number().min(0).max(1).optional(),
-  percentualReservaCaixa: z.number().min(0).max(1).optional(),
+  tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo'),
 })
 
 router.put('/parametros', requireProLaboreAuth, async (req: Request, res: Response) => {
@@ -134,130 +116,123 @@ router.put('/parametros', requireProLaboreAuth, async (req: Request, res: Respon
     return
   }
 
-  const atual = await prisma.parametroLiquidez.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
-  const mesclado = {
-    percentualImpostos: parse.data.percentualImpostos ?? atual?.percentualImpostos ?? PARAMETROS_PADRAO.percentualImpostos,
-    percentualCustosOperacionais: parse.data.percentualCustosOperacionais ?? atual?.percentualCustosOperacionais ?? PARAMETROS_PADRAO.percentualCustosOperacionais,
-    percentualReservaCaixa: parse.data.percentualReservaCaixa ?? atual?.percentualReservaCaixa ?? PARAMETROS_PADRAO.percentualReservaCaixa,
-  }
-  const somaTotal = mesclado.percentualImpostos + mesclado.percentualCustosOperacionais + mesclado.percentualReservaCaixa
-  if (somaTotal > 1) {
-    res.status(400).json({ error: 'A soma dos percentuais não pode ultrapassar 100%' })
-    return
-  }
-
   const parametro = await prisma.parametroLiquidez.upsert({
     where: { usuarioId: req.proLaboreUser!.sub },
     update: parse.data,
-    create: { usuarioId: req.proLaboreUser!.sub, ...PARAMETROS_PADRAO, ...parse.data },
+    create: { usuarioId: req.proLaboreUser!.sub, ...parse.data },
   })
   res.json(parametro)
 })
 
-// --- Lançamentos semanais de faturamento ---
+// --- Vendas ---
 
-router.get('/faturamentos', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/vendas', requireProLaboreAuth, async (req: Request, res: Response) => {
   const { ano } = req.query
-  const where: { usuarioId: string; referenciaSemana?: { gte: Date; lte: Date } } = { usuarioId: req.proLaboreUser!.sub }
+  const where: { usuarioId: string; data?: { gte: Date; lte: Date } } = { usuarioId: req.proLaboreUser!.sub }
   if (typeof ano === 'string' && /^\d{4}$/.test(ano)) {
-    where.referenciaSemana = { gte: new Date(Number(ano), 0, 1), lte: new Date(Number(ano), 11, 31) }
+    where.data = { gte: new Date(Number(ano), 0, 1), lte: new Date(Number(ano), 11, 31) }
   }
 
-  const faturamentos = await prisma.faturamentoSemanal.findMany({
+  const vendas = await prisma.venda.findMany({
     where,
-    orderBy: { referenciaSemana: 'desc' },
+    orderBy: { data: 'desc' },
   })
-  res.json(faturamentos)
+  res.json(vendas)
 })
 
-const criarFaturamentoSchema = z.object({
+const criarVendaSchema = z.object({
   data: z.string().min(1, 'Data obrigatória'),
-  valorBruto: z.number().positive('Valor deve ser positivo'),
+  valorVenda: z.number().positive('Valor da venda deve ser positivo'),
+  valorProLabore: z.number().positive('Valor de pró-labore deve ser positivo'),
   observacao: z.string().optional(),
 })
 
-router.post('/faturamentos', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const parse = criarFaturamentoSchema.safeParse(req.body)
+router.post('/vendas', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = criarVendaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
 
   const usuarioId = req.proLaboreUser!.sub
-  const referenciaSemana = segundaFeiraDaSemana(new Date(parse.data.data))
+  const { valorVenda, valorProLabore } = parse.data
 
   const parametro = await prisma.parametroLiquidez.upsert({
     where: { usuarioId },
     update: {},
-    create: { usuarioId, ...PARAMETROS_PADRAO },
+    create: { usuarioId, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
   })
 
-  const { valorLiquido } = calcularLiquido(parse.data.valorBruto, parametro)
-
-  const existente = await prisma.faturamentoSemanal.findUnique({
-    where: { usuarioId_referenciaSemana: { usuarioId, referenciaSemana } },
-  })
-  if (existente) {
-    res.status(409).json({ error: 'Já existe um lançamento para essa semana. Edite o lançamento existente.' })
+  if (valorProLabore > parametro.tetoProLaborePorVenda) {
+    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${parametro.tetoProLaborePorVenda})` })
+    return
+  }
+  if (valorProLabore > valorVenda) {
+    res.status(400).json({ error: 'O pró-labore não pode ser maior que o valor da venda' })
     return
   }
 
-  const faturamento = await prisma.faturamentoSemanal.create({
+  const venda = await prisma.venda.create({
     data: {
       usuarioId,
-      referenciaSemana,
-      valorBruto: parse.data.valorBruto,
-      percentualImpostosAplicado: parametro.percentualImpostos,
-      percentualCustosAplicado: parametro.percentualCustosOperacionais,
-      percentualReservaAplicado: parametro.percentualReservaCaixa,
-      valorLiquido,
+      data: new Date(parse.data.data),
+      valorVenda,
+      valorProLabore,
       observacao: parse.data.observacao,
     },
   })
-  res.status(201).json(faturamento)
+  res.status(201).json(venda)
 })
 
-const editarFaturamentoSchema = z.object({
-  valorBruto: z.number().positive().optional(),
+const editarVendaSchema = z.object({
+  valorVenda: z.number().positive().optional(),
+  valorProLabore: z.number().positive().optional(),
   observacao: z.string().optional(),
 })
 
-router.patch('/faturamentos/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const parse = editarFaturamentoSchema.safeParse(req.body)
+router.patch('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = editarVendaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
 
   const usuarioId = req.proLaboreUser!.sub
-  const atual = await prisma.faturamentoSemanal.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
-    res.status(404).json({ error: 'Lançamento não encontrado' })
+    res.status(404).json({ error: 'Venda não encontrada' })
     return
   }
 
-  const valorBruto = parse.data.valorBruto ?? atual.valorBruto
-  const { valorLiquido } = calcularLiquido(valorBruto, {
-    percentualImpostos: atual.percentualImpostosAplicado,
-    percentualCustosOperacionais: atual.percentualCustosAplicado,
-    percentualReservaCaixa: atual.percentualReservaAplicado,
-  })
+  const valorVenda = parse.data.valorVenda ?? atual.valorVenda
+  const valorProLabore = parse.data.valorProLabore ?? atual.valorProLabore
 
-  const faturamento = await prisma.faturamentoSemanal.update({
+  const parametro = await prisma.parametroLiquidez.findUnique({ where: { usuarioId } })
+  const teto = parametro?.tetoProLaborePorVenda ?? TETO_PRO_LABORE_PADRAO
+  if (valorProLabore > teto) {
+    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${teto})` })
+    return
+  }
+  if (valorProLabore > valorVenda) {
+    res.status(400).json({ error: 'O pró-labore não pode ser maior que o valor da venda' })
+    return
+  }
+
+  const venda = await prisma.venda.update({
     where: { id: atual.id },
-    data: { valorBruto, valorLiquido, observacao: parse.data.observacao ?? atual.observacao },
+    data: { valorVenda, valorProLabore, observacao: parse.data.observacao ?? atual.observacao },
   })
-  res.json(faturamento)
+  res.json(venda)
 })
 
-router.delete('/faturamentos/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
-  const atual = await prisma.faturamentoSemanal.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
-    res.status(404).json({ error: 'Lançamento não encontrado' })
+    res.status(404).json({ error: 'Venda não encontrada' })
     return
   }
-  await prisma.faturamentoSemanal.delete({ where: { id: atual.id } })
+  await prisma.venda.delete({ where: { id: atual.id } })
   res.json({ ok: true })
 })
 
@@ -268,37 +243,49 @@ router.get('/resumo', requireProLaboreAuth, async (req: Request, res: Response) 
   const agora = new Date()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
   const inicioAno = new Date(agora.getFullYear(), 0, 1)
-  const semanaAtualRef = segundaFeiraDaSemana(agora)
 
-  const [semanaAtual, doMes, doAno, ultimasSemanas] = await Promise.all([
-    prisma.faturamentoSemanal.findUnique({ where: { usuarioId_referenciaSemana: { usuarioId, referenciaSemana: semanaAtualRef } } }),
-    prisma.faturamentoSemanal.findMany({ where: { usuarioId, referenciaSemana: { gte: inicioMes } } }),
-    prisma.faturamentoSemanal.findMany({ where: { usuarioId, referenciaSemana: { gte: inicioAno } }, select: { valorBruto: true, valorLiquido: true } }),
-    prisma.faturamentoSemanal.findMany({
-      where: { usuarioId },
-      orderBy: { referenciaSemana: 'desc' },
-      take: 12,
-      select: { referenciaSemana: true, valorBruto: true, valorLiquido: true },
-    }),
+  const [ultimaVenda, doMes, doAno, ultimasVendas] = await Promise.all([
+    prisma.venda.findFirst({ where: { usuarioId }, orderBy: { data: 'desc' } }),
+    prisma.venda.findMany({ where: { usuarioId, data: { gte: inicioMes } }, select: { valorVenda: true, valorProLabore: true } }),
+    prisma.venda.findMany({ where: { usuarioId, data: { gte: inicioAno } }, select: { data: true, valorVenda: true, valorProLabore: true } }),
+    prisma.venda.findMany({ where: { usuarioId }, orderBy: { data: 'desc' }, take: 10 }),
   ])
 
-  const brutoMes = doMes.reduce((s, f) => s + f.valorBruto, 0)
-  const liquidoMes = doMes.reduce((s, f) => s + f.valorLiquido, 0)
-  const brutoAno = doAno.reduce((s, f) => s + f.valorBruto, 0)
-  const liquidoAno = doAno.reduce((s, f) => s + f.valorLiquido, 0)
+  const somar = (lista: { valorVenda: number; valorProLabore: number }[], campo: 'valorVenda' | 'valorProLabore') =>
+    lista.reduce((s, v) => s + v[campo], 0)
+
+  const valorVendasMes = somar(doMes, 'valorVenda')
+  const proLaboreMes = somar(doMes, 'valorProLabore')
+  const valorVendasAno = somar(doAno, 'valorVenda')
+  const proLaboreAno = somar(doAno, 'valorProLabore')
+
+  const serieMensal = MESES_LABEL.slice(0, agora.getMonth() + 1).map((label, mes) => {
+    const doMesReferencia = doAno.filter(v => v.data.getMonth() === mes)
+    return {
+      mes,
+      label,
+      quantidadeVendas: doMesReferencia.length,
+      valorVendas: somar(doMesReferencia, 'valorVenda'),
+      proLaboreSacado: somar(doMesReferencia, 'valorProLabore'),
+    }
+  })
 
   res.json({
-    semanaAtual: semanaAtual
-      ? { referenciaSemana: semanaAtual.referenciaSemana, valorBruto: semanaAtual.valorBruto, valorLiquido: semanaAtual.valorLiquido }
-      : null,
+    ultimaVenda,
     mes: {
-      bruto: brutoMes,
-      liquido: liquidoMes,
-      retido: brutoMes - liquidoMes,
-      percentualLiquidezMedio: brutoMes > 0 ? liquidoMes / brutoMes : 0,
+      quantidadeVendas: doMes.length,
+      valorVendas: valorVendasMes,
+      proLaboreSacado: proLaboreMes,
+      retidoCaixa: valorVendasMes - proLaboreMes,
+      ticketMedio: doMes.length > 0 ? valorVendasMes / doMes.length : 0,
     },
-    ano: { bruto: brutoAno, liquido: liquidoAno },
-    serieSemanal: [...ultimasSemanas].reverse(),
+    ano: {
+      quantidadeVendas: doAno.length,
+      valorVendas: valorVendasAno,
+      proLaboreSacado: proLaboreAno,
+    },
+    serieMensal,
+    ultimasVendas,
   })
 })
 
