@@ -878,3 +878,54 @@ model LogAuditoria {
   @@index([empresaId, entidadeTipo, entidadeId])
   @@map("log_auditoria")
 }
+
+// =====================================================================
+// PRÓ-LABORE — módulo pessoal de acompanhamento de liquidez do
+// faturamento da operação comercial. Independente do modelo multi-tenant
+// (Empresa/Usuario) do Commercial OS: usuário único, login próprio.
+// =====================================================================
+
+model ProLaboreUsuario {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  parametro ParametroLiquidez?
+  vendas    Venda[]
+
+  @@map("pro_labore_usuarios")
+}
+
+// Teto de pró-labore que pode ser sacado por venda — linha única por
+// usuário, editável a qualquer momento.
+model ParametroLiquidez {
+  id                    String   @id @default(cuid())
+  usuarioId             String   @unique
+  tetoProLaborePorVenda Float    @default(900)
+  atualizadoEm          DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("pro_labore_parametros")
+}
+
+// Cada venda/negociação fechada. O pró-labore sacado é decidido por venda,
+// nunca acima do teto configurado nem do valor da própria venda.
+model Venda {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  data           DateTime
+  valorVenda     Float
+  valorProLabore Float
+  observacao     String?
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId, data])
+  @@map("pro_labore_vendas")
+}
