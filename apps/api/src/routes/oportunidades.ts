@@ -264,4 +264,47 @@ router.delete('/', requireAuth, async (req: Request, res: Response) => {
   res.json({ apagadas: ids.length })
 })
 
+// ---------------------------------------------------------------------------
+// Limpar histórico — reset total do CRM e do Funil de Vendas, pra quando for
+// preciso reorganizar tudo do zero. Diferente do apagar em lote (que só
+// remove o que foi selecionado), aqui é literalmente tudo: toda oportunidade
+// do usuário, contrato, contas a receber, atividade, histórico de estágio E
+// o contador permanente de leads (LeadRegistrado) — inclusive vendas já
+// fechadas. Sempre escopado ao próprio usuário que chama, mesmo pra quem tem
+// visão de equipe/empresa, pra um gestor nunca apagar sem querer o CRM de
+// outra pessoa.
+// ---------------------------------------------------------------------------
+
+router.delete('/limpar-historico', requireAuth, async (req: Request, res: Response) => {
+  const empresaId = req.user!.empresaId
+  const usuarioId = req.user!.sub
+
+  const minhasOportunidades = await prisma.oportunidade.findMany({
+    where: { empresaId, responsavelId: usuarioId },
+    select: { id: true },
+  })
+  const ids = minhasOportunidades.map(o => o.id)
+
+  const meusContratos = await prisma.contrato.findMany({
+    where: { empresaId, OR: [{ oportunidadeId: { in: ids } }, { vendedorId: usuarioId }] },
+    select: { id: true },
+  })
+  const contratoIds = meusContratos.map(c => c.id)
+
+  const [, contratosApagados, , , oportunidadesApagadas, leadsApagados] = await prisma.$transaction([
+    prisma.contaReceber.deleteMany({ where: { contratoId: { in: contratoIds } } }),
+    prisma.contrato.deleteMany({ where: { id: { in: contratoIds } } }),
+    prisma.atividadeOportunidade.deleteMany({ where: { oportunidadeId: { in: ids } } }),
+    prisma.estagioHistorico.deleteMany({ where: { oportunidadeId: { in: ids } } }),
+    prisma.oportunidade.deleteMany({ where: { id: { in: ids } } }),
+    prisma.leadRegistrado.deleteMany({ where: { empresaId, usuarioId } }),
+  ])
+
+  res.json({
+    oportunidadesApagadas: oportunidadesApagadas.count,
+    contratosApagados: contratosApagados.count,
+    leadsApagados: leadsApagados.count,
+  })
+})
+
 export default router

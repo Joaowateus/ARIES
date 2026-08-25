@@ -41,6 +41,7 @@ export default function FunilVendasPage() {
   const [editando, setEditando] = useState<{ etapa: string; campo: CampoEdicao } | null>(null)
   const [valorEdicao, setValorEdicao] = useState('')
   const [atualizando, setAtualizando] = useState(false)
+  const [limpando, setLimpando] = useState(false)
   const [periodo, setPeriodo] = useState<{ inicio?: string; fim?: string }>({})
   const [presetAtivo, setPresetAtivo] = useState<string>('tudo')
   const [customInicio, setCustomInicio] = useState('')
@@ -60,6 +61,24 @@ export default function FunilVendasPage() {
       await carregar()
     } finally {
       setAtualizando(false)
+    }
+  }
+
+  async function limparHistorico() {
+    const digitado = window.prompt(
+      'Isso apaga TODO o seu histórico — todo lead, contrato (mesmo já fechado), atividade e o total de leads registrados. Não tem como desfazer.\n\n' +
+      'Digite APAGAR para confirmar:'
+    )
+    if (digitado?.trim().toUpperCase() !== 'APAGAR') return
+    setLimpando(true)
+    try {
+      const resultado = await api.oportunidades.limparHistorico()
+      window.alert(
+        `Histórico limpo: ${resultado.oportunidadesApagadas} oportunidade(s), ${resultado.contratosApagados} contrato(s) e ${resultado.leadsApagados} lead(s) registrado(s) apagados.`
+      )
+      await carregar()
+    } finally {
+      setLimpando(false)
     }
   }
 
@@ -224,6 +243,26 @@ export default function FunilVendasPage() {
           </div>
         </div>
       )}
+
+      {/* Zona de risco — reset total, separado do resto pra não confundir com
+          o "Atualizar" nem virar clique acidental. */}
+      <div className="mt-8 pt-6 border-t border-gray-200">
+        <div className="flex items-center justify-between gap-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <div>
+            <div className="text-sm font-medium text-red-800">Limpar histórico</div>
+            <p className="text-xs text-red-600 mt-0.5">
+              Última instância, pra reorganizar tudo do zero: apaga só o seu próprio CRM e Funil (leads, contratos, mesmo os fechados). Não afeta o de outros vendedores.
+            </p>
+          </div>
+          <button
+            onClick={limparHistorico}
+            disabled={limpando}
+            className="bg-white border border-red-300 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors shrink-0"
+          >
+            {limpando ? 'Limpando...' : 'Limpar histórico'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

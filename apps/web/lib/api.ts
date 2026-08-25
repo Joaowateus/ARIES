@@ -719,6 +719,11 @@ export const api = {
       request<AtividadeOportunidade>(`/oportunidades/${id}/atividades`, { method: 'POST', body: JSON.stringify(data) }),
     apagarLote: (ids: string[]) =>
       request<{ apagadas: number }>('/oportunidades', { method: 'DELETE', body: JSON.stringify({ ids }) }),
+    limparHistorico: () =>
+      request<{ oportunidadesApagadas: number; contratosApagados: number; leadsApagados: number }>(
+        '/oportunidades/limpar-historico',
+        { method: 'DELETE' }
+      ),
   },
   dashboard: {
     get: () => request<DashboardExecutivo>('/dashboard'),
