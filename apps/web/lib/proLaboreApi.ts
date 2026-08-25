@@ -31,28 +31,24 @@ export interface ProLaboreUsuario {
 }
 
 export interface ParametroLiquidez {
-  percentualImpostos: number
-  percentualCustosOperacionais: number
-  percentualReservaCaixa: number
+  tetoProLaborePorVenda: number
 }
 
-export interface FaturamentoSemanal {
+export interface Venda {
   id: string
-  referenciaSemana: string
-  valorBruto: number
-  percentualImpostosAplicado: number
-  percentualCustosAplicado: number
-  percentualReservaAplicado: number
-  valorLiquido: number
+  data: string
+  valorVenda: number
+  valorProLabore: number
   observacao?: string | null
   criadoEm: string
 }
 
 export interface ResumoProLabore {
-  semanaAtual: { referenciaSemana: string; valorBruto: number; valorLiquido: number } | null
-  mes: { bruto: number; liquido: number; retido: number; percentualLiquidezMedio: number }
-  ano: { bruto: number; liquido: number }
-  serieSemanal: { referenciaSemana: string; valorBruto: number; valorLiquido: number }[]
+  ultimaVenda: Venda | null
+  mes: { quantidadeVendas: number; valorVendas: number; proLaboreSacado: number; retidoCaixa: number; ticketMedio: number }
+  ano: { quantidadeVendas: number; valorVendas: number; proLaboreSacado: number }
+  serieMensal: { mes: number; label: string; quantidadeVendas: number; valorVendas: number; proLaboreSacado: number }[]
+  ultimasVendas: Venda[]
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -87,16 +83,16 @@ export const proLaboreApi = {
   },
   parametros: {
     get: () => request<ParametroLiquidez>('/pro-labore/parametros'),
-    atualizar: (data: Partial<ParametroLiquidez>) =>
+    atualizar: (data: ParametroLiquidez) =>
       request<ParametroLiquidez>('/pro-labore/parametros', { method: 'PUT', body: JSON.stringify(data) }),
   },
-  faturamentos: {
-    listar: (ano?: number) => request<FaturamentoSemanal[]>(`/pro-labore/faturamentos${ano ? `?ano=${ano}` : ''}`),
-    criar: (data: { data: string; valorBruto: number; observacao?: string }) =>
-      request<FaturamentoSemanal>('/pro-labore/faturamentos', { method: 'POST', body: JSON.stringify(data) }),
-    editar: (id: string, data: { valorBruto?: number; observacao?: string }) =>
-      request<FaturamentoSemanal>(`/pro-labore/faturamentos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/faturamentos/${id}`, { method: 'DELETE' }),
+  vendas: {
+    listar: (ano?: number) => request<Venda[]>(`/pro-labore/vendas${ano ? `?ano=${ano}` : ''}`),
+    criar: (data: { data: string; valorVenda: number; valorProLabore: number; observacao?: string }) =>
+      request<Venda>('/pro-labore/vendas', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; observacao?: string }) =>
+      request<Venda>(`/pro-labore/vendas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendas/${id}`, { method: 'DELETE' }),
   },
   resumo: {
     get: () => request<ResumoProLabore>('/pro-labore/resumo'),
