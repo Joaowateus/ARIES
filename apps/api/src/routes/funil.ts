@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
-import { requireAuth, requirePapel } from '../middleware/auth'
-import { PAPEIS_GESTAO, escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
+import { requireAuth } from '../middleware/auth'
+import { escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
 import { METAS_FUNIL_PADRAO, SLA_PADRAO_DIAS, obterMetasFunil, montarConversaoFunil, contarLeadsRegistrados } from '../lib/funil'
 
 const router = Router()
@@ -17,7 +17,11 @@ const metaFunilSchema = z.object({
   tempoMaximoDias: z.number().int().positive().nullable().optional(),
 })
 
-router.put('/metas/:etapa', requireAuth, requirePapel(...PAPEIS_GESTAO), async (req: Request, res: Response) => {
+// Meta % e SLA por etapa são editáveis por qualquer usuário autenticado — não
+// só gestão. É config compartilhada por toda a empresa (todo mundo vê a
+// mesma meta), então qualquer vendedor pode corrigir na hora direto pelo
+// painel, sem depender de alguém com papel de gestão logado.
+router.put('/metas/:etapa', requireAuth, async (req: Request, res: Response) => {
   const parse = metaFunilSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })

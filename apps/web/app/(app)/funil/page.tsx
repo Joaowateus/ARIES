@@ -2,9 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { api, ConversaoFunil, EtapaConversao } from '@/lib/api'
-import { useAuth } from '@/lib/auth'
-
-const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL']
 
 const STATUS_COR: Record<string, string> = { verde: '#22c55e', amarelo: '#f59e0b', vermelho: '#ef4444' }
 const STATUS_TEXTO: Record<string, string> = { verde: 'text-green-600', amarelo: 'text-amber-600', vermelho: 'text-red-600' }
@@ -35,7 +32,6 @@ function periodoDoPreset(id: string): { inicio?: string; fim?: string } {
 }
 
 export default function FunilVendasPage() {
-  const { user } = useAuth()
   const [dados, setDados] = useState<ConversaoFunil | null>(null)
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<{ etapa: string; campo: CampoEdicao } | null>(null)
@@ -46,8 +42,6 @@ export default function FunilVendasPage() {
   const [presetAtivo, setPresetAtivo] = useState<string>('tudo')
   const [customInicio, setCustomInicio] = useState('')
   const [customFim, setCustomFim] = useState('')
-
-  const podeGerenciar = PAPEIS_GESTAO.includes(user?.papel ?? '')
 
   const carregar = useCallback(() => {
     return api.funil.conversao(periodo).then(setDados).finally(() => setLoading(false))
@@ -206,11 +200,10 @@ export default function FunilVendasPage() {
                   </div>
                 ) : (
                   <button
-                    disabled={!podeGerenciar}
                     onClick={() => iniciarEdicao(e.estagio, 'meta', e.meta)}
-                    className="text-[11px] text-gray-400 disabled:cursor-default hover:text-blue-600 block w-full"
+                    className="text-[11px] text-gray-400 hover:text-blue-600 block w-full"
                   >
-                    Meta: {pct(e.meta)}{e.tipoMeta === 'MAXIMO_PERDA' ? ' (máx.)' : ' (mín.)'}{podeGerenciar && ' ✎'}
+                    Meta: {pct(e.meta)}{e.tipoMeta === 'MAXIMO_PERDA' ? ' (máx.)' : ' (mín.)'} ✎
                   </button>
                 )}
 
@@ -231,11 +224,10 @@ export default function FunilVendasPage() {
                   </div>
                 ) : (
                   <button
-                    disabled={!podeGerenciar}
                     onClick={() => iniciarEdicao(e.estagio, 'sla', e.tempoMaximoDias ?? null)}
-                    className="text-[11px] text-gray-400 disabled:cursor-default hover:text-blue-600 block w-full"
+                    className="text-[11px] text-gray-400 hover:text-blue-600 block w-full"
                   >
-                    Prazo: {e.tempoMaximoDias != null ? `${e.tempoMaximoDias}d` : '—'}{podeGerenciar && ' ✎'}
+                    Prazo: {e.tempoMaximoDias != null ? `${e.tempoMaximoDias}d` : '—'} ✎
                   </button>
                 )}
               </div>
