@@ -50,8 +50,8 @@ export const ESTAGIOS_FINAIS: readonly Estagio[] = ['COMPRADO', 'PERDIDO']
 export const METAS_FUNIL_PADRAO: Record<string, { metaPct: number; tipoMeta: 'MINIMO' | 'MAXIMO_PERDA' }> = {
   NAO_RESPONDEU: { metaPct: 0.1, tipoMeta: 'MAXIMO_PERDA' },
   RESPONDEU: { metaPct: 0.9, tipoMeta: 'MINIMO' },
-  MQL: { metaPct: 0.2, tipoMeta: 'MINIMO' },
-  SQL: { metaPct: 0.7, tipoMeta: 'MINIMO' },
+  MQL: { metaPct: 0.7, tipoMeta: 'MINIMO' },
+  SQL: { metaPct: 0.2, tipoMeta: 'MINIMO' },
   COMPRADO: { metaPct: 0.2, tipoMeta: 'MINIMO' },
   PROCESSO_ADMINISTRATIVO: { metaPct: 1.0, tipoMeta: 'MINIMO' },
 }
