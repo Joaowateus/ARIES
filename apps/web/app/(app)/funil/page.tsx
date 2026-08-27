@@ -42,10 +42,11 @@ export default function FunilVendasPage() {
   const [presetAtivo, setPresetAtivo] = useState<string>('tudo')
   const [customInicio, setCustomInicio] = useState('')
   const [customFim, setCustomFim] = useState('')
+  const [tipoLead, setTipoLead] = useState<string>('')
 
   const carregar = useCallback(() => {
-    return api.funil.conversao(periodo).then(setDados).finally(() => setLoading(false))
-  }, [periodo])
+    return api.funil.conversao({ ...periodo, tipoLead: tipoLead || undefined }).then(setDados).finally(() => setLoading(false))
+  }, [periodo, tipoLead])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -161,6 +162,26 @@ export default function FunilVendasPage() {
             Aplicar período
           </button>
         </div>
+      </div>
+
+      {/* Origem do lead — pago (tráfego) vs orgânico */}
+      <div className="flex items-center gap-2 mb-6">
+        <span className="text-xs text-gray-400 mr-1">Origem:</span>
+        {[
+          { id: '', label: 'Todos' },
+          { id: 'TRAFEGO', label: 'Tráfego pago' },
+          { id: 'ORGANICO', label: 'Orgânico' },
+        ].map(op => (
+          <button
+            key={op.id || 'todos'}
+            onClick={() => setTipoLead(op.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              tipoLead === op.id ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {op.label}
+          </button>
+        ))}
       </div>
 
       {dados && dados.totalLeads < 5 && (

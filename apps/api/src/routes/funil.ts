@@ -61,7 +61,8 @@ router.put('/metas/:etapa', requireAuth, async (req: Request, res: Response) => 
 // LeadRegistrado, não do histórico — assim ela nunca encolhe quando um card
 // é apagado do CRM. Aceita ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD pra analisar um
 // período específico (dia, semana, mês); sem os parâmetros, é o histórico
-// completo.
+// completo. Aceita também ?tipoLead=TRAFEGO|ORGANICO pra comparar a
+// performance de lead pago com a de lead orgânico separadamente.
 // ---------------------------------------------------------------------------
 
 function parseDataQuery(valor: unknown): Date | undefined {
@@ -79,10 +80,13 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
   const fimQuery = parseDataQuery(req.query.fim)
   // Fim inclusivo do dia inteiro, senão "até 25/08" excluiria o próprio 25/08.
   const fim = fimQuery ? new Date(fimQuery.getFullYear(), fimQuery.getMonth(), fimQuery.getDate(), 23, 59, 59, 999) : undefined
+  const tipoLead = typeof req.query.tipoLead === 'string' && ['TRAFEGO', 'ORGANICO'].includes(req.query.tipoLead)
+    ? req.query.tipoLead
+    : undefined
 
   const escopo = await escopoVisibilidade(prisma, req.user!)
   const oportunidadesEscopo = await prisma.oportunidade.findMany({
-    where: { empresaId, ...escopoWhereDono(escopo, 'responsavelId') },
+    where: { empresaId, ...escopoWhereDono(escopo, 'responsavelId'), ...(tipoLead ? { tipoLead } : {}) },
     select: { id: true },
   })
 
@@ -95,7 +99,7 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
     select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
   })
 
-  const totalLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, escopoWhereDono(escopo, 'usuarioId'), { inicio, fim })
+  const totalLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, escopoWhereDono(escopo, 'usuarioId'), { inicio, fim }, tipoLead)
 
   res.json(montarConversaoFunil(historico, metaPorEtapa, totalLeadsRegistrados))
 })

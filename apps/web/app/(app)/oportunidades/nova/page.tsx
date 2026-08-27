@@ -19,6 +19,7 @@ export default function NovaOportunidadePage() {
     unidadeId: '',
     responsavelId: '',
     origem: 'MANUAL',
+    tipoLead: '',
     valor: '',
     observacoes: '',
   })
@@ -45,6 +46,7 @@ export default function NovaOportunidadePage() {
         unidadeId: form.unidadeId || undefined,
         responsavelId: form.responsavelId || undefined,
         email: form.email || undefined,
+        tipoLead: (form.tipoLead || undefined) as 'TRAFEGO' | 'ORGANICO' | undefined,
       })
       router.push('/funil')
     } catch (err: unknown) {
@@ -154,6 +156,35 @@ export default function NovaOportunidadePage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de lead</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => set('tipoLead', form.tipoLead === 'TRAFEGO' ? '' : 'TRAFEGO')}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                form.tipoLead === 'TRAFEGO'
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Tráfego pago
+            </button>
+            <button
+              type="button"
+              onClick={() => set('tipoLead', form.tipoLead === 'ORGANICO' ? '' : 'ORGANICO')}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                form.tipoLead === 'ORGANICO'
+                  ? 'bg-green-600 border-green-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Orgânico
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Opcional — permite comparar a produção de leads pagos e orgânicos no Funil de Vendas.</p>
         </div>
 
         <div>

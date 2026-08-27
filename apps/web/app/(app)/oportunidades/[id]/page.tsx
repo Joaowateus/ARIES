@@ -29,6 +29,17 @@ function formatDias(dias: number): string {
   return `${arredondado}d`
 }
 
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/)
+  const primeiras = partes[0]?.[0] ?? ''
+  const ultimas = partes.length > 1 ? partes[partes.length - 1][0] : ''
+  return (primeiras + ultimas).toUpperCase()
+}
+
+function somenteDigitos(valor: string): string {
+  return valor.replace(/\D/g, '')
+}
+
 interface EtapaComDuracao {
   id: string
   estagioAnterior: string | null
@@ -101,39 +112,85 @@ export default function OportunidadeDetalhePage() {
     <div className="p-8 max-w-4xl">
       <Link href="/oportunidades" className="text-sm text-gray-400 hover:text-gray-600">← Oportunidades</Link>
 
-      <div className="flex items-start justify-between mt-2 mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{op.nomeCliente}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ESTAGIO_COR[op.estagio]}`}>
-              {ESTAGIO_LABEL[op.estagio] ?? op.estagio}
-            </span>
-            {op.diasNaEtapaAtual != null && (
-              <span className="text-xs text-gray-400">⏱ {formatDias(op.diasNaEtapaAtual)} nesta etapa</span>
-            )}
-            {op.telefone && <span className="text-sm text-gray-500">{op.telefone}</span>}
+      {/* Identificação */}
+      <div className="flex items-start justify-between mt-2 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-lg shrink-0">
+            {iniciais(op.nomeCliente)}
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{op.nomeCliente}</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ESTAGIO_COR[op.estagio]}`}>
+                {ESTAGIO_LABEL[op.estagio] ?? op.estagio}
+              </span>
+              {op.tipoLead && (
+                <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                  op.tipoLead === 'TRAFEGO' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                }`}>
+                  {op.tipoLead === 'TRAFEGO' ? 'Tráfego pago' : 'Orgânico'}
+                </span>
+              )}
+              {op.diasNaEtapaAtual != null && (
+                <span className="text-xs text-gray-400">⏱ {formatDias(op.diasNaEtapaAtual)} nesta etapa</span>
+              )}
+            </div>
           </div>
         </div>
         {op.valor && <div className="text-lg font-semibold text-green-700">{formatMoeda(op.valor)}</div>}
       </div>
 
-      {/* Próxima ação */}
-      <div className={`rounded-xl border p-4 mb-6 ${atrasado ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
-        <div className="text-xs font-medium text-gray-500 mb-1">Próxima ação {atrasado && '— atrasada'}</div>
-        <div className="text-sm text-gray-900">{op.proximaAcaoDescricao || 'Nenhuma ação agendada'}</div>
-        {op.proximaAcaoEm && <div className="text-xs text-gray-500 mt-0.5">{formatData(op.proximaAcaoEm)}</div>}
-        <div className="text-xs text-gray-400 mt-1">Última interação: {formatData(op.ultimaInteracaoEm)}</div>
+      {/* Contato rápido — ações reais e clicáveis */}
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        {op.telefone && (
+          <a href={`tel:${somenteDigitos(op.telefone)}`}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+            📞 Ligar
+          </a>
+        )}
+        {op.telefone && (
+          <a href={`https://wa.me/55${somenteDigitos(op.telefone)}`} target="_blank" rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-50 border border-green-200 text-green-700 hover:bg-green-100">
+            💬 WhatsApp
+          </a>
+        )}
+        {op.email && (
+          <a href={`mailto:${op.email}`}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+            ✉️ E-mail
+          </a>
+        )}
+        {!op.telefone && !op.email && (
+          <span className="text-xs text-gray-400">Sem telefone ou e-mail cadastrado</span>
+        )}
       </div>
 
-      {/* Mover estágio */}
-      {!['COMPRADO', 'PERDIDO'].includes(op.estagio) && (
-        <div className="mb-6">
-          <div className="text-xs font-medium text-gray-500 mb-2">Mover para</div>
-          <div className="flex gap-2 flex-wrap">
+      {/* Pipeline de vendas — maior destaque do card */}
+      <div className="rounded-xl border-2 border-blue-200 bg-blue-50/40 p-4 mb-6">
+        <div className="text-xs font-medium text-blue-700 mb-2">Pipeline de vendas</div>
+        <div className="flex items-center gap-1 flex-wrap mb-3">
+          {ETAPAS_FUNIL_ORDEM.map((e, i) => (
+            <span key={e} className="flex items-center">
+              <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                e === op.estagio ? 'bg-blue-600 text-white' : 'bg-white text-gray-400 border border-gray-200'
+              }`}>
+                {ESTAGIO_LABEL[e]}
+              </span>
+              {i < ETAPAS_FUNIL_ORDEM.length - 1 && <span className="text-gray-300 mx-0.5">›</span>}
+            </span>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-xs text-gray-600 mb-3">
+          <div><span className="text-gray-400">Moto de interesse:</span> {op.unidade?.nome ?? '—'}</div>
+          <div><span className="text-gray-400">Origem:</span> {op.origem}</div>
+          <div><span className="text-gray-400">Responsável:</span> {op.responsavel?.nome ?? '—'}</div>
+        </div>
+        {!['COMPRADO', 'PERDIDO'].includes(op.estagio) && (
+          <div className="flex gap-2 flex-wrap pt-2 border-t border-blue-100">
             {ETAPAS_FUNIL_ORDEM.filter(e => e !== op.estagio).map(e => (
               <button key={e} onClick={() => mover(e)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">
-                {ESTAGIO_LABEL[e]}
+                Mover p/ {ESTAGIO_LABEL[e]}
               </button>
             ))}
             <button onClick={() => mover('PERDIDO')}
@@ -141,6 +198,31 @@ export default function OportunidadeDetalhePage() {
               Marcar como perdido
             </button>
           </div>
+        )}
+      </div>
+
+      {/* Relacionamento */}
+      <div className={`rounded-xl border p-4 mb-6 ${atrasado ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+        <div className="grid grid-cols-3 gap-3 text-xs text-gray-600 mb-3">
+          <div><span className="text-gray-400">Cliente desde:</span> {formatData(op.criadaEm)}</div>
+          <div><span className="text-gray-400">Última interação:</span> {formatData(op.ultimaInteracaoEm)}</div>
+          <div><span className="text-gray-400">Interações:</span> {op.atividades.length}</div>
+        </div>
+        <div className="text-xs font-medium text-gray-500 mb-1">Próxima ação {atrasado && '— atrasada'}</div>
+        <div className="text-sm text-gray-900">{op.proximaAcaoDescricao || 'Nenhuma ação agendada'}</div>
+        {op.proximaAcaoEm && <div className="text-xs text-gray-500 mt-0.5">{formatData(op.proximaAcaoEm)}</div>}
+      </div>
+
+      {/* Observações */}
+      {(op.observacoes || op.atividades.length > 0) && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+          <div className="text-xs font-medium text-gray-500 mb-1">Observações</div>
+          {op.observacoes && <div className="text-sm text-gray-800 mb-2">{op.observacoes}</div>}
+          {op.atividades[0] && (
+            <div className="text-xs text-gray-400">
+              Última nota: "{op.atividades[0].descricao}"{op.atividades[0].usuario ? ` — ${op.atividades[0].usuario.nome}` : ''} em {formatData(op.atividades[0].criadoEm)}
+            </div>
+          )}
         </div>
       )}
 

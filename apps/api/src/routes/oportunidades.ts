@@ -14,6 +14,7 @@ const criarSchema = z.object({
   unidadeId: z.string().optional(),
   responsavelId: z.string().optional(),
   origem: z.string().default('MANUAL'),
+  tipoLead: z.enum(['TRAFEGO', 'ORGANICO']).optional(),
   valor: z.number().positive().optional(),
   observacoes: z.string().optional(),
 })
@@ -38,6 +39,7 @@ const include = {
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   const estagio = typeof req.query.estagio === 'string' ? req.query.estagio : undefined
   const responsavelId = typeof req.query.responsavelId === 'string' ? req.query.responsavelId : undefined
+  const tipoLead = typeof req.query.tipoLead === 'string' ? req.query.tipoLead : undefined
   const escopo = await escopoVisibilidade(prisma, req.user!)
 
   const oportunidades = await prisma.oportunidade.findMany({
@@ -46,6 +48,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       ...escopoWhereDono(escopo, 'responsavelId'),
       ...(estagio ? { estagio } : {}),
       ...(responsavelId ? { responsavelId } : {}),
+      ...(tipoLead ? { tipoLead } : {}),
     },
     include,
     orderBy: { atualizadaEm: 'desc' },
@@ -112,7 +115,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     })
     // Contador permanente — nunca apagado, mesmo se este card for excluído
     // do CRM depois (ver DELETE /oportunidades e lib/funil.ts).
-    await tx.leadRegistrado.create({ data: { empresaId, usuarioId: responsavelId } })
+    await tx.leadRegistrado.create({ data: { empresaId, usuarioId: responsavelId, tipoLead: data.tipoLead } })
     return nova
   })
 

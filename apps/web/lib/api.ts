@@ -43,6 +43,7 @@ export interface Oportunidade {
   email?: string
   estagio: string
   origem: string
+  tipoLead?: 'TRAFEGO' | 'ORGANICO' | null
   valor?: number
   observacoes?: string
   responsavel?: { id: string; nome: string }
@@ -701,7 +702,7 @@ export const api = {
     }>('/financeiro/resumo'),
   },
   oportunidades: {
-    listar: (params?: { estagio?: string; responsavelId?: string }) => {
+    listar: (params?: { estagio?: string; responsavelId?: string; tipoLead?: string }) => {
       const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : ''
       return request<Oportunidade[]>(`/oportunidades${qs}`)
     },
@@ -838,10 +839,12 @@ export const api = {
     metas: () => request<MetaFunilEtapa[]>('/funil/metas'),
     atualizarMeta: (etapa: string, dados: { metaPct?: number; tempoMaximoDias?: number | null }) =>
       request<MetaFunilEtapa>(`/funil/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(dados) }),
-    conversao: (periodo?: { inicio?: string; fim?: string }) => {
-      const qs = periodo?.inicio || periodo?.fim
-        ? '?' + new URLSearchParams({ ...(periodo.inicio ? { inicio: periodo.inicio } : {}), ...(periodo.fim ? { fim: periodo.fim } : {}) }).toString()
-        : ''
+    conversao: (params?: { inicio?: string; fim?: string; tipoLead?: string }) => {
+      const query: Record<string, string> = {}
+      if (params?.inicio) query.inicio = params.inicio
+      if (params?.fim) query.fim = params.fim
+      if (params?.tipoLead) query.tipoLead = params.tipoLead
+      const qs = Object.keys(query).length ? '?' + new URLSearchParams(query).toString() : ''
       return request<ConversaoFunil>(`/funil/conversao${qs}`)
     },
   },

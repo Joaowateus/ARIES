@@ -177,6 +177,7 @@ model Oportunidade {
   email                 String?
   estagio               String    @default("NOVO_LEAD")
   origem                String    @default("MANUAL")
+  tipoLead              String? // TRAFEGO | ORGANICO — pra separar produção de lead pago vs orgânico no Funil
   valor                 Float?
   observacoes           String?
   ultimaInteracaoEm     DateTime?
@@ -249,6 +250,7 @@ model LeadRegistrado {
   id        String   @id @default(cuid())
   empresaId String
   usuarioId String
+  tipoLead  String? // TRAFEGO | ORGANICO — espelha Oportunidade.tipoLead, pro contador permanente
   criadoEm  DateTime @default(now())
 
   empresa Empresa @relation(fields: [empresaId], references: [id])

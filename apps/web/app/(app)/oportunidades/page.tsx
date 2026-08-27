@@ -146,7 +146,16 @@ export default function CrmPage() {
                         className="absolute top-2 right-2 w-4 h-4 accent-red-600 cursor-pointer"
                       />
                     )}
-                    <div className="font-medium text-sm text-gray-900 truncate pr-5">{op.nomeCliente}</div>
+                    <div className="flex items-center gap-1.5 pr-5">
+                      <div className="font-medium text-sm text-gray-900 truncate">{op.nomeCliente}</div>
+                      {op.tipoLead && (
+                        <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                          op.tipoLead === 'TRAFEGO' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {op.tipoLead === 'TRAFEGO' ? 'Tráfego' : 'Orgânico'}
+                        </span>
+                      )}
+                    </div>
                     {op.unidade && (
                       <div className="text-xs text-gray-500 mt-0.5 truncate">{op.unidade.nome}</div>
                     )}

@@ -227,12 +227,14 @@ export async function contarLeadsRegistrados(
   prisma: PrismaClient,
   empresaId: string,
   whereDono: Record<string, unknown>,
-  periodo?: { inicio?: Date; fim?: Date }
+  periodo?: { inicio?: Date; fim?: Date },
+  tipoLead?: string
 ): Promise<number> {
   return prisma.leadRegistrado.count({
     where: {
       empresaId,
       ...whereDono,
+      ...(tipoLead ? { tipoLead } : {}),
       ...(periodo?.inicio || periodo?.fim
         ? { criadoEm: { ...(periodo.inicio ? { gte: periodo.inicio } : {}), ...(periodo.fim ? { lte: periodo.fim } : {}) } }
         : {}),
