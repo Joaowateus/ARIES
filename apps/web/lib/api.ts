@@ -748,6 +748,11 @@ export const api = {
         '/oportunidades/limpar-historico',
         { method: 'DELETE' }
       ),
+    importarHistoricoWanderson: () =>
+      request<{ importadas: number; jaExistiam: number; valorTotal: number }>(
+        '/oportunidades/importar-historico-wanderson',
+        { method: 'POST' }
+      ),
   },
   dashboard: {
     get: () => request<DashboardExecutivo>('/dashboard'),

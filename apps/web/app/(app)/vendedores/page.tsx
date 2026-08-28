@@ -36,6 +36,7 @@ export default function VendedoresPage() {
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [importando, setImportando] = useState(false)
 
   const [form, setForm] = useState({ nome: '', email: '', senha: '', papel: 'VENDEDOR', departamento: '', gestorId: '' })
 
@@ -75,6 +76,22 @@ export default function VendedoresPage() {
   async function atualizarCampo(id: string, campo: 'papel' | 'gestorId', valor: string) {
     await api.usuarios.editar(id, { [campo]: valor || null })
     carregar()
+  }
+
+  async function importarHistoricoWanderson() {
+    setImportando(true)
+    try {
+      const resultado = await api.oportunidades.importarHistoricoWanderson()
+      window.alert(
+        resultado.importadas > 0
+          ? `Importado: ${resultado.importadas} venda(s), R$ ${resultado.valorTotal.toLocaleString('pt-BR')}.${resultado.jaExistiam > 0 ? ` (${resultado.jaExistiam} já existiam e foram puladas)` : ''}`
+          : `Nada a importar — as ${resultado.jaExistiam} venda(s) já estavam registradas.`
+      )
+    } catch (err: unknown) {
+      window.alert(err instanceof Error ? err.message : 'Erro ao importar histórico')
+    } finally {
+      setImportando(false)
+    }
   }
 
   return (
@@ -227,6 +244,15 @@ export default function VendedoresPage() {
                           className="text-xs text-gray-500 hover:text-red-600"
                         >
                           {u.status === 'ATIVO' ? 'Desativar' : 'Reativar'}
+                        </button>
+                      )}
+                      {u.email === 'consultorwandersonmmnegocios@gmail.com' && (
+                        <button
+                          onClick={importarHistoricoWanderson}
+                          disabled={importando}
+                          className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                        >
+                          {importando ? 'Importando...' : 'Importar histórico'}
                         </button>
                       )}
                     </td>

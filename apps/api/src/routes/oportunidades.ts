@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, requirePapel } from '../middleware/auth'
 import { ESTAGIOS, ESTAGIOS_FINAIS, ESTAGIO_VENDA_FECHADA, diasNaEtapaAtualPorOportunidade } from '../lib/funil'
 import { escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
 
@@ -309,5 +309,115 @@ router.delete('/limpar-historico', requireAuth, async (req: Request, res: Respon
     leadsApagados: leadsApagados.count,
   })
 })
+
+// ---------------------------------------------------------------------------
+// Importação pontual do histórico de vendas do Wanderson (relatório de
+// balanceamento comercial, jan-jul/2026). Feita via API em vez de migração
+// de banco porque a migração equivalente (rodada no boot do container em
+// produção) não deixou o histórico visível pro vendedor — usar o mesmo
+// Prisma client que já serve o resto do app garante que grava exatamente
+// onde a tela lê. Só gestão pode disparar (afeta a conta de outra pessoa).
+// Idempotente: pula qualquer venda que já exista pro vendedor (mesmo nome +
+// mesma data), então pode ser chamada de novo sem duplicar nada.
+// ---------------------------------------------------------------------------
+
+const HISTORICO_WANDERSON: { data: string; modelo: string; valor: number; banco: string }[] = [
+  { data: '2026-01-04', modelo: 'CB 250', valor: 23900, banco: 'PAN' },
+  { data: '2026-01-09', modelo: 'R15', valor: 18533, banco: 'PAN' },
+  { data: '2026-01-14', modelo: '500 F', valor: 40900, banco: 'SANTANDER' },
+  { data: '2026-01-19', modelo: 'BROS 2020', valor: 22600, banco: 'PAN' },
+  { data: '2026-02-03', modelo: 'XRE 2015', valor: 15900, banco: 'PAN' },
+  { data: '2026-02-10', modelo: 'MT 03', valor: 27900, banco: 'SANTANDER' },
+  { data: '2026-02-25', modelo: 'TITAN 160', valor: 20000, banco: 'SANTANDER' },
+  { data: '2026-03-02', modelo: 'LANDER 250 AZUL', valor: 26900, banco: 'BV' },
+  { data: '2026-03-05', modelo: 'PCX 2024', valor: 24500, banco: 'A VISTA' },
+  { data: '2026-03-08', modelo: 'FZ 25 AZUL', valor: 25900, banco: 'BV' },
+  { data: '2026-03-11', modelo: 'START VERMELHA', valor: 16000, banco: 'PAN' },
+  { data: '2026-03-14', modelo: 'CB 250 TW BRANCA', valor: 24000, banco: 'PAN' },
+  { data: '2026-03-17', modelo: 'CB 300F VERMELHA', valor: 28000, banco: 'BV' },
+  { data: '2026-03-20', modelo: 'R15', valor: 24900, banco: 'BV' },
+  { data: '2026-03-23', modelo: 'CB 300F VERMELHA 2', valor: 27000, banco: 'PAN' },
+  { data: '2026-04-02', modelo: 'FAN 150 2021', valor: 18000, banco: 'PAN' },
+  { data: '2026-04-07', modelo: 'TITAN LARANJA', valor: 26000, banco: 'SANTANDER' },
+  { data: '2026-04-12', modelo: 'MT 03', valor: 26000, banco: 'BV' },
+  { data: '2026-04-17', modelo: 'LANDER 250 PRETA', valor: 26000, banco: 'BV' },
+  { data: '2026-04-22', modelo: 'TITAN AZUL 2021', valor: 21000, banco: 'SANTANDER' },
+  { data: '2026-04-27', modelo: 'FZ 15 VERMELHA', valor: 26000, banco: 'PAN' },
+  { data: '2026-05-08', modelo: 'BROS PRETA 2021', valor: 23900, banco: 'SANTANDER' },
+  { data: '2026-05-22', modelo: 'CB TWISTER 250', valor: 21000, banco: 'SANTANDER' },
+  { data: '2026-06-15', modelo: 'BROS AZUL 2021', valor: 22900, banco: 'PAN' },
+  { data: '2026-07-15', modelo: 'CB 300F', valor: 28900, banco: 'PAN' },
+]
+
+router.post(
+  '/importar-historico-wanderson',
+  requireAuth,
+  requirePapel('ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL'),
+  async (req: Request, res: Response) => {
+    const empresaId = req.user!.empresaId
+    const vendedor = await prisma.usuario.findFirst({
+      where: { empresaId, email: 'consultorwandersonmmnegocios@gmail.com' },
+      select: { id: true },
+    })
+    if (!vendedor) {
+      res.status(404).json({ error: 'Conta do Wanderson não encontrada nesta empresa' })
+      return
+    }
+
+    let importadas = 0
+    let jaExistiam = 0
+    let valorTotal = 0
+
+    for (const venda of HISTORICO_WANDERSON) {
+      const nomeCliente = `Venda histórica — ${venda.modelo}`
+      const criadaEm = new Date(`${venda.data}T00:00:00`)
+
+      const existente = await prisma.oportunidade.findFirst({
+        where: { empresaId, responsavelId: vendedor.id, nomeCliente, criadaEm },
+        select: { id: true },
+      })
+      if (existente) {
+        jaExistiam++
+        continue
+      }
+
+      const observacoes = `Importado do relatório de balanceamento comercial (histórico, sem jornada detalhada no CRM). Modelo: ${venda.modelo} · Banco: ${venda.banco}`
+
+      await prisma.$transaction(async (tx) => {
+        const oportunidade = await tx.oportunidade.create({
+          data: {
+            empresaId,
+            responsavelId: vendedor.id,
+            nomeCliente,
+            estagio: 'COMPRADO',
+            origem: 'SDR',
+            valor: venda.valor,
+            statusFinal: 'COMPRADO',
+            fechadaEm: criadaEm,
+            criadaEm,
+            observacoes,
+          },
+        })
+        await tx.contrato.create({
+          data: {
+            empresaId,
+            oportunidadeId: oportunidade.id,
+            vendedorId: vendedor.id,
+            nomeCliente,
+            valorTotal: venda.valor,
+            status: 'ATIVO',
+            processoAdministrativoStatus: 'CONCLUIDO',
+            criadoEm: criadaEm,
+            observacoes: `Importado do relatório de balanceamento comercial. Modelo: ${venda.modelo} · Banco: ${venda.banco}`,
+          },
+        })
+      })
+      importadas++
+      valorTotal += venda.valor
+    }
+
+    res.json({ importadas, jaExistiam, valorTotal })
+  }
+)
 
 export default router
