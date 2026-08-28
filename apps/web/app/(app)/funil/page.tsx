@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api, ConversaoFunil, EtapaConversao } from '@/lib/api'
+import { api, ConversaoFunil, EtapaConversao, Usuario } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+
+const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL', 'SUPERVISOR', 'COORDENADOR']
 
 const STATUS_COR: Record<string, string> = { verde: '#22c55e', amarelo: '#f59e0b', vermelho: '#ef4444' }
 const STATUS_TEXTO: Record<string, string> = { verde: 'text-green-600', amarelo: 'text-amber-600', vermelho: 'text-red-600' }
@@ -32,6 +35,7 @@ function periodoDoPreset(id: string): { inicio?: string; fim?: string } {
 }
 
 export default function FunilVendasPage() {
+  const { user } = useAuth()
   const [dados, setDados] = useState<ConversaoFunil | null>(null)
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<{ etapa: string; campo: CampoEdicao } | null>(null)
@@ -43,12 +47,20 @@ export default function FunilVendasPage() {
   const [customInicio, setCustomInicio] = useState('')
   const [customFim, setCustomFim] = useState('')
   const [tipoLead, setTipoLead] = useState<string>('')
+  const [vendedorId, setVendedorId] = useState<string>('')
+  const [vendedores, setVendedores] = useState<Usuario[]>([])
+
+  const podeFiltrarVendedor = PAPEIS_GESTAO.includes(user?.papel ?? '')
 
   const carregar = useCallback(() => {
-    return api.funil.conversao({ ...periodo, tipoLead: tipoLead || undefined }).then(setDados).finally(() => setLoading(false))
-  }, [periodo, tipoLead])
+    return api.funil.conversao({ ...periodo, tipoLead: tipoLead || undefined, vendedorId: vendedorId || undefined }).then(setDados).finally(() => setLoading(false))
+  }, [periodo, tipoLead, vendedorId])
 
   useEffect(() => { carregar() }, [carregar])
+
+  useEffect(() => {
+    if (podeFiltrarVendedor) api.usuarios.listar().then(setVendedores)
+  }, [podeFiltrarVendedor])
 
   async function atualizarManualmente() {
     setAtualizando(true)
@@ -165,7 +177,7 @@ export default function FunilVendasPage() {
       </div>
 
       {/* Origem do lead — pago (tráfego) vs orgânico */}
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span className="text-xs text-gray-400 mr-1">Origem:</span>
         {[
           { id: '', label: 'Todos' },
@@ -183,6 +195,23 @@ export default function FunilVendasPage() {
           </button>
         ))}
       </div>
+
+      {/* Vendedor — só pra quem tem visão de equipe/empresa */}
+      {podeFiltrarVendedor && (
+        <div className="flex items-center gap-2 mb-6">
+          <span className="text-xs text-gray-400 mr-1">Vendedor:</span>
+          <select
+            value={vendedorId}
+            onChange={e => setVendedorId(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white text-gray-700"
+          >
+            <option value="">Todos</option>
+            {vendedores.map(v => (
+              <option key={v.id} value={v.id}>{v.nome}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {dados && dados.totalLeads < 5 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700 mb-6">

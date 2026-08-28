@@ -42,6 +42,18 @@ const NAV_VENDEDOR: NavGrupo[] = [
   { itens: [{ href: '/calendario', label: 'Calendário', icon: '📅' }] },
 ]
 
+// Navegação enxuta do Gerente Comercial — só duas abas por enquanto, a
+// pedido do usuário: um painel de produção unificado (soma todos os
+// vendedores, filtrável por um específico) e o Funil Comercial, também
+// unificado e filtrável (inclusive por Tráfego/Orgânico). Sem CRM aqui de
+// propósito — o gerente não passa pelo board individual, só pelo
+// consolidado. Outros papéis de gestão (Admin, Diretor, Supervisor,
+// Coordenador) continuam com a navegação completa abaixo.
+const NAV_GERENTE: NavGrupo[] = [
+  { itens: [{ href: '/painel-equipe', label: 'Painel da Equipe', icon: '📊' }] },
+  { itens: [{ href: '/funil', label: 'Funil Comercial', icon: '🔽' }] },
+]
+
 // Navegação do gestor (seção 30) — o que ele controla/decide.
 const NAV_GESTOR: NavGrupo[] = [
   { itens: [{ href: '/dashboard', label: 'Dashboard', icon: '📊' }] },
@@ -97,7 +109,10 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
 
-  const grupos = PAPEIS_GESTAO_NAV.includes(user?.papel ?? '') ? NAV_GESTOR : NAV_VENDEDOR
+  const grupos =
+    user?.papel === 'GERENTE_COMERCIAL' ? NAV_GERENTE
+      : PAPEIS_GESTAO_NAV.includes(user?.papel ?? '') ? NAV_GESTOR
+      : NAV_VENDEDOR
 
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-white border-r border-gray-200 min-h-screen">

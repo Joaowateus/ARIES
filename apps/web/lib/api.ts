@@ -377,6 +377,13 @@ export interface MeuPainel {
   producaoDashboard: ProducaoDashboard
 }
 
+export interface PainelProducaoEquipe {
+  producaoDashboard: ProducaoDashboard
+  vendedores: { id: string; nome: string; papel: string }[]
+  vendedorSelecionado: string | null
+  escopoTodos: boolean
+}
+
 export interface MetaComercialPadrao {
   supermetaVendasMes: number
   supermetaFaturamentoMes: number
@@ -858,6 +865,8 @@ export const api = {
     scoreConfig: () => request<ScoreConfig>('/gestao/score-config'),
     atualizarScoreConfig: (data: object) => request<ScoreConfig>('/gestao/score-config', { method: 'PUT', body: JSON.stringify(data) }),
     score: () => request<ScorePessoa[]>('/gestao/score'),
+    producao: (vendedorId?: string) =>
+      request<PainelProducaoEquipe>(`/gestao/producao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
   },
   auditorias: {
     listar: (entidadeTipo?: string) => request<AuditoriaGenerica[]>(`/auditorias${entidadeTipo ? `?entidadeTipo=${entidadeTipo}` : ''}`),
@@ -924,11 +933,12 @@ export const api = {
     metas: () => request<MetaFunilEtapa[]>('/funil/metas'),
     atualizarMeta: (etapa: string, dados: { metaPct?: number; tempoMaximoDias?: number | null }) =>
       request<MetaFunilEtapa>(`/funil/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(dados) }),
-    conversao: (params?: { inicio?: string; fim?: string; tipoLead?: string }) => {
+    conversao: (params?: { inicio?: string; fim?: string; tipoLead?: string; vendedorId?: string }) => {
       const query: Record<string, string> = {}
       if (params?.inicio) query.inicio = params.inicio
       if (params?.fim) query.fim = params.fim
       if (params?.tipoLead) query.tipoLead = params.tipoLead
+      if (params?.vendedorId) query.vendedorId = params.vendedorId
       const qs = Object.keys(query).length ? '?' + new URLSearchParams(query).toString() : ''
       return request<ConversaoFunil>(`/funil/conversao${qs}`)
     },

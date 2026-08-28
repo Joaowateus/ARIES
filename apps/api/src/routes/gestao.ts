@@ -4,6 +4,8 @@ import { prisma } from '../lib/prisma'
 import { requireAuth, requirePapel } from '../middleware/auth'
 import { escopoVisibilidade, veEquipe } from '../lib/permissoes'
 import { ESTAGIOS_FINAIS } from '../lib/funil'
+import { obterMetasComerciais } from '../lib/metasComerciais'
+import { calcularProducaoVendedor } from '../lib/producaoVendedor'
 
 const router = Router()
 
@@ -67,6 +69,60 @@ router.get('/equipe', requireAuth, apenasEquipe, async (req: Request, res: Respo
   )
 
   res.json(equipe)
+})
+
+// ---------------------------------------------------------------------------
+// Painel de Produção da Equipe — mesmo painel de produção do vendedor (Meu
+// Painel), só que somando todo mundo visível ao gestor de uma vez, com a
+// opção de filtrar por um vendedor específico (?vendedorId=). Sem filtro, a
+// meta mensal escala pelo número de gente ativa na equipe (supermeta ×
+// quantidade), já que não existe uma "meta da empresa" separada — cada
+// vendedor tem a mesma meta individual, e a soma delas é a meta do time.
+// ---------------------------------------------------------------------------
+
+router.get('/producao', requireAuth, apenasEquipe, async (req: Request, res: Response) => {
+  const empresaId = req.user!.empresaId
+  const agora = new Date()
+  const inicioAno = new Date(agora.getFullYear(), 0, 1)
+
+  const escopo = await escopoVisibilidade(prisma, req.user!)
+  const usuarios = await usuariosDaEquipe(req)
+
+  const vendedorIdParam = typeof req.query.vendedorId === 'string' ? req.query.vendedorId : undefined
+  const vendedorIdValido = !!vendedorIdParam && usuarios.some(u => u.id === vendedorIdParam)
+  const vendedorIds = vendedorIdValido ? [vendedorIdParam as string] : usuarios.map(u => u.id)
+
+  const [contratosAno, oportunidadesEscopo, metasComerciais] = await Promise.all([
+    prisma.contrato.findMany({
+      where: { empresaId, vendedorId: { in: vendedorIds }, status: { not: 'CANCELADO' }, criadoEm: { gte: inicioAno } },
+      select: { valorTotal: true, criadoEm: true },
+    }),
+    prisma.oportunidade.findMany({
+      where: { empresaId, responsavelId: { in: vendedorIds } },
+      select: { id: true },
+    }),
+    obterMetasComerciais(prisma, empresaId),
+  ])
+
+  const historico = await prisma.estagioHistorico.findMany({
+    where: { oportunidadeId: { in: oportunidadesEscopo.map(o => o.id) }, estagioNovo: 'NOVO_LEAD', criadoEm: { gte: inicioAno } },
+    select: { criadoEm: true },
+  })
+  const leadsPorMes = new Array(12).fill(0)
+  for (const h of historico) leadsPorMes[h.criadoEm.getMonth()]++
+
+  const metaMensal = vendedorIdValido
+    ? metasComerciais.supermetaFaturamentoMes
+    : metasComerciais.supermetaFaturamentoMes * Math.max(1, vendedorIds.length)
+
+  const producaoDashboard = calcularProducaoVendedor(contratosAno, leadsPorMes, metaMensal, agora)
+
+  res.json({
+    producaoDashboard,
+    vendedores: usuarios,
+    vendedorSelecionado: vendedorIdValido ? vendedorIdParam : null,
+    escopoTodos: escopo.tipo === 'todos',
+  })
 })
 
 // ---------------------------------------------------------------------------

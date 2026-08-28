@@ -47,7 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(usuario)
     setUsuario(usuario)
     const papeisGestao = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL', 'SUPERVISOR', 'COORDENADOR']
-    router.push(papeisGestao.includes(usuario.papel) ? '/dashboard' : '/meu-painel')
+    const destino = usuario.papel === 'GERENTE_COMERCIAL' ? '/painel-equipe' : papeisGestao.includes(usuario.papel) ? '/dashboard' : '/meu-painel'
+    router.push(destino)
   }
 
   function logout() {

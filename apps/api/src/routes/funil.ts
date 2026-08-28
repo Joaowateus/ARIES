@@ -85,8 +85,19 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
     : undefined
 
   const escopo = await escopoVisibilidade(prisma, req.user!)
+
+  // Filtro por vendedor específico — só respeitado se quem pediu já enxerga
+  // essa pessoa no próprio escopo (gestão/equipe), senão cai no escopo
+  // normal. Usado pelo Funil Comercial do gerente pra fatiar por vendedor.
+  const vendedorIdParam = typeof req.query.vendedorId === 'string' ? req.query.vendedorId : undefined
+  const vendedorIdValido = !!vendedorIdParam && (
+    escopo.tipo === 'todos' || (escopo.tipo === 'equipe' && escopo.usuarioIds.includes(vendedorIdParam))
+  )
+  const whereResponsavel = vendedorIdValido ? { responsavelId: vendedorIdParam } : escopoWhereDono(escopo, 'responsavelId')
+  const whereUsuario = vendedorIdValido ? { usuarioId: vendedorIdParam } : escopoWhereDono(escopo, 'usuarioId')
+
   const oportunidadesEscopo = await prisma.oportunidade.findMany({
-    where: { empresaId, ...escopoWhereDono(escopo, 'responsavelId'), ...(tipoLead ? { tipoLead } : {}) },
+    where: { empresaId, ...whereResponsavel, ...(tipoLead ? { tipoLead } : {}) },
     select: { id: true },
   })
 
@@ -99,7 +110,7 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
     select: { oportunidadeId: true, estagioNovo: true, criadoEm: true },
   })
 
-  const totalLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, escopoWhereDono(escopo, 'usuarioId'), { inicio, fim }, tipoLead)
+  const totalLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, whereUsuario, { inicio, fim }, tipoLead)
 
   res.json(montarConversaoFunil(historico, metaPorEtapa, totalLeadsRegistrados))
 })

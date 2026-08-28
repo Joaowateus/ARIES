@@ -46,7 +46,18 @@ function ProgressoDark({ percentual }: { percentual: number }) {
   )
 }
 
-export default function ProducaoDashboardCard({ user, dados }: { user: Usuario | null; dados: ProducaoDashboard }) {
+export default function ProducaoDashboardCard({
+  user, dados, titulo, subtitulo, filtro,
+}: {
+  user: Usuario | null
+  dados: ProducaoDashboard
+  /** Sobrepõe o nome mostrado no cabeçalho (padrão: nome do usuário logado). */
+  titulo?: string
+  /** Sobrepõe o subtítulo do cabeçalho (padrão: "Consultor de Vendas — ARIES"). */
+  subtitulo?: string
+  /** Slot extra no cabeçalho, ao lado do toggle mensal/anual — usado pro filtro de vendedor no painel do gerente. */
+  filtro?: React.ReactNode
+}) {
   const [visao, setVisao] = useState<'mensal' | 'anual'>('mensal')
   const [verTabela, setVerTabela] = useState(false)
 
@@ -55,6 +66,7 @@ export default function ProducaoDashboardCard({ user, dados }: { user: Usuario |
   const ano = agora.getFullYear()
 
   const producaoAnualTotal = dados.producaoAnualAcumulada
+  const nomeExibido = titulo ?? user?.nome ?? '—'
 
   return (
     <div className="bg-[#0d0f17] rounded-2xl p-6 text-white">
@@ -62,26 +74,29 @@ export default function ProducaoDashboardCard({ user, dados }: { user: Usuario |
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-full bg-blue-600 flex items-center justify-center font-semibold text-sm shrink-0">
-            {iniciais(user?.nome ?? '?')}
+            {iniciais(nomeExibido)}
           </div>
           <div>
-            <div className="font-semibold text-white">{user?.nome ?? '—'}</div>
-            <div className="text-xs text-gray-400">Consultor de Vendas — ARIES</div>
+            <div className="font-semibold text-white">{nomeExibido}</div>
+            <div className="text-xs text-gray-400">{subtitulo ?? 'Consultor de Vendas — ARIES'}</div>
           </div>
         </div>
-        <div className="flex items-center bg-white/5 rounded-lg p-1 text-sm">
-          <button
-            onClick={() => setVisao('mensal')}
-            className={`px-3 py-1.5 rounded-md font-medium transition-colors ${visao === 'mensal' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-gray-200'}`}
-          >
-            Visão mensal
-          </button>
-          <button
-            onClick={() => setVisao('anual')}
-            className={`px-3 py-1.5 rounded-md font-medium transition-colors ${visao === 'anual' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-gray-200'}`}
-          >
-            Visão anual
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {filtro}
+          <div className="flex items-center bg-white/5 rounded-lg p-1 text-sm">
+            <button
+              onClick={() => setVisao('mensal')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-colors ${visao === 'mensal' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              Visão mensal
+            </button>
+            <button
+              onClick={() => setVisao('anual')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-colors ${visao === 'anual' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              Visão anual
+            </button>
+          </div>
         </div>
       </div>
 
