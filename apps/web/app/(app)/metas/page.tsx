@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth'
 import { formatMoeda } from '@/lib/format'
 import ProgressBar from '@/components/ui/ProgressBar'
 
-type CampoComercial = 'supermetaVendasMes' | 'metaAnunciosMes'
+type CampoComercial = 'supermetaVendasMes' | 'supermetaFaturamentoMes' | 'metaAnunciosMes'
 
 const PERIODOS = [
   { value: 'DIARIA', label: 'Diária' },
@@ -60,7 +60,9 @@ export default function MetasPage() {
     if (!editandoComercial) return
     const valor = Number(valorComercial)
     if (!Number.isFinite(valor) || valor <= 0) return
-    const atualizado = await api.metasComerciais.atualizar({ [editandoComercial]: Math.round(valor) })
+    const atualizado = await api.metasComerciais.atualizar({
+      [editandoComercial]: editandoComercial === 'supermetaFaturamentoMes' ? valor : Math.round(valor),
+    })
     setMetaComercial(atualizado)
     setEditandoComercial(null)
   }
@@ -117,7 +119,7 @@ export default function MetasPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <h2 className="font-semibold text-gray-900 mb-1">Padrões Comerciais</h2>
           <p className="text-xs text-gray-400 mb-4">Mesmo alvo pra qualquer vendedor da equipe — usado no Meu Painel de cada um</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <CampoComercialEditor
               label="Supermeta de vendas (mensal)"
               valor={metaComercial.supermetaVendasMes}
@@ -127,6 +129,18 @@ export default function MetasPage() {
               valorEdicao={valorComercial}
               onValorEdicaoChange={setValorComercial}
               onIniciar={() => iniciarEdicaoComercial('supermetaVendasMes', metaComercial.supermetaVendasMes)}
+              onSalvar={salvarEdicaoComercial}
+            />
+            <CampoComercialEditor
+              label="Meta de faturamento (mensal)"
+              valor={metaComercial.supermetaFaturamentoMes}
+              sufixo="/mês — base do painel de produção (trimestre ×3, ano ×12)"
+              formatoMoeda
+              editando={editandoComercial === 'supermetaFaturamentoMes'}
+              podeGerenciar={podeGerenciar}
+              valorEdicao={valorComercial}
+              onValorEdicaoChange={setValorComercial}
+              onIniciar={() => iniciarEdicaoComercial('supermetaFaturamentoMes', metaComercial.supermetaFaturamentoMes)}
               onSalvar={salvarEdicaoComercial}
             />
             <CampoComercialEditor
@@ -250,7 +264,7 @@ export default function MetasPage() {
 }
 
 function CampoComercialEditor({
-  label, valor, sufixo, editando, podeGerenciar, valorEdicao, onValorEdicaoChange, onIniciar, onSalvar,
+  label, valor, sufixo, editando, podeGerenciar, valorEdicao, onValorEdicaoChange, onIniciar, onSalvar, formatoMoeda,
 }: {
   label: string
   valor: number
@@ -261,6 +275,7 @@ function CampoComercialEditor({
   onValorEdicaoChange: (v: string) => void
   onIniciar: () => void
   onSalvar: () => void
+  formatoMoeda?: boolean
 }) {
   return (
     <div>
@@ -270,7 +285,8 @@ function CampoComercialEditor({
           <input
             type="number" autoFocus value={valorEdicao} onChange={e => onValorEdicaoChange(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && onSalvar()}
-            className="w-24 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center"
+            step={formatoMoeda ? '0.01' : '1'}
+            className="w-28 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center"
           />
           <button onClick={onSalvar} className="text-sm text-blue-600 font-medium">OK</button>
         </div>
@@ -280,7 +296,7 @@ function CampoComercialEditor({
           onClick={onIniciar}
           className="text-lg font-semibold text-gray-900 disabled:cursor-default hover:text-blue-600"
         >
-          {valor} <span className="text-xs font-normal text-gray-400">{sufixo}</span>{podeGerenciar && ' ✎'}
+          {formatoMoeda ? formatMoeda(valor) : valor} <span className="text-xs font-normal text-gray-400">{sufixo}</span>{podeGerenciar && ' ✎'}
         </button>
       )}
     </div>
