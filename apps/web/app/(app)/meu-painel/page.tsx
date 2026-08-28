@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { api, MeuPainel, ProducaoMensal, ConversaoFunil } from '@/lib/api'
+import { api, MeuPainel, ConversaoFunil } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { formatMoeda } from '@/lib/format'
 import StatCard from '@/components/ui/StatCard'
 import ProgressBar from '@/components/ui/ProgressBar'
+import ProducaoDashboardCard from '@/components/meu-painel/ProducaoDashboard'
 
 const STATUS_DOT: Record<string, string> = { verde: 'bg-green-500', amarelo: 'bg-amber-500', vermelho: 'bg-red-500' }
 
@@ -31,20 +31,13 @@ export default function MeuPainelPage() {
         <p className="text-gray-500 text-sm mt-1">Seu painel individual — o que precisa da sua atenção hoje</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard label="Faturamento Gerado (mês)" value={formatMoeda(dados?.faturamentoGerado ?? 0)} color="emerald" />
+      <div className="grid grid-cols-2 gap-4">
         <StatCard label="Anúncios (semana)" value={dados?.anunciosProduzidosSemana ?? 0} href="/marketplace" color="purple" />
         <StatCard label="Conteúdos (semana)" value={dados?.conteudosProduzidosSemana ?? 0} href="/social-media" color="slate" />
       </div>
 
-      {/* Produção mensal */}
-      {dados && dados.producaoMensal.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-semibold text-gray-900 mb-1">Minha Produção Mensal</h2>
-          <p className="text-xs text-gray-400 mb-4">Vendas fechadas por mês, no ano corrente — linha tracejada é a supermeta</p>
-          <GraficoProducaoMensal dados={dados.producaoMensal} meta={dados.metasComerciais.supermetaVendasMes} />
-        </div>
-      )}
+      {/* Painel de produção — visão mensal/anual */}
+      {dados && <ProducaoDashboardCard user={user} dados={dados.producaoDashboard} />}
 
       {/* Supermeta e Anúncios Orgânicos */}
       {dados && (
@@ -97,39 +90,6 @@ export default function MeuPainelPage() {
         <Link href="/insights" className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
           Ver meus insights
         </Link>
-      </div>
-    </div>
-  )
-}
-
-function GraficoProducaoMensal({ dados, meta }: { dados: ProducaoMensal[]; meta: number }) {
-  const max = Math.max(meta, ...dados.map(d => d.vendas), 1)
-  const alturaMeta = (meta / max) * 100
-
-  return (
-    <div className="relative h-40">
-      <div
-        className="absolute left-0 right-0 border-t border-dashed border-red-400"
-        style={{ bottom: `${alturaMeta}%` }}
-      >
-        <span className="absolute right-0 -top-4 text-[10px] text-red-500">Supermeta: {meta}</span>
-      </div>
-      <div className="flex items-end gap-2 h-full">
-        {dados.map(d => {
-          const altura = Math.max((d.vendas / max) * 100, d.vendas > 0 ? 3 : 0)
-          const atingiuMeta = d.vendas >= meta
-          return (
-            <div key={d.mes} className="flex-1 flex flex-col items-center justify-end h-full">
-              <div className="text-xs font-semibold text-gray-700 mb-1">{d.vendas}</div>
-              <div
-                title={`${d.label}: ${d.vendas} venda${d.vendas !== 1 ? 's' : ''} — ${formatMoeda(d.faturamento)}`}
-                className={`w-full rounded-t transition-all ${atingiuMeta ? 'bg-green-500' : 'bg-blue-400'}`}
-                style={{ height: `${altura}%` }}
-              />
-              <div className="text-[11px] text-gray-400 mt-1">{d.label}</div>
-            </div>
-          )
-        })}
       </div>
     </div>
   )

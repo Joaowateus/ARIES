@@ -307,6 +307,61 @@ export interface MetasComerciais {
   quinzenaAtual: 1 | 2
 }
 
+export interface DiaProducao {
+  dia: number
+  realizado: number | null
+  metaLinear: number
+}
+
+export interface MesBalanco {
+  mes: number
+  label: string
+  valor: number
+  variacaoPct: number | null
+  projetado: boolean
+}
+
+export interface TrimestreProducao {
+  numero: number
+  label: string
+  realizado: number
+  meta: number
+  percentual: number
+  status: 'FECHADO' | 'PROJETADO'
+}
+
+export interface ProducaoDashboard {
+  producaoMesAteHoje: number
+  variacaoProducaoMesPct: number | null
+  vendasRealizadasMes: number
+  variacaoVendasMes: number | null
+  ticketMedio: number
+  variacaoTicketMedioPct: number | null
+  taxaConversao: number
+  variacaoConversaoPP: number | null
+
+  producaoDiaria: DiaProducao[]
+  diaAtual: number
+  diasNoMes: number
+  ritmoDiarioAtual: number
+  projecaoFimMes: number
+  metaMes: number
+  percentualMetaMes: number
+  percentualProjecaoMes: number
+  faltaParaMeta: number
+  diasRestantesMes: number
+  ritmoNecessarioRestante: number
+
+  balancoMensal: MesBalanco[]
+  trimestres: TrimestreProducao[]
+  metaAnual: number
+  producaoAnualAcumulada: number
+  percentualMetaAnual: number
+  projecaoFechamentoAnual: number
+  percentualProjecaoAnual: number
+  faltaAnual: number
+}
+
 export interface MeuPainel {
   metas: { dia: MetaComProgresso | null; semana: MetaComProgresso | null; mes: MetaComProgresso[] }
   leadsPendentes: number
@@ -319,10 +374,12 @@ export interface MeuPainel {
   producaoMensal: ProducaoMensal[]
   metasComerciais: MetasComerciais
   funilProprio: ConversaoFunil
+  producaoDashboard: ProducaoDashboard
 }
 
 export interface MetaComercialPadrao {
   supermetaVendasMes: number
+  supermetaFaturamentoMes: number
   metaAnunciosMes: number
 }
 

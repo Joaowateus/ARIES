@@ -156,11 +156,12 @@ model Meta {
 // de vendas + meta de anúncios orgânicos) — mesmo padrão de "config de linha
 // única por empresa, com default, editável por gestão" do ParametroPrecificacao.
 model MetaComercialPadrao {
-  id                 String   @id @default(cuid())
-  empresaId          String   @unique
-  supermetaVendasMes Int      @default(10)
-  metaAnunciosMes    Int      @default(2000)
-  atualizadoEm       DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  empresaId              String   @unique
+  supermetaVendasMes     Int      @default(10)
+  supermetaFaturamentoMes Float   @default(150000) // base pro painel de produção — trimestre/ano derivam daqui (×3 / ×12)
+  metaAnunciosMes        Int      @default(2000)
+  atualizadoEm           DateTime @updatedAt
 
   empresa Empresa @relation(fields: [empresaId], references: [id])
 

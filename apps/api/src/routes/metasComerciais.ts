@@ -14,6 +14,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
 const metaComercialSchema = z.object({
   supermetaVendasMes: z.number().int().positive().optional(),
+  supermetaFaturamentoMes: z.number().positive().optional(),
   metaAnunciosMes: z.number().int().positive().optional(),
 })
 

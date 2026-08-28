@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth'
 import { ESTAGIOS_FINAIS, obterMetasFunil, montarConversaoFunil, contarLeadsRegistrados } from '../lib/funil'
 import { obterMetasComerciais } from '../lib/metasComerciais'
 import { calcularProgressoMetas } from './metas'
+import { calcularProducaoVendedor } from '../lib/producaoVendedor'
 
 const router = Router()
 
@@ -105,6 +106,18 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   const meusLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, { usuarioId })
   const funilProprio = montarConversaoFunil(meuHistorico, metaFunilPorEtapa, meusLeadsRegistrados)
 
+  // Leads entrados no funil por mês (ano corrente) — usado só pra aproximar
+  // a taxa de conversão do painel de produção (vendas do mês ÷ leads do
+  // mês). Não é uma coorte perfeita (uma venda pode vir de um lead de mês
+  // anterior), mas dá um norte sem precisar de análise de coorte completa.
+  const leadsPorMes = new Array(12).fill(0)
+  for (const h of meuHistorico) {
+    if (h.estagioNovo === 'NOVO_LEAD' && h.criadoEm.getFullYear() === agora.getFullYear()) {
+      leadsPorMes[h.criadoEm.getMonth()]++
+    }
+  }
+  const producaoDashboard = calcularProducaoVendedor(contratosAno, leadsPorMes, metasComerciais.supermetaFaturamentoMes, agora)
+
   res.json({
     metas: {
       dia: porPeriodo('DIARIA')[0] ?? null,
@@ -129,6 +142,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       quinzenaAtual,
     },
     funilProprio,
+    producaoDashboard,
   })
 })
 
