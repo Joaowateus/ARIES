@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { api, Usuario, getUser, setUser, setToken, clearToken } from './api'
+import { api, ApiError, Usuario, getUser, setUser, setToken, clearToken } from './api'
 
 interface AuthCtx {
   user: Usuario | null
@@ -25,9 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       api.auth.me().then(u => {
         setUsuario(u)
         setUser(u)
-      }).catch(() => {
-        clearToken()
-        setUsuario(null)
+      }).catch((err) => {
+        // Só desloga de verdade quando o token é inválido/expirado (401).
+        // Qualquer outro erro (rede fora do ar, servidor reiniciando durante
+        // um deploy, resposta não-JSON de um proxy) mantém a sessão em cache
+        // — senão um blip momentâneo da API derruba o acesso de todo mundo
+        // ao mesmo tempo, mesmo sem o token ter expirado de verdade.
+        if (err instanceof ApiError && err.status === 401) {
+          clearToken()
+          setUsuario(null)
+        }
       }).finally(() => setLoading(false))
     } else {
       setLoading(false)

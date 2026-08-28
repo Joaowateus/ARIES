@@ -621,18 +621,41 @@ export interface ProtocoloDetalhe {
   melhorias: MelhoriaProtocolo[]
 }
 
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers ?? {}),
-    },
-  })
-  const body = await res.json()
-  if (!res.ok) throw new Error(body.error ?? 'Erro inesperado')
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers ?? {}),
+      },
+    })
+  } catch {
+    // Falha de rede (servidor fora do ar, sem conexão) — nunca chegou a ter resposta.
+    throw new ApiError('Não foi possível conectar ao servidor. Tente novamente em instantes.', 0)
+  }
+  // Em manutenção/deploy, o servidor pode devolver uma página de erro (proxy)
+  // em vez de JSON — sem isso, res.json() quebra com um erro críptico de parse.
+  let body: { error?: string; message?: string } | null = null
+  try {
+    body = await res.json()
+  } catch {
+    body = null
+  }
+  if (!res.ok) {
+    throw new ApiError(body?.message ?? body?.error ?? `Erro inesperado (${res.status})`, res.status)
+  }
   return body as T
 }
 
