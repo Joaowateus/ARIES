@@ -32,50 +32,29 @@ export default function ProLaboreConfiguracoesPage() {
     }
   }
 
-  if (loading) return <div className="text-sm text-gray-400">Carregando...</div>
+  if (loading) return <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
 
   return (
-    <div className="space-y-6 max-w-lg">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Configurações</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Defina o teto máximo de pró-labore que você separa por venda, independente do valor dela.
-        </p>
+    <div>
+      <div className="pl-section-head" style={{ marginTop: 0 }}>
+        <div>
+          <div className="pl-eyebrow">Preferências</div>
+          <h2 className="pl-section-title">Configurações</h2>
+          <div className="pl-section-note" style={{ marginTop: 4 }}>Teto máximo de pró-labore separado por venda, independente do valor dela</div>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Teto de pró-labore por venda (R$)</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={teto}
-            onChange={e => setTeto(e.target.value)}
-            required
-            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-          />
-          <p className="text-xs text-gray-400 mt-1">
-            Nenhuma venda poderá ter um valor de pró-labore registrado acima deste teto — hoje: {formatMoeda(Number(teto) || 0)}
-          </p>
+      <form onSubmit={handleSubmit} className="pl-card" style={{ maxWidth: 480 }}>
+        <div className="pl-field">
+          <label>Teto de pró-labore por venda (R$)</label>
+          <input type="number" step="0.01" min="0" className="pl-input" value={teto} onChange={e => setTeto(e.target.value)} required />
+          <span className="pl-hint">Nenhuma venda pode ter pró-labore acima deste teto — hoje: {formatMoeda(Number(teto) || 0)}</span>
         </div>
 
-        {erro && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700">{erro}</div>
-        )}
-        {sucesso && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 text-sm text-emerald-700">
-            Teto atualizado. Novas vendas usarão esse limite — vendas já registradas não são alteradas.
-          </div>
-        )}
+        {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{erro}</div>}
+        {sucesso && <div className="pl-alert pl-alert-success" style={{ marginTop: 14 }}>Teto atualizado. Vendas já registradas não são alteradas.</div>}
 
-        <button
-          type="submit"
-          disabled={salvando}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {salvando ? 'Salvando...' : 'Salvar'}
-        </button>
+        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando} style={{ marginTop: 16 }}>{salvando ? 'Salvando...' : 'Salvar'}</button>
       </form>
     </div>
   )

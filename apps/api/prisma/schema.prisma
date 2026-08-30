@@ -896,10 +896,65 @@ model ProLaboreUsuario {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  parametro ParametroLiquidez?
-  vendas    Venda[]
+  parametro      ParametroLiquidez?
+  vendas         Venda[]
+  vendedores     Vendedor[]
+  funilMensal    FunilMensal[]
+  gastosAnuncios GastoAnuncioMensal[]
 
   @@map("pro_labore_usuarios")
+}
+
+// Vendedor da operação — não é um login, só um registro pra atribuir vendas
+// e montar o ranking de produção por pessoa.
+model Vendedor {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  nome         String
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  vendas  Venda[]
+
+  @@index([usuarioId])
+  @@map("pro_labore_vendedores")
+}
+
+// Contagem do funil de vendas por mês (Leads/Abordados/Negociação/Proposta),
+// cadastrada manualmente. Fechamento não é guardado aqui — é sempre a
+// contagem real de Venda no mês, pra não haver divergência entre os dois.
+model FunilMensal {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  mesReferencia DateTime // primeiro dia do mês de referência
+  leads         Int      @default(0)
+  abordados     Int      @default(0)
+  negociacao    Int      @default(0)
+  proposta      Int      @default(0)
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, mesReferencia])
+  @@map("pro_labore_funil_mensal")
+}
+
+// Gasto com anúncios por mês, cadastrado manualmente — base do ROAS/CAC.
+model GastoAnuncioMensal {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  mesReferencia DateTime // primeiro dia do mês de referência
+  valor         Float
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, mesReferencia])
+  @@map("pro_labore_gasto_anuncios_mensal")
 }
 
 // Teto de pró-labore que pode ser sacado por venda — linha única por
@@ -920,6 +975,7 @@ model ParametroLiquidez {
 model Venda {
   id             String   @id @default(cuid())
   usuarioId      String
+  vendedorId     String?
   data           DateTime
   valorVenda     Float
   valorProLabore Float
@@ -927,8 +983,10 @@ model Venda {
   criadoEm       DateTime @default(now())
   atualizadoEm   DateTime @updatedAt
 
-  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  usuario  ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  vendedor Vendedor?        @relation(fields: [vendedorId], references: [id])
 
   @@index([usuarioId, data])
+  @@index([vendedorId])
   @@map("pro_labore_vendas")
 }
