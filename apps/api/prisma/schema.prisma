@@ -963,6 +963,8 @@ model ParametroLiquidez {
   id                    String   @id @default(cuid())
   usuarioId             String   @unique
   tetoProLaborePorVenda Float    @default(900)
+  metaFaturamentoAnual  Float    @default(5000000)
+  fraseMotivacional     String?
   atualizadoEm          DateTime @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
