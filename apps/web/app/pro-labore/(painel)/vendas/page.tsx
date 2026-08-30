@@ -4,6 +4,25 @@ import { useEffect, useState, useCallback } from 'react'
 import { proLaboreApi, Venda, ParametroLiquidez, Vendedor } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 
+const MESES_MAP: Record<string, number> = {
+  jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
+}
+
+function normalizarMes(raw: string): string | null {
+  const limpo = raw.trim().toLowerCase().slice(0, 3)
+  return limpo in MESES_MAP ? limpo : null
+}
+
+function parseValorBR(raw: string): number {
+  const semSimbolo = raw.replace(/[R$\s]/g, '')
+  const semMilhar = semSimbolo.replace(/\./g, '')
+  const comPonto = semMilhar.replace(',', '.')
+  const numero = Number(comPonto)
+  return Number.isFinite(numero) ? numero : 0
+}
+
+interface ResultadoImportacao { linha: string; ok: boolean; erro?: string }
+
 export default function ProLaboreVendasPage() {
   const [vendas, setVendas] = useState<Venda[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -14,6 +33,12 @@ export default function ProLaboreVendasPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
   const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
+
+  const [importAberto, setImportAberto] = useState(false)
+  const [textoImportacao, setTextoImportacao] = useState('')
+  const [anoImportacao, setAnoImportacao] = useState('2026')
+  const [importando, setImportando] = useState(false)
+  const [resultadosImportacao, setResultadosImportacao] = useState<ResultadoImportacao[]>([])
 
   const carregar = useCallback(() => {
     Promise.all([proLaboreApi.vendas.listar(), proLaboreApi.parametros.get(), proLaboreApi.vendedores.listar()])
@@ -76,6 +101,76 @@ export default function ProLaboreVendasPage() {
     carregar()
   }
 
+  async function processarImportacao() {
+    setImportando(true)
+    setResultadosImportacao([])
+
+    const ano = Number(anoImportacao)
+    const linhas = textoImportacao.split('\n').map(l => l.trim()).filter(Boolean)
+    const registros: { mes: string; mesIdx: number; vendedor: string; valor: number; pendente: boolean }[] = []
+
+    for (const linha of linhas) {
+      let campos = linha.split('\t').map(c => c.trim())
+      if (campos.length < 3) campos = linha.split(/\s{2,}/).map(c => c.trim())
+      if (campos.length < 3) continue
+      const [mesRaw, vendedorRaw, valorRaw, statusRaw] = campos
+      const mesNorm = normalizarMes(mesRaw)
+      if (mesNorm === null) continue // pula cabeçalho ou linha inválida
+      const valor = parseValorBR(valorRaw)
+      if (!valor || !vendedorRaw) continue
+      registros.push({ mes: mesRaw, mesIdx: MESES_MAP[mesNorm], vendedor: vendedorRaw, valor, pendente: /pendente/i.test(statusRaw ?? '') })
+    }
+
+    if (registros.length === 0) {
+      setResultadosImportacao([{ linha: '—', ok: false, erro: 'Nenhuma linha reconhecida. Confira o formato (Mês, Vendedor, Valor, Status).' }])
+      setImportando(false)
+      return
+    }
+
+    // resolve/cria vendedores que ainda não existem
+    const existentes = await proLaboreApi.vendedores.listar()
+    const mapaVendedores = new Map(existentes.map(v => [v.nome.toLowerCase(), v.id]))
+    const nomesUnicos = [...new Set(registros.map(r => r.vendedor.toLowerCase()))]
+    for (const nomeLower of nomesUnicos) {
+      if (!mapaVendedores.has(nomeLower)) {
+        const original = registros.find(r => r.vendedor.toLowerCase() === nomeLower)!.vendedor
+        const criado = await proLaboreApi.vendedores.criar(original)
+        mapaVendedores.set(nomeLower, criado.id)
+      }
+    }
+    setVendedores(await proLaboreApi.vendedores.listar())
+
+    const teto = parametro?.tetoProLaborePorVenda ?? 900
+    const contadorPorMes = new Map<number, number>()
+    const resultados: ResultadoImportacao[] = []
+
+    for (const reg of registros) {
+      const ocorrencia = (contadorPorMes.get(reg.mesIdx) ?? 0) + 1
+      contadorPorMes.set(reg.mesIdx, ocorrencia)
+      const diasNoMes = new Date(ano, reg.mesIdx + 1, 0).getDate()
+      const dia = Math.min(ocorrencia, diasNoMes)
+      const dataIso = `${ano}-${String(reg.mesIdx + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
+      const valorProLabore = Math.min(teto, reg.valor)
+      const rotulo = `${reg.mes} · ${reg.vendedor} · ${formatMoeda(reg.valor)}`
+      try {
+        await proLaboreApi.vendas.criar({
+          data: dataIso,
+          valorVenda: reg.valor,
+          valorProLabore,
+          vendedorId: mapaVendedores.get(reg.vendedor.toLowerCase()),
+          observacao: reg.pendente ? 'Importado do histórico — pagamento pendente' : 'Importado do histórico',
+        })
+        resultados.push({ linha: rotulo, ok: true })
+      } catch (err) {
+        resultados.push({ linha: rotulo, ok: false, erro: err instanceof Error ? err.message : 'Erro desconhecido' })
+      }
+    }
+
+    setResultadosImportacao(resultados)
+    setImportando(false)
+    carregar()
+  }
+
   function formatData(iso: string) {
     return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
@@ -128,6 +223,71 @@ export default function ProLaboreVendasPage() {
           {editandoId && <button type="button" className="pl-btn pl-btn-ghost" onClick={cancelarEdicao}>Cancelar</button>}
         </div>
       </form>
+
+      <div className="pl-card" style={{ marginBottom: 20 }}>
+        <div className="pl-card-head" style={{ marginBottom: importAberto ? 14 : 0 }}>
+          <div>
+            <div className="pl-card-title">Importação em lote</div>
+            <div className="pl-card-sub">Cole vendas copiadas de outra planilha/sistema (uma por linha: Mês, Vendedor, Valor, Status)</div>
+          </div>
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setImportAberto(a => !a)}>
+            {importAberto ? 'Fechar' : 'Importar em lote'}
+          </button>
+        </div>
+
+        {importAberto && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 14 }}>
+              <div className="pl-field">
+                <label>Dados colados (uma venda por linha)</label>
+                <textarea
+                  className="pl-input"
+                  rows={8}
+                  style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5 }}
+                  value={textoImportacao}
+                  onChange={e => setTextoImportacao(e.target.value)}
+                  placeholder={'Jan\tWanderson\tR$ 23.900,00\t✅ Importado\nJan\tNaiza\tR$ 20.000,00\t✅ Importado'}
+                />
+                <span className="pl-hint">Só o mês é usado (sem ano) — o ano vem do campo ao lado. Vendedores novos são cadastrados automaticamente.</span>
+              </div>
+              <div className="pl-field">
+                <label>Ano dos dados</label>
+                <input type="number" className="pl-input" value={anoImportacao} onChange={e => setAnoImportacao(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <button type="button" className="pl-btn pl-btn-primary" disabled={importando || !textoImportacao.trim()} onClick={processarImportacao}>
+                {importando ? 'Importando...' : 'Processar e importar'}
+              </button>
+            </div>
+
+            {resultadosImportacao.length > 0 && (
+              <div className="pl-table-wrap">
+                <table className="pl-table">
+                  <thead>
+                    <tr>
+                      <th>Registro</th>
+                      <th>Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultadosImportacao.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.linha}</td>
+                        <td>
+                          {r.ok
+                            ? <span className="pl-delta up" style={{ display: 'inline-flex' }}>Importado</span>
+                            : <span className="pl-delta down" style={{ display: 'inline-flex' }} title={r.erro}>Falhou{r.erro ? `: ${r.erro}` : ''}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
