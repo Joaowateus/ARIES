@@ -34,21 +34,65 @@ export interface ParametroLiquidez {
   tetoProLaborePorVenda: number
 }
 
+export interface Vendedor {
+  id: string
+  nome: string
+  ativo: boolean
+  criadoEm: string
+}
+
 export interface Venda {
   id: string
   data: string
   valorVenda: number
   valorProLabore: number
+  vendedorId?: string | null
+  vendedor?: { id: string; nome: string } | null
   observacao?: string | null
   criadoEm: string
 }
 
-export interface ResumoProLabore {
-  ultimaVenda: Venda | null
-  mes: { quantidadeVendas: number; valorVendas: number; proLaboreSacado: number; retidoCaixa: number; ticketMedio: number }
-  ano: { quantidadeVendas: number; valorVendas: number; proLaboreSacado: number }
-  serieMensal: { mes: number; label: string; quantidadeVendas: number; valorVendas: number; proLaboreSacado: number }[]
-  ultimasVendas: Venda[]
+export interface FunilMensal {
+  id: string
+  mesReferencia: string
+  leads: number
+  abordados: number
+  negociacao: number
+  proposta: number
+}
+
+export interface GastoAnuncioMensal {
+  id: string
+  mesReferencia: string
+  valor: number
+}
+
+export interface VendedorRanking {
+  id: string
+  nome: string
+  quantidadeVendas: number
+  receita: number
+  proLaboreSacado: number
+}
+
+export interface MesPainel {
+  mes: number
+  label: string
+  ano: number
+  receita: number
+  proLaboreSacado: number
+  quantidadeVendas: number
+  ticketMedio: number
+  gastoAnuncios: number
+  roas: number
+  cac: number
+  funil: { leads: number; abordados: number; negociacao: number; proposta: number; fechamento: number }
+  conversaoLeadVenda: number
+  vendedores: VendedorRanking[]
+}
+
+export interface PainelProLabore {
+  meses: MesPainel[]
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -86,15 +130,32 @@ export const proLaboreApi = {
     atualizar: (data: ParametroLiquidez) =>
       request<ParametroLiquidez>('/pro-labore/parametros', { method: 'PUT', body: JSON.stringify(data) }),
   },
+  vendedores: {
+    listar: () => request<Vendedor[]>('/pro-labore/vendedores'),
+    criar: (nome: string) => request<Vendedor>('/pro-labore/vendedores', { method: 'POST', body: JSON.stringify({ nome }) }),
+    editar: (id: string, data: { nome?: string; ativo?: boolean }) =>
+      request<Vendedor>(`/pro-labore/vendedores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendedores/${id}`, { method: 'DELETE' }),
+  },
   vendas: {
     listar: (ano?: number) => request<Venda[]>(`/pro-labore/vendas${ano ? `?ano=${ano}` : ''}`),
-    criar: (data: { data: string; valorVenda: number; valorProLabore: number; observacao?: string }) =>
+    criar: (data: { data: string; valorVenda: number; valorProLabore: number; vendedorId?: string; observacao?: string }) =>
       request<Venda>('/pro-labore/vendas', { method: 'POST', body: JSON.stringify(data) }),
-    editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; observacao?: string }) =>
+    editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; vendedorId?: string | null; observacao?: string }) =>
       request<Venda>(`/pro-labore/vendas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendas/${id}`, { method: 'DELETE' }),
   },
-  resumo: {
-    get: () => request<ResumoProLabore>('/pro-labore/resumo'),
+  funil: {
+    listar: (ano?: number) => request<FunilMensal[]>(`/pro-labore/funil${ano ? `?ano=${ano}` : ''}`),
+    salvar: (data: { mesReferencia: string; leads: number; abordados: number; negociacao: number; proposta: number }) =>
+      request<FunilMensal>('/pro-labore/funil', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  gastosAnuncios: {
+    listar: (ano?: number) => request<GastoAnuncioMensal[]>(`/pro-labore/gastos-anuncios${ano ? `?ano=${ano}` : ''}`),
+    salvar: (data: { mesReferencia: string; valor: number }) =>
+      request<GastoAnuncioMensal>('/pro-labore/gastos-anuncios', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  painel: {
+    get: (ano?: number) => request<PainelProLabore>(`/pro-labore/painel${ano ? `?ano=${ano}` : ''}`),
   },
 }

@@ -1,22 +1,23 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { proLaboreApi, Venda, ParametroLiquidez } from '@/lib/proLaboreApi'
+import { proLaboreApi, Venda, ParametroLiquidez, Vendedor } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 
 export default function ProLaboreVendasPage() {
   const [vendas, setVendas] = useState<Venda[]>([])
+  const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
-  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', observacao: '' })
+  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
 
   const carregar = useCallback(() => {
-    Promise.all([proLaboreApi.vendas.listar(), proLaboreApi.parametros.get()])
-      .then(([v, p]) => { setVendas(v); setParametro(p) })
+    Promise.all([proLaboreApi.vendas.listar(), proLaboreApi.parametros.get(), proLaboreApi.vendedores.listar()])
+      .then(([v, p, ven]) => { setVendas(v); setParametro(p); setVendedores(ven) })
       .finally(() => setLoading(false))
   }, [])
 
@@ -36,12 +37,13 @@ export default function ProLaboreVendasPage() {
     try {
       const valorVenda = Number(form.valorVenda)
       const valorProLabore = Number(form.valorProLabore)
+      const vendedorId = form.vendedorId || undefined
       if (editandoId) {
-        await proLaboreApi.vendas.editar(editandoId, { valorVenda, valorProLabore, observacao: form.observacao || undefined })
+        await proLaboreApi.vendas.editar(editandoId, { valorVenda, valorProLabore, vendedorId: form.vendedorId || null, observacao: form.observacao || undefined })
       } else {
-        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, observacao: form.observacao || undefined })
+        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, vendedorId, observacao: form.observacao || undefined })
       }
-      setForm({ data: '', valorVenda: '', valorProLabore: '', observacao: '' })
+      setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
       setEditandoId(null)
       carregar()
     } catch (err: unknown) {
@@ -57,13 +59,14 @@ export default function ProLaboreVendasPage() {
       data: v.data.slice(0, 10),
       valorVenda: String(v.valorVenda),
       valorProLabore: String(v.valorProLabore),
+      vendedorId: v.vendedorId ?? '',
       observacao: v.observacao ?? '',
     })
   }
 
   function cancelarEdicao() {
     setEditandoId(null)
-    setForm({ data: '', valorVenda: '', valorProLabore: '', observacao: '' })
+    setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
   }
 
   async function remover(id: string) {
@@ -80,118 +83,86 @@ export default function ProLaboreVendasPage() {
   const teto = parametro?.tetoProLaborePorVenda ?? 900
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Vendas</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Registre cada venda e quanto de pró-labore você sacou dela (teto: {formatMoeda(teto)})</p>
+    <div>
+      <div className="pl-section-head" style={{ marginTop: 0 }}>
+        <div>
+          <div className="pl-eyebrow">Vendas</div>
+          <h2 className="pl-section-title">Registro de vendas</h2>
+          <div className="pl-section-note" style={{ marginTop: 4 }}>Cada venda define quanto de pró-labore você sacou dela (teto: {formatMoeda(teto)})</div>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="font-semibold text-gray-900">{editandoId ? 'Editar venda' : 'Nova venda'}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data da venda</label>
-            <input
-              type="date"
-              value={form.data}
-              onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-              required
-              disabled={!!editandoId}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
-            />
+      <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
+        <div className="pl-card-title" style={{ marginBottom: 14 }}>{editandoId ? 'Editar venda' : 'Nova venda'}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
+          <div className="pl-field">
+            <label>Data da venda</label>
+            <input type="date" className="pl-input" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} required disabled={!!editandoId} />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Valor da venda (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.valorVenda}
-              onChange={e => atualizarValorVenda(e.target.value)}
-              placeholder="0,00"
-              required
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-            />
+          <div className="pl-field">
+            <label>Valor da venda (R$)</label>
+            <input type="number" step="0.01" min="0" className="pl-input" value={form.valorVenda} onChange={e => atualizarValorVenda(e.target.value)} placeholder="0,00" required />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pró-labore sacado (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max={teto}
-              value={form.valorProLabore}
-              onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))}
-              placeholder="0,00"
-              required
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">Máximo {formatMoeda(teto)} por venda</p>
+          <div className="pl-field">
+            <label>Pró-labore sacado (R$)</label>
+            <input type="number" step="0.01" min="0" max={teto} className="pl-input" value={form.valorProLabore} onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
+            <span className="pl-hint">Máximo {formatMoeda(teto)}</span>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Observação (opcional)</label>
-            <input
-              type="text"
-              value={form.observacao}
-              onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))}
-              placeholder="Ex: cliente / modelo"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-            />
+          <div className="pl-field">
+            <label>Vendedor (opcional)</label>
+            <select className="pl-select" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
+              <option value="">— Sem vendedor —</option>
+              {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+            </select>
+          </div>
+          <div className="pl-field">
+            <label>Observação (opcional)</label>
+            <input type="text" className="pl-input" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: cliente / modelo" />
           </div>
         </div>
 
-        {erro && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700">{erro}</div>
-        )}
+        {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{erro}</div>}
 
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={salvando}
-            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {salvando ? 'Salvando...' : editandoId ? 'Salvar alterações' : 'Registrar venda'}
-          </button>
-          {editandoId && (
-            <button type="button" onClick={cancelarEdicao} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 border border-gray-300">
-              Cancelar
-            </button>
-          )}
+        <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+          <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : editandoId ? 'Salvar alterações' : 'Registrar venda'}</button>
+          {editandoId && <button type="button" className="pl-btn pl-btn-ghost" onClick={cancelarEdicao}>Cancelar</button>}
         </div>
       </form>
 
       {loading ? (
-        <div className="text-sm text-gray-400">Carregando...</div>
+        <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
       ) : vendas.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-4xl mb-3">🏍️</div>
-          <h3 className="font-medium text-gray-900">Nenhuma venda ainda</h3>
-          <p className="text-sm text-gray-500 mt-1">Registre a primeira venda acima para começar a acompanhar seu pró-labore</p>
+        <div className="pl-empty pl-card">
+          <div className="pl-emoji">🏍️</div>
+          <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Nenhuma venda ainda</h3>
+          <p style={{ marginTop: 6 }}>Registre a primeira venda acima para começar a acompanhar seu pró-labore</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="pl-table-wrap">
+          <table className="pl-table">
+            <thead>
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Data</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Valor da venda</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Pró-labore sacado</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Ficou no caixa</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Observação</th>
-                <th className="px-4 py-3" />
+                <th>Data</th>
+                <th>Vendedor</th>
+                <th className="pl-right">Valor da venda</th>
+                <th className="pl-right">Pró-labore sacado</th>
+                <th className="pl-right">Ficou no caixa</th>
+                <th>Observação</th>
+                <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {vendas.map(v => (
-                <tr key={v.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{formatData(v.data)}</td>
-                  <td className="px-4 py-3 text-right text-gray-900">{formatMoeda(v.valorVenda)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-emerald-600">{formatMoeda(v.valorProLabore)}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{formatMoeda(v.valorVenda - v.valorProLabore)}</td>
-                  <td className="px-4 py-3 text-gray-500">{v.observacao || '—'}</td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => editar(v)} className="text-xs text-blue-600 hover:underline mr-3">Editar</button>
-                    <button onClick={() => remover(v.id)} className="text-xs text-red-600 hover:underline">Remover</button>
+                <tr key={v.id}>
+                  <td>{formatData(v.data)}</td>
+                  <td>{v.vendedor?.nome ?? '—'}</td>
+                  <td className="pl-right">{formatMoeda(v.valorVenda)}</td>
+                  <td className="pl-right" style={{ color: 'var(--pl-accent-3)', fontWeight: 700 }}>{formatMoeda(v.valorProLabore)}</td>
+                  <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore)}</td>
+                  <td>{v.observacao || '—'}</td>
+                  <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
+                    <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>
+                    <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
                   </td>
                 </tr>
               ))}
