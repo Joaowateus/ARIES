@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking } from '@/lib/proLaboreApi'
+import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
@@ -43,12 +43,14 @@ function DeltaChip({ curr, prev, invert }: { curr: number; prev: number | undefi
 
 export default function ProLaboreDashboardPage() {
   const [painel, setPainel] = useState<PainelProLabore | null>(null)
+  const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   useEffect(() => {
-    proLaboreApi.painel.get().then(p => {
+    Promise.all([proLaboreApi.painel.get(), proLaboreApi.parametros.get()]).then(([p, param]) => {
       setPainel(p)
+      setParametro(param)
       setSelectedIdx(Math.max(0, p.meses.length - 1))
     }).finally(() => setLoading(false))
   }, [])
@@ -101,6 +103,8 @@ export default function ProLaboreDashboardPage() {
           </div>
         ))}
       </div>
+
+      <AnoEMetas meses={meses} parametro={parametro} onParametroSalvo={setParametro} />
 
       <div className="pl-section-head">
         <div>
@@ -190,6 +194,112 @@ export default function ProLaboreDashboardPage() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ============ FATURAMENTO ANUAL x META + FRASE MOTIVACIONAL ============ */
+function AnoEMetas({ meses, parametro, onParametroSalvo }: { meses: MesPainel[]; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void }) {
+  if (meses.length === 0) return null
+  const ano = meses[0].ano
+  const totalAnual = meses.reduce((s, m) => s + m.receita, 0)
+  const metaAnual = parametro?.metaFaturamentoAnual ?? 5_000_000
+  const pctMeta = metaAnual > 0 ? Math.min(1, totalAnual / metaAnual) : 0
+  const faltam = Math.max(0, metaAnual - totalAnual)
+
+  return (
+    <div>
+      <div className="pl-section-head">
+        <div>
+          <div className="pl-eyebrow">Visão anual</div>
+          <h2 className="pl-section-title">Faturamento acumulado x meta de {ano}</h2>
+        </div>
+      </div>
+
+      <div className="pl-grid-2b">
+        <div className="pl-card">
+          <div className="pl-card-head">
+            <div>
+              <div className="pl-card-title">Faturamento anual (atual)</div>
+              <div className="pl-card-sub">Acumulado de {meses[0].label} a {meses[meses.length - 1].label} de {ano}</div>
+            </div>
+          </div>
+          <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(totalAnual)}</div>
+        </div>
+
+        <div className="pl-card">
+          <div className="pl-card-head">
+            <div>
+              <div className="pl-card-title">Meta anual</div>
+              <div className="pl-card-sub">Objetivo de faturamento para {ano}</div>
+            </div>
+          </div>
+          <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaAnual)}</div>
+          <div className="pl-bar-track" style={{ marginTop: 14 }}>
+            <div className="pl-bar-fill" style={{ width: `${pctMeta * 100}%` }} />
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--pl-ink-muted)', marginTop: 8 }}>
+            {formatPct(pctMeta)} da meta atingida{faltam > 0 ? ` — faltam ${formatMoeda(faltam)}` : ' — meta batida! 🎉'}
+          </div>
+        </div>
+      </div>
+
+      <FraseMotivacional parametro={parametro} onSaved={onParametroSalvo} />
+    </div>
+  )
+}
+
+function FraseMotivacional({ parametro, onSaved }: { parametro: ParametroLiquidez | null; onSaved: (p: ParametroLiquidez) => void }) {
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState(parametro?.fraseMotivacional ?? '')
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => { setTexto(parametro?.fraseMotivacional ?? '') }, [parametro?.fraseMotivacional])
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      const atualizado = await proLaboreApi.parametros.atualizar({ fraseMotivacional: texto })
+      onSaved(atualizado)
+      setEditando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div className="pl-card" style={{ marginTop: 16 }}>
+      <div className="pl-card-head">
+        <div>
+          <div className="pl-card-title">Frase motivacional</div>
+          <div className="pl-card-sub">Sua lembrança pessoal, sempre visível no painel</div>
+        </div>
+        {!editando && (
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setEditando(true)}>
+            {parametro?.fraseMotivacional ? 'Editar' : 'Adicionar'}
+          </button>
+        )}
+      </div>
+      {editando ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <textarea
+            className="pl-input"
+            rows={2}
+            maxLength={280}
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            placeholder="Ex: Cada venda é um passo mais perto da liberdade financeira."
+          />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" className="pl-btn pl-btn-primary" disabled={salvando} onClick={salvar}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+            <button type="button" className="pl-btn pl-btn-ghost" onClick={() => { setTexto(parametro?.fraseMotivacional ?? ''); setEditando(false) }}>Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <p style={{ fontFamily: 'Sora', fontSize: 17, fontWeight: 600, fontStyle: 'italic', color: 'var(--pl-ink-1)', margin: 0 }}>
+          {parametro?.fraseMotivacional ? `"${parametro.fraseMotivacional}"` : 'Nenhuma frase cadastrada ainda.'}
+        </p>
+      )}
     </div>
   )
 }

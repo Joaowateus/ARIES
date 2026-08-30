@@ -110,7 +110,9 @@ router.get('/parametros', requireProLaboreAuth, async (req: Request, res: Respon
 })
 
 const parametrosSchema = z.object({
-  tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo'),
+  tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo').optional(),
+  metaFaturamentoAnual: z.number().positive('Meta deve ser positiva').optional(),
+  fraseMotivacional: z.string().max(280, 'Frase muito longa').optional(),
 })
 
 router.put('/parametros', requireProLaboreAuth, async (req: Request, res: Response) => {

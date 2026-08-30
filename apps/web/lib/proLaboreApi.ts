@@ -32,6 +32,8 @@ export interface ProLaboreUsuario {
 
 export interface ParametroLiquidez {
   tetoProLaborePorVenda: number
+  metaFaturamentoAnual: number
+  fraseMotivacional?: string | null
 }
 
 export interface Vendedor {
@@ -127,7 +129,7 @@ export const proLaboreApi = {
   },
   parametros: {
     get: () => request<ParametroLiquidez>('/pro-labore/parametros'),
-    atualizar: (data: ParametroLiquidez) =>
+    atualizar: (data: Partial<ParametroLiquidez>) =>
       request<ParametroLiquidez>('/pro-labore/parametros', { method: 'PUT', body: JSON.stringify(data) }),
   },
   vendedores: {

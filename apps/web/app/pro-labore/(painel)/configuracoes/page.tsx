@@ -6,13 +6,17 @@ import { formatMoeda } from '@/lib/format'
 
 export default function ProLaboreConfiguracoesPage() {
   const [teto, setTeto] = useState('')
+  const [metaAnual, setMetaAnual] = useState('')
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
 
   useEffect(() => {
-    proLaboreApi.parametros.get().then((p: ParametroLiquidez) => setTeto(String(p.tetoProLaborePorVenda))).finally(() => setLoading(false))
+    proLaboreApi.parametros.get().then((p: ParametroLiquidez) => {
+      setTeto(String(p.tetoProLaborePorVenda))
+      setMetaAnual(String(p.metaFaturamentoAnual))
+    }).finally(() => setLoading(false))
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -21,9 +25,12 @@ export default function ProLaboreConfiguracoesPage() {
     setSucesso(false)
     setSalvando(true)
     try {
-      const tetoProLaborePorVenda = Number(teto)
-      const atualizado = await proLaboreApi.parametros.atualizar({ tetoProLaborePorVenda })
+      const atualizado = await proLaboreApi.parametros.atualizar({
+        tetoProLaborePorVenda: Number(teto),
+        metaFaturamentoAnual: Number(metaAnual),
+      })
       setTeto(String(atualizado.tetoProLaborePorVenda))
+      setMetaAnual(String(atualizado.metaFaturamentoAnual))
       setSucesso(true)
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -40,21 +47,27 @@ export default function ProLaboreConfiguracoesPage() {
         <div>
           <div className="pl-eyebrow">Preferências</div>
           <h2 className="pl-section-title">Configurações</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Teto máximo de pró-labore separado por venda, independente do valor dela</div>
+          <div className="pl-section-note" style={{ marginTop: 4 }}>Teto de pró-labore por venda e meta anual de faturamento</div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="pl-card" style={{ maxWidth: 480 }}>
+      <form onSubmit={handleSubmit} className="pl-card" style={{ maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div className="pl-field">
           <label>Teto de pró-labore por venda (R$)</label>
           <input type="number" step="0.01" min="0" className="pl-input" value={teto} onChange={e => setTeto(e.target.value)} required />
           <span className="pl-hint">Nenhuma venda pode ter pró-labore acima deste teto — hoje: {formatMoeda(Number(teto) || 0)}</span>
         </div>
 
-        {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{erro}</div>}
-        {sucesso && <div className="pl-alert pl-alert-success" style={{ marginTop: 14 }}>Teto atualizado. Vendas já registradas não são alteradas.</div>}
+        <div className="pl-field">
+          <label>Meta de faturamento anual (R$)</label>
+          <input type="number" step="0.01" min="0" className="pl-input" value={metaAnual} onChange={e => setMetaAnual(e.target.value)} required />
+          <span className="pl-hint">Aparece no dashboard como referência do progresso do ano — hoje: {formatMoeda(Number(metaAnual) || 0)}</span>
+        </div>
 
-        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando} style={{ marginTop: 16 }}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+        {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
+        {sucesso && <div className="pl-alert pl-alert-success">Configurações atualizadas.</div>}
+
+        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando} style={{ alignSelf: 'flex-start' }}>{salvando ? 'Salvando...' : 'Salvar'}</button>
       </form>
     </div>
   )
