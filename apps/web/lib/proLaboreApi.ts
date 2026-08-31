@@ -126,6 +126,11 @@ export const proLaboreApi = {
         body: JSON.stringify({ email, senha }),
       }),
     me: () => request<ProLaboreUsuario>('/pro-labore/auth/me'),
+    recuperar: (data: { codigo: string; email: string; senha: string; nome?: string }) =>
+      request<{ ok: boolean; email: string }>('/pro-labore/auth/recuperar', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
   parametros: {
     get: () => request<ParametroLiquidez>('/pro-labore/parametros'),

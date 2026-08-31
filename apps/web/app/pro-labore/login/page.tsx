@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { proLaboreApi } from '@/lib/proLaboreApi'
 
@@ -63,6 +64,10 @@ export default function ProLaboreLoginPage() {
           {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
           <button type="submit" className="pl-btn pl-btn-primary" disabled={loading} style={{ width: '100%' }}>{loading ? 'Entrando...' : 'Entrar'}</button>
         </form>
+
+        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--pl-ink-muted)', marginTop: 20 }}>
+          <Link href="/pro-labore/recuperar" style={{ color: 'var(--pl-accent)', fontWeight: 600 }}>Esqueceu o email ou a senha?</Link>
+        </p>
       </div>
     </div>
   )

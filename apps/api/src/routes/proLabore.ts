@@ -98,6 +98,51 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
   res.json(usuario)
 })
 
+const recuperarSchema = z.object({
+  codigo: z.string().min(1, 'Código de recuperação obrigatório'),
+  email: z.string().email('Email inválido'),
+  senha: z.string().min(6, 'Senha deve ter ao menos 6 caracteres'),
+  nome: z.string().min(2).optional(),
+})
+
+// Recuperação de acesso — não precisa do email/senha antigos, só do código
+// definido em PRO_LABORE_RECOVERY_SECRET (variável de ambiente do servidor,
+// que só quem administra o deploy consegue ver/definir). Atualiza a conta
+// existente em vez de recriar, então nenhum dado (vendas, vendedores etc.)
+// é perdido.
+router.post('/auth/recuperar', async (req: Request, res: Response) => {
+  const segredo = process.env.PRO_LABORE_RECOVERY_SECRET
+  if (!segredo) {
+    res.status(503).json({ error: 'Recuperação não configurada neste servidor. Defina PRO_LABORE_RECOVERY_SECRET no ambiente e tente novamente.' })
+    return
+  }
+
+  const parse = recuperarSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+
+  if (parse.data.codigo !== segredo) {
+    res.status(401).json({ error: 'Código de recuperação inválido' })
+    return
+  }
+
+  const usuario = await prisma.proLaboreUsuario.findFirst()
+  if (!usuario) {
+    res.status(404).json({ error: 'Nenhuma conta encontrada. Use a tela de configuração inicial para criar uma.' })
+    return
+  }
+
+  const senhaHash = await bcrypt.hash(parse.data.senha, 10)
+  const atualizado = await prisma.proLaboreUsuario.update({
+    where: { id: usuario.id },
+    data: { email: parse.data.email, senhaHash, ...(parse.data.nome ? { nome: parse.data.nome } : {}) },
+  })
+
+  res.json({ ok: true, email: atualizado.email })
+})
+
 // --- Parâmetros de liquidez ---
 
 router.get('/parametros', requireProLaboreAuth, async (req: Request, res: Response) => {
