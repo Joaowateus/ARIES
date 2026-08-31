@@ -34,6 +34,9 @@ export default function ProLaboreVendasPage() {
 
   const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
 
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
+  const [apagandoSelecao, setApagandoSelecao] = useState(false)
+
   const [importAberto, setImportAberto] = useState(false)
   const [textoImportacao, setTextoImportacao] = useState('')
   const [anoImportacao, setAnoImportacao] = useState('2026')
@@ -99,6 +102,36 @@ export default function ProLaboreVendasPage() {
     await proLaboreApi.vendas.remover(id)
     if (editandoId === id) cancelarEdicao()
     carregar()
+  }
+
+  function toggleSelecao(id: string) {
+    setSelecionadas(atual => {
+      const proxima = new Set(atual)
+      if (proxima.has(id)) proxima.delete(id)
+      else proxima.add(id)
+      return proxima
+    })
+  }
+
+  function toggleSelecaoTodas() {
+    setSelecionadas(atual => (atual.size === vendas.length ? new Set() : new Set(vendas.map(v => v.id))))
+  }
+
+  async function apagarSelecionadas() {
+    const qtd = selecionadas.size
+    if (qtd === 0) return
+    if (!confirm(`Apagar ${qtd} venda${qtd > 1 ? 's' : ''} selecionada${qtd > 1 ? 's' : ''}? Essa ação não pode ser desfeita.`)) return
+    setApagandoSelecao(true)
+    try {
+      for (const id of selecionadas) {
+        await proLaboreApi.vendas.remover(id)
+      }
+      setSelecionadas(new Set())
+      if (editandoId && selecionadas.has(editandoId)) cancelarEdicao()
+      carregar()
+    } finally {
+      setApagandoSelecao(false)
+    }
   }
 
   async function processarImportacao() {
@@ -298,36 +331,55 @@ export default function ProLaboreVendasPage() {
           <p style={{ marginTop: 6 }}>Registre a primeira venda acima para começar a acompanhar seu pró-labore</p>
         </div>
       ) : (
-        <div className="pl-table-wrap">
-          <table className="pl-table">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Vendedor</th>
-                <th className="pl-right">Valor da venda</th>
-                <th className="pl-right">Pró-labore sacado</th>
-                <th className="pl-right">Ficou no caixa</th>
-                <th>Observação</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {vendas.map(v => (
-                <tr key={v.id}>
-                  <td>{formatData(v.data)}</td>
-                  <td>{v.vendedor?.nome ?? '—'}</td>
-                  <td className="pl-right">{formatMoeda(v.valorVenda)}</td>
-                  <td className="pl-right" style={{ color: 'var(--pl-accent-3)', fontWeight: 700 }}>{formatMoeda(v.valorProLabore)}</td>
-                  <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore)}</td>
-                  <td>{v.observacao || '—'}</td>
-                  <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
-                    <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>
-                    <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
-                  </td>
+        <div>
+          {selecionadas.size > 0 && (
+            <div className="pl-card" style={{ marginBottom: 12, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{selecionadas.size} venda{selecionadas.size > 1 ? 's' : ''} selecionada{selecionadas.size > 1 ? 's' : ''}</span>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setSelecionadas(new Set())}>Limpar seleção</button>
+                <button type="button" className="pl-btn pl-btn-primary" style={{ background: 'var(--pl-critical)' }} disabled={apagandoSelecao} onClick={apagarSelecionadas}>
+                  {apagandoSelecao ? 'Apagando...' : 'Apagar selecionadas'}
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="pl-table-wrap">
+            <table className="pl-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 36 }}>
+                    <input type="checkbox" checked={selecionadas.size === vendas.length} onChange={toggleSelecaoTodas} style={{ accentColor: 'var(--pl-accent-3)' }} />
+                  </th>
+                  <th>Data</th>
+                  <th>Vendedor</th>
+                  <th className="pl-right">Valor da venda</th>
+                  <th className="pl-right">Pró-labore sacado</th>
+                  <th className="pl-right">Ficou no caixa</th>
+                  <th>Observação</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {vendas.map(v => (
+                  <tr key={v.id} style={selecionadas.has(v.id) ? { background: 'var(--pl-surface-2)' } : undefined}>
+                    <td>
+                      <input type="checkbox" checked={selecionadas.has(v.id)} onChange={() => toggleSelecao(v.id)} style={{ accentColor: 'var(--pl-accent-3)' }} />
+                    </td>
+                    <td>{formatData(v.data)}</td>
+                    <td>{v.vendedor?.nome ?? '—'}</td>
+                    <td className="pl-right">{formatMoeda(v.valorVenda)}</td>
+                    <td className="pl-right" style={{ color: 'var(--pl-accent-3)', fontWeight: 700 }}>{formatMoeda(v.valorProLabore)}</td>
+                    <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore)}</td>
+                    <td>{v.observacao || '—'}</td>
+                    <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
+                      <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>
+                      <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
