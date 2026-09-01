@@ -83,6 +83,7 @@ const NAV_GESTOR: NavGrupo[] = [
     itens: [
       { href: '/marketplace', label: 'Marketplace', icon: '🛵' },
       { href: '/social-media', label: 'Social Media', icon: '📱' },
+      { href: '/funil-trafego', label: 'Funil de Tráfego Pago', icon: '📶' },
     ],
   },
   {

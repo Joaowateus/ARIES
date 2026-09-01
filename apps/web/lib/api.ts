@@ -82,6 +82,36 @@ export interface ConversaoFunil {
   etapas: EtapaConversao[]
 }
 
+export interface MetricaTrafegoPago {
+  id: string
+  plataforma: string
+  data: string
+  impressoes: number
+  cliques: number
+  visitasLp: number
+  leadsCapturados: number
+  valorInvestido: number
+  observacoes?: string | null
+  usuario?: { id: string; nome: string }
+}
+
+export interface EtapaConversaoTrafego {
+  estagio: string
+  label: string
+  quantidade: number
+  conversaoReal: number
+}
+
+export interface ConversaoTrafego {
+  etapas: EtapaConversaoTrafego[]
+  valorInvestido: number
+  ctr: number
+  cpc: number
+  cpl: number
+  custoPorLeadCrm: number
+  taxaLeadPlataformaParaCrm: number
+}
+
 export interface Notificacao {
   id: string
   tipo: string
@@ -942,6 +972,28 @@ export const api = {
       const qs = Object.keys(query).length ? '?' + new URLSearchParams(query).toString() : ''
       return request<ConversaoFunil>(`/funil/conversao${qs}`)
     },
+  },
+  funilTrafego: {
+    conversao: (params?: { inicio?: string; fim?: string; plataforma?: string }) => {
+      const query: Record<string, string> = {}
+      if (params?.inicio) query.inicio = params.inicio
+      if (params?.fim) query.fim = params.fim
+      if (params?.plataforma) query.plataforma = params.plataforma
+      const qs = Object.keys(query).length ? '?' + new URLSearchParams(query).toString() : ''
+      return request<ConversaoTrafego>(`/funil-trafego/conversao${qs}`)
+    },
+    metricas: () => request<MetricaTrafegoPago[]>('/funil-trafego/metricas'),
+    registrarMetrica: (data: {
+      data: string
+      plataforma?: string
+      impressoes?: number
+      cliques?: number
+      visitasLp?: number
+      leadsCapturados?: number
+      valorInvestido?: number
+      observacoes?: string
+    }) => request<MetricaTrafegoPago>('/funil-trafego/metricas', { method: 'POST', body: JSON.stringify(data) }),
+    excluirMetrica: (id: string) => request<{ ok: boolean }>(`/funil-trafego/metricas/${id}`, { method: 'DELETE' }),
   },
   insights: {
     listar: () => request<Insight[]>('/insights'),

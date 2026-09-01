@@ -21,6 +21,7 @@ import protocolosRoutes from './routes/protocolos'
 import metasRoutes from './routes/metas'
 import metasComerciaisRoutes from './routes/metasComerciais'
 import funilRoutes from './routes/funil'
+import funilTrafegoRoutes from './routes/funilTrafego'
 import insightsRoutes from './routes/insights'
 import meuPainelRoutes from './routes/meuPainel'
 import rotinasRoutes from './routes/rotinas'
@@ -114,6 +115,7 @@ app.use('/protocolos', protocolosRoutes)
 app.use('/metas', metasRoutes)
 app.use('/metas-comerciais', metasComerciaisRoutes)
 app.use('/funil', funilRoutes)
+app.use('/funil-trafego', funilTrafegoRoutes)
 app.use('/insights', insightsRoutes)
 app.use('/meu-painel', meuPainelRoutes)
 app.use('/rotinas', rotinasRoutes)

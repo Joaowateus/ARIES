@@ -43,6 +43,7 @@ model Empresa {
   logAuditoria          LogAuditoria[]
   metaComercialPadrao   MetaComercialPadrao?
   leadsRegistrados      LeadRegistrado[]
+  metricasTrafegoPago   MetricaTrafegoPago[]
 
   @@map("empresas")
 }
@@ -83,6 +84,7 @@ model Usuario {
   auditorias          Auditoria[]
   planosAcao          PlanoAcao[]
   leadsRegistrados    LeadRegistrado[]
+  metricasTrafegoPago MetricaTrafegoPago[]
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -261,6 +263,38 @@ model LeadRegistrado {
   @@index([empresaId, usuarioId])
   @@index([empresaId, criadoEm])
   @@map("leads_registrados")
+}
+
+// Funil de Tráfego Pago — v1: lançamento manual do que o gerenciador de
+// anúncios (Meta Ads por enquanto) reporta por dia, pra medir a jornada
+// ANTES do lead cair no CRM (Impressões → Cliques → Visitas LP → Leads
+// capturados pela plataforma) e comparar contra LeadRegistrado(tipoLead=
+// TRAFEGO), que já é o que de fato chega no funil comercial (ver funil.ts).
+// Esse comparativo (leads da plataforma vs leads que viraram Oportunidade)
+// já expõe perda de qualidade/atribuição mesmo sem integração automática
+// via API — a automação (Meta Marketing API/Google Ads API) troca só a
+// origem do lançamento, não o formato.
+model MetricaTrafegoPago {
+  id              String   @id @default(cuid())
+  empresaId       String
+  usuarioId       String
+  plataforma      String   @default("META") // META | GOOGLE | TIKTOK | OUTRO
+  data            DateTime
+  impressoes      Int      @default(0)
+  cliques         Int      @default(0)
+  visitasLp       Int      @default(0)
+  leadsCapturados Int      @default(0)
+  valorInvestido  Float    @default(0)
+  observacoes     String?
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([empresaId, usuarioId, plataforma, data])
+  @@index([empresaId, data])
+  @@map("metricas_trafego_pago")
 }
 
 model Contrato {
