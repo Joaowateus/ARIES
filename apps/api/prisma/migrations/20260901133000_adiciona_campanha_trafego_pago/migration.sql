@@ -14,4 +14,4 @@ DROP INDEX "metricas_trafego_pago_empresaId_usuarioId_plataforma_data_key";
 CREATE INDEX "metricas_trafego_pago_empresaId_campanha_idx" ON "metricas_trafego_pago"("empresaId", "campanha");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "metricas_trafego_pago_empresaId_usuarioId_plataforma_campa_key" ON "metricas_trafego_pago"("empresaId", "usuarioId", "plataforma", "campanha", "data");
+CREATE UNIQUE INDEX "metricas_trafego_pago_empresaId_usuarioId_plataforma_campan_key" ON "metricas_trafego_pago"("empresaId", "usuarioId", "plataforma", "campanha", "data");
