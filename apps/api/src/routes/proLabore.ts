@@ -11,8 +11,24 @@ const TETO_PRO_LABORE_PADRAO = 900
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-function primeiroDiaDoMes(data: Date): Date {
-  return new Date(data.getFullYear(), data.getMonth(), 1)
+// Datas de venda/mês de referência são conceitos de calendário puro (sem
+// horário nem fuso) — por isso todo o agrupamento por mês/ano usa os
+// getters/construtores UTC, nunca os locais. `new Date(y, m, d)` e
+// `.getMonth()` dependem do fuso do processo que roda o código; se o
+// servidor não estiver exatamente em UTC, uma venda no primeiro dia do
+// mês/ano pode cair no mês anterior ou sumir do total do ano. Usando UTC
+// em ponta a ponta (criação, filtro e agrupamento), o resultado é sempre
+// o mesmo não importa o fuso do processo.
+function primeiroDiaDoMesUTC(data: Date): Date {
+  return new Date(Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), 1))
+}
+
+function inicioDoAnoUTC(ano: number): Date {
+  return new Date(Date.UTC(ano, 0, 1))
+}
+
+function fimDoAnoUTC(ano: number): Date {
+  return new Date(Date.UTC(ano, 11, 31, 23, 59, 59, 999))
 }
 
 // --- Autenticação (usuário único, independente do login multi-tenant do ARIES) ---
@@ -239,7 +255,7 @@ router.get('/vendas', requireProLaboreAuth, async (req: Request, res: Response) 
   const { ano } = req.query
   const where: { usuarioId: string; data?: { gte: Date; lte: Date } } = { usuarioId: req.proLaboreUser!.sub }
   if (typeof ano === 'string' && /^\d{4}$/.test(ano)) {
-    where.data = { gte: new Date(Number(ano), 0, 1), lte: new Date(Number(ano), 11, 31) }
+    where.data = { gte: inicioDoAnoUTC(Number(ano)), lte: fimDoAnoUTC(Number(ano)) }
   }
 
   const vendas = await prisma.venda.findMany({
@@ -377,9 +393,9 @@ router.delete('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Res
 router.get('/funil', requireProLaboreAuth, async (req: Request, res: Response) => {
   const { ano } = req.query
   const usuarioId = req.proLaboreUser!.sub
-  const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : new Date().getFullYear()
+  const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : new Date().getUTCFullYear()
   const registros = await prisma.funilMensal.findMany({
-    where: { usuarioId, mesReferencia: { gte: new Date(anoNum, 0, 1), lte: new Date(anoNum, 11, 31) } },
+    where: { usuarioId, mesReferencia: { gte: inicioDoAnoUTC(anoNum), lte: fimDoAnoUTC(anoNum) } },
     orderBy: { mesReferencia: 'asc' },
   })
   res.json(registros)
@@ -400,7 +416,7 @@ router.put('/funil', requireProLaboreAuth, async (req: Request, res: Response) =
     return
   }
   const usuarioId = req.proLaboreUser!.sub
-  const mesReferencia = primeiroDiaDoMes(new Date(parse.data.mesReferencia))
+  const mesReferencia = primeiroDiaDoMesUTC(new Date(parse.data.mesReferencia))
   const { leads, abordados, negociacao, proposta } = parse.data
 
   const registro = await prisma.funilMensal.upsert({
@@ -416,9 +432,9 @@ router.put('/funil', requireProLaboreAuth, async (req: Request, res: Response) =
 router.get('/gastos-anuncios', requireProLaboreAuth, async (req: Request, res: Response) => {
   const { ano } = req.query
   const usuarioId = req.proLaboreUser!.sub
-  const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : new Date().getFullYear()
+  const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : new Date().getUTCFullYear()
   const registros = await prisma.gastoAnuncioMensal.findMany({
-    where: { usuarioId, mesReferencia: { gte: new Date(anoNum, 0, 1), lte: new Date(anoNum, 11, 31) } },
+    where: { usuarioId, mesReferencia: { gte: inicioDoAnoUTC(anoNum), lte: fimDoAnoUTC(anoNum) } },
     orderBy: { mesReferencia: 'asc' },
   })
   res.json(registros)
@@ -436,7 +452,7 @@ router.put('/gastos-anuncios', requireProLaboreAuth, async (req: Request, res: R
     return
   }
   const usuarioId = req.proLaboreUser!.sub
-  const mesReferencia = primeiroDiaDoMes(new Date(parse.data.mesReferencia))
+  const mesReferencia = primeiroDiaDoMesUTC(new Date(parse.data.mesReferencia))
   const { valor } = parse.data
 
   const registro = await prisma.gastoAnuncioMensal.upsert({
@@ -453,11 +469,11 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
   const usuarioId = req.proLaboreUser!.sub
   const agora = new Date()
   const { ano } = req.query
-  const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : agora.getFullYear()
-  const ultimoMes = anoNum === agora.getFullYear() ? agora.getMonth() : 11
+  const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : agora.getUTCFullYear()
+  const ultimoMes = anoNum === agora.getUTCFullYear() ? agora.getUTCMonth() : 11
 
-  const inicioAno = new Date(anoNum, 0, 1)
-  const fimAno = new Date(anoNum, 11, 31, 23, 59, 59)
+  const inicioAno = inicioDoAnoUTC(anoNum)
+  const fimAno = fimDoAnoUTC(anoNum)
 
   const [vendas, funilRegistros, gastosRegistros, vendedores] = await Promise.all([
     prisma.venda.findMany({
@@ -472,14 +488,14 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
   const vendedorPorId = new Map(vendedores.map(v => [v.id, v]))
 
   const meses = MESES_LABEL.slice(0, ultimoMes + 1).map((label, mes) => {
-    const vendasDoMes = vendas.filter(v => v.data.getMonth() === mes)
+    const vendasDoMes = vendas.filter(v => v.data.getUTCMonth() === mes)
     const receita = vendasDoMes.reduce((s, v) => s + v.valorVenda, 0)
     const proLaboreSacado = vendasDoMes.reduce((s, v) => s + v.valorProLabore, 0)
     const quantidadeVendas = vendasDoMes.length
     const ticketMedio = quantidadeVendas > 0 ? receita / quantidadeVendas : 0
 
-    const funilRegistro = funilRegistros.find(f => f.mesReferencia.getMonth() === mes)
-    const gastoRegistro = gastosRegistros.find(g => g.mesReferencia.getMonth() === mes)
+    const funilRegistro = funilRegistros.find(f => f.mesReferencia.getUTCMonth() === mes)
+    const gastoRegistro = gastosRegistros.find(g => g.mesReferencia.getUTCMonth() === mes)
     const gastoAnuncios = gastoRegistro?.valor ?? 0
     const roas = gastoAnuncios > 0 ? receita / gastoAnuncios : 0
     const cac = gastoAnuncios > 0 && quantidadeVendas > 0 ? gastoAnuncios / quantidadeVendas : 0

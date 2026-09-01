@@ -204,8 +204,13 @@ export default function ProLaboreVendasPage() {
     carregar()
   }
 
+  // Lê os componentes da data direto da string ISO (ano-mês-dia), sem passar
+  // por new Date(...).toLocaleDateString() — isso evita reconverter pro fuso
+  // horário do navegador, que pode exibir o dia anterior (ex: a virada de mês)
+  // dependendo de onde a pessoa está.
   function formatData(iso: string) {
-    return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const [ano, mes, dia] = iso.slice(0, 10).split('-')
+    return `${dia}/${mes}/${ano}`
   }
 
   const teto = parametro?.tetoProLaborePorVenda ?? 900
