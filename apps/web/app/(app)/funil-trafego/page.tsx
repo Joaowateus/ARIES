@@ -1,9 +1,15 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api, ConversaoTrafego, EtapaConversaoTrafego, MetricaTrafegoPago } from '@/lib/api'
+import { api, ConversaoTrafego, EtapaConversaoTrafego, MetricaTrafegoPago, StatusIntegracaoAnuncio } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 
 const STATUS_COR = '#3b82f6'
+
+// Mesmo conjunto de papéis exigido pelo backend (requirePapel(...PAPEIS_GESTAO)
+// em routes/integracoesAnuncio.ts) — só esconde o botão de quem não pode
+// clicar, a permissão de verdade continua sendo checada na API.
+const PAPEIS_GESTAO_INTEGRACAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL']
 
 const PRESETS = [
   { id: 'tudo', label: 'Tudo' },
@@ -41,9 +47,15 @@ function moeda(v: number): string {
 const FORM_VAZIO = { data: isoData(new Date()), plataforma: 'META', campanha: '', impressoes: '', cliques: '', visitasLp: '', leadsCapturados: '', valorInvestido: '', observacoes: '' }
 
 export default function FunilTrafegoPage() {
+  const { user } = useAuth()
+  const podeGerenciarIntegracao = PAPEIS_GESTAO_INTEGRACAO.includes(user?.papel ?? '')
   const [dados, setDados] = useState<ConversaoTrafego | null>(null)
   const [metricas, setMetricas] = useState<MetricaTrafegoPago[]>([])
   const [campanhas, setCampanhas] = useState<string[]>([])
+  const [integracao, setIntegracao] = useState<StatusIntegracaoAnuncio | null>(null)
+  const [conectando, setConectando] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
+  const [avisoRedirect, setAvisoRedirect] = useState<'conectada' | 'erro' | null>(null)
   const [loading, setLoading] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
   const [periodo, setPeriodo] = useState<{ inicio?: string; fim?: string }>({})
@@ -61,14 +73,60 @@ export default function FunilTrafegoPage() {
       api.funilTrafego.conversao({ ...periodo, plataforma: plataforma || undefined }),
       api.funilTrafego.metricas(),
       api.funilTrafego.campanhas(),
-    ]).then(([conversao, lista, nomesCampanha]) => {
+      api.integracoesAnuncio.status(),
+    ]).then(([conversao, lista, nomesCampanha, statusIntegracao]) => {
       setDados(conversao)
       setMetricas(lista)
       setCampanhas(nomesCampanha)
+      setIntegracao(statusIntegracao)
     }).finally(() => setLoading(false))
   }, [periodo, plataforma])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // O callback OAuth (routes/integracoesAnuncio.ts) redireciona de volta pra
+  // cá com ?integracao=conectada|erro — lê direto da URL (sem useSearchParams,
+  // pra não depender de API do Next que pode ter mudado nesta versão) e
+  // limpa o parâmetro, senão o aviso reaparece a cada refresh da página.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const resultado = params.get('integracao')
+    if (resultado === 'conectada' || resultado === 'erro') {
+      setAvisoRedirect(resultado)
+      params.delete('integracao')
+      const query = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''))
+    }
+  }, [])
+
+  async function conectarMetaAds() {
+    setConectando(true)
+    try {
+      const { url } = await api.integracoesAnuncio.iniciarConexao()
+      window.location.href = url
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : 'Não foi possível iniciar a conexão com o Meta Ads.')
+      setConectando(false)
+    }
+  }
+
+  async function desconectarMetaAds() {
+    if (!window.confirm('Desconectar o Meta Ads? A sincronização automática para até reconectar.')) return
+    await api.integracoesAnuncio.desconectar()
+    await carregar()
+  }
+
+  async function sincronizarAgora() {
+    setSincronizando(true)
+    try {
+      await api.integracoesAnuncio.sincronizar()
+      await carregar()
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : 'Não foi possível sincronizar com o Meta Ads.')
+    } finally {
+      setSincronizando(false)
+    }
+  }
 
   async function atualizarManualmente() {
     setAtualizando(true)
@@ -152,9 +210,33 @@ export default function FunilTrafegoPage() {
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800 mb-6">
-        Fase manual: os números abaixo vêm do que você lança a partir do gerenciador de anúncios (Meta Ads). A estrutura já é a definitiva — quando a extração automática via API for conectada, ela passa a preencher estes mesmos dados sozinha.
-      </div>
+      {erro && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 mb-4 flex items-center justify-between gap-2">
+          <span>{erro}</span>
+          <button onClick={() => setErro('')} className="text-red-500 hover:text-red-700 shrink-0">✕</button>
+        </div>
+      )}
+
+      {avisoRedirect === 'conectada' && (
+        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800 mb-4">
+          ✅ Meta Ads conectado com sucesso. Clique em &quot;Sincronizar agora&quot; para puxar os números.
+        </div>
+      )}
+      {avisoRedirect === 'erro' && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 mb-4">
+          Não foi possível conectar ao Meta Ads. Tente novamente ou avise o administrador do sistema.
+        </div>
+      )}
+
+      <IntegracaoMetaAdsCard
+        integracao={integracao}
+        podeGerenciar={podeGerenciarIntegracao}
+        conectando={conectando}
+        sincronizando={sincronizando}
+        onConectar={conectarMetaAds}
+        onDesconectar={desconectarMetaAds}
+        onSincronizar={sincronizarAgora}
+      />
 
       {/* Período de análise */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -262,7 +344,6 @@ export default function FunilTrafegoPage() {
                 className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
             </Campo>
           </div>
-          {erro && <p className="text-xs text-red-600 mt-3">{erro}</p>}
           <div className="flex items-center gap-2 mt-4">
             <button type="submit" disabled={salvando}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
@@ -387,6 +468,85 @@ export default function FunilTrafegoPage() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function IntegracaoMetaAdsCard({
+  integracao,
+  podeGerenciar,
+  conectando,
+  sincronizando,
+  onConectar,
+  onDesconectar,
+  onSincronizar,
+}: {
+  integracao: StatusIntegracaoAnuncio | null
+  podeGerenciar: boolean
+  conectando: boolean
+  sincronizando: boolean
+  onConectar: () => void
+  onDesconectar: () => void
+  onSincronizar: () => void
+}) {
+  if (!integracao) return null
+
+  if (!integracao.configurada) {
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 mb-6">
+        Fase manual: os números abaixo vêm do que você lança a partir do gerenciador de anúncios (Meta Ads). A conexão automática ainda não foi configurada pelo administrador do sistema — a estrutura já é a definitiva, só falta ligar a extração automática.
+      </div>
+    )
+  }
+
+  if (integracao.status === 'CONECTADO') {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between flex-wrap gap-2">
+        <div className="text-sm text-green-800">
+          <strong>Meta Ads conectado</strong> — conta {integracao.contaAnuncioNome ?? '—'}
+          {integracao.conectadoPor && <span className="text-green-700"> (por {integracao.conectadoPor.nome})</span>}
+          <div className="text-xs text-green-700 mt-0.5">
+            {integracao.ultimaSincronizacaoEm
+              ? `Última sincronização: ${new Date(integracao.ultimaSincronizacaoEm).toLocaleString('pt-BR')}`
+              : 'Ainda não sincronizado — clique em "Sincronizar agora".'}
+          </div>
+        </div>
+        {podeGerenciar && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onSincronizar}
+              disabled={sincronizando}
+              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              {sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
+            </button>
+            <button onClick={onDesconectar} className="text-xs text-green-700 hover:text-green-900 underline">
+              Desconectar
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between flex-wrap gap-2">
+      <div className="text-sm text-amber-800">
+        Fase manual: os números abaixo vêm do que você lança a partir do gerenciador de anúncios.
+        {integracao.status === 'ERRO' && integracao.ultimoErro && (
+          <div className="text-xs text-red-700 mt-0.5">Última tentativa falhou: {integracao.ultimoErro}</div>
+        )}
+        {!podeGerenciar && <div className="text-xs text-amber-700 mt-0.5">Só Administrador, Diretor ou Gerente Comercial podem conectar.</div>}
+      </div>
+      {podeGerenciar && (
+        <button
+          onClick={onConectar}
+          disabled={conectando}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors shrink-0"
+        >
+          {conectando ? 'Conectando...' : 'Conectar Meta Ads'}
+        </button>
+      )}
     </div>
   )
 }

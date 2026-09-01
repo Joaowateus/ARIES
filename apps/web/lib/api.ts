@@ -127,6 +127,15 @@ export interface ConversaoTrafego {
   porCampanha: CampanhaConversao[]
 }
 
+export interface StatusIntegracaoAnuncio {
+  configurada: boolean
+  status: 'DESCONECTADO' | 'CONECTADO' | 'ERRO'
+  contaAnuncioNome: string | null
+  conectadoPor: { id: string; nome: string } | null
+  ultimaSincronizacaoEm: string | null
+  ultimoErro: string | null
+}
+
 export interface Notificacao {
   id: string
   tipo: string
@@ -1011,6 +1020,18 @@ export const api = {
     }) => request<MetricaTrafegoPago>('/funil-trafego/metricas', { method: 'POST', body: JSON.stringify(data) }),
     excluirMetrica: (id: string) => request<{ ok: boolean }>(`/funil-trafego/metricas/${id}`, { method: 'DELETE' }),
     campanhas: () => request<string[]>('/funil-trafego/campanhas'),
+  },
+  integracoesAnuncio: {
+    status: () => request<StatusIntegracaoAnuncio>('/integracoes/meta-ads/status'),
+    iniciarConexao: () => request<{ url: string }>('/integracoes/meta-ads/iniciar'),
+    desconectar: () => request<{ ok: boolean }>('/integracoes/meta-ads/desconectar', { method: 'POST' }),
+    sincronizar: (params?: { inicio?: string; fim?: string }) => {
+      const query: Record<string, string> = {}
+      if (params?.inicio) query.inicio = params.inicio
+      if (params?.fim) query.fim = params.fim
+      const qs = Object.keys(query).length ? '?' + new URLSearchParams(query).toString() : ''
+      return request<{ sincronizados: number; periodo: { inicio: string; fim: string } }>(`/integracoes/meta-ads/sincronizar${qs}`, { method: 'POST' })
+    },
   },
   insights: {
     listar: () => request<Insight[]>('/insights'),

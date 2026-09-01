@@ -44,6 +44,7 @@ model Empresa {
   metaComercialPadrao   MetaComercialPadrao?
   leadsRegistrados      LeadRegistrado[]
   metricasTrafegoPago   MetricaTrafegoPago[]
+  integracoesAnuncio    IntegracaoAnuncio[]
 
   @@map("empresas")
 }
@@ -83,8 +84,9 @@ model Usuario {
   notificacoes        Notificacao[]
   auditorias          Auditoria[]
   planosAcao          PlanoAcao[]
-  leadsRegistrados    LeadRegistrado[]
-  metricasTrafegoPago MetricaTrafegoPago[]
+  leadsRegistrados      LeadRegistrado[]
+  metricasTrafegoPago   MetricaTrafegoPago[]
+  integracoesConectadas IntegracaoAnuncio[]
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -299,6 +301,34 @@ model MetricaTrafegoPago {
   @@index([empresaId, data])
   @@index([empresaId, campanha])
   @@map("metricas_trafego_pago")
+}
+
+// Extração automática — v1 do fluxo OAuth com o gerenciador de anúncios.
+// accessTokenCifrado nunca fica em texto puro (ver lib/crypto.ts); a rota de
+// sincronização (routes/integracoesAnuncio.ts) decifra em memória, chama a
+// Insights API da plataforma e grava o resultado em MetricaTrafegoPago —
+// mesma tabela do lançamento manual, então o Funil de Tráfego Pago não muda
+// nada quando a integração está ativa, só para de precisar do lançamento.
+model IntegracaoAnuncio {
+  id                    String    @id @default(cuid())
+  empresaId             String
+  plataforma            String    @default("META") // META | GOOGLE | TIKTOK
+  status                String    @default("DESCONECTADO") // DESCONECTADO | CONECTADO | ERRO
+  contaAnuncioExternaId String? // ex: act_1234567890 (Meta) — a conta de anúncios escolhida na plataforma
+  contaAnuncioNome      String?
+  accessTokenCifrado    String? // token de acesso de longa duração, cifrado em repouso
+  tokenExpiraEm         DateTime?
+  ultimaSincronizacaoEm DateTime?
+  ultimoErro            String?
+  conectadoPorId        String?
+  criadoEm              DateTime  @default(now())
+  atualizadoEm          DateTime  @updatedAt
+
+  empresa      Empresa  @relation(fields: [empresaId], references: [id])
+  conectadoPor Usuario? @relation(fields: [conectadoPorId], references: [id])
+
+  @@unique([empresaId, plataforma])
+  @@map("integracoes_anuncio")
 }
 
 model Contrato {
