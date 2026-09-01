@@ -131,6 +131,11 @@ export default function OportunidadeDetalhePage() {
                   {op.tipoLead === 'TRAFEGO' ? 'Tráfego pago' : 'Orgânico'}
                 </span>
               )}
+              {op.campanhaTrafego && (
+                <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                  📶 {op.campanhaTrafego}
+                </span>
+              )}
               {op.diasNaEtapaAtual != null && (
                 <span className="text-xs text-gray-400">⏱ {formatDias(op.diasNaEtapaAtual)} nesta etapa</span>
               )}

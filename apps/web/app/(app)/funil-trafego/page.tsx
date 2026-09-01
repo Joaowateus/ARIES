@@ -38,11 +38,12 @@ function moeda(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-const FORM_VAZIO = { data: isoData(new Date()), plataforma: 'META', impressoes: '', cliques: '', visitasLp: '', leadsCapturados: '', valorInvestido: '', observacoes: '' }
+const FORM_VAZIO = { data: isoData(new Date()), plataforma: 'META', campanha: '', impressoes: '', cliques: '', visitasLp: '', leadsCapturados: '', valorInvestido: '', observacoes: '' }
 
 export default function FunilTrafegoPage() {
   const [dados, setDados] = useState<ConversaoTrafego | null>(null)
   const [metricas, setMetricas] = useState<MetricaTrafegoPago[]>([])
+  const [campanhas, setCampanhas] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
   const [periodo, setPeriodo] = useState<{ inicio?: string; fim?: string }>({})
@@ -59,9 +60,11 @@ export default function FunilTrafegoPage() {
     return Promise.all([
       api.funilTrafego.conversao({ ...periodo, plataforma: plataforma || undefined }),
       api.funilTrafego.metricas(),
-    ]).then(([conversao, lista]) => {
+      api.funilTrafego.campanhas(),
+    ]).then(([conversao, lista, nomesCampanha]) => {
       setDados(conversao)
       setMetricas(lista)
+      setCampanhas(nomesCampanha)
     }).finally(() => setLoading(false))
   }, [periodo, plataforma])
 
@@ -97,6 +100,7 @@ export default function FunilTrafegoPage() {
       await api.funilTrafego.registrarMetrica({
         data: form.data,
         plataforma: form.plataforma,
+        campanha: form.campanha.trim() || undefined,
         impressoes: Number(form.impressoes) || 0,
         cliques: Number(form.cliques) || 0,
         visitasLp: Number(form.visitasLp) || 0,
@@ -225,6 +229,14 @@ export default function FunilTrafegoPage() {
                 {PLATAFORMAS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
             </Campo>
+            <Campo label="Campanha">
+              <input type="text" list="campanhas-trafego" value={form.campanha} onChange={e => setForm({ ...form, campanha: e.target.value })}
+                placeholder="Ex: Promoção CG 160 — Setembro"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+              <datalist id="campanhas-trafego">
+                {campanhas.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </Campo>
             <Campo label="Impressões">
               <input type="number" min={0} value={form.impressoes} onChange={e => setForm({ ...form, impressoes: e.target.value })}
                 className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
@@ -295,6 +307,41 @@ export default function FunilTrafegoPage() {
         </div>
       )}
 
+      {dados && dados.porCampanha.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h2 className="text-sm font-semibold text-gray-900 mb-1">Por campanha</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            &quot;Leads no CRM&quot; só bate com uma campanha quando o nome lançado aqui é igual ao escolhido no cadastro do lead (campo Campanha, em Novo Lead).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
+                  <th className="py-2 pr-3 font-medium">Campanha</th>
+                  <th className="py-2 pr-3 font-medium text-right">Investido</th>
+                  <th className="py-2 pr-3 font-medium text-right">Leads (plataforma)</th>
+                  <th className="py-2 pr-3 font-medium text-right">Leads no CRM</th>
+                  <th className="py-2 pr-3 font-medium text-right">CPL</th>
+                  <th className="py-2 pr-3 font-medium text-right">Custo/Lead no CRM</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.porCampanha.map(c => (
+                  <tr key={c.campanha || '—'} className="border-b border-gray-50">
+                    <td className="py-2 pr-3">{c.campanha || 'Sem campanha definida'}</td>
+                    <td className="py-2 pr-3 text-right">{moeda(c.valorInvestido)}</td>
+                    <td className="py-2 pr-3 text-right">{c.leadsCapturados}</td>
+                    <td className="py-2 pr-3 text-right">{c.leadsCrm}</td>
+                    <td className="py-2 pr-3 text-right">{moeda(c.cpl)}</td>
+                    <td className="py-2 pr-3 text-right font-medium">{moeda(c.custoPorLeadCrm)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-sm font-semibold text-gray-900 mb-3">Lançamentos</h2>
         {metricas.length === 0 ? (
@@ -306,6 +353,7 @@ export default function FunilTrafegoPage() {
                 <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
                   <th className="py-2 pr-3 font-medium">Data</th>
                   <th className="py-2 pr-3 font-medium">Plataforma</th>
+                  <th className="py-2 pr-3 font-medium">Campanha</th>
                   <th className="py-2 pr-3 font-medium text-right">Impressões</th>
                   <th className="py-2 pr-3 font-medium text-right">Cliques</th>
                   <th className="py-2 pr-3 font-medium text-right">Visitas LP</th>
@@ -320,6 +368,7 @@ export default function FunilTrafegoPage() {
                   <tr key={m.id} className="border-b border-gray-50">
                     <td className="py-2 pr-3">{new Date(m.data).toLocaleDateString('pt-BR')}</td>
                     <td className="py-2 pr-3">{PLATAFORMAS.find(p => p.id === m.plataforma)?.label ?? m.plataforma}</td>
+                    <td className="py-2 pr-3 text-gray-600">{m.campanha || '—'}</td>
                     <td className="py-2 pr-3 text-right">{m.impressoes}</td>
                     <td className="py-2 pr-3 text-right">{m.cliques}</td>
                     <td className="py-2 pr-3 text-right">{m.visitasLp}</td>

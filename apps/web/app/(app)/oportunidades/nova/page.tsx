@@ -9,6 +9,7 @@ export default function NovaOportunidadePage() {
   const router = useRouter()
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [vendedores, setVendedores] = useState<Usuario[]>([])
+  const [campanhas, setCampanhas] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -20,6 +21,7 @@ export default function NovaOportunidadePage() {
     responsavelId: '',
     origem: 'MANUAL',
     tipoLead: '',
+    campanhaTrafego: '',
     valor: '',
     observacoes: '',
   })
@@ -29,6 +31,7 @@ export default function NovaOportunidadePage() {
       setProdutos(p)
       setVendedores(u.filter(u => u.status === 'ATIVO'))
     })
+    api.funilTrafego.campanhas().then(setCampanhas)
   }, [])
 
   function set(field: string, value: string) {
@@ -47,6 +50,7 @@ export default function NovaOportunidadePage() {
         responsavelId: form.responsavelId || undefined,
         email: form.email || undefined,
         tipoLead: (form.tipoLead || undefined) as 'TRAFEGO' | 'ORGANICO' | undefined,
+        campanhaTrafego: form.tipoLead === 'TRAFEGO' ? (form.campanhaTrafego.trim() || undefined) : undefined,
       })
       router.push('/funil')
     } catch (err: unknown) {
@@ -185,6 +189,24 @@ export default function NovaOportunidadePage() {
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-1">Opcional — permite comparar a produção de leads pagos e orgânicos no Funil de Vendas.</p>
+
+          {form.tipoLead === 'TRAFEGO' && (
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Campanha</label>
+              <input
+                type="text"
+                list="campanhas-trafego"
+                value={form.campanhaTrafego}
+                onChange={e => set('campanhaTrafego', e.target.value)}
+                placeholder="Ex: Promoção CG 160 — Setembro"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <datalist id="campanhas-trafego">
+                {campanhas.map(c => <option key={c} value={c} />)}
+              </datalist>
+              <p className="text-xs text-gray-400 mt-1">Qual campanha do gerenciador de anúncios gerou este lead — use o mesmo nome lançado no Funil de Tráfego Pago, pra medir o custo real por lead.</p>
+            </div>
+          )}
         </div>
 
         <div>

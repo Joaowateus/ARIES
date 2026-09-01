@@ -44,6 +44,7 @@ export interface Oportunidade {
   estagio: string
   origem: string
   tipoLead?: 'TRAFEGO' | 'ORGANICO' | null
+  campanhaTrafego?: string | null
   valor?: number
   observacoes?: string
   responsavel?: { id: string; nome: string }
@@ -85,6 +86,7 @@ export interface ConversaoFunil {
 export interface MetricaTrafegoPago {
   id: string
   plataforma: string
+  campanha: string
   data: string
   impressoes: number
   cliques: number
@@ -102,6 +104,18 @@ export interface EtapaConversaoTrafego {
   conversaoReal: number
 }
 
+export interface CampanhaConversao {
+  campanha: string
+  impressoes: number
+  cliques: number
+  leadsCapturados: number
+  leadsCrm: number
+  valorInvestido: number
+  cpl: number
+  custoPorLeadCrm: number
+  taxaLeadPlataformaParaCrm: number
+}
+
 export interface ConversaoTrafego {
   etapas: EtapaConversaoTrafego[]
   valorInvestido: number
@@ -110,6 +124,7 @@ export interface ConversaoTrafego {
   cpl: number
   custoPorLeadCrm: number
   taxaLeadPlataformaParaCrm: number
+  porCampanha: CampanhaConversao[]
 }
 
 export interface Notificacao {
@@ -986,6 +1001,7 @@ export const api = {
     registrarMetrica: (data: {
       data: string
       plataforma?: string
+      campanha?: string
       impressoes?: number
       cliques?: number
       visitasLp?: number
@@ -994,6 +1010,7 @@ export const api = {
       observacoes?: string
     }) => request<MetricaTrafegoPago>('/funil-trafego/metricas', { method: 'POST', body: JSON.stringify(data) }),
     excluirMetrica: (id: string) => request<{ ok: boolean }>(`/funil-trafego/metricas/${id}`, { method: 'DELETE' }),
+    campanhas: () => request<string[]>('/funil-trafego/campanhas'),
   },
   insights: {
     listar: () => request<Insight[]>('/insights'),

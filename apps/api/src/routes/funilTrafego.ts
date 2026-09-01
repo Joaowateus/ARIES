@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { escopoVisibilidade, escopoWhereDono } from '../lib/permissoes'
 import { contarLeadsRegistrados } from '../lib/funil'
-import { PLATAFORMAS_TRAFEGO, montarConversaoTrafego } from '../lib/funilTrafego'
+import { PLATAFORMAS_TRAFEGO, montarConversaoTrafego, montarConversaoPorCampanha } from '../lib/funilTrafego'
 
 const router = Router()
 
@@ -21,6 +21,7 @@ function parsePlataformaQuery(valor: unknown): string | undefined {
 const metricaSchema = z.object({
   data: z.string().refine(v => !Number.isNaN(new Date(v).getTime()), 'Data inválida'),
   plataforma: z.enum(PLATAFORMAS_TRAFEGO).default('META'),
+  campanha: z.string().trim().default(''),
   impressoes: z.number().int().nonnegative().default(0),
   cliques: z.number().int().nonnegative().default(0),
   visitasLp: z.number().int().nonnegative().default(0),
@@ -60,8 +61,31 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
 
   const leadsCrm = await contarLeadsRegistrados(prisma, empresaId, whereUsuario, { inicio, fim }, 'TRAFEGO')
 
-  res.json(
-    montarConversaoTrafego(
+  const porCampanhaMetricas = await prisma.metricaTrafegoPago.groupBy({
+    by: ['campanha'],
+    where: {
+      empresaId,
+      ...whereUsuario,
+      ...(plataforma ? { plataforma } : {}),
+      ...(inicio || fim ? { data: { ...(inicio ? { gte: inicio } : {}), ...(fim ? { lte: fim } : {}) } } : {}),
+    },
+    _sum: { impressoes: true, cliques: true, visitasLp: true, leadsCapturados: true, valorInvestido: true },
+  })
+
+  const porCampanhaLeads = await prisma.leadRegistrado.groupBy({
+    by: ['campanhaTrafego'],
+    where: {
+      empresaId,
+      ...whereUsuario,
+      tipoLead: 'TRAFEGO',
+      ...(inicio || fim ? { criadoEm: { ...(inicio ? { gte: inicio } : {}), ...(fim ? { lte: fim } : {}) } } : {}),
+    },
+    _count: true,
+  })
+  const leadsCrmPorCampanha = new Map(porCampanhaLeads.map(g => [g.campanhaTrafego ?? '', g._count]))
+
+  res.json({
+    ...montarConversaoTrafego(
       {
         impressoes: agregado._sum.impressoes ?? 0,
         cliques: agregado._sum.cliques ?? 0,
@@ -70,8 +94,33 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
         valorInvestido: agregado._sum.valorInvestido ?? 0,
       },
       leadsCrm
-    )
-  )
+    ),
+    porCampanha: montarConversaoPorCampanha(
+      porCampanhaMetricas.map(g => ({
+        campanha: g.campanha,
+        impressoes: g._sum.impressoes ?? 0,
+        cliques: g._sum.cliques ?? 0,
+        visitasLp: g._sum.visitasLp ?? 0,
+        leadsCapturados: g._sum.leadsCapturados ?? 0,
+        valorInvestido: g._sum.valorInvestido ?? 0,
+        leadsCrm: leadsCrmPorCampanha.get(g.campanha) ?? 0,
+      }))
+    ),
+  })
+})
+
+// Nomes de campanha já lançados — alimenta o autocomplete tanto do
+// lançamento de métrica quanto do campo "Campanha" no cadastro de lead
+// (Novo Lead), pra reduzir o nome digitado divergir entre os dois lados.
+router.get('/campanhas', requireAuth, async (req: Request, res: Response) => {
+  const escopo = await escopoVisibilidade(prisma, req.user!)
+  const campanhas = await prisma.metricaTrafegoPago.findMany({
+    where: { empresaId: req.user!.empresaId, ...escopoWhereDono(escopo, 'usuarioId'), campanha: { not: '' } },
+    select: { campanha: true },
+    distinct: ['campanha'],
+    orderBy: { campanha: 'asc' },
+  })
+  res.json(campanhas.map(c => c.campanha))
 })
 
 router.get('/metricas', requireAuth, async (req: Request, res: Response) => {
@@ -100,7 +149,13 @@ router.post('/metricas', requireAuth, async (req: Request, res: Response) => {
 
   const metrica = await prisma.metricaTrafegoPago.upsert({
     where: {
-      empresaId_usuarioId_plataforma_data: { empresaId, usuarioId, plataforma: resto.plataforma, data: dataNormalizada },
+      empresaId_usuarioId_plataforma_campanha_data: {
+        empresaId,
+        usuarioId,
+        plataforma: resto.plataforma,
+        campanha: resto.campanha,
+        data: dataNormalizada,
+      },
     },
     update: resto,
     create: { ...resto, empresaId, usuarioId, data: dataNormalizada },

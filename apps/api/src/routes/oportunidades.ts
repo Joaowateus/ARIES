@@ -15,6 +15,7 @@ const criarSchema = z.object({
   responsavelId: z.string().optional(),
   origem: z.string().default('MANUAL'),
   tipoLead: z.enum(['TRAFEGO', 'ORGANICO']).optional(),
+  campanhaTrafego: z.string().trim().optional(),
   valor: z.number().positive().optional(),
   observacoes: z.string().optional(),
 })
@@ -115,7 +116,9 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     })
     // Contador permanente — nunca apagado, mesmo se este card for excluído
     // do CRM depois (ver DELETE /oportunidades e lib/funil.ts).
-    await tx.leadRegistrado.create({ data: { empresaId, usuarioId: responsavelId, tipoLead: data.tipoLead } })
+    await tx.leadRegistrado.create({
+      data: { empresaId, usuarioId: responsavelId, tipoLead: data.tipoLead, campanhaTrafego: data.campanhaTrafego },
+    })
     return nova
   })
 

@@ -88,3 +88,41 @@ export function montarConversaoTrafego(agregado: AgregadoTrafego, leadsCrm: numb
     taxaLeadPlataformaParaCrm: agregado.leadsCapturados > 0 ? leadsCrm / agregado.leadsCapturados : 0,
   }
 }
+
+export interface CampanhaTrafego extends AgregadoTrafego {
+  campanha: string
+  leadsCrm: number
+}
+
+export interface CampanhaConversao {
+  campanha: string
+  impressoes: number
+  cliques: number
+  leadsCapturados: number
+  leadsCrm: number
+  valorInvestido: number
+  cpl: number
+  custoPorLeadCrm: number
+  taxaLeadPlataformaParaCrm: number
+}
+
+/** Mesmas contas de `montarConversaoTrafego`, mas uma linha por campanha —
+ * é o que finalmente responde "qual campanha está trazendo lead barato e
+ * qual está só gastando verba": Oportunidade.campanhaTrafego (espelhado em
+ * LeadRegistrado) precisa bater com MetricaTrafegoPago.campanha pro
+ * cruzamento funcionar; campanhas sem nome ("") ficam agrupadas juntas. */
+export function montarConversaoPorCampanha(linhas: CampanhaTrafego[]): CampanhaConversao[] {
+  return linhas
+    .map(l => ({
+      campanha: l.campanha,
+      impressoes: l.impressoes,
+      cliques: l.cliques,
+      leadsCapturados: l.leadsCapturados,
+      leadsCrm: l.leadsCrm,
+      valorInvestido: l.valorInvestido,
+      cpl: l.leadsCapturados > 0 ? l.valorInvestido / l.leadsCapturados : 0,
+      custoPorLeadCrm: l.leadsCrm > 0 ? l.valorInvestido / l.leadsCrm : 0,
+      taxaLeadPlataformaParaCrm: l.leadsCapturados > 0 ? l.leadsCrm / l.leadsCapturados : 0,
+    }))
+    .sort((a, b) => b.valorInvestido - a.valorInvestido)
+}

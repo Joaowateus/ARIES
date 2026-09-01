@@ -181,6 +181,7 @@ model Oportunidade {
   estagio               String    @default("NOVO_LEAD")
   origem                String    @default("MANUAL")
   tipoLead              String? // TRAFEGO | ORGANICO — pra separar produção de lead pago vs orgânico no Funil
+  campanhaTrafego       String? // nome da campanha (Meta Ads etc.) que gerou o lead — só relevante quando tipoLead=TRAFEGO, liga este lead ao lançamento em MetricaTrafegoPago
   valor                 Float?
   observacoes           String?
   ultimaInteracaoEm     DateTime?
@@ -250,11 +251,12 @@ model EstagioHistorico {
 // Leads" que o Funil de Vendas usa como base de 100%, pra não encolher
 // silenciosamente quando alguém limpa o board.
 model LeadRegistrado {
-  id        String   @id @default(cuid())
-  empresaId String
-  usuarioId String
-  tipoLead  String? // TRAFEGO | ORGANICO — espelha Oportunidade.tipoLead, pro contador permanente
-  criadoEm  DateTime @default(now())
+  id              String   @id @default(cuid())
+  empresaId       String
+  usuarioId       String
+  tipoLead        String? // TRAFEGO | ORGANICO — espelha Oportunidade.tipoLead, pro contador permanente
+  campanhaTrafego String? // espelha Oportunidade.campanhaTrafego, pro contador permanente por campanha
+  criadoEm        DateTime @default(now())
 
   empresa Empresa @relation(fields: [empresaId], references: [id])
   usuario Usuario @relation(fields: [usuarioId], references: [id])
@@ -279,6 +281,7 @@ model MetricaTrafegoPago {
   empresaId       String
   usuarioId       String
   plataforma      String   @default("META") // META | GOOGLE | TIKTOK | OUTRO
+  campanha        String   @default("") // nome da campanha — mesmo nome usado em Oportunidade.campanhaTrafego, é o elo que permite CPL/conversão por campanha
   data            DateTime
   impressoes      Int      @default(0)
   cliques         Int      @default(0)
@@ -292,8 +295,9 @@ model MetricaTrafegoPago {
   empresa Empresa @relation(fields: [empresaId], references: [id])
   usuario Usuario @relation(fields: [usuarioId], references: [id])
 
-  @@unique([empresaId, usuarioId, plataforma, data])
+  @@unique([empresaId, usuarioId, plataforma, campanha, data])
   @@index([empresaId, data])
+  @@index([empresaId, campanha])
   @@map("metricas_trafego_pago")
 }
 
