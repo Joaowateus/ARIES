@@ -409,7 +409,7 @@ function LucroChart({ meses, selectedIdx, valorFn, color = 'var(--pl-accent-3)' 
 
   return (
     <div className="pl-chart-wrap">
-      <svg className="pl-chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <svg className="pl-chart-svg pl-chart-svg--bars" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
         {meses.map((m, i) => {
           const bh = (getValor(m) / maxV) * plotH
           const bx = padL + i * slot + (slot - bw) / 2
