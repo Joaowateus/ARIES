@@ -9,6 +9,7 @@ export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel !== 'VENDEDOR'
   const [teto, setTeto] = useState('')
+  const [tetoComissao, setTetoComissao] = useState('')
   const [metaAnual, setMetaAnual] = useState('')
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
@@ -19,6 +20,7 @@ export default function ProLaboreConfiguracoesPage() {
     if (!isDono) { setLoading(false); return }
     proLaboreApi.parametros.get().then((p: ParametroLiquidez) => {
       setTeto(String(p.tetoProLaborePorVenda))
+      setTetoComissao(String(p.tetoComissaoPadrao))
       setMetaAnual(String(p.metaFaturamentoAnual))
     }).finally(() => setLoading(false))
   }, [isDono])
@@ -31,9 +33,11 @@ export default function ProLaboreConfiguracoesPage() {
     try {
       const atualizado = await proLaboreApi.parametros.atualizar({
         tetoProLaborePorVenda: Number(teto),
+        tetoComissaoPadrao: Number(tetoComissao),
         metaFaturamentoAnual: Number(metaAnual),
       })
       setTeto(String(atualizado.tetoProLaborePorVenda))
+      setTetoComissao(String(atualizado.tetoComissaoPadrao))
       setMetaAnual(String(atualizado.metaFaturamentoAnual))
       setSucesso(true)
     } catch (err: unknown) {
@@ -61,7 +65,7 @@ export default function ProLaboreConfiguracoesPage() {
         <div>
           <div className="pl-eyebrow">Preferências</div>
           <h2 className="pl-section-title">Configurações</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Teto de pró-labore por venda e meta anual de faturamento</div>
+          <div className="pl-section-note" style={{ marginTop: 4 }}>Teto de pró-labore, teto padrão de comissão e meta anual de faturamento</div>
         </div>
       </div>
 
@@ -69,7 +73,13 @@ export default function ProLaboreConfiguracoesPage() {
         <div className="pl-field">
           <label>Teto de pró-labore por venda (R$)</label>
           <input type="number" step="0.01" min="0" className="pl-input" value={teto} onChange={e => setTeto(e.target.value)} required />
-          <span className="pl-hint">Nenhuma venda pode ter pró-labore acima deste teto — hoje: {formatMoeda(Number(teto) || 0)}</span>
+          <span className="pl-hint">Seu pró-labore pessoal — sacado de qualquer venda, nunca acima deste teto — hoje: {formatMoeda(Number(teto) || 0)}</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Teto de comissão padrão (R$)</label>
+          <input type="number" step="0.01" min="0" className="pl-input" value={tetoComissao} onChange={e => setTetoComissao(e.target.value)} required />
+          <span className="pl-hint">Usado só por vendedores sem comissão individual definida (em Vendedores) — hoje: {formatMoeda(Number(tetoComissao) || 0)}</span>
         </div>
 
         <div className="pl-field">

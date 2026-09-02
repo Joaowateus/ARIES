@@ -37,7 +37,7 @@ export default function ProLaboreLeadsPage() {
   const [erro, setErro] = useState('')
 
   const [convertendoId, setConvertendoId] = useState<string | null>(null)
-  const [convertForm, setConvertForm] = useState({ data: hojeIso(), valorVenda: '', valorProLabore: '', observacao: '' })
+  const [convertForm, setConvertForm] = useState({ data: hojeIso(), valorVenda: '', valorProLabore: '', valorComissao: '', observacao: '' })
   const [convertErro, setConvertErro] = useState('')
   const [convertSalvando, setConvertSalvando] = useState(false)
 
@@ -103,20 +103,19 @@ export default function ProLaboreLeadsPage() {
     }
   }
 
-  // Cada vendedor pode ter seu próprio teto de pró-labore por venda — o do
-  // lead sendo convertido (se o vendedor tiver um definido) ou o padrão da
-  // conta. Um vendedor logado sempre usa o próprio teto, já resolvido pelo
-  // backend em auth/me.
-  function tetoEfetivo(vendedorId?: string | null): number {
-    if (!isDono) return usuario?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+  // Pró-labore é sempre do dono, sacado de qualquer venda — teto único da
+  // conta. Comissão é o que se paga ao vendedor do lead, com teto próprio
+  // (se definido) ou o padrão da conta. Conversão é exclusiva do dono.
+  const tetoProLabore = parametro?.tetoProLaborePorVenda ?? 900
+  function tetoComissao(vendedorId?: string | null): number {
     const vendedor = vendedorId ? vendedores.find(v => v.id === vendedorId) : undefined
-    return vendedor?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+    return vendedor?.tetoComissaoPorVenda ?? parametro?.tetoComissaoPadrao ?? 900
   }
 
   function abrirConversao(lead: Lead) {
+    if (!isDono) return
     setConvertendoId(lead.id)
-    const teto = tetoEfetivo(lead.vendedorId)
-    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(teto), observacao: '' })
+    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(tetoProLabore), valorComissao: lead.vendedorId ? String(tetoComissao(lead.vendedorId)) : '', observacao: '' })
     setConvertErro('')
   }
 
@@ -127,8 +126,7 @@ export default function ProLaboreLeadsPage() {
 
   function atualizarValorVendaConversao(valor: string) {
     const numero = Number(valor)
-    const teto = tetoEfetivo(leadConvertendo?.vendedorId)
-    const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, teto) : teto
+    const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, tetoProLabore) : tetoProLabore
     setConvertForm(f => ({ ...f, valorVenda: valor, valorProLabore: String(sugestao) }))
   }
 
@@ -141,6 +139,7 @@ export default function ProLaboreLeadsPage() {
         data: convertForm.data,
         valorVenda: Number(convertForm.valorVenda),
         valorProLabore: Number(convertForm.valorProLabore),
+        valorComissao: leadConvertendo?.vendedorId && convertForm.valorComissao !== '' ? Number(convertForm.valorComissao) : undefined,
         observacao: convertForm.observacao || undefined,
       })
       fecharConversao()
@@ -181,7 +180,7 @@ export default function ProLaboreLeadsPage() {
     const lead = leads.find(l => l.id === id)
     if (!lead || lead.vendaId || lead.estagio === estagio) return
     if (estagio === 'FECHADO') {
-      abrirConversao(lead)
+      if (isDono) abrirConversao(lead)
     } else {
       mudarEstagio(lead, estagio)
     }
@@ -196,7 +195,7 @@ export default function ProLaboreLeadsPage() {
   const conversaoFiltrado = totalFiltrado > 0 ? (fechadosFiltrado / totalFiltrado) * 100 : 0
 
   const leadConvertendo = convertendoId ? leads.find(l => l.id === convertendoId) ?? null : null
-  const teto = tetoEfetivo(leadConvertendo?.vendedorId)
+  const tetoComissaoAtual = leadConvertendo?.vendedorId ? tetoComissao(leadConvertendo.vendedorId) : null
 
   return (
     <div>
@@ -305,7 +304,7 @@ export default function ProLaboreLeadsPage() {
                             <div className="pl-kanban-card-badge">✓ Convertido em venda</div>
                           ) : (
                             <div className="pl-kanban-card-actions">
-                              {col.estagio !== 'FECHADO' && <span onClick={() => abrirConversao(lead)}>Converter</span>}
+                              {isDono && col.estagio !== 'FECHADO' && <span onClick={() => abrirConversao(lead)}>Converter</span>}
                               <span onClick={() => marcarPerdido(lead)} className="pl-danger">Perdido</span>
                               <span onClick={() => remover(lead)} className="pl-danger">Remover</span>
                             </div>
@@ -365,9 +364,16 @@ export default function ProLaboreLeadsPage() {
               </div>
               <div className="pl-field">
                 <label>Pró-labore sacado (R$)</label>
-                <input type="number" step="0.01" min="0" max={teto} className="pl-input" value={convertForm.valorProLabore} onChange={e => setConvertForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
-                <span className="pl-hint">Máximo {formatMoeda(teto)}</span>
+                <input type="number" step="0.01" min="0" max={tetoProLabore} className="pl-input" value={convertForm.valorProLabore} onChange={e => setConvertForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
+                <span className="pl-hint">Máximo {formatMoeda(tetoProLabore)}</span>
               </div>
+              {leadConvertendo.vendedorId && (
+                <div className="pl-field">
+                  <label>Comissão do vendedor (R$)</label>
+                  <input type="number" step="0.01" min="0" max={tetoComissaoAtual ?? undefined} className="pl-input" value={convertForm.valorComissao} onChange={e => setConvertForm(f => ({ ...f, valorComissao: e.target.value }))} placeholder="0,00" />
+                  <span className="pl-hint">Máximo {formatMoeda(tetoComissaoAtual ?? 0)}</span>
+                </div>
+              )}
               <div className="pl-field">
                 <label>Observação (opcional)</label>
                 <input className="pl-input" value={convertForm.observacao} onChange={e => setConvertForm(f => ({ ...f, observacao: e.target.value }))} placeholder={`Convertido do lead: ${leadConvertendo.nomeCliente}`} />

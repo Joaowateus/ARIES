@@ -97,7 +97,7 @@ export default function ProLaboreVendedoresPage() {
 
   function abrirEdicaoTeto(v: Vendedor) {
     setEditandoTetoId(v.id)
-    setTetoValor(v.tetoProLaborePorVenda != null ? String(v.tetoProLaborePorVenda) : '')
+    setTetoValor(v.tetoComissaoPorVenda != null ? String(v.tetoComissaoPorVenda) : '')
     setTetoErro('')
   }
 
@@ -116,7 +116,7 @@ export default function ProLaboreVendedoresPage() {
         setTetoErro('Informe um valor positivo, ou deixe em branco pra usar o padrão da conta')
         return
       }
-      await proLaboreApi.vendedores.editar(id, { tetoProLaborePorVenda: numero })
+      await proLaboreApi.vendedores.editar(id, { tetoComissaoPorVenda: numero })
       fecharEdicaoTeto()
       carregar()
     } catch (err: unknown) {
@@ -186,9 +186,9 @@ export default function ProLaboreVendedoresPage() {
                       <span className={`pl-delta ${v.ativo ? 'up' : 'down'}`} style={{ display: 'inline-flex' }}>{v.ativo ? 'Ativo' : 'Inativo'}</span>
                     </td>
                     <td>
-                      {v.tetoProLaborePorVenda != null
-                        ? <span className="pl-mono">{formatMoeda(v.tetoProLaborePorVenda)}</span>
-                        : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoProLaborePorVenda)})` : ''}</span>}
+                      {v.tetoComissaoPorVenda != null
+                        ? <span className="pl-mono">{formatMoeda(v.tetoComissaoPorVenda)}</span>
+                        : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoComissaoPadrao)})` : ''}</span>}
                     </td>
                     <td>
                       {v.email
@@ -212,9 +212,9 @@ export default function ProLaboreVendedoresPage() {
                       <td colSpan={5}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
-                            <label>Comissão (teto de pró-labore por venda, R$)</label>
-                            <input type="number" step="0.01" min="0" className="pl-input" value={tetoValor} onChange={e => setTetoValor(e.target.value)} placeholder={parametro ? String(parametro.tetoProLaborePorVenda) : '900'} />
-                            <span className="pl-hint">Deixe em branco pra usar o padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoProLaborePorVenda)})` : ''}</span>
+                            <label>Comissão (teto por venda, R$)</label>
+                            <input type="number" step="0.01" min="0" className="pl-input" value={tetoValor} onChange={e => setTetoValor(e.target.value)} placeholder={parametro ? String(parametro.tetoComissaoPadrao) : '900'} />
+                            <span className="pl-hint">Deixe em branco pra usar o padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoComissaoPadrao)})` : ''}</span>
                           </div>
                           <button type="button" className="pl-btn pl-btn-primary" disabled={tetoSalvando} onClick={() => salvarTeto(v.id)}>
                             {tetoSalvando ? 'Salvando...' : 'Salvar comissão'}

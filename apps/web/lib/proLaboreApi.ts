@@ -31,13 +31,13 @@ export interface ProLaboreUsuario {
   nome: string
   email: string
   papel: ProLaborePapel
-  // Só presente quando papel === 'VENDEDOR': teto efetivo já resolvido
-  // (comissão individual do vendedor, ou o padrão da conta se não tiver uma).
-  tetoProLaborePorVenda?: number
 }
 
 export interface ParametroLiquidez {
+  // Pró-labore é sempre do dono, sacado de qualquer venda da operação.
   tetoProLaborePorVenda: number
+  // Teto padrão de comissão, usado por vendedores sem comissão individual.
+  tetoComissaoPadrao: number
   metaFaturamentoAnual: number
   fraseMotivacional?: string | null
 }
@@ -47,7 +47,7 @@ export interface Vendedor {
   nome: string
   ativo: boolean
   email?: string | null
-  tetoProLaborePorVenda?: number | null
+  tetoComissaoPorVenda?: number | null
   criadoEm: string
 }
 
@@ -77,6 +77,7 @@ export interface Venda {
   data: string
   valorVenda: number
   valorProLabore: number
+  valorComissao?: number | null
   vendedorId?: string | null
   vendedor?: { id: string; nome: string } | null
   observacao?: string | null
@@ -103,7 +104,7 @@ export interface VendedorRanking {
   nome: string
   quantidadeVendas: number
   receita: number
-  proLaboreSacado: number
+  comissaoPaga: number
 }
 
 export interface MesPainel {
@@ -111,7 +112,9 @@ export interface MesPainel {
   label: string
   ano: number
   receita: number
+  // Sempre do dono; vem zerado quando quem consulta é um vendedor.
   proLaboreSacado: number
+  comissaoPaga: number
   quantidadeVendas: number
   ticketMedio: number
   gastoAnuncios: number
@@ -169,7 +172,7 @@ export const proLaboreApi = {
   vendedores: {
     listar: () => request<Vendedor[]>('/pro-labore/vendedores'),
     criar: (nome: string) => request<Vendedor>('/pro-labore/vendedores', { method: 'POST', body: JSON.stringify({ nome }) }),
-    editar: (id: string, data: { nome?: string; ativo?: boolean; tetoProLaborePorVenda?: number | null }) =>
+    editar: (id: string, data: { nome?: string; ativo?: boolean; tetoComissaoPorVenda?: number | null }) =>
       request<Vendedor>(`/pro-labore/vendedores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendedores/${id}`, { method: 'DELETE' }),
     concederAcesso: (id: string, data: { email: string; senha: string }) =>
@@ -178,9 +181,9 @@ export const proLaboreApi = {
   },
   vendas: {
     listar: (ano?: number) => request<Venda[]>(`/pro-labore/vendas${ano ? `?ano=${ano}` : ''}`),
-    criar: (data: { data: string; valorVenda: number; valorProLabore: number; vendedorId?: string; observacao?: string }) =>
+    criar: (data: { data: string; valorVenda: number; valorProLabore: number; vendedorId?: string; valorComissao?: number; observacao?: string }) =>
       request<Venda>('/pro-labore/vendas', { method: 'POST', body: JSON.stringify(data) }),
-    editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; vendedorId?: string | null; observacao?: string }) =>
+    editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; vendedorId?: string | null; valorComissao?: number | null; observacao?: string }) =>
       request<Venda>(`/pro-labore/vendas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendas/${id}`, { method: 'DELETE' }),
   },
@@ -202,7 +205,7 @@ export const proLaboreApi = {
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     mudarEstagio: (id: string, estagio: EstagioLead) =>
       request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio }) }),
-    converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; observacao?: string }) =>
+    converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; valorComissao?: number; observacao?: string }) =>
       request<{ lead: Lead; venda: Venda }>(`/pro-labore/leads/${id}/converter`, { method: 'POST', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/leads/${id}`, { method: 'DELETE' }),
   },

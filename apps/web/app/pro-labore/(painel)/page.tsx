@@ -77,10 +77,13 @@ export default function ProLaboreDashboardPage() {
 
   const kpis = [
     { label: 'Receita do mês', value: formatMoeda(atual.receita), color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
-    { label: 'Lucro (pró-labore)', value: formatMoeda(atual.proLaboreSacado), color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado },
+    isDono
+      ? { label: 'Lucro (pró-labore)', value: formatMoeda(atual.proLaboreSacado), color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }
+      : { label: 'Comissão do mês', value: formatMoeda(atual.comissaoPaga), color: 'var(--pl-accent-3)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
     { label: 'Ticket médio', value: formatMoeda(atual.ticketMedio), color: 'var(--pl-accent-4)', curr: atual.ticketMedio, prev: anterior?.ticketMedio },
     ...(isDono
       ? [
+          { label: 'Comissões pagas', value: formatMoeda(atual.comissaoPaga), color: 'var(--pl-accent-4)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
           { label: 'Gasto com anúncios', value: formatMoeda(atual.gastoAnuncios), color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true },
           { label: 'ROAS', value: <>{atual.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}<span className="pl-unit">×</span></>, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas },
         ]
@@ -136,9 +139,12 @@ export default function ProLaboreDashboardPage() {
           <div className="pl-month-detail">
             <div>Mês selecionado<strong>{atual.label} {atual.ano}</strong></div>
             <div>Receita<strong>{formatMoeda(atual.receita)}</strong></div>
-            <div>Lucro<strong>{formatMoeda(atual.proLaboreSacado)}</strong></div>
+            {isDono
+              ? <div>Lucro<strong>{formatMoeda(atual.proLaboreSacado)}</strong></div>
+              : <div>Comissão<strong>{formatMoeda(atual.comissaoPaga)}</strong></div>}
             <div>Vendas<strong>{atual.quantidadeVendas}</strong></div>
             <div>Ticket médio<strong>{formatMoeda(atual.ticketMedio)}</strong></div>
+            {isDono && <div>Comissões<strong>{formatMoeda(atual.comissaoPaga)}</strong></div>}
             {isDono && <div>Gasto anúncios<strong>{formatMoeda(atual.gastoAnuncios)}</strong></div>}
           </div>
         </div>
@@ -146,17 +152,42 @@ export default function ProLaboreDashboardPage() {
         <div className="pl-card">
           <div className="pl-card-head">
             <div>
-              <div className="pl-card-title">Lucro (pró-labore) mensal</div>
-              <div className="pl-card-sub">Sacado por venda, até o teto configurado</div>
+              <div className="pl-card-title">{isDono ? 'Lucro (pró-labore) mensal' : 'Comissão mensal'}</div>
+              <div className="pl-card-sub">{isDono ? 'Sacado por venda, até o teto configurado' : 'Paga por venda, até o teto da sua comissão'}</div>
             </div>
           </div>
-          <LucroChart meses={meses} selectedIdx={selectedIdx} />
+          <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => (isDono ? m.proLaboreSacado : m.comissaoPaga)} />
           <div className="pl-stat-strip">
-            <div className="pl-s"><div className="pl-l">Lucro/venda médio</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.proLaboreSacado / atual.quantidadeVendas : 0)}</div></div>
-            <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.proLaboreSacado, 0))}</div></div>
+            <div className="pl-s"><div className="pl-l">{isDono ? 'Lucro/venda médio' : 'Comissão/venda média'}</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? (isDono ? atual.proLaboreSacado : atual.comissaoPaga) / atual.quantidadeVendas : 0)}</div></div>
+            <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + (isDono ? m.proLaboreSacado : m.comissaoPaga), 0))}</div></div>
           </div>
         </div>
       </div>
+
+      {isDono && (
+        <>
+          <div className="pl-section-head">
+            <div>
+              <div className="pl-eyebrow">Comissões</div>
+              <h2 className="pl-section-title">Quanto você já pagou aos vendedores</h2>
+            </div>
+            <div className="pl-section-note">{meses[0].label}–{meses[meses.length - 1].label} {atual.ano}</div>
+          </div>
+          <div className="pl-card">
+            <div className="pl-card-head">
+              <div>
+                <div className="pl-card-title">Comissões pagas mensal</div>
+                <div className="pl-card-sub">Somada por venda, até o teto de cada vendedor</div>
+              </div>
+            </div>
+            <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.comissaoPaga} color="var(--pl-accent-4)" />
+            <div className="pl-stat-strip">
+              <div className="pl-s"><div className="pl-l">Comissão/venda média</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.comissaoPaga / atual.quantidadeVendas : 0)}</div></div>
+              <div className="pl-s"><div className="pl-l">Total pago no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.comissaoPaga, 0))}</div></div>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="pl-section-head">
         <div>
@@ -367,11 +398,12 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
   )
 }
 
-/* ============ GRÁFICO DE LUCRO (barras) ============ */
-function LucroChart({ meses, selectedIdx }: { meses: MesPainel[]; selectedIdx: number }) {
+/* ============ GRÁFICO DE LUCRO/COMISSÃO (barras) ============ */
+function LucroChart({ meses, selectedIdx, valorFn, color = 'var(--pl-accent-3)' }: { meses: MesPainel[]; selectedIdx: number; valorFn?: (m: MesPainel) => number; color?: string }) {
+  const getValor = valorFn ?? ((m: MesPainel) => m.proLaboreSacado)
   const w = 320, h = 190, padL = 4, padR = 4, padT = 10, padB = 24
   const plotW = w - padL - padR, plotH = h - padT - padB
-  const maxV = Math.max(...meses.map(m => m.proLaboreSacado), 1) * 1.15
+  const maxV = Math.max(...meses.map(getValor), 1) * 1.15
   const slot = plotW / meses.length
   const bw = slot * 0.56
 
@@ -379,13 +411,13 @@ function LucroChart({ meses, selectedIdx }: { meses: MesPainel[]; selectedIdx: n
     <div className="pl-chart-wrap">
       <svg className="pl-chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
         {meses.map((m, i) => {
-          const bh = (m.proLaboreSacado / maxV) * plotH
+          const bh = (getValor(m) / maxV) * plotH
           const bx = padL + i * slot + (slot - bw) / 2
           const by = padT + plotH - bh
           const isSel = i === selectedIdx
           return (
             <g key={m.mes}>
-              <rect x={bx} y={by} width={bw} height={bh} rx={4} fill={isSel ? 'var(--pl-accent-3)' : 'color-mix(in srgb, var(--pl-accent-3) 38%, transparent)'} />
+              <rect x={bx} y={by} width={bw} height={bh} rx={4} fill={isSel ? color : `color-mix(in srgb, ${color} 38%, transparent)`} />
               <text x={bx + bw / 2} y={h - 8} className="pl-axis-label" textAnchor="middle">{m.label}</text>
             </g>
           )
@@ -455,7 +487,7 @@ function SellerLeaderboard({ vendedores }: { vendedores: VendedorRanking[] }) {
               </div>
               <div className="pl-bar-track"><div className="pl-bar-fill" style={{ width: `${wpct}%` }} /></div>
             </div>
-            <div className="pl-seller-meta">{s.quantidadeVendas} venda{s.quantidadeVendas !== 1 ? 's' : ''}<br />lucro {formatMoedaCompacta(s.proLaboreSacado)}</div>
+            <div className="pl-seller-meta">{s.quantidadeVendas} venda{s.quantidadeVendas !== 1 ? 's' : ''}<br />comissão {formatMoedaCompacta(s.comissaoPaga)}</div>
           </div>
         )
       })}

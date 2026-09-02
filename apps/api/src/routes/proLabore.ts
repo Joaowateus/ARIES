@@ -11,23 +11,34 @@ const TETO_PRO_LABORE_PADRAO = 900
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, tetoProLaborePorVenda: true, criadoEm: true, atualizadoEm: true } as const
+const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, tetoComissaoPorVenda: true, criadoEm: true, atualizadoEm: true } as const
 
-// Teto efetivo de pró-labore por venda: usa a comissão individual do
-// vendedor quando definida, senão cai pro padrão da conta. Cada vendedor
-// pode ter uma comissão diferente — sem isso, o teto era um valor único
-// compartilhado por toda a operação.
-async function resolverTetoProLabore(usuarioId: string, vendedorId?: string | null): Promise<number> {
-  if (vendedorId) {
-    const vendedor = await prisma.vendedor.findUnique({ where: { id: vendedorId }, select: { tetoProLaborePorVenda: true } })
-    if (vendedor?.tetoProLaborePorVenda != null) return vendedor.tetoProLaborePorVenda
-  }
+// Pró-labore é sempre do dono — sacado de qualquer venda da operação,
+// independente de quem vendeu. O teto é um único valor por conta.
+async function resolverTetoProLabore(usuarioId: string): Promise<number> {
   const parametro = await prisma.parametroLiquidez.upsert({
     where: { usuarioId },
     update: {},
     create: { usuarioId, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
   })
   return parametro.tetoProLaborePorVenda
+}
+
+// Comissão é o que se paga ao vendedor daquela venda — usa o teto
+// individual do vendedor quando definido, senão cai pro padrão da conta.
+// Cada vendedor pode ter uma comissão diferente; sem isso, o teto era um
+// valor único compartilhado por toda a operação.
+async function resolverTetoComissao(usuarioId: string, vendedorId?: string | null): Promise<number> {
+  if (vendedorId) {
+    const vendedor = await prisma.vendedor.findUnique({ where: { id: vendedorId }, select: { tetoComissaoPorVenda: true } })
+    if (vendedor?.tetoComissaoPorVenda != null) return vendedor.tetoComissaoPorVenda
+  }
+  const parametro = await prisma.parametroLiquidez.upsert({
+    where: { usuarioId },
+    update: {},
+    create: { usuarioId, tetoComissaoPadrao: TETO_PRO_LABORE_PADRAO },
+  })
+  return parametro.tetoComissaoPadrao
 }
 
 // Datas de venda/mês de referência são conceitos de calendário puro (sem
@@ -158,8 +169,7 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
       res.status(404).json({ error: 'Vendedor não encontrado' })
       return
     }
-    const tetoProLaborePorVenda = await resolverTetoProLabore(sub, vendedorId)
-    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: 'VENDEDOR', tetoProLaborePorVenda })
+    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: 'VENDEDOR' })
     return
   }
 
@@ -232,6 +242,7 @@ router.get('/parametros', requireProLaboreAuth, async (req: Request, res: Respon
 
 const parametrosSchema = z.object({
   tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo').optional(),
+  tetoComissaoPadrao: z.number().positive('Teto deve ser positivo').optional(),
   metaFaturamentoAnual: z.number().positive('Meta deve ser positiva').optional(),
   fraseMotivacional: z.string().max(280, 'Frase muito longa').optional(),
 })
@@ -282,7 +293,7 @@ router.post('/vendedores', requireProLaboreAuth, requireDono, async (req: Reques
 const editarVendedorSchema = z.object({
   nome: z.string().min(2).optional(),
   ativo: z.boolean().optional(),
-  tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo').nullable().optional(),
+  tetoComissaoPorVenda: z.number().positive('Teto deve ser positivo').nullable().optional(),
 })
 
 router.patch('/vendedores/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -367,11 +378,11 @@ router.delete('/vendedores/:id/acesso', requireProLaboreAuth, requireDono, async
   res.json(vendedor)
 })
 
-// --- Vendas ---
+// --- Vendas (cadastro exclusivo do dono — vendedor não registra a própria venda) ---
 
-router.get('/vendas', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/vendas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const { ano } = req.query
-  const where: { usuarioId: string; vendedorId?: string; data?: { gte: Date; lte: Date } } = vendaWhereBase(req)
+  const where: { usuarioId: string; data?: { gte: Date; lte: Date } } = { usuarioId: req.proLaboreUser!.sub }
   if (typeof ano === 'string' && /^\d{4}$/.test(ano)) {
     where.data = { gte: inicioDoAnoUTC(Number(ano)), lte: fimDoAnoUTC(Number(ano)) }
   }
@@ -389,10 +400,11 @@ const criarVendaSchema = z.object({
   valorVenda: z.number().positive('Valor da venda deve ser positivo'),
   valorProLabore: z.number().positive('Valor de pró-labore deve ser positivo'),
   vendedorId: z.string().optional(),
+  valorComissao: z.number().min(0, 'Comissão não pode ser negativa').optional(),
   observacao: z.string().optional(),
 })
 
-router.post('/vendas', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/vendas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const parse = criarVendaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -400,13 +412,10 @@ router.post('/vendas', requireProLaboreAuth, async (req: Request, res: Response)
   }
 
   const usuarioId = req.proLaboreUser!.sub
-  const papel = req.proLaboreUser!.papel
-  const { valorVenda, valorProLabore } = parse.data
-  let vendedorId = parse.data.vendedorId
+  const { valorVenda, valorProLabore, vendedorId } = parse.data
+  const valorComissao = vendedorId ? parse.data.valorComissao ?? 0 : undefined
 
-  if (papel === 'VENDEDOR') {
-    vendedorId = req.proLaboreUser!.vendedorId!
-  } else if (vendedorId) {
+  if (vendedorId) {
     const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
     if (!vendedor) {
       res.status(400).json({ error: 'Vendedor não encontrado' })
@@ -414,15 +423,26 @@ router.post('/vendas', requireProLaboreAuth, async (req: Request, res: Response)
     }
   }
 
-  const teto = await resolverTetoProLabore(usuarioId, vendedorId)
-
-  if (valorProLabore > teto) {
-    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${teto})` })
+  const tetoProLabore = await resolverTetoProLabore(usuarioId)
+  if (valorProLabore > tetoProLabore) {
+    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${tetoProLabore})` })
     return
   }
   if (valorProLabore > valorVenda) {
     res.status(400).json({ error: 'O pró-labore não pode ser maior que o valor da venda' })
     return
+  }
+
+  if (valorComissao !== undefined) {
+    const tetoComissao = await resolverTetoComissao(usuarioId, vendedorId)
+    if (valorComissao > tetoComissao) {
+      res.status(400).json({ error: `A comissão não pode ultrapassar o teto configurado (${tetoComissao})` })
+      return
+    }
+    if (valorComissao > valorVenda) {
+      res.status(400).json({ error: 'A comissão não pode ser maior que o valor da venda' })
+      return
+    }
   }
 
   const venda = await prisma.venda.create({
@@ -432,6 +452,7 @@ router.post('/vendas', requireProLaboreAuth, async (req: Request, res: Response)
       data: new Date(parse.data.data),
       valorVenda,
       valorProLabore,
+      valorComissao,
       observacao: parse.data.observacao,
     },
     include: { vendedor: { select: { id: true, nome: true } } },
@@ -443,10 +464,11 @@ const editarVendaSchema = z.object({
   valorVenda: z.number().positive().optional(),
   valorProLabore: z.number().positive().optional(),
   vendedorId: z.string().nullable().optional(),
+  valorComissao: z.number().min(0, 'Comissão não pode ser negativa').nullable().optional(),
   observacao: z.string().optional(),
 })
 
-router.patch('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.patch('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const parse = editarVendaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -454,17 +476,13 @@ router.patch('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Resp
   }
 
   const usuarioId = req.proLaboreUser!.sub
-  const papel = req.proLaboreUser!.papel
-  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), ...vendaWhereBase(req) } })
+  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
     res.status(404).json({ error: 'Venda não encontrada' })
     return
   }
 
-  // Vendedor não pode reatribuir a própria venda a outra pessoa.
-  if (papel === 'VENDEDOR') {
-    delete parse.data.vendedorId
-  } else if (parse.data.vendedorId) {
+  if (parse.data.vendedorId) {
     const vendedor = await prisma.vendedor.findFirst({ where: { id: parse.data.vendedorId, usuarioId } })
     if (!vendedor) {
       res.status(400).json({ error: 'Vendedor não encontrado' })
@@ -475,15 +493,30 @@ router.patch('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Resp
   const valorVenda = parse.data.valorVenda ?? atual.valorVenda
   const valorProLabore = parse.data.valorProLabore ?? atual.valorProLabore
   const vendedorIdEfetivo = parse.data.vendedorId === undefined ? atual.vendedorId : parse.data.vendedorId
+  const valorComissaoEfetivo = vendedorIdEfetivo == null
+    ? undefined
+    : parse.data.valorComissao === undefined ? atual.valorComissao ?? 0 : parse.data.valorComissao ?? 0
 
-  const teto = await resolverTetoProLabore(usuarioId, vendedorIdEfetivo)
-  if (valorProLabore > teto) {
-    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${teto})` })
+  const tetoProLabore = await resolverTetoProLabore(usuarioId)
+  if (valorProLabore > tetoProLabore) {
+    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${tetoProLabore})` })
     return
   }
   if (valorProLabore > valorVenda) {
     res.status(400).json({ error: 'O pró-labore não pode ser maior que o valor da venda' })
     return
+  }
+
+  if (valorComissaoEfetivo !== undefined) {
+    const tetoComissao = await resolverTetoComissao(usuarioId, vendedorIdEfetivo)
+    if (valorComissaoEfetivo > tetoComissao) {
+      res.status(400).json({ error: `A comissão não pode ultrapassar o teto configurado (${tetoComissao})` })
+      return
+    }
+    if (valorComissaoEfetivo > valorVenda) {
+      res.status(400).json({ error: 'A comissão não pode ser maior que o valor da venda' })
+      return
+    }
   }
 
   const venda = await prisma.venda.update({
@@ -492,6 +525,7 @@ router.patch('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Resp
       valorVenda,
       valorProLabore,
       vendedorId: parse.data.vendedorId === undefined ? atual.vendedorId : parse.data.vendedorId,
+      valorComissao: valorComissaoEfetivo ?? null,
       observacao: parse.data.observacao ?? atual.observacao,
     },
     include: { vendedor: { select: { id: true, nome: true } } },
@@ -499,8 +533,9 @@ router.patch('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Resp
   res.json(venda)
 })
 
-router.delete('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), ...vendaWhereBase(req) } })
+router.delete('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
     res.status(404).json({ error: 'Venda não encontrada' })
     return
@@ -669,6 +704,7 @@ const converterLeadSchema = z.object({
   data: z.string().min(1, 'Data obrigatória'),
   valorVenda: z.number().positive('Valor da venda deve ser positivo'),
   valorProLabore: z.number().positive('Valor de pró-labore deve ser positivo'),
+  valorComissao: z.number().min(0, 'Comissão não pode ser negativa').optional(),
   observacao: z.string().optional(),
 })
 
@@ -676,7 +712,8 @@ const converterLeadSchema = z.object({
 // de fechamento, pra manter o vínculo lead→venda e não deixar o funil e as
 // vendas divergirem. Marcar o estágio como FECHADO manualmente ainda é
 // possível (ex: negócio fechado fora da esteira), só não cria a venda.
-router.post('/leads/:id/converter', requireProLaboreAuth, async (req: Request, res: Response) => {
+// Exclusivo do dono — é ele quem registra vendas e paga comissão.
+router.post('/leads/:id/converter', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const parse = converterLeadSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -695,14 +732,28 @@ router.post('/leads/:id/converter', requireProLaboreAuth, async (req: Request, r
   }
 
   const { valorVenda, valorProLabore } = parse.data
-  const teto = await resolverTetoProLabore(usuarioId, atual.vendedorId)
-  if (valorProLabore > teto) {
-    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${teto})` })
+  const valorComissao = atual.vendedorId ? parse.data.valorComissao ?? 0 : undefined
+
+  const tetoProLabore = await resolverTetoProLabore(usuarioId)
+  if (valorProLabore > tetoProLabore) {
+    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${tetoProLabore})` })
     return
   }
   if (valorProLabore > valorVenda) {
     res.status(400).json({ error: 'O pró-labore não pode ser maior que o valor da venda' })
     return
+  }
+
+  if (valorComissao !== undefined) {
+    const tetoComissao = await resolverTetoComissao(usuarioId, atual.vendedorId)
+    if (valorComissao > tetoComissao) {
+      res.status(400).json({ error: `A comissão não pode ultrapassar o teto configurado (${tetoComissao})` })
+      return
+    }
+    if (valorComissao > valorVenda) {
+      res.status(400).json({ error: 'A comissão não pode ser maior que o valor da venda' })
+      return
+    }
   }
 
   const venda = await prisma.venda.create({
@@ -712,6 +763,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, async (req: Request, r
       data: new Date(parse.data.data),
       valorVenda,
       valorProLabore,
+      valorComissao,
       observacao: parse.data.observacao ?? `Convertido do lead: ${atual.nomeCliente}`,
     },
     include: { vendedor: { select: { id: true, nome: true } } },
@@ -855,7 +907,10 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
   const meses = MESES_LABEL.slice(0, ultimoMes + 1).map((label, mes) => {
     const vendasDoMes = vendas.filter(v => v.data.getUTCMonth() === mes)
     const receita = vendasDoMes.reduce((s, v) => s + v.valorVenda, 0)
-    const proLaboreSacado = vendasDoMes.reduce((s, v) => s + v.valorProLabore, 0)
+    // Pró-labore é sempre do dono — não faz sentido pra um vendedor ver o
+    // quanto o dono sacou de cada venda, então some da resposta pra ele.
+    const proLaboreSacado = papel === 'DONO' ? vendasDoMes.reduce((s, v) => s + v.valorProLabore, 0) : 0
+    const comissaoPaga = vendasDoMes.reduce((s, v) => s + (v.valorComissao ?? 0), 0)
     const quantidadeVendas = vendasDoMes.length
     const ticketMedio = quantidadeVendas > 0 ? receita / quantidadeVendas : 0
 
@@ -887,16 +942,16 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
           }
     const conversaoLeadVenda = funil.leads > 0 ? (quantidadeVendas / funil.leads) * 100 : 0
 
-    const rankingVendedores: { id: string; nome: string; quantidadeVendas: number; receita: number; proLaboreSacado: number }[] = []
+    const rankingVendedores: { id: string; nome: string; quantidadeVendas: number; receita: number; comissaoPaga: number }[] = []
     if (papel === 'DONO') {
-      const porVendedor = new Map<string, { id: string; nome: string; quantidadeVendas: number; receita: number; proLaboreSacado: number }>()
+      const porVendedor = new Map<string, { id: string; nome: string; quantidadeVendas: number; receita: number; comissaoPaga: number }>()
       for (const v of vendasDoMes) {
         if (!v.vendedorId) continue
         const nome = vendedorPorId.get(v.vendedorId)?.nome ?? v.vendedor?.nome ?? 'Sem nome'
-        const atual = porVendedor.get(v.vendedorId) ?? { id: v.vendedorId, nome, quantidadeVendas: 0, receita: 0, proLaboreSacado: 0 }
+        const atual = porVendedor.get(v.vendedorId) ?? { id: v.vendedorId, nome, quantidadeVendas: 0, receita: 0, comissaoPaga: 0 }
         atual.quantidadeVendas += 1
         atual.receita += v.valorVenda
-        atual.proLaboreSacado += v.valorProLabore
+        atual.comissaoPaga += v.valorComissao ?? 0
         porVendedor.set(v.vendedorId, atual)
       }
       rankingVendedores.push(...[...porVendedor.values()].sort((a, b) => b.receita - a.receita))
@@ -904,7 +959,7 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
 
     return {
       mes, label, ano: anoNum,
-      receita, proLaboreSacado, quantidadeVendas, ticketMedio,
+      receita, proLaboreSacado, comissaoPaga, quantidadeVendas, ticketMedio,
       gastoAnuncios, roas, cac,
       funil, conversaoLeadVenda,
       vendedores: rankingVendedores,
