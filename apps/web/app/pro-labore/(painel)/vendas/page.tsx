@@ -47,6 +47,7 @@ export default function ProLaboreVendasPage() {
   const [importAberto, setImportAberto] = useState(false)
   const [textoImportacao, setTextoImportacao] = useState('')
   const [anoImportacao, setAnoImportacao] = useState('2026')
+  const [comissaoImportacao, setComissaoImportacao] = useState('500')
   const [importando, setImportando] = useState(false)
   const [resultadosImportacao, setResultadosImportacao] = useState<ResultadoImportacao[]>([])
 
@@ -208,6 +209,7 @@ export default function ProLaboreVendasPage() {
 
     const contadorPorMes = new Map<number, number>()
     const resultados: ResultadoImportacao[] = []
+    const comissaoPadraoLote = Number(comissaoImportacao) || 0
 
     for (const reg of registros) {
       const ocorrencia = (contadorPorMes.get(reg.mesIdx) ?? 0) + 1
@@ -216,13 +218,16 @@ export default function ProLaboreVendasPage() {
       const dia = Math.min(ocorrencia, diasNoMes)
       const dataIso = `${ano}-${String(reg.mesIdx + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
       const valorProLabore = Math.min(tetoProLabore, reg.valor)
+      const vendedorId = mapaVendedores.get(reg.vendedor.toLowerCase())
+      const valorComissao = vendedorId ? Math.min(comissaoPadraoLote, reg.valor) : undefined
       const rotulo = `${reg.mes} · ${reg.vendedor} · ${formatMoeda(reg.valor)}`
       try {
         await proLaboreApi.vendas.criar({
           data: dataIso,
           valorVenda: reg.valor,
           valorProLabore,
-          vendedorId: mapaVendedores.get(reg.vendedor.toLowerCase()),
+          vendedorId,
+          valorComissao,
           observacao: reg.pendente ? 'Importado do histórico — pagamento pendente' : 'Importado do histórico',
         })
         resultados.push({ linha: rotulo, ok: true })
@@ -324,7 +329,7 @@ export default function ProLaboreVendasPage() {
 
         {importAberto && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 14 }}>
               <div className="pl-field">
                 <label>Dados colados (uma venda por linha)</label>
                 <textarea
@@ -335,11 +340,15 @@ export default function ProLaboreVendasPage() {
                   onChange={e => setTextoImportacao(e.target.value)}
                   placeholder={'Jan\tWanderson\tR$ 23.900,00\t✅ Importado\nJan\tNaiza\tR$ 20.000,00\t✅ Importado'}
                 />
-                <span className="pl-hint">Só o mês é usado (sem ano) — o ano vem do campo ao lado. Vendedores novos são cadastrados automaticamente. A comissão não é preenchida aqui — edite a venda depois se precisar.</span>
+                <span className="pl-hint">Só o mês é usado (sem ano) — o ano vem do campo ao lado. Vendedores novos são cadastrados automaticamente. Pró-labore ({formatMoeda(tetoProLabore)}) e comissão são aplicados no valor fixo definido ao lado pra cada linha — edite a venda depois se precisar de um valor diferente.</span>
               </div>
               <div className="pl-field">
                 <label>Ano dos dados</label>
                 <input type="number" className="pl-input" value={anoImportacao} onChange={e => setAnoImportacao(e.target.value)} />
+              </div>
+              <div className="pl-field">
+                <label>Comissão por venda (R$)</label>
+                <input type="number" step="0.01" min="0" className="pl-input" value={comissaoImportacao} onChange={e => setComissaoImportacao(e.target.value)} />
               </div>
             </div>
             <div>
