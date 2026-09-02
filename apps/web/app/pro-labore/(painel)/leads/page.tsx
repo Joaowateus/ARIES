@@ -103,9 +103,19 @@ export default function ProLaboreLeadsPage() {
     }
   }
 
+  // Cada vendedor pode ter seu próprio teto de pró-labore por venda — o do
+  // lead sendo convertido (se o vendedor tiver um definido) ou o padrão da
+  // conta. Um vendedor logado sempre usa o próprio teto, já resolvido pelo
+  // backend em auth/me.
+  function tetoEfetivo(vendedorId?: string | null): number {
+    if (!isDono) return usuario?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+    const vendedor = vendedorId ? vendedores.find(v => v.id === vendedorId) : undefined
+    return vendedor?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+  }
+
   function abrirConversao(lead: Lead) {
     setConvertendoId(lead.id)
-    const teto = parametro?.tetoProLaborePorVenda ?? 900
+    const teto = tetoEfetivo(lead.vendedorId)
     setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(teto), observacao: '' })
     setConvertErro('')
   }
@@ -117,7 +127,7 @@ export default function ProLaboreLeadsPage() {
 
   function atualizarValorVendaConversao(valor: string) {
     const numero = Number(valor)
-    const teto = parametro?.tetoProLaborePorVenda ?? 900
+    const teto = tetoEfetivo(leadConvertendo?.vendedorId)
     const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, teto) : teto
     setConvertForm(f => ({ ...f, valorVenda: valor, valorProLabore: String(sugestao) }))
   }
@@ -185,8 +195,8 @@ export default function ProLaboreLeadsPage() {
   const fechadosFiltrado = leadsFiltrados.filter(l => l.vendaId).length
   const conversaoFiltrado = totalFiltrado > 0 ? (fechadosFiltrado / totalFiltrado) * 100 : 0
 
-  const teto = parametro?.tetoProLaborePorVenda ?? 900
   const leadConvertendo = convertendoId ? leads.find(l => l.id === convertendoId) ?? null : null
+  const teto = tetoEfetivo(leadConvertendo?.vendedorId)
 
   return (
     <div>

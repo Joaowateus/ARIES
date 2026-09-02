@@ -916,6 +916,10 @@ model Vendedor {
   ativo        Boolean  @default(true)
   email        String?  @unique
   senhaHash    String?
+  // Teto de pró-labore por venda individual deste vendedor — sobrepõe o
+  // ParametroLiquidez.tetoProLaborePorVenda da conta quando definido. Só o
+  // dono edita (a rota é requireDono); nulo = usa o padrão da conta.
+  tetoProLaborePorVenda Float?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 

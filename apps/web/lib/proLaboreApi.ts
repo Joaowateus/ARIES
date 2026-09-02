@@ -31,6 +31,9 @@ export interface ProLaboreUsuario {
   nome: string
   email: string
   papel: ProLaborePapel
+  // Só presente quando papel === 'VENDEDOR': teto efetivo já resolvido
+  // (comissão individual do vendedor, ou o padrão da conta se não tiver uma).
+  tetoProLaborePorVenda?: number
 }
 
 export interface ParametroLiquidez {
@@ -44,6 +47,7 @@ export interface Vendedor {
   nome: string
   ativo: boolean
   email?: string | null
+  tetoProLaborePorVenda?: number | null
   criadoEm: string
 }
 
@@ -165,7 +169,7 @@ export const proLaboreApi = {
   vendedores: {
     listar: () => request<Vendedor[]>('/pro-labore/vendedores'),
     criar: (nome: string) => request<Vendedor>('/pro-labore/vendedores', { method: 'POST', body: JSON.stringify({ nome }) }),
-    editar: (id: string, data: { nome?: string; ativo?: boolean }) =>
+    editar: (id: string, data: { nome?: string; ativo?: boolean; tetoProLaborePorVenda?: number | null }) =>
       request<Vendedor>(`/pro-labore/vendedores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendedores/${id}`, { method: 'DELETE' }),
     concederAcesso: (id: string, data: { email: string; senha: string }) =>

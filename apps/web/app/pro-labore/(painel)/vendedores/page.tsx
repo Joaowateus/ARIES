@@ -1,13 +1,15 @@
 'use client'
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
-import { proLaboreApi, Vendedor } from '@/lib/proLaboreApi'
+import { proLaboreApi, Vendedor, ParametroLiquidez } from '@/lib/proLaboreApi'
+import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
 export default function ProLaboreVendedoresPage() {
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel !== 'VENDEDOR'
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
+  const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
   const [nome, setNome] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -19,9 +21,16 @@ export default function ProLaboreVendedoresPage() {
   const [acessoErro, setAcessoErro] = useState('')
   const [acessoSalvando, setAcessoSalvando] = useState(false)
 
+  const [editandoTetoId, setEditandoTetoId] = useState<string | null>(null)
+  const [tetoValor, setTetoValor] = useState('')
+  const [tetoErro, setTetoErro] = useState('')
+  const [tetoSalvando, setTetoSalvando] = useState(false)
+
   const carregar = useCallback(() => {
     if (!isDono) { setLoading(false); return }
-    proLaboreApi.vendedores.listar().then(setVendedores).finally(() => setLoading(false))
+    Promise.all([proLaboreApi.vendedores.listar(), proLaboreApi.parametros.get()])
+      .then(([v, p]) => { setVendedores(v); setParametro(p) })
+      .finally(() => setLoading(false))
   }, [isDono])
 
   useEffect(() => { carregar() }, [carregar])
@@ -86,6 +95,37 @@ export default function ProLaboreVendedoresPage() {
     carregar()
   }
 
+  function abrirEdicaoTeto(v: Vendedor) {
+    setEditandoTetoId(v.id)
+    setTetoValor(v.tetoProLaborePorVenda != null ? String(v.tetoProLaborePorVenda) : '')
+    setTetoErro('')
+  }
+
+  function fecharEdicaoTeto() {
+    setEditandoTetoId(null)
+    setTetoValor('')
+    setTetoErro('')
+  }
+
+  async function salvarTeto(id: string) {
+    setTetoErro('')
+    setTetoSalvando(true)
+    try {
+      const numero = tetoValor.trim() === '' ? null : Number(tetoValor)
+      if (numero !== null && (!Number.isFinite(numero) || numero <= 0)) {
+        setTetoErro('Informe um valor positivo, ou deixe em branco pra usar o padrão da conta')
+        return
+      }
+      await proLaboreApi.vendedores.editar(id, { tetoProLaborePorVenda: numero })
+      fecharEdicaoTeto()
+      carregar()
+    } catch (err: unknown) {
+      setTetoErro(err instanceof Error ? err.message : 'Erro ao salvar comissão')
+    } finally {
+      setTetoSalvando(false)
+    }
+  }
+
   if (!isDono) {
     return (
       <div className="pl-empty pl-card">
@@ -132,6 +172,7 @@ export default function ProLaboreVendedoresPage() {
               <tr>
                 <th>Nome</th>
                 <th>Status</th>
+                <th>Comissão por venda</th>
                 <th>Acesso individual</th>
                 <th />
               </tr>
@@ -145,11 +186,19 @@ export default function ProLaboreVendedoresPage() {
                       <span className={`pl-delta ${v.ativo ? 'up' : 'down'}`} style={{ display: 'inline-flex' }}>{v.ativo ? 'Ativo' : 'Inativo'}</span>
                     </td>
                     <td>
+                      {v.tetoProLaborePorVenda != null
+                        ? <span className="pl-mono">{formatMoeda(v.tetoProLaborePorVenda)}</span>
+                        : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoProLaborePorVenda)})` : ''}</span>}
+                    </td>
+                    <td>
                       {v.email
                         ? <span className="pl-delta up" style={{ display: 'inline-flex' }} title={v.email}>Com login</span>
                         : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Sem login</span>}
                     </td>
                     <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
+                      <span className="pl-link-action" onClick={() => (editandoTetoId === v.id ? fecharEdicaoTeto() : abrirEdicaoTeto(v))} style={{ marginRight: 14 }}>
+                        Editar comissão
+                      </span>
                       <span className="pl-link-action" onClick={() => (concedendoId === v.id ? fecharConcessao() : abrirConcessao(v))} style={{ marginRight: 14 }}>
                         {v.email ? 'Trocar acesso' : 'Dar acesso'}
                       </span>
@@ -158,9 +207,27 @@ export default function ProLaboreVendedoresPage() {
                       <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
                     </td>
                   </tr>
+                  {editandoTetoId === v.id && (
+                    <tr>
+                      <td colSpan={5}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
+                          <div className="pl-field" style={{ minWidth: 220 }}>
+                            <label>Comissão (teto de pró-labore por venda, R$)</label>
+                            <input type="number" step="0.01" min="0" className="pl-input" value={tetoValor} onChange={e => setTetoValor(e.target.value)} placeholder={parametro ? String(parametro.tetoProLaborePorVenda) : '900'} />
+                            <span className="pl-hint">Deixe em branco pra usar o padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoProLaborePorVenda)})` : ''}</span>
+                          </div>
+                          <button type="button" className="pl-btn pl-btn-primary" disabled={tetoSalvando} onClick={() => salvarTeto(v.id)}>
+                            {tetoSalvando ? 'Salvando...' : 'Salvar comissão'}
+                          </button>
+                          <button type="button" className="pl-btn pl-btn-ghost" onClick={fecharEdicaoTeto}>Cancelar</button>
+                        </div>
+                        {tetoErro && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{tetoErro}</div>}
+                      </td>
+                    </tr>
+                  )}
                   {concedendoId === v.id && (
                     <tr>
-                      <td colSpan={4}>
+                      <td colSpan={5}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Email de acesso</label>

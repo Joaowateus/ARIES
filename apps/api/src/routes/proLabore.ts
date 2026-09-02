@@ -11,7 +11,24 @@ const TETO_PRO_LABORE_PADRAO = 900
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, criadoEm: true, atualizadoEm: true } as const
+const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, tetoProLaborePorVenda: true, criadoEm: true, atualizadoEm: true } as const
+
+// Teto efetivo de pró-labore por venda: usa a comissão individual do
+// vendedor quando definida, senão cai pro padrão da conta. Cada vendedor
+// pode ter uma comissão diferente — sem isso, o teto era um valor único
+// compartilhado por toda a operação.
+async function resolverTetoProLabore(usuarioId: string, vendedorId?: string | null): Promise<number> {
+  if (vendedorId) {
+    const vendedor = await prisma.vendedor.findUnique({ where: { id: vendedorId }, select: { tetoProLaborePorVenda: true } })
+    if (vendedor?.tetoProLaborePorVenda != null) return vendedor.tetoProLaborePorVenda
+  }
+  const parametro = await prisma.parametroLiquidez.upsert({
+    where: { usuarioId },
+    update: {},
+    create: { usuarioId, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
+  })
+  return parametro.tetoProLaborePorVenda
+}
 
 // Datas de venda/mês de referência são conceitos de calendário puro (sem
 // horário nem fuso) — por isso todo o agrupamento por mês/ano usa os
@@ -141,7 +158,8 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
       res.status(404).json({ error: 'Vendedor não encontrado' })
       return
     }
-    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: 'VENDEDOR' })
+    const tetoProLaborePorVenda = await resolverTetoProLabore(sub, vendedorId)
+    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: 'VENDEDOR', tetoProLaborePorVenda })
     return
   }
 
@@ -264,6 +282,7 @@ router.post('/vendedores', requireProLaboreAuth, requireDono, async (req: Reques
 const editarVendedorSchema = z.object({
   nome: z.string().min(2).optional(),
   ativo: z.boolean().optional(),
+  tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo').nullable().optional(),
 })
 
 router.patch('/vendedores/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -395,14 +414,10 @@ router.post('/vendas', requireProLaboreAuth, async (req: Request, res: Response)
     }
   }
 
-  const parametro = await prisma.parametroLiquidez.upsert({
-    where: { usuarioId },
-    update: {},
-    create: { usuarioId, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
-  })
+  const teto = await resolverTetoProLabore(usuarioId, vendedorId)
 
-  if (valorProLabore > parametro.tetoProLaborePorVenda) {
-    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${parametro.tetoProLaborePorVenda})` })
+  if (valorProLabore > teto) {
+    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${teto})` })
     return
   }
   if (valorProLabore > valorVenda) {
@@ -459,9 +474,9 @@ router.patch('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Resp
 
   const valorVenda = parse.data.valorVenda ?? atual.valorVenda
   const valorProLabore = parse.data.valorProLabore ?? atual.valorProLabore
+  const vendedorIdEfetivo = parse.data.vendedorId === undefined ? atual.vendedorId : parse.data.vendedorId
 
-  const parametro = await prisma.parametroLiquidez.findUnique({ where: { usuarioId } })
-  const teto = parametro?.tetoProLaborePorVenda ?? TETO_PRO_LABORE_PADRAO
+  const teto = await resolverTetoProLabore(usuarioId, vendedorIdEfetivo)
   if (valorProLabore > teto) {
     res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${teto})` })
     return
@@ -680,13 +695,9 @@ router.post('/leads/:id/converter', requireProLaboreAuth, async (req: Request, r
   }
 
   const { valorVenda, valorProLabore } = parse.data
-  const parametro = await prisma.parametroLiquidez.upsert({
-    where: { usuarioId },
-    update: {},
-    create: { usuarioId, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
-  })
-  if (valorProLabore > parametro.tetoProLaborePorVenda) {
-    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${parametro.tetoProLaborePorVenda})` })
+  const teto = await resolverTetoProLabore(usuarioId, atual.vendedorId)
+  if (valorProLabore > teto) {
+    res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${teto})` })
     return
   }
   if (valorProLabore > valorVenda) {
