@@ -24,10 +24,13 @@ export function setUsuario(usuario: ProLaboreUsuario) {
   localStorage.setItem('pro_labore_usuario', JSON.stringify(usuario))
 }
 
+export type ProLaborePapel = 'DONO' | 'VENDEDOR'
+
 export interface ProLaboreUsuario {
   id: string
   nome: string
   email: string
+  papel: ProLaborePapel
 }
 
 export interface ParametroLiquidez {
@@ -40,7 +43,25 @@ export interface Vendedor {
   id: string
   nome: string
   ativo: boolean
+  email?: string | null
   criadoEm: string
+}
+
+export const ESTAGIOS_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO', 'PERDIDO'] as const
+export type EstagioLead = (typeof ESTAGIOS_LEAD)[number]
+
+export interface Lead {
+  id: string
+  nomeCliente: string
+  telefone?: string | null
+  observacao?: string | null
+  estagio: EstagioLead
+  vendaId?: string | null
+  vendedorId?: string | null
+  vendedor?: { id: string; nome: string } | null
+  criadoEm: string
+  atualizadoEm: string
+  fechadoEm?: string | null
 }
 
 export interface Venda {
@@ -143,6 +164,9 @@ export const proLaboreApi = {
     editar: (id: string, data: { nome?: string; ativo?: boolean }) =>
       request<Vendedor>(`/pro-labore/vendedores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendedores/${id}`, { method: 'DELETE' }),
+    concederAcesso: (id: string, data: { email: string; senha: string }) =>
+      request<Vendedor>(`/pro-labore/vendedores/${id}/acesso`, { method: 'POST', body: JSON.stringify(data) }),
+    revogarAcesso: (id: string) => request<Vendedor>(`/pro-labore/vendedores/${id}/acesso`, { method: 'DELETE' }),
   },
   vendas: {
     listar: (ano?: number) => request<Venda[]>(`/pro-labore/vendas${ano ? `?ano=${ano}` : ''}`),
@@ -161,6 +185,18 @@ export const proLaboreApi = {
     listar: (ano?: number) => request<GastoAnuncioMensal[]>(`/pro-labore/gastos-anuncios${ano ? `?ano=${ano}` : ''}`),
     salvar: (data: { mesReferencia: string; valor: number }) =>
       request<GastoAnuncioMensal>('/pro-labore/gastos-anuncios', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  leads: {
+    listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
+    criar: (data: { nomeCliente: string; telefone?: string; observacao?: string; vendedorId?: string }) =>
+      request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: { nomeCliente?: string; telefone?: string; observacao?: string; vendedorId?: string | null }) =>
+      request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    mudarEstagio: (id: string, estagio: EstagioLead) =>
+      request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio }) }),
+    converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; observacao?: string }) =>
+      request<{ lead: Lead; venda: Venda }>(`/pro-labore/leads/${id}/converter`, { method: 'POST', body: JSON.stringify(data) }),
+    remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/leads/${id}`, { method: 'DELETE' }),
   },
   painel: {
     get: (ano?: number) => request<PainelProLabore>(`/pro-labore/painel${ano ? `?ano=${ano}` : ''}`),

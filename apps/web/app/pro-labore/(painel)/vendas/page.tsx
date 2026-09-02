@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { proLaboreApi, Venda, ParametroLiquidez, Vendedor } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
+import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
 const MESES_MAP: Record<string, number> = {
   jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
@@ -24,6 +25,8 @@ function parseValorBR(raw: string): number {
 interface ResultadoImportacao { linha: string; ok: boolean; erro?: string }
 
 export default function ProLaboreVendasPage() {
+  const { usuario } = useProLaboreAuth()
+  const isDono = usuario?.papel !== 'VENDEDOR'
   const [vendas, setVendas] = useState<Venda[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
@@ -44,10 +47,14 @@ export default function ProLaboreVendasPage() {
   const [resultadosImportacao, setResultadosImportacao] = useState<ResultadoImportacao[]>([])
 
   const carregar = useCallback(() => {
-    Promise.all([proLaboreApi.vendas.listar(), proLaboreApi.parametros.get(), proLaboreApi.vendedores.listar()])
+    Promise.all([
+      proLaboreApi.vendas.listar(),
+      proLaboreApi.parametros.get(),
+      isDono ? proLaboreApi.vendedores.listar() : Promise.resolve<Vendedor[]>([]),
+    ])
       .then(([v, p, ven]) => { setVendas(v); setParametro(p); setVendedores(ven) })
       .finally(() => setLoading(false))
-  }, [])
+  }, [isDono])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -241,13 +248,15 @@ export default function ProLaboreVendasPage() {
             <input type="number" step="0.01" min="0" max={teto} className="pl-input" value={form.valorProLabore} onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
             <span className="pl-hint">Máximo {formatMoeda(teto)}</span>
           </div>
-          <div className="pl-field">
-            <label>Vendedor (opcional)</label>
-            <select className="pl-select" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
-              <option value="">— Sem vendedor —</option>
-              {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
-            </select>
-          </div>
+          {isDono && (
+            <div className="pl-field">
+              <label>Vendedor (opcional)</label>
+              <select className="pl-select" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
+                <option value="">— Sem vendedor —</option>
+                {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+              </select>
+            </div>
+          )}
           <div className="pl-field">
             <label>Observação (opcional)</label>
             <input type="text" className="pl-input" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: cliente / modelo" />
@@ -262,6 +271,7 @@ export default function ProLaboreVendasPage() {
         </div>
       </form>
 
+      {isDono && (
       <div className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-head" style={{ marginBottom: importAberto ? 14 : 0 }}>
           <div>
@@ -326,6 +336,7 @@ export default function ProLaboreVendasPage() {
           </div>
         )}
       </div>
+      )}
 
       {loading ? (
         <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>

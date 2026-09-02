@@ -6,6 +6,8 @@ export interface ProLaboreJwtPayload {
   sub: string
   email: string
   nome: string
+  papel: 'DONO' | 'VENDEDOR'
+  vendedorId?: string
 }
 
 export function signProLaboreToken(payload: ProLaboreJwtPayload): string {

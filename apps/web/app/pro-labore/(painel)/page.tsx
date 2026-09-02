@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
+import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
@@ -42,6 +43,8 @@ function DeltaChip({ curr, prev, invert }: { curr: number; prev: number | undefi
 }
 
 export default function ProLaboreDashboardPage() {
+  const { usuario } = useProLaboreAuth()
+  const isDono = usuario?.papel !== 'VENDEDOR'
   const [painel, setPainel] = useState<PainelProLabore | null>(null)
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
@@ -76,8 +79,12 @@ export default function ProLaboreDashboardPage() {
     { label: 'Receita do mês', value: formatMoeda(atual.receita), color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
     { label: 'Lucro (pró-labore)', value: formatMoeda(atual.proLaboreSacado), color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado },
     { label: 'Ticket médio', value: formatMoeda(atual.ticketMedio), color: 'var(--pl-accent-4)', curr: atual.ticketMedio, prev: anterior?.ticketMedio },
-    { label: 'Gasto com anúncios', value: formatMoeda(atual.gastoAnuncios), color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true },
-    { label: 'ROAS', value: <>{atual.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}<span className="pl-unit">×</span></>, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas },
+    ...(isDono
+      ? [
+          { label: 'Gasto com anúncios', value: formatMoeda(atual.gastoAnuncios), color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true },
+          { label: 'ROAS', value: <>{atual.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}<span className="pl-unit">×</span></>, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas },
+        ]
+      : []),
     { label: 'Conversão lead→venda', value: formatPct(atual.conversaoLeadVenda / 100), color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
   ]
 
@@ -104,7 +111,7 @@ export default function ProLaboreDashboardPage() {
         ))}
       </div>
 
-      <AnoEMetas meses={meses} parametro={parametro} onParametroSalvo={setParametro} />
+      <AnoEMetas meses={meses} parametro={parametro} onParametroSalvo={setParametro} isDono={isDono} />
 
       <div className="pl-section-head">
         <div>
@@ -132,7 +139,7 @@ export default function ProLaboreDashboardPage() {
             <div>Lucro<strong>{formatMoeda(atual.proLaboreSacado)}</strong></div>
             <div>Vendas<strong>{atual.quantidadeVendas}</strong></div>
             <div>Ticket médio<strong>{formatMoeda(atual.ticketMedio)}</strong></div>
-            <div>Gasto anúncios<strong>{formatMoeda(atual.gastoAnuncios)}</strong></div>
+            {isDono && <div>Gasto anúncios<strong>{formatMoeda(atual.gastoAnuncios)}</strong></div>}
           </div>
         </div>
 
@@ -162,44 +169,48 @@ export default function ProLaboreDashboardPage() {
         <FunilJourney funil={atual.funil} />
       </div>
 
-      <div className="pl-section-head">
-        <div>
-          <div className="pl-eyebrow">Times &amp; investimento</div>
-          <h2 className="pl-section-title">Ranking de vendedores e retorno de anúncios</h2>
-        </div>
-      </div>
-
-      <div className="pl-grid-2b">
-        <div className="pl-card">
-          <div className="pl-card-head">
+      {isDono && (
+        <>
+          <div className="pl-section-head">
             <div>
-              <div className="pl-card-title">Ranking de vendedores</div>
-              <div className="pl-card-sub">Por receita gerada · {atual.label} {atual.ano}</div>
+              <div className="pl-eyebrow">Times &amp; investimento</div>
+              <h2 className="pl-section-title">Ranking de vendedores e retorno de anúncios</h2>
             </div>
           </div>
-          <SellerLeaderboard vendedores={atual.vendedores} />
-        </div>
 
-        <div className="pl-card">
-          <div className="pl-card-head">
-            <div>
-              <div className="pl-card-title">ROAS mensal</div>
-              <div className="pl-card-sub">Receita ÷ gasto com anúncios</div>
+          <div className="pl-grid-2b">
+            <div className="pl-card">
+              <div className="pl-card-head">
+                <div>
+                  <div className="pl-card-title">Ranking de vendedores</div>
+                  <div className="pl-card-sub">Por receita gerada · {atual.label} {atual.ano}</div>
+                </div>
+              </div>
+              <SellerLeaderboard vendedores={atual.vendedores} />
+            </div>
+
+            <div className="pl-card">
+              <div className="pl-card-head">
+                <div>
+                  <div className="pl-card-title">ROAS mensal</div>
+                  <div className="pl-card-sub">Receita ÷ gasto com anúncios</div>
+                </div>
+              </div>
+              <RoasBars meses={meses} selectedIdx={selectedIdx} />
+              <div className="pl-stat-strip">
+                <div className="pl-s"><div className="pl-l">Gasto em {atual.label}</div><div className="pl-v">{formatMoeda(atual.gastoAnuncios)}</div></div>
+                <div className="pl-s"><div className="pl-l">CAC (custo/venda)</div><div className="pl-v">{formatMoeda(atual.cac)}</div></div>
+              </div>
             </div>
           </div>
-          <RoasBars meses={meses} selectedIdx={selectedIdx} />
-          <div className="pl-stat-strip">
-            <div className="pl-s"><div className="pl-l">Gasto em {atual.label}</div><div className="pl-v">{formatMoeda(atual.gastoAnuncios)}</div></div>
-            <div className="pl-s"><div className="pl-l">CAC (custo/venda)</div><div className="pl-v">{formatMoeda(atual.cac)}</div></div>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }
 
 /* ============ FATURAMENTO ANUAL x META + FRASE MOTIVACIONAL ============ */
-function AnoEMetas({ meses, parametro, onParametroSalvo }: { meses: MesPainel[]; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void }) {
+function AnoEMetas({ meses, parametro, onParametroSalvo, isDono }: { meses: MesPainel[]; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void; isDono: boolean }) {
   if (meses.length === 0) return null
   const ano = meses[0].ano
   const totalAnual = meses.reduce((s, m) => s + m.receita, 0)
@@ -220,7 +231,7 @@ function AnoEMetas({ meses, parametro, onParametroSalvo }: { meses: MesPainel[];
         <div className="pl-card">
           <div className="pl-card-head">
             <div>
-              <div className="pl-card-title">Faturamento anual (atual)</div>
+              <div className="pl-card-title">{isDono ? 'Faturamento anual (atual)' : 'Sua produção anual'}</div>
               <div className="pl-card-sub">Acumulado de {meses[0].label} a {meses[meses.length - 1].label} de {ano}</div>
             </div>
           </div>
@@ -244,12 +255,12 @@ function AnoEMetas({ meses, parametro, onParametroSalvo }: { meses: MesPainel[];
         </div>
       </div>
 
-      <FraseMotivacional parametro={parametro} onSaved={onParametroSalvo} />
+      <FraseMotivacional parametro={parametro} onSaved={onParametroSalvo} isDono={isDono} />
     </div>
   )
 }
 
-function FraseMotivacional({ parametro, onSaved }: { parametro: ParametroLiquidez | null; onSaved: (p: ParametroLiquidez) => void }) {
+function FraseMotivacional({ parametro, onSaved, isDono }: { parametro: ParametroLiquidez | null; onSaved: (p: ParametroLiquidez) => void; isDono: boolean }) {
   const [editando, setEditando] = useState(false)
   const [texto, setTexto] = useState(parametro?.fraseMotivacional ?? '')
   const [salvando, setSalvando] = useState(false)
@@ -274,7 +285,7 @@ function FraseMotivacional({ parametro, onSaved }: { parametro: ParametroLiquide
           <div className="pl-card-title">Frase motivacional</div>
           <div className="pl-card-sub">Sua lembrança pessoal, sempre visível no painel</div>
         </div>
-        {!editando && (
+        {isDono && !editando && (
           <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setEditando(true)}>
             {parametro?.fraseMotivacional ? 'Editar' : 'Adicionar'}
           </button>
