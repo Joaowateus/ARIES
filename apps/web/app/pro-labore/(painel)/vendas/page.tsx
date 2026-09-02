@@ -51,6 +51,12 @@ export default function ProLaboreVendasPage() {
   const [importando, setImportando] = useState(false)
   const [resultadosImportacao, setResultadosImportacao] = useState<ResultadoImportacao[]>([])
 
+  const [atualizarAberto, setAtualizarAberto] = useState(false)
+  const [textoAtualizacao, setTextoAtualizacao] = useState('')
+  const [comissaoAtualizacao, setComissaoAtualizacao] = useState('500')
+  const [atualizando, setAtualizando] = useState(false)
+  const [resultadosAtualizacao, setResultadosAtualizacao] = useState<ResultadoImportacao[]>([])
+
   const carregar = useCallback(() => {
     if (!isDono) { setLoading(false); return }
     Promise.all([proLaboreApi.vendas.listar(), proLaboreApi.parametros.get(), proLaboreApi.vendedores.listar()])
@@ -241,6 +247,71 @@ export default function ProLaboreVendasPage() {
     carregar()
   }
 
+  // Preenche a comissão de vendas JÁ CADASTRADAS (nunca cria venda nova).
+  // Casa cada linha colada (Vendedor + Valor da venda) com uma venda existente
+  // do mesmo vendedor e valor; quando há mais de uma venda igual, cada linha
+  // consome uma correspondência diferente (vendas sem comissão ainda entram
+  // primeiro na fila), então não há risco de duplicar nem de sobrescrever a
+  // mesma venda duas vezes.
+  async function processarAtualizacaoComissao() {
+    setAtualizando(true)
+    setResultadosAtualizacao([])
+
+    const comissaoPadrao = Number(comissaoAtualizacao) || 0
+    const linhas = textoAtualizacao.split('\n').map(l => l.trim()).filter(Boolean)
+    const registros: { vendedor: string; valor: number }[] = []
+
+    for (const linha of linhas) {
+      let campos = linha.split('\t').map(c => c.trim())
+      if (campos.length < 2) campos = linha.split(/\s{2,}/).map(c => c.trim())
+      if (campos.length < 2) continue
+      const [vendedorRaw, valorRaw] = campos
+      if (/vendedor/i.test(vendedorRaw)) continue // pula cabeçalho
+      const valor = parseValorBR(valorRaw)
+      if (!valor || !vendedorRaw) continue
+      registros.push({ vendedor: vendedorRaw, valor })
+    }
+
+    if (registros.length === 0) {
+      setResultadosAtualizacao([{ linha: '—', ok: false, erro: 'Nenhuma linha reconhecida. Formato esperado: Vendedor, Valor da venda.' }])
+      setAtualizando(false)
+      return
+    }
+
+    const pool = new Map<string, Venda[]>()
+    for (const v of vendas) {
+      if (!v.vendedorId || !v.vendedor) continue
+      const chave = `${v.vendedor.nome.toLowerCase()}|${v.valorVenda}`
+      const lista = pool.get(chave) ?? []
+      lista.push(v)
+      pool.set(chave, lista)
+    }
+    for (const lista of pool.values()) {
+      lista.sort((a, b) => (a.valorComissao != null ? 1 : 0) - (b.valorComissao != null ? 1 : 0))
+    }
+
+    const resultados: ResultadoImportacao[] = []
+    for (const reg of registros) {
+      const chave = `${reg.vendedor.toLowerCase()}|${reg.valor}`
+      const rotulo = `${reg.vendedor} · ${formatMoeda(reg.valor)}`
+      const candidato = pool.get(chave)?.shift()
+      if (!candidato) {
+        resultados.push({ linha: rotulo, ok: false, erro: 'Nenhuma venda correspondente encontrada' })
+        continue
+      }
+      try {
+        await proLaboreApi.vendas.editar(candidato.id, { valorComissao: comissaoPadrao })
+        resultados.push({ linha: rotulo, ok: true })
+      } catch (err) {
+        resultados.push({ linha: rotulo, ok: false, erro: err instanceof Error ? err.message : 'Erro desconhecido' })
+      }
+    }
+
+    setResultadosAtualizacao(resultados)
+    setAtualizando(false)
+    carregar()
+  }
+
   // Lê os componentes da data direto da string ISO (ano-mês-dia), sem passar
   // por new Date(...).toLocaleDateString() — isso evita reconverter pro fuso
   // horário do navegador, que pode exibir o dia anterior (ex: a virada de mês)
@@ -374,6 +445,71 @@ export default function ProLaboreVendasPage() {
                           {r.ok
                             ? <span className="pl-delta up" style={{ display: 'inline-flex' }}>Importado</span>
                             : <span className="pl-delta down" style={{ display: 'inline-flex' }} title={r.erro}>Falhou{r.erro ? `: ${r.erro}` : ''}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="pl-card" style={{ marginBottom: 20 }}>
+        <div className="pl-card-head" style={{ marginBottom: atualizarAberto ? 14 : 0 }}>
+          <div>
+            <div className="pl-card-title">Atualizar comissão em lote</div>
+            <div className="pl-card-sub">Cole vendedor + valor da venda (uma por linha) para preencher a comissão de vendas já cadastradas — nunca cria venda nova</div>
+          </div>
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setAtualizarAberto(a => !a)}>
+            {atualizarAberto ? 'Fechar' : 'Atualizar comissão'}
+          </button>
+        </div>
+
+        {atualizarAberto && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 14 }}>
+              <div className="pl-field">
+                <label>Dados colados (Vendedor, Valor da venda)</label>
+                <textarea
+                  className="pl-input"
+                  rows={8}
+                  style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5 }}
+                  value={textoAtualizacao}
+                  onChange={e => setTextoAtualizacao(e.target.value)}
+                  placeholder={'Wanderson\tR$ 23.900,00\nNaiza\tR$ 20.000,00'}
+                />
+                <span className="pl-hint">Cada linha é casada com uma venda já cadastrada do mesmo vendedor e valor. Quando há mais de uma venda igual, cada linha consome uma correspondência diferente (sem comissão ainda tem prioridade) — sem risco de duplicar ou de aplicar duas vezes na mesma venda.</span>
+              </div>
+              <div className="pl-field">
+                <label>Comissão a aplicar (R$)</label>
+                <input type="number" step="0.01" min="0" className="pl-input" value={comissaoAtualizacao} onChange={e => setComissaoAtualizacao(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <button type="button" className="pl-btn pl-btn-primary" disabled={atualizando || !textoAtualizacao.trim()} onClick={processarAtualizacaoComissao}>
+                {atualizando ? 'Atualizando...' : 'Aplicar comissão às vendas existentes'}
+              </button>
+            </div>
+
+            {resultadosAtualizacao.length > 0 && (
+              <div className="pl-table-wrap">
+                <table className="pl-table">
+                  <thead>
+                    <tr>
+                      <th>Registro</th>
+                      <th>Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultadosAtualizacao.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.linha}</td>
+                        <td>
+                          {r.ok
+                            ? <span className="pl-delta up" style={{ display: 'inline-flex' }}>Atualizado</span>
+                            : <span className="pl-delta down" style={{ display: 'inline-flex' }} title={r.erro}>Não encontrado{r.erro ? `: ${r.erro}` : ''}</span>}
                         </td>
                       </tr>
                     ))}
