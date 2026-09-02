@@ -916,10 +916,10 @@ model Vendedor {
   ativo        Boolean  @default(true)
   email        String?  @unique
   senhaHash    String?
-  // Teto de pró-labore por venda individual deste vendedor — sobrepõe o
-  // ParametroLiquidez.tetoProLaborePorVenda da conta quando definido. Só o
+  // Teto de comissão por venda individual deste vendedor — sobrepõe o
+  // ParametroLiquidez.tetoComissaoPadrao da conta quando definido. Só o
   // dono edita (a rota é requireDono); nulo = usa o padrão da conta.
-  tetoProLaborePorVenda Float?
+  tetoComissaoPorVenda Float?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
@@ -971,7 +971,12 @@ model GastoAnuncioMensal {
 model ParametroLiquidez {
   id                    String   @id @default(cuid())
   usuarioId             String   @unique
+  // Teto de pró-labore por venda — é sempre o dono, sacado de toda venda
+  // registrada na operação, independente de quem vendeu.
   tetoProLaborePorVenda Float    @default(900)
+  // Teto padrão de comissão por venda, usado quando o vendedor daquela
+  // venda não tem um Vendedor.tetoComissaoPorVenda próprio definido.
+  tetoComissaoPadrao    Float    @default(900)
   metaFaturamentoAnual  Float    @default(5000000)
   fraseMotivacional     String?
   atualizadoEm          DateTime @updatedAt
@@ -981,8 +986,10 @@ model ParametroLiquidez {
   @@map("pro_labore_parametros")
 }
 
-// Cada venda/negociação fechada. O pró-labore sacado é decidido por venda,
-// nunca acima do teto configurado nem do valor da própria venda.
+// Cada venda/negociação fechada — cadastrada só pelo dono. O pró-labore
+// (sempre do dono, sacado de qualquer venda) e a comissão (só quando a
+// venda tem um vendedor atribuído) são valores independentes: cada um
+// respeita o próprio teto e nunca ultrapassa o valor da venda.
 model Venda {
   id             String   @id @default(cuid())
   usuarioId      String
@@ -990,6 +997,7 @@ model Venda {
   data           DateTime
   valorVenda     Float
   valorProLabore Float
+  valorComissao  Float?
   observacao     String?
   criadoEm       DateTime @default(now())
   atualizadoEm   DateTime @updatedAt

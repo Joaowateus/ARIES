@@ -8,7 +8,7 @@ import { PLThemeToggle } from '@/lib/proLaboreTheme'
 
 const NAV = [
   { href: '/pro-labore', label: 'Dashboard' },
-  { href: '/pro-labore/vendas', label: 'Vendas' },
+  { href: '/pro-labore/vendas', label: 'Vendas', donoOnly: true },
   { href: '/pro-labore/leads', label: 'Leads' },
   { href: '/pro-labore/vendedores', label: 'Vendedores', donoOnly: true },
   { href: '/pro-labore/indicadores', label: 'Indicadores', donoOnly: true },

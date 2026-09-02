@@ -24,9 +24,13 @@ function parseValorBR(raw: string): number {
 
 interface ResultadoImportacao { linha: string; ok: boolean; erro?: string }
 
+// Vendas é cadastro exclusivo do dono — vendedor não registra a própria
+// venda, só acompanha o resultado (comissão) no Dashboard e trabalha o
+// funil em Leads.
 export default function ProLaboreVendasPage() {
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel !== 'VENDEDOR'
+
   const [vendas, setVendas] = useState<Venda[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
@@ -35,7 +39,7 @@ export default function ProLaboreVendasPage() {
   const [salvando, setSalvando] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
-  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
+  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '' })
 
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [apagandoSelecao, setApagandoSelecao] = useState(false)
@@ -47,32 +51,38 @@ export default function ProLaboreVendasPage() {
   const [resultadosImportacao, setResultadosImportacao] = useState<ResultadoImportacao[]>([])
 
   const carregar = useCallback(() => {
-    Promise.all([
-      proLaboreApi.vendas.listar(),
-      proLaboreApi.parametros.get(),
-      isDono ? proLaboreApi.vendedores.listar() : Promise.resolve<Vendedor[]>([]),
-    ])
+    if (!isDono) { setLoading(false); return }
+    Promise.all([proLaboreApi.vendas.listar(), proLaboreApi.parametros.get(), proLaboreApi.vendedores.listar()])
       .then(([v, p, ven]) => { setVendas(v); setParametro(p); setVendedores(ven) })
       .finally(() => setLoading(false))
   }, [isDono])
 
   useEffect(() => { carregar() }, [carregar])
 
-  // Cada vendedor pode ter seu próprio teto de pró-labore por venda — o
-  // efetivo é o do vendedor selecionado (se tiver um definido) ou o padrão
-  // da conta. Um vendedor logado sempre usa o próprio teto, já resolvido
-  // pelo backend em auth/me.
-  function tetoEfetivo(vendedorId: string): number {
-    if (!isDono) return usuario?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+  // Pró-labore é sempre do dono, sacado de qualquer venda — o teto é o
+  // padrão único da conta (Configurações), não depende de vendedor.
+  const tetoProLabore = parametro?.tetoProLaborePorVenda ?? 900
+
+  // Comissão é o que se paga ao vendedor daquela venda — cada um pode ter
+  // o próprio teto (Vendedores), senão cai pro padrão da conta.
+  function tetoComissao(vendedorId: string): number {
     const vendedor = vendedores.find(v => v.id === vendedorId)
-    return vendedor?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+    return vendedor?.tetoComissaoPorVenda ?? parametro?.tetoComissaoPadrao ?? 900
   }
 
   function atualizarValorVenda(valor: string) {
     const numero = Number(valor)
-    const teto = tetoEfetivo(form.vendedorId)
-    const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, teto) : teto
+    const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, tetoProLabore) : tetoProLabore
     setForm(f => ({ ...f, valorVenda: valor, valorProLabore: editandoId ? f.valorProLabore : String(sugestao) }))
+  }
+
+  function selecionarVendedor(vendedorId: string) {
+    setForm(f => {
+      if (!vendedorId) return { ...f, vendedorId, valorComissao: '' }
+      const novoTeto = tetoComissao(vendedorId)
+      const sugestao = editandoId ? f.valorComissao : String(Math.min(Number(f.valorComissao) || novoTeto, novoTeto))
+      return { ...f, vendedorId, valorComissao: sugestao }
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -83,12 +93,17 @@ export default function ProLaboreVendasPage() {
       const valorVenda = Number(form.valorVenda)
       const valorProLabore = Number(form.valorProLabore)
       const vendedorId = form.vendedorId || undefined
+      const valorComissao = vendedorId && form.valorComissao !== '' ? Number(form.valorComissao) : undefined
       if (editandoId) {
-        await proLaboreApi.vendas.editar(editandoId, { valorVenda, valorProLabore, vendedorId: form.vendedorId || null, observacao: form.observacao || undefined })
+        await proLaboreApi.vendas.editar(editandoId, {
+          valorVenda, valorProLabore, vendedorId: form.vendedorId || null,
+          valorComissao: form.vendedorId ? valorComissao ?? 0 : null,
+          observacao: form.observacao || undefined,
+        })
       } else {
-        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, vendedorId, observacao: form.observacao || undefined })
+        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, vendedorId, valorComissao, observacao: form.observacao || undefined })
       }
-      setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
+      setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '' })
       setEditandoId(null)
       carregar()
     } catch (err: unknown) {
@@ -105,13 +120,14 @@ export default function ProLaboreVendasPage() {
       valorVenda: String(v.valorVenda),
       valorProLabore: String(v.valorProLabore),
       vendedorId: v.vendedorId ?? '',
+      valorComissao: v.valorComissao != null ? String(v.valorComissao) : '',
       observacao: v.observacao ?? '',
     })
   }
 
   function cancelarEdicao() {
     setEditandoId(null)
-    setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', observacao: '' })
+    setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '' })
   }
 
   async function remover(id: string) {
@@ -190,7 +206,6 @@ export default function ProLaboreVendasPage() {
     }
     setVendedores(await proLaboreApi.vendedores.listar())
 
-    const teto = parametro?.tetoProLaborePorVenda ?? 900
     const contadorPorMes = new Map<number, number>()
     const resultados: ResultadoImportacao[] = []
 
@@ -200,7 +215,7 @@ export default function ProLaboreVendasPage() {
       const diasNoMes = new Date(ano, reg.mesIdx + 1, 0).getDate()
       const dia = Math.min(ocorrencia, diasNoMes)
       const dataIso = `${ano}-${String(reg.mesIdx + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
-      const valorProLabore = Math.min(teto, reg.valor)
+      const valorProLabore = Math.min(tetoProLabore, reg.valor)
       const rotulo = `${reg.mes} · ${reg.vendedor} · ${formatMoeda(reg.valor)}`
       try {
         await proLaboreApi.vendas.criar({
@@ -230,7 +245,17 @@ export default function ProLaboreVendasPage() {
     return `${dia}/${mes}/${ano}`
   }
 
-  const teto = tetoEfetivo(form.vendedorId)
+  if (!isDono) {
+    return (
+      <div className="pl-empty pl-card">
+        <div className="pl-emoji">🔒</div>
+        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
+        <p style={{ marginTop: 6 }}>O cadastro de vendas é feito só pelo dono. Use o Dashboard e o Leads pra acompanhar seu trabalho.</p>
+      </div>
+    )
+  }
+
+  const tetoComissaoAtual = form.vendedorId ? tetoComissao(form.vendedorId) : null
 
   return (
     <div>
@@ -238,7 +263,7 @@ export default function ProLaboreVendasPage() {
         <div>
           <div className="pl-eyebrow">Vendas</div>
           <h2 className="pl-section-title">Registro de vendas</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Cada venda define quanto de pró-labore você sacou dela (teto: {formatMoeda(teto)})</div>
+          <div className="pl-section-note" style={{ marginTop: 4 }}>Cada venda define seu pró-labore (teto: {formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele</div>
         </div>
       </div>
 
@@ -255,28 +280,21 @@ export default function ProLaboreVendasPage() {
           </div>
           <div className="pl-field">
             <label>Pró-labore sacado (R$)</label>
-            <input type="number" step="0.01" min="0" max={teto} className="pl-input" value={form.valorProLabore} onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
-            <span className="pl-hint">Máximo {formatMoeda(teto)}</span>
+            <input type="number" step="0.01" min="0" max={tetoProLabore} className="pl-input" value={form.valorProLabore} onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
+            <span className="pl-hint">Máximo {formatMoeda(tetoProLabore)}</span>
           </div>
-          {isDono && (
+          <div className="pl-field">
+            <label>Vendedor (opcional)</label>
+            <select className="pl-select" value={form.vendedorId} onChange={e => selecionarVendedor(e.target.value)}>
+              <option value="">— Sem vendedor —</option>
+              {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+            </select>
+          </div>
+          {form.vendedorId && (
             <div className="pl-field">
-              <label>Vendedor (opcional)</label>
-              <select
-                className="pl-select"
-                value={form.vendedorId}
-                onChange={e => {
-                  const vendedorId = e.target.value
-                  const novoTeto = tetoEfetivo(vendedorId)
-                  setForm(f => ({
-                    ...f,
-                    vendedorId,
-                    valorProLabore: editandoId ? f.valorProLabore : String(Math.min(Number(f.valorProLabore) || novoTeto, novoTeto)),
-                  }))
-                }}
-              >
-                <option value="">— Sem vendedor —</option>
-                {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
-              </select>
+              <label>Comissão do vendedor (R$)</label>
+              <input type="number" step="0.01" min="0" max={tetoComissaoAtual ?? undefined} className="pl-input" value={form.valorComissao} onChange={e => setForm(f => ({ ...f, valorComissao: e.target.value }))} placeholder="0,00" />
+              <span className="pl-hint">Máximo {formatMoeda(tetoComissaoAtual ?? 0)}</span>
             </div>
           )}
           <div className="pl-field">
@@ -293,7 +311,6 @@ export default function ProLaboreVendasPage() {
         </div>
       </form>
 
-      {isDono && (
       <div className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-head" style={{ marginBottom: importAberto ? 14 : 0 }}>
           <div>
@@ -318,7 +335,7 @@ export default function ProLaboreVendasPage() {
                   onChange={e => setTextoImportacao(e.target.value)}
                   placeholder={'Jan\tWanderson\tR$ 23.900,00\t✅ Importado\nJan\tNaiza\tR$ 20.000,00\t✅ Importado'}
                 />
-                <span className="pl-hint">Só o mês é usado (sem ano) — o ano vem do campo ao lado. Vendedores novos são cadastrados automaticamente.</span>
+                <span className="pl-hint">Só o mês é usado (sem ano) — o ano vem do campo ao lado. Vendedores novos são cadastrados automaticamente. A comissão não é preenchida aqui — edite a venda depois se precisar.</span>
               </div>
               <div className="pl-field">
                 <label>Ano dos dados</label>
@@ -358,7 +375,6 @@ export default function ProLaboreVendasPage() {
           </div>
         )}
       </div>
-      )}
 
       {loading ? (
         <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
@@ -392,6 +408,7 @@ export default function ProLaboreVendasPage() {
                   <th>Vendedor</th>
                   <th className="pl-right">Valor da venda</th>
                   <th className="pl-right">Pró-labore sacado</th>
+                  <th className="pl-right">Comissão</th>
                   <th className="pl-right">Ficou no caixa</th>
                   <th>Observação</th>
                   <th />
@@ -407,7 +424,8 @@ export default function ProLaboreVendasPage() {
                     <td>{v.vendedor?.nome ?? '—'}</td>
                     <td className="pl-right">{formatMoeda(v.valorVenda)}</td>
                     <td className="pl-right" style={{ color: 'var(--pl-accent-3)', fontWeight: 700 }}>{formatMoeda(v.valorProLabore)}</td>
-                    <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore)}</td>
+                    <td className="pl-right" style={{ color: 'var(--pl-accent-4)', fontWeight: 700 }}>{v.valorComissao != null ? formatMoeda(v.valorComissao) : '—'}</td>
+                    <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore - (v.valorComissao ?? 0))}</td>
                     <td>{v.observacao || '—'}</td>
                     <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
                       <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>
