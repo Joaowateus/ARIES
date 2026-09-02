@@ -901,22 +901,27 @@ model ProLaboreUsuario {
   vendedores     Vendedor[]
   funilMensal    FunilMensal[]
   gastosAnuncios GastoAnuncioMensal[]
+  leads          Lead[]
 
   @@map("pro_labore_usuarios")
 }
 
-// Vendedor da operação — não é um login, só um registro pra atribuir vendas
-// e montar o ranking de produção por pessoa.
+// Vendedor da operação. Pode ou não ter login próprio: email/senhaHash só
+// são preenchidos quando o DONO concede acesso individual — até lá é só um
+// registro pra atribuir vendas e montar o ranking de produção por pessoa.
 model Vendedor {
   id           String   @id @default(cuid())
   usuarioId    String
   nome         String
   ativo        Boolean  @default(true)
+  email        String?  @unique
+  senhaHash    String?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
   vendas  Venda[]
+  leads   Lead[]
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -987,8 +992,52 @@ model Venda {
 
   usuario  ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
   vendedor Vendedor?        @relation(fields: [vendedorId], references: [id])
+  lead     Lead?
 
   @@index([usuarioId, data])
   @@index([vendedorId])
   @@map("pro_labore_vendas")
+}
+
+// Lead/oportunidade da esteira comercial do Pró-Labore. Substitui a
+// contagem manual do FunilMensal quando existe dado real: o /painel prefere
+// os números computados daqui e só cai pro FunilMensal em meses sem Lead
+// nenhum (histórico anterior à funcionalidade).
+model Lead {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  vendedorId   String?
+  nomeCliente  String
+  telefone     String?
+  observacao   String?
+  estagio      String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
+  vendaId      String?   @unique
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  fechadoEm    DateTime?
+
+  usuario   ProLaboreUsuario        @relation(fields: [usuarioId], references: [id])
+  vendedor  Vendedor?               @relation(fields: [vendedorId], references: [id])
+  venda     Venda?                  @relation(fields: [vendaId], references: [id])
+  historico LeadEstagioHistorico[]
+
+  @@index([usuarioId])
+  @@index([usuarioId, estagio])
+  @@index([vendedorId])
+  @@map("pro_labore_leads")
+}
+
+// Trilha de transição de estágio do Lead — base pra conversão etapa-a-etapa
+// e tempo médio no funil, espelhando o EstagioHistorico do CRM principal.
+model LeadEstagioHistorico {
+  id              String   @id @default(cuid())
+  leadId          String
+  estagioAnterior String?
+  estagioNovo     String
+  criadoEm        DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@map("pro_labore_lead_estagio_historico")
 }

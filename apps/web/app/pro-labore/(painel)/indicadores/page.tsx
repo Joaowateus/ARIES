@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { proLaboreApi, FunilMensal, GastoAnuncioMensal } from '@/lib/proLaboreApi'
+import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
 function mesAtualStr() {
   const d = new Date()
@@ -9,6 +10,8 @@ function mesAtualStr() {
 }
 
 export default function ProLaboreIndicadoresPage() {
+  const { usuario } = useProLaboreAuth()
+  const isDono = usuario?.papel !== 'VENDEDOR'
   const [mesSelecionado, setMesSelecionado] = useState(mesAtualStr())
   const [funis, setFunis] = useState<FunilMensal[]>([])
   const [gastos, setGastos] = useState<GastoAnuncioMensal[]>([])
@@ -22,11 +25,12 @@ export default function ProLaboreIndicadoresPage() {
   const ano = Number(mesSelecionado.slice(0, 4))
 
   const carregar = useCallback(() => {
+    if (!isDono) { setLoading(false); return }
     setLoading(true)
     Promise.all([proLaboreApi.funil.listar(ano), proLaboreApi.gastosAnuncios.listar(ano)])
       .then(([f, g]) => { setFunis(f); setGastos(g) })
       .finally(() => setLoading(false))
-  }, [ano])
+  }, [ano, isDono])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -66,6 +70,16 @@ export default function ProLaboreIndicadoresPage() {
     } finally {
       setSalvando(false)
     }
+  }
+
+  if (!isDono) {
+    return (
+      <div className="pl-empty pl-card">
+        <div className="pl-emoji">🔒</div>
+        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
+        <p style={{ marginTop: 6 }}>Indicadores de funil e anúncios são visão geral do negócio.</p>
+      </div>
+    )
   }
 
   return (
