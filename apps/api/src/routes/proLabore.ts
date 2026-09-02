@@ -498,6 +498,7 @@ router.delete('/vendas/:id', requireProLaboreAuth, async (req: Request, res: Res
 
 const ESTAGIOS_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO', 'PERDIDO'] as const
 const ORDEM_ESTAGIO_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO'] as const
+const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
 
 function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[number]): boolean {
   if (estagioAtual === 'PERDIDO') return false
@@ -515,10 +516,13 @@ function leadWhereBase(req: Request): { usuarioId: string; vendedorId?: string }
 }
 
 router.get('/leads', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const { estagio } = req.query
-  const where: { usuarioId: string; vendedorId?: string; estagio?: string } = leadWhereBase(req)
+  const { estagio, tipoLead } = req.query
+  const where: { usuarioId: string; vendedorId?: string; estagio?: string; tipoLead?: string } = leadWhereBase(req)
   if (typeof estagio === 'string' && (ESTAGIOS_LEAD as readonly string[]).includes(estagio)) {
     where.estagio = estagio
+  }
+  if (typeof tipoLead === 'string' && (TIPOS_LEAD as readonly string[]).includes(tipoLead)) {
+    where.tipoLead = tipoLead
   }
   const leads = await prisma.lead.findMany({ where, include: LEAD_INCLUDE, orderBy: { criadoEm: 'desc' } })
   res.json(leads)
@@ -529,6 +533,7 @@ const criarLeadSchema = z.object({
   telefone: z.string().optional(),
   observacao: z.string().optional(),
   vendedorId: z.string().optional(),
+  tipoLead: z.enum(TIPOS_LEAD).optional(),
 })
 
 router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) => {
@@ -559,6 +564,7 @@ router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) 
       nomeCliente: parse.data.nomeCliente,
       telefone: parse.data.telefone,
       observacao: parse.data.observacao,
+      tipoLead: parse.data.tipoLead,
     },
     include: LEAD_INCLUDE,
   })
@@ -571,6 +577,7 @@ const editarLeadSchema = z.object({
   telefone: z.string().optional(),
   observacao: z.string().optional(),
   vendedorId: z.string().nullable().optional(),
+  tipoLead: z.enum(TIPOS_LEAD).nullable().optional(),
 })
 
 router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
@@ -588,10 +595,11 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
     return
   }
 
-  const data: { nomeCliente?: string; telefone?: string; observacao?: string; vendedorId?: string | null } = {
+  const data: { nomeCliente?: string; telefone?: string; observacao?: string; vendedorId?: string | null; tipoLead?: string | null } = {
     nomeCliente: parse.data.nomeCliente,
     telefone: parse.data.telefone,
     observacao: parse.data.observacao,
+    tipoLead: parse.data.tipoLead,
   }
   // Só o dono pode reatribuir um lead a outro vendedor.
   if (papel === 'DONO' && parse.data.vendedorId !== undefined) {
