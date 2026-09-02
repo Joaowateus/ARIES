@@ -179,7 +179,10 @@
 
 /* ============ MAIN GRID ============ */
 .pl-grid-2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; align-items: stretch; }
-.pl-grid-2b { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: stretch; }
+/* align-items: start (não stretch) — a lista de ranking cresce com o número
+   de vendedores; esticar o card vizinho (ROAS) até essa altura deixava uma
+   sobra vazia enorme embaixo do gráfico dele. */
+.pl-grid-2b { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
 .pl-legend { display: flex; gap: 14px; flex-wrap: wrap; }
 .pl-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--pl-ink-2); }
 .pl-legend-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
@@ -187,6 +190,11 @@
 /* ============ CHART ============ */
 .pl-chart-wrap { position: relative; }
 .pl-chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+/* Gráficos de barra (Lucro/Comissão) têm altura fixa, não proporcional à
+   largura — sem isso, um card mais largo (ex: full-width) fazia a altura
+   inflar junto (a altura "auto" segue a proporção do viewBox) e as barras
+   ficavam enormes e desproporcionais. */
+.pl-chart-svg--bars { height: 190px; }
 .pl-axis-label { font-family: 'JetBrains Mono'; font-size: 10.5px; fill: var(--pl-ink-muted); }
 .pl-grid-hline { stroke: var(--pl-grid-line); stroke-width: 1; }
 .pl-baseline-line { stroke: var(--pl-baseline); stroke-width: 1; }
@@ -238,8 +246,8 @@
 .pl-seller-meta { font-size: 11px; color: var(--pl-ink-muted); text-align: right; white-space: nowrap; }
 
 /* ============ ROAS BARS ============ */
-.pl-roas-bars { display: flex; align-items: flex-end; gap: 8px; height: 130px; margin-top: 6px; }
-.pl-roas-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 6px; }
+.pl-roas-bars { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; height: 130px; margin-top: 6px; }
+.pl-roas-col { flex: 0 1 40px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 6px; }
 .pl-roas-bar { width: 100%; border-radius: 5px 5px 3px 3px; background: linear-gradient(180deg, var(--pl-accent-2), color-mix(in srgb, var(--pl-accent-2) 55%, transparent)); position: relative; min-height: 4px; }
 .pl-roas-val { font-family: 'JetBrains Mono'; font-size: 10.5px; color: var(--pl-ink-2); font-weight: 600; }
 .pl-roas-lbl { font-family: 'JetBrains Mono'; font-size: 10px; color: var(--pl-ink-muted); margin-top: 4px; }
