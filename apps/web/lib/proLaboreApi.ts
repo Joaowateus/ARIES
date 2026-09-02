@@ -50,11 +50,15 @@ export interface Vendedor {
 export const ESTAGIOS_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO', 'PERDIDO'] as const
 export type EstagioLead = (typeof ESTAGIOS_LEAD)[number]
 
+export const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
+export type TipoLead = (typeof TIPOS_LEAD)[number]
+
 export interface Lead {
   id: string
   nomeCliente: string
   telefone?: string | null
   observacao?: string | null
+  tipoLead?: TipoLead | null
   estagio: EstagioLead
   vendaId?: string | null
   vendedorId?: string | null
@@ -188,9 +192,9 @@ export const proLaboreApi = {
   },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
-    criar: (data: { nomeCliente: string; telefone?: string; observacao?: string; vendedorId?: string }) =>
+    criar: (data: { nomeCliente: string; telefone?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead }) =>
       request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
-    editar: (id: string, data: { nomeCliente?: string; telefone?: string; observacao?: string; vendedorId?: string | null }) =>
+    editar: (id: string, data: { nomeCliente?: string; telefone?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     mudarEstagio: (id: string, estagio: EstagioLead) =>
       request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio }) }),

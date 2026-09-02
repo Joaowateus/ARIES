@@ -1010,6 +1010,7 @@ model Lead {
   nomeCliente  String
   telefone     String?
   observacao   String?
+  tipoLead     String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
   estagio      String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
   vendaId      String?   @unique
   criadoEm     DateTime  @default(now())

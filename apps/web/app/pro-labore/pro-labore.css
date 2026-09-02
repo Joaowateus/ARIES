@@ -290,6 +290,46 @@
 .pl-empty { text-align: center; padding: 48px 20px; color: var(--pl-ink-muted); }
 .pl-empty .pl-emoji { font-size: 34px; margin-bottom: 10px; }
 
+/* ============ CRM KANBAN ============ */
+.pl-kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; align-items: start; overflow-x: auto; padding-bottom: 4px; }
+.pl-kanban-col {
+  background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
+  padding: 12px; min-height: 140px; transition: background .15s, border-color .15s;
+}
+.pl-kanban-col.drop-active { background: var(--pl-accent-soft); border-color: var(--pl-accent); }
+.pl-kanban-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.pl-kanban-col-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-2); }
+.pl-kanban-col-count {
+  font-family: 'JetBrains Mono'; font-size: 11px; font-weight: 700; color: var(--pl-ink-muted);
+  background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 999px; padding: 2px 8px; flex: none;
+}
+.pl-kanban-cards { display: flex; flex-direction: column; gap: 9px; min-height: 40px; }
+.pl-kanban-card {
+  background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm);
+  box-shadow: var(--pl-shadow-card); padding: 11px 12px; cursor: grab; transition: transform .12s, opacity .12s;
+}
+.pl-kanban-card[draggable="false"] { cursor: default; }
+.pl-kanban-card:active { cursor: grabbing; }
+.pl-kanban-card.dragging { opacity: .4; }
+.pl-kanban-card:hover { transform: translateY(-1px); }
+.pl-kanban-card-name { font-size: 13px; font-weight: 700; color: var(--pl-ink-1); }
+.pl-kanban-card-meta { font-size: 11.5px; color: var(--pl-ink-muted); margin-top: 3px; }
+.pl-kanban-card-tag {
+  display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  padding: 2px 7px; border-radius: 999px; margin-top: 8px;
+}
+.pl-kanban-card-tag.trafego { background: var(--pl-accent-soft); color: var(--pl-accent); }
+.pl-kanban-card-tag.organico { background: var(--pl-accent-3-soft); color: var(--pl-accent-3); }
+.pl-kanban-card-actions { display: flex; gap: 12px; margin-top: 9px; flex-wrap: wrap; }
+.pl-kanban-card-actions span { font-size: 11px; font-weight: 700; color: var(--pl-accent); cursor: pointer; }
+.pl-kanban-card-actions span.pl-danger { color: var(--pl-critical); }
+.pl-kanban-card-badge { font-size: 10.5px; color: var(--pl-ink-muted); margin-top: 9px; }
+.pl-kanban-empty { font-size: 11.5px; color: var(--pl-ink-muted); text-align: center; padding: 16px 4px; border: 1px dashed var(--pl-border-strong); border-radius: var(--pl-radius-sm); }
+
+/* ============ MODAL ============ */
+.pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+.pl-modal-panel { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+
 .pl-footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--pl-border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: var(--pl-ink-muted); }
 
 .pl-status-pill {
@@ -304,6 +344,7 @@
   .pl-journey { grid-template-columns: 1fr 1fr; row-gap: 22px; }
   .pl-stage:not(:first-child)::before { display: none; }
   .pl-stage-arrow { display: none; }
+  .pl-kanban { grid-template-columns: repeat(5, 240px); }
 }
 @media (max-width: 620px) {
   .pl-kpi-grid { grid-template-columns: repeat(2, 1fr); }
