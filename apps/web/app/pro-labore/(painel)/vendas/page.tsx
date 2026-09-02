@@ -58,9 +58,19 @@ export default function ProLaboreVendasPage() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Cada vendedor pode ter seu próprio teto de pró-labore por venda — o
+  // efetivo é o do vendedor selecionado (se tiver um definido) ou o padrão
+  // da conta. Um vendedor logado sempre usa o próprio teto, já resolvido
+  // pelo backend em auth/me.
+  function tetoEfetivo(vendedorId: string): number {
+    if (!isDono) return usuario?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+    const vendedor = vendedores.find(v => v.id === vendedorId)
+    return vendedor?.tetoProLaborePorVenda ?? parametro?.tetoProLaborePorVenda ?? 900
+  }
+
   function atualizarValorVenda(valor: string) {
     const numero = Number(valor)
-    const teto = parametro?.tetoProLaborePorVenda ?? 900
+    const teto = tetoEfetivo(form.vendedorId)
     const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, teto) : teto
     setForm(f => ({ ...f, valorVenda: valor, valorProLabore: editandoId ? f.valorProLabore : String(sugestao) }))
   }
@@ -220,7 +230,7 @@ export default function ProLaboreVendasPage() {
     return `${dia}/${mes}/${ano}`
   }
 
-  const teto = parametro?.tetoProLaborePorVenda ?? 900
+  const teto = tetoEfetivo(form.vendedorId)
 
   return (
     <div>
@@ -251,7 +261,19 @@ export default function ProLaboreVendasPage() {
           {isDono && (
             <div className="pl-field">
               <label>Vendedor (opcional)</label>
-              <select className="pl-select" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
+              <select
+                className="pl-select"
+                value={form.vendedorId}
+                onChange={e => {
+                  const vendedorId = e.target.value
+                  const novoTeto = tetoEfetivo(vendedorId)
+                  setForm(f => ({
+                    ...f,
+                    vendedorId,
+                    valorProLabore: editandoId ? f.valorProLabore : String(Math.min(Number(f.valorProLabore) || novoTeto, novoTeto)),
+                  }))
+                }}
+              >
                 <option value="">— Sem vendedor —</option>
                 {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
               </select>
