@@ -1,10 +1,20 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez } from '@/lib/proLaboreApi'
+import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez, Vendedor, Lead, TipoLead } from '@/lib/proLaboreApi'
 import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+
+// Mesma ordem/lógica do backend (estagioAtingiu em proLabore.ts) — usada só
+// pra recalcular o funil no cliente quando um filtro de vendedor/canal está
+// ativo (o /painel não tem esses filtros, então filtramos os Leads já
+// carregados em vez de criar um endpoint novo pra isso).
+const ORDEM_ESTAGIO_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO'] as const
+function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[number]): boolean {
+  if (estagioAtual === 'PERDIDO') return false
+  return ORDEM_ESTAGIO_LEAD.indexOf(estagioAtual as (typeof ORDEM_ESTAGIO_LEAD)[number]) >= ORDEM_ESTAGIO_LEAD.indexOf(alvo)
+}
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
@@ -50,17 +60,48 @@ export default function ProLaboreDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [selectedIdx, setSelectedIdx] = useState(0)
 
+  // Dados pro filtro (sutil, no card do Funil) por vendedor/canal — os leads
+  // já vêm com vendedorId e tipoLead, então filtramos no cliente em vez de
+  // criar um endpoint novo só pra isso.
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [vendedores, setVendedores] = useState<Vendedor[]>([])
+  const [filtroVendedorId, setFiltroVendedorId] = useState('')
+  const [filtroCanal, setFiltroCanal] = useState<'' | TipoLead>('')
+
   useEffect(() => {
-    Promise.all([proLaboreApi.painel.get(), proLaboreApi.parametros.get()]).then(([p, param]) => {
+    Promise.all([proLaboreApi.painel.get(), proLaboreApi.parametros.get(), proLaboreApi.leads.listar()]).then(([p, param, ls]) => {
       setPainel(p)
       setParametro(param)
+      setLeads(ls)
       setSelectedIdx(Math.max(0, p.meses.length - 1))
     }).finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    if (isDono) proLaboreApi.vendedores.listar().then(setVendedores)
+  }, [isDono])
+
   const meses = painel?.meses ?? []
   const atual = meses[selectedIdx]
   const anterior = selectedIdx > 0 ? meses[selectedIdx - 1] : undefined
+
+  const filtroAtivo = filtroVendedorId !== '' || filtroCanal !== ''
+  const funilFiltrado = useMemo(() => {
+    if (!atual || !filtroAtivo) return null
+    const leadsDoMes = leads.filter(l => {
+      const d = new Date(l.criadoEm)
+      return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes
+        && (!filtroVendedorId || l.vendedorId === filtroVendedorId)
+        && (!filtroCanal || l.tipoLead === filtroCanal)
+    })
+    return {
+      leads: leadsDoMes.length,
+      abordados: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
+      negociacao: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
+      proposta: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
+      fechamento: leadsDoMes.filter(l => l.estagio === 'FECHADO').length,
+    }
+  }, [atual, filtroAtivo, leads, filtroVendedorId, filtroCanal])
 
   if (loading) return <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
 
@@ -194,10 +235,20 @@ export default function ProLaboreDashboardPage() {
           <div className="pl-eyebrow">Funil comercial</div>
           <h2 className="pl-section-title">Jornada de compra do cliente</h2>
         </div>
-        <div className="pl-section-note">{atual.label} {atual.ano}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="pl-section-note">{atual.label} {atual.ano}{filtroAtivo && ' · filtrado'}</div>
+          <FunilFiltro
+            isDono={isDono}
+            vendedores={vendedores}
+            vendedorId={filtroVendedorId}
+            canal={filtroCanal}
+            onChangeVendedor={setFiltroVendedorId}
+            onChangeCanal={setFiltroCanal}
+          />
+        </div>
       </div>
       <div className="pl-card">
-        <FunilJourney funil={atual.funil} />
+        <FunilJourney funil={funilFiltrado ?? atual.funil} />
       </div>
 
       {isDono && (
@@ -424,6 +475,63 @@ function LucroChart({ meses, selectedIdx, valorFn, color = 'var(--pl-accent-3)' 
         })}
         <line x1={padL} x2={w - padR} y1={padT + plotH} y2={padT + plotH} className="pl-baseline-line" />
       </svg>
+    </div>
+  )
+}
+
+/* ============ FILTRO DO FUNIL (vendedor / canal) ============ */
+function FunilFiltro({
+  isDono, vendedores, vendedorId, canal, onChangeVendedor, onChangeCanal,
+}: {
+  isDono: boolean
+  vendedores: Vendedor[]
+  vendedorId: string
+  canal: '' | TipoLead
+  onChangeVendedor: (id: string) => void
+  onChangeCanal: (c: '' | TipoLead) => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const ativo = vendedorId !== '' || canal !== ''
+
+  useEffect(() => {
+    if (!aberto) return
+    function onClickFora(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAberto(false)
+    }
+    document.addEventListener('mousedown', onClickFora)
+    return () => document.removeEventListener('mousedown', onClickFora)
+  }, [aberto])
+
+  return (
+    <div className="pl-filter-wrap" ref={wrapRef}>
+      <button type="button" className={`pl-icon-btn ${ativo ? 'active' : ''}`} onClick={() => setAberto(a => !a)} title="Filtrar funil" aria-label="Filtrar funil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M8 12h8M11 18h2" /></svg>
+        {ativo && <span className="pl-icon-btn-dot" />}
+      </button>
+
+      {aberto && (
+        <div className="pl-filter-pop">
+          {isDono && (
+            <div className="pl-field">
+              <label>Vendedor</label>
+              <select className="pl-select" value={vendedorId} onChange={e => onChangeVendedor(e.target.value)}>
+                <option value="">Todos</option>
+                {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="pl-field">
+            <label>Canal</label>
+            <select className="pl-select" value={canal} onChange={e => onChangeCanal(e.target.value as '' | TipoLead)}>
+              <option value="">Todos</option>
+              <option value="TRAFEGO">Tráfego pago</option>
+              <option value="ORGANICO">Orgânico</option>
+            </select>
+          </div>
+          {ativo && <span className="pl-filter-clear" onClick={() => { onChangeVendedor(''); onChangeCanal('') }}>Limpar filtro</span>}
+        </div>
+      )}
     </div>
   )
 }
