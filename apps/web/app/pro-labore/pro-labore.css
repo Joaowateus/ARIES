@@ -96,8 +96,8 @@
 .pl-shell { max-width: 1320px; margin: 0 auto; padding: 28px 28px 80px; }
 
 /* ============ HEADER ============ */
-.pl-topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
-.pl-brand { display: flex; align-items: center; gap: 12px; }
+.pl-topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+.pl-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pl-brand-mark {
   width: 40px; height: 40px; border-radius: 11px;
   background: linear-gradient(155deg, var(--pl-accent), var(--pl-accent-5));
@@ -109,13 +109,26 @@
 
 .pl-header-right { display: flex; align-items: center; gap: 10px; }
 
-.pl-nav { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.pl-nav { display: flex; align-items: center; gap: 2px; }
 .pl-nav a {
   padding: 8px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--pl-ink-2);
   transition: background .15s, color .15s;
 }
 .pl-nav a:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
 .pl-nav a.active { background: var(--pl-ink-1); color: var(--pl-bg); }
+
+/* Gaveta de navegação — em telas largas é só um wrapper inline (nav de um
+   lado, usuário/tema/sair do outro); vira painel deslizante só abaixo de
+   980px, junto com o botão hambúrguer (ambos escondidos até lá). */
+.pl-drawer { display: flex; align-items: center; justify-content: space-between; flex: 1; gap: 20px; min-width: 0; }
+.pl-drawer-head { display: none; }
+.pl-drawer-backdrop { display: none; }
+.pl-menu-toggle {
+  display: none; align-items: center; justify-content: center; flex: none;
+  width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--pl-border-strong);
+  background: var(--pl-surface); color: var(--pl-ink-1); cursor: pointer;
+}
+.pl-menu-toggle svg { width: 18px; height: 18px; }
 
 .pl-theme-toggle {
   display: flex; align-items: center; gap: 6px; background: var(--pl-surface);
@@ -159,7 +172,14 @@
 .pl-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 
 /* ============ KPI GRID ============ */
-.pl-kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+/* auto-fit (não um número fixo de colunas) — o total de cards varia por
+   papel (dono vê 7, vendedor vê 4), e com repeat(6, 1fr) sobrava sempre um
+   card sozinho numa segunda linha quase vazia. Com auto-fit os cards
+   redistribuem a largura entre si e preenchem a linha inteira. 150px (não
+   170px) porque na largura máxima do shell (1264px de conteúdo) os 7 cards
+   do dono só cabem numa linha só com um mínimo de até ~168px — acima disso
+   o navegador quebra pra 6 colunas e sobra o mesmo card órfão de antes. */
+.pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
 .pl-kpi {
   background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
   box-shadow: var(--pl-shadow-card); padding: 16px 16px 14px; position: relative; overflow: hidden;
@@ -304,7 +324,10 @@
 .pl-alert-success { background: var(--pl-accent-3-soft); color: var(--pl-accent-3); }
 
 /* ============ TABLE ============ */
-.pl-table-wrap { background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); box-shadow: var(--pl-shadow-card); overflow: hidden; }
+/* overflow-x: auto (não hidden) — em telas estreitas a tabela é mais larga
+   que o card, e sem isso colunas inteiras (às vezes até os botões de ação)
+   ficavam cortadas e inacessíveis em vez de roláveis. */
+.pl-table-wrap { background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); box-shadow: var(--pl-shadow-card); overflow-x: auto; }
 .pl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .pl-table thead { background: var(--pl-surface-2); }
 .pl-table th { text-align: left; padding: 11px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-muted); }
@@ -367,15 +390,33 @@
 .pl-dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--pl-good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pl-good) 22%, transparent); }
 
 @media (max-width: 980px) {
-  .pl-kpi-grid { grid-template-columns: repeat(3, 1fr); }
   .pl-grid-2, .pl-grid-2b { grid-template-columns: 1fr; }
   .pl-journey { grid-template-columns: 1fr 1fr; row-gap: 22px; }
   .pl-stage:not(:first-child)::before { display: none; }
   .pl-stage-arrow { display: none; }
   .pl-kanban { grid-template-columns: repeat(5, 240px); }
+
+  /* Menu vira gaveta deslizante — o botão hambúrguer some em telas largas
+     (o nav cabe inline ali em cima) e aparece só aqui. */
+  .pl-menu-toggle { display: flex; }
+  .pl-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(300px, 84vw);
+    background: var(--pl-surface); border-left: 1px solid var(--pl-border-strong);
+    box-shadow: -16px 0 40px -20px rgba(0, 0, 0, .5);
+    flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0;
+    padding: 20px 18px; z-index: 60; overflow-y: auto;
+    transform: translateX(100%); transition: transform .22s ease;
+  }
+  .pl-drawer.open { transform: translateX(0); }
+  .pl-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--pl-border); }
+  .pl-drawer-title { font-family: 'Sora'; font-weight: 700; font-size: 15px; }
+  .pl-drawer-backdrop { display: block; position: fixed; inset: 0; background: rgba(4, 6, 14, .55); z-index: 55; }
+  .pl-nav { flex-direction: column; align-items: stretch; gap: 2px; }
+  .pl-nav a { padding: 11px 12px; }
+  .pl-header-right { flex-direction: column; align-items: stretch; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--pl-border); }
+  .pl-theme-toggle, .pl-logout { align-self: flex-start; }
 }
 @media (max-width: 620px) {
-  .pl-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .pl-journey { grid-template-columns: 1fr; }
   .pl-shell { padding: 20px 16px 60px; }
 }

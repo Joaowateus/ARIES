@@ -452,14 +452,35 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
 /* ============ GRÁFICO DE LUCRO/COMISSÃO (barras) ============ */
 function LucroChart({ meses, selectedIdx, valorFn, color = 'var(--pl-accent-3)' }: { meses: MesPainel[]; selectedIdx: number; valorFn?: (m: MesPainel) => number; color?: string }) {
   const getValor = valorFn ?? ((m: MesPainel) => m.proLaboreSacado)
-  const w = 320, h = 190, padL = 4, padR = 4, padT = 10, padB = 24
+
+  // A altura do card é fixa (190px, via .pl-chart-svg--bars), mas a largura
+  // varia muito conforme onde o gráfico é usado (metade da tela vs. card
+  // full-width). Com viewBox fixo e preserveAspectRatio="none", isso
+  // esticava tudo — barras E o texto dos meses — de forma não-uniforme,
+  // deixando as letras dos rótulos distorcidas em cards mais largos. Medindo
+  // a largura real do container e usando ela no viewBox, 1 unidade SVG passa
+  // a valer sempre 1px na tela, então nada precisa ser esticado.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [w, setW] = useState(320)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      const largura = entries[0]?.contentRect.width
+      if (largura) setW(largura)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const h = 190, padL = 4, padR = 4, padT = 10, padB = 24
   const plotW = w - padL - padR, plotH = h - padT - padB
   const maxV = Math.max(...meses.map(getValor), 1) * 1.15
   const slot = plotW / meses.length
   const bw = slot * 0.56
 
   return (
-    <div className="pl-chart-wrap">
+    <div className="pl-chart-wrap" ref={wrapRef}>
       <svg className="pl-chart-svg pl-chart-svg--bars" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
         {meses.map((m, i) => {
           const bh = (getValor(m) / maxV) * plotH
