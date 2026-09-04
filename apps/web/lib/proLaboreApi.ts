@@ -129,6 +129,21 @@ export interface PainelProLabore {
   meses: MesPainel[]
 }
 
+export const PERIODOS_RECEITA = ['hoje', '7', '15', '30'] as const
+export type ReceitaPeriodo = (typeof PERIODOS_RECEITA)[number]
+
+export interface PontoReceita {
+  label: string
+  receita: number
+  vendas: number
+}
+
+export interface ReceitaDetalhada {
+  totalReceita: number
+  totalVendas: number
+  pontos: PontoReceita[]
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
@@ -211,5 +226,8 @@ export const proLaboreApi = {
   },
   painel: {
     get: (ano?: number) => request<PainelProLabore>(`/pro-labore/painel${ano ? `?ano=${ano}` : ''}`),
+  },
+  receitas: {
+    porPeriodo: (periodo: ReceitaPeriodo) => request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?periodo=${periodo}`),
   },
 }
