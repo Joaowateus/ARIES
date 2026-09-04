@@ -229,6 +229,11 @@ export default function ProLaboreLeadsPage() {
 
   function colunaNoPonto(x: number, y: number): EstagioLead | null {
     for (const [estagio, el] of colRefs.current) {
+      // Fechamentos exige registrar a venda (valor, pró-labore, comissão) —
+      // só o dono faz isso, então pro vendedor essa coluna não é um alvo
+      // válido: sem isso o card "não movia" ao soltar ali, sem nenhuma
+      // pista visual de por quê.
+      if (estagio === 'FECHADO' && !isDono) continue
       const r = el.getBoundingClientRect()
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return estagio
     }
@@ -385,7 +390,12 @@ export default function ProLaboreLeadsPage() {
                   className={`pl-kanban-col ${dragOverCol === col.estagio ? 'drop-active' : ''}`}
                 >
                   <div className="pl-kanban-col-head">
-                    <div className="pl-kanban-col-title">{col.titulo}</div>
+                    <div>
+                      <div className="pl-kanban-col-title">{col.titulo}</div>
+                      {col.estagio === 'FECHADO' && !isDono && (
+                        <div className="pl-kanban-col-hint">Confirmação de venda é só do dono</div>
+                      )}
+                    </div>
                     <div className="pl-kanban-col-count pl-mono">{leadsDaColuna.length}</div>
                   </div>
                   <div className="pl-kanban-cards">
