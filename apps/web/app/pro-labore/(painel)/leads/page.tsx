@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, DragEvent } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, Vendedor, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
@@ -32,7 +32,7 @@ export default function ProLaboreLeadsPage() {
   const [filtroCanal, setFiltroCanal] = useState<TipoLead | ''>('')
   const [mostrarPerdidos, setMostrarPerdidos] = useState(false)
 
-  const [form, setForm] = useState({ nomeCliente: '', telefone: '', observacao: '', vendedorId: '', tipoLead: '' as TipoLead | '' })
+  const [form, setForm] = useState({ nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '' as TipoLead | '' })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -41,8 +41,22 @@ export default function ProLaboreLeadsPage() {
   const [convertErro, setConvertErro] = useState('')
   const [convertSalvando, setConvertSalvando] = useState(false)
 
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '' as TipoLead | '' })
+  const [editErro, setEditErro] = useState('')
+  const [editSalvando, setEditSalvando] = useState(false)
+
+  // Arrastar os cards usa Pointer Events (não o Drag and Drop nativo do
+  // HTML5) — o nativo não funciona em toque/celular e, mesmo no mouse,
+  // vinha falhando de forma inconsistente pra algumas vendedoras (o card
+  // não se movia e ficava na etapa antiga). dragRef guarda o estado "vivo"
+  // da arrastada — os listeners do pointermove/pointerup ficam presos ao
+  // fechamento (closure) de quando o pointerdown começou, então não dá pra
+  // confiar em state do React ali dentro; só em refs, que são sempre atuais.
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<EstagioLead | null>(null)
+  const dragRef = useRef<{ lead: Lead; startX: number; startY: number; dragging: boolean; colSobre: EstagioLead | null; abort: AbortController } | null>(null)
+  const colRefs = useRef(new Map<EstagioLead, HTMLDivElement>())
 
   const carregar = useCallback(() => {
     setLoading(true)
@@ -57,6 +71,11 @@ export default function ProLaboreLeadsPage() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Limpa os listeners de arrastar se a página desmontar no meio de um
+  // gesto (ex: trocou de rota durante o drag) — lê a gaveta ATUAL (ref),
+  // então funciona não importa em qual render o drag começou.
+  useEffect(() => () => { dragRef.current?.abort.abort() }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
@@ -65,11 +84,15 @@ export default function ProLaboreLeadsPage() {
       await proLaboreApi.leads.criar({
         nomeCliente: form.nomeCliente,
         telefone: form.telefone || undefined,
+        email: form.email || undefined,
+        cpf: form.cpf || undefined,
+        endereco: form.endereco || undefined,
+        modeloInteresse: form.modeloInteresse || undefined,
         observacao: form.observacao || undefined,
         vendedorId: form.vendedorId || undefined,
         tipoLead: form.tipoLead || undefined,
       })
-      setForm({ nomeCliente: '', telefone: '', observacao: '', vendedorId: '', tipoLead: '' })
+      setForm({ nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '' })
       carregar()
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar lead')
@@ -100,6 +123,52 @@ export default function ProLaboreLeadsPage() {
       carregar()
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao remover lead')
+    }
+  }
+
+  function abrirEdicao(lead: Lead) {
+    setEditandoId(lead.id)
+    setEditForm({
+      nomeCliente: lead.nomeCliente,
+      telefone: lead.telefone ?? '',
+      email: lead.email ?? '',
+      cpf: lead.cpf ?? '',
+      endereco: lead.endereco ?? '',
+      modeloInteresse: lead.modeloInteresse ?? '',
+      observacao: lead.observacao ?? '',
+      vendedorId: lead.vendedorId ?? '',
+      tipoLead: lead.tipoLead ?? '',
+    })
+    setEditErro('')
+  }
+
+  function fecharEdicao() {
+    setEditandoId(null)
+    setEditErro('')
+  }
+
+  async function salvarEdicao() {
+    if (!editandoId) return
+    setEditErro('')
+    setEditSalvando(true)
+    try {
+      await proLaboreApi.leads.editar(editandoId, {
+        nomeCliente: editForm.nomeCliente,
+        telefone: editForm.telefone || undefined,
+        email: editForm.email || undefined,
+        cpf: editForm.cpf || undefined,
+        endereco: editForm.endereco || undefined,
+        modeloInteresse: editForm.modeloInteresse || undefined,
+        observacao: editForm.observacao || undefined,
+        ...(isDono ? { vendedorId: editForm.vendedorId || null } : {}),
+        tipoLead: editForm.tipoLead || null,
+      })
+      fecharEdicao()
+      carregar()
+    } catch (err: unknown) {
+      setEditErro(err instanceof Error ? err.message : 'Erro ao salvar lead')
+    } finally {
+      setEditSalvando(false)
     }
   }
 
@@ -151,39 +220,63 @@ export default function ProLaboreLeadsPage() {
     }
   }
 
-  function onDragStartCard(e: DragEvent<HTMLDivElement>, lead: Lead) {
-    e.dataTransfer.setData('text/plain', lead.id)
-    e.dataTransfer.effectAllowed = 'move'
-    setDraggingId(lead.id)
-  }
-
-  function onDragEndCard() {
+  function limparDrag() {
+    dragRef.current?.abort.abort()
+    dragRef.current = null
     setDraggingId(null)
     setDragOverCol(null)
   }
 
-  function onDragOverCol(e: DragEvent<HTMLDivElement>, estagio: EstagioLead) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    if (dragOverCol !== estagio) setDragOverCol(estagio)
-  }
-
-  function onDragLeaveCol(estagio: EstagioLead) {
-    setDragOverCol(atual => (atual === estagio ? null : atual))
-  }
-
-  function onDropCol(e: DragEvent<HTMLDivElement>, estagio: EstagioLead) {
-    e.preventDefault()
-    setDragOverCol(null)
-    const id = e.dataTransfer.getData('text/plain')
-    setDraggingId(null)
-    const lead = leads.find(l => l.id === id)
-    if (!lead || lead.vendaId || lead.estagio === estagio) return
-    if (estagio === 'FECHADO') {
-      if (isDono) abrirConversao(lead)
-    } else {
-      mudarEstagio(lead, estagio)
+  function colunaNoPonto(x: number, y: number): EstagioLead | null {
+    for (const [estagio, el] of colRefs.current) {
+      const r = el.getBoundingClientRect()
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return estagio
     }
+    return null
+  }
+
+  function onPointerMoveWin(e: PointerEvent) {
+    const st = dragRef.current
+    if (!st) return
+    const dx = e.clientX - st.startX, dy = e.clientY - st.startY
+    if (!st.dragging) {
+      // limiar de ~6px antes de virar arrastada — evita que um simples
+      // toque/clique (ex: nos botões do card) já dispare o drag
+      if (Math.hypot(dx, dy) < 6) return
+      st.dragging = true
+      setDraggingId(st.lead.id)
+    }
+    e.preventDefault()
+    const colSobre = colunaNoPonto(e.clientX, e.clientY)
+    if (st.colSobre !== colSobre) {
+      st.colSobre = colSobre
+      setDragOverCol(colSobre)
+    }
+  }
+
+  function onPointerUpWin() {
+    const st = dragRef.current
+    limparDrag()
+    if (!st?.dragging || !st.colSobre || st.colSobre === st.lead.estagio) return
+    if (st.colSobre === 'FECHADO') {
+      if (isDono) abrirConversao(st.lead)
+    } else {
+      mudarEstagio(st.lead, st.colSobre)
+    }
+  }
+
+  function onPointerCancelWin() {
+    limparDrag()
+  }
+
+  function onPointerDownCard(e: React.PointerEvent<HTMLDivElement>, lead: Lead) {
+    if (lead.vendaId) return
+    if ((e.target as HTMLElement).closest('.pl-kanban-card-actions')) return
+    const abort = new AbortController()
+    dragRef.current = { lead, startX: e.clientX, startY: e.clientY, dragging: false, colSobre: null, abort }
+    window.addEventListener('pointermove', onPointerMoveWin, { signal: abort.signal })
+    window.addEventListener('pointerup', onPointerUpWin, { signal: abort.signal })
+    window.addEventListener('pointercancel', onPointerCancelWin, { signal: abort.signal })
   }
 
   const leadsFiltrados = leads.filter(l => !filtroCanal || l.tipoLead === filtroCanal)
@@ -196,6 +289,7 @@ export default function ProLaboreLeadsPage() {
 
   const leadConvertendo = convertendoId ? leads.find(l => l.id === convertendoId) ?? null : null
   const tetoComissaoAtual = leadConvertendo?.vendedorId ? tetoComissao(leadConvertendo.vendedorId) : null
+  const leadEditando = editandoId ? leads.find(l => l.id === editandoId) ?? null : null
 
   return (
     <div>
@@ -221,6 +315,22 @@ export default function ProLaboreLeadsPage() {
             <input className="pl-input" value={form.telefone} onChange={e => setForm(f => ({ ...f, telefone: e.target.value }))} placeholder="(00) 00000-0000" />
           </div>
           <div className="pl-field">
+            <label>E-mail (opcional)</label>
+            <input type="email" className="pl-input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="cliente@email.com" />
+          </div>
+          <div className="pl-field">
+            <label>CPF (opcional)</label>
+            <input className="pl-input" value={form.cpf} onChange={e => setForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" />
+          </div>
+          <div className="pl-field">
+            <label>Endereço (opcional)</label>
+            <input className="pl-input" value={form.endereco} onChange={e => setForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Ex: Rua, número, cidade" />
+          </div>
+          <div className="pl-field">
+            <label>Modelo de interesse (opcional)</label>
+            <input className="pl-input" value={form.modeloInteresse} onChange={e => setForm(f => ({ ...f, modeloInteresse: e.target.value }))} placeholder="Ex: CG 160" />
+          </div>
+          <div className="pl-field">
             <label>Canal (opcional)</label>
             <select className="pl-select" value={form.tipoLead} onChange={e => setForm(f => ({ ...f, tipoLead: e.target.value as TipoLead | '' }))}>
               <option value="">— Não informado —</option>
@@ -238,7 +348,7 @@ export default function ProLaboreLeadsPage() {
           )}
           <div className="pl-field">
             <label>Observação (opcional)</label>
-            <input className="pl-input" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: interesse em qual modelo" />
+            <input className="pl-input" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: preferências do cliente" />
           </div>
         </div>
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{erro}</div>}
@@ -271,10 +381,8 @@ export default function ProLaboreLeadsPage() {
               return (
                 <div
                   key={col.estagio}
+                  ref={el => { if (el) colRefs.current.set(col.estagio, el); else colRefs.current.delete(col.estagio) }}
                   className={`pl-kanban-col ${dragOverCol === col.estagio ? 'drop-active' : ''}`}
-                  onDragOver={e => onDragOverCol(e, col.estagio)}
-                  onDragLeave={() => onDragLeaveCol(col.estagio)}
-                  onDrop={e => onDropCol(e, col.estagio)}
                 >
                   <div className="pl-kanban-col-head">
                     <div className="pl-kanban-col-title">{col.titulo}</div>
@@ -288,9 +396,8 @@ export default function ProLaboreLeadsPage() {
                         <div
                           key={lead.id}
                           className={`pl-kanban-card ${draggingId === lead.id ? 'dragging' : ''}`}
-                          draggable={movivel}
-                          onDragStart={e => onDragStartCard(e, lead)}
-                          onDragEnd={onDragEndCard}
+                          style={movivel ? undefined : { cursor: 'default' }}
+                          onPointerDown={movivel ? e => onPointerDownCard(e, lead) : undefined}
                         >
                           <div className="pl-kanban-card-name">{lead.nomeCliente}</div>
                           {(lead.telefone || (isDono && lead.vendedor)) && (
@@ -298,6 +405,7 @@ export default function ProLaboreLeadsPage() {
                               {lead.telefone}{lead.telefone && isDono && lead.vendedor ? ' · ' : ''}{isDono && lead.vendedor ? lead.vendedor.nome : ''}
                             </div>
                           )}
+                          {lead.modeloInteresse && <div className="pl-kanban-card-meta">Interesse: {lead.modeloInteresse}</div>}
                           {lead.observacao && <div className="pl-kanban-card-meta">{lead.observacao}</div>}
                           {lead.tipoLead && <span className={`pl-kanban-card-tag ${TIPO_CLASS[lead.tipoLead]}`}>{TIPO_LABEL[lead.tipoLead]}</span>}
                           {lead.vendaId ? (
@@ -305,6 +413,7 @@ export default function ProLaboreLeadsPage() {
                           ) : (
                             <div className="pl-kanban-card-actions">
                               {isDono && col.estagio !== 'FECHADO' && <span onClick={() => abrirConversao(lead)}>Converter</span>}
+                              <span onClick={() => abrirEdicao(lead)}>Editar</span>
                               <span onClick={() => marcarPerdido(lead)} className="pl-danger">Perdido</span>
                               <span onClick={() => remover(lead)} className="pl-danger">Remover</span>
                             </div>
@@ -385,6 +494,68 @@ export default function ProLaboreLeadsPage() {
                 {convertSalvando ? 'Convertendo...' : 'Confirmar venda'}
               </button>
               <button type="button" className="pl-btn pl-btn-ghost" onClick={fecharConversao}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {leadEditando && (
+        <div className="pl-modal-backdrop" onClick={fecharEdicao}>
+          <div className="pl-card pl-modal-panel" onClick={e => e.stopPropagation()}>
+            <div className="pl-card-title" style={{ marginBottom: 4 }}>Editar lead</div>
+            <div className="pl-card-sub" style={{ marginBottom: 16 }}>{leadEditando.nomeCliente}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="pl-field">
+                <label>Nome do cliente</label>
+                <input className="pl-input" value={editForm.nomeCliente} onChange={e => setEditForm(f => ({ ...f, nomeCliente: e.target.value }))} required minLength={2} />
+              </div>
+              <div className="pl-field">
+                <label>Telefone (opcional)</label>
+                <input className="pl-input" value={editForm.telefone} onChange={e => setEditForm(f => ({ ...f, telefone: e.target.value }))} placeholder="(00) 00000-0000" />
+              </div>
+              <div className="pl-field">
+                <label>E-mail (opcional)</label>
+                <input type="email" className="pl-input" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="cliente@email.com" />
+              </div>
+              <div className="pl-field">
+                <label>CPF (opcional)</label>
+                <input className="pl-input" value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" />
+              </div>
+              <div className="pl-field">
+                <label>Endereço (opcional)</label>
+                <input className="pl-input" value={editForm.endereco} onChange={e => setEditForm(f => ({ ...f, endereco: e.target.value }))} placeholder="Ex: Rua, número, cidade" />
+              </div>
+              <div className="pl-field">
+                <label>Modelo de interesse (opcional)</label>
+                <input className="pl-input" value={editForm.modeloInteresse} onChange={e => setEditForm(f => ({ ...f, modeloInteresse: e.target.value }))} placeholder="Ex: CG 160" />
+              </div>
+              <div className="pl-field">
+                <label>Canal (opcional)</label>
+                <select className="pl-select" value={editForm.tipoLead} onChange={e => setEditForm(f => ({ ...f, tipoLead: e.target.value as TipoLead | '' }))}>
+                  <option value="">— Não informado —</option>
+                  {TIPOS_LEAD.map(t => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
+                </select>
+              </div>
+              {isDono && (
+                <div className="pl-field">
+                  <label>Vendedor (opcional)</label>
+                  <select className="pl-select" value={editForm.vendedorId} onChange={e => setEditForm(f => ({ ...f, vendedorId: e.target.value }))}>
+                    <option value="">— Sem vendedor —</option>
+                    {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="pl-field">
+                <label>Observação (opcional)</label>
+                <input className="pl-input" value={editForm.observacao} onChange={e => setEditForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: preferências do cliente" />
+              </div>
+            </div>
+            {editErro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{editErro}</div>}
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button type="button" className="pl-btn pl-btn-primary" disabled={editSalvando} onClick={salvarEdicao}>
+                {editSalvando ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+              <button type="button" className="pl-btn pl-btn-ghost" onClick={fecharEdicao}>Cancelar</button>
             </div>
           </div>
         </div>

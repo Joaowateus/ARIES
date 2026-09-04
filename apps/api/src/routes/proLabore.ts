@@ -581,6 +581,10 @@ router.get('/leads', requireProLaboreAuth, async (req: Request, res: Response) =
 const criarLeadSchema = z.object({
   nomeCliente: z.string().min(2, 'Nome muito curto'),
   telefone: z.string().optional(),
+  email: z.string().email('E-mail inválido').optional(),
+  cpf: z.string().optional(),
+  endereco: z.string().optional(),
+  modeloInteresse: z.string().optional(),
   observacao: z.string().optional(),
   vendedorId: z.string().optional(),
   tipoLead: z.enum(TIPOS_LEAD).optional(),
@@ -613,6 +617,10 @@ router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) 
       vendedorId,
       nomeCliente: parse.data.nomeCliente,
       telefone: parse.data.telefone,
+      email: parse.data.email,
+      cpf: parse.data.cpf,
+      endereco: parse.data.endereco,
+      modeloInteresse: parse.data.modeloInteresse,
       observacao: parse.data.observacao,
       tipoLead: parse.data.tipoLead,
     },
@@ -625,6 +633,10 @@ router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) 
 const editarLeadSchema = z.object({
   nomeCliente: z.string().min(2).optional(),
   telefone: z.string().optional(),
+  email: z.string().email('E-mail inválido').optional(),
+  cpf: z.string().optional(),
+  endereco: z.string().optional(),
+  modeloInteresse: z.string().optional(),
   observacao: z.string().optional(),
   vendedorId: z.string().nullable().optional(),
   tipoLead: z.enum(TIPOS_LEAD).nullable().optional(),
@@ -645,9 +657,16 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
     return
   }
 
-  const data: { nomeCliente?: string; telefone?: string; observacao?: string; vendedorId?: string | null; tipoLead?: string | null } = {
+  const data: {
+    nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string
+    modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: string | null
+  } = {
     nomeCliente: parse.data.nomeCliente,
     telefone: parse.data.telefone,
+    email: parse.data.email,
+    cpf: parse.data.cpf,
+    endereco: parse.data.endereco,
+    modeloInteresse: parse.data.modeloInteresse,
     observacao: parse.data.observacao,
     tipoLead: parse.data.tipoLead,
   }

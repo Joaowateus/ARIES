@@ -1021,6 +1021,10 @@ model Lead {
   vendedorId   String?
   nomeCliente  String
   telefone     String?
+  email        String?
+  cpf          String?
+  endereco     String?
+  modeloInteresse String? // moto que o cliente tem interesse — separado de observacao pra facilitar relatório
   observacao   String?
   tipoLead     String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
   estagio      String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
