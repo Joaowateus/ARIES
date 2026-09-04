@@ -193,14 +193,14 @@ export default function ProLaboreDashboardPage() {
         <div className="pl-card">
           <div className="pl-card-head">
             <div>
-              <div className="pl-card-title">{isDono ? 'Lucro (pró-labore) mensal' : 'Comissão mensal'}</div>
-              <div className="pl-card-sub">{isDono ? 'Sacado por venda, até o teto configurado' : 'Paga por venda, até o teto da sua comissão'}</div>
+              <div className="pl-card-title">{isDono ? 'Comissões pagas mensal' : 'Comissão mensal'}</div>
+              <div className="pl-card-sub">{isDono ? 'Somada por venda, até o teto de cada vendedor' : 'Paga por venda, até o teto da sua comissão'}</div>
             </div>
           </div>
-          <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => (isDono ? m.proLaboreSacado : m.comissaoPaga)} />
+          <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.comissaoPaga} color="var(--pl-accent-4)" />
           <div className="pl-stat-strip">
-            <div className="pl-s"><div className="pl-l">{isDono ? 'Lucro/venda médio' : 'Comissão/venda média'}</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? (isDono ? atual.proLaboreSacado : atual.comissaoPaga) / atual.quantidadeVendas : 0)}</div></div>
-            <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + (isDono ? m.proLaboreSacado : m.comissaoPaga), 0))}</div></div>
+            <div className="pl-s"><div className="pl-l">Comissão/venda média</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.comissaoPaga / atual.quantidadeVendas : 0)}</div></div>
+            <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.comissaoPaga, 0))}</div></div>
           </div>
         </div>
       </div>
@@ -217,14 +217,14 @@ export default function ProLaboreDashboardPage() {
           <div className="pl-card">
             <div className="pl-card-head">
               <div>
-                <div className="pl-card-title">Comissões pagas mensal</div>
-                <div className="pl-card-sub">Somada por venda, até o teto de cada vendedor</div>
+                <div className="pl-card-title">Lucro (pró-labore) mensal</div>
+                <div className="pl-card-sub">Sacado por venda, até o teto configurado</div>
               </div>
             </div>
-            <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.comissaoPaga} color="var(--pl-accent-4)" />
+            <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.proLaboreSacado} />
             <div className="pl-stat-strip">
-              <div className="pl-s"><div className="pl-l">Comissão/venda média</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.comissaoPaga / atual.quantidadeVendas : 0)}</div></div>
-              <div className="pl-s"><div className="pl-l">Total pago no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.comissaoPaga, 0))}</div></div>
+              <div className="pl-s"><div className="pl-l">Lucro/venda médio</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.proLaboreSacado / atual.quantidadeVendas : 0)}</div></div>
+              <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.proLaboreSacado, 0))}</div></div>
             </div>
           </div>
         </>
