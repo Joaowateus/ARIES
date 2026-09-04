@@ -355,11 +355,15 @@
   background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 999px; padding: 2px 8px; flex: none;
 }
 .pl-kanban-cards { display: flex; flex-direction: column; gap: 9px; min-height: 40px; }
+/* touch-action: none — o card usa Pointer Events pra arrastar (funciona em
+   toque, diferente do Drag and Drop nativo do HTML5); sem isso, no celular
+   o navegador tenta rolar a página assim que o dedo encosta no card, e o
+   gesto de arrastar nunca chega a começar. */
 .pl-kanban-card {
   background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm);
   box-shadow: var(--pl-shadow-card); padding: 11px 12px; cursor: grab; transition: transform .12s, opacity .12s;
+  touch-action: none; -webkit-user-select: none; user-select: none;
 }
-.pl-kanban-card[draggable="false"] { cursor: default; }
 .pl-kanban-card:active { cursor: grabbing; }
 .pl-kanban-card.dragging { opacity: .4; }
 .pl-kanban-card:hover { transform: translateY(-1px); }
