@@ -107,6 +107,19 @@ export default function ProLaboreLeadsPage() {
     carregar()
   }
 
+  // Com muitos leads na coluna, arrastar um card lá de baixo até a coluna
+  // seguinte é o principal ponto de atrito do CRM (precisa rolar a lista
+  // inteira segurando o card). O botão "Avançar" resolve isso com um clique
+  // só, sem precisar arrastar nada — sempre move UMA etapa adiante. Não
+  // avança pra Fechamentos por aqui (isso continua exclusivo do botão
+  // "Converter"/arrastar, que já abre o registro da venda).
+  const ORDEM_COLUNAS = COLUNAS.map(c => c.estagio)
+  function proximaEtapaSimples(estagio: EstagioLead): EstagioLead | null {
+    const idx = ORDEM_COLUNAS.indexOf(estagio)
+    if (idx === -1 || idx >= ORDEM_COLUNAS.length - 2) return null
+    return ORDEM_COLUNAS[idx + 1]
+  }
+
   async function marcarPerdido(lead: Lead) {
     if (!confirm(`Marcar o lead de ${lead.nomeCliente} como perdido?`)) return
     await mudarEstagio(lead, 'PERDIDO')
@@ -276,7 +289,7 @@ export default function ProLaboreLeadsPage() {
 
   function onPointerDownCard(e: React.PointerEvent<HTMLDivElement>, lead: Lead) {
     if (lead.vendaId) return
-    if ((e.target as HTMLElement).closest('.pl-kanban-card-actions')) return
+    if ((e.target as HTMLElement).closest('.pl-kanban-card-actions, .pl-kanban-card-advance')) return
     const abort = new AbortController()
     dragRef.current = { lead, startX: e.clientX, startY: e.clientY, dragging: false, colSobre: null, abort }
     window.addEventListener('pointermove', onPointerMoveWin, { signal: abort.signal })
@@ -402,6 +415,8 @@ export default function ProLaboreLeadsPage() {
                     {leadsDaColuna.length === 0 && <div className="pl-kanban-empty">Arraste um lead pra cá</div>}
                     {leadsDaColuna.map(lead => {
                       const movivel = !lead.vendaId
+                      const proxima = proximaEtapaSimples(lead.estagio)
+                      const proximaTitulo = proxima ? COLUNAS.find(c => c.estagio === proxima)?.titulo : null
                       return (
                         <div
                           key={lead.id}
@@ -421,12 +436,25 @@ export default function ProLaboreLeadsPage() {
                           {lead.vendaId ? (
                             <div className="pl-kanban-card-badge">✓ Convertido em venda</div>
                           ) : (
-                            <div className="pl-kanban-card-actions">
-                              {isDono && col.estagio !== 'FECHADO' && <span onClick={() => abrirConversao(lead)}>Converter</span>}
-                              <span onClick={() => abrirEdicao(lead)}>Editar</span>
-                              <span onClick={() => marcarPerdido(lead)} className="pl-danger">Perdido</span>
-                              <span onClick={() => remover(lead)} className="pl-danger">Remover</span>
-                            </div>
+                            <>
+                              {proxima && (
+                                <button
+                                  type="button"
+                                  className="pl-kanban-card-advance"
+                                  onClick={() => mudarEstagio(lead, proxima)}
+                                  title={`Mover para ${proximaTitulo}`}
+                                >
+                                  Avançar
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
+                                </button>
+                              )}
+                              <div className="pl-kanban-card-actions">
+                                {isDono && col.estagio !== 'FECHADO' && <span onClick={() => abrirConversao(lead)}>Converter</span>}
+                                <span onClick={() => abrirEdicao(lead)}>Editar</span>
+                                <span onClick={() => marcarPerdido(lead)} className="pl-danger">Perdido</span>
+                                <span onClick={() => remover(lead)} className="pl-danger">Remover</span>
+                              </div>
+                            </>
                           )}
                         </div>
                       )

@@ -376,6 +376,22 @@
 }
 .pl-kanban-card-tag.trafego { background: var(--pl-accent-soft); color: var(--pl-accent); }
 .pl-kanban-card-tag.organico { background: var(--pl-accent-3-soft); color: var(--pl-accent-3); }
+/* Botão de avançar — move o card uma etapa adiante com um clique só, sem
+   precisar arrastar. Resolve o atrito de colunas com muitos leads, onde
+   arrastar um card lá de baixo até a próxima coluna exige rolar a lista
+   inteira segurando ele. Destacado (preenchido) pra ser o alvo óbvio, bem
+   diferente dos links de texto das outras ações abaixo. */
+.pl-kanban-card-advance {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; margin-top: 10px; padding: 7px 10px; border-radius: 8px;
+  background: color-mix(in srgb, var(--pl-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pl-accent) 30%, transparent);
+  color: var(--pl-accent); font-size: 11.5px; font-weight: 700; font-family: 'Manrope';
+  cursor: pointer; transition: background .15s;
+}
+.pl-kanban-card-advance:hover { background: color-mix(in srgb, var(--pl-accent) 24%, transparent); }
+.pl-kanban-card-advance svg { width: 12px; height: 12px; flex: none; }
+
 .pl-kanban-card-actions { display: flex; gap: 12px; margin-top: 9px; flex-wrap: wrap; }
 .pl-kanban-card-actions span { font-size: 11px; font-weight: 700; color: var(--pl-accent); cursor: pointer; }
 .pl-kanban-card-actions span.pl-danger { color: var(--pl-critical); }
