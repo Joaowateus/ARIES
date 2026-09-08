@@ -31,6 +31,9 @@ export interface ProLaboreUsuario {
   nome: string
   email: string
   papel: ProLaborePapel
+  // Só existe pra quem loga como VENDEDOR/SUPERVISOR — meta mensal
+  // individual, usada no lugar da meta anual no dashboard de um VENDEDOR.
+  metaMensal?: number | null
 }
 
 export interface ParametroLiquidez {
@@ -39,6 +42,8 @@ export interface ParametroLiquidez {
   // Teto padrão de comissão, usado por vendedores sem comissão individual.
   tetoComissaoPadrao: number
   metaFaturamentoAnual: number
+  // Meta mensal padrão, usada por vendedores sem meta mensal individual.
+  metaMensalPadrao: number
   fraseMotivacional?: string | null
 }
 
@@ -49,6 +54,7 @@ export interface Vendedor {
   email?: string | null
   papel: 'VENDEDOR' | 'SUPERVISOR'
   tetoComissaoPorVenda?: number | null
+  metaMensal?: number | null
   criadoEm: string
 }
 
@@ -192,7 +198,7 @@ export const proLaboreApi = {
   vendedores: {
     listar: () => request<Vendedor[]>('/pro-labore/vendedores'),
     criar: (nome: string) => request<Vendedor>('/pro-labore/vendedores', { method: 'POST', body: JSON.stringify({ nome }) }),
-    editar: (id: string, data: { nome?: string; ativo?: boolean; papel?: 'VENDEDOR' | 'SUPERVISOR'; tetoComissaoPorVenda?: number | null }) =>
+    editar: (id: string, data: { nome?: string; ativo?: boolean; papel?: 'VENDEDOR' | 'SUPERVISOR'; tetoComissaoPorVenda?: number | null; metaMensal?: number | null }) =>
       request<Vendedor>(`/pro-labore/vendedores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendedores/${id}`, { method: 'DELETE' }),
     concederAcesso: (id: string, data: { email: string; senha: string }) =>

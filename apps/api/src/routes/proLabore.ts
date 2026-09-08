@@ -11,7 +11,7 @@ const TETO_PRO_LABORE_PADRAO = 900
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, tetoComissaoPorVenda: true, criadoEm: true, atualizadoEm: true } as const
+const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, tetoComissaoPorVenda: true, metaMensal: true, criadoEm: true, atualizadoEm: true } as const
 
 // Pró-labore é sempre do dono — sacado de qualquer venda da operação,
 // independente de quem vendeu. O teto é um único valor por conta.
@@ -151,7 +151,7 @@ router.post('/auth/login', async (req: Request, res: Response) => {
       papel: papelVendedor,
       vendedorId: vendedor.id,
     })
-    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: papelVendedor } })
+    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: papelVendedor, metaMensal: vendedor.metaMensal } })
     return
   }
 
@@ -164,7 +164,7 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
   if (papel === 'VENDEDOR' || papel === 'SUPERVISOR') {
     const vendedor = await prisma.vendedor.findUnique({
       where: { id: vendedorId },
-      select: { id: true, nome: true, email: true },
+      select: { id: true, nome: true, email: true, metaMensal: true },
     })
     if (!vendedor || !vendedor.email) {
       res.status(404).json({ error: 'Vendedor não encontrado' })
@@ -175,7 +175,7 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
     // que o que o resto das rotas está de fato aplicando, a pessoa veria a
     // tela de supervisor mas os dados viriam escopados como vendedor. Uma
     // promoção só entra em vigor no próximo login (novo token).
-    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel })
+    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel, metaMensal: vendedor.metaMensal })
     return
   }
 
@@ -250,6 +250,7 @@ const parametrosSchema = z.object({
   tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo').optional(),
   tetoComissaoPadrao: z.number().positive('Teto deve ser positivo').optional(),
   metaFaturamentoAnual: z.number().positive('Meta deve ser positiva').optional(),
+  metaMensalPadrao: z.number().positive('Meta deve ser positiva').optional(),
   fraseMotivacional: z.string().max(280, 'Frase muito longa').optional(),
 })
 
@@ -301,6 +302,7 @@ const editarVendedorSchema = z.object({
   ativo: z.boolean().optional(),
   papel: z.enum(['VENDEDOR', 'SUPERVISOR']).optional(),
   tetoComissaoPorVenda: z.number().positive('Teto deve ser positivo').nullable().optional(),
+  metaMensal: z.number().positive('Meta deve ser positiva').nullable().optional(),
 })
 
 router.patch('/vendedores/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {

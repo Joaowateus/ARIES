@@ -927,6 +927,11 @@ model Vendedor {
   // ParametroLiquidez.tetoComissaoPadrao da conta quando definido. Só o
   // dono edita (a rota é requireDono); nulo = usa o padrão da conta.
   tetoComissaoPorVenda Float?
+  // Meta de faturamento mensal individual deste vendedor — sobrepõe o
+  // ParametroLiquidez.metaMensalPadrao da conta quando definida. Vendedor
+  // não vê a meta anual da operação (isso é visão de dono/supervisor); no
+  // lugar, o dashboard dele mostra essa meta mensal própria.
+  metaMensal   Float?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
@@ -985,6 +990,10 @@ model ParametroLiquidez {
   // venda não tem um Vendedor.tetoComissaoPorVenda próprio definido.
   tetoComissaoPadrao    Float    @default(900)
   metaFaturamentoAnual  Float    @default(5000000)
+  // Meta mensal padrão, usada por vendedores sem Vendedor.metaMensal
+  // próprio definido. Substitui a meta anual no dashboard de quem loga
+  // como VENDEDOR (dono e supervisor continuam vendo a meta anual).
+  metaMensalPadrao      Float    @default(0)
   fraseMotivacional     String?
   atualizadoEm          DateTime @updatedAt
 
