@@ -26,6 +26,11 @@ export default function ProLaboreVendedoresPage() {
   const [tetoErro, setTetoErro] = useState('')
   const [tetoSalvando, setTetoSalvando] = useState(false)
 
+  const [editandoMetaId, setEditandoMetaId] = useState<string | null>(null)
+  const [metaValor, setMetaValor] = useState('')
+  const [metaErro, setMetaErro] = useState('')
+  const [metaSalvando, setMetaSalvando] = useState(false)
+
   const carregar = useCallback(() => {
     if (!isDono) { setLoading(false); return }
     Promise.all([proLaboreApi.vendedores.listar(), proLaboreApi.parametros.get()])
@@ -136,6 +141,37 @@ export default function ProLaboreVendedoresPage() {
     }
   }
 
+  function abrirEdicaoMeta(v: Vendedor) {
+    setEditandoMetaId(v.id)
+    setMetaValor(v.metaMensal != null ? String(v.metaMensal) : '')
+    setMetaErro('')
+  }
+
+  function fecharEdicaoMeta() {
+    setEditandoMetaId(null)
+    setMetaValor('')
+    setMetaErro('')
+  }
+
+  async function salvarMeta(id: string) {
+    setMetaErro('')
+    setMetaSalvando(true)
+    try {
+      const numero = metaValor.trim() === '' ? null : Number(metaValor)
+      if (numero !== null && (!Number.isFinite(numero) || numero <= 0)) {
+        setMetaErro('Informe um valor positivo, ou deixe em branco pra usar o padrão da conta')
+        return
+      }
+      await proLaboreApi.vendedores.editar(id, { metaMensal: numero })
+      fecharEdicaoMeta()
+      carregar()
+    } catch (err: unknown) {
+      setMetaErro(err instanceof Error ? err.message : 'Erro ao salvar meta mensal')
+    } finally {
+      setMetaSalvando(false)
+    }
+  }
+
   if (!isDono) {
     return (
       <div className="pl-empty pl-card">
@@ -184,6 +220,7 @@ export default function ProLaboreVendedoresPage() {
                 <th>Status</th>
                 <th>Papel</th>
                 <th>Comissão por venda</th>
+                <th>Meta mensal</th>
                 <th>Acesso individual</th>
                 <th />
               </tr>
@@ -207,6 +244,11 @@ export default function ProLaboreVendedoresPage() {
                         : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoComissaoPadrao)})` : ''}</span>}
                     </td>
                     <td>
+                      {v.metaMensal != null
+                        ? <span className="pl-mono">{formatMoeda(v.metaMensal)}</span>
+                        : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Padrão da conta{parametro ? ` (${formatMoeda(parametro.metaMensalPadrao)})` : ''}</span>}
+                    </td>
+                    <td>
                       {v.email
                         ? <span className="pl-delta up" style={{ display: 'inline-flex' }} title={v.email}>Com login</span>
                         : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Sem login</span>}
@@ -218,6 +260,9 @@ export default function ProLaboreVendedoresPage() {
                       <span className="pl-link-action" onClick={() => (editandoTetoId === v.id ? fecharEdicaoTeto() : abrirEdicaoTeto(v))} style={{ marginRight: 14 }}>
                         Editar comissão
                       </span>
+                      <span className="pl-link-action" onClick={() => (editandoMetaId === v.id ? fecharEdicaoMeta() : abrirEdicaoMeta(v))} style={{ marginRight: 14 }}>
+                        Editar meta mensal
+                      </span>
                       <span className="pl-link-action" onClick={() => (concedendoId === v.id ? fecharConcessao() : abrirConcessao(v))} style={{ marginRight: 14 }}>
                         {v.email ? 'Trocar acesso' : 'Dar acesso'}
                       </span>
@@ -228,7 +273,7 @@ export default function ProLaboreVendedoresPage() {
                   </tr>
                   {editandoTetoId === v.id && (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Comissão (teto por venda, R$)</label>
@@ -244,9 +289,27 @@ export default function ProLaboreVendedoresPage() {
                       </td>
                     </tr>
                   )}
+                  {editandoMetaId === v.id && (
+                    <tr>
+                      <td colSpan={7}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
+                          <div className="pl-field" style={{ minWidth: 220 }}>
+                            <label>Meta mensal (R$)</label>
+                            <input type="number" step="0.01" min="0" className="pl-input" value={metaValor} onChange={e => setMetaValor(e.target.value)} placeholder={parametro ? String(parametro.metaMensalPadrao) : '0'} />
+                            <span className="pl-hint">Deixe em branco pra usar o padrão da conta{parametro ? ` (${formatMoeda(parametro.metaMensalPadrao)})` : ''}</span>
+                          </div>
+                          <button type="button" className="pl-btn pl-btn-primary" disabled={metaSalvando} onClick={() => salvarMeta(v.id)}>
+                            {metaSalvando ? 'Salvando...' : 'Salvar meta'}
+                          </button>
+                          <button type="button" className="pl-btn pl-btn-ghost" onClick={fecharEdicaoMeta}>Cancelar</button>
+                        </div>
+                        {metaErro && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{metaErro}</div>}
+                      </td>
+                    </tr>
+                  )}
                   {concedendoId === v.id && (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Email de acesso</label>

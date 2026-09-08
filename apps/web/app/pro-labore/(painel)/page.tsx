@@ -65,6 +65,11 @@ export default function ProLaboreDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [selectedIdx, setSelectedIdx] = useState(0)
 
+  // Meta mensal própria, só relevante pra VENDEDOR (dono/supervisor veem a
+  // meta anual no lugar) — usa a individual dele quando definida, senão o
+  // padrão da conta.
+  const metaMensalVendedor = usuario?.metaMensal ?? parametro?.metaMensalPadrao ?? 0
+
   // Dados pro filtro (sutil, no card do Funil) por vendedor/canal — os leads
   // já vêm com vendedorId e tipoLead, então filtramos no cliente em vez de
   // criar um endpoint novo só pra isso.
@@ -175,7 +180,7 @@ export default function ProLaboreDashboardPage() {
         ))}
       </div>
 
-      <AnoEMetas meses={meses} parametro={parametro} onParametroSalvo={setParametro} isDono={isDono} vejaEquipe={vejaEquipe} />
+      <AnoEMetas meses={meses} atual={atual} parametro={parametro} onParametroSalvo={setParametro} isDono={isDono} vejaEquipe={vejaEquipe} metaMensalVendedor={metaMensalVendedor} />
 
       <div className="pl-section-head">
         <div>
@@ -341,50 +346,88 @@ export default function ProLaboreDashboardPage() {
   )
 }
 
-/* ============ FATURAMENTO ANUAL x META + FRASE MOTIVACIONAL ============ */
-function AnoEMetas({ meses, parametro, onParametroSalvo, isDono, vejaEquipe }: { meses: MesPainel[]; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void; isDono: boolean; vejaEquipe: boolean }) {
+/* ============ FATURAMENTO ANUAL x META (dono/supervisor) OU META MENSAL (vendedor) + FRASE MOTIVACIONAL ============ */
+// Vendedor não vê a meta anual da operação — só dono e supervisor têm essa
+// visão de conjunto. No lugar, o vendedor vê a própria meta mensal (a dele,
+// se definida em Vendedores, senão o padrão da conta).
+function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEquipe, metaMensalVendedor }: { meses: MesPainel[]; atual: MesPainel; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void; isDono: boolean; vejaEquipe: boolean; metaMensalVendedor: number }) {
   if (meses.length === 0) return null
   const ano = meses[0].ano
   const totalAnual = meses.reduce((s, m) => s + m.receita, 0)
   const metaAnual = parametro?.metaFaturamentoAnual ?? 5_000_000
-  const pctMeta = metaAnual > 0 ? Math.min(1, totalAnual / metaAnual) : 0
-  const faltam = Math.max(0, metaAnual - totalAnual)
+  const pctMetaAnual = metaAnual > 0 ? Math.min(1, totalAnual / metaAnual) : 0
+  const faltamAnual = Math.max(0, metaAnual - totalAnual)
+
+  const pctMetaMensal = metaMensalVendedor > 0 ? Math.min(1, atual.receita / metaMensalVendedor) : 0
+  const faltamMensal = Math.max(0, metaMensalVendedor - atual.receita)
 
   return (
     <div>
       <div className="pl-section-head">
         <div>
-          <div className="pl-eyebrow">Visão anual</div>
-          <h2 className="pl-section-title">Faturamento acumulado x meta de {ano}</h2>
+          <div className="pl-eyebrow">{vejaEquipe ? 'Visão anual' : 'Sua meta do mês'}</div>
+          <h2 className="pl-section-title">{vejaEquipe ? `Faturamento acumulado x meta de ${ano}` : `Sua produção x meta de ${atual.label}`}</h2>
         </div>
       </div>
 
       <div className="pl-grid-2b">
-        <div className="pl-card">
-          <div className="pl-card-head">
-            <div>
-              <div className="pl-card-title">{vejaEquipe ? 'Faturamento anual (atual)' : 'Sua produção anual'}</div>
-              <div className="pl-card-sub">Acumulado de {meses[0].label} a {meses[meses.length - 1].label} de {ano}</div>
+        {vejaEquipe ? (
+          <>
+            <div className="pl-card">
+              <div className="pl-card-head">
+                <div>
+                  <div className="pl-card-title">Faturamento anual (atual)</div>
+                  <div className="pl-card-sub">Acumulado de {meses[0].label} a {meses[meses.length - 1].label} de {ano}</div>
+                </div>
+              </div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(totalAnual)}</div>
             </div>
-          </div>
-          <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(totalAnual)}</div>
-        </div>
 
-        <div className="pl-card">
-          <div className="pl-card-head">
-            <div>
-              <div className="pl-card-title">Meta anual</div>
-              <div className="pl-card-sub">Objetivo de faturamento para {ano}</div>
+            <div className="pl-card">
+              <div className="pl-card-head">
+                <div>
+                  <div className="pl-card-title">Meta anual</div>
+                  <div className="pl-card-sub">Objetivo de faturamento para {ano}</div>
+                </div>
+              </div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaAnual)}</div>
+              <div className="pl-bar-track" style={{ marginTop: 14 }}>
+                <div className="pl-bar-fill" style={{ width: `${pctMetaAnual * 100}%` }} />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--pl-ink-muted)', marginTop: 8 }}>
+                {formatPct(pctMetaAnual)} da meta atingida{faltamAnual > 0 ? ` — faltam ${formatMoeda(faltamAnual)}` : ' — meta batida! 🎉'}
+              </div>
             </div>
-          </div>
-          <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaAnual)}</div>
-          <div className="pl-bar-track" style={{ marginTop: 14 }}>
-            <div className="pl-bar-fill" style={{ width: `${pctMeta * 100}%` }} />
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--pl-ink-muted)', marginTop: 8 }}>
-            {formatPct(pctMeta)} da meta atingida{faltam > 0 ? ` — faltam ${formatMoeda(faltam)}` : ' — meta batida! 🎉'}
-          </div>
-        </div>
+          </>
+        ) : (
+          <>
+            <div className="pl-card">
+              <div className="pl-card-head">
+                <div>
+                  <div className="pl-card-title">Sua produção do mês</div>
+                  <div className="pl-card-sub">Receita das suas vendas em {atual.label} de {atual.ano}</div>
+                </div>
+              </div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(atual.receita)}</div>
+            </div>
+
+            <div className="pl-card">
+              <div className="pl-card-head">
+                <div>
+                  <div className="pl-card-title">Meta mensal</div>
+                  <div className="pl-card-sub">Seu objetivo de faturamento em {atual.label}</div>
+                </div>
+              </div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaMensalVendedor)}</div>
+              <div className="pl-bar-track" style={{ marginTop: 14 }}>
+                <div className="pl-bar-fill" style={{ width: `${pctMetaMensal * 100}%` }} />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--pl-ink-muted)', marginTop: 8 }}>
+                {formatPct(pctMetaMensal)} da meta atingida{faltamMensal > 0 ? ` — faltam ${formatMoeda(faltamMensal)}` : ' — meta batida! 🎉'}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <FraseMotivacional parametro={parametro} onSaved={onParametroSalvo} isDono={isDono} />

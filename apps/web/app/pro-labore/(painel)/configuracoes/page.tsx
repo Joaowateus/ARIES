@@ -11,6 +11,7 @@ export default function ProLaboreConfiguracoesPage() {
   const [teto, setTeto] = useState('')
   const [tetoComissao, setTetoComissao] = useState('')
   const [metaAnual, setMetaAnual] = useState('')
+  const [metaMensalPadrao, setMetaMensalPadrao] = useState('')
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -22,6 +23,7 @@ export default function ProLaboreConfiguracoesPage() {
       setTeto(String(p.tetoProLaborePorVenda))
       setTetoComissao(String(p.tetoComissaoPadrao))
       setMetaAnual(String(p.metaFaturamentoAnual))
+      setMetaMensalPadrao(String(p.metaMensalPadrao))
     }).finally(() => setLoading(false))
   }, [isDono])
 
@@ -35,10 +37,12 @@ export default function ProLaboreConfiguracoesPage() {
         tetoProLaborePorVenda: Number(teto),
         tetoComissaoPadrao: Number(tetoComissao),
         metaFaturamentoAnual: Number(metaAnual),
+        metaMensalPadrao: Number(metaMensalPadrao),
       })
       setTeto(String(atualizado.tetoProLaborePorVenda))
       setTetoComissao(String(atualizado.tetoComissaoPadrao))
       setMetaAnual(String(atualizado.metaFaturamentoAnual))
+      setMetaMensalPadrao(String(atualizado.metaMensalPadrao))
       setSucesso(true)
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -85,7 +89,13 @@ export default function ProLaboreConfiguracoesPage() {
         <div className="pl-field">
           <label>Meta de faturamento anual (R$)</label>
           <input type="number" step="0.01" min="0" className="pl-input" value={metaAnual} onChange={e => setMetaAnual(e.target.value)} required />
-          <span className="pl-hint">Aparece no dashboard como referência do progresso do ano — hoje: {formatMoeda(Number(metaAnual) || 0)}</span>
+          <span className="pl-hint">Aparece no dashboard do dono e do supervisor como referência do progresso do ano — hoje: {formatMoeda(Number(metaAnual) || 0)}</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Meta mensal padrão por vendedor (R$)</label>
+          <input type="number" step="0.01" min="0.01" className="pl-input" value={metaMensalPadrao} onChange={e => setMetaMensalPadrao(e.target.value)} required />
+          <span className="pl-hint">Vendedor não vê a meta anual — no lugar, vê essa meta mensal (ou a individual dele, se definida em Vendedores) — hoje: {formatMoeda(Number(metaMensalPadrao) || 0)}</span>
         </div>
 
         {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
