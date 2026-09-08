@@ -916,6 +916,13 @@ model Vendedor {
   ativo        Boolean  @default(true)
   email        String?  @unique
   senhaHash    String?
+  // VENDEDOR (padrão) só vê/mexe na própria produção. SUPERVISOR vê o
+  // painel e o CRM com o escopo da equipe inteira (igual ao dono), mas sem
+  // acesso a Vendas/Vendedores/Indicadores/Configurações nem às cifras
+  // pessoais do dono (pró-labore, comissões agregadas, gasto com anúncios)
+  // — essas rotas continuam exclusivas de requireDono. Só entra em vigor no
+  // próximo login, porque o papel vai dentro do JWT.
+  papel        String   @default("VENDEDOR")
   // Teto de comissão por venda individual deste vendedor — sobrepõe o
   // ParametroLiquidez.tetoComissaoPadrao da conta quando definido. Só o
   // dono edita (a rota é requireDono); nulo = usa o padrão da conta.

@@ -11,7 +11,7 @@ function mesAtualStr() {
 
 export default function ProLaboreIndicadoresPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel !== 'VENDEDOR'
+  const isDono = usuario?.papel === 'DONO'
   const [mesSelecionado, setMesSelecionado] = useState(mesAtualStr())
   const [funis, setFunis] = useState<FunilMensal[]>([])
   const [gastos, setGastos] = useState<GastoAnuncioMensal[]>([])

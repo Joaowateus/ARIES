@@ -54,7 +54,12 @@ function DeltaChip({ curr, prev, invert }: { curr: number; prev: number | undefi
 
 export default function ProLaboreDashboardPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel !== 'VENDEDOR'
+  const isDono = usuario?.papel === 'DONO'
+  const isSupervisor = usuario?.papel === 'SUPERVISOR'
+  // Supervisor vê o painel com o escopo da equipe inteira (igual ao dono),
+  // menos as cifras pessoais do dono — pró-labore, comissões agregadas,
+  // gasto com anúncios/ROAS. Essas continuam em `isDono` estrito.
+  const vejaEquipe = isDono || isSupervisor
   const [painel, setPainel] = useState<PainelProLabore | null>(null)
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
@@ -78,8 +83,8 @@ export default function ProLaboreDashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (isDono) proLaboreApi.vendedores.listar().then(setVendedores)
-  }, [isDono])
+    if (vejaEquipe) proLaboreApi.vendedores.listar().then(setVendedores)
+  }, [vejaEquipe])
 
   // Card "Receita detalhada" (ao lado do Lucro pró-labore) — período curto
   // (hoje/7/15/30 dias), separado do /painel (que só tem granularidade
@@ -131,9 +136,11 @@ export default function ProLaboreDashboardPage() {
 
   const kpis = [
     { label: 'Receita do mês', value: formatMoeda(atual.receita), color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
-    isDono
-      ? { label: 'Lucro (pró-labore)', value: formatMoeda(atual.proLaboreSacado), color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }
-      : { label: 'Comissão do mês', value: formatMoeda(atual.comissaoPaga), color: 'var(--pl-accent-3)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
+    ...(isDono
+      ? [{ label: 'Lucro (pró-labore)', value: formatMoeda(atual.proLaboreSacado), color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }]
+      : isSupervisor
+        ? [] // não é dela nem da equipe como um todo — cada vendedor já vê a própria no Ranking
+        : [{ label: 'Comissão do mês', value: formatMoeda(atual.comissaoPaga), color: 'var(--pl-accent-3)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga }]),
     { label: 'Ticket médio', value: formatMoeda(atual.ticketMedio), color: 'var(--pl-accent-4)', curr: atual.ticketMedio, prev: anterior?.ticketMedio },
     ...(isDono
       ? [
@@ -168,7 +175,7 @@ export default function ProLaboreDashboardPage() {
         ))}
       </div>
 
-      <AnoEMetas meses={meses} parametro={parametro} onParametroSalvo={setParametro} isDono={isDono} />
+      <AnoEMetas meses={meses} parametro={parametro} onParametroSalvo={setParametro} isDono={isDono} vejaEquipe={vejaEquipe} />
 
       <div className="pl-section-head">
         <div>
@@ -178,7 +185,7 @@ export default function ProLaboreDashboardPage() {
         <div className="pl-section-note">{meses[0].label}–{meses[meses.length - 1].label} {atual.ano} · clique num ponto do gráfico para inspecionar o mês</div>
       </div>
 
-      <div className="pl-grid-2">
+      <div className={isSupervisor ? undefined : 'pl-grid-2'}>
         <div className="pl-card">
           <div className="pl-card-head">
             <div>
@@ -193,9 +200,8 @@ export default function ProLaboreDashboardPage() {
           <div className="pl-month-detail">
             <div>Mês selecionado<strong>{atual.label} {atual.ano}</strong></div>
             <div>Receita<strong>{formatMoeda(atual.receita)}</strong></div>
-            {isDono
-              ? <div>Lucro<strong>{formatMoeda(atual.proLaboreSacado)}</strong></div>
-              : <div>Comissão<strong>{formatMoeda(atual.comissaoPaga)}</strong></div>}
+            {isDono && <div>Lucro<strong>{formatMoeda(atual.proLaboreSacado)}</strong></div>}
+            {!isDono && !isSupervisor && <div>Comissão<strong>{formatMoeda(atual.comissaoPaga)}</strong></div>}
             <div>Vendas<strong>{atual.quantidadeVendas}</strong></div>
             <div>Ticket médio<strong>{formatMoeda(atual.ticketMedio)}</strong></div>
             {isDono && <div>Comissões<strong>{formatMoeda(atual.comissaoPaga)}</strong></div>}
@@ -203,19 +209,21 @@ export default function ProLaboreDashboardPage() {
           </div>
         </div>
 
-        <div className="pl-card">
-          <div className="pl-card-head">
-            <div>
-              <div className="pl-card-title">{isDono ? 'Comissões pagas mensal' : 'Comissão mensal'}</div>
-              <div className="pl-card-sub">{isDono ? 'Somada por venda, até o teto de cada vendedor' : 'Paga por venda, até o teto da sua comissão'}</div>
+        {!isSupervisor && (
+          <div className="pl-card">
+            <div className="pl-card-head">
+              <div>
+                <div className="pl-card-title">{isDono ? 'Comissões pagas mensal' : 'Comissão mensal'}</div>
+                <div className="pl-card-sub">{isDono ? 'Somada por venda, até o teto de cada vendedor' : 'Paga por venda, até o teto da sua comissão'}</div>
+              </div>
+            </div>
+            <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.comissaoPaga} color="var(--pl-accent-4)" />
+            <div className="pl-stat-strip">
+              <div className="pl-s"><div className="pl-l">Comissão/venda média</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.comissaoPaga / atual.quantidadeVendas : 0)}</div></div>
+              <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.comissaoPaga, 0))}</div></div>
             </div>
           </div>
-          <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.comissaoPaga} color="var(--pl-accent-4)" />
-          <div className="pl-stat-strip">
-            <div className="pl-s"><div className="pl-l">Comissão/venda média</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.comissaoPaga / atual.quantidadeVendas : 0)}</div></div>
-            <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.comissaoPaga, 0))}</div></div>
-          </div>
-        </div>
+        )}
       </div>
 
       {isDono && (
@@ -278,7 +286,7 @@ export default function ProLaboreDashboardPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div className="pl-section-note">{atual.label} {atual.ano}{filtroAtivo && ' · filtrado'}</div>
           <FunilFiltro
-            isDono={isDono}
+            isDono={vejaEquipe}
             vendedores={vendedores}
             vendedorId={filtroVendedorId}
             canal={filtroCanal}
@@ -291,16 +299,16 @@ export default function ProLaboreDashboardPage() {
         <FunilJourney funil={funilFiltrado ?? atual.funil} />
       </div>
 
-      {isDono && (
+      {vejaEquipe && (
         <>
           <div className="pl-section-head">
             <div>
-              <div className="pl-eyebrow">Times &amp; investimento</div>
-              <h2 className="pl-section-title">Ranking de vendedores e retorno de anúncios</h2>
+              <div className="pl-eyebrow">Times{isDono ? ' & investimento' : ''}</div>
+              <h2 className="pl-section-title">{isDono ? 'Ranking de vendedores e retorno de anúncios' : 'Ranking de vendedores'}</h2>
             </div>
           </div>
 
-          <div className="pl-grid-2b">
+          <div className={isDono ? 'pl-grid-2b' : undefined}>
             <div className="pl-card">
               <div className="pl-card-head">
                 <div>
@@ -311,19 +319,21 @@ export default function ProLaboreDashboardPage() {
               <SellerLeaderboard vendedores={atual.vendedores} />
             </div>
 
-            <div className="pl-card">
-              <div className="pl-card-head">
-                <div>
-                  <div className="pl-card-title">ROAS mensal</div>
-                  <div className="pl-card-sub">Receita ÷ gasto com anúncios</div>
+            {isDono && (
+              <div className="pl-card">
+                <div className="pl-card-head">
+                  <div>
+                    <div className="pl-card-title">ROAS mensal</div>
+                    <div className="pl-card-sub">Receita ÷ gasto com anúncios</div>
+                  </div>
+                </div>
+                <RoasBars meses={meses} selectedIdx={selectedIdx} />
+                <div className="pl-stat-strip">
+                  <div className="pl-s"><div className="pl-l">Gasto em {atual.label}</div><div className="pl-v">{formatMoeda(atual.gastoAnuncios)}</div></div>
+                  <div className="pl-s"><div className="pl-l">CAC (custo/venda)</div><div className="pl-v">{formatMoeda(atual.cac)}</div></div>
                 </div>
               </div>
-              <RoasBars meses={meses} selectedIdx={selectedIdx} />
-              <div className="pl-stat-strip">
-                <div className="pl-s"><div className="pl-l">Gasto em {atual.label}</div><div className="pl-v">{formatMoeda(atual.gastoAnuncios)}</div></div>
-                <div className="pl-s"><div className="pl-l">CAC (custo/venda)</div><div className="pl-v">{formatMoeda(atual.cac)}</div></div>
-              </div>
-            </div>
+            )}
           </div>
         </>
       )}
@@ -332,7 +342,7 @@ export default function ProLaboreDashboardPage() {
 }
 
 /* ============ FATURAMENTO ANUAL x META + FRASE MOTIVACIONAL ============ */
-function AnoEMetas({ meses, parametro, onParametroSalvo, isDono }: { meses: MesPainel[]; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void; isDono: boolean }) {
+function AnoEMetas({ meses, parametro, onParametroSalvo, isDono, vejaEquipe }: { meses: MesPainel[]; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void; isDono: boolean; vejaEquipe: boolean }) {
   if (meses.length === 0) return null
   const ano = meses[0].ano
   const totalAnual = meses.reduce((s, m) => s + m.receita, 0)
@@ -353,7 +363,7 @@ function AnoEMetas({ meses, parametro, onParametroSalvo, isDono }: { meses: MesP
         <div className="pl-card">
           <div className="pl-card-head">
             <div>
-              <div className="pl-card-title">{isDono ? 'Faturamento anual (atual)' : 'Sua produção anual'}</div>
+              <div className="pl-card-title">{vejaEquipe ? 'Faturamento anual (atual)' : 'Sua produção anual'}</div>
               <div className="pl-card-sub">Acumulado de {meses[0].label} a {meses[meses.length - 1].label} de {ano}</div>
             </div>
           </div>

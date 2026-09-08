@@ -7,7 +7,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
 export default function ProLaboreVendedoresPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel !== 'VENDEDOR'
+  const isDono = usuario?.papel === 'DONO'
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
@@ -52,6 +52,16 @@ export default function ProLaboreVendedoresPage() {
 
   async function alternarAtivo(v: Vendedor) {
     await proLaboreApi.vendedores.editar(v.id, { ativo: !v.ativo })
+    carregar()
+  }
+
+  async function alternarPapel(v: Vendedor) {
+    const novoPapel = v.papel === 'SUPERVISOR' ? 'VENDEDOR' : 'SUPERVISOR'
+    const mensagem = novoPapel === 'SUPERVISOR'
+      ? `Tornar ${v.nome} supervisor(a)? Ela passa a ver o painel e o CRM com o escopo da equipe inteira. É preciso deslogar e logar de novo pra valer.`
+      : `Tirar o acesso de supervisor(a) de ${v.nome}? Ela volta a ver só a própria produção. É preciso deslogar e logar de novo pra valer.`
+    if (!confirm(mensagem)) return
+    await proLaboreApi.vendedores.editar(v.id, { papel: novoPapel })
     carregar()
   }
 
@@ -172,6 +182,7 @@ export default function ProLaboreVendedoresPage() {
               <tr>
                 <th>Nome</th>
                 <th>Status</th>
+                <th>Papel</th>
                 <th>Comissão por venda</th>
                 <th>Acesso individual</th>
                 <th />
@@ -186,6 +197,11 @@ export default function ProLaboreVendedoresPage() {
                       <span className={`pl-delta ${v.ativo ? 'up' : 'down'}`} style={{ display: 'inline-flex' }}>{v.ativo ? 'Ativo' : 'Inativo'}</span>
                     </td>
                     <td>
+                      {v.papel === 'SUPERVISOR'
+                        ? <span className="pl-delta up" style={{ display: 'inline-flex' }}>Supervisor(a)</span>
+                        : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Vendedor(a)</span>}
+                    </td>
+                    <td>
                       {v.tetoComissaoPorVenda != null
                         ? <span className="pl-mono">{formatMoeda(v.tetoComissaoPorVenda)}</span>
                         : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Padrão da conta{parametro ? ` (${formatMoeda(parametro.tetoComissaoPadrao)})` : ''}</span>}
@@ -196,6 +212,9 @@ export default function ProLaboreVendedoresPage() {
                         : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Sem login</span>}
                     </td>
                     <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
+                      <span className="pl-link-action" onClick={() => alternarPapel(v)} style={{ marginRight: 14 }}>
+                        {v.papel === 'SUPERVISOR' ? 'Tornar vendedor(a)' : 'Tornar supervisor(a)'}
+                      </span>
                       <span className="pl-link-action" onClick={() => (editandoTetoId === v.id ? fecharEdicaoTeto() : abrirEdicaoTeto(v))} style={{ marginRight: 14 }}>
                         Editar comissão
                       </span>
@@ -209,7 +228,7 @@ export default function ProLaboreVendedoresPage() {
                   </tr>
                   {editandoTetoId === v.id && (
                     <tr>
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Comissão (teto por venda, R$)</label>
@@ -227,7 +246,7 @@ export default function ProLaboreVendedoresPage() {
                   )}
                   {concedendoId === v.id && (
                     <tr>
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Email de acesso</label>

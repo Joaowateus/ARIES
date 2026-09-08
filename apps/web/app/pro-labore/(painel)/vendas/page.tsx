@@ -29,7 +29,7 @@ interface ResultadoImportacao { linha: string; ok: boolean; erro?: string }
 // funil em Leads.
 export default function ProLaboreVendasPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel !== 'VENDEDOR'
+  const isDono = usuario?.papel === 'DONO'
 
   const [vendas, setVendas] = useState<Venda[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])

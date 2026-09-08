@@ -7,7 +7,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel !== 'VENDEDOR'
+  const isDono = usuario?.papel === 'DONO'
   const [teto, setTeto] = useState('')
   const [tetoComissao, setTetoComissao] = useState('')
   const [metaAnual, setMetaAnual] = useState('')
