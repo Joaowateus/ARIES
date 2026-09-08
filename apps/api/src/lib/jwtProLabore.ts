@@ -6,7 +6,7 @@ export interface ProLaboreJwtPayload {
   sub: string
   email: string
   nome: string
-  papel: 'DONO' | 'VENDEDOR'
+  papel: 'DONO' | 'VENDEDOR' | 'SUPERVISOR'
   vendedorId?: string
 }
 

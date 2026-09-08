@@ -48,8 +48,9 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
 
   if (!usuario) return null
 
-  const isDono = usuario.papel !== 'VENDEDOR'
+  const isDono = usuario.papel === 'DONO'
   const nav = NAV.filter(item => !item.donoOnly || isDono)
+  const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : null
 
   return (
     <div className="pl-shell">
@@ -82,7 +83,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             ))}
           </nav>
           <div className="pl-header-right">
-            <span className="pl-user">{usuario.nome}{!isDono && <span className="pl-hint" style={{ marginLeft: 6 }}>(vendedor)</span>}</span>
+            <span className="pl-user">{usuario.nome}{rotuloPapel && <span className="pl-hint" style={{ marginLeft: 6 }}>({rotuloPapel})</span>}</span>
             <PLThemeToggle />
             <button className="pl-logout" onClick={logout}>Sair</button>
           </div>

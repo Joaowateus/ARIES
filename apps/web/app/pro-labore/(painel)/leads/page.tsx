@@ -22,7 +22,12 @@ function hojeIso() {
 
 export default function ProLaboreLeadsPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel !== 'VENDEDOR'
+  const isDono = usuario?.papel === 'DONO'
+  const isSupervisor = usuario?.papel === 'SUPERVISOR'
+  // Supervisor gerencia o CRM da equipe inteira (ver/criar/editar/reatribuir
+  // qualquer lead), mas "Converter"/arrastar pra Fechamentos continua
+  // exclusivo do dono — essas ações continuam em `isDono` estrito.
+  const vejaEquipe = isDono || isSupervisor
 
   const [leads, setLeads] = useState<Lead[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -62,12 +67,12 @@ export default function ProLaboreLeadsPage() {
     setLoading(true)
     Promise.all([
       proLaboreApi.leads.listar(),
-      isDono ? proLaboreApi.vendedores.listar() : Promise.resolve<Vendedor[]>([]),
+      vejaEquipe ? proLaboreApi.vendedores.listar() : Promise.resolve<Vendedor[]>([]),
       proLaboreApi.parametros.get(),
     ])
       .then(([l, v, p]) => { setLeads(l); setVendedores(v); setParametro(p) })
       .finally(() => setLoading(false))
-  }, [isDono])
+  }, [vejaEquipe])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -173,7 +178,7 @@ export default function ProLaboreLeadsPage() {
         endereco: editForm.endereco || undefined,
         modeloInteresse: editForm.modeloInteresse || undefined,
         observacao: editForm.observacao || undefined,
-        ...(isDono ? { vendedorId: editForm.vendedorId || null } : {}),
+        ...(vejaEquipe ? { vendedorId: editForm.vendedorId || null } : {}),
         tipoLead: editForm.tipoLead || null,
       })
       fecharEdicao()
@@ -316,7 +321,7 @@ export default function ProLaboreLeadsPage() {
           <div className="pl-eyebrow">CRM</div>
           <h2 className="pl-section-title">Funil de vendas</h2>
           <div className="pl-section-note" style={{ marginTop: 4 }}>
-            {isDono ? 'Arraste os cards entre as etapas — a mesma jornada do dashboard' : 'Seus leads, do primeiro contato ao fechamento'}
+            {vejaEquipe ? 'Arraste os cards entre as etapas — a mesma jornada do dashboard' : 'Seus leads, do primeiro contato ao fechamento'}
           </div>
         </div>
       </div>
@@ -355,7 +360,7 @@ export default function ProLaboreLeadsPage() {
               {TIPOS_LEAD.map(t => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
             </select>
           </div>
-          {isDono && (
+          {vejaEquipe && (
             <div className="pl-field">
               <label>Vendedor (opcional)</label>
               <select className="pl-select" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
@@ -425,9 +430,9 @@ export default function ProLaboreLeadsPage() {
                           onPointerDown={movivel ? e => onPointerDownCard(e, lead) : undefined}
                         >
                           <div className="pl-kanban-card-name">{lead.nomeCliente}</div>
-                          {(lead.telefone || (isDono && lead.vendedor)) && (
+                          {(lead.telefone || (vejaEquipe && lead.vendedor)) && (
                             <div className="pl-kanban-card-meta">
-                              {lead.telefone}{lead.telefone && isDono && lead.vendedor ? ' · ' : ''}{isDono && lead.vendedor ? lead.vendedor.nome : ''}
+                              {lead.telefone}{lead.telefone && vejaEquipe && lead.vendedor ? ' · ' : ''}{vejaEquipe && lead.vendedor ? lead.vendedor.nome : ''}
                             </div>
                           )}
                           {lead.modeloInteresse && <div className="pl-kanban-card-meta">Interesse: {lead.modeloInteresse}</div>}
@@ -472,7 +477,7 @@ export default function ProLaboreLeadsPage() {
                   <tr>
                     <th>Cliente</th>
                     <th>Canal</th>
-                    {isDono && <th>Vendedor</th>}
+                    {vejaEquipe && <th>Vendedor</th>}
                     <th />
                   </tr>
                 </thead>
@@ -481,7 +486,7 @@ export default function ProLaboreLeadsPage() {
                     <tr key={l.id}>
                       <td>{l.nomeCliente}</td>
                       <td>{l.tipoLead ? TIPO_LABEL[l.tipoLead] : '—'}</td>
-                      {isDono && <td>{l.vendedor?.nome ?? '—'}</td>}
+                      {vejaEquipe && <td>{l.vendedor?.nome ?? '—'}</td>}
                       <td className="pl-right">
                         <span className="pl-link-action" onClick={() => reabrir(l)} style={{ marginRight: 14 }}>Reabrir</span>
                         <span className="pl-link-action pl-danger" onClick={() => remover(l)}>Remover</span>
@@ -574,7 +579,7 @@ export default function ProLaboreLeadsPage() {
                   {TIPOS_LEAD.map(t => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
                 </select>
               </div>
-              {isDono && (
+              {vejaEquipe && (
                 <div className="pl-field">
                   <label>Vendedor (opcional)</label>
                   <select className="pl-select" value={editForm.vendedorId} onChange={e => setEditForm(f => ({ ...f, vendedorId: e.target.value }))}>

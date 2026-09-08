@@ -24,7 +24,7 @@ export function setUsuario(usuario: ProLaboreUsuario) {
   localStorage.setItem('pro_labore_usuario', JSON.stringify(usuario))
 }
 
-export type ProLaborePapel = 'DONO' | 'VENDEDOR'
+export type ProLaborePapel = 'DONO' | 'VENDEDOR' | 'SUPERVISOR'
 
 export interface ProLaboreUsuario {
   id: string
@@ -47,6 +47,7 @@ export interface Vendedor {
   nome: string
   ativo: boolean
   email?: string | null
+  papel: 'VENDEDOR' | 'SUPERVISOR'
   tetoComissaoPorVenda?: number | null
   criadoEm: string
 }
@@ -191,7 +192,7 @@ export const proLaboreApi = {
   vendedores: {
     listar: () => request<Vendedor[]>('/pro-labore/vendedores'),
     criar: (nome: string) => request<Vendedor>('/pro-labore/vendedores', { method: 'POST', body: JSON.stringify({ nome }) }),
-    editar: (id: string, data: { nome?: string; ativo?: boolean; tetoComissaoPorVenda?: number | null }) =>
+    editar: (id: string, data: { nome?: string; ativo?: boolean; papel?: 'VENDEDOR' | 'SUPERVISOR'; tetoComissaoPorVenda?: number | null }) =>
       request<Vendedor>(`/pro-labore/vendedores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendedores/${id}`, { method: 'DELETE' }),
     concederAcesso: (id: string, data: { email: string; senha: string }) =>

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { signProLaboreToken } from '../lib/jwtProLabore'
-import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
+import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 
 const router = Router()
 
@@ -11,7 +11,7 @@ const TETO_PRO_LABORE_PADRAO = 900
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, tetoComissaoPorVenda: true, criadoEm: true, atualizadoEm: true } as const
+const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, tetoComissaoPorVenda: true, criadoEm: true, atualizadoEm: true } as const
 
 // Pró-labore é sempre do dono — sacado de qualquer venda da operação,
 // independente de quem vendeu. O teto é um único valor por conta.
@@ -143,14 +143,15 @@ router.post('/auth/login', async (req: Request, res: Response) => {
 
   const vendedor = await prisma.vendedor.findUnique({ where: { email } })
   if (vendedor?.senhaHash && vendedor.email && vendedor.ativo && (await bcrypt.compare(senha, vendedor.senhaHash))) {
+    const papelVendedor = vendedor.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR'
     const token = signProLaboreToken({
       sub: vendedor.usuarioId,
       email: vendedor.email,
       nome: vendedor.nome,
-      papel: 'VENDEDOR',
+      papel: papelVendedor,
       vendedorId: vendedor.id,
     })
-    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: 'VENDEDOR' } })
+    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: papelVendedor } })
     return
   }
 
@@ -160,7 +161,7 @@ router.post('/auth/login', async (req: Request, res: Response) => {
 router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response) => {
   const { papel, vendedorId, sub } = req.proLaboreUser!
 
-  if (papel === 'VENDEDOR') {
+  if (papel === 'VENDEDOR' || papel === 'SUPERVISOR') {
     const vendedor = await prisma.vendedor.findUnique({
       where: { id: vendedorId },
       select: { id: true, nome: true, email: true },
@@ -169,7 +170,12 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
       res.status(404).json({ error: 'Vendedor não encontrado' })
       return
     }
-    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: 'VENDEDOR' })
+    // Usa o papel do TOKEN, não uma busca nova no banco — é o token que
+    // autoriza cada requisição, então se ele mostrasse um papel mais novo
+    // que o que o resto das rotas está de fato aplicando, a pessoa veria a
+    // tela de supervisor mas os dados viriam escopados como vendedor. Uma
+    // promoção só entra em vigor no próximo login (novo token).
+    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel })
     return
   }
 
@@ -262,9 +268,9 @@ router.put('/parametros', requireProLaboreAuth, requireDono, async (req: Request
   res.json(parametro)
 })
 
-// --- Vendedores (gestão exclusiva do dono) ---
+// --- Vendedores (leitura: dono e supervisor; gestão: exclusiva do dono) ---
 
-router.get('/vendedores', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/vendedores', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const vendedores = await prisma.vendedor.findMany({
     where: { usuarioId: req.proLaboreUser!.sub },
     select: VENDEDOR_SELECT,
@@ -293,6 +299,7 @@ router.post('/vendedores', requireProLaboreAuth, requireDono, async (req: Reques
 const editarVendedorSchema = z.object({
   nome: z.string().min(2).optional(),
   ativo: z.boolean().optional(),
+  papel: z.enum(['VENDEDOR', 'SUPERVISOR']).optional(),
   tetoComissaoPorVenda: z.number().positive('Teto deve ser positivo').nullable().optional(),
 })
 
@@ -670,8 +677,8 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
     observacao: parse.data.observacao,
     tipoLead: parse.data.tipoLead,
   }
-  // Só o dono pode reatribuir um lead a outro vendedor.
-  if (papel === 'DONO' && parse.data.vendedorId !== undefined) {
+  // Dono e supervisor podem reatribuir um lead a outro vendedor.
+  if ((papel === 'DONO' || papel === 'SUPERVISOR') && parse.data.vendedorId !== undefined) {
     if (parse.data.vendedorId) {
       const vendedor = await prisma.vendedor.findFirst({ where: { id: parse.data.vendedorId, usuarioId } })
       if (!vendedor) {
@@ -903,21 +910,24 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
   const inicioAno = inicioDoAnoUTC(anoNum)
   const fimAno = fimDoAnoUTC(anoNum)
 
-  // Métricas de negócio da operação inteira (gasto com anúncio, ranking por
-  // vendedor, funil manual histórico) são visão exclusiva do dono — um
-  // vendedor autenticado só enxerga a própria produção.
+  // Gasto com anúncio e pró-labore são cifras pessoais do dono — nem
+  // vendedor nem supervisor enxergam. Ranking por vendedor e funil manual
+  // histórico já são visão de equipe: dono E supervisor veem, só o
+  // vendedor comum fica restrito à própria produção (vendaWhereBase/
+  // leadWhereBase já cuidam disso pra vendas e leads).
+  const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
   const [vendas, funilRegistros, gastosRegistros, vendedores, leads] = await Promise.all([
     prisma.venda.findMany({
       where: { ...vendaWhereBase(req), data: { gte: inicioAno, lte: fimAno } },
       include: { vendedor: { select: { id: true, nome: true } } },
     }),
-    papel === 'DONO'
+    vejaEquipe
       ? prisma.funilMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioAno, lte: fimAno } } })
       : Promise.resolve([]),
     papel === 'DONO'
       ? prisma.gastoAnuncioMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioAno, lte: fimAno } } })
       : Promise.resolve([]),
-    papel === 'DONO' ? prisma.vendedor.findMany({ where: { usuarioId } }) : Promise.resolve([]),
+    vejaEquipe ? prisma.vendedor.findMany({ where: { usuarioId } }) : Promise.resolve([]),
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioAno, lte: fimAno } } }),
   ])
 
@@ -962,7 +972,7 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
     const conversaoLeadVenda = funil.leads > 0 ? (quantidadeVendas / funil.leads) * 100 : 0
 
     const rankingVendedores: { id: string; nome: string; quantidadeVendas: number; receita: number; comissaoPaga: number }[] = []
-    if (papel === 'DONO') {
+    if (vejaEquipe) {
       const porVendedor = new Map<string, { id: string; nome: string; quantidadeVendas: number; receita: number; comissaoPaga: number }>()
       for (const v of vendasDoMes) {
         if (!v.vendedorId) continue

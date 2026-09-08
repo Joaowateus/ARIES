@@ -32,3 +32,17 @@ export function requireDono(req: Request, res: Response, next: NextFunction): vo
   }
   next()
 }
+
+// SUPERVISOR vê o painel e o CRM com o escopo da equipe inteira (igual ao
+// dono), então também precisa enxergar a lista de vendedores — pro filtro
+// do funil e pra atribuir/reatribuir lead a qualquer um do time. Só a
+// GESTÃO de vendedores (criar/editar/remover/conceder acesso) continua em
+// requireDono.
+export function requireDonoOuSupervisor(req: Request, res: Response, next: NextFunction): void {
+  const papel = req.proLaboreUser?.papel
+  if (papel !== 'DONO' && papel !== 'SUPERVISOR') {
+    res.status(403).json({ error: 'Acesso restrito ao dono ou supervisor da operação' })
+    return
+  }
+  next()
+}
