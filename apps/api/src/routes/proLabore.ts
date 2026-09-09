@@ -1002,7 +1002,7 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
 
 // --- Receita detalhada por período curto (hoje / 7·15·30 dias, ou personalizado) ---
 
-const PERIODOS_RECEITA = ['hoje', '7', '15', '30'] as const
+const PERIODOS_RECEITA = ['hoje', '7'] as const
 const MAX_DIAS_PERIODO_CUSTOM = 366
 
 function inicioDoDiaUTC(data: Date): Date {
