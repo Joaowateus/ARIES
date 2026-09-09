@@ -18,14 +18,6 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
-const FUNIL_ICONS: Record<string, React.ReactElement> = {
-  leads: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.4" /><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" /></svg>,
-  abordados: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v10H8l-4 4V5Z" /></svg>,
-  negociacao: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h5l2-3 4 6 2-3h5" /></svg>,
-  proposta: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3h7l4 4v14H7V3Z" /><path d="M10.5 12h5M10.5 15.5h5" /></svg>,
-  fechamento: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12.5l5 5L20 7" /></svg>,
-}
-
 function initials(nome: string) {
   return nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
 }
@@ -855,6 +847,42 @@ function rotuloMetaPL(meta: MetaFunilProLabore | undefined): string {
   return `Meta: ${formatPct(meta.metaPct)} (mín.)`
 }
 
+// Funil visual em CSS puro (trapézio por segmento via clip-path), mesmo
+// formato do Funil de Vendas do CRM principal — a silhueta usa a altura
+// ACUMULADA mínima (nunca alarga de novo, mesmo se algum filtro deixar os
+// totais momentaneamente fora de ordem), enquanto os números exibidos
+// continuam os reais, sem nenhum ajuste.
+function FunilTrapezio({ valores, cores }: { valores: number[]; cores: string[] }) {
+  const max = Math.max(1, ...valores)
+  const ALTURA_MIN = 0.1
+  const valoresVisuais: number[] = []
+  for (const v of valores) {
+    const anterior = valoresVisuais[valoresVisuais.length - 1] ?? v
+    valoresVisuais.push(Math.min(v, anterior))
+  }
+  const alturas = valoresVisuais.map(v => ALTURA_MIN + (1 - ALTURA_MIN) * Math.sqrt(v / max))
+
+  return (
+    <div style={{ position: 'relative', height: 130, display: 'flex' }}>
+      {valores.slice(0, -1).map((_, i) => {
+        const h1 = alturas[i] * 100
+        const h2 = alturas[i + 1] * 100
+        return (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              height: '100%',
+              clipPath: `polygon(0% ${50 - h1 / 2}%, 100% ${50 - h2 / 2}%, 100% ${50 + h2 / 2}%, 0% ${50 + h1 / 2}%)`,
+              background: `linear-gradient(to right, ${cores[i]}, ${cores[i + 1]})`,
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
 function FunilJourney({
   funil, metas, custoPorLeadTopo, isDono, onMetaSalva, onCustoLeadSalvo,
 }: {
@@ -872,9 +900,35 @@ function FunilJourney({
     { key: 'proposta', etapa: 'PROPOSTA' as const, name: 'Proposta', value: funil.proposta },
     { key: 'fechamento', etapa: 'FECHADO' as const, name: 'Fechamento', value: funil.fechamento },
   ]
-  const maxV = Math.max(stages[0].value, 1)
   const totalLeads = stages[0].value
   const metaPorEtapa = new Map(metas.map(m => [m.etapa, m]))
+
+  // Métricas derivadas de cada etapa, calculadas uma vez só e reaproveitadas
+  // pelas três seções visuais (números do topo, funil trapézio e o painel
+  // de meta/perda/custo) — evita recalcular a mesma coisa três vezes.
+  const dados = stages.map((stage, i) => {
+    // Limitado a 100% — LEAD→ABORDADO→NEGOCIACAO→PROPOSTA→FECHADO é
+    // sequencial de verdade aqui (estagioAtingiu exige ter passado pelas
+    // etapas anteriores), mas o cap evita qualquer número impossível se o
+    // filtro de vendedor/canal cortar a base de um jeito que desalinhe
+    // momentaneamente os totais.
+    const convFromPrev = i === 0 ? 1 : (stages[i - 1].value > 0 ? Math.min(1, stage.value / stages[i - 1].value) : (stage.value > 0 ? 1 : 0))
+    const perdaQuantidade = i === 0 ? null : Math.max(0, stages[i - 1].value - stage.value)
+    const perdaPct = i === 0 ? null : 1 - convFromPrev
+    const conversaoTotal = totalLeads > 0 ? stage.value / totalLeads : 0
+    const custoPorLead = custoPorLeadTopo > 0 && conversaoTotal > 0 ? custoPorLeadTopo / conversaoTotal : null
+    const meta = metaPorEtapa.get(stage.etapa)
+
+    let statusOk: boolean | null = null
+    if (meta) {
+      if (meta.tipoMeta === 'MAXIMO_PERDA') statusOk = perdaPct == null ? null : perdaPct <= meta.metaPct
+      else if (meta.tipoMeta === 'MAXIMO_CUSTO') statusOk = meta.metaCusto == null || custoPorLead == null ? null : custoPorLead <= meta.metaCusto
+      else statusOk = conversaoTotal >= meta.metaPct
+    }
+    const cor = statusOk === true ? 'var(--pl-good)' : statusOk === false ? 'var(--pl-critical)' : 'var(--pl-accent)'
+
+    return { ...stage, i, convFromPrev, perdaQuantidade, perdaPct, conversaoTotal, custoPorLead, meta, statusOk, cor }
+  })
 
   const [editandoEtapa, setEditandoEtapa] = useState<(typeof ETAPAS_FUNIL_PL)[number] | null>(null)
   const [tipoMetaEdicao, setTipoMetaEdicao] = useState<TipoMetaFunilPL>('MINIMO')
@@ -955,88 +1009,78 @@ function FunilJourney({
         </div>
       )}
 
-      <div className="pl-journey">
-        {stages.map((stage, i) => {
-          const widthPct = Math.max((stage.value / maxV) * 100, 6)
-          // Limitado a 100% — LEAD→ABORDADO→NEGOCIACAO→PROPOSTA→FECHADO é
-          // sequencial de verdade aqui (estagioAtingiu exige ter passado
-          // pelas etapas anteriores), mas o cap evita qualquer número
-          // impossível se o filtro de vendedor/canal cortar a base de um
-          // jeito que desalinhe momentaneamente os totais.
-          const convFromPrev = i === 0 ? 1 : (stages[i - 1].value > 0 ? Math.min(1, stage.value / stages[i - 1].value) : (stage.value > 0 ? 1 : 0))
-          const perdaQuantidade = i === 0 ? null : Math.max(0, stages[i - 1].value - stage.value)
-          const perdaPct = i === 0 ? null : 1 - convFromPrev
-          const conversaoTotal = totalLeads > 0 ? stage.value / totalLeads : 0
-          const custoPorLead = custoPorLeadTopo > 0 && conversaoTotal > 0 ? custoPorLeadTopo / conversaoTotal : null
-          const meta = metaPorEtapa.get(stage.etapa)
-
-          let statusOk: boolean | null = null
-          if (meta) {
-            if (meta.tipoMeta === 'MAXIMO_PERDA') statusOk = perdaPct == null ? null : perdaPct <= meta.metaPct
-            else if (meta.tipoMeta === 'MAXIMO_CUSTO') statusOk = meta.metaCusto == null || custoPorLead == null ? null : custoPorLead <= meta.metaCusto
-            else statusOk = conversaoTotal >= meta.metaPct
-          }
-
-          return (
-            <div key={stage.key} className="pl-stage">
-              <div className="pl-stage-icon">{FUNIL_ICONS[stage.key]}</div>
-              <div className="pl-stage-name">{stage.name}</div>
-              <div className="pl-stage-value pl-mono">{stage.value.toLocaleString('pt-BR')}</div>
-              <div className="pl-stage-bar-track"><div className="pl-stage-bar-fill" style={{ width: `${widthPct}%`, background: 'var(--pl-accent)' }} /></div>
-              <div className="pl-stage-conv">
-                {i === 0 ? 'topo do funil' : <>conv. anterior <b>{(convFromPrev * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b></>}
-              </div>
-
-              {i > 0 && (
-                <div className="pl-stage-conv">
-                  Perda <b>{perdaQuantidade} ({formatPct(perdaPct ?? 0)})</b>
-                </div>
-              )}
-
-              {editandoEtapa === stage.etapa ? (
-                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-                  <select
-                    className="pl-select" style={{ fontSize: 11, padding: '2px 4px' }}
-                    value={tipoMetaEdicao} onChange={e => setTipoMetaEdicao(e.target.value as TipoMetaFunilPL)}
-                  >
-                    <option value="MINIMO">Conversão mín.</option>
-                    <option value="MAXIMO_PERDA">Perda máx.</option>
-                    <option value="MAXIMO_CUSTO">Custo máx.</option>
-                  </select>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {tipoMetaEdicao === 'MAXIMO_CUSTO' && <span className="pl-hint">R$</span>}
-                    <input
-                      type="number" autoFocus className="pl-input" style={{ width: 56, padding: '2px 4px', fontSize: 11, textAlign: 'center' }}
-                      value={valorEdicao} onChange={e => setValorEdicao(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && salvarMeta()}
-                    />
-                    {tipoMetaEdicao !== 'MAXIMO_CUSTO' && <span className="pl-hint">%</span>}
-                    <button type="button" className="pl-link-action" disabled={salvandoMeta} onClick={salvarMeta}>OK</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="pl-stage-conv" style={{ marginTop: 6 }}>
-                  {isDono ? (
-                    <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(stage.etapa)}>{rotuloMetaPL(meta)} ✎</span>
-                  ) : (
-                    <span>{rotuloMetaPL(meta)}</span>
-                  )}
-                  {statusOk != null && <span className={`pl-delta ${statusOk ? 'up' : 'down'}`} style={{ marginLeft: 6 }}>{statusOk ? 'ok' : 'fora'}</span>}
-                </div>
-              )}
-
-              {custoPorLead != null && (
-                <div className="pl-stage-conv">
-                  Custo/lead <b>{formatMoeda(custoPorLead)}</b>
-                </div>
-              )}
-
-              {i < stages.length - 1 && (
-                <div className="pl-stage-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h13M13 6l6 6-6 6" /></svg></div>
-              )}
+      {/* Bloco 1: número, nome e % sobre o total — mesmo topo do Funil de
+          Vendas do CRM principal. */}
+      <div className="pl-journey-numbers" style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, textAlign: 'center' }}>
+        {dados.map(d => (
+          <div key={d.key}>
+            <div className="pl-stage-value pl-mono" style={{ fontSize: 24 }}>{d.value.toLocaleString('pt-BR')}</div>
+            <div className="pl-stage-name" style={{ marginTop: 4 }}>{d.name}</div>
+            <div className="pl-mono" style={{ marginTop: 3, fontWeight: 700, fontSize: 13, color: d.cor }}>
+              {formatPct(d.conversaoTotal)}
             </div>
-          )
-        })}
+          </div>
+        ))}
+      </div>
+
+      {/* Bloco 2: funil trapézio — mesmo formato visual do Funil de Vendas
+          do CRM principal, com gradiente indicando o status de cada etapa. */}
+      <FunilTrapezio valores={dados.map(d => d.value)} cores={dados.map(d => d.cor)} />
+
+      {/* Bloco 3: conversão da etapa anterior, perda, meta (editável) e
+          custo por lead — por etapa. */}
+      <div className="pl-journey-details" style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, gap: 4, marginTop: 4 }}>
+        {dados.map(d => (
+          <div key={d.key} style={{ textAlign: 'center' }}>
+            <div className="pl-stage-conv">
+              {d.i === 0 ? 'topo do funil' : <>conv. anterior <b>{(d.convFromPrev * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b></>}
+            </div>
+
+            {d.i > 0 && (
+              <div className="pl-stage-conv">
+                Perda <b>{d.perdaQuantidade} ({formatPct(d.perdaPct ?? 0)})</b>
+              </div>
+            )}
+
+            {editandoEtapa === d.etapa ? (
+              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                <select
+                  className="pl-select" style={{ fontSize: 11, padding: '2px 4px' }}
+                  value={tipoMetaEdicao} onChange={e => setTipoMetaEdicao(e.target.value as TipoMetaFunilPL)}
+                >
+                  <option value="MINIMO">Conversão mín.</option>
+                  <option value="MAXIMO_PERDA">Perda máx.</option>
+                  <option value="MAXIMO_CUSTO">Custo máx.</option>
+                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {tipoMetaEdicao === 'MAXIMO_CUSTO' && <span className="pl-hint">R$</span>}
+                  <input
+                    type="number" autoFocus className="pl-input" style={{ width: 56, padding: '2px 4px', fontSize: 11, textAlign: 'center' }}
+                    value={valorEdicao} onChange={e => setValorEdicao(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && salvarMeta()}
+                  />
+                  {tipoMetaEdicao !== 'MAXIMO_CUSTO' && <span className="pl-hint">%</span>}
+                  <button type="button" className="pl-link-action" disabled={salvandoMeta} onClick={salvarMeta}>OK</button>
+                </div>
+              </div>
+            ) : (
+              <div className="pl-stage-conv" style={{ marginTop: 6 }}>
+                {isDono ? (
+                  <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(d.etapa)}>{rotuloMetaPL(d.meta)} ✎</span>
+                ) : (
+                  <span>{rotuloMetaPL(d.meta)}</span>
+                )}
+                {d.statusOk != null && <span className={`pl-delta ${d.statusOk ? 'up' : 'down'}`} style={{ marginLeft: 6 }}>{d.statusOk ? 'ok' : 'fora'}</span>}
+              </div>
+            )}
+
+            {d.custoPorLead != null && (
+              <div className="pl-stage-conv">
+                Custo/lead <b>{formatMoeda(d.custoPorLead)}</b>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )
