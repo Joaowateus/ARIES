@@ -852,9 +852,20 @@ function rotuloMetaPL(meta: MetaFunilProLabore | undefined): string {
 // ACUMULADA mínima (nunca alarga de novo, mesmo se algum filtro deixar os
 // totais momentaneamente fora de ordem), enquanto os números exibidos
 // continuam os reais, sem nenhum ajuste.
+// Funil em Sankey suave (curvas de Bézier, não trapézios de arestas retas) —
+// uma única forma contínua com um degradê também contínuo passando pela cor
+// de cada etapa, no lugar de segmentos colados um no outro. É essa
+// continuidade (forma fluida + degradê sem costura) que dá o acabamento
+// "sofisticado" — o degradê em si é o que deixa visível a evolução do
+// funil ao longo da jornada, não só o afunilamento da silhueta.
 function FunilTrapezio({ valores, cores }: { valores: number[]; cores: string[] }) {
+  const n = valores.length
+  const W = 1000
+  const H = 190
   const max = Math.max(1, ...valores)
-  const ALTURA_MIN = 0.1
+  const ALTURA_MIN = 0.16
+  // Silhueta nunca alarga de novo (só relevante se um filtro deixar os
+  // totais momentaneamente fora de ordem — a jornada em si já é sequencial).
   const valoresVisuais: number[] = []
   for (const v of valores) {
     const anterior = valoresVisuais[valoresVisuais.length - 1] ?? v
@@ -862,24 +873,33 @@ function FunilTrapezio({ valores, cores }: { valores: number[]; cores: string[] 
   }
   const alturas = valoresVisuais.map(v => ALTURA_MIN + (1 - ALTURA_MIN) * Math.sqrt(v / max))
 
+  const stepX = W / (n - 1)
+  const xAt = (i: number) => i * stepX
+  const halfHAt = (i: number) => (alturas[i] * H) / 2
+  const midY = H / 2
+  const gradientId = 'jornadaGrad'
+
+  let caminho = `M 0 ${midY - halfHAt(0)}`
+  for (let i = 0; i < n - 1; i++) {
+    const x1 = xAt(i), x2 = xAt(i + 1), midX = (x1 + x2) / 2
+    caminho += ` C ${midX} ${midY - halfHAt(i)}, ${midX} ${midY - halfHAt(i + 1)}, ${x2} ${midY - halfHAt(i + 1)}`
+  }
+  caminho += ` L ${xAt(n - 1)} ${midY + halfHAt(n - 1)}`
+  for (let i = n - 1; i > 0; i--) {
+    const x1 = xAt(i), x2 = xAt(i - 1), midX = (x1 + x2) / 2
+    caminho += ` C ${midX} ${midY + halfHAt(i)}, ${midX} ${midY + halfHAt(i - 1)}, ${x2} ${midY + halfHAt(i - 1)}`
+  }
+  caminho += ' Z'
+
   return (
-    <div style={{ position: 'relative', height: 130, display: 'flex' }}>
-      {valores.slice(0, -1).map((_, i) => {
-        const h1 = alturas[i] * 100
-        const h2 = alturas[i + 1] * 100
-        return (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              height: '100%',
-              clipPath: `polygon(0% ${50 - h1 / 2}%, 100% ${50 - h2 / 2}%, 100% ${50 + h2 / 2}%, 0% ${50 + h1 / 2}%)`,
-              background: `linear-gradient(to right, ${cores[i]}, ${cores[i + 1]})`,
-            }}
-          />
-        )
-      })}
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 170, display: 'block' }}>
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+          {cores.map((cor, i) => <stop key={i} offset={`${(i / (n - 1)) * 100}%`} stopColor={cor} />)}
+        </linearGradient>
+      </defs>
+      <path d={caminho} fill={`url(#${gradientId})`} />
+    </svg>
   )
 }
 
@@ -1009,25 +1029,38 @@ function FunilJourney({
         </div>
       )}
 
-      {/* Bloco 1: número, nome e % sobre o total — mesmo topo do Funil de
-          Vendas do CRM principal. */}
-      <div className="pl-journey-numbers" style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, textAlign: 'center' }}>
-        {dados.map(d => (
-          <div key={d.key}>
-            <div className="pl-stage-value pl-mono" style={{ fontSize: 24 }}>{d.value.toLocaleString('pt-BR')}</div>
-            <div className="pl-stage-name" style={{ marginTop: 4 }}>{d.name}</div>
-            <div className="pl-mono" style={{ marginTop: 3, fontWeight: 700, fontSize: 13, color: d.cor }}>
-              {formatPct(d.conversaoTotal)}
-            </div>
+      {/* Bloco 1: nomes das etapas, com divisórias verticais — mesmo topo do
+          gráfico de referência. */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)` }}>
+        {dados.map((d, i) => (
+          <div key={d.key} style={{ textAlign: 'center', paddingBottom: 10, borderLeft: i > 0 ? '1px solid var(--pl-border)' : 'none' }}>
+            <div className="pl-stage-name">{d.name}</div>
           </div>
         ))}
       </div>
 
-      {/* Bloco 2: funil trapézio — mesmo formato visual do Funil de Vendas
-          do CRM principal, com gradiente indicando o status de cada etapa. */}
-      <FunilTrapezio valores={dados.map(d => d.value)} cores={dados.map(d => d.cor)} />
+      {/* Bloco 2: funil em Sankey suave, com a % de cada etapa sobreposta
+          dentro da própria faixa colorida — mesmo formato do gráfico de
+          referência. */}
+      <div style={{ position: 'relative' }}>
+        <FunilTrapezio valores={dados.map(d => d.value)} cores={dados.map(d => d.cor)} />
+        <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, alignItems: 'center' }}>
+          {dados.map(d => (
+            <div key={d.key} className="pl-mono" style={{ textAlign: 'center', fontWeight: 800, fontSize: 17, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,.45)' }}>
+              {formatPct(d.conversaoTotal)}
+            </div>
+          ))}
+        </div>
+      </div>
 
-      {/* Bloco 3: conversão da etapa anterior, perda, meta (editável) e
+      {/* Bloco 3: valor bruto de cada etapa, logo abaixo do funil. */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, marginTop: 10 }}>
+        {dados.map(d => (
+          <div key={d.key} className="pl-stage-value pl-mono" style={{ textAlign: 'center', fontSize: 20 }}>{d.value.toLocaleString('pt-BR')}</div>
+        ))}
+      </div>
+
+      {/* Bloco 4: conversão da etapa anterior, perda, meta (editável) e
           custo por lead — por etapa. */}
       <div className="pl-journey-details" style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, gap: 4, marginTop: 4 }}>
         {dados.map(d => (
