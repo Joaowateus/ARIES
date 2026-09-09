@@ -251,6 +251,7 @@ const parametrosSchema = z.object({
   tetoComissaoPadrao: z.number().positive('Teto deve ser positivo').optional(),
   metaFaturamentoAnual: z.number().positive('Meta deve ser positiva').optional(),
   metaMensalPadrao: z.number().positive('Meta deve ser positiva').optional(),
+  custoPorLeadTopo: z.number().nonnegative('Custo deve ser positivo ou zero').optional(),
   fraseMotivacional: z.string().max(280, 'Frase muito longa').optional(),
 })
 
@@ -267,6 +268,60 @@ router.put('/parametros', requireProLaboreAuth, requireDono, async (req: Request
     create: { usuarioId: req.proLaboreUser!.sub, ...parse.data },
   })
   res.json(parametro)
+})
+
+// --- Metas por etapa da jornada de compra (mesmo conceito de MetaFunilEtapa
+// do CRM principal: conversão mínima, perda máxima ou custo máximo, cada
+// etapa com só um tipo ativo por vez) ---
+
+const ETAPAS_FUNIL_PL = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO'] as const
+
+router.get('/funil-metas', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const existentes = await prisma.metaFunilProLabore.findMany({ where: { usuarioId } })
+  const porEtapa = new Map(existentes.map(m => [m.etapa, m]))
+
+  const faltando = ETAPAS_FUNIL_PL.filter(etapa => !porEtapa.has(etapa))
+  if (faltando.length) {
+    await prisma.$transaction(
+      faltando.map(etapa =>
+        prisma.metaFunilProLabore.upsert({
+          where: { usuarioId_etapa: { usuarioId, etapa } },
+          update: {},
+          create: { usuarioId, etapa },
+        })
+      )
+    )
+    res.json(await prisma.metaFunilProLabore.findMany({ where: { usuarioId } }))
+    return
+  }
+  res.json(existentes)
+})
+
+const metaFunilProLaboreSchema = z.object({
+  metaPct: z.number().min(0).max(1).optional(),
+  metaCusto: z.number().nonnegative().optional(),
+  tipoMeta: z.enum(['MINIMO', 'MAXIMO_PERDA', 'MAXIMO_CUSTO']).optional(),
+})
+
+router.put('/funil-metas/:etapa', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const etapa = String(req.params.etapa)
+  if (!(ETAPAS_FUNIL_PL as readonly string[]).includes(etapa)) {
+    res.status(400).json({ error: 'Etapa inválida' })
+    return
+  }
+  const parse = metaFunilProLaboreSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const usuarioId = req.proLaboreUser!.sub
+  const meta = await prisma.metaFunilProLabore.upsert({
+    where: { usuarioId_etapa: { usuarioId, etapa } },
+    update: parse.data,
+    create: { usuarioId, etapa, ...parse.data },
+  })
+  res.json(meta)
 })
 
 // --- Vendedores (leitura: dono e supervisor; gestão: exclusiva do dono) ---
