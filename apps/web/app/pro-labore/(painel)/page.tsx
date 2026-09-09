@@ -91,10 +91,10 @@ export default function ProLaboreDashboardPage() {
     if (vejaEquipe) proLaboreApi.vendedores.listar().then(setVendedores)
   }, [vejaEquipe])
 
-  // Card "Receita e pró-labore detalhados" — período curto (hoje/7/15/30
-  // dias) ou personalizado (data início/fim escolhidas no calendário),
-  // separado do /painel (que só tem granularidade mensal e cobre o ano
-  // inteiro). periodoCustom !== null tem prioridade sobre o preset ativo.
+  // Card "Receita e pró-labore detalhados" — período curto (hoje/7 dias)
+  // ou personalizado (data início/fim escolhidas no calendário), separado
+  // do /painel (que só tem granularidade mensal e cobre o ano inteiro).
+  // periodoCustom !== null tem prioridade sobre o preset ativo.
   const [receitaPeriodo, setReceitaPeriodo] = useState<ReceitaPeriodo>('hoje')
   const [periodoCustom, setPeriodoCustom] = useState<{ inicio: string; fim: string } | null>(null)
   const [customInicio, setCustomInicio] = useState('')
@@ -296,12 +296,15 @@ export default function ProLaboreDashboardPage() {
                     {p === 'hoje' ? 'Hoje' : `${p} dias`}
                   </button>
                 ))}
-                <input type="date" className="pl-input" style={{ width: 138, padding: '6px 10px' }} value={customInicio} onChange={e => setCustomInicio(e.target.value)} />
-                <span className="pl-hint">até</span>
-                <input type="date" className="pl-input" style={{ width: 138, padding: '6px 10px' }} value={customFim} onChange={e => setCustomFim(e.target.value)} />
-                <button type="button" className={`pl-chip ${periodoCustom ? 'active' : ''}`} onClick={aplicarPeriodoCustom} disabled={!customInicio || !customFim}>
-                  Aplicar período
-                </button>
+                <PeriodoCalendarioFiltro
+                  inicio={customInicio}
+                  fim={customFim}
+                  onChangeInicio={setCustomInicio}
+                  onChangeFim={setCustomFim}
+                  onAplicar={aplicarPeriodoCustom}
+                  ativo={periodoCustom !== null}
+                  onLimpar={() => { setPeriodoCustom(null); setReceitaPeriodo('hoje') }}
+                />
               </div>
               {carregandoReceita ? (
                 <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13, padding: '30px 0' }}>Carregando...</div>
@@ -579,12 +582,18 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
 // área de receita.
 function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
-  const W = 480, H = 190, padL = 4, padR = 4, padT = 14, padB = 22
+  const W = 480, H = 230, padL = 4, padR = 40, padT = 14, padB = 22
   const plotW = W - padL - padR, plotH = H - padT - padB
-  const maxV = Math.max(...pontos.map(p => p.receita), ...pontos.map(p => p.proLabore), 1) * 1.15
+  // Receita e pró-labore usam escalas INDEPENDENTES (cada uma normalizada
+  // ao próprio máximo) — se dividissem a mesma escala, pró-labore (sempre
+  // uma fração pequena do valor da venda) ficaria achatado perto da base,
+  // sem dar pra enxergar sua própria variação ao longo do período.
+  const maxReceita = Math.max(...pontos.map(p => p.receita), 1) * 1.15
+  const maxProLabore = Math.max(...pontos.map(p => p.proLabore), 1) * 1.15
   const stepX = pontos.length > 1 ? plotW / (pontos.length - 1) : 0
   const x = (i: number) => padL + i * stepX
-  const y = (v: number) => padT + plotH - (v / maxV) * plotH
+  const yReceita = (v: number) => padT + plotH - (v / maxReceita) * plotH
+  const yProLabore = (v: number) => padT + plotH - (v / maxProLabore) * plotH
 
   // Com até 30 pontos (30 dias), mostrar o rótulo de cada um empilharia
   // texto ilegível — mostra só uma amostra espaçada, sempre incluindo o
@@ -610,8 +619,8 @@ function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
     return <div className="pl-empty" style={{ padding: '30px 0' }}>Sem vendas nesse período.</div>
   }
 
-  const ptsReceita = pontos.map((p, i) => [x(i), y(p.receita)] as const)
-  const ptsProLabore = pontos.map((p, i) => [x(i), y(p.proLabore)] as const)
+  const ptsReceita = pontos.map((p, i) => [x(i), yReceita(p.receita)] as const)
+  const ptsProLabore = pontos.map((p, i) => [x(i), yProLabore(p.proLabore)] as const)
   const areaD = `M ${ptsReceita[0][0]} ${padT + plotH} ` + ptsReceita.map(p => `L ${p[0]} ${p[1]}`).join(' ') + ` L ${ptsReceita[ptsReceita.length - 1][0]} ${padT + plotH} Z`
   const lineReceitaD = `M ` + ptsReceita.map(p => `${p[0]} ${p[1]}`).join(' L ')
   const lineProLaboreD = `M ` + ptsProLabore.map(p => `${p[0]} ${p[1]}`).join(' L ')
@@ -629,18 +638,21 @@ function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
         <line x1={padL} x2={W - padR} y1={padT + plotH} y2={padT + plotH} className="pl-baseline-line" />
         <path d={areaD} fill="url(#recPeriodoGrad)" stroke="none" />
         <path d={lineReceitaD} fill="none" stroke="var(--pl-accent)" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
-        <path d={lineProLaboreD} fill="none" stroke="var(--pl-accent-3)" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={lineProLaboreD} fill="none" stroke="var(--pl-accent-3)" strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" />
+        {/* Escala do pró-labore (eixo à direita) — só o topo e a base, pra deixar claro que a linha verde usa uma escala própria, não a mesma da receita. */}
+        <text x={W - padR + 6} y={padT + 4} className="pl-axis-label" style={{ fill: 'var(--pl-accent-3)' }} textAnchor="start">{formatMoedaCompacta(maxProLabore)}</text>
+        <text x={W - padR + 6} y={padT + plotH} className="pl-axis-label" style={{ fill: 'var(--pl-accent-3)' }} textAnchor="start">R$0</text>
         {pontos.map((p, i) => mostrarRotulo(i) && (
           <text key={i} x={x(i)} y={H - 6} className="pl-axis-label" textAnchor={i === 0 ? 'start' : i === pontos.length - 1 ? 'end' : 'middle'}>{p.label}</text>
         ))}
         {hoverIdx !== null && <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={padT + plotH} className="pl-hover-x" style={{ opacity: 1 }} />}
-        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(pontos[hoverIdx].receita)} r={4.5} fill="var(--pl-accent)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
-        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(pontos[hoverIdx].proLabore)} r={4.5} fill="var(--pl-accent-3)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
+        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={yReceita(pontos[hoverIdx].receita)} r={4.5} fill="var(--pl-accent)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
+        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={yProLabore(pontos[hoverIdx].proLabore)} r={4.5} fill="var(--pl-accent-3)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
         {pontos.length <= 15 && pontos.map((p, i) => (
-          <circle key={`r-${i}`} cx={x(i)} cy={y(p.receita)} r={3} fill="var(--pl-surface)" stroke="var(--pl-accent)" strokeWidth={2} />
+          <circle key={`r-${i}`} cx={x(i)} cy={yReceita(p.receita)} r={3} fill="var(--pl-surface)" stroke="var(--pl-accent)" strokeWidth={2} />
         ))}
         {pontos.length <= 15 && pontos.map((p, i) => (
-          <circle key={`p-${i}`} cx={x(i)} cy={y(p.proLabore)} r={3} fill="var(--pl-surface)" stroke="var(--pl-accent-3)" strokeWidth={2} />
+          <circle key={`p-${i}`} cx={x(i)} cy={yProLabore(p.proLabore)} r={3} fill="var(--pl-surface)" stroke="var(--pl-accent-3)" strokeWidth={2} />
         ))}
         {pontos.map((p, i) => (
           <rect key={i} x={x(i) - stepX / 2} y={padT} width={stepX || W} height={plotH + 14} className="pl-hit"
@@ -648,7 +660,7 @@ function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
         ))}
       </svg>
       {hover && (
-        <div className="pl-tooltip" style={{ left: `${(x(hoverIdx!) / W) * 100}%`, top: `${(y(hover.receita) / H) * 100}%`, opacity: 1 }}>
+        <div className="pl-tooltip" style={{ left: `${(x(hoverIdx!) / W) * 100}%`, top: `${(yReceita(hover.receita) / H) * 100}%`, opacity: 1 }}>
           <b>{hover.label}</b>
           Receita {formatMoeda(hover.receita)}<br />Pró-labore {formatMoeda(hover.proLabore)}<br />Vendas {hover.vendas}
         </div>
@@ -759,6 +771,64 @@ function FunilFiltro({
             </select>
           </div>
           {ativo && <span className="pl-filter-clear" onClick={() => { onChangeVendedor(''); onChangeCanal('') }}>Limpar filtro</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ============ PERÍODO PERSONALIZADO (calendário) ============ */
+function PeriodoCalendarioFiltro({
+  inicio, fim, onChangeInicio, onChangeFim, onAplicar, ativo, onLimpar,
+}: {
+  inicio: string
+  fim: string
+  onChangeInicio: (v: string) => void
+  onChangeFim: (v: string) => void
+  onAplicar: () => void
+  ativo: boolean
+  onLimpar: () => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!aberto) return
+    function onClickFora(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAberto(false)
+    }
+    document.addEventListener('mousedown', onClickFora)
+    return () => document.removeEventListener('mousedown', onClickFora)
+  }, [aberto])
+
+  function aplicar() {
+    onAplicar()
+    setAberto(false)
+  }
+
+  return (
+    <div className="pl-filter-wrap" ref={wrapRef}>
+      <button type="button" className={`pl-chip ${ativo ? 'active' : ''}`} onClick={() => setAberto(a => !a)}>
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: -2 }}>
+          <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" />
+        </svg>
+        {ativo ? `${inicio.split('-').reverse().join('/')} – ${fim.split('-').reverse().join('/')}` : 'Personalizado'}
+      </button>
+
+      {aberto && (
+        <div className="pl-filter-pop">
+          <div className="pl-field">
+            <label>Data início</label>
+            <input type="date" className="pl-input" value={inicio} onChange={e => onChangeInicio(e.target.value)} />
+          </div>
+          <div className="pl-field">
+            <label>Data fim</label>
+            <input type="date" className="pl-input" value={fim} onChange={e => onChangeFim(e.target.value)} />
+          </div>
+          <button type="button" className="pl-btn pl-btn-primary" style={{ width: '100%' }} disabled={!inicio || !fim} onClick={aplicar}>
+            Aplicar período
+          </button>
+          {ativo && <span className="pl-filter-clear" onClick={() => { onLimpar(); setAberto(false) }}>Limpar período</span>}
         </div>
       )}
     </div>

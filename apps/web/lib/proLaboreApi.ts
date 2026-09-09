@@ -140,7 +140,7 @@ export interface PainelProLabore {
   meses: MesPainel[]
 }
 
-export const PERIODOS_RECEITA = ['hoje', '7', '15', '30'] as const
+export const PERIODOS_RECEITA = ['hoje', '7'] as const
 export type ReceitaPeriodo = (typeof PERIODOS_RECEITA)[number]
 
 export interface PontoReceita {
