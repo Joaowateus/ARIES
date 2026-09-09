@@ -18,10 +18,6 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
-const PERIODO_RECEITA_LABEL: Record<ReceitaPeriodo, string> = {
-  hoje: 'Hoje', '7': '7 dias', '15': '15 dias', '30': '30 dias', '60': '60 dias', '90': '90 dias', '180': '6 meses', '365': '12 meses',
-}
-
 const FUNIL_ICONS: Record<string, React.ReactElement> = {
   leads: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.4" /><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" /></svg>,
   abordados: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v10H8l-4 4V5Z" /></svg>,
@@ -95,18 +91,37 @@ export default function ProLaboreDashboardPage() {
     if (vejaEquipe) proLaboreApi.vendedores.listar().then(setVendedores)
   }, [vejaEquipe])
 
-  // Card "Receita detalhada" (ao lado do Lucro pró-labore) — período curto
-  // (hoje/7/15/30 dias), separado do /painel (que só tem granularidade
-  // mensal e cobre o ano inteiro).
+  // Card "Receita e pró-labore detalhados" — período curto (hoje/7/15/30
+  // dias) ou personalizado (data início/fim escolhidas no calendário),
+  // separado do /painel (que só tem granularidade mensal e cobre o ano
+  // inteiro). periodoCustom !== null tem prioridade sobre o preset ativo.
   const [receitaPeriodo, setReceitaPeriodo] = useState<ReceitaPeriodo>('hoje')
+  const [periodoCustom, setPeriodoCustom] = useState<{ inicio: string; fim: string } | null>(null)
+  const [customInicio, setCustomInicio] = useState('')
+  const [customFim, setCustomFim] = useState('')
   const [receitaDetalhada, setReceitaDetalhada] = useState<ReceitaDetalhada | null>(null)
   const [carregandoReceita, setCarregandoReceita] = useState(true)
+
+  function selecionarPresetReceita(p: ReceitaPeriodo) {
+    setReceitaPeriodo(p)
+    setPeriodoCustom(null)
+    setCustomInicio('')
+    setCustomFim('')
+  }
+
+  function aplicarPeriodoCustom() {
+    if (!customInicio || !customFim) return
+    setPeriodoCustom({ inicio: customInicio, fim: customFim })
+  }
 
   useEffect(() => {
     if (!isDono) return
     setCarregandoReceita(true)
-    proLaboreApi.receitas.porPeriodo(receitaPeriodo).then(setReceitaDetalhada).finally(() => setCarregandoReceita(false))
-  }, [receitaPeriodo, isDono])
+    const promise = periodoCustom
+      ? proLaboreApi.receitas.porPeriodoCustom(periodoCustom.inicio, periodoCustom.fim)
+      : proLaboreApi.receitas.porPeriodo(receitaPeriodo)
+    promise.then(setReceitaDetalhada).finally(() => setCarregandoReceita(false))
+  }, [receitaPeriodo, periodoCustom, isDono])
 
   const meses = painel?.meses ?? []
   const atual = meses[selectedIdx]
@@ -263,7 +278,11 @@ export default function ProLaboreDashboardPage() {
               <div className="pl-card-head">
                 <div>
                   <div className="pl-card-title">Receita e pró-labore detalhados</div>
-                  <div className="pl-card-sub">Receita, pró-labore e vendas por período</div>
+                  <div className="pl-card-sub">Comparativo de receita e pró-labore por período</div>
+                </div>
+                <div className="pl-legend">
+                  <div className="pl-legend-item"><span className="pl-legend-swatch" style={{ background: 'var(--pl-accent)' }} />Receita</div>
+                  <div className="pl-legend-item"><span className="pl-legend-swatch" style={{ background: 'var(--pl-accent-3)' }} />Pró-labore</div>
                 </div>
               </div>
               <div className="pl-stat-strip" style={{ marginTop: 0 }}>
@@ -271,22 +290,23 @@ export default function ProLaboreDashboardPage() {
                 <div className="pl-s"><div className="pl-l">Total de pró-labore</div><div className="pl-v" style={{ fontSize: 18 }}>{formatMoeda(receitaDetalhada?.totalProLabore ?? 0)}</div></div>
                 <div className="pl-s"><div className="pl-l">Total de vendas</div><div className="pl-v" style={{ fontSize: 18 }}>{receitaDetalhada?.totalVendas ?? 0}</div></div>
               </div>
-              <div className="pl-period-row" style={{ margin: '14px 0' }}>
+              <div className="pl-period-row" style={{ margin: '14px 0', alignItems: 'center' }}>
                 {PERIODOS_RECEITA.map(p => (
-                  <button key={p} type="button" className={`pl-chip ${receitaPeriodo === p ? 'active' : ''}`} onClick={() => setReceitaPeriodo(p)}>
-                    {PERIODO_RECEITA_LABEL[p]}
+                  <button key={p} type="button" className={`pl-chip ${!periodoCustom && receitaPeriodo === p ? 'active' : ''}`} onClick={() => selecionarPresetReceita(p)}>
+                    {p === 'hoje' ? 'Hoje' : `${p} dias`}
                   </button>
                 ))}
+                <input type="date" className="pl-input" style={{ width: 138, padding: '6px 10px' }} value={customInicio} onChange={e => setCustomInicio(e.target.value)} />
+                <span className="pl-hint">até</span>
+                <input type="date" className="pl-input" style={{ width: 138, padding: '6px 10px' }} value={customFim} onChange={e => setCustomFim(e.target.value)} />
+                <button type="button" className={`pl-chip ${periodoCustom ? 'active' : ''}`} onClick={aplicarPeriodoCustom} disabled={!customInicio || !customFim}>
+                  Aplicar período
+                </button>
               </div>
               {carregandoReceita ? (
                 <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13, padding: '30px 0' }}>Carregando...</div>
               ) : (
-                <>
-                  <div className="pl-card-sub" style={{ marginBottom: 4 }}>Receita</div>
-                  <ReceitaPeriodoChart pontos={receitaDetalhada?.pontos ?? []} valorFn={p => p.receita} color="var(--pl-accent)" gradientId="recPeriodoGrad" tooltipLabel="Receita" />
-                  <div className="pl-card-sub" style={{ margin: '16px 0 4px' }}>Pró-labore</div>
-                  <ReceitaPeriodoChart pontos={receitaDetalhada?.pontos ?? []} valorFn={p => p.proLabore} color="var(--pl-accent-3)" gradientId="proLaborePeriodoGrad" tooltipLabel="Pró-labore" />
-                </>
+                <ReceitaPeriodoChart pontos={receitaDetalhada?.pontos ?? []} />
               )}
             </div>
           </div>
@@ -553,11 +573,15 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
 }
 
 /* ============ RECEITA/PRÓ-LABORE DETALHADOS (hoje / 7 a 365 dias) ============ */
-function ReceitaPeriodoChart({ pontos, valorFn = p => p.receita, color = 'var(--pl-accent)', gradientId = 'recPeriodoGrad', tooltipLabel = 'Receita' }: { pontos: PontoReceita[]; valorFn?: (p: PontoReceita) => number; color?: string; gradientId?: string; tooltipLabel?: string }) {
+// Receita e pró-labore no MESMO gráfico (não dois gráficos separados) — dá
+// pra comparar as duas curvas de relance, e como pró-labore é sempre uma
+// fração do valor de cada venda, a linha dele sempre fica "por dentro" da
+// área de receita.
+function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const W = 480, H = 190, padL = 4, padR = 4, padT = 14, padB = 22
   const plotW = W - padL - padR, plotH = H - padT - padB
-  const maxV = Math.max(...pontos.map(valorFn), 1) * 1.15
+  const maxV = Math.max(...pontos.map(p => p.receita), ...pontos.map(p => p.proLabore), 1) * 1.15
   const stepX = pontos.length > 1 ? plotW / (pontos.length - 1) : 0
   const x = (i: number) => padL + i * stepX
   const y = (v: number) => padT + plotH - (v / maxV) * plotH
@@ -586,30 +610,37 @@ function ReceitaPeriodoChart({ pontos, valorFn = p => p.receita, color = 'var(--
     return <div className="pl-empty" style={{ padding: '30px 0' }}>Sem vendas nesse período.</div>
   }
 
-  const pts = pontos.map((p, i) => [x(i), y(valorFn(p))] as const)
-  const areaD = `M ${pts[0][0]} ${padT + plotH} ` + pts.map(p => `L ${p[0]} ${p[1]}`).join(' ') + ` L ${pts[pts.length - 1][0]} ${padT + plotH} Z`
-  const lineD = `M ` + pts.map(p => `${p[0]} ${p[1]}`).join(' L ')
+  const ptsReceita = pontos.map((p, i) => [x(i), y(p.receita)] as const)
+  const ptsProLabore = pontos.map((p, i) => [x(i), y(p.proLabore)] as const)
+  const areaD = `M ${ptsReceita[0][0]} ${padT + plotH} ` + ptsReceita.map(p => `L ${p[0]} ${p[1]}`).join(' ') + ` L ${ptsReceita[ptsReceita.length - 1][0]} ${padT + plotH} Z`
+  const lineReceitaD = `M ` + ptsReceita.map(p => `${p[0]} ${p[1]}`).join(' L ')
+  const lineProLaboreD = `M ` + ptsProLabore.map(p => `${p[0]} ${p[1]}`).join(' L ')
   const hover = hoverIdx !== null ? pontos[hoverIdx] : null
 
   return (
     <div className="pl-chart-wrap">
       <svg className="pl-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
         <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          <linearGradient id="recPeriodoGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--pl-accent)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="var(--pl-accent)" stopOpacity="0" />
           </linearGradient>
         </defs>
         <line x1={padL} x2={W - padR} y1={padT + plotH} y2={padT + plotH} className="pl-baseline-line" />
-        <path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
-        <path d={lineD} fill="none" stroke={color} strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={areaD} fill="url(#recPeriodoGrad)" stroke="none" />
+        <path d={lineReceitaD} fill="none" stroke="var(--pl-accent)" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={lineProLaboreD} fill="none" stroke="var(--pl-accent-3)" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
         {pontos.map((p, i) => mostrarRotulo(i) && (
           <text key={i} x={x(i)} y={H - 6} className="pl-axis-label" textAnchor={i === 0 ? 'start' : i === pontos.length - 1 ? 'end' : 'middle'}>{p.label}</text>
         ))}
         {hoverIdx !== null && <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={padT + plotH} className="pl-hover-x" style={{ opacity: 1 }} />}
-        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(valorFn(pontos[hoverIdx]))} r={4.5} fill={color} stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
+        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(pontos[hoverIdx].receita)} r={4.5} fill="var(--pl-accent)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
+        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(pontos[hoverIdx].proLabore)} r={4.5} fill="var(--pl-accent-3)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
         {pontos.length <= 15 && pontos.map((p, i) => (
-          <circle key={i} cx={x(i)} cy={y(valorFn(p))} r={3} fill="var(--pl-surface)" stroke={color} strokeWidth={2} />
+          <circle key={`r-${i}`} cx={x(i)} cy={y(p.receita)} r={3} fill="var(--pl-surface)" stroke="var(--pl-accent)" strokeWidth={2} />
+        ))}
+        {pontos.length <= 15 && pontos.map((p, i) => (
+          <circle key={`p-${i}`} cx={x(i)} cy={y(p.proLabore)} r={3} fill="var(--pl-surface)" stroke="var(--pl-accent-3)" strokeWidth={2} />
         ))}
         {pontos.map((p, i) => (
           <rect key={i} x={x(i) - stepX / 2} y={padT} width={stepX || W} height={plotH + 14} className="pl-hit"
@@ -617,9 +648,9 @@ function ReceitaPeriodoChart({ pontos, valorFn = p => p.receita, color = 'var(--
         ))}
       </svg>
       {hover && (
-        <div className="pl-tooltip" style={{ left: `${(x(hoverIdx!) / W) * 100}%`, top: `${(y(valorFn(hover)) / H) * 100}%`, opacity: 1 }}>
+        <div className="pl-tooltip" style={{ left: `${(x(hoverIdx!) / W) * 100}%`, top: `${(y(hover.receita) / H) * 100}%`, opacity: 1 }}>
           <b>{hover.label}</b>
-          {tooltipLabel} {formatMoeda(valorFn(hover))}<br />Vendas {hover.vendas}
+          Receita {formatMoeda(hover.receita)}<br />Pró-labore {formatMoeda(hover.proLabore)}<br />Vendas {hover.vendas}
         </div>
       )}
     </div>
