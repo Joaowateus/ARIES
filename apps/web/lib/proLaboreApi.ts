@@ -140,7 +140,7 @@ export interface PainelProLabore {
   meses: MesPainel[]
 }
 
-export const PERIODOS_RECEITA = ['hoje', '7', '15', '30', '60', '90', '180', '365'] as const
+export const PERIODOS_RECEITA = ['hoje', '7', '15', '30'] as const
 export type ReceitaPeriodo = (typeof PERIODOS_RECEITA)[number]
 
 export interface PontoReceita {
@@ -242,5 +242,7 @@ export const proLaboreApi = {
   },
   receitas: {
     porPeriodo: (periodo: ReceitaPeriodo) => request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?periodo=${periodo}`),
+    porPeriodoCustom: (inicio: string, fim: string) =>
+      request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?inicio=${inicio}&fim=${fim}`),
   },
 }

@@ -1000,9 +1000,10 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
   res.json({ meses })
 })
 
-// --- Receita detalhada por período curto (hoje / 7·15·30 dias) ---
+// --- Receita detalhada por período curto (hoje / 7·15·30 dias, ou personalizado) ---
 
-const PERIODOS_RECEITA = ['hoje', '7', '15', '30', '60', '90', '180', '365'] as const
+const PERIODOS_RECEITA = ['hoje', '7', '15', '30'] as const
+const MAX_DIAS_PERIODO_CUSTOM = 366
 
 function inicioDoDiaUTC(data: Date): Date {
   return new Date(Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate()))
@@ -1015,11 +1016,57 @@ function horaBrasilia(data: Date): number {
   return (data.getUTCHours() + 21) % 24 // (UTCHours - 3 + 24) % 24
 }
 
+// Agrega vendas dia a dia entre [inicio, inicio + dias). Compartilhado pelos
+// presets de dias (7/15/30) e pelo período personalizado (data início/fim),
+// que só diferem em como "inicio"/"dias" são calculados.
+async function agregarReceitaPorDia(req: Request, inicio: Date, dias: number) {
+  const fim = new Date(inicio.getTime() + dias * 24 * 60 * 60 * 1000 - 1)
+  const vendas = await prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: inicio, lte: fim } } })
+
+  const porDia = new Map<string, { receita: number; proLabore: number; vendas: number }>()
+  for (let i = 0; i < dias; i++) {
+    const d = new Date(inicio.getTime() + i * 24 * 60 * 60 * 1000)
+    porDia.set(d.toISOString().slice(0, 10), { receita: 0, proLabore: 0, vendas: 0 })
+  }
+  for (const v of vendas) {
+    const chave = v.data.toISOString().slice(0, 10)
+    const atual = porDia.get(chave)
+    if (atual) {
+      atual.receita += v.valorVenda
+      atual.proLabore += v.valorProLabore
+      atual.vendas += 1
+    }
+  }
+  return {
+    totalReceita: vendas.reduce((s, v) => s + v.valorVenda, 0),
+    totalProLabore: vendas.reduce((s, v) => s + v.valorProLabore, 0),
+    totalVendas: vendas.length,
+    pontos: [...porDia.entries()].map(([iso, p]) => {
+      const [, mes, dia] = iso.split('-')
+      return { label: `${dia}/${mes}`, ...p }
+    }),
+  }
+}
+
 // Inclui valorProLabore por período — cifra pessoal do dono (sacada de
 // qualquer venda) — então, diferente da maioria das rotas de leitura desse
 // módulo, essa é requireDono estrito (vendedor/supervisor não acessam).
 router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const { periodo } = req.query
+  const { periodo, inicio, fim } = req.query
+
+  // Período personalizado (data início/fim escolhidas no calendário) tem
+  // prioridade sobre os presets — mesma granularidade diária deles, só que
+  // com o intervalo escolhido em vez de fixo.
+  if (typeof inicio === 'string' && typeof fim === 'string') {
+    const inicioData = new Date(`${inicio}T00:00:00.000Z`)
+    const fimData = new Date(`${fim}T00:00:00.000Z`)
+    if (!Number.isNaN(inicioData.getTime()) && !Number.isNaN(fimData.getTime()) && fimData >= inicioData) {
+      const dias = Math.min(MAX_DIAS_PERIODO_CUSTOM, Math.round((fimData.getTime() - inicioData.getTime()) / (24 * 60 * 60 * 1000)) + 1)
+      res.json(await agregarReceitaPorDia(req, inicioData, dias))
+      return
+    }
+  }
+
   const periodoEfetivo: (typeof PERIODOS_RECEITA)[number] =
     (PERIODOS_RECEITA as readonly string[]).includes(String(periodo)) ? (periodo as (typeof PERIODOS_RECEITA)[number]) : 'hoje'
 
@@ -1048,32 +1095,8 @@ router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: R
   }
 
   const dias = Number(periodoEfetivo)
-  const inicio = new Date(hojeInicio.getTime() - (dias - 1) * 24 * 60 * 60 * 1000)
-  const vendas = await prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: inicio, lte: hojeFim } } })
-
-  const porDia = new Map<string, { receita: number; proLabore: number; vendas: number }>()
-  for (let i = 0; i < dias; i++) {
-    const d = new Date(inicio.getTime() + i * 24 * 60 * 60 * 1000)
-    porDia.set(d.toISOString().slice(0, 10), { receita: 0, proLabore: 0, vendas: 0 })
-  }
-  for (const v of vendas) {
-    const chave = v.data.toISOString().slice(0, 10)
-    const atual = porDia.get(chave)
-    if (atual) {
-      atual.receita += v.valorVenda
-      atual.proLabore += v.valorProLabore
-      atual.vendas += 1
-    }
-  }
-  res.json({
-    totalReceita: vendas.reduce((s, v) => s + v.valorVenda, 0),
-    totalProLabore: vendas.reduce((s, v) => s + v.valorProLabore, 0),
-    totalVendas: vendas.length,
-    pontos: [...porDia.entries()].map(([iso, p]) => {
-      const [, mes, dia] = iso.split('-')
-      return { label: `${dia}/${mes}`, ...p }
-    }),
-  })
+  const inicioPreset = new Date(hojeInicio.getTime() - (dias - 1) * 24 * 60 * 60 * 1000)
+  res.json(await agregarReceitaPorDia(req, inicioPreset, dias))
 })
 
 export default router
