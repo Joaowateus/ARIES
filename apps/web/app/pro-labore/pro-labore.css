@@ -254,22 +254,10 @@
 .pl-filter-clear:hover { text-decoration: underline; }
 
 /* ============ FUNNEL / JOURNEY ============ */
-.pl-journey { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; position: relative; }
-.pl-stage { position: relative; padding: 4px 14px 0; }
-.pl-stage:not(:first-child)::before {
-  content: ""; position: absolute; left: 0; top: 34px; width: 100%; height: 1px;
-  background: repeating-linear-gradient(90deg, var(--pl-border-strong) 0 6px, transparent 6px 11px);
-}
-.pl-stage-icon { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--pl-surface-2); border: 1px solid var(--pl-border); position: relative; z-index: 1; margin-bottom: 10px; }
-.pl-stage-icon svg { width: 15px; height: 15px; }
 .pl-stage-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pl-ink-2); }
 .pl-stage-value { font-family: 'Sora'; font-size: 22px; font-weight: 700; margin-top: 5px; }
-.pl-stage-bar-track { height: 7px; border-radius: 5px; background: var(--pl-surface-2); margin-top: 10px; overflow: hidden; }
-.pl-stage-bar-fill { height: 100%; border-radius: 5px; }
-.pl-stage-conv { margin-top: 8px; font-size: 11.5px; color: var(--pl-ink-muted); display: flex; align-items: center; gap: 5px; }
+.pl-stage-conv { margin-top: 8px; font-size: 11.5px; color: var(--pl-ink-muted); display: flex; align-items: center; justify-content: center; gap: 5px; }
 .pl-stage-conv b { color: var(--pl-ink-1); font-family: 'JetBrains Mono'; }
-.pl-stage-arrow { position: absolute; right: -9px; top: 14px; z-index: 2; color: var(--pl-ink-muted); }
-.pl-stage-arrow svg { width: 16px; height: 16px; display: block; }
 
 /* ============ SELLER LEADERBOARD ============ */
 .pl-seller-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--pl-border); }
