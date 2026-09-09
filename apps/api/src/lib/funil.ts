@@ -154,6 +154,7 @@ export async function obterMetasFunil(prisma: PrismaClient, empresaId: string) {
 
 interface MetaEtapaCfg {
   metaPct: number
+  metaCusto: number | null
   tipoMeta: string
   tempoMaximoDias: number | null
 }
@@ -169,11 +170,19 @@ interface MetaEtapaCfg {
  * "Leads" e a base de 100% do funil passam a refletir todo mundo que já
  * entrou, mesmo quem foi apagado do CRM depois. As demais etapas continuam
  * vindo do histórico normalmente, porque essas sim devem refletir o estado
- * atual das oportunidades. */
+ * atual das oportunidades.
+ *
+ * `custoPorLeadTopo`, quando informado, alimenta `custoPorLead` de cada
+ * etapa: quanto está custando, hoje, um lead que já chegou até ali. Sempre
+ * dividido pela conversão ACUMULADA desde o topo (`conversaoReal`, não a
+ * etapa-a-etapa) — é ela que carrega o efeito composto de todo connect
+ * rate/conversão perdida no caminho até aqui, então usá-la evita o erro
+ * clássico de subestimar o custo dividindo só pela taxa da última etapa. */
 export function montarConversaoFunil(
   historico: HistoricoEntrada[],
   metaPorEtapa: Map<string, MetaEtapaCfg>,
-  totalLeadsRegistrados?: number
+  totalLeadsRegistrados?: number,
+  custoPorLeadTopo?: number
 ) {
   const totalLeadsHistorico = new Set(historico.filter(h => h.estagioNovo === 'NOVO_LEAD').map(h => h.oportunidadeId)).size
   const totalLeads = totalLeadsRegistrados ?? totalLeadsHistorico
@@ -186,18 +195,53 @@ export function montarConversaoFunil(
 
   const tempoMedio = tempoMedioPorEtapa(historico)
 
-  const etapas = ETAPAS_FUNIL_ORDEM.map(estagio => {
-    const quantidade = estagio === 'NOVO_LEAD' ? totalLeads : (alcancados.get(estagio)?.size ?? 0)
+  const quantidades = ETAPAS_FUNIL_ORDEM.map(estagio =>
+    estagio === 'NOVO_LEAD' ? totalLeads : (alcancados.get(estagio)?.size ?? 0)
+  )
+
+  const etapas = ETAPAS_FUNIL_ORDEM.map((estagio, i) => {
+    const quantidade = quantidades[i]
     const conversaoReal = totalLeads > 0 ? quantidade / totalLeads : 0
     const metaCfg = metaPorEtapa.get(estagio)
     const metaPct = metaCfg?.metaPct ?? METAS_FUNIL_PADRAO[estagio]?.metaPct ?? 0
+    const metaCusto = metaCfg?.metaCusto ?? null
     const tipoMeta = metaCfg?.tipoMeta ?? METAS_FUNIL_PADRAO[estagio]?.tipoMeta ?? 'MINIMO'
     const tempoMaximoDias = metaCfg?.tempoMaximoDias ?? SLA_PADRAO_DIAS[estagio] ?? null
+
+    // Conversão etapa-a-etapa (de quem chegou na etapa anterior, quantos
+    // avançaram até aqui) e perda correspondente — distinto de
+    // `conversaoReal`, que é sempre sobre o total de leads do topo do funil,
+    // não sobre quem alcançou a etapa imediatamente anterior. "Leads" é o
+    // próprio topo, então não tem "etapa anterior" — conta como 100%/0 perda.
+    //
+    // NAO_RESPONDEU/FOLLOW_1_DIA/RESPONDEU não são um gate sequencial de
+    // verdade (um lead pode responder direto, sem passar por "Follow") —
+    // então quantidade[i] pode vir MAIOR que quantidade[i-1] mesmo sem
+    // nada de errado. Sem o cap abaixo, isso vazava como "perda > 100%" ou
+    // conversão negativa, o que é logicamente impossível e enganaria quem
+    // está auditando o funil. Tratamos esse caso como "sem base de
+    // comparação" (100% de conversão, 0 de perda) em vez de inventar uma
+    // perda que não existiu.
+    const quantidadeAnterior = i > 0 ? quantidades[i - 1] : null
+    const conversaoEtapaAnterior = i === 0
+      ? 1
+      : quantidadeAnterior! > 0
+        ? Math.min(1, quantidade / quantidadeAnterior!)
+        : (quantidade > 0 ? 1 : 0)
+    const perdaQuantidade = i === 0 ? 0 : Math.max(0, quantidadeAnterior! - quantidade)
+    const perdaPct = i === 0 ? 0 : 1 - conversaoEtapaAnterior
+
+    const custoPorLead = custoPorLeadTopo != null && conversaoReal > 0 ? custoPorLeadTopo / conversaoReal : null
 
     let status: 'verde' | 'amarelo' | 'vermelho' = 'verde'
     if (tipoMeta === 'MAXIMO_PERDA') {
       if (conversaoReal > metaPct * 1.15) status = 'vermelho'
       else if (conversaoReal > metaPct) status = 'amarelo'
+    } else if (tipoMeta === 'MAXIMO_CUSTO') {
+      if (metaCusto != null && custoPorLead != null) {
+        if (custoPorLead > metaCusto * 1.15) status = 'vermelho'
+        else if (custoPorLead > metaCusto) status = 'amarelo'
+      }
     } else {
       if (conversaoReal < metaPct * 0.85) status = 'vermelho'
       else if (conversaoReal < metaPct) status = 'amarelo'
@@ -208,16 +252,21 @@ export function montarConversaoFunil(
       label: ESTAGIO_LABEL[estagio],
       quantidade,
       conversaoReal,
+      conversaoEtapaAnterior,
+      perdaQuantidade,
+      perdaPct,
       meta: metaPct,
+      metaCusto,
       tipoMeta,
       diferenca: conversaoReal - metaPct,
+      custoPorLead,
       status,
       tempoMedioDias: tempoMedio.has(estagio) ? Math.round(tempoMedio.get(estagio)! * 10) / 10 : null,
       tempoMaximoDias,
     }
   })
 
-  return { totalLeads, etapas }
+  return { totalLeads, custoPorLeadTopo: custoPorLeadTopo ?? null, etapas }
 }
 
 /** Conta o total de leads permanentemente registrados (LeadRegistrado), com

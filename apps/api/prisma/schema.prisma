@@ -43,6 +43,7 @@ model Empresa {
   logAuditoria          LogAuditoria[]
   metaComercialPadrao   MetaComercialPadrao?
   leadsRegistrados      LeadRegistrado[]
+  custoLeadConfig       CustoLeadConfig?
 
   @@map("empresas")
 }
@@ -545,8 +546,12 @@ model MetaFunilEtapa {
   id             String   @id @default(cuid())
   empresaId      String
   etapa          String
-  metaPct        Float // 0-1
-  tipoMeta       String   @default("MINIMO") // MINIMO | MAXIMO_PERDA
+  metaPct        Float // 0-1 — usado quando tipoMeta é MINIMO ou MAXIMO_PERDA
+  // Meta de custo máximo por lead nesta etapa, em R$ — usado só quando
+  // tipoMeta é MAXIMO_CUSTO. Campo separado de metaPct porque a unidade é
+  // outra (moeda, não fração 0-1).
+  metaCusto      Float?
+  tipoMeta       String   @default("MINIMO") // MINIMO | MAXIMO_PERDA | MAXIMO_CUSTO
   tempoMaximoDias Int?    // SLA em dias — lead parado além disso vira alerta pro gestor
   atualizadoEm   DateTime @updatedAt
 
@@ -554,6 +559,21 @@ model MetaFunilEtapa {
 
   @@unique([empresaId, etapa])
   @@map("metas_funil_etapa")
+}
+
+// Custo por lead no topo do funil (ex: gasto com anúncios ÷ leads gerados) —
+// única cifra que não dá pra derivar do CRM, por isso é cadastrada
+// manualmente. É a partir dela que o custo por lead em cada etapa mais
+// funda do funil é calculado (ver montarConversaoFunil/custoPorLead).
+model CustoLeadConfig {
+  id           String   @id @default(cuid())
+  empresaId    String   @unique
+  custoPorLead Float    @default(0)
+  atualizadoEm DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@map("custo_lead_config")
 }
 
 model ContaAnuncio {

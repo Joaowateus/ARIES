@@ -14,13 +14,17 @@ router.get('/metas', requireAuth, async (req: Request, res: Response) => {
 
 const metaFunilSchema = z.object({
   metaPct: z.number().min(0).max(1).optional(),
+  metaCusto: z.number().nonnegative().optional(),
+  tipoMeta: z.enum(['MINIMO', 'MAXIMO_PERDA', 'MAXIMO_CUSTO']).optional(),
   tempoMaximoDias: z.number().int().positive().nullable().optional(),
 })
 
 // Meta % e SLA por etapa são editáveis por qualquer usuário autenticado — não
 // só gestão. É config compartilhada por toda a empresa (todo mundo vê a
 // mesma meta), então qualquer vendedor pode corrigir na hora direto pelo
-// painel, sem depender de alguém com papel de gestão logado.
+// painel, sem depender de alguém com papel de gestão logado. `tipoMeta`
+// deixa a etapa escolher se ela é acompanhada por conversão mínima, perda
+// máxima ou custo máximo por lead — cada etapa tem só um tipo ativo por vez.
 router.put('/metas/:etapa', requireAuth, async (req: Request, res: Response) => {
   const parse = metaFunilSchema.safeParse(req.body)
   if (!parse.success) {
@@ -41,11 +45,43 @@ router.put('/metas/:etapa', requireAuth, async (req: Request, res: Response) => 
       empresaId: req.user!.empresaId,
       etapa,
       metaPct: parse.data.metaPct ?? cfgPadrao?.metaPct ?? 0,
-      tipoMeta: cfgPadrao?.tipoMeta ?? 'MINIMO',
+      metaCusto: parse.data.metaCusto,
+      tipoMeta: parse.data.tipoMeta ?? cfgPadrao?.tipoMeta ?? 'MINIMO',
       tempoMaximoDias: parse.data.tempoMaximoDias ?? SLA_PADRAO_DIAS[etapa] ?? null,
     },
   })
   res.json(meta)
+})
+
+// Custo por lead no topo do funil — cifra manual (gasto com anúncios ÷ leads
+// gerados) que alimenta o custo por lead calculado de cada etapa mais funda.
+// Mesma política de edição das metas: qualquer usuário autenticado da
+// empresa pode corrigir.
+router.get('/custo-lead', requireAuth, async (req: Request, res: Response) => {
+  const cfg = await prisma.custoLeadConfig.upsert({
+    where: { empresaId: req.user!.empresaId },
+    update: {},
+    create: { empresaId: req.user!.empresaId, custoPorLead: 0 },
+  })
+  res.json(cfg)
+})
+
+const custoLeadSchema = z.object({
+  custoPorLead: z.number().nonnegative('Custo deve ser positivo ou zero'),
+})
+
+router.put('/custo-lead', requireAuth, async (req: Request, res: Response) => {
+  const parse = custoLeadSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const cfg = await prisma.custoLeadConfig.upsert({
+    where: { empresaId: req.user!.empresaId },
+    update: { custoPorLead: parse.data.custoPorLead },
+    create: { empresaId: req.user!.empresaId, custoPorLead: parse.data.custoPorLead },
+  })
+  res.json(cfg)
 })
 
 // ---------------------------------------------------------------------------
@@ -75,6 +111,7 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
   const empresaId = req.user!.empresaId
   const metas = await obterMetasFunil(prisma, empresaId)
   const metaPorEtapa = new Map(metas.map(m => [m.etapa, m]))
+  const custoLeadCfg = await prisma.custoLeadConfig.findUnique({ where: { empresaId } })
 
   const inicio = parseDataQuery(req.query.inicio)
   const fimQuery = parseDataQuery(req.query.fim)
@@ -112,7 +149,7 @@ router.get('/conversao', requireAuth, async (req: Request, res: Response) => {
 
   const totalLeadsRegistrados = await contarLeadsRegistrados(prisma, empresaId, whereUsuario, { inicio, fim }, tipoLead)
 
-  res.json(montarConversaoFunil(historico, metaPorEtapa, totalLeadsRegistrados))
+  res.json(montarConversaoFunil(historico, metaPorEtapa, totalLeadsRegistrados, custoLeadCfg?.custoPorLead))
 })
 
 export default router

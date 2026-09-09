@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api, ConversaoFunil, EtapaConversao, Usuario } from '@/lib/api'
+import { api, ConversaoFunil, EtapaConversao, Usuario, CustoLeadConfig, TipoMetaFunil } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { formatMoeda } from '@/lib/format'
 
 const PAPEIS_GESTAO = ['ADMINISTRADOR', 'DIRETOR_COMERCIAL', 'GERENTE_COMERCIAL', 'SUPERVISOR', 'COORDENADOR']
 
@@ -11,6 +12,12 @@ const STATUS_TEXTO: Record<string, string> = { verde: 'text-green-600', amarelo:
 
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`
+}
+
+function rotuloMeta(e: EtapaConversao): string {
+  if (e.tipoMeta === 'MAXIMO_CUSTO') return `Meta: ${formatMoeda(e.metaCusto ?? 0)} (máx.)`
+  if (e.tipoMeta === 'MAXIMO_PERDA') return `Meta: ${pct(e.meta)} (máx.)`
+  return `Meta: ${pct(e.meta)} (mín.)`
 }
 
 type CampoEdicao = 'meta' | 'sla'
@@ -40,6 +47,7 @@ export default function FunilVendasPage() {
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<{ etapa: string; campo: CampoEdicao } | null>(null)
   const [valorEdicao, setValorEdicao] = useState('')
+  const [tipoMetaEdicao, setTipoMetaEdicao] = useState<TipoMetaFunil>('MINIMO')
   const [atualizando, setAtualizando] = useState(false)
   const [limpando, setLimpando] = useState(false)
   const [periodo, setPeriodo] = useState<{ inicio?: string; fim?: string }>({})
@@ -49,6 +57,13 @@ export default function FunilVendasPage() {
   const [tipoLead, setTipoLead] = useState<string>('')
   const [vendedorId, setVendedorId] = useState<string>('')
   const [vendedores, setVendedores] = useState<Usuario[]>([])
+
+  // Custo por lead no topo do funil — única cifra que o CRM não deriva
+  // sozinho (gasto com anúncios ÷ leads gerados), cadastrada manualmente e
+  // usada pra calcular o custo por lead em cada etapa mais funda.
+  const [custoLead, setCustoLead] = useState<CustoLeadConfig | null>(null)
+  const [editandoCustoLead, setEditandoCustoLead] = useState(false)
+  const [custoLeadValor, setCustoLeadValor] = useState('')
 
   const podeFiltrarVendedor = PAPEIS_GESTAO.includes(user?.papel ?? '')
 
@@ -61,6 +76,10 @@ export default function FunilVendasPage() {
   useEffect(() => {
     if (podeFiltrarVendedor) api.usuarios.listar().then(setVendedores)
   }, [podeFiltrarVendedor])
+
+  useEffect(() => {
+    api.funil.custoLead.get().then(setCustoLead)
+  }, [])
 
   async function atualizarManualmente() {
     setAtualizando(true)
@@ -102,23 +121,49 @@ export default function FunilVendasPage() {
     setPeriodo({ inicio: customInicio || undefined, fim: customFim || undefined })
   }
 
-  function iniciarEdicao(etapa: string, campo: CampoEdicao, valorAtual: number | null) {
-    setEditando({ etapa, campo })
-    setValorEdicao(campo === 'meta' ? String(Math.round((valorAtual ?? 0) * 100)) : String(valorAtual ?? ''))
+  function iniciarEdicaoMeta(e: EtapaConversao) {
+    setEditando({ etapa: e.estagio, campo: 'meta' })
+    setTipoMetaEdicao(e.tipoMeta)
+    setValorEdicao(e.tipoMeta === 'MAXIMO_CUSTO' ? String(e.metaCusto ?? 0) : String(Math.round(e.meta * 100)))
+  }
+
+  function iniciarEdicaoSla(etapa: string, valorAtual: number | null) {
+    setEditando({ etapa, campo: 'sla' })
+    setValorEdicao(String(valorAtual ?? ''))
   }
 
   async function salvarEdicao() {
     if (!editando) return
     if (editando.campo === 'meta') {
-      const valor = Number(valorEdicao) / 100
-      if (!Number.isFinite(valor) || valor < 0 || valor > 1) return
-      await api.funil.atualizarMeta(editando.etapa, { metaPct: valor })
+      if (tipoMetaEdicao === 'MAXIMO_CUSTO') {
+        const valor = Number(valorEdicao)
+        if (!Number.isFinite(valor) || valor < 0) return
+        await api.funil.atualizarMeta(editando.etapa, { tipoMeta: tipoMetaEdicao, metaCusto: valor })
+      } else {
+        const valor = Number(valorEdicao) / 100
+        if (!Number.isFinite(valor) || valor < 0 || valor > 1) return
+        await api.funil.atualizarMeta(editando.etapa, { tipoMeta: tipoMetaEdicao, metaPct: valor })
+      }
     } else {
       const dias = valorEdicao.trim() === '' ? null : Number(valorEdicao)
       if (dias !== null && (!Number.isFinite(dias) || dias <= 0)) return
       await api.funil.atualizarMeta(editando.etapa, { tempoMaximoDias: dias })
     }
     setEditando(null)
+    carregar()
+  }
+
+  function iniciarEdicaoCustoLead() {
+    setCustoLeadValor(String(custoLead?.custoPorLead ?? 0))
+    setEditandoCustoLead(true)
+  }
+
+  async function salvarCustoLead() {
+    const valor = Number(custoLeadValor)
+    if (!Number.isFinite(valor) || valor < 0) return
+    const atualizado = await api.funil.custoLead.atualizar(valor)
+    setCustoLead(atualizado)
+    setEditandoCustoLead(false)
     carregar()
   }
 
@@ -140,6 +185,30 @@ export default function FunilVendasPage() {
         >
           {atualizando ? 'Atualizando...' : '🔄 Atualizar'}
         </button>
+      </div>
+
+      {/* Custo por lead no topo — única cifra que o CRM não deriva sozinho
+          (gasto com anúncios ÷ leads gerados); alimenta o custo por lead
+          calculado em cada etapa mais funda do funil, logo abaixo. */}
+      <div className="flex items-center gap-2 mb-6 bg-white border border-gray-200 rounded-lg px-4 py-2.5 w-fit">
+        <span className="text-xs text-gray-500">Custo por lead (topo do funil):</span>
+        {editandoCustoLead ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400">R$</span>
+            <input
+              type="number" step="0.01" min="0" autoFocus
+              value={custoLeadValor} onChange={e => setCustoLeadValor(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && salvarCustoLead()}
+              className="w-24 px-1.5 py-0.5 border border-gray-300 rounded text-xs"
+            />
+            <button onClick={salvarCustoLead} className="text-xs text-blue-600 font-medium">OK</button>
+            <button onClick={() => setEditandoCustoLead(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancelar</button>
+          </div>
+        ) : (
+          <button onClick={iniciarEdicaoCustoLead} className="text-sm font-semibold text-gray-900 hover:text-blue-600">
+            {formatMoeda(custoLead?.custoPorLead ?? 0)} ✎
+          </button>
+        )}
       </div>
 
       {/* Período de análise */}
@@ -235,26 +304,59 @@ export default function FunilVendasPage() {
           {/* Gráfico de funil */}
           <FunnelChart etapas={dados.etapas} />
 
-          {/* Metas, tempo médio e SLA por etapa */}
+          {/* Conversão da etapa anterior, perda (connect rate), metas
+              (conversão/perda/custo), custo por lead, tempo médio e SLA —
+              tudo por etapa, pra dar suporte a uma auditoria de conversão
+              completa do funil. */}
           <div className="grid gap-1 mt-2" style={{ gridTemplateColumns: `repeat(${dados.etapas.length}, 1fr)` }}>
-            {dados.etapas.map(e => (
+            {dados.etapas.map((e, i) => (
               <div key={e.estagio} className="text-center space-y-0.5">
+                {i > 0 && (
+                  <div className="text-[11px] text-gray-500">
+                    Conv. etapa ant.: <span className="font-medium text-gray-700">{pct(e.conversaoEtapaAnterior)}</span>
+                  </div>
+                )}
+                {i > 0 && (
+                  <div className="text-[11px] text-gray-500">
+                    Perda: <span className="font-medium text-red-600">{e.perdaQuantidade} ({pct(e.perdaPct)})</span>
+                  </div>
+                )}
+
                 {editando?.etapa === e.estagio && editando.campo === 'meta' ? (
-                  <div className="flex items-center justify-center gap-1">
-                    <input
-                      type="number" autoFocus value={valorEdicao} onChange={ev => setValorEdicao(ev.target.value)}
-                      onKeyDown={ev => ev.key === 'Enter' && salvarEdicao()}
-                      className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs text-center"
-                    />
-                    <button onClick={salvarEdicao} className="text-xs text-blue-600 font-medium">OK</button>
+                  <div className="space-y-1">
+                    <select
+                      value={tipoMetaEdicao}
+                      onChange={ev => setTipoMetaEdicao(ev.target.value as TipoMetaFunil)}
+                      className="w-full px-1 py-0.5 border border-gray-300 rounded text-[10px]"
+                    >
+                      <option value="MINIMO">Conversão mín.</option>
+                      <option value="MAXIMO_PERDA">Perda máx.</option>
+                      <option value="MAXIMO_CUSTO">Custo máx.</option>
+                    </select>
+                    <div className="flex items-center justify-center gap-1">
+                      {tipoMetaEdicao === 'MAXIMO_CUSTO' && <span className="text-[10px] text-gray-400">R$</span>}
+                      <input
+                        type="number" autoFocus value={valorEdicao} onChange={ev => setValorEdicao(ev.target.value)}
+                        onKeyDown={ev => ev.key === 'Enter' && salvarEdicao()}
+                        className="w-12 px-1 py-0.5 border border-gray-300 rounded text-xs text-center"
+                      />
+                      {tipoMetaEdicao !== 'MAXIMO_CUSTO' && <span className="text-[10px] text-gray-400">%</span>}
+                      <button onClick={salvarEdicao} className="text-xs text-blue-600 font-medium">OK</button>
+                    </div>
                   </div>
                 ) : (
                   <button
-                    onClick={() => iniciarEdicao(e.estagio, 'meta', e.meta)}
+                    onClick={() => iniciarEdicaoMeta(e)}
                     className="text-[11px] text-gray-400 hover:text-blue-600 block w-full"
                   >
-                    Meta: {pct(e.meta)}{e.tipoMeta === 'MAXIMO_PERDA' ? ' (máx.)' : ' (mín.)'} ✎
+                    {rotuloMeta(e)} ✎
                   </button>
+                )}
+
+                {e.custoPorLead != null && (
+                  <div className="text-[11px] text-gray-500">
+                    Custo/lead: <span className="font-medium text-gray-700">{formatMoeda(e.custoPorLead)}</span>
+                  </div>
                 )}
 
                 {e.tempoMedioDias != null && (
@@ -274,7 +376,7 @@ export default function FunilVendasPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => iniciarEdicao(e.estagio, 'sla', e.tempoMaximoDias ?? null)}
+                    onClick={() => iniciarEdicaoSla(e.estagio, e.tempoMaximoDias ?? null)}
                     className="text-[11px] text-gray-400 hover:text-blue-600 block w-full"
                   >
                     Prazo: {e.tempoMaximoDias != null ? `${e.tempoMaximoDias}d` : '—'} ✎
