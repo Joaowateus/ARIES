@@ -56,11 +56,14 @@ export interface Oportunidade {
   diasNaEtapaAtual?: number | null
 }
 
+export type TipoMetaFunil = 'MINIMO' | 'MAXIMO_PERDA' | 'MAXIMO_CUSTO'
+
 export interface MetaFunilEtapa {
   id: string
   etapa: string
   metaPct: number
-  tipoMeta: 'MINIMO' | 'MAXIMO_PERDA'
+  metaCusto?: number | null
+  tipoMeta: TipoMetaFunil
   tempoMaximoDias?: number | null
 }
 
@@ -68,10 +71,23 @@ export interface EtapaConversao {
   estagio: string
   label: string
   quantidade: number
+  // % sobre o total de leads do topo do funil (acumulado desde o início).
   conversaoReal: number
+  // % de quem chegou na etapa ANTERIOR que avançou até esta — distinto do
+  // acumulado acima. Sempre 1 (100%) na primeira etapa (Leads).
+  conversaoEtapaAnterior: number
+  // Quantos e que % de quem estava na etapa anterior não avançou (connect
+  // rate de perda). Sempre 0 na primeira etapa.
+  perdaQuantidade: number
+  perdaPct: number
   meta: number
-  tipoMeta: 'MINIMO' | 'MAXIMO_PERDA'
+  metaCusto: number | null
+  tipoMeta: TipoMetaFunil
   diferenca: number
+  // Custo estimado de UM lead que chegou até esta etapa, calculado a partir
+  // do custo por lead do topo (custoPorLeadTopo) ÷ conversaoReal — null
+  // quando ninguém chegou na etapa (ou custoPorLeadTopo não configurado).
+  custoPorLead: number | null
   status: 'verde' | 'amarelo' | 'vermelho'
   tempoMedioDias: number | null
   tempoMaximoDias: number | null
@@ -79,7 +95,13 @@ export interface EtapaConversao {
 
 export interface ConversaoFunil {
   totalLeads: number
+  custoPorLeadTopo: number | null
   etapas: EtapaConversao[]
+}
+
+export interface CustoLeadConfig {
+  id: string
+  custoPorLead: number
 }
 
 export interface Notificacao {
@@ -931,8 +953,13 @@ export const api = {
   },
   funil: {
     metas: () => request<MetaFunilEtapa[]>('/funil/metas'),
-    atualizarMeta: (etapa: string, dados: { metaPct?: number; tempoMaximoDias?: number | null }) =>
+    atualizarMeta: (etapa: string, dados: { metaPct?: number; metaCusto?: number; tipoMeta?: TipoMetaFunil; tempoMaximoDias?: number | null }) =>
       request<MetaFunilEtapa>(`/funil/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    custoLead: {
+      get: () => request<CustoLeadConfig>('/funil/custo-lead'),
+      atualizar: (custoPorLead: number) =>
+        request<CustoLeadConfig>('/funil/custo-lead', { method: 'PUT', body: JSON.stringify({ custoPorLead }) }),
+    },
     conversao: (params?: { inicio?: string; fim?: string; tipoLead?: string; vendedorId?: string }) => {
       const query: Record<string, string> = {}
       if (params?.inicio) query.inicio = params.inicio
