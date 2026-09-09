@@ -44,7 +44,21 @@ export interface ParametroLiquidez {
   metaFaturamentoAnual: number
   // Meta mensal padrão, usada por vendedores sem meta mensal individual.
   metaMensalPadrao: number
+  // Custo por lead no topo da jornada de compra — única cifra que não dá
+  // pra derivar sozinho, cadastrada manualmente. Alimenta o custo por lead
+  // calculado em cada etapa mais funda (FunilJourney).
+  custoPorLeadTopo: number
   fraseMotivacional?: string | null
+}
+
+export type TipoMetaFunilPL = 'MINIMO' | 'MAXIMO_PERDA' | 'MAXIMO_CUSTO'
+
+export interface MetaFunilProLabore {
+  id: string
+  etapa: EstagioFunilPL
+  metaPct: number
+  metaCusto: number | null
+  tipoMeta: TipoMetaFunilPL
 }
 
 export interface Vendedor {
@@ -60,6 +74,11 @@ export interface Vendedor {
 
 export const ESTAGIOS_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO', 'PERDIDO'] as const
 export type EstagioLead = (typeof ESTAGIOS_LEAD)[number]
+
+// Etapas da jornada de compra (FunilJourney) — mesma ordem/nomes de
+// ESTAGIOS_LEAD, sem PERDIDO (que não é uma etapa de progresso).
+export const ETAPAS_FUNIL_PL = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO'] as const
+export type EstagioFunilPL = (typeof ETAPAS_FUNIL_PL)[number]
 
 export const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
 export type TipoLead = (typeof TIPOS_LEAD)[number]
@@ -196,6 +215,11 @@ export const proLaboreApi = {
     get: () => request<ParametroLiquidez>('/pro-labore/parametros'),
     atualizar: (data: Partial<ParametroLiquidez>) =>
       request<ParametroLiquidez>('/pro-labore/parametros', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  funilMetas: {
+    listar: () => request<MetaFunilProLabore[]>('/pro-labore/funil-metas'),
+    atualizar: (etapa: EstagioFunilPL, data: { metaPct?: number; metaCusto?: number; tipoMeta?: TipoMetaFunilPL }) =>
+      request<MetaFunilProLabore>(`/pro-labore/funil-metas/${etapa}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
   vendedores: {
     listar: () => request<Vendedor[]>('/pro-labore/vendedores'),

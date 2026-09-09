@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez, Vendedor, Lead, TipoLead, PERIODOS_RECEITA, ReceitaPeriodo, ReceitaDetalhada, PontoReceita } from '@/lib/proLaboreApi'
+import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez, Vendedor, Lead, TipoLead, PERIODOS_RECEITA, ReceitaPeriodo, ReceitaDetalhada, PontoReceita, MetaFunilProLabore, TipoMetaFunilPL, ETAPAS_FUNIL_PL } from '@/lib/proLaboreApi'
 import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
@@ -78,11 +78,16 @@ export default function ProLaboreDashboardPage() {
   const [filtroVendedorId, setFiltroVendedorId] = useState('')
   const [filtroCanal, setFiltroCanal] = useState<'' | TipoLead>('')
 
+  // Metas por etapa da jornada de compra (conversão/perda/custo) — mesmo
+  // conceito das metas do Funil de Vendas do CRM principal.
+  const [metasFunil, setMetasFunil] = useState<MetaFunilProLabore[]>([])
+
   useEffect(() => {
-    Promise.all([proLaboreApi.painel.get(), proLaboreApi.parametros.get(), proLaboreApi.leads.listar()]).then(([p, param, ls]) => {
+    Promise.all([proLaboreApi.painel.get(), proLaboreApi.parametros.get(), proLaboreApi.leads.listar(), proLaboreApi.funilMetas.listar()]).then(([p, param, ls, metas]) => {
       setPainel(p)
       setParametro(param)
       setLeads(ls)
+      setMetasFunil(metas)
       setSelectedIdx(Math.max(0, p.meses.length - 1))
     }).finally(() => setLoading(false))
   }, [])
@@ -334,7 +339,14 @@ export default function ProLaboreDashboardPage() {
         </div>
       </div>
       <div className="pl-card">
-        <FunilJourney funil={funilFiltrado ?? atual.funil} />
+        <FunilJourney
+          funil={funilFiltrado ?? atual.funil}
+          metas={metasFunil}
+          custoPorLeadTopo={parametro?.custoPorLeadTopo ?? 0}
+          isDono={isDono}
+          onMetaSalva={m => setMetasFunil(atual => atual.map(x => (x.etapa === m.etapa ? m : x)))}
+          onCustoLeadSalvo={custoPorLeadTopo => setParametro(p => (p ? { ...p, custoPorLeadTopo } : p))}
+        />
       </div>
 
       {vejaEquipe && (
@@ -836,36 +848,196 @@ function PeriodoCalendarioFiltro({
 }
 
 /* ============ FUNIL COMERCIAL ============ */
-function FunilJourney({ funil }: { funil: MesPainel['funil'] }) {
+function rotuloMetaPL(meta: MetaFunilProLabore | undefined): string {
+  if (!meta) return 'Meta: —'
+  if (meta.tipoMeta === 'MAXIMO_CUSTO') return `Meta: ${formatMoeda(meta.metaCusto ?? 0)} (máx.)`
+  if (meta.tipoMeta === 'MAXIMO_PERDA') return `Meta: ${formatPct(meta.metaPct)} (máx.)`
+  return `Meta: ${formatPct(meta.metaPct)} (mín.)`
+}
+
+function FunilJourney({
+  funil, metas, custoPorLeadTopo, isDono, onMetaSalva, onCustoLeadSalvo,
+}: {
+  funil: MesPainel['funil']
+  metas: MetaFunilProLabore[]
+  custoPorLeadTopo: number
+  isDono: boolean
+  onMetaSalva: (m: MetaFunilProLabore) => void
+  onCustoLeadSalvo: (v: number) => void
+}) {
   const stages = [
-    { key: 'leads', name: 'Leads', value: funil.leads },
-    { key: 'abordados', name: 'Abordados', value: funil.abordados },
-    { key: 'negociacao', name: 'Negociação', value: funil.negociacao },
-    { key: 'proposta', name: 'Proposta', value: funil.proposta },
-    { key: 'fechamento', name: 'Fechamento', value: funil.fechamento },
+    { key: 'leads', etapa: 'LEAD' as const, name: 'Leads', value: funil.leads },
+    { key: 'abordados', etapa: 'ABORDADO' as const, name: 'Abordados', value: funil.abordados },
+    { key: 'negociacao', etapa: 'NEGOCIACAO' as const, name: 'Negociação', value: funil.negociacao },
+    { key: 'proposta', etapa: 'PROPOSTA' as const, name: 'Proposta', value: funil.proposta },
+    { key: 'fechamento', etapa: 'FECHADO' as const, name: 'Fechamento', value: funil.fechamento },
   ]
   const maxV = Math.max(stages[0].value, 1)
+  const totalLeads = stages[0].value
+  const metaPorEtapa = new Map(metas.map(m => [m.etapa, m]))
+
+  const [editandoEtapa, setEditandoEtapa] = useState<(typeof ETAPAS_FUNIL_PL)[number] | null>(null)
+  const [tipoMetaEdicao, setTipoMetaEdicao] = useState<TipoMetaFunilPL>('MINIMO')
+  const [valorEdicao, setValorEdicao] = useState('')
+  const [salvandoMeta, setSalvandoMeta] = useState(false)
+
+  const [editandoCustoLead, setEditandoCustoLead] = useState(false)
+  const [custoLeadValor, setCustoLeadValor] = useState('')
+  const [salvandoCustoLead, setSalvandoCustoLead] = useState(false)
+
+  function iniciarEdicaoMeta(etapa: (typeof ETAPAS_FUNIL_PL)[number]) {
+    const meta = metaPorEtapa.get(etapa)
+    setEditandoEtapa(etapa)
+    setTipoMetaEdicao(meta?.tipoMeta ?? 'MINIMO')
+    setValorEdicao(meta?.tipoMeta === 'MAXIMO_CUSTO' ? String(meta.metaCusto ?? 0) : String(Math.round((meta?.metaPct ?? 0) * 100)))
+  }
+
+  async function salvarMeta() {
+    if (!editandoEtapa) return
+    setSalvandoMeta(true)
+    try {
+      let atualizado: MetaFunilProLabore
+      if (tipoMetaEdicao === 'MAXIMO_CUSTO') {
+        const valor = Number(valorEdicao)
+        if (!Number.isFinite(valor) || valor < 0) return
+        atualizado = await proLaboreApi.funilMetas.atualizar(editandoEtapa, { tipoMeta: tipoMetaEdicao, metaCusto: valor })
+      } else {
+        const valor = Number(valorEdicao) / 100
+        if (!Number.isFinite(valor) || valor < 0 || valor > 1) return
+        atualizado = await proLaboreApi.funilMetas.atualizar(editandoEtapa, { tipoMeta: tipoMetaEdicao, metaPct: valor })
+      }
+      onMetaSalva(atualizado)
+      setEditandoEtapa(null)
+    } finally {
+      setSalvandoMeta(false)
+    }
+  }
+
+  function iniciarEdicaoCustoLead() {
+    setCustoLeadValor(String(custoPorLeadTopo))
+    setEditandoCustoLead(true)
+  }
+
+  async function salvarCustoLead() {
+    const valor = Number(custoLeadValor)
+    if (!Number.isFinite(valor) || valor < 0) return
+    setSalvandoCustoLead(true)
+    try {
+      const atualizado = await proLaboreApi.parametros.atualizar({ custoPorLeadTopo: valor })
+      onCustoLeadSalvo(atualizado.custoPorLeadTopo)
+      setEditandoCustoLead(false)
+    } finally {
+      setSalvandoCustoLead(false)
+    }
+  }
 
   return (
-    <div className="pl-journey">
-      {stages.map((stage, i) => {
-        const widthPct = Math.max((stage.value / maxV) * 100, 6)
-        const convFromPrev = i === 0 ? null : (stages[i - 1].value > 0 ? (stage.value / stages[i - 1].value) * 100 : 0)
-        return (
-          <div key={stage.key} className="pl-stage">
-            <div className="pl-stage-icon">{FUNIL_ICONS[stage.key]}</div>
-            <div className="pl-stage-name">{stage.name}</div>
-            <div className="pl-stage-value pl-mono">{stage.value.toLocaleString('pt-BR')}</div>
-            <div className="pl-stage-bar-track"><div className="pl-stage-bar-fill" style={{ width: `${widthPct}%`, background: 'var(--pl-accent)' }} /></div>
-            <div className="pl-stage-conv">
-              {convFromPrev === null ? 'topo do funil' : <>conv. anterior <b>{convFromPrev.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b></>}
+    <div>
+      {isDono && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <span className="pl-hint">Custo por lead (topo da jornada):</span>
+          {editandoCustoLead ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="number" step="0.01" min="0" autoFocus
+                className="pl-input" style={{ width: 100, padding: '4px 8px' }}
+                value={custoLeadValor} onChange={e => setCustoLeadValor(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && salvarCustoLead()}
+              />
+              <button type="button" className="pl-btn pl-btn-primary" disabled={salvandoCustoLead} onClick={salvarCustoLead} style={{ padding: '4px 10px' }}>OK</button>
+              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setEditandoCustoLead(false)} style={{ padding: '4px 10px' }}>Cancelar</button>
             </div>
-            {i < stages.length - 1 && (
-              <div className="pl-stage-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h13M13 6l6 6-6 6" /></svg></div>
-            )}
-          </div>
-        )
-      })}
+          ) : (
+            <span className="pl-link-action" onClick={iniciarEdicaoCustoLead} style={{ fontWeight: 600 }}>
+              {formatMoeda(custoPorLeadTopo)} ✎
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="pl-journey">
+        {stages.map((stage, i) => {
+          const widthPct = Math.max((stage.value / maxV) * 100, 6)
+          // Limitado a 100% — LEAD→ABORDADO→NEGOCIACAO→PROPOSTA→FECHADO é
+          // sequencial de verdade aqui (estagioAtingiu exige ter passado
+          // pelas etapas anteriores), mas o cap evita qualquer número
+          // impossível se o filtro de vendedor/canal cortar a base de um
+          // jeito que desalinhe momentaneamente os totais.
+          const convFromPrev = i === 0 ? 1 : (stages[i - 1].value > 0 ? Math.min(1, stage.value / stages[i - 1].value) : (stage.value > 0 ? 1 : 0))
+          const perdaQuantidade = i === 0 ? null : Math.max(0, stages[i - 1].value - stage.value)
+          const perdaPct = i === 0 ? null : 1 - convFromPrev
+          const conversaoTotal = totalLeads > 0 ? stage.value / totalLeads : 0
+          const custoPorLead = custoPorLeadTopo > 0 && conversaoTotal > 0 ? custoPorLeadTopo / conversaoTotal : null
+          const meta = metaPorEtapa.get(stage.etapa)
+
+          let statusOk: boolean | null = null
+          if (meta) {
+            if (meta.tipoMeta === 'MAXIMO_PERDA') statusOk = perdaPct == null ? null : perdaPct <= meta.metaPct
+            else if (meta.tipoMeta === 'MAXIMO_CUSTO') statusOk = meta.metaCusto == null || custoPorLead == null ? null : custoPorLead <= meta.metaCusto
+            else statusOk = conversaoTotal >= meta.metaPct
+          }
+
+          return (
+            <div key={stage.key} className="pl-stage">
+              <div className="pl-stage-icon">{FUNIL_ICONS[stage.key]}</div>
+              <div className="pl-stage-name">{stage.name}</div>
+              <div className="pl-stage-value pl-mono">{stage.value.toLocaleString('pt-BR')}</div>
+              <div className="pl-stage-bar-track"><div className="pl-stage-bar-fill" style={{ width: `${widthPct}%`, background: 'var(--pl-accent)' }} /></div>
+              <div className="pl-stage-conv">
+                {i === 0 ? 'topo do funil' : <>conv. anterior <b>{(convFromPrev * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b></>}
+              </div>
+
+              {i > 0 && (
+                <div className="pl-stage-conv">
+                  Perda <b>{perdaQuantidade} ({formatPct(perdaPct ?? 0)})</b>
+                </div>
+              )}
+
+              {editandoEtapa === stage.etapa ? (
+                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                  <select
+                    className="pl-select" style={{ fontSize: 11, padding: '2px 4px' }}
+                    value={tipoMetaEdicao} onChange={e => setTipoMetaEdicao(e.target.value as TipoMetaFunilPL)}
+                  >
+                    <option value="MINIMO">Conversão mín.</option>
+                    <option value="MAXIMO_PERDA">Perda máx.</option>
+                    <option value="MAXIMO_CUSTO">Custo máx.</option>
+                  </select>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {tipoMetaEdicao === 'MAXIMO_CUSTO' && <span className="pl-hint">R$</span>}
+                    <input
+                      type="number" autoFocus className="pl-input" style={{ width: 56, padding: '2px 4px', fontSize: 11, textAlign: 'center' }}
+                      value={valorEdicao} onChange={e => setValorEdicao(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && salvarMeta()}
+                    />
+                    {tipoMetaEdicao !== 'MAXIMO_CUSTO' && <span className="pl-hint">%</span>}
+                    <button type="button" className="pl-link-action" disabled={salvandoMeta} onClick={salvarMeta}>OK</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="pl-stage-conv" style={{ marginTop: 6 }}>
+                  {isDono ? (
+                    <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(stage.etapa)}>{rotuloMetaPL(meta)} ✎</span>
+                  ) : (
+                    <span>{rotuloMetaPL(meta)}</span>
+                  )}
+                  {statusOk != null && <span className={`pl-delta ${statusOk ? 'up' : 'down'}`} style={{ marginLeft: 6 }}>{statusOk ? 'ok' : 'fora'}</span>}
+                </div>
+              )}
+
+              {custoPorLead != null && (
+                <div className="pl-stage-conv">
+                  Custo/lead <b>{formatMoeda(custoPorLead)}</b>
+                </div>
+              )}
+
+              {i < stages.length - 1 && (
+                <div className="pl-stage-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h13M13 6l6 6-6 6" /></svg></div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

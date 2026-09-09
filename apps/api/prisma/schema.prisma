@@ -922,6 +922,7 @@ model ProLaboreUsuario {
   funilMensal    FunilMensal[]
   gastosAnuncios GastoAnuncioMensal[]
   leads          Lead[]
+  metasFunil     MetaFunilProLabore[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1014,12 +1015,36 @@ model ParametroLiquidez {
   // próprio definido. Substitui a meta anual no dashboard de quem loga
   // como VENDEDOR (dono e supervisor continuam vendo a meta anual).
   metaMensalPadrao      Float    @default(0)
+  // Custo por lead no topo da jornada de compra (ex: gasto com anúncios ÷
+  // leads gerados) — única cifra que o Pró-Labore não deriva sozinho,
+  // cadastrada manualmente. Alimenta o custo por lead calculado em cada
+  // etapa mais funda da jornada (ver FunilJourney no dashboard).
+  custoPorLeadTopo      Float    @default(0)
   fraseMotivacional     String?
   atualizadoEm          DateTime @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
 
   @@map("pro_labore_parametros")
+}
+
+// Metas por etapa da jornada de compra (Leads/Abordados/Negociação/
+// Proposta/Fechamento) — mesmo conceito de MetaFunilEtapa do CRM principal
+// (conversão mínima, perda máxima ou custo máximo por etapa), só que
+// escopado ao usuário dono do Pró-Labore em vez de Empresa.
+model MetaFunilProLabore {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  etapa        String   // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO
+  metaPct      Float    @default(0) // 0-1 — usado quando tipoMeta é MINIMO ou MAXIMO_PERDA
+  metaCusto    Float?   // R$ — usado só quando tipoMeta é MAXIMO_CUSTO
+  tipoMeta     String   @default("MINIMO") // MINIMO | MAXIMO_PERDA | MAXIMO_CUSTO
+  atualizadoEm DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, etapa])
+  @@map("pro_labore_metas_funil")
 }
 
 // Cada venda/negociação fechada — cadastrada só pelo dono. O pró-labore
