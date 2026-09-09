@@ -140,17 +140,19 @@ export interface PainelProLabore {
   meses: MesPainel[]
 }
 
-export const PERIODOS_RECEITA = ['hoje', '7', '15', '30'] as const
+export const PERIODOS_RECEITA = ['hoje', '7', '15', '30', '60', '90', '180', '365'] as const
 export type ReceitaPeriodo = (typeof PERIODOS_RECEITA)[number]
 
 export interface PontoReceita {
   label: string
   receita: number
+  proLabore: number
   vendas: number
 }
 
 export interface ReceitaDetalhada {
   totalReceita: number
+  totalProLabore: number
   totalVendas: number
   pontos: PontoReceita[]
 }

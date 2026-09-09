@@ -18,6 +18,10 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
+const PERIODO_RECEITA_LABEL: Record<ReceitaPeriodo, string> = {
+  hoje: 'Hoje', '7': '7 dias', '15': '15 dias', '30': '30 dias', '60': '60 dias', '90': '90 dias', '180': '6 meses', '365': '12 meses',
+}
+
 const FUNIL_ICONS: Record<string, React.ReactElement> = {
   leads: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.4" /><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" /></svg>,
   abordados: <svg viewBox="0 0 24 24" fill="none" stroke="var(--pl-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v10H8l-4 4V5Z" /></svg>,
@@ -258,25 +262,31 @@ export default function ProLaboreDashboardPage() {
             <div className="pl-card">
               <div className="pl-card-head">
                 <div>
-                  <div className="pl-card-title">Receita detalhada</div>
-                  <div className="pl-card-sub">Receita e vendas por período curto</div>
+                  <div className="pl-card-title">Receita e pró-labore detalhados</div>
+                  <div className="pl-card-sub">Receita, pró-labore e vendas por período</div>
                 </div>
               </div>
               <div className="pl-stat-strip" style={{ marginTop: 0 }}>
                 <div className="pl-s"><div className="pl-l">Total de receita</div><div className="pl-v" style={{ fontSize: 18 }}>{formatMoeda(receitaDetalhada?.totalReceita ?? 0)}</div></div>
+                <div className="pl-s"><div className="pl-l">Total de pró-labore</div><div className="pl-v" style={{ fontSize: 18 }}>{formatMoeda(receitaDetalhada?.totalProLabore ?? 0)}</div></div>
                 <div className="pl-s"><div className="pl-l">Total de vendas</div><div className="pl-v" style={{ fontSize: 18 }}>{receitaDetalhada?.totalVendas ?? 0}</div></div>
               </div>
               <div className="pl-period-row" style={{ margin: '14px 0' }}>
                 {PERIODOS_RECEITA.map(p => (
                   <button key={p} type="button" className={`pl-chip ${receitaPeriodo === p ? 'active' : ''}`} onClick={() => setReceitaPeriodo(p)}>
-                    {p === 'hoje' ? 'Hoje' : `${p} dias`}
+                    {PERIODO_RECEITA_LABEL[p]}
                   </button>
                 ))}
               </div>
               {carregandoReceita ? (
                 <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13, padding: '30px 0' }}>Carregando...</div>
               ) : (
-                <ReceitaPeriodoChart pontos={receitaDetalhada?.pontos ?? []} />
+                <>
+                  <div className="pl-card-sub" style={{ marginBottom: 4 }}>Receita</div>
+                  <ReceitaPeriodoChart pontos={receitaDetalhada?.pontos ?? []} valorFn={p => p.receita} color="var(--pl-accent)" gradientId="recPeriodoGrad" tooltipLabel="Receita" />
+                  <div className="pl-card-sub" style={{ margin: '16px 0 4px' }}>Pró-labore</div>
+                  <ReceitaPeriodoChart pontos={receitaDetalhada?.pontos ?? []} valorFn={p => p.proLabore} color="var(--pl-accent-3)" gradientId="proLaborePeriodoGrad" tooltipLabel="Pró-labore" />
+                </>
               )}
             </div>
           </div>
@@ -542,12 +552,12 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
   )
 }
 
-/* ============ RECEITA DETALHADA (hoje / 7·15·30 dias) ============ */
-function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
+/* ============ RECEITA/PRÓ-LABORE DETALHADOS (hoje / 7 a 365 dias) ============ */
+function ReceitaPeriodoChart({ pontos, valorFn = p => p.receita, color = 'var(--pl-accent)', gradientId = 'recPeriodoGrad', tooltipLabel = 'Receita' }: { pontos: PontoReceita[]; valorFn?: (p: PontoReceita) => number; color?: string; gradientId?: string; tooltipLabel?: string }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
   const W = 480, H = 190, padL = 4, padR = 4, padT = 14, padB = 22
   const plotW = W - padL - padR, plotH = H - padT - padB
-  const maxV = Math.max(...pontos.map(p => p.receita), 1) * 1.15
+  const maxV = Math.max(...pontos.map(valorFn), 1) * 1.15
   const stepX = pontos.length > 1 ? plotW / (pontos.length - 1) : 0
   const x = (i: number) => padL + i * stepX
   const y = (v: number) => padT + plotH - (v / maxV) * plotH
@@ -576,7 +586,7 @@ function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
     return <div className="pl-empty" style={{ padding: '30px 0' }}>Sem vendas nesse período.</div>
   }
 
-  const pts = pontos.map((p, i) => [x(i), y(p.receita)] as const)
+  const pts = pontos.map((p, i) => [x(i), y(valorFn(p))] as const)
   const areaD = `M ${pts[0][0]} ${padT + plotH} ` + pts.map(p => `L ${p[0]} ${p[1]}`).join(' ') + ` L ${pts[pts.length - 1][0]} ${padT + plotH} Z`
   const lineD = `M ` + pts.map(p => `${p[0]} ${p[1]}`).join(' L ')
   const hover = hoverIdx !== null ? pontos[hoverIdx] : null
@@ -585,21 +595,21 @@ function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
     <div className="pl-chart-wrap">
       <svg className="pl-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
         <defs>
-          <linearGradient id="recPeriodoGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--pl-accent)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--pl-accent)" stopOpacity="0" />
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
         <line x1={padL} x2={W - padR} y1={padT + plotH} y2={padT + plotH} className="pl-baseline-line" />
-        <path d={areaD} fill="url(#recPeriodoGrad)" stroke="none" />
-        <path d={lineD} fill="none" stroke="var(--pl-accent)" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
+        <path d={lineD} fill="none" stroke={color} strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
         {pontos.map((p, i) => mostrarRotulo(i) && (
           <text key={i} x={x(i)} y={H - 6} className="pl-axis-label" textAnchor={i === 0 ? 'start' : i === pontos.length - 1 ? 'end' : 'middle'}>{p.label}</text>
         ))}
         {hoverIdx !== null && <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={padT + plotH} className="pl-hover-x" style={{ opacity: 1 }} />}
-        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(pontos[hoverIdx].receita)} r={4.5} fill="var(--pl-accent)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
+        {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(valorFn(pontos[hoverIdx]))} r={4.5} fill={color} stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
         {pontos.length <= 15 && pontos.map((p, i) => (
-          <circle key={i} cx={x(i)} cy={y(p.receita)} r={3} fill="var(--pl-surface)" stroke="var(--pl-accent)" strokeWidth={2} />
+          <circle key={i} cx={x(i)} cy={y(valorFn(p))} r={3} fill="var(--pl-surface)" stroke={color} strokeWidth={2} />
         ))}
         {pontos.map((p, i) => (
           <rect key={i} x={x(i) - stepX / 2} y={padT} width={stepX || W} height={plotH + 14} className="pl-hit"
@@ -607,9 +617,9 @@ function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
         ))}
       </svg>
       {hover && (
-        <div className="pl-tooltip" style={{ left: `${(x(hoverIdx!) / W) * 100}%`, top: `${(y(hover.receita) / H) * 100}%`, opacity: 1 }}>
+        <div className="pl-tooltip" style={{ left: `${(x(hoverIdx!) / W) * 100}%`, top: `${(y(valorFn(hover)) / H) * 100}%`, opacity: 1 }}>
           <b>{hover.label}</b>
-          Receita {formatMoeda(hover.receita)}<br />Vendas {hover.vendas}
+          {tooltipLabel} {formatMoeda(valorFn(hover))}<br />Vendas {hover.vendas}
         </div>
       )}
     </div>

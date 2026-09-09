@@ -1002,7 +1002,7 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
 
 // --- Receita detalhada por período curto (hoje / 7·15·30 dias) ---
 
-const PERIODOS_RECEITA = ['hoje', '7', '15', '30'] as const
+const PERIODOS_RECEITA = ['hoje', '7', '15', '30', '60', '90', '180', '365'] as const
 
 function inicioDoDiaUTC(data: Date): Date {
   return new Date(Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate()))
@@ -1015,7 +1015,10 @@ function horaBrasilia(data: Date): number {
   return (data.getUTCHours() + 21) % 24 // (UTCHours - 3 + 24) % 24
 }
 
-router.get('/receitas-periodo', requireProLaboreAuth, async (req: Request, res: Response) => {
+// Inclui valorProLabore por período — cifra pessoal do dono (sacada de
+// qualquer venda) — então, diferente da maioria das rotas de leitura desse
+// módulo, essa é requireDono estrito (vendedor/supervisor não acessam).
+router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const { periodo } = req.query
   const periodoEfetivo: (typeof PERIODOS_RECEITA)[number] =
     (PERIODOS_RECEITA as readonly string[]).includes(String(periodo)) ? (periodo as (typeof PERIODOS_RECEITA)[number]) : 'hoje'
@@ -1028,14 +1031,16 @@ router.get('/receitas-periodo', requireProLaboreAuth, async (req: Request, res: 
     // A venda só guarda a data (sem horário) — o detalhe por hora usa
     // quando ela foi CADASTRADA (criadoEm) como aproximação de quando foi
     // vendida, já que não existe outro campo com horário real.
-    const porHora = Array.from({ length: 24 }, () => ({ receita: 0, vendas: 0 }))
+    const porHora = Array.from({ length: 24 }, () => ({ receita: 0, proLabore: 0, vendas: 0 }))
     for (const v of vendas) {
       const h = horaBrasilia(v.criadoEm)
       porHora[h].receita += v.valorVenda
+      porHora[h].proLabore += v.valorProLabore
       porHora[h].vendas += 1
     }
     res.json({
       totalReceita: vendas.reduce((s, v) => s + v.valorVenda, 0),
+      totalProLabore: vendas.reduce((s, v) => s + v.valorProLabore, 0),
       totalVendas: vendas.length,
       pontos: porHora.map((p, h) => ({ label: `${String(h).padStart(2, '0')}h`, ...p })),
     })
@@ -1046,21 +1051,23 @@ router.get('/receitas-periodo', requireProLaboreAuth, async (req: Request, res: 
   const inicio = new Date(hojeInicio.getTime() - (dias - 1) * 24 * 60 * 60 * 1000)
   const vendas = await prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: inicio, lte: hojeFim } } })
 
-  const porDia = new Map<string, { receita: number; vendas: number }>()
+  const porDia = new Map<string, { receita: number; proLabore: number; vendas: number }>()
   for (let i = 0; i < dias; i++) {
     const d = new Date(inicio.getTime() + i * 24 * 60 * 60 * 1000)
-    porDia.set(d.toISOString().slice(0, 10), { receita: 0, vendas: 0 })
+    porDia.set(d.toISOString().slice(0, 10), { receita: 0, proLabore: 0, vendas: 0 })
   }
   for (const v of vendas) {
     const chave = v.data.toISOString().slice(0, 10)
     const atual = porDia.get(chave)
     if (atual) {
       atual.receita += v.valorVenda
+      atual.proLabore += v.valorProLabore
       atual.vendas += 1
     }
   }
   res.json({
     totalReceita: vendas.reduce((s, v) => s + v.valorVenda, 0),
+    totalProLabore: vendas.reduce((s, v) => s + v.valorProLabore, 0),
     totalVendas: vendas.length,
     pontos: [...porDia.entries()].map(([iso, p]) => {
       const [, mes, dia] = iso.split('-')
