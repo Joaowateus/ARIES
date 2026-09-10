@@ -52,7 +52,6 @@ export default function ProLaboreDashboardPage() {
   // menos as cifras pessoais do dono — pró-labore, comissões agregadas,
   // gasto com anúncios/ROAS. Essas continuam em `isDono` estrito.
   const vejaEquipe = isDono || isSupervisor
-  const [painel, setPainel] = useState<PainelProLabore | null>(null)
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedIdx, setSelectedIdx] = useState(0)
@@ -62,13 +61,30 @@ export default function ProLaboreDashboardPage() {
   // padrão da conta.
   const metaMensalVendedor = usuario?.metaMensal ?? parametro?.metaMensalPadrao ?? 0
 
-  // Dados pro filtro (sutil, no card do Funil) por vendedor/canal — os leads
-  // já vêm com vendedorId e tipoLead, então filtramos no cliente em vez de
-  // criar um endpoint novo só pra isso.
+  // Dados pro filtro por vendedor/canal — os leads já vêm com vendedorId e
+  // tipoLead, então o canal (que o /painel não conhece) é filtrado no
+  // cliente em vez de exigir um endpoint novo só pra isso.
   const [leads, setLeads] = useState<Lead[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
+
+  // Filtro geral de vendedor (topo do painel) + um filtro isolado por card —
+  // cada card pode "seguir o filtro geral" (null) ou ter o próprio vendedor
+  // selecionado, independente dos outros cards e do filtro geral. É o que
+  // deixa olhar um vendedor na Jornada de compra e outro (ou todos) no
+  // resto do painel ao mesmo tempo.
   const [filtroVendedorId, setFiltroVendedorId] = useState('')
   const [filtroCanal, setFiltroCanal] = useState<'' | TipoLead>('')
+  const [filtroReceitaId, setFiltroReceitaId] = useState<string | null>(null)
+  const [filtroComissaoId, setFiltroComissaoId] = useState<string | null>(null)
+  const [filtroLucroId, setFiltroLucroId] = useState<string | null>(null)
+  const [filtroReceitaDetalhadaId, setFiltroReceitaDetalhadaId] = useState<string | null>(null)
+  const [filtroFunilVendedorId, setFiltroFunilVendedorId] = useState<string | null>(null)
+
+  const chaveReceita = filtroReceitaId ?? filtroVendedorId
+  const chaveComissao = filtroComissaoId ?? filtroVendedorId
+  const chaveLucro = filtroLucroId ?? filtroVendedorId
+  const chaveReceitaDetalhada = filtroReceitaDetalhadaId ?? filtroVendedorId
+  const chaveFunilVendedor = filtroFunilVendedorId ?? filtroVendedorId
 
   // Metas por etapa da jornada de compra (conversão/perda/custo) — mesmo
   // conceito das metas do Funil de Vendas do CRM principal.
@@ -82,24 +98,41 @@ export default function ProLaboreDashboardPage() {
     })
   }, [])
 
-  // O painel inteiro (KPIs, gráficos, ranking) é refeito sempre que o filtro
-  // universal de vendedor muda — é ele que faz "filtrar a produção geral de
-  // um vendedor em todo o dashboard", não só na Jornada de compra. Na
-  // primeira carga também posiciona o seletor de mês no mais recente; nas
-  // trocas de filtro seguintes, mantém o mês que a pessoa já estava vendo.
+  // Cache de /painel por vendedorId ('' = todos). Cada card pode pedir uma
+  // chave diferente da do filtro geral — só busca a chave que ainda não
+  // está no cache; chaves repetidas (cards que seguem o filtro geral)
+  // reaproveitam a mesma resposta, sem refetch.
+  const [painelPorVendedor, setPainelPorVendedor] = useState<Record<string, PainelProLabore>>({})
+  const chavesNecessarias = useMemo(
+    () => Array.from(new Set([filtroVendedorId, chaveReceita, chaveComissao, chaveLucro, chaveFunilVendedor])),
+    [filtroVendedorId, chaveReceita, chaveComissao, chaveLucro, chaveFunilVendedor],
+  )
+  const chavesNecessariasKey = chavesNecessarias.join('|')
+
+  // Na primeira carga posiciona o seletor de mês no mais recente do filtro
+  // geral; depois disso, trocar qualquer filtro (geral ou de algum card)
+  // nunca mais mexe no mês que a pessoa já estava vendo.
   const primeiraCargaPainel = useRef(true)
   useEffect(() => {
+    const faltando = chavesNecessarias.filter(c => !(c in painelPorVendedor))
+    if (faltando.length === 0) return
     if (primeiraCargaPainel.current) setLoading(true)
-    proLaboreApi.painel.get(undefined, filtroVendedorId || undefined).then(p => {
-      setPainel(p)
-      if (primeiraCargaPainel.current) {
-        setSelectedIdx(Math.max(0, p.meses.length - 1))
-        primeiraCargaPainel.current = false
-      } else {
-        setSelectedIdx(idx => Math.min(idx, Math.max(0, p.meses.length - 1)))
-      }
-    }).finally(() => setLoading(false))
-  }, [filtroVendedorId])
+    Promise.all(faltando.map(c => proLaboreApi.painel.get(undefined, c || undefined).then(p => [c, p] as const)))
+      .then(pares => {
+        setPainelPorVendedor(cache => {
+          const novo = { ...cache }
+          for (const [c, p] of pares) novo[c] = p
+          return novo
+        })
+        if (primeiraCargaPainel.current) {
+          const principal = pares.find(([c]) => c === filtroVendedorId)?.[1]
+          if (principal) setSelectedIdx(Math.max(0, principal.meses.length - 1))
+          primeiraCargaPainel.current = false
+        }
+      })
+      .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chavesNecessariasKey])
 
   useEffect(() => {
     if (vejaEquipe) proLaboreApi.vendedores.listar().then(setVendedores)
@@ -132,32 +165,54 @@ export default function ProLaboreDashboardPage() {
     if (!isDono) return
     setCarregandoReceita(true)
     const promise = periodoCustom
-      ? proLaboreApi.receitas.porPeriodoCustom(periodoCustom.inicio, periodoCustom.fim, filtroVendedorId || undefined)
-      : proLaboreApi.receitas.porPeriodo(receitaPeriodo, filtroVendedorId || undefined)
+      ? proLaboreApi.receitas.porPeriodoCustom(periodoCustom.inicio, periodoCustom.fim, chaveReceitaDetalhada || undefined)
+      : proLaboreApi.receitas.porPeriodo(receitaPeriodo, chaveReceitaDetalhada || undefined)
     promise.then(setReceitaDetalhada).finally(() => setCarregandoReceita(false))
-  }, [receitaPeriodo, periodoCustom, isDono, filtroVendedorId])
+  }, [receitaPeriodo, periodoCustom, isDono, chaveReceitaDetalhada])
 
+  const painel = painelPorVendedor[filtroVendedorId] ?? null
   const meses = painel?.meses ?? []
   const atual = meses[selectedIdx]
   const anterior = selectedIdx > 0 ? meses[selectedIdx - 1] : undefined
 
-  const filtroAtivo = filtroVendedorId !== '' || filtroCanal !== ''
+  // Cada card com filtro isolado lê da chave correspondente no cache (caindo
+  // pro painel do filtro geral enquanto a chave isolada ainda não voltou).
+  const painelReceita = painelPorVendedor[chaveReceita] ?? painel
+  const mesesReceita = painelReceita?.meses ?? meses
+  const atualReceita = mesesReceita[selectedIdx] ?? atual
+
+  const painelComissao = painelPorVendedor[chaveComissao] ?? painel
+  const mesesComissao = painelComissao?.meses ?? meses
+  const atualComissao = mesesComissao[selectedIdx] ?? atual
+
+  const painelLucro = painelPorVendedor[chaveLucro] ?? painel
+  const mesesLucro = painelLucro?.meses ?? meses
+  const atualLucro = mesesLucro[selectedIdx] ?? atual
+
+  // Canal (tráfego/orgânico) não existe no /painel, só em Lead — com canal
+  // ativo o funil é sempre recalculado no cliente a partir dos Leads já
+  // carregados; sem canal, usa a resposta do /painel já buscada pra chave
+  // de vendedor do funil (isolada do funil, ou seguindo o filtro geral).
+  const filtroFunilAtivo = chaveFunilVendedor !== '' || filtroCanal !== ''
   const funilFiltrado = useMemo(() => {
-    if (!atual || !filtroAtivo) return null
-    const leadsDoMes = leads.filter(l => {
-      const d = new Date(l.criadoEm)
-      return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes
-        && (!filtroVendedorId || l.vendedorId === filtroVendedorId)
-        && (!filtroCanal || l.tipoLead === filtroCanal)
-    })
-    return {
-      leads: leadsDoMes.length,
-      abordados: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
-      negociacao: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
-      proposta: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
-      fechamento: leadsDoMes.filter(l => l.estagio === 'FECHADO').length,
+    if (!atual || !filtroFunilAtivo) return null
+    if (filtroCanal !== '') {
+      const leadsDoMes = leads.filter(l => {
+        const d = new Date(l.criadoEm)
+        return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes
+          && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
+          && (!filtroCanal || l.tipoLead === filtroCanal)
+      })
+      return {
+        leads: leadsDoMes.length,
+        abordados: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
+        negociacao: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
+        proposta: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
+        fechamento: leadsDoMes.filter(l => l.estagio === 'FECHADO').length,
+      }
     }
-  }, [atual, filtroAtivo, leads, filtroVendedorId, filtroCanal])
+    return painelPorVendedor[chaveFunilVendedor]?.meses[selectedIdx]?.funil ?? null
+  }, [atual, filtroFunilAtivo, filtroCanal, leads, chaveFunilVendedor, painelPorVendedor, selectedIdx])
 
   if (loading) return <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
 
@@ -237,18 +292,21 @@ export default function ProLaboreDashboardPage() {
             </div>
             <div className="pl-legend">
               <div className="pl-legend-item"><span className="pl-legend-swatch" style={{ background: 'var(--pl-accent)' }} />Receita</div>
+              {vejaEquipe && (
+                <FiltroVendedorCard vendedores={vendedores} valor={filtroReceitaId} vendedorGeralId={filtroVendedorId} onChange={setFiltroReceitaId} />
+              )}
             </div>
           </div>
-          <RevenueChart meses={meses} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
+          <RevenueChart meses={mesesReceita} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
           <div className="pl-month-detail">
-            <div>Mês selecionado<strong>{atual.label} {atual.ano}</strong></div>
-            <div>Receita<strong>{formatMoeda(atual.receita)}</strong></div>
-            {isDono && <div>Lucro<strong>{formatMoeda(atual.proLaboreSacado)}</strong></div>}
-            {!isDono && !isSupervisor && <div>Comissão<strong>{formatMoeda(atual.comissaoPaga)}</strong></div>}
-            <div>Vendas<strong>{atual.quantidadeVendas}</strong></div>
-            <div>Ticket médio<strong>{formatMoeda(atual.ticketMedio)}</strong></div>
-            {isDono && <div>Comissões<strong>{formatMoeda(atual.comissaoPaga)}</strong></div>}
-            {isDono && <div>Gasto anúncios<strong>{formatMoeda(atual.gastoAnuncios)}</strong></div>}
+            <div>Mês selecionado<strong>{atualReceita.label} {atualReceita.ano}</strong></div>
+            <div>Receita<strong>{formatMoeda(atualReceita.receita)}</strong></div>
+            {isDono && <div>Lucro<strong>{formatMoeda(atualReceita.proLaboreSacado)}</strong></div>}
+            {!isDono && !isSupervisor && <div>Comissão<strong>{formatMoeda(atualReceita.comissaoPaga)}</strong></div>}
+            <div>Vendas<strong>{atualReceita.quantidadeVendas}</strong></div>
+            <div>Ticket médio<strong>{formatMoeda(atualReceita.ticketMedio)}</strong></div>
+            {isDono && <div>Comissões<strong>{formatMoeda(atualReceita.comissaoPaga)}</strong></div>}
+            {isDono && <div>Gasto anúncios<strong>{formatMoeda(atualReceita.gastoAnuncios)}</strong></div>}
           </div>
         </div>
 
@@ -259,11 +317,14 @@ export default function ProLaboreDashboardPage() {
                 <div className="pl-card-title">{isDono ? 'Comissões pagas mensal' : 'Comissão mensal'}</div>
                 <div className="pl-card-sub">{isDono ? 'Somada por venda, até o teto de cada vendedor' : 'Paga por venda, até o teto da sua comissão'}</div>
               </div>
+              {vejaEquipe && (
+                <FiltroVendedorCard vendedores={vendedores} valor={filtroComissaoId} vendedorGeralId={filtroVendedorId} onChange={setFiltroComissaoId} />
+              )}
             </div>
-            <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.comissaoPaga} color="var(--pl-accent-4)" />
+            <LucroChart meses={mesesComissao} selectedIdx={selectedIdx} valorFn={m => m.comissaoPaga} color="var(--pl-accent-4)" />
             <div className="pl-stat-strip">
-              <div className="pl-s"><div className="pl-l">Comissão/venda média</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.comissaoPaga / atual.quantidadeVendas : 0)}</div></div>
-              <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.comissaoPaga, 0))}</div></div>
+              <div className="pl-s"><div className="pl-l">Comissão/venda média</div><div className="pl-v">{formatMoeda(atualComissao.quantidadeVendas > 0 ? atualComissao.comissaoPaga / atualComissao.quantidadeVendas : 0)}</div></div>
+              <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(mesesComissao.reduce((s, m) => s + m.comissaoPaga, 0))}</div></div>
             </div>
           </div>
         )}
@@ -285,11 +346,12 @@ export default function ProLaboreDashboardPage() {
                   <div className="pl-card-title">Lucro (pró-labore) mensal</div>
                   <div className="pl-card-sub">Sacado por venda, até o teto configurado</div>
                 </div>
+                <FiltroVendedorCard vendedores={vendedores} valor={filtroLucroId} vendedorGeralId={filtroVendedorId} onChange={setFiltroLucroId} />
               </div>
-              <LucroChart meses={meses} selectedIdx={selectedIdx} valorFn={m => m.proLaboreSacado} />
+              <LucroChart meses={mesesLucro} selectedIdx={selectedIdx} valorFn={m => m.proLaboreSacado} />
               <div className="pl-stat-strip">
-                <div className="pl-s"><div className="pl-l">Lucro/venda médio</div><div className="pl-v">{formatMoeda(atual.quantidadeVendas > 0 ? atual.proLaboreSacado / atual.quantidadeVendas : 0)}</div></div>
-                <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(meses.reduce((s, m) => s + m.proLaboreSacado, 0))}</div></div>
+                <div className="pl-s"><div className="pl-l">Lucro/venda médio</div><div className="pl-v">{formatMoeda(atualLucro.quantidadeVendas > 0 ? atualLucro.proLaboreSacado / atualLucro.quantidadeVendas : 0)}</div></div>
+                <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(mesesLucro.reduce((s, m) => s + m.proLaboreSacado, 0))}</div></div>
               </div>
             </div>
 
@@ -302,6 +364,7 @@ export default function ProLaboreDashboardPage() {
                 <div className="pl-legend">
                   <div className="pl-legend-item"><span className="pl-legend-swatch" style={{ background: 'var(--pl-accent)' }} />Receita</div>
                   <div className="pl-legend-item"><span className="pl-legend-swatch" style={{ background: 'var(--pl-accent-3)' }} />Pró-labore</div>
+                  <FiltroVendedorCard vendedores={vendedores} valor={filtroReceitaDetalhadaId} vendedorGeralId={filtroVendedorId} onChange={setFiltroReceitaDetalhadaId} />
                 </div>
               </div>
               <div className="pl-stat-strip" style={{ marginTop: 0 }}>
@@ -341,8 +404,15 @@ export default function ProLaboreDashboardPage() {
           <h2 className="pl-section-title">Jornada de compra do cliente</h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="pl-section-note">{atual.label} {atual.ano}{filtroAtivo && ' · filtrado'}</div>
-          <FunilFiltro canal={filtroCanal} onChangeCanal={setFiltroCanal} />
+          <div className="pl-section-note">{atual.label} {atual.ano}{filtroFunilAtivo && ' · filtrado'}</div>
+          <FunilFiltro
+            vendedores={vendedores}
+            vendedorId={filtroFunilVendedorId}
+            vendedorGeralId={filtroVendedorId}
+            canal={filtroCanal}
+            onChangeVendedor={setFiltroFunilVendedorId}
+            onChangeCanal={setFiltroCanal}
+          />
         </div>
       </div>
       <div className="pl-card">
@@ -764,16 +834,24 @@ function FiltroVendedorGlobal({
   )
 }
 
-/* ============ FILTRO DO FUNIL (canal) ============ */
-function FunilFiltro({
-  canal, onChangeCanal,
+/* ============ FILTRO ISOLADO DE VENDEDOR (por card) ============ */
+// Cada card com um destes pode "seguir o filtro geral" (valor null) ou
+// isolar o próprio vendedor, independente do filtro do topo e dos outros
+// cards — é o que deixa olhar um vendedor num gráfico e outro (ou todos) no
+// resto do painel ao mesmo tempo.
+function FiltroVendedorCard({
+  vendedores, valor, vendedorGeralId, onChange, titulo = 'Filtrar vendedor (isolado deste card)',
 }: {
-  canal: '' | TipoLead
-  onChangeCanal: (c: '' | TipoLead) => void
+  vendedores: Vendedor[]
+  valor: string | null
+  vendedorGeralId: string
+  onChange: (v: string | null) => void
+  titulo?: string
 }) {
   const [aberto, setAberto] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const ativo = canal !== ''
+  const ativo = valor !== null
+  const rotuloGeral = vendedorGeralId ? (vendedores.find(v => v.id === vendedorGeralId)?.nome ?? 'vendedor') : 'Todos'
 
   useEffect(() => {
     if (!aberto) return
@@ -786,13 +864,72 @@ function FunilFiltro({
 
   return (
     <div className="pl-filter-wrap" ref={wrapRef}>
-      <button type="button" className={`pl-icon-btn ${ativo ? 'active' : ''}`} onClick={() => setAberto(a => !a)} title="Filtrar por canal" aria-label="Filtrar por canal">
+      <button type="button" className={`pl-icon-btn ${ativo ? 'active' : ''}`} onClick={() => setAberto(a => !a)} title={titulo} aria-label={titulo}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M8 12h8M11 18h2" /></svg>
         {ativo && <span className="pl-icon-btn-dot" />}
       </button>
 
       {aberto && (
         <div className="pl-filter-pop">
+          <div className="pl-field">
+            <label>Vendedor (isolado)</label>
+            <select className="pl-select" value={valor ?? '__geral__'} onChange={e => onChange(e.target.value === '__geral__' ? null : e.target.value)}>
+              <option value="__geral__">Filtro geral ({rotuloGeral})</option>
+              <option value="">Todos</option>
+              {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+            </select>
+          </div>
+          {ativo && <span className="pl-filter-clear" onClick={() => onChange(null)}>Voltar ao filtro geral</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ============ FILTRO DO FUNIL (vendedor isolado + canal) ============ */
+function FunilFiltro({
+  vendedores, vendedorId, vendedorGeralId, canal, onChangeVendedor, onChangeCanal,
+}: {
+  vendedores: Vendedor[]
+  vendedorId: string | null
+  vendedorGeralId: string
+  canal: '' | TipoLead
+  onChangeVendedor: (v: string | null) => void
+  onChangeCanal: (c: '' | TipoLead) => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const ativo = vendedorId !== null || canal !== ''
+  const rotuloGeral = vendedorGeralId ? (vendedores.find(v => v.id === vendedorGeralId)?.nome ?? 'vendedor') : 'Todos'
+
+  useEffect(() => {
+    if (!aberto) return
+    function onClickFora(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAberto(false)
+    }
+    document.addEventListener('mousedown', onClickFora)
+    return () => document.removeEventListener('mousedown', onClickFora)
+  }, [aberto])
+
+  return (
+    <div className="pl-filter-wrap" ref={wrapRef}>
+      <button type="button" className={`pl-icon-btn ${ativo ? 'active' : ''}`} onClick={() => setAberto(a => !a)} title="Filtrar funil" aria-label="Filtrar funil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M8 12h8M11 18h2" /></svg>
+        {ativo && <span className="pl-icon-btn-dot" />}
+      </button>
+
+      {aberto && (
+        <div className="pl-filter-pop">
+          {vendedores.length > 0 && (
+            <div className="pl-field">
+              <label>Vendedor (isolado do funil)</label>
+              <select className="pl-select" value={vendedorId ?? '__geral__'} onChange={e => onChangeVendedor(e.target.value === '__geral__' ? null : e.target.value)}>
+                <option value="__geral__">Filtro geral ({rotuloGeral})</option>
+                <option value="">Todos</option>
+                {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+              </select>
+            </div>
+          )}
           <div className="pl-field">
             <label>Canal</label>
             <select className="pl-select" value={canal} onChange={e => onChangeCanal(e.target.value as '' | TipoLead)}>
@@ -801,7 +938,7 @@ function FunilFiltro({
               <option value="ORGANICO">Orgânico</option>
             </select>
           </div>
-          {ativo && <span className="pl-filter-clear" onClick={() => onChangeCanal('')}>Limpar filtro</span>}
+          {ativo && <span className="pl-filter-clear" onClick={() => { onChangeVendedor(null); onChangeCanal('') }}>Limpar filtros</span>}
         </div>
       )}
     </div>
