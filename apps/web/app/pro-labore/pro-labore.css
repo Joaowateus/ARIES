@@ -339,6 +339,14 @@
 .pl-empty { text-align: center; padding: 48px 20px; color: var(--pl-ink-muted); }
 .pl-empty .pl-emoji { font-size: 34px; margin-bottom: 10px; }
 
+/* ============ CRM: BARRA DE BUSCA/FILTROS ============ */
+.pl-leads-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.pl-search-wrap { position: relative; flex: 1 1 240px; min-width: 200px; max-width: 340px; }
+.pl-search-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--pl-ink-muted); pointer-events: none; }
+.pl-search-input { padding-left: 34px !important; }
+.pl-leads-textlink { font-size: 12.5px; color: var(--pl-accent); cursor: pointer; font-weight: 700; }
+.pl-leads-textlink:hover { text-decoration: underline; }
+
 /* ============ CRM KANBAN ============ */
 .pl-kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; align-items: start; overflow-x: auto; padding-bottom: 4px; }
 .pl-kanban-col {
@@ -353,7 +361,18 @@
   font-family: 'JetBrains Mono'; font-size: 11px; font-weight: 700; color: var(--pl-ink-muted);
   background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 999px; padding: 2px 8px; flex: none;
 }
-.pl-kanban-cards { display: flex; flex-direction: column; gap: 9px; min-height: 40px; }
+/* Altura máxima com rolagem própria por coluna — sem isso, uma etapa que
+   acumula leads (o topo do funil quase sempre) fazia a coluna crescer sem
+   limite e a página inteira ficar enorme, com as 5 colunas em alturas bem
+   diferentes. O cabeçalho da coluna fica fora deste bloco (não rola com os
+   cards), então título e contador continuam sempre visíveis. */
+.pl-kanban-cards {
+  display: flex; flex-direction: column; gap: 9px; min-height: 40px;
+  max-height: 620px; overflow-y: auto; padding-right: 3px; margin-right: -3px;
+  scrollbar-width: thin; scrollbar-color: var(--pl-border-strong) transparent;
+}
+.pl-kanban-cards::-webkit-scrollbar { width: 6px; }
+.pl-kanban-cards::-webkit-scrollbar-thumb { background: var(--pl-border-strong); border-radius: 4px; }
 /* touch-action: none — o card usa Pointer Events pra arrastar (funciona em
    toque, diferente do Drag and Drop nativo do HTML5); sem isso, no celular
    o navegador tenta rolar a página assim que o dedo encosta no card, e o
@@ -366,8 +385,22 @@
 .pl-kanban-card:active { cursor: grabbing; }
 .pl-kanban-card.dragging { opacity: .4; }
 .pl-kanban-card:hover { transform: translateY(-1px); }
+.pl-kanban-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .pl-kanban-card-name { font-size: 13px; font-weight: 700; color: var(--pl-ink-1); }
+/* Pílula de "tempo parado nesta etapa" — sinal que fica mais útil quanto
+   mais leads o funil acumula, já que é justamente aí que um lead esquecido
+   passa despercebido rolando a coluna. Vermelha (stale) com 7+ dias sem
+   avançar. */
+.pl-kanban-card-time {
+  font-family: 'JetBrains Mono'; font-size: 9.5px; font-weight: 700; color: var(--pl-ink-muted);
+  background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 999px; padding: 1px 6px; flex: none; white-space: nowrap;
+}
+.pl-kanban-card-time.stale {
+  color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 10%, transparent);
+  border-color: color-mix(in srgb, var(--pl-critical) 35%, transparent);
+}
 .pl-kanban-card-meta { font-size: 11.5px; color: var(--pl-ink-muted); margin-top: 3px; }
+.pl-kanban-card-vendor { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11.5px; color: var(--pl-ink-muted); }
 .pl-kanban-card-tag {
   display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: .02em;
   padding: 2px 7px; border-radius: 999px; margin-top: 8px;
@@ -378,7 +411,7 @@
    precisar arrastar. Resolve o atrito de colunas com muitos leads, onde
    arrastar um card lá de baixo até a próxima coluna exige rolar a lista
    inteira segurando ele. Destacado (preenchido) pra ser o alvo óbvio, bem
-   diferente dos links de texto das outras ações abaixo. */
+   diferente dos ícones de ação abaixo. */
 .pl-kanban-card-advance {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; margin-top: 10px; padding: 7px 10px; border-radius: 8px;
@@ -389,12 +422,50 @@
 }
 .pl-kanban-card-advance:hover { background: color-mix(in srgb, var(--pl-accent) 24%, transparent); }
 .pl-kanban-card-advance svg { width: 12px; height: 12px; flex: none; }
+/* "Converter em venda" — mesmo formato do Avançar, mas em verde (pl-good) e
+   com peso visual próprio: é a ação de maior valor do card (fecha o
+   negócio), então merece ficar tão em destaque quanto Avançar, não misturada
+   nos links de texto das ações secundárias. */
+.pl-kanban-card-convert {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; margin-top: 8px; padding: 7px 10px; border-radius: 8px;
+  background: color-mix(in srgb, var(--pl-good) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pl-good) 32%, transparent);
+  color: var(--pl-good); font-size: 11.5px; font-weight: 700; font-family: 'Manrope';
+  cursor: pointer; transition: background .15s;
+}
+.pl-kanban-card-convert:hover { background: color-mix(in srgb, var(--pl-good) 24%, transparent); }
+.pl-kanban-card-convert svg { width: 12px; height: 12px; flex: none; }
 
-.pl-kanban-card-actions { display: flex; gap: 12px; margin-top: 9px; flex-wrap: wrap; }
-.pl-kanban-card-actions span { font-size: 11px; font-weight: 700; color: var(--pl-accent); cursor: pointer; }
-.pl-kanban-card-actions span.pl-danger { color: var(--pl-critical); }
+/* Ações secundárias (mover, editar, perdido, remover) como ícones — alvo de
+   toque consistente e sem depender só de ler um texto pequeno pra saber o
+   que cada ação faz. */
+.pl-kanban-card-actions-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.pl-kanban-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 24px; height: 24px; border-radius: 7px; border: 1px solid var(--pl-border);
+  background: var(--pl-surface-2); color: var(--pl-ink-muted); cursor: pointer; transition: all .15s ease;
+}
+.pl-kanban-icon-btn svg { width: 12px; height: 12px; }
+.pl-kanban-icon-btn:hover { color: var(--pl-ink-1); border-color: var(--pl-border-strong); }
+.pl-kanban-icon-btn.pl-danger:hover { color: var(--pl-critical); border-color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 10%, transparent); }
 .pl-kanban-card-badge { font-size: 10.5px; color: var(--pl-ink-muted); margin-top: 9px; }
 .pl-kanban-empty { font-size: 11.5px; color: var(--pl-ink-muted); text-align: center; padding: 16px 4px; border: 1px dashed var(--pl-border-strong); border-radius: var(--pl-radius-sm); }
+
+/* Menu "mover para etapa" — renderizado via portal (ver MoverEtapaMenu),
+   com posição "fixed" calculada a partir do botão que abre. Precisa da
+   própria aparência (não reaproveita .pl-filter-pop) porque, fora do fluxo
+   normal da coluna, não tem mais um ancestral "position: relative" pra
+   herdar como referência de posicionamento. */
+.pl-kanban-move-pop {
+  position: fixed; z-index: 60; width: 176px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: var(--pl-radius-md); box-shadow: var(--pl-shadow-card);
+}
+.pl-kanban-move-item {
+  text-align: left; padding: 7px 9px; border-radius: 7px; font-size: 12.5px; font-weight: 600;
+  color: var(--pl-ink-2); background: transparent; border: none; cursor: pointer; transition: background .12s; font-family: 'Manrope';
+}
+.pl-kanban-move-item:hover { background: var(--pl-surface); color: var(--pl-ink-1); }
 
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
