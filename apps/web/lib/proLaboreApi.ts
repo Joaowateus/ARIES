@@ -262,11 +262,24 @@ export const proLaboreApi = {
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/leads/${id}`, { method: 'DELETE' }),
   },
   painel: {
-    get: (ano?: number) => request<PainelProLabore>(`/pro-labore/painel${ano ? `?ano=${ano}` : ''}`),
+    get: (ano?: number, vendedorId?: string) => {
+      const params = new URLSearchParams()
+      if (ano) params.set('ano', String(ano))
+      if (vendedorId) params.set('vendedorId', vendedorId)
+      const qs = params.toString()
+      return request<PainelProLabore>(`/pro-labore/painel${qs ? `?${qs}` : ''}`)
+    },
   },
   receitas: {
-    porPeriodo: (periodo: ReceitaPeriodo) => request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?periodo=${periodo}`),
-    porPeriodoCustom: (inicio: string, fim: string) =>
-      request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?inicio=${inicio}&fim=${fim}`),
+    porPeriodo: (periodo: ReceitaPeriodo, vendedorId?: string) => {
+      const params = new URLSearchParams({ periodo })
+      if (vendedorId) params.set('vendedorId', vendedorId)
+      return request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?${params.toString()}`)
+    },
+    porPeriodoCustom: (inicio: string, fim: string, vendedorId?: string) => {
+      const params = new URLSearchParams({ inicio, fim })
+      if (vendedorId) params.set('vendedorId', vendedorId)
+      return request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?${params.toString()}`)
+    },
   },
 }
