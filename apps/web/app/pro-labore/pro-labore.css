@@ -233,6 +233,16 @@
 .pl-month-detail div { font-size: 11.5px; color: var(--pl-ink-muted); }
 .pl-month-detail strong { display: block; font-family: 'JetBrains Mono'; font-size: 14px; color: var(--pl-ink-1); margin-top: 2px; font-weight: 700; }
 
+/* ============ FILTRO UNIVERSAL DE VENDEDOR ============ */
+.pl-select-chip {
+  border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-ink-2);
+  font-family: 'JetBrains Mono'; font-size: 12px; font-weight: 500;
+  padding: 7px 10px; border-radius: 9px; cursor: pointer; transition: all .15s ease;
+}
+.pl-select-chip:hover { border-color: var(--pl-border-strong); color: var(--pl-ink-1); }
+.pl-select-chip.active { border-color: var(--pl-accent); color: var(--pl-accent); font-weight: 700; }
+.pl-select-chip:focus { outline: 2px solid var(--pl-accent); outline-offset: 1px; }
+
 /* ============ FILTER (Funil) ============ */
 .pl-filter-wrap { position: relative; display: inline-flex; }
 .pl-icon-btn {

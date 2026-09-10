@@ -75,14 +75,31 @@ export default function ProLaboreDashboardPage() {
   const [metasFunil, setMetasFunil] = useState<MetaFunilProLabore[]>([])
 
   useEffect(() => {
-    Promise.all([proLaboreApi.painel.get(), proLaboreApi.parametros.get(), proLaboreApi.leads.listar(), proLaboreApi.funilMetas.listar()]).then(([p, param, ls, metas]) => {
-      setPainel(p)
+    Promise.all([proLaboreApi.parametros.get(), proLaboreApi.leads.listar(), proLaboreApi.funilMetas.listar()]).then(([param, ls, metas]) => {
       setParametro(param)
       setLeads(ls)
       setMetasFunil(metas)
-      setSelectedIdx(Math.max(0, p.meses.length - 1))
-    }).finally(() => setLoading(false))
+    })
   }, [])
+
+  // O painel inteiro (KPIs, gráficos, ranking) é refeito sempre que o filtro
+  // universal de vendedor muda — é ele que faz "filtrar a produção geral de
+  // um vendedor em todo o dashboard", não só na Jornada de compra. Na
+  // primeira carga também posiciona o seletor de mês no mais recente; nas
+  // trocas de filtro seguintes, mantém o mês que a pessoa já estava vendo.
+  const primeiraCargaPainel = useRef(true)
+  useEffect(() => {
+    if (primeiraCargaPainel.current) setLoading(true)
+    proLaboreApi.painel.get(undefined, filtroVendedorId || undefined).then(p => {
+      setPainel(p)
+      if (primeiraCargaPainel.current) {
+        setSelectedIdx(Math.max(0, p.meses.length - 1))
+        primeiraCargaPainel.current = false
+      } else {
+        setSelectedIdx(idx => Math.min(idx, Math.max(0, p.meses.length - 1)))
+      }
+    }).finally(() => setLoading(false))
+  }, [filtroVendedorId])
 
   useEffect(() => {
     if (vejaEquipe) proLaboreApi.vendedores.listar().then(setVendedores)
@@ -115,10 +132,10 @@ export default function ProLaboreDashboardPage() {
     if (!isDono) return
     setCarregandoReceita(true)
     const promise = periodoCustom
-      ? proLaboreApi.receitas.porPeriodoCustom(periodoCustom.inicio, periodoCustom.fim)
-      : proLaboreApi.receitas.porPeriodo(receitaPeriodo)
+      ? proLaboreApi.receitas.porPeriodoCustom(periodoCustom.inicio, periodoCustom.fim, filtroVendedorId || undefined)
+      : proLaboreApi.receitas.porPeriodo(receitaPeriodo, filtroVendedorId || undefined)
     promise.then(setReceitaDetalhada).finally(() => setCarregandoReceita(false))
-  }, [receitaPeriodo, periodoCustom, isDono])
+  }, [receitaPeriodo, periodoCustom, isDono, filtroVendedorId])
 
   const meses = painel?.meses ?? []
   const atual = meses[selectedIdx]
@@ -175,12 +192,17 @@ export default function ProLaboreDashboardPage() {
 
   return (
     <div>
-      <div className="pl-period-row" style={{ marginTop: 4 }}>
-        {meses.map((m, i) => (
-          <button key={m.mes} type="button" className={`pl-chip ${i === selectedIdx ? 'active' : ''}`} onClick={() => setSelectedIdx(i)}>
-            {m.label} {m.ano}
-          </button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
+        <div className="pl-period-row">
+          {meses.map((m, i) => (
+            <button key={m.mes} type="button" className={`pl-chip ${i === selectedIdx ? 'active' : ''}`} onClick={() => setSelectedIdx(i)}>
+              {m.label} {m.ano}
+            </button>
+          ))}
+        </div>
+        {vejaEquipe && (
+          <FiltroVendedorGlobal vendedores={vendedores} vendedorId={filtroVendedorId} onChange={setFiltroVendedorId} />
+        )}
       </div>
 
       <div className="pl-kpi-grid" style={{ marginTop: 16 }}>
@@ -320,14 +342,7 @@ export default function ProLaboreDashboardPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div className="pl-section-note">{atual.label} {atual.ano}{filtroAtivo && ' · filtrado'}</div>
-          <FunilFiltro
-            isDono={vejaEquipe}
-            vendedores={vendedores}
-            vendedorId={filtroVendedorId}
-            canal={filtroCanal}
-            onChangeVendedor={setFiltroVendedorId}
-            onChangeCanal={setFiltroCanal}
-          />
+          <FunilFiltro canal={filtroCanal} onChangeCanal={setFiltroCanal} />
         </div>
       </div>
       <div className="pl-card">
@@ -348,6 +363,7 @@ export default function ProLaboreDashboardPage() {
               <div className="pl-eyebrow">Times{isDono ? ' & investimento' : ''}</div>
               <h2 className="pl-section-title">{isDono ? 'Ranking de vendedores e retorno de anúncios' : 'Ranking de vendedores'}</h2>
             </div>
+            {filtroVendedorId && <div className="pl-section-note">Sempre com a equipe inteira — não é afetado pelo filtro de vendedor</div>}
           </div>
 
           <div className={isDono ? 'pl-grid-2b' : undefined}>
@@ -366,7 +382,7 @@ export default function ProLaboreDashboardPage() {
                 <div className="pl-card-head">
                   <div>
                     <div className="pl-card-title">ROAS mensal</div>
-                    <div className="pl-card-sub">Receita ÷ gasto com anúncios</div>
+                    <div className="pl-card-sub">Receita ÷ gasto com anúncios (operação inteira)</div>
                   </div>
                 </div>
                 <RoasBars meses={meses} selectedIdx={selectedIdx} />
@@ -724,20 +740,40 @@ function LucroChart({ meses, selectedIdx, valorFn, color = 'var(--pl-accent-3)' 
   )
 }
 
-/* ============ FILTRO DO FUNIL (vendedor / canal) ============ */
-function FunilFiltro({
-  isDono, vendedores, vendedorId, canal, onChangeVendedor, onChangeCanal,
+/* ============ FILTRO UNIVERSAL DE VENDEDOR ============ */
+// Único e no topo do painel — muda o vendedorId que alimenta o /painel
+// inteiro (KPIs, gráficos, ranking) e a Jornada de compra, em vez de ficar
+// restrito a um card só. Só existe pra quem já vê a equipe (dono/supervisor);
+// um VENDEDOR autenticado só enxerga a própria produção de qualquer forma.
+function FiltroVendedorGlobal({
+  vendedores, vendedorId, onChange,
 }: {
-  isDono: boolean
   vendedores: Vendedor[]
   vendedorId: string
+  onChange: (id: string) => void
+}) {
+  const ativo = vendedorId !== ''
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span className="pl-hint">Vendedor</span>
+      <select className={`pl-select-chip ${ativo ? 'active' : ''}`} value={vendedorId} onChange={e => onChange(e.target.value)}>
+        <option value="">Todos</option>
+        {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+      </select>
+    </div>
+  )
+}
+
+/* ============ FILTRO DO FUNIL (canal) ============ */
+function FunilFiltro({
+  canal, onChangeCanal,
+}: {
   canal: '' | TipoLead
-  onChangeVendedor: (id: string) => void
   onChangeCanal: (c: '' | TipoLead) => void
 }) {
   const [aberto, setAberto] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const ativo = vendedorId !== '' || canal !== ''
+  const ativo = canal !== ''
 
   useEffect(() => {
     if (!aberto) return
@@ -750,22 +786,13 @@ function FunilFiltro({
 
   return (
     <div className="pl-filter-wrap" ref={wrapRef}>
-      <button type="button" className={`pl-icon-btn ${ativo ? 'active' : ''}`} onClick={() => setAberto(a => !a)} title="Filtrar funil" aria-label="Filtrar funil">
+      <button type="button" className={`pl-icon-btn ${ativo ? 'active' : ''}`} onClick={() => setAberto(a => !a)} title="Filtrar por canal" aria-label="Filtrar por canal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M8 12h8M11 18h2" /></svg>
         {ativo && <span className="pl-icon-btn-dot" />}
       </button>
 
       {aberto && (
         <div className="pl-filter-pop">
-          {isDono && (
-            <div className="pl-field">
-              <label>Vendedor</label>
-              <select className="pl-select" value={vendedorId} onChange={e => onChangeVendedor(e.target.value)}>
-                <option value="">Todos</option>
-                {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
-              </select>
-            </div>
-          )}
           <div className="pl-field">
             <label>Canal</label>
             <select className="pl-select" value={canal} onChange={e => onChangeCanal(e.target.value as '' | TipoLead)}>
@@ -774,7 +801,7 @@ function FunilFiltro({
               <option value="ORGANICO">Orgânico</option>
             </select>
           </div>
-          {ativo && <span className="pl-filter-clear" onClick={() => { onChangeVendedor(''); onChangeCanal('') }}>Limpar filtro</span>}
+          {ativo && <span className="pl-filter-clear" onClick={() => onChangeCanal('')}>Limpar filtro</span>}
         </div>
       )}
     </div>

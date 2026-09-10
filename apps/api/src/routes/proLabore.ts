@@ -66,11 +66,16 @@ function fimDoAnoUTC(ano: number): Date {
 // Um vendedor autenticado usa o mesmo usuarioId do dono (pra reaproveitar
 // todo o particionamento existente) mais o vendedorId, que restringe as
 // consultas só aos próprios registros.
-function vendaWhereBase(req: Request): { usuarioId: string; vendedorId?: string } {
+// `vendedorIdFiltro` é o filtro universal de dashboard (dono/supervisor
+// inspecionando a produção de um vendedor específico) — só tem efeito pra
+// quem já enxerga a equipe inteira; um VENDEDOR autenticado continua preso
+// à própria produção independente do que vier nesse parâmetro.
+function vendaWhereBase(req: Request, vendedorIdFiltro?: string): { usuarioId: string; vendedorId?: string } {
   const usuarioId = req.proLaboreUser!.sub
   if (req.proLaboreUser!.papel === 'VENDEDOR') {
     return { usuarioId, vendedorId: req.proLaboreUser!.vendedorId! }
   }
+  if (vendedorIdFiltro) return { usuarioId, vendedorId: vendedorIdFiltro }
   return { usuarioId }
 }
 
@@ -621,11 +626,12 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
 
 const LEAD_INCLUDE = { vendedor: { select: { id: true, nome: true } } } as const
 
-function leadWhereBase(req: Request): { usuarioId: string; vendedorId?: string } {
+function leadWhereBase(req: Request, vendedorIdFiltro?: string): { usuarioId: string; vendedorId?: string } {
   const usuarioId = req.proLaboreUser!.sub
   if (req.proLaboreUser!.papel === 'VENDEDOR') {
     return { usuarioId, vendedorId: req.proLaboreUser!.vendedorId! }
   }
+  if (vendedorIdFiltro) return { usuarioId, vendedorId: vendedorIdFiltro }
   return { usuarioId }
 }
 
@@ -960,7 +966,7 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
   const usuarioId = req.proLaboreUser!.sub
   const papel = req.proLaboreUser!.papel
   const agora = new Date()
-  const { ano } = req.query
+  const { ano, vendedorId } = req.query
   const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : agora.getUTCFullYear()
   const ultimoMes = anoNum === agora.getUTCFullYear() ? agora.getUTCMonth() : 11
 
@@ -973,7 +979,12 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
   // vendedor comum fica restrito à própria produção (vendaWhereBase/
   // leadWhereBase já cuidam disso pra vendas e leads).
   const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
-  const [vendas, funilRegistros, gastosRegistros, vendedores, leads] = await Promise.all([
+  // Filtro universal (dono/supervisor inspecionando um vendedor específico
+  // em todo o painel) — só existe pra quem já vê a equipe inteira; pra um
+  // VENDEDOR autenticado, vendaWhereBase/leadWhereBase ignoram esse valor.
+  const vendedorIdFiltro = vejaEquipe && typeof vendedorId === 'string' && vendedorId ? vendedorId : undefined
+
+  const [vendasTodas, funilRegistros, gastosRegistros, vendedores, leadsTodos] = await Promise.all([
     prisma.venda.findMany({
       where: { ...vendaWhereBase(req), data: { gte: inicioAno, lte: fimAno } },
       include: { vendedor: { select: { id: true, nome: true } } },
@@ -988,6 +999,15 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioAno, lte: fimAno } } }),
   ])
 
+  // `vendasTodas`/`leadsTodos` já vêm restritos ao próprio vendedor quando
+  // quem pede é um VENDEDOR (vendaWhereBase/leadWhereBase cuidam disso). O
+  // filtro universal só entra aqui, recortando esse conjunto pros números
+  // "principais" do mês — ranking, ROAS e CAC continuam usando o total da
+  // equipe (`vendasTodas`) mesmo com o filtro ativo, porque gasto com
+  // anúncios é da operação inteira, não dá pra atribuir a um vendedor só.
+  const vendas = vendedorIdFiltro ? vendasTodas.filter(v => v.vendedorId === vendedorIdFiltro) : vendasTodas
+  const leads = vendedorIdFiltro ? leadsTodos.filter(l => l.vendedorId === vendedorIdFiltro) : leadsTodos
+
   const vendedorPorId = new Map(vendedores.map(v => [v.id, v]))
 
   const meses = MESES_LABEL.slice(0, ultimoMes + 1).map((label, mes) => {
@@ -1000,16 +1020,20 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
     const quantidadeVendas = vendasDoMes.length
     const ticketMedio = quantidadeVendas > 0 ? receita / quantidadeVendas : 0
 
+    // ROAS/CAC usam sempre o total da equipe (vendasTodasDoMes), nunca o
+    // recorte do filtro — ver comentário acima sobre `vendas`.
+    const vendasTodasDoMes = vendasTodas.filter(v => v.data.getUTCMonth() === mes)
     const gastoRegistro = gastosRegistros.find(g => g.mesReferencia.getUTCMonth() === mes)
     const gastoAnuncios = papel === 'DONO' ? gastoRegistro?.valor ?? 0 : 0
-    const roas = gastoAnuncios > 0 ? receita / gastoAnuncios : 0
-    const cac = gastoAnuncios > 0 && quantidadeVendas > 0 ? gastoAnuncios / quantidadeVendas : 0
+    const roas = gastoAnuncios > 0 ? vendasTodasDoMes.reduce((s, v) => s + v.valorVenda, 0) / gastoAnuncios : 0
+    const cac = gastoAnuncios > 0 && vendasTodasDoMes.length > 0 ? gastoAnuncios / vendasTodasDoMes.length : 0
 
     // Prefere o funil real (Leads) quando existe dado no mês; cai pro
     // cadastro manual (FunilMensal) só em meses anteriores à funcionalidade
-    // de Leads, e só pro dono — não há FunilMensal por vendedor.
+    // de Leads, e só pro dono, sem filtro de vendedor ativo — o cadastro
+    // manual não guarda o vendedor, então não dá pra atribuir a um só.
     const leadsDoMes = leads.filter(l => l.criadoEm.getUTCMonth() === mes)
-    const funilRegistro = funilRegistros.find(f => f.mesReferencia.getUTCMonth() === mes)
+    const funilRegistro = vendedorIdFiltro ? undefined : funilRegistros.find(f => f.mesReferencia.getUTCMonth() === mes)
     const funil =
       leadsDoMes.length > 0
         ? {
@@ -1028,10 +1052,13 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
           }
     const conversaoLeadVenda = funil.leads > 0 ? (quantidadeVendas / funil.leads) * 100 : 0
 
+    // Ranking sempre da equipe inteira (vendasTodasDoMes) — comparar
+    // vendedores é o próprio propósito do card, então o filtro universal
+    // não o recorta, só destaca outras métricas do painel.
     const rankingVendedores: { id: string; nome: string; quantidadeVendas: number; receita: number; comissaoPaga: number }[] = []
     if (vejaEquipe) {
       const porVendedor = new Map<string, { id: string; nome: string; quantidadeVendas: number; receita: number; comissaoPaga: number }>()
-      for (const v of vendasDoMes) {
+      for (const v of vendasTodasDoMes) {
         if (!v.vendedorId) continue
         const nome = vendedorPorId.get(v.vendedorId)?.nome ?? v.vendedor?.nome ?? 'Sem nome'
         const atual = porVendedor.get(v.vendedorId) ?? { id: v.vendedorId, nome, quantidadeVendas: 0, receita: 0, comissaoPaga: 0 }
@@ -1074,9 +1101,9 @@ function horaBrasilia(data: Date): number {
 // Agrega vendas dia a dia entre [inicio, inicio + dias). Compartilhado pelos
 // presets de dias (7/15/30) e pelo período personalizado (data início/fim),
 // que só diferem em como "inicio"/"dias" são calculados.
-async function agregarReceitaPorDia(req: Request, inicio: Date, dias: number) {
+async function agregarReceitaPorDia(req: Request, inicio: Date, dias: number, vendedorIdFiltro?: string) {
   const fim = new Date(inicio.getTime() + dias * 24 * 60 * 60 * 1000 - 1)
-  const vendas = await prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: inicio, lte: fim } } })
+  const vendas = await prisma.venda.findMany({ where: { ...vendaWhereBase(req, vendedorIdFiltro), data: { gte: inicio, lte: fim } } })
 
   const porDia = new Map<string, { receita: number; proLabore: number; vendas: number }>()
   for (let i = 0; i < dias; i++) {
@@ -1107,7 +1134,11 @@ async function agregarReceitaPorDia(req: Request, inicio: Date, dias: number) {
 // qualquer venda) — então, diferente da maioria das rotas de leitura desse
 // módulo, essa é requireDono estrito (vendedor/supervisor não acessam).
 router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const { periodo, inicio, fim } = req.query
+  const { periodo, inicio, fim, vendedorId } = req.query
+  // Rota exclusiva do dono (requireDono acima) — ele sempre "vê a equipe",
+  // então o filtro universal (vendedor específico) vale sem checagem extra
+  // de papel, igual ao /painel.
+  const vendedorIdFiltro = typeof vendedorId === 'string' && vendedorId ? vendedorId : undefined
 
   // Período personalizado (data início/fim escolhidas no calendário) tem
   // prioridade sobre os presets — mesma granularidade diária deles, só que
@@ -1117,7 +1148,7 @@ router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: R
     const fimData = new Date(`${fim}T00:00:00.000Z`)
     if (!Number.isNaN(inicioData.getTime()) && !Number.isNaN(fimData.getTime()) && fimData >= inicioData) {
       const dias = Math.min(MAX_DIAS_PERIODO_CUSTOM, Math.round((fimData.getTime() - inicioData.getTime()) / (24 * 60 * 60 * 1000)) + 1)
-      res.json(await agregarReceitaPorDia(req, inicioData, dias))
+      res.json(await agregarReceitaPorDia(req, inicioData, dias, vendedorIdFiltro))
       return
     }
   }
@@ -1129,7 +1160,7 @@ router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: R
   const hojeFim = new Date(hojeInicio.getTime() + 24 * 60 * 60 * 1000 - 1)
 
   if (periodoEfetivo === 'hoje') {
-    const vendas = await prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: hojeInicio, lte: hojeFim } } })
+    const vendas = await prisma.venda.findMany({ where: { ...vendaWhereBase(req, vendedorIdFiltro), data: { gte: hojeInicio, lte: hojeFim } } })
     // A venda só guarda a data (sem horário) — o detalhe por hora usa
     // quando ela foi CADASTRADA (criadoEm) como aproximação de quando foi
     // vendida, já que não existe outro campo com horário real.
@@ -1151,7 +1182,7 @@ router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: R
 
   const dias = Number(periodoEfetivo)
   const inicioPreset = new Date(hojeInicio.getTime() - (dias - 1) * 24 * 60 * 60 * 1000)
-  res.json(await agregarReceitaPorDia(req, inicioPreset, dias))
+  res.json(await agregarReceitaPorDia(req, inicioPreset, dias, vendedorIdFiltro))
 })
 
 export default router
