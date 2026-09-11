@@ -16,6 +16,11 @@ const CATEGORIA_COR: Record<AgendaCategoria, string> = {
   META: 'var(--pl-accent)', PROCESSO: 'var(--pl-accent-3)', AUDITORIA: 'var(--pl-accent-5)', PROTOCOLO: 'var(--pl-accent-4)', OUTRO: 'var(--pl-ink-muted)',
 }
 
+// Valor sentinela só do <select> "Atribuído a" — nunca sai do componente:
+// no submit vira { atribuidoAoDono: true, vendedorId: undefined }.
+const ATRIBUICAO_DONO = '__DONO__'
+const ROTULO_DONO = 'Você (Head Comercial)'
+
 function isoDia(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
@@ -42,8 +47,11 @@ function itemAplicaNoDia(item: AgendaItem, dia: Date): boolean {
   return true
 }
 
-// null = "toda a equipe" (cada pessoa segue e conclui por conta própria).
-function itemAplicaPara(item: AgendaItem, meuVendedorId: string | null): boolean {
+// null = "toda a equipe" (cada pessoa segue e conclui por conta própria);
+// atribuidoAoDono é um alvo à parte (o dono/"Head Comercial" não tem
+// registro de Vendedor pra usar vendedorId).
+function itemAplicaPara(item: AgendaItem, meuVendedorId: string | null, souDono: boolean): boolean {
+  if (item.atribuidoAoDono) return souDono
   return item.vendedorId == null || item.vendedorId === meuVendedorId
 }
 
@@ -70,10 +78,11 @@ type FormAgenda = {
   diasSemana: number[]
   dataInicio: string
   dataFim: string
-  vendedorId: string
+  // '' = toda a equipe; ATRIBUICAO_DONO = o dono; senão, o id de um vendedor.
+  atribuicao: string
 }
 
-const FORM_VAZIO: FormAgenda = { titulo: '', descricao: '', categoria: 'META', tipo: 'RECORRENTE', data: '', diasSemana: [1, 2, 3, 4, 5], dataInicio: '', dataFim: '', vendedorId: '' }
+const FORM_VAZIO: FormAgenda = { titulo: '', descricao: '', categoria: 'META', tipo: 'RECORRENTE', data: '', diasSemana: [1, 2, 3, 4, 5], dataInicio: '', dataFim: '', atribuicao: '' }
 
 export default function ProLaboreAgendaPage() {
   const { usuario } = useProLaboreAuth()
@@ -126,7 +135,7 @@ export default function ProLaboreAgendaPage() {
     proLaboreApi.agenda.conclusoes.listar(isoDia(inicio), isoDia(fim)).then(setConclusoes)
   }, [mesVisivel.ano, mesVisivel.mes])
 
-  const meusItens = useMemo(() => itens.filter(i => itemAplicaPara(i, meuVendedorId)), [itens, meuVendedorId])
+  const meusItens = useMemo(() => itens.filter(i => itemAplicaPara(i, meuVendedorId, isDono)), [itens, meuVendedorId, isDono])
 
   const hojeIso = isoDia(hojeUTC())
   const meusItensHoje = useMemo(() => meusItens.filter(i => itemAplicaNoDia(i, hojeUTC())), [meusItens])
@@ -138,7 +147,7 @@ export default function ProLaboreAgendaPage() {
     let somaPct = 0
     let comItem = 0
     for (const v of vendedoresAtivos) {
-      const aplicaveis = itens.filter(i => itemAplicaPara(i, v.id) && itemAplicaNoDia(i, hojeUTC()))
+      const aplicaveis = itens.filter(i => itemAplicaPara(i, v.id, false) && itemAplicaNoDia(i, hojeUTC()))
       if (aplicaveis.length === 0) continue
       comItem += 1
       const feitos = aplicaveis.filter(i => foiConcluido(conclusoes, i.id, v.id, hojeIso)).length
@@ -174,7 +183,7 @@ export default function ProLaboreAgendaPage() {
       diasSemana: (item.diasSemana ?? '').split(',').filter(Boolean).map(Number),
       dataInicio: item.dataInicio ? item.dataInicio.slice(0, 10) : '',
       dataFim: item.dataFim ? item.dataFim.slice(0, 10) : '',
-      vendedorId: item.vendedorId ?? '',
+      atribuicao: item.atribuidoAoDono ? ATRIBUICAO_DONO : item.vendedorId ?? '',
     })
     setErro('')
     setModalAberto(true)
@@ -196,6 +205,8 @@ export default function ProLaboreAgendaPage() {
     if (form.tipo === 'RECORRENTE' && form.diasSemana.length === 0) { setErro('Selecione ao menos um dia da semana'); return }
     setSalvando(true)
     try {
+      const atribuidoAoDono = form.atribuicao === ATRIBUICAO_DONO
+      const vendedorId = !atribuidoAoDono && form.atribuicao ? form.atribuicao : ''
       const payload = {
         titulo: form.titulo,
         descricao: form.descricao || undefined,
@@ -205,10 +216,11 @@ export default function ProLaboreAgendaPage() {
         diasSemana: form.tipo === 'RECORRENTE' ? form.diasSemana : undefined,
         dataInicio: form.tipo === 'RECORRENTE' ? form.dataInicio || undefined : undefined,
         dataFim: form.tipo === 'RECORRENTE' ? form.dataFim || undefined : undefined,
-        vendedorId: form.vendedorId || undefined,
+        vendedorId: vendedorId || undefined,
+        atribuidoAoDono,
       }
       if (editandoId) {
-        await proLaboreApi.agenda.itens.editar(editandoId, { ...payload, vendedorId: form.vendedorId || null })
+        await proLaboreApi.agenda.itens.editar(editandoId, { ...payload, vendedorId: vendedorId || null })
       } else {
         await proLaboreApi.agenda.itens.criar(payload)
       }
@@ -236,7 +248,7 @@ export default function ProLaboreAgendaPage() {
 
   const grid = diasDoMesGrid(mesVisivel.ano, mesVisivel.mes)
   const diaSelecionadoDate = new Date(`${diaSelecionado}T00:00:00.000Z`)
-  const itensDoDiaSelecionado = itens.filter(i => itemAplicaNoDia(i, diaSelecionadoDate) && (vejaEquipe || itemAplicaPara(i, meuVendedorId)))
+  const itensDoDiaSelecionado = itens.filter(i => itemAplicaNoDia(i, diaSelecionadoDate) && (vejaEquipe || itemAplicaPara(i, meuVendedorId, isDono)))
   const rotuloDiaSelecionado = diaSelecionadoDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
 
   function mesAnterior() {
@@ -331,11 +343,16 @@ export default function ProLaboreAgendaPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
               {itensDoDiaSelecionado.map(item => {
-                const souAlvo = itemAplicaPara(item, meuVendedorId)
+                const souAlvo = itemAplicaPara(item, meuVendedorId, isDono)
                 const euConcluido = foiConcluido(conclusoes, item.id, meuAutorId, diaSelecionado)
                 let resumoEquipe: string | null = null
                 if (vejaEquipe) {
-                  if (item.vendedorId == null) {
+                  if (item.atribuidoAoDono) {
+                    if (!isDono) {
+                      const concluiuDono = foiConcluido(conclusoes, item.id, item.usuarioId, diaSelecionado)
+                      resumoEquipe = `${ROTULO_DONO}: ${concluiuDono ? 'concluído' : 'pendente'}`
+                    }
+                  } else if (item.vendedorId == null) {
                     const feitos = vendedoresAtivos.filter(v => foiConcluido(conclusoes, item.id, v.id, diaSelecionado)).length
                     resumoEquipe = vendedoresAtivos.length > 0 ? `${feitos} de ${vendedoresAtivos.length} vendedores concluíram` : null
                   } else if (item.vendedorId !== meuVendedorId) {
@@ -363,7 +380,7 @@ export default function ProLaboreAgendaPage() {
                     </div>
                     {item.descricao && <div className="pl-kanban-card-meta" style={{ marginTop: 4 }}>{item.descricao}</div>}
                     <div className="pl-kanban-card-meta" style={{ marginTop: 4 }}>
-                      {item.vendedorId == null ? 'Toda a equipe' : item.vendedor?.nome ?? 'Vendedor'}
+                      {item.atribuidoAoDono ? ROTULO_DONO : item.vendedorId == null ? 'Toda a equipe' : item.vendedor?.nome ?? 'Vendedor'}
                       {item.tipo === 'RECORRENTE' ? ' · recorrente' : ' · data única'}
                     </div>
                     {resumoEquipe && <div className="pl-kanban-card-meta">{resumoEquipe}</div>}
@@ -407,7 +424,7 @@ export default function ProLaboreAgendaPage() {
                   <td>{item.titulo}</td>
                   <td>{CATEGORIA_LABEL[item.categoria]}</td>
                   <td>{item.tipo === 'UNICO' ? `Único · ${item.data ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}` : `Recorrente · ${(item.diasSemana ?? '').split(',').filter(Boolean).map(d => DIAS_SEMANA_LABEL[Number(d)]).join(', ')}`}</td>
-                  <td>{item.vendedorId == null ? 'Toda a equipe' : item.vendedor?.nome ?? '—'}</td>
+                  <td>{item.atribuidoAoDono ? ROTULO_DONO : item.vendedorId == null ? 'Toda a equipe' : item.vendedor?.nome ?? '—'}</td>
                   <td>{item.ativo ? 'Ativo' : 'Inativo'}</td>
                   <td className="pl-right">
                     <span className="pl-link-action" style={{ marginRight: 14 }} onClick={() => abrirEdicaoItem(item)}>Editar</span>
@@ -443,8 +460,9 @@ export default function ProLaboreAgendaPage() {
                 </div>
                 <div className="pl-field">
                   <label>Atribuído a</label>
-                  <select className="pl-select" value={form.vendedorId} onChange={e => setForm(f => ({ ...f, vendedorId: e.target.value }))}>
+                  <select className="pl-select" value={form.atribuicao} onChange={e => setForm(f => ({ ...f, atribuicao: e.target.value }))}>
                     <option value="">Toda a equipe</option>
+                    <option value={ATRIBUICAO_DONO}>{ROTULO_DONO}</option>
                     {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
                   </select>
                 </div>

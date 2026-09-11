@@ -91,6 +91,7 @@ export type AgendaTipoItem = (typeof AGENDA_TIPOS)[number]
 
 export interface AgendaItem {
   id: string
+  usuarioId: string // id do dono da conta — dobra de "autorId" quando atribuidoAoDono
   titulo: string
   descricao?: string | null
   categoria: AgendaCategoria
@@ -99,8 +100,11 @@ export interface AgendaItem {
   diasSemana?: string | null // CSV "0,1,2..." (dom-sáb), quando tipo === 'RECORRENTE'
   dataInicio?: string | null
   dataFim?: string | null
-  vendedorId?: string | null // null = toda a equipe
+  vendedorId?: string | null // null = toda a equipe (ou o dono, se atribuidoAoDono)
   vendedor?: { id: string; nome: string } | null
+  // Atribuído especificamente ao dono ("Head Comercial"), não a um Vendedor
+  // — mutuamente exclusivo com vendedorId.
+  atribuidoAoDono: boolean
   ativo: boolean
   criadoEm: string
   atualizadoEm: string
@@ -326,6 +330,7 @@ export const proLaboreApi = {
         dataInicio?: string
         dataFim?: string
         vendedorId?: string
+        atribuidoAoDono?: boolean
       }) => request<AgendaItem>('/pro-labore/agenda-itens', { method: 'POST', body: JSON.stringify(data) }),
       editar: (
         id: string,
@@ -339,6 +344,7 @@ export const proLaboreApi = {
           dataInicio: string | null
           dataFim: string | null
           vendedorId: string | null
+          atribuidoAoDono: boolean
           ativo: boolean
         }>,
       ) => request<AgendaItem>(`/pro-labore/agenda-itens/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
