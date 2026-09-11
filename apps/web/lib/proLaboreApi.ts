@@ -91,7 +91,7 @@ export type AgendaTipoItem = (typeof AGENDA_TIPOS)[number]
 
 export interface AgendaItem {
   id: string
-  usuarioId: string // id do dono da conta — dobra de "autorId" quando atribuidoAoDono
+  usuarioId: string // id do dono da conta — dobra de "autorId" quando incluiDono
   titulo: string
   descricao?: string | null
   categoria: AgendaCategoria
@@ -100,11 +100,12 @@ export interface AgendaItem {
   diasSemana?: string | null // CSV "0,1,2..." (dom-sáb), quando tipo === 'RECORRENTE'
   dataInicio?: string | null
   dataFim?: string | null
-  vendedorId?: string | null // null = toda a equipe (ou o dono, se atribuidoAoDono)
-  vendedor?: { id: string; nome: string } | null
-  // Atribuído especificamente ao dono ("Head Comercial"), não a um Vendedor
-  // — mutuamente exclusivo com vendedorId.
-  atribuidoAoDono: boolean
+  horario?: string | null // "HH:mm", opcional
+  // Sem vendedorIds nem incluiDono = toda a equipe. Os dois são
+  // independentes entre si — dá pra escolher vendedores específicos E o
+  // dono ao mesmo tempo.
+  vendedorIds?: string | null // CSV de ids de Vendedor
+  incluiDono: boolean
   ativo: boolean
   criadoEm: string
   atualizadoEm: string
@@ -329,8 +330,9 @@ export const proLaboreApi = {
         diasSemana?: number[]
         dataInicio?: string
         dataFim?: string
-        vendedorId?: string
-        atribuidoAoDono?: boolean
+        horario?: string
+        vendedorIds?: string[]
+        incluiDono?: boolean
       }) => request<AgendaItem>('/pro-labore/agenda-itens', { method: 'POST', body: JSON.stringify(data) }),
       editar: (
         id: string,
@@ -343,8 +345,9 @@ export const proLaboreApi = {
           diasSemana: number[] | null
           dataInicio: string | null
           dataFim: string | null
-          vendedorId: string | null
-          atribuidoAoDono: boolean
+          horario: string | null
+          vendedorIds: string[] | null
+          incluiDono: boolean
           ativo: boolean
         }>,
       ) => request<AgendaItem>(`/pro-labore/agenda-itens/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

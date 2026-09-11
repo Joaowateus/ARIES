@@ -1208,7 +1208,7 @@ function parseDataDiaUTC(valor: string): Date | null {
   return Number.isNaN(data.getTime()) ? null : data
 }
 
-const AGENDA_ITEM_INCLUDE = { vendedor: { select: { id: true, nome: true } } } as const
+const HORARIO_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
 
 router.get('/agenda-itens', requireProLaboreAuth, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
@@ -1216,13 +1216,25 @@ router.get('/agenda-itens', requireProLaboreAuth, async (req: Request, res: Resp
   const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
 
   const itens = await prisma.agendaItem.findMany({
-    where: vejaEquipe
-      ? { usuarioId }
-      : { usuarioId, ativo: true, OR: [{ vendedorId: null, atribuidoAoDono: false }, { vendedorId: req.proLaboreUser!.vendedorId }] },
-    include: AGENDA_ITEM_INCLUDE,
+    where: { usuarioId, ...(vejaEquipe ? {} : { ativo: true }) },
     orderBy: { criadoEm: 'desc' },
   })
-  res.json(itens)
+
+  if (vejaEquipe) {
+    res.json(itens)
+    return
+  }
+  // Filtro de "é meu" feito em memória, não em SQL — vendedorIds é uma
+  // lista em CSV, e um "contains" no banco arriscaria falso positivo por
+  // substring entre ids parecidos. A lista de itens é pequena, então o
+  // custo disso é irrelevante.
+  const meuVendedorId = req.proLaboreUser!.vendedorId ?? null
+  const meus = itens.filter(item => {
+    const alvos = (item.vendedorIds ?? '').split(',').filter(Boolean)
+    const temAlvo = alvos.length > 0 || item.incluiDono
+    return !temAlvo || (meuVendedorId != null && alvos.includes(meuVendedorId))
+  })
+  res.json(meus)
 })
 
 const agendaItemSchema = z
@@ -1235,10 +1247,11 @@ const agendaItemSchema = z
     diasSemana: z.array(z.number().int().min(0).max(6)).optional(),
     dataInicio: z.string().optional(),
     dataFim: z.string().optional(),
-    vendedorId: z.string().nullable().optional(),
-    // Atribuído especificamente ao dono ("Head Comercial") — mutuamente
-    // exclusivo com vendedorId; quando true, vendedorId é ignorado.
-    atribuidoAoDono: z.boolean().optional(),
+    horario: z.string().regex(HORARIO_REGEX, 'Horário inválido (use HH:mm)').optional(),
+    // Sem nenhum dos dois = toda a equipe. Os dois são independentes entre
+    // si (dá pra escolher vendedores específicos E o dono ao mesmo tempo).
+    vendedorIds: z.array(z.string()).optional(),
+    incluiDono: z.boolean().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.tipo === 'UNICO' && (!val.data || !parseDataDiaUTC(val.data))) {
@@ -1256,12 +1269,13 @@ router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, asyn
     return
   }
   const usuarioId = req.proLaboreUser!.sub
-  const { titulo, descricao, categoria, tipo, data, diasSemana, dataInicio, dataFim, vendedorId, atribuidoAoDono } = parse.data
+  const { titulo, descricao, categoria, tipo, data, diasSemana, dataInicio, dataFim, horario, vendedorIds, incluiDono } = parse.data
 
-  if (!atribuidoAoDono && vendedorId) {
-    const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
-    if (!vendedor) {
-      res.status(404).json({ error: 'Vendedor não encontrado' })
+  const idsUnicos = [...new Set(vendedorIds ?? [])]
+  if (idsUnicos.length > 0) {
+    const encontrados = await prisma.vendedor.count({ where: { id: { in: idsUnicos }, usuarioId } })
+    if (encontrados !== idsUnicos.length) {
+      res.status(404).json({ error: 'Um ou mais vendedores selecionados não foram encontrados' })
       return
     }
   }
@@ -1277,10 +1291,10 @@ router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, asyn
       diasSemana: tipo === 'RECORRENTE' ? diasSemana!.join(',') : undefined,
       dataInicio: dataInicio ? parseDataDiaUTC(dataInicio) ?? undefined : undefined,
       dataFim: dataFim ? parseDataDiaUTC(dataFim) ?? undefined : undefined,
-      vendedorId: atribuidoAoDono ? undefined : vendedorId || undefined,
-      atribuidoAoDono: !!atribuidoAoDono,
+      horario: horario || undefined,
+      vendedorIds: idsUnicos.length > 0 ? idsUnicos.join(',') : undefined,
+      incluiDono: !!incluiDono,
     },
-    include: AGENDA_ITEM_INCLUDE,
   })
   res.status(201).json(item)
 })
@@ -1294,8 +1308,9 @@ const agendaItemEditSchema = z.object({
   diasSemana: z.array(z.number().int().min(0).max(6)).nullable().optional(),
   dataInicio: z.string().nullable().optional(),
   dataFim: z.string().nullable().optional(),
-  vendedorId: z.string().nullable().optional(),
-  atribuidoAoDono: z.boolean().optional(),
+  horario: z.string().regex(HORARIO_REGEX, 'Horário inválido (use HH:mm)').nullable().optional(),
+  vendedorIds: z.array(z.string()).nullable().optional(),
+  incluiDono: z.boolean().optional(),
   ativo: z.boolean().optional(),
 })
 
@@ -1311,12 +1326,13 @@ router.patch('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor,
     res.status(404).json({ error: 'Item de agenda não encontrado' })
     return
   }
-  const { data, diasSemana, dataInicio, dataFim, vendedorId, atribuidoAoDono, ...resto } = parse.data
+  const { data, diasSemana, dataInicio, dataFim, horario, vendedorIds, ...resto } = parse.data
 
-  if (!atribuidoAoDono && vendedorId) {
-    const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
-    if (!vendedor) {
-      res.status(404).json({ error: 'Vendedor não encontrado' })
+  const idsUnicos = vendedorIds ? [...new Set(vendedorIds)] : null
+  if (idsUnicos && idsUnicos.length > 0) {
+    const encontrados = await prisma.vendedor.count({ where: { id: { in: idsUnicos }, usuarioId } })
+    if (encontrados !== idsUnicos.length) {
+      res.status(404).json({ error: 'Um ou mais vendedores selecionados não foram encontrados' })
       return
     }
   }
@@ -1329,11 +1345,9 @@ router.patch('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor,
       ...(diasSemana !== undefined ? { diasSemana: diasSemana ? diasSemana.join(',') : null } : {}),
       ...(dataInicio !== undefined ? { dataInicio: dataInicio ? parseDataDiaUTC(dataInicio) : null } : {}),
       ...(dataFim !== undefined ? { dataFim: dataFim ? parseDataDiaUTC(dataFim) : null } : {}),
-      // Mutuamente exclusivos: marcar um sempre limpa o outro.
-      ...(atribuidoAoDono ? { atribuidoAoDono: true, vendedorId: null } : {}),
-      ...(!atribuidoAoDono && vendedorId !== undefined ? { vendedorId: vendedorId || null, atribuidoAoDono: false } : {}),
+      ...(horario !== undefined ? { horario: horario || null } : {}),
+      ...(vendedorIds !== undefined ? { vendedorIds: idsUnicos && idsUnicos.length > 0 ? idsUnicos.join(',') : null } : {}),
     },
-    include: AGENDA_ITEM_INCLUDE,
   })
   res.json(item)
 })
@@ -1401,14 +1415,14 @@ router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Requ
     return
   }
   const meuVendedorId = req.proLaboreUser!.vendedorId ?? null
-  if (item.atribuidoAoDono) {
-    if (req.proLaboreUser!.papel !== 'DONO') {
-      res.status(403).json({ error: 'Este item é do Head Comercial' })
+  const alvos = (item.vendedorIds ?? '').split(',').filter(Boolean)
+  const temAlvoEspecifico = alvos.length > 0 || item.incluiDono
+  if (temAlvoEspecifico) {
+    const souAlvo = (item.incluiDono && req.proLaboreUser!.papel === 'DONO') || (meuVendedorId != null && alvos.includes(meuVendedorId))
+    if (!souAlvo) {
+      res.status(403).json({ error: 'Este item é de outra pessoa' })
       return
     }
-  } else if (item.vendedorId && item.vendedorId !== meuVendedorId) {
-    res.status(403).json({ error: 'Este item é de outra pessoa' })
-    return
   }
 
   const autorId = autorIdAtual(req)
