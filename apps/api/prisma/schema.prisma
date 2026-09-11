@@ -1141,8 +1141,14 @@ model AgendaItem {
   dataFim      DateTime? // opcional, só pra RECORRENTE — até quando vale
   // null = toda a equipe (cada pessoa segue e marca a própria conclusão,
   // independente das outras); preenchido = só essa pessoa (vendedor comum
-  // ou supervisor — os dois são um registro de Vendedor).
+  // ou supervisor — os dois são um registro de Vendedor). Mutuamente
+  // exclusivo com atribuidoAoDono.
   vendedorId   String?
+  // Item atribuído especificamente ao dono ("Head Comercial"), não a um
+  // Vendedor — o dono não tem registro de Vendedor, por isso precisa de um
+  // campo próprio em vez de reaproveitar vendedorId. Quando true, vendedorId
+  // fica sempre null.
+  atribuidoAoDono Boolean   @default(false)
   ativo        Boolean   @default(true)
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt

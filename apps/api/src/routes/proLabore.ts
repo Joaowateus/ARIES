@@ -1218,7 +1218,7 @@ router.get('/agenda-itens', requireProLaboreAuth, async (req: Request, res: Resp
   const itens = await prisma.agendaItem.findMany({
     where: vejaEquipe
       ? { usuarioId }
-      : { usuarioId, ativo: true, OR: [{ vendedorId: null }, { vendedorId: req.proLaboreUser!.vendedorId }] },
+      : { usuarioId, ativo: true, OR: [{ vendedorId: null, atribuidoAoDono: false }, { vendedorId: req.proLaboreUser!.vendedorId }] },
     include: AGENDA_ITEM_INCLUDE,
     orderBy: { criadoEm: 'desc' },
   })
@@ -1236,6 +1236,9 @@ const agendaItemSchema = z
     dataInicio: z.string().optional(),
     dataFim: z.string().optional(),
     vendedorId: z.string().nullable().optional(),
+    // Atribuído especificamente ao dono ("Head Comercial") — mutuamente
+    // exclusivo com vendedorId; quando true, vendedorId é ignorado.
+    atribuidoAoDono: z.boolean().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.tipo === 'UNICO' && (!val.data || !parseDataDiaUTC(val.data))) {
@@ -1253,9 +1256,9 @@ router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, asyn
     return
   }
   const usuarioId = req.proLaboreUser!.sub
-  const { titulo, descricao, categoria, tipo, data, diasSemana, dataInicio, dataFim, vendedorId } = parse.data
+  const { titulo, descricao, categoria, tipo, data, diasSemana, dataInicio, dataFim, vendedorId, atribuidoAoDono } = parse.data
 
-  if (vendedorId) {
+  if (!atribuidoAoDono && vendedorId) {
     const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
     if (!vendedor) {
       res.status(404).json({ error: 'Vendedor não encontrado' })
@@ -1274,7 +1277,8 @@ router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, asyn
       diasSemana: tipo === 'RECORRENTE' ? diasSemana!.join(',') : undefined,
       dataInicio: dataInicio ? parseDataDiaUTC(dataInicio) ?? undefined : undefined,
       dataFim: dataFim ? parseDataDiaUTC(dataFim) ?? undefined : undefined,
-      vendedorId: vendedorId || undefined,
+      vendedorId: atribuidoAoDono ? undefined : vendedorId || undefined,
+      atribuidoAoDono: !!atribuidoAoDono,
     },
     include: AGENDA_ITEM_INCLUDE,
   })
@@ -1291,6 +1295,7 @@ const agendaItemEditSchema = z.object({
   dataInicio: z.string().nullable().optional(),
   dataFim: z.string().nullable().optional(),
   vendedorId: z.string().nullable().optional(),
+  atribuidoAoDono: z.boolean().optional(),
   ativo: z.boolean().optional(),
 })
 
@@ -1306,9 +1311,9 @@ router.patch('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor,
     res.status(404).json({ error: 'Item de agenda não encontrado' })
     return
   }
-  const { data, diasSemana, dataInicio, dataFim, vendedorId, ...resto } = parse.data
+  const { data, diasSemana, dataInicio, dataFim, vendedorId, atribuidoAoDono, ...resto } = parse.data
 
-  if (vendedorId) {
+  if (!atribuidoAoDono && vendedorId) {
     const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
     if (!vendedor) {
       res.status(404).json({ error: 'Vendedor não encontrado' })
@@ -1324,7 +1329,9 @@ router.patch('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor,
       ...(diasSemana !== undefined ? { diasSemana: diasSemana ? diasSemana.join(',') : null } : {}),
       ...(dataInicio !== undefined ? { dataInicio: dataInicio ? parseDataDiaUTC(dataInicio) : null } : {}),
       ...(dataFim !== undefined ? { dataFim: dataFim ? parseDataDiaUTC(dataFim) : null } : {}),
-      ...(vendedorId !== undefined ? { vendedorId: vendedorId || null } : {}),
+      // Mutuamente exclusivos: marcar um sempre limpa o outro.
+      ...(atribuidoAoDono ? { atribuidoAoDono: true, vendedorId: null } : {}),
+      ...(!atribuidoAoDono && vendedorId !== undefined ? { vendedorId: vendedorId || null, atribuidoAoDono: false } : {}),
     },
     include: AGENDA_ITEM_INCLUDE,
   })
@@ -1394,7 +1401,12 @@ router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Requ
     return
   }
   const meuVendedorId = req.proLaboreUser!.vendedorId ?? null
-  if (item.vendedorId && item.vendedorId !== meuVendedorId) {
+  if (item.atribuidoAoDono) {
+    if (req.proLaboreUser!.papel !== 'DONO') {
+      res.status(403).json({ error: 'Este item é do Head Comercial' })
+      return
+    }
+  } else if (item.vendedorId && item.vendedorId !== meuVendedorId) {
     res.status(403).json({ error: 'Este item é de outra pessoa' })
     return
   }
