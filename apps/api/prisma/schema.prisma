@@ -957,10 +957,9 @@ model Vendedor {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  usuario     ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  vendas      Venda[]
-  leads       Lead[]
-  agendaItens AgendaItem[]
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  vendas  Venda[]
+  leads   Lead[]
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -1139,26 +1138,22 @@ model AgendaItem {
   diasSemana   String? // usado quando tipo = RECORRENTE — CSV de 0(dom) a 6(sáb), ex "1,2,3,4,5"
   dataInicio   DateTime? // opcional, só pra RECORRENTE — a partir de quando vale
   dataFim      DateTime? // opcional, só pra RECORRENTE — até quando vale
-  // null = toda a equipe (cada pessoa segue e marca a própria conclusão,
-  // independente das outras); preenchido = só essa pessoa (vendedor comum
-  // ou supervisor — os dois são um registro de Vendedor). Mutuamente
-  // exclusivo com atribuidoAoDono.
-  vendedorId   String?
-  // Item atribuído especificamente ao dono ("Head Comercial"), não a um
-  // Vendedor — o dono não tem registro de Vendedor, por isso precisa de um
-  // campo próprio em vez de reaproveitar vendedorId. Quando true, vendedorId
-  // fica sempre null.
-  atribuidoAoDono Boolean   @default(false)
+  horario      String? // horário previsto no dia, "HH:mm" (opcional — nem toda rotina tem hora fixa)
+  // Sem alvo específico nenhum (vendedorIds vazio E incluiDono false) =
+  // toda a equipe (cada pessoa segue e marca a própria conclusão,
+  // independente das outras). Com alvo(s), só essas pessoas — pode ser
+  // várias ao mesmo tempo: um ou mais vendedores (CSV de ids em
+  // vendedorIds) e/ou o dono ("Head Comercial", incluiDono).
+  vendedorIds  String? // CSV de ids de Vendedor — sem FK porque é multivalorado
+  incluiDono   Boolean   @default(false)
   ativo        Boolean   @default(true)
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
 
   usuario    ProLaboreUsuario  @relation(fields: [usuarioId], references: [id])
-  vendedor   Vendedor?         @relation(fields: [vendedorId], references: [id])
   conclusoes AgendaConclusao[]
 
   @@index([usuarioId])
-  @@index([vendedorId])
   @@map("pro_labore_agenda_itens")
 }
 

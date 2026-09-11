@@ -16,9 +16,6 @@ const CATEGORIA_COR: Record<AgendaCategoria, string> = {
   META: 'var(--pl-accent)', PROCESSO: 'var(--pl-accent-3)', AUDITORIA: 'var(--pl-accent-5)', PROTOCOLO: 'var(--pl-accent-4)', OUTRO: 'var(--pl-ink-muted)',
 }
 
-// Valor sentinela só do <select> "Atribuído a" — nunca sai do componente:
-// no submit vira { atribuidoAoDono: true, vendedorId: undefined }.
-const ATRIBUICAO_DONO = '__DONO__'
 const ROTULO_DONO = 'Você (Head Comercial)'
 
 function isoDia(d: Date): string {
@@ -47,12 +44,36 @@ function itemAplicaNoDia(item: AgendaItem, dia: Date): boolean {
   return true
 }
 
-// null = "toda a equipe" (cada pessoa segue e conclui por conta própria);
-// atribuidoAoDono é um alvo à parte (o dono/"Head Comercial" não tem
-// registro de Vendedor pra usar vendedorId).
+// Sem vendedorIds nem incluiDono = "toda a equipe" (cada pessoa segue e
+// conclui por conta própria). Com alvo(s), só essas pessoas — pode ser
+// vários vendedores e/ou o dono ("Head Comercial") ao mesmo tempo.
+function alvosDoItem(item: AgendaItem): string[] {
+  return (item.vendedorIds ?? '').split(',').filter(Boolean)
+}
+
 function itemAplicaPara(item: AgendaItem, meuVendedorId: string | null, souDono: boolean): boolean {
-  if (item.atribuidoAoDono) return souDono
-  return item.vendedorId == null || item.vendedorId === meuVendedorId
+  const alvos = alvosDoItem(item)
+  const temAlvo = alvos.length > 0 || item.incluiDono
+  if (!temAlvo) return true
+  if (souDono) return item.incluiDono
+  return meuVendedorId != null && alvos.includes(meuVendedorId)
+}
+
+// Rótulo de "atribuído a" pra exibição — quem não vê a equipe não tem a
+// lista de vendedores carregada (nem precisa: o backend só devolve pra ele
+// os itens que já são dele mesmo), então só mostra "Você".
+function alvoLabel(item: AgendaItem, vendedores: Vendedor[], vejaEquipe: boolean): string {
+  const alvos = alvosDoItem(item)
+  const temAlvo = alvos.length > 0 || item.incluiDono
+  if (!temAlvo) return 'Toda a equipe'
+  if (!vejaEquipe) return 'Você'
+  const nomes: string[] = []
+  if (item.incluiDono) nomes.push(ROTULO_DONO)
+  for (const id of alvos) {
+    const nome = vendedores.find(v => v.id === id)?.nome
+    if (nome) nomes.push(nome)
+  }
+  return nomes.length > 0 ? nomes.join(', ') : 'Pessoas específicas'
 }
 
 function foiConcluido(conclusoes: AgendaConclusao[], itemId: string, autorId: string, diaIso: string): boolean {
@@ -78,11 +99,17 @@ type FormAgenda = {
   diasSemana: number[]
   dataInicio: string
   dataFim: string
-  // '' = toda a equipe; ATRIBUICAO_DONO = o dono; senão, o id de um vendedor.
-  atribuicao: string
+  horario: string
+  alvoModo: 'TODOS' | 'ESPECIFICO'
+  alvoIncluiDono: boolean
+  alvoVendedorIds: string[]
 }
 
-const FORM_VAZIO: FormAgenda = { titulo: '', descricao: '', categoria: 'META', tipo: 'RECORRENTE', data: '', diasSemana: [1, 2, 3, 4, 5], dataInicio: '', dataFim: '', atribuicao: '' }
+const FORM_VAZIO: FormAgenda = {
+  titulo: '', descricao: '', categoria: 'META', tipo: 'RECORRENTE', data: '',
+  diasSemana: [1, 2, 3, 4, 5], dataInicio: '', dataFim: '', horario: '',
+  alvoModo: 'TODOS', alvoIncluiDono: false, alvoVendedorIds: [],
+}
 
 export default function ProLaboreAgendaPage() {
   const { usuario } = useProLaboreAuth()
@@ -173,6 +200,7 @@ export default function ProLaboreAgendaPage() {
   }
 
   function abrirEdicaoItem(item: AgendaItem) {
+    const alvos = alvosDoItem(item)
     setEditandoId(item.id)
     setForm({
       titulo: item.titulo,
@@ -183,10 +211,17 @@ export default function ProLaboreAgendaPage() {
       diasSemana: (item.diasSemana ?? '').split(',').filter(Boolean).map(Number),
       dataInicio: item.dataInicio ? item.dataInicio.slice(0, 10) : '',
       dataFim: item.dataFim ? item.dataFim.slice(0, 10) : '',
-      atribuicao: item.atribuidoAoDono ? ATRIBUICAO_DONO : item.vendedorId ?? '',
+      horario: item.horario ?? '',
+      alvoModo: alvos.length > 0 || item.incluiDono ? 'ESPECIFICO' : 'TODOS',
+      alvoIncluiDono: item.incluiDono,
+      alvoVendedorIds: alvos,
     })
     setErro('')
     setModalAberto(true)
+  }
+
+  function alternarAlvoVendedor(id: string) {
+    setForm(f => ({ ...f, alvoVendedorIds: f.alvoVendedorIds.includes(id) ? f.alvoVendedorIds.filter(x => x !== id) : [...f.alvoVendedorIds, id] }))
   }
 
   function fecharModal() {
@@ -203,10 +238,11 @@ export default function ProLaboreAgendaPage() {
     setErro('')
     if (form.tipo === 'UNICO' && !form.data) { setErro('Escolha a data do item'); return }
     if (form.tipo === 'RECORRENTE' && form.diasSemana.length === 0) { setErro('Selecione ao menos um dia da semana'); return }
+    if (form.alvoModo === 'ESPECIFICO' && form.alvoVendedorIds.length === 0 && !form.alvoIncluiDono) { setErro('Selecione ao menos uma pessoa'); return }
     setSalvando(true)
     try {
-      const atribuidoAoDono = form.atribuicao === ATRIBUICAO_DONO
-      const vendedorId = !atribuidoAoDono && form.atribuicao ? form.atribuicao : ''
+      const vendedorIds = form.alvoModo === 'ESPECIFICO' ? form.alvoVendedorIds : []
+      const incluiDono = form.alvoModo === 'ESPECIFICO' && form.alvoIncluiDono
       const payload = {
         titulo: form.titulo,
         descricao: form.descricao || undefined,
@@ -216,11 +252,12 @@ export default function ProLaboreAgendaPage() {
         diasSemana: form.tipo === 'RECORRENTE' ? form.diasSemana : undefined,
         dataInicio: form.tipo === 'RECORRENTE' ? form.dataInicio || undefined : undefined,
         dataFim: form.tipo === 'RECORRENTE' ? form.dataFim || undefined : undefined,
-        vendedorId: vendedorId || undefined,
-        atribuidoAoDono,
+        horario: form.horario || undefined,
+        vendedorIds,
+        incluiDono,
       }
       if (editandoId) {
-        await proLaboreApi.agenda.itens.editar(editandoId, { ...payload, vendedorId: vendedorId || null })
+        await proLaboreApi.agenda.itens.editar(editandoId, { ...payload, vendedorIds: vendedorIds.length > 0 ? vendedorIds : null, horario: form.horario || null })
       } else {
         await proLaboreApi.agenda.itens.criar(payload)
       }
@@ -248,7 +285,9 @@ export default function ProLaboreAgendaPage() {
 
   const grid = diasDoMesGrid(mesVisivel.ano, mesVisivel.mes)
   const diaSelecionadoDate = new Date(`${diaSelecionado}T00:00:00.000Z`)
-  const itensDoDiaSelecionado = itens.filter(i => itemAplicaNoDia(i, diaSelecionadoDate) && (vejaEquipe || itemAplicaPara(i, meuVendedorId, isDono)))
+  const itensDoDiaSelecionado = itens
+    .filter(i => itemAplicaNoDia(i, diaSelecionadoDate) && (vejaEquipe || itemAplicaPara(i, meuVendedorId, isDono)))
+    .sort((a, b) => (a.horario ?? '99:99').localeCompare(b.horario ?? '99:99'))
   const rotuloDiaSelecionado = diaSelecionadoDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
 
   function mesAnterior() {
@@ -347,24 +386,33 @@ export default function ProLaboreAgendaPage() {
                 const euConcluido = foiConcluido(conclusoes, item.id, meuAutorId, diaSelecionado)
                 let resumoEquipe: string | null = null
                 if (vejaEquipe) {
-                  if (item.atribuidoAoDono) {
-                    if (!isDono) {
-                      const concluiuDono = foiConcluido(conclusoes, item.id, item.usuarioId, diaSelecionado)
-                      resumoEquipe = `${ROTULO_DONO}: ${concluiuDono ? 'concluído' : 'pendente'}`
-                    }
-                  } else if (item.vendedorId == null) {
+                  const alvos = alvosDoItem(item)
+                  const temAlvo = alvos.length > 0 || item.incluiDono
+                  if (!temAlvo) {
                     const feitos = vendedoresAtivos.filter(v => foiConcluido(conclusoes, item.id, v.id, diaSelecionado)).length
                     resumoEquipe = vendedoresAtivos.length > 0 ? `${feitos} de ${vendedoresAtivos.length} vendedores concluíram` : null
-                  } else if (item.vendedorId !== meuVendedorId) {
-                    const concluiuAlvo = foiConcluido(conclusoes, item.id, item.vendedorId, diaSelecionado)
-                    resumoEquipe = `${item.vendedor?.nome ?? 'Vendedor'}: ${concluiuAlvo ? 'concluído' : 'pendente'}`
+                  } else {
+                    const partes: string[] = []
+                    if (item.incluiDono && !isDono) {
+                      const concluiu = foiConcluido(conclusoes, item.id, item.usuarioId, diaSelecionado)
+                      partes.push(`${ROTULO_DONO}: ${concluiu ? 'concluído' : 'pendente'}`)
+                    }
+                    for (const id of alvos.filter(id => id !== meuVendedorId)) {
+                      const nome = vendedores.find(v => v.id === id)?.nome ?? 'Vendedor'
+                      const concluiu = foiConcluido(conclusoes, item.id, id, diaSelecionado)
+                      partes.push(`${nome}: ${concluiu ? 'concluído' : 'pendente'}`)
+                    }
+                    resumoEquipe = partes.length > 0 ? partes.join(' · ') : null
                   }
                 }
                 return (
                   <div key={item.id} className="pl-agenda-item-card" style={{ ['--cat-cor' as string]: CATEGORIA_COR[item.categoria] }}>
                     <div className="pl-agenda-item-head">
                       <div>
-                        <span className="pl-agenda-item-badge">{CATEGORIA_LABEL[item.categoria]}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="pl-agenda-item-badge">{CATEGORIA_LABEL[item.categoria]}</span>
+                          {item.horario && <span className="pl-kanban-card-time">{item.horario}</span>}
+                        </div>
                         <div className="pl-agenda-item-title">{item.titulo}</div>
                       </div>
                       {vejaEquipe && (
@@ -380,7 +428,7 @@ export default function ProLaboreAgendaPage() {
                     </div>
                     {item.descricao && <div className="pl-kanban-card-meta" style={{ marginTop: 4 }}>{item.descricao}</div>}
                     <div className="pl-kanban-card-meta" style={{ marginTop: 4 }}>
-                      {item.atribuidoAoDono ? ROTULO_DONO : item.vendedorId == null ? 'Toda a equipe' : item.vendedor?.nome ?? 'Vendedor'}
+                      {alvoLabel(item, vendedores, vejaEquipe)}
                       {item.tipo === 'RECORRENTE' ? ' · recorrente' : ' · data única'}
                     </div>
                     {resumoEquipe && <div className="pl-kanban-card-meta">{resumoEquipe}</div>}
@@ -412,6 +460,7 @@ export default function ProLaboreAgendaPage() {
               <tr>
                 <th>Título</th>
                 <th>Categoria</th>
+                <th>Horário</th>
                 <th>Tipo</th>
                 <th>Atribuído a</th>
                 <th>Status</th>
@@ -423,8 +472,9 @@ export default function ProLaboreAgendaPage() {
                 <tr key={item.id}>
                   <td>{item.titulo}</td>
                   <td>{CATEGORIA_LABEL[item.categoria]}</td>
+                  <td>{item.horario ?? '—'}</td>
                   <td>{item.tipo === 'UNICO' ? `Único · ${item.data ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}` : `Recorrente · ${(item.diasSemana ?? '').split(',').filter(Boolean).map(d => DIAS_SEMANA_LABEL[Number(d)]).join(', ')}`}</td>
-                  <td>{item.atribuidoAoDono ? ROTULO_DONO : item.vendedorId == null ? 'Toda a equipe' : item.vendedor?.nome ?? '—'}</td>
+                  <td>{alvoLabel(item, vendedores, true)}</td>
                   <td>{item.ativo ? 'Ativo' : 'Inativo'}</td>
                   <td className="pl-right">
                     <span className="pl-link-action" style={{ marginRight: 14 }} onClick={() => abrirEdicaoItem(item)}>Editar</span>
@@ -459,14 +509,28 @@ export default function ProLaboreAgendaPage() {
                   </select>
                 </div>
                 <div className="pl-field">
-                  <label>Atribuído a</label>
-                  <select className="pl-select" value={form.atribuicao} onChange={e => setForm(f => ({ ...f, atribuicao: e.target.value }))}>
-                    <option value="">Toda a equipe</option>
-                    <option value={ATRIBUICAO_DONO}>{ROTULO_DONO}</option>
-                    {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
-                  </select>
+                  <label>Horário (opcional)</label>
+                  <input type="time" className="pl-input" value={form.horario} onChange={e => setForm(f => ({ ...f, horario: e.target.value }))} />
                 </div>
               </div>
+              <div className="pl-field">
+                <label>Atribuído a</label>
+                <div className="pl-period-row">
+                  <button type="button" className={`pl-chip ${form.alvoModo === 'TODOS' ? 'active' : ''}`} onClick={() => setForm(f => ({ ...f, alvoModo: 'TODOS' }))}>Toda a equipe</button>
+                  <button type="button" className={`pl-chip ${form.alvoModo === 'ESPECIFICO' ? 'active' : ''}`} onClick={() => setForm(f => ({ ...f, alvoModo: 'ESPECIFICO' }))}>Pessoas específicas</button>
+                </div>
+              </div>
+              {form.alvoModo === 'ESPECIFICO' && (
+                <div className="pl-field">
+                  <label>Selecione quem (pode marcar mais de uma pessoa)</label>
+                  <div className="pl-period-row">
+                    <button type="button" className={`pl-chip ${form.alvoIncluiDono ? 'active' : ''}`} onClick={() => setForm(f => ({ ...f, alvoIncluiDono: !f.alvoIncluiDono }))}>{ROTULO_DONO}</button>
+                    {vendedores.map(v => (
+                      <button key={v.id} type="button" className={`pl-chip ${form.alvoVendedorIds.includes(v.id) ? 'active' : ''}`} onClick={() => alternarAlvoVendedor(v.id)}>{v.nome}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="pl-field">
                 <label>Repetição</label>
                 <div className="pl-period-row">
