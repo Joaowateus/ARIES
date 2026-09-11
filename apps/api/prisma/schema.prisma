@@ -923,6 +923,7 @@ model ProLaboreUsuario {
   gastosAnuncios GastoAnuncioMensal[]
   leads          Lead[]
   metasFunil     MetaFunilProLabore[]
+  agendaItens    AgendaItem[]
 
   @@map("pro_labore_usuarios")
 }
@@ -956,9 +957,10 @@ model Vendedor {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  vendas  Venda[]
-  leads   Lead[]
+  usuario     ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  vendas      Venda[]
+  leads       Lead[]
+  agendaItens AgendaItem[]
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -1118,4 +1120,56 @@ model LeadEstagioHistorico {
 
   @@index([leadId])
   @@map("pro_labore_lead_estagio_historico")
+}
+
+// Agenda de trabalho: itens de rotina (metas diárias, processos, auditorias,
+// protocolos etc.) cadastrados pelo dono/supervisor pra toda a equipe
+// seguir. Um item é único (uma data específica) ou recorrente (dias da
+// semana, com início/fim opcionais) — a ocorrência de cada dia é resolvida
+// no cliente a partir dessas regras, sem precisar materializar uma linha
+// por dia por pessoa.
+model AgendaItem {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  titulo       String
+  descricao    String?
+  categoria    String // META | PROCESSO | AUDITORIA | PROTOCOLO | OUTRO
+  tipo         String // UNICO | RECORRENTE
+  data         DateTime? // usado quando tipo = UNICO
+  diasSemana   String? // usado quando tipo = RECORRENTE — CSV de 0(dom) a 6(sáb), ex "1,2,3,4,5"
+  dataInicio   DateTime? // opcional, só pra RECORRENTE — a partir de quando vale
+  dataFim      DateTime? // opcional, só pra RECORRENTE — até quando vale
+  // null = toda a equipe (cada pessoa segue e marca a própria conclusão,
+  // independente das outras); preenchido = só essa pessoa (vendedor comum
+  // ou supervisor — os dois são um registro de Vendedor).
+  vendedorId   String?
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  usuario    ProLaboreUsuario  @relation(fields: [usuarioId], references: [id])
+  vendedor   Vendedor?         @relation(fields: [vendedorId], references: [id])
+  conclusoes AgendaConclusao[]
+
+  @@index([usuarioId])
+  @@index([vendedorId])
+  @@map("pro_labore_agenda_itens")
+}
+
+// Registro de "feito" de um item num dia específico, por pessoa. `autorId`
+// é o usuarioId do dono OU o id do Vendedor (supervisor ou vendedor comum)
+// que concluiu — não é FK porque pode apontar pra duas tabelas diferentes,
+// e a resolução de "quem sou eu" já é feita no backend a partir do token.
+model AgendaConclusao {
+  id             String   @id @default(cuid())
+  agendaItemId   String
+  autorId        String
+  dataReferencia DateTime
+  concluidoEm    DateTime @default(now())
+
+  item AgendaItem @relation(fields: [agendaItemId], references: [id])
+
+  @@unique([agendaItemId, autorId, dataReferencia])
+  @@index([agendaItemId])
+  @@map("pro_labore_agenda_conclusoes")
 }

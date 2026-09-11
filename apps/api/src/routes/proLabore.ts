@@ -1185,4 +1185,234 @@ router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: R
   res.json(await agregarReceitaPorDia(req, inicioPreset, dias, vendedorIdFiltro))
 })
 
+// --- Agenda de trabalho (calendário, metas diárias, processos, auditorias, protocolos) ---
+// Cadastrada pelo dono/supervisor pra toda a equipe seguir. Um item é único
+// (uma data) ou recorrente (dias da semana, com início/fim opcionais) — a
+// ocorrência de cada dia é resolvida no CLIENTE a partir dessas regras (a
+// quantidade de itens é pequena, então não vale a pena materializar uma
+// linha por dia no banco). O servidor só guarda as regras e as conclusões.
+
+const AGENDA_CATEGORIAS = ['META', 'PROCESSO', 'AUDITORIA', 'PROTOCOLO', 'OUTRO'] as const
+const AGENDA_TIPOS = ['UNICO', 'RECORRENTE'] as const
+
+// "Quem sou eu" pra fins de completude da agenda — supervisor e vendedor
+// comum são ambos um registro de Vendedor (usam o vendedorId do token); o
+// dono não tem Vendedor, então usa o próprio usuarioId como identificador.
+function autorIdAtual(req: Request): string {
+  return req.proLaboreUser!.vendedorId ?? req.proLaboreUser!.sub
+}
+
+function parseDataDiaUTC(valor: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return null
+  const data = new Date(`${valor}T00:00:00.000Z`)
+  return Number.isNaN(data.getTime()) ? null : data
+}
+
+const AGENDA_ITEM_INCLUDE = { vendedor: { select: { id: true, nome: true } } } as const
+
+router.get('/agenda-itens', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const papel = req.proLaboreUser!.papel
+  const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
+
+  const itens = await prisma.agendaItem.findMany({
+    where: vejaEquipe
+      ? { usuarioId }
+      : { usuarioId, ativo: true, OR: [{ vendedorId: null }, { vendedorId: req.proLaboreUser!.vendedorId }] },
+    include: AGENDA_ITEM_INCLUDE,
+    orderBy: { criadoEm: 'desc' },
+  })
+  res.json(itens)
+})
+
+const agendaItemSchema = z
+  .object({
+    titulo: z.string().min(2, 'Título muito curto'),
+    descricao: z.string().max(2000).optional(),
+    categoria: z.enum(AGENDA_CATEGORIAS),
+    tipo: z.enum(AGENDA_TIPOS),
+    data: z.string().optional(),
+    diasSemana: z.array(z.number().int().min(0).max(6)).optional(),
+    dataInicio: z.string().optional(),
+    dataFim: z.string().optional(),
+    vendedorId: z.string().nullable().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.tipo === 'UNICO' && (!val.data || !parseDataDiaUTC(val.data))) {
+      ctx.addIssue({ code: 'custom', path: ['data'], message: 'Data obrigatória pra um item único' })
+    }
+    if (val.tipo === 'RECORRENTE' && (!val.diasSemana || val.diasSemana.length === 0)) {
+      ctx.addIssue({ code: 'custom', path: ['diasSemana'], message: 'Selecione ao menos um dia da semana' })
+    }
+  })
+
+router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const parse = agendaItemSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const usuarioId = req.proLaboreUser!.sub
+  const { titulo, descricao, categoria, tipo, data, diasSemana, dataInicio, dataFim, vendedorId } = parse.data
+
+  if (vendedorId) {
+    const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
+    if (!vendedor) {
+      res.status(404).json({ error: 'Vendedor não encontrado' })
+      return
+    }
+  }
+
+  const item = await prisma.agendaItem.create({
+    data: {
+      usuarioId,
+      titulo,
+      descricao: descricao || undefined,
+      categoria,
+      tipo,
+      data: tipo === 'UNICO' ? parseDataDiaUTC(data!) : undefined,
+      diasSemana: tipo === 'RECORRENTE' ? diasSemana!.join(',') : undefined,
+      dataInicio: dataInicio ? parseDataDiaUTC(dataInicio) ?? undefined : undefined,
+      dataFim: dataFim ? parseDataDiaUTC(dataFim) ?? undefined : undefined,
+      vendedorId: vendedorId || undefined,
+    },
+    include: AGENDA_ITEM_INCLUDE,
+  })
+  res.status(201).json(item)
+})
+
+const agendaItemEditSchema = z.object({
+  titulo: z.string().min(2, 'Título muito curto').optional(),
+  descricao: z.string().max(2000).nullable().optional(),
+  categoria: z.enum(AGENDA_CATEGORIAS).optional(),
+  tipo: z.enum(AGENDA_TIPOS).optional(),
+  data: z.string().nullable().optional(),
+  diasSemana: z.array(z.number().int().min(0).max(6)).nullable().optional(),
+  dataInicio: z.string().nullable().optional(),
+  dataFim: z.string().nullable().optional(),
+  vendedorId: z.string().nullable().optional(),
+  ativo: z.boolean().optional(),
+})
+
+router.patch('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const parse = agendaItemEditSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.agendaItem.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!atual) {
+    res.status(404).json({ error: 'Item de agenda não encontrado' })
+    return
+  }
+  const { data, diasSemana, dataInicio, dataFim, vendedorId, ...resto } = parse.data
+
+  if (vendedorId) {
+    const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
+    if (!vendedor) {
+      res.status(404).json({ error: 'Vendedor não encontrado' })
+      return
+    }
+  }
+
+  const item = await prisma.agendaItem.update({
+    where: { id: atual.id },
+    data: {
+      ...resto,
+      ...(data !== undefined ? { data: data ? parseDataDiaUTC(data) : null } : {}),
+      ...(diasSemana !== undefined ? { diasSemana: diasSemana ? diasSemana.join(',') : null } : {}),
+      ...(dataInicio !== undefined ? { dataInicio: dataInicio ? parseDataDiaUTC(dataInicio) : null } : {}),
+      ...(dataFim !== undefined ? { dataFim: dataFim ? parseDataDiaUTC(dataFim) : null } : {}),
+      ...(vendedorId !== undefined ? { vendedorId: vendedorId || null } : {}),
+    },
+    include: AGENDA_ITEM_INCLUDE,
+  })
+  res.json(item)
+})
+
+router.delete('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.agendaItem.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!atual) {
+    res.status(404).json({ error: 'Item de agenda não encontrado' })
+    return
+  }
+  await prisma.agendaConclusao.deleteMany({ where: { agendaItemId: atual.id } })
+  await prisma.agendaItem.delete({ where: { id: atual.id } })
+  res.json({ ok: true })
+})
+
+// Conclusões no intervalo pedido — vendedor só vê as próprias; dono/
+// supervisor vê de todo mundo (é a base do indicador de aderência da
+// equipe). Sempre filtrado por item.usuarioId, pra nunca vazar entre contas.
+router.get('/agenda-conclusoes', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const papel = req.proLaboreUser!.papel
+  const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
+  const { inicio, fim } = req.query
+
+  const inicioData = typeof inicio === 'string' ? parseDataDiaUTC(inicio) : null
+  const fimData = typeof fim === 'string' ? parseDataDiaUTC(fim) : null
+  if (!inicioData || !fimData) {
+    res.status(400).json({ error: 'Período inválido' })
+    return
+  }
+
+  const conclusoes = await prisma.agendaConclusao.findMany({
+    where: {
+      dataReferencia: { gte: inicioData, lte: fimData },
+      item: { usuarioId },
+      ...(vejaEquipe ? {} : { autorId: autorIdAtual(req) }),
+    },
+  })
+  res.json(conclusoes)
+})
+
+const concluirSchema = z.object({ data: z.string() })
+
+// Marca/desmarca (alterna) a conclusão do item pra HOJE-do-ponto-de-vista-de
+// quem pede, na data informada — cada pessoa só mexe na própria conclusão,
+// nunca na de outra (mesmo dono/supervisor não marcam "no lugar de"
+// ninguém: o valor da visão deles é acompanhar a aderência, não simulá-la).
+router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = concluirSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const dataReferencia = parseDataDiaUTC(parse.data.data)
+  if (!dataReferencia) {
+    res.status(400).json({ error: 'Data inválida' })
+    return
+  }
+
+  const usuarioId = req.proLaboreUser!.sub
+  const item = await prisma.agendaItem.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!item) {
+    res.status(404).json({ error: 'Item de agenda não encontrado' })
+    return
+  }
+  const meuVendedorId = req.proLaboreUser!.vendedorId ?? null
+  if (item.vendedorId && item.vendedorId !== meuVendedorId) {
+    res.status(403).json({ error: 'Este item é de outra pessoa' })
+    return
+  }
+
+  const autorId = autorIdAtual(req)
+  const existente = await prisma.agendaConclusao.findUnique({
+    where: { agendaItemId_autorId_dataReferencia: { agendaItemId: item.id, autorId, dataReferencia } },
+  })
+
+  if (existente) {
+    await prisma.agendaConclusao.delete({ where: { id: existente.id } })
+    res.json({ concluido: false })
+    return
+  }
+  const criada = await prisma.agendaConclusao.create({
+    data: { agendaItemId: item.id, autorId, dataReferencia },
+  })
+  res.json({ concluido: true, concluidoEm: criada.concluidoEm })
+})
+
 export default router

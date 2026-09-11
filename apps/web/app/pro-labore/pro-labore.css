@@ -467,6 +467,48 @@
 }
 .pl-kanban-move-item:hover { background: var(--pl-surface); color: var(--pl-ink-1); }
 
+/* ============ AGENDA DE TRABALHO ============ */
+.pl-agenda-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 6px; }
+.pl-agenda-weekday { text-align: center; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-muted); padding-bottom: 4px; }
+.pl-agenda-day {
+  position: relative; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: var(--pl-radius-sm); border: 1px solid var(--pl-border); background: var(--pl-surface-2);
+  cursor: pointer; transition: all .15s ease; padding: 4px;
+}
+.pl-agenda-day.empty { border: none; background: transparent; cursor: default; }
+.pl-agenda-day:not(.empty):hover { border-color: var(--pl-border-strong); }
+.pl-agenda-day.today { border-color: var(--pl-accent); }
+.pl-agenda-day.selected { background: var(--pl-accent-soft); border-color: var(--pl-accent); }
+.pl-agenda-day-num { font-family: 'JetBrains Mono'; font-size: 12px; font-weight: 700; color: var(--pl-ink-1); }
+.pl-agenda-day-count {
+  position: absolute; top: 3px; right: 4px; font-family: 'JetBrains Mono'; font-size: 8.5px; font-weight: 700;
+  color: var(--pl-ink-muted);
+}
+.pl-agenda-day-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pl-ink-muted); }
+.pl-agenda-day-dot.completo { background: var(--pl-good); }
+.pl-agenda-day-dot.parcial { background: var(--pl-accent-4); }
+.pl-agenda-day-dot.pendente { background: var(--pl-critical); }
+
+.pl-agenda-item-card {
+  background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-left: 3px solid var(--cat-cor, var(--pl-accent));
+  border-radius: var(--pl-radius-sm); padding: 11px 12px;
+}
+.pl-agenda-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.pl-agenda-item-badge {
+  display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  color: var(--cat-cor, var(--pl-accent)); text-transform: uppercase;
+}
+.pl-agenda-item-title { font-size: 13px; font-weight: 700; color: var(--pl-ink-1); margin-top: 2px; }
+.pl-agenda-toggle-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 7px 10px;
+  border-radius: 8px; background: var(--pl-surface); border: 1px solid var(--pl-border-strong); color: var(--pl-ink-2);
+  font-size: 11.5px; font-weight: 700; font-family: 'Manrope'; cursor: pointer; transition: all .15s;
+}
+.pl-agenda-toggle-btn:hover { border-color: var(--pl-accent); color: var(--pl-accent); }
+.pl-agenda-toggle-btn.done {
+  background: color-mix(in srgb, var(--pl-good) 14%, transparent); border-color: color-mix(in srgb, var(--pl-good) 32%, transparent); color: var(--pl-good);
+}
+
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
 .pl-modal-panel { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
