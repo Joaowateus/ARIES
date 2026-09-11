@@ -10,6 +10,7 @@ const NAV = [
   { href: '/pro-labore', label: 'Dashboard' },
   { href: '/pro-labore/vendas', label: 'Vendas', donoOnly: true },
   { href: '/pro-labore/leads', label: 'Leads' },
+  { href: '/pro-labore/agenda', label: 'Agenda' },
   { href: '/pro-labore/vendedores', label: 'Vendedores', donoOnly: true },
   { href: '/pro-labore/indicadores', label: 'Indicadores', donoOnly: true },
   { href: '/pro-labore/configuracoes', label: 'Configurações', donoOnly: true },

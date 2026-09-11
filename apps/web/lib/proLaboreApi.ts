@@ -83,6 +83,37 @@ export type EstagioFunilPL = (typeof ETAPAS_FUNIL_PL)[number]
 export const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
 export type TipoLead = (typeof TIPOS_LEAD)[number]
 
+export const AGENDA_CATEGORIAS = ['META', 'PROCESSO', 'AUDITORIA', 'PROTOCOLO', 'OUTRO'] as const
+export type AgendaCategoria = (typeof AGENDA_CATEGORIAS)[number]
+
+export const AGENDA_TIPOS = ['UNICO', 'RECORRENTE'] as const
+export type AgendaTipoItem = (typeof AGENDA_TIPOS)[number]
+
+export interface AgendaItem {
+  id: string
+  titulo: string
+  descricao?: string | null
+  categoria: AgendaCategoria
+  tipo: AgendaTipoItem
+  data?: string | null // ISO, quando tipo === 'UNICO'
+  diasSemana?: string | null // CSV "0,1,2..." (dom-sáb), quando tipo === 'RECORRENTE'
+  dataInicio?: string | null
+  dataFim?: string | null
+  vendedorId?: string | null // null = toda a equipe
+  vendedor?: { id: string; nome: string } | null
+  ativo: boolean
+  criadoEm: string
+  atualizadoEm: string
+}
+
+export interface AgendaConclusao {
+  id: string
+  agendaItemId: string
+  autorId: string
+  dataReferencia: string
+  concluidoEm: string
+}
+
 export interface Lead {
   id: string
   nomeCliente: string
@@ -280,6 +311,43 @@ export const proLaboreApi = {
       const params = new URLSearchParams({ inicio, fim })
       if (vendedorId) params.set('vendedorId', vendedorId)
       return request<ReceitaDetalhada>(`/pro-labore/receitas-periodo?${params.toString()}`)
+    },
+  },
+  agenda: {
+    itens: {
+      listar: () => request<AgendaItem[]>('/pro-labore/agenda-itens'),
+      criar: (data: {
+        titulo: string
+        descricao?: string
+        categoria: AgendaCategoria
+        tipo: AgendaTipoItem
+        data?: string
+        diasSemana?: number[]
+        dataInicio?: string
+        dataFim?: string
+        vendedorId?: string
+      }) => request<AgendaItem>('/pro-labore/agenda-itens', { method: 'POST', body: JSON.stringify(data) }),
+      editar: (
+        id: string,
+        data: Partial<{
+          titulo: string
+          descricao: string | null
+          categoria: AgendaCategoria
+          tipo: AgendaTipoItem
+          data: string | null
+          diasSemana: number[] | null
+          dataInicio: string | null
+          dataFim: string | null
+          vendedorId: string | null
+          ativo: boolean
+        }>,
+      ) => request<AgendaItem>(`/pro-labore/agenda-itens/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/agenda-itens/${id}`, { method: 'DELETE' }),
+      concluir: (id: string, data: string) =>
+        request<{ concluido: boolean; concluidoEm?: string }>(`/pro-labore/agenda-itens/${id}/concluir`, { method: 'POST', body: JSON.stringify({ data }) }),
+    },
+    conclusoes: {
+      listar: (inicio: string, fim: string) => request<AgendaConclusao[]>(`/pro-labore/agenda-conclusoes?inicio=${inicio}&fim=${fim}`),
     },
   },
 }
