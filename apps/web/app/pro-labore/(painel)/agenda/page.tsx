@@ -80,6 +80,38 @@ function foiConcluido(conclusoes: AgendaConclusao[], itemId: string, autorId: st
   return conclusoes.some(c => c.agendaItemId === itemId && c.autorId === autorId && c.dataReferencia.slice(0, 10) === diaIso)
 }
 
+type PeriodoAuditoria = '7' | '30' | 'mes'
+
+function rangeAuditoria(periodo: PeriodoAuditoria): { inicio: Date; fim: Date } {
+  const hoje = hojeUTC()
+  if (periodo === 'mes') {
+    return { inicio: new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 1)), fim: hoje }
+  }
+  const inicio = new Date(hoje)
+  inicio.setUTCDate(inicio.getUTCDate() - (periodo === '7' ? 6 : 29))
+  return { inicio, fim: hoje }
+}
+
+const AVATAR_CORES_AUDITORIA = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
+
+function iniciais(nome: string): string {
+  return nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+}
+
+// Hash simples e estável do id só pra escolher sempre a mesma cor de avatar
+// pra mesma pessoa, sem precisar de um índice de posição numa lista.
+function corAvatar(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return AVATAR_CORES_AUDITORIA[h % AVATAR_CORES_AUDITORIA.length]
+}
+
+function corPct(pct: number): string {
+  if (pct >= 80) return 'var(--pl-good)'
+  if (pct >= 50) return 'var(--pl-accent-4)'
+  return 'var(--pl-critical)'
+}
+
 function diasDoMesGrid(ano: number, mes: number): (Date | null)[] {
   const primeiro = new Date(Date.UTC(ano, mes, 1))
   const diasNoMes = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate()
@@ -132,6 +164,10 @@ export default function ProLaboreAgendaPage() {
   const [diaSelecionado, setDiaSelecionado] = useState(() => isoDia(hojeUTC()))
   const [mostrarTodos, setMostrarTodos] = useState(false)
 
+  const [periodoAuditoria, setPeriodoAuditoria] = useState<PeriodoAuditoria>('7')
+  const [conclusoesAuditoria, setConclusoesAuditoria] = useState<AgendaConclusao[]>([])
+  const [carregandoAuditoria, setCarregandoAuditoria] = useState(false)
+
   const [modalAberto, setModalAberto] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [form, setForm] = useState<FormAgenda>(FORM_VAZIO)
@@ -162,6 +198,17 @@ export default function ProLaboreAgendaPage() {
     proLaboreApi.agenda.conclusoes.listar(isoDia(inicio), isoDia(fim)).then(setConclusoes)
   }, [mesVisivel.ano, mesVisivel.mes])
 
+  // Auditoria de aderência: período independente do mês visível no
+  // calendário, só carregado (e usado) por quem enxerga a equipe.
+  useEffect(() => {
+    if (!vejaEquipe) return
+    const { inicio, fim } = rangeAuditoria(periodoAuditoria)
+    setCarregandoAuditoria(true)
+    proLaboreApi.agenda.conclusoes.listar(isoDia(inicio), isoDia(fim))
+      .then(setConclusoesAuditoria)
+      .finally(() => setCarregandoAuditoria(false))
+  }, [vejaEquipe, periodoAuditoria])
+
   const meusItens = useMemo(() => itens.filter(i => itemAplicaPara(i, meuVendedorId, isDono)), [itens, meuVendedorId, isDono])
 
   const hojeIso = isoDia(hojeUTC())
@@ -182,6 +229,36 @@ export default function ProLaboreAgendaPage() {
     }
     return comItem > 0 ? (somaPct / comItem) * 100 : null
   }, [vejaEquipe, vendedoresAtivos, itens, conclusoes, hojeIso])
+
+  // Ranking de aderência no período selecionado: pra cada pessoa (dono
+  // incluído, quando ele mesmo é alvo de algum item) soma quantos itens
+  // aplicáveis existiram em cada dia do período e quantos foram concluídos.
+  const auditoria = useMemo(() => {
+    if (!vejaEquipe) return []
+    const { inicio, fim } = rangeAuditoria(periodoAuditoria)
+    const donoAutorId = itens[0]?.usuarioId
+    const pessoas: { id: string; nome: string; ehDono: boolean }[] = []
+    if (donoAutorId) pessoas.push({ id: donoAutorId, nome: ROTULO_DONO, ehDono: true })
+    for (const v of vendedoresAtivos) pessoas.push({ id: v.id, nome: v.nome, ehDono: false })
+
+    const dias: Date[] = []
+    for (const d = new Date(inicio); d <= fim; d.setUTCDate(d.getUTCDate() + 1)) dias.push(new Date(d))
+
+    return pessoas
+      .map(p => {
+        let total = 0
+        let feitos = 0
+        for (const dia of dias) {
+          const diaIso = isoDia(dia)
+          const aplicaveis = itens.filter(i => itemAplicaPara(i, p.ehDono ? null : p.id, p.ehDono) && itemAplicaNoDia(i, dia))
+          total += aplicaveis.length
+          feitos += aplicaveis.filter(i => foiConcluido(conclusoesAuditoria, i.id, p.id, diaIso)).length
+        }
+        return { id: p.id, nome: p.nome, total, feitos, pct: total > 0 ? (feitos / total) * 100 : 0 }
+      })
+      .filter(p => p.total > 0)
+      .sort((a, b) => b.pct - a.pct)
+  }, [vejaEquipe, periodoAuditoria, itens, vendedoresAtivos, conclusoesAuditoria])
 
   async function alternarConclusao(item: AgendaItem, diaIso: string) {
     const resultado = await proLaboreApi.agenda.itens.concluir(item.id, diaIso)
@@ -446,6 +523,49 @@ export default function ProLaboreAgendaPage() {
           )}
         </div>
       </div>
+
+      {vejaEquipe && (
+        <div className="pl-card" style={{ marginTop: 20 }}>
+          <div className="pl-card-head">
+            <div>
+              <div className="pl-card-title">Auditoria de aderência</div>
+              <div className="pl-section-note" style={{ marginTop: 2 }}>Quem está cumprindo a própria rotina de trabalho no período.</div>
+            </div>
+            <div className="pl-period-row">
+              <button type="button" className={`pl-chip ${periodoAuditoria === '7' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('7')}>7 dias</button>
+              <button type="button" className={`pl-chip ${periodoAuditoria === '30' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('30')}>30 dias</button>
+              <button type="button" className={`pl-chip ${periodoAuditoria === 'mes' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('mes')}>Este mês</button>
+            </div>
+          </div>
+          {carregandoAuditoria ? (
+            <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13, padding: '20px 0' }}>Carregando...</div>
+          ) : auditoria.length === 0 ? (
+            <div className="pl-empty" style={{ padding: '30px 10px' }}>
+              <div className="pl-emoji">📋</div>
+              Ninguém tem itens de agenda aplicáveis neste período.
+            </div>
+          ) : (
+            <div style={{ marginTop: 8 }}>
+              {auditoria.map((p, i) => (
+                <div key={p.id} className="pl-seller-row">
+                  <div className={`pl-rank ${i === 0 ? 'top' : ''}`}>{i + 1}</div>
+                  <div className="pl-seller-main">
+                    <div className="pl-seller-top">
+                      <div className="pl-seller-name">
+                        <span className="pl-avatar" style={{ background: corAvatar(p.id) }}>{iniciais(p.nome)}</span>
+                        {p.nome}
+                      </div>
+                      <div className="pl-seller-figs" style={{ color: corPct(p.pct) }}>{p.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>
+                    </div>
+                    <div className="pl-bar-track"><div className="pl-bar-fill" style={{ width: `${p.pct}%`, background: corPct(p.pct) }} /></div>
+                  </div>
+                  <div className="pl-seller-meta">{p.feitos}/{p.total}<br />concluídos</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {vejaEquipe && itens.length > 0 && (
         <div className="pl-section-note" style={{ margin: '16px 0' }}>
