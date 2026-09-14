@@ -80,6 +80,19 @@ export default function ProLaboreDashboardPage() {
   const [filtroReceitaDetalhadaId, setFiltroReceitaDetalhadaId] = useState<string | null>(null)
   const [filtroFunilVendedorId, setFiltroFunilVendedorId] = useState<string | null>(null)
 
+  // Período personalizado isolado do funil — quando aplicado, a jornada
+  // deixa de olhar o mês selecionado no topo e passa a somar os Leads
+  // criados dentro do intervalo de datas, na hora (client-side, junto com
+  // o filtro de vendedor/canal do próprio card).
+  const [filtroFunilPeriodo, setFiltroFunilPeriodo] = useState<{ inicio: string; fim: string } | null>(null)
+  const [funilCustomInicio, setFunilCustomInicio] = useState('')
+  const [funilCustomFim, setFunilCustomFim] = useState('')
+
+  function aplicarFunilPeriodo() {
+    if (!funilCustomInicio || !funilCustomFim) return
+    setFiltroFunilPeriodo({ inicio: funilCustomInicio, fim: funilCustomFim })
+  }
+
   const chaveReceita = filtroReceitaId ?? filtroVendedorId
   const chaveComissao = filtroComissaoId ?? filtroVendedorId
   const chaveLucro = filtroLucroId ?? filtroVendedorId
@@ -193,9 +206,27 @@ export default function ProLaboreDashboardPage() {
   // ativo o funil é sempre recalculado no cliente a partir dos Leads já
   // carregados; sem canal, usa a resposta do /painel já buscada pra chave
   // de vendedor do funil (isolada do funil, ou seguindo o filtro geral).
-  const filtroFunilAtivo = chaveFunilVendedor !== '' || filtroCanal !== ''
+  const filtroFunilAtivo = chaveFunilVendedor !== '' || filtroCanal !== '' || filtroFunilPeriodo !== null
   const funilFiltrado = useMemo(() => {
-    if (!atual || !filtroFunilAtivo) return null
+    if (!filtroFunilAtivo) return null
+    if (filtroFunilPeriodo) {
+      const inicioData = new Date(`${filtroFunilPeriodo.inicio}T00:00:00`)
+      const fimData = new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`)
+      const leadsNoPeriodo = leads.filter(l => {
+        const d = new Date(l.criadoEm)
+        return d >= inicioData && d <= fimData
+          && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
+          && (!filtroCanal || l.tipoLead === filtroCanal)
+      })
+      return {
+        leads: leadsNoPeriodo.length,
+        abordados: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
+        negociacao: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
+        proposta: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
+        fechamento: leadsNoPeriodo.filter(l => l.estagio === 'FECHADO').length,
+      }
+    }
+    if (!atual) return null
     if (filtroCanal !== '') {
       const leadsDoMes = leads.filter(l => {
         const d = new Date(l.criadoEm)
@@ -212,7 +243,7 @@ export default function ProLaboreDashboardPage() {
       }
     }
     return painelPorVendedor[chaveFunilVendedor]?.meses[selectedIdx]?.funil ?? null
-  }, [atual, filtroFunilAtivo, filtroCanal, leads, chaveFunilVendedor, painelPorVendedor, selectedIdx])
+  }, [atual, filtroFunilAtivo, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor, painelPorVendedor, selectedIdx])
 
   if (loading) return <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
 
@@ -404,7 +435,12 @@ export default function ProLaboreDashboardPage() {
           <h2 className="pl-section-title">Jornada de compra do cliente</h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="pl-section-note">{atual.label} {atual.ano}{filtroFunilAtivo && ' · filtrado'}</div>
+          <div className="pl-section-note">
+            {filtroFunilPeriodo
+              ? `${filtroFunilPeriodo.inicio.split('-').reverse().join('/')} – ${filtroFunilPeriodo.fim.split('-').reverse().join('/')}`
+              : `${atual.label} ${atual.ano}`}
+            {filtroFunilAtivo && ' · filtrado'}
+          </div>
           <FunilFiltro
             vendedores={vendedores}
             vendedorId={filtroFunilVendedorId}
@@ -412,6 +448,13 @@ export default function ProLaboreDashboardPage() {
             canal={filtroCanal}
             onChangeVendedor={setFiltroFunilVendedorId}
             onChangeCanal={setFiltroCanal}
+            periodo={filtroFunilPeriodo}
+            customInicio={funilCustomInicio}
+            customFim={funilCustomFim}
+            onChangeCustomInicio={setFunilCustomInicio}
+            onChangeCustomFim={setFunilCustomFim}
+            onAplicarPeriodo={aplicarFunilPeriodo}
+            onLimparPeriodo={() => setFiltroFunilPeriodo(null)}
           />
         </div>
       </div>
@@ -889,6 +932,7 @@ function FiltroVendedorCard({
 /* ============ FILTRO DO FUNIL (vendedor isolado + canal) ============ */
 function FunilFiltro({
   vendedores, vendedorId, vendedorGeralId, canal, onChangeVendedor, onChangeCanal,
+  periodo, customInicio, customFim, onChangeCustomInicio, onChangeCustomFim, onAplicarPeriodo, onLimparPeriodo,
 }: {
   vendedores: Vendedor[]
   vendedorId: string | null
@@ -896,11 +940,23 @@ function FunilFiltro({
   canal: '' | TipoLead
   onChangeVendedor: (v: string | null) => void
   onChangeCanal: (c: '' | TipoLead) => void
+  periodo: { inicio: string; fim: string } | null
+  customInicio: string
+  customFim: string
+  onChangeCustomInicio: (v: string) => void
+  onChangeCustomFim: (v: string) => void
+  onAplicarPeriodo: () => void
+  onLimparPeriodo: () => void
 }) {
   const [aberto, setAberto] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const ativo = vendedorId !== null || canal !== ''
+  const ativo = vendedorId !== null || canal !== '' || periodo !== null
   const rotuloGeral = vendedorGeralId ? (vendedores.find(v => v.id === vendedorGeralId)?.nome ?? 'vendedor') : 'Todos'
+
+  function aplicarPeriodo() {
+    onAplicarPeriodo()
+    setAberto(false)
+  }
 
   useEffect(() => {
     if (!aberto) return
@@ -938,7 +994,22 @@ function FunilFiltro({
               <option value="ORGANICO">Orgânico</option>
             </select>
           </div>
-          {ativo && <span className="pl-filter-clear" onClick={() => { onChangeVendedor(null); onChangeCanal('') }}>Limpar filtros</span>}
+          <div className="pl-field">
+            <label>Data início</label>
+            <input type="date" className="pl-input" value={customInicio} onChange={e => onChangeCustomInicio(e.target.value)} />
+          </div>
+          <div className="pl-field">
+            <label>Data fim</label>
+            <input type="date" className="pl-input" value={customFim} onChange={e => onChangeCustomFim(e.target.value)} />
+          </div>
+          <button type="button" className="pl-btn pl-btn-primary" style={{ width: '100%' }} disabled={!customInicio || !customFim} onClick={aplicarPeriodo}>
+            Aplicar período
+          </button>
+          {ativo && (
+            <span className="pl-filter-clear" onClick={() => { onChangeVendedor(null); onChangeCanal(''); onLimparPeriodo(); setAberto(false) }}>
+              Limpar filtros
+            </span>
+          )}
         </div>
       )}
     </div>
