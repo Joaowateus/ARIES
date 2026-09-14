@@ -18,13 +18,20 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
-// Mesma semântica dos presets de /receitas-periodo (hoje = só o dia atual,
-// 7 dias = hoje e os 6 anteriores) — dias=1 cobre o caso "hoje" também.
-function periodoPreset(dias: number): { inicio: string; fim: string } {
+// Mesma semântica do preset "hoje" de /receitas-periodo — só o dia atual.
+function periodoHoje(): { inicio: string; fim: string } {
+  const hojeIso = new Date().toISOString().slice(0, 10)
+  return { inicio: hojeIso, fim: hojeIso }
+}
+
+// Semana comercial (segunda a sábado, sem domingo) que contém hoje — sempre
+// a semana atual, nunca um intervalo fixo de dias pra trás.
+function periodoSemanaAtual(): { inicio: string; fim: string } {
   const hoje = new Date()
-  const fim = hoje.toISOString().slice(0, 10)
-  const inicioData = new Date(hoje.getTime() - (dias - 1) * 24 * 60 * 60 * 1000)
-  return { inicio: inicioData.toISOString().slice(0, 10), fim }
+  const diasDesdeSegunda = (hoje.getUTCDay() + 6) % 7 // domingo=0 vira 6; segunda=1 vira 0
+  const segunda = new Date(hoje.getTime() - diasDesdeSegunda * 24 * 60 * 60 * 1000)
+  const sabado = new Date(segunda.getTime() + 5 * 24 * 60 * 60 * 1000)
+  return { inicio: segunda.toISOString().slice(0, 10), fim: sabado.toISOString().slice(0, 10) }
 }
 
 function initials(nome: string) {
@@ -102,8 +109,8 @@ export default function ProLaboreDashboardPage() {
     setFiltroFunilPeriodo({ inicio: funilCustomInicio, fim: funilCustomFim })
   }
 
-  function selecionarFunilPreset(dias: number) {
-    const p = periodoPreset(dias)
+  function selecionarFunilPreset(tipo: 'hoje' | 'semana') {
+    const p = tipo === 'hoje' ? periodoHoje() : periodoSemanaAtual()
     setFunilCustomInicio(p.inicio)
     setFunilCustomFim(p.fim)
     setFiltroFunilPeriodo(p)
@@ -964,7 +971,7 @@ function FunilFiltro({
   onChangeCustomFim: (v: string) => void
   onAplicarPeriodo: () => void
   onLimparPeriodo: () => void
-  onSelecionarPreset: (dias: number) => void
+  onSelecionarPreset: (tipo: 'hoje' | 'semana') => void
 }) {
   const [aberto, setAberto] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -976,8 +983,8 @@ function FunilFiltro({
     setAberto(false)
   }
 
-  function selecionarPreset(dias: number) {
-    onSelecionarPreset(dias)
+  function selecionarPreset(tipo: 'hoje' | 'semana') {
+    onSelecionarPreset(tipo)
     setAberto(false)
   }
 
@@ -1020,8 +1027,8 @@ function FunilFiltro({
           <div className="pl-field">
             <label>Período</label>
             <div className="pl-period-row">
-              <button type="button" className={`pl-chip ${periodo && periodo.inicio === periodoPreset(1).inicio && periodo.fim === periodoPreset(1).fim ? 'active' : ''}`} onClick={() => selecionarPreset(1)}>Hoje</button>
-              <button type="button" className={`pl-chip ${periodo && periodo.inicio === periodoPreset(7).inicio && periodo.fim === periodoPreset(7).fim ? 'active' : ''}`} onClick={() => selecionarPreset(7)}>7 dias</button>
+              <button type="button" className={`pl-chip ${periodo && periodo.inicio === periodoHoje().inicio && periodo.fim === periodoHoje().fim ? 'active' : ''}`} onClick={() => selecionarPreset('hoje')}>Hoje</button>
+              <button type="button" className={`pl-chip ${periodo && periodo.inicio === periodoSemanaAtual().inicio && periodo.fim === periodoSemanaAtual().fim ? 'active' : ''}`} onClick={() => selecionarPreset('semana')}>Essa semana</button>
             </div>
           </div>
           <div className="pl-field">
