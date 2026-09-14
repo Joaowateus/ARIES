@@ -18,6 +18,15 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
 
 const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
+// Mesma semântica dos presets de /receitas-periodo (hoje = só o dia atual,
+// 7 dias = hoje e os 6 anteriores) — dias=1 cobre o caso "hoje" também.
+function periodoPreset(dias: number): { inicio: string; fim: string } {
+  const hoje = new Date()
+  const fim = hoje.toISOString().slice(0, 10)
+  const inicioData = new Date(hoje.getTime() - (dias - 1) * 24 * 60 * 60 * 1000)
+  return { inicio: inicioData.toISOString().slice(0, 10), fim }
+}
+
 function initials(nome: string) {
   return nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
 }
@@ -91,6 +100,13 @@ export default function ProLaboreDashboardPage() {
   function aplicarFunilPeriodo() {
     if (!funilCustomInicio || !funilCustomFim) return
     setFiltroFunilPeriodo({ inicio: funilCustomInicio, fim: funilCustomFim })
+  }
+
+  function selecionarFunilPreset(dias: number) {
+    const p = periodoPreset(dias)
+    setFunilCustomInicio(p.inicio)
+    setFunilCustomFim(p.fim)
+    setFiltroFunilPeriodo(p)
   }
 
   const chaveReceita = filtroReceitaId ?? filtroVendedorId
@@ -455,6 +471,7 @@ export default function ProLaboreDashboardPage() {
             onChangeCustomFim={setFunilCustomFim}
             onAplicarPeriodo={aplicarFunilPeriodo}
             onLimparPeriodo={() => setFiltroFunilPeriodo(null)}
+            onSelecionarPreset={selecionarFunilPreset}
           />
         </div>
       </div>
@@ -932,7 +949,7 @@ function FiltroVendedorCard({
 /* ============ FILTRO DO FUNIL (vendedor isolado + canal) ============ */
 function FunilFiltro({
   vendedores, vendedorId, vendedorGeralId, canal, onChangeVendedor, onChangeCanal,
-  periodo, customInicio, customFim, onChangeCustomInicio, onChangeCustomFim, onAplicarPeriodo, onLimparPeriodo,
+  periodo, customInicio, customFim, onChangeCustomInicio, onChangeCustomFim, onAplicarPeriodo, onLimparPeriodo, onSelecionarPreset,
 }: {
   vendedores: Vendedor[]
   vendedorId: string | null
@@ -947,6 +964,7 @@ function FunilFiltro({
   onChangeCustomFim: (v: string) => void
   onAplicarPeriodo: () => void
   onLimparPeriodo: () => void
+  onSelecionarPreset: (dias: number) => void
 }) {
   const [aberto, setAberto] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -955,6 +973,11 @@ function FunilFiltro({
 
   function aplicarPeriodo() {
     onAplicarPeriodo()
+    setAberto(false)
+  }
+
+  function selecionarPreset(dias: number) {
+    onSelecionarPreset(dias)
     setAberto(false)
   }
 
@@ -993,6 +1016,13 @@ function FunilFiltro({
               <option value="TRAFEGO">Tráfego pago</option>
               <option value="ORGANICO">Orgânico</option>
             </select>
+          </div>
+          <div className="pl-field">
+            <label>Período</label>
+            <div className="pl-period-row">
+              <button type="button" className={`pl-chip ${periodo && periodo.inicio === periodoPreset(1).inicio && periodo.fim === periodoPreset(1).fim ? 'active' : ''}`} onClick={() => selecionarPreset(1)}>Hoje</button>
+              <button type="button" className={`pl-chip ${periodo && periodo.inicio === periodoPreset(7).inicio && periodo.fim === periodoPreset(7).fim ? 'active' : ''}`} onClick={() => selecionarPreset(7)}>7 dias</button>
+            </div>
           </div>
           <div className="pl-field">
             <label>Data início</label>
