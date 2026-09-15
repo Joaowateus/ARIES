@@ -221,6 +221,7 @@
    gradiente sutil (truque padding-box/border-box — sem wrapper extra, sem
    pseudo-elemento) + sombra em camadas. Hover eleva o card levemente. */
 .pl-card {
+  container-type: inline-size;
   background:
     linear-gradient(var(--pl-glass-bg), var(--pl-glass-bg)) padding-box,
     linear-gradient(135deg, var(--pl-glass-border-a), var(--pl-glass-border-b)) border-box;
@@ -237,6 +238,10 @@
 .pl-card-sub { font-size: 12px; color: var(--pl-ink-muted); margin-top: 2px; }
 .pl-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 
+/* Valores "hero" (ex: faturamento anual) usam a mesma lógica de encolher-pra-caber
+   do .pl-kpi-value, mas com teto maior (32px) já que estes cards são mais largos. */
+.pl-kpi-value.pl-value-lg { font-size: clamp(18px, 8cqi, 32px); }
+
 /* ============ KPI GRID ============ */
 /* auto-fit (não um número fixo de colunas) — o total de cards varia por
    papel (dono vê 7, vendedor vê 4), e com repeat(6, 1fr) sobrava sempre um
@@ -245,8 +250,14 @@
    170px) porque na largura máxima do shell (1264px de conteúdo) os 7 cards
    do dono só cabem numa linha só com um mínimo de até ~168px — acima disso
    o navegador quebra pra 6 colunas e sobra o mesmo card órfão de antes. */
-.pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+/* minmax subiu de 150 pra 168px — era estreito demais pro JetBrains Mono
+   (mais largo que a Sora usada antes) caber num valor tipo "R$ 111.500,00"
+   sem cortar. Ainda assim, container query + clamp() no valor é o que
+   garante que NENHUM valor corta, em qualquer largura de card/tela — o
+   número encolhe até caber em vez de estourar (ver .pl-kpi-value abaixo). */
+.pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; }
 .pl-kpi {
+  container-type: inline-size;
   background:
     linear-gradient(var(--pl-glass-bg), var(--pl-glass-bg)) padding-box,
     linear-gradient(135deg, var(--pl-glass-border-a), var(--pl-glass-border-b)) border-box;
@@ -262,9 +273,13 @@
   box-shadow: 0 0 12px 0 var(--k-color, var(--pl-accent));
 }
 .pl-kpi-label { font-size: 11px; color: var(--pl-ink-muted); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
-.pl-kpi-value { font-family: 'JetBrains Mono', 'Sora', monospace; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; margin-top: 9px; letter-spacing: -0.01em; }
-.pl-kpi-value .pl-unit { font-family: 'Manrope'; font-size: 13px; font-weight: 600; color: var(--pl-ink-muted); margin-left: 2px; }
-.pl-kpi-foot { display: flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 12px; }
+.pl-kpi-value {
+  font-family: 'JetBrains Mono', 'Sora', monospace; font-variant-numeric: tabular-nums;
+  font-size: clamp(14px, 9cqi, 22px); font-weight: 700; margin-top: 9px; letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.pl-kpi-value .pl-unit { font-family: 'Manrope'; font-size: .6em; font-weight: 600; color: var(--pl-ink-muted); margin-left: 2px; }
+.pl-kpi-foot { display: flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 12px; flex-wrap: wrap; }
 .pl-delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-family: 'JetBrains Mono'; font-size: 11.5px; padding: 2px 6px 2px 5px; border-radius: 6px; transition: text-shadow .3s ease; }
 .pl-delta.up { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 13%, transparent); text-shadow: 0 0 10px color-mix(in srgb, var(--pl-good) 55%, transparent); }
 .pl-delta.down { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 13%, transparent); text-shadow: 0 0 10px color-mix(in srgb, var(--pl-critical) 55%, transparent); }
@@ -355,9 +370,18 @@
 .pl-filter-clear:hover { text-decoration: underline; }
 
 /* ============ FUNNEL / JOURNEY ============ */
+/* As 5 etapas (Leads → Fechamento) precisam ficar lado a lado e alinhadas
+   entre os 4 blocos (nomes, funil, valores, detalhes) pra não desalinhar a
+   leitura visual. Em vez de encolher até virarem ilegíveis num celular, o
+   conjunto inteiro rola na horizontal com uma largura mínima por coluna
+   (mesma solução já usada no .pl-kanban). */
+.pl-journey-scroll { overflow-x: auto; padding-bottom: 4px; }
+.pl-journey-inner { min-width: 460px; }
+.pl-journey-row { display: grid; grid-template-columns: repeat(5, minmax(84px, 1fr)); }
+.pl-journey-details { gap: 4px; }
 .pl-stage-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pl-ink-2); }
 .pl-stage-value { font-family: 'JetBrains Mono', 'Sora', monospace; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; margin-top: 5px; }
-.pl-stage-conv { margin-top: 8px; font-size: 11.5px; color: var(--pl-ink-muted); display: flex; align-items: center; justify-content: center; gap: 5px; }
+.pl-stage-conv { margin-top: 8px; font-size: 11.5px; color: var(--pl-ink-muted); display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
 .pl-stage-conv b { color: var(--pl-ink-1); font-family: 'JetBrains Mono'; }
 
 /* ============ SELLER LEADERBOARD ============ */
@@ -643,9 +667,6 @@
 
 @media (max-width: 980px) {
   .pl-grid-2, .pl-grid-2b { grid-template-columns: 1fr; }
-  .pl-journey { grid-template-columns: 1fr 1fr; row-gap: 22px; }
-  .pl-stage:not(:first-child)::before { display: none; }
-  .pl-stage-arrow { display: none; }
   .pl-kanban { grid-template-columns: repeat(5, 240px); }
 
   /* Menu vira gaveta deslizante — o botão hambúrguer some em telas largas
@@ -669,6 +690,6 @@
   .pl-theme-toggle, .pl-logout { align-self: flex-start; }
 }
 @media (max-width: 620px) {
-  .pl-journey { grid-template-columns: 1fr; }
   .pl-shell { padding: 20px 16px 60px; }
+  .pl-import-grid { grid-template-columns: 1fr !important; }
 }

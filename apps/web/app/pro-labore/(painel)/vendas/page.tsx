@@ -329,7 +329,7 @@ export default function ProLaboreVendasPage() {
 
         {importAberto && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 14 }}>
+            <div className="pl-import-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 14 }}>
               <div className="pl-field">
                 <label>Dados colados (uma venda por linha)</label>
                 <textarea

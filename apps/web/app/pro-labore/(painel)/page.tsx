@@ -605,7 +605,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Acumulado de {meses[0].label} a {meses[meses.length - 1].label} de {ano}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(totalAnualAnimado)}</div>
+              <div className="pl-kpi-value pl-value-lg">{formatMoeda(totalAnualAnimado)}</div>
             </div>
 
             <div className="pl-card">
@@ -615,7 +615,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Objetivo de faturamento para {ano}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaAnualAnimada)}</div>
+              <div className="pl-kpi-value pl-value-lg">{formatMoeda(metaAnualAnimada)}</div>
               <div className="pl-bar-track" style={{ marginTop: 14 }}>
                 <div className="pl-bar-fill" style={{ width: `${pctMetaAnual * 100}%` }} />
               </div>
@@ -633,7 +633,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Receita das suas vendas em {atual.label} de {atual.ano}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(receitaMesAnimada)}</div>
+              <div className="pl-kpi-value pl-value-lg">{formatMoeda(receitaMesAnimada)}</div>
             </div>
 
             <div className="pl-card">
@@ -643,7 +643,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Seu objetivo de faturamento em {atual.label}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaMensalAnimada)}</div>
+              <div className="pl-kpi-value pl-value-lg">{formatMoeda(metaMensalAnimada)}</div>
               <div className="pl-bar-track" style={{ marginTop: 14 }}>
                 <div className="pl-bar-fill" style={{ width: `${pctMetaMensal * 100}%` }} />
               </div>
@@ -1351,9 +1351,15 @@ function FunilJourney({
         </div>
       )}
 
+      {/* Telas estreitas: as 5 etapas nunca cabem legíveis espremidas numa
+          coluna só, então o funil inteiro rola na horizontal em vez de
+          cortar/esmagar texto (mesmo padrão do .pl-kanban). */}
+      <div className="pl-journey-scroll">
+      <div className="pl-journey-inner">
+
       {/* Bloco 1: nomes das etapas, com divisórias verticais — mesmo topo do
           gráfico de referência. */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)` }}>
+      <div className="pl-journey-row">
         {dados.map((d, i) => (
           <div key={d.key} style={{ textAlign: 'center', paddingBottom: 10, borderLeft: i > 0 ? '1px solid var(--pl-border)' : 'none' }}>
             <div className="pl-stage-name">{d.name}</div>
@@ -1366,7 +1372,7 @@ function FunilJourney({
           referência. */}
       <div style={{ position: 'relative' }}>
         <FunilTrapezio valores={dados.map(d => d.value)} cores={dados.map(d => d.cor)} />
-        <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, alignItems: 'center' }}>
+        <div className="pl-journey-row" style={{ position: 'absolute', inset: 0, alignItems: 'center' }}>
           {dados.map(d => (
             <div key={d.key} className="pl-mono" style={{ textAlign: 'center', fontWeight: 800, fontSize: 17, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,.45)' }}>
               {formatPct(d.conversaoTotal)}
@@ -1376,7 +1382,7 @@ function FunilJourney({
       </div>
 
       {/* Bloco 3: valor bruto de cada etapa, logo abaixo do funil. */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, marginTop: 10 }}>
+      <div className="pl-journey-row" style={{ marginTop: 10 }}>
         {dados.map(d => (
           <div key={d.key} className="pl-stage-value pl-mono" style={{ textAlign: 'center', fontSize: 20 }}>{d.value.toLocaleString('pt-BR')}</div>
         ))}
@@ -1384,7 +1390,7 @@ function FunilJourney({
 
       {/* Bloco 4: conversão da etapa anterior, perda, meta (editável) e
           custo por lead — por etapa. */}
-      <div className="pl-journey-details" style={{ display: 'grid', gridTemplateColumns: `repeat(${dados.length}, 1fr)`, gap: 4, marginTop: 4 }}>
+      <div className="pl-journey-details pl-journey-row" style={{ gap: 4, marginTop: 4 }}>
         {dados.map(d => (
           <div key={d.key} style={{ textAlign: 'center' }}>
             <div className="pl-stage-conv">
@@ -1436,6 +1442,9 @@ function FunilJourney({
             )}
           </div>
         ))}
+      </div>
+
+      </div>
       </div>
     </div>
   )
