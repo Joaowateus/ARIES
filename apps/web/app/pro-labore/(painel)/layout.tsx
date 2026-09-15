@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PLThemeToggle } from '@/lib/proLaboreTheme'
+import { AriesBrandMark } from '../AriesBrandMark'
 
 const NAV = [
   { href: '/pro-labore', label: 'Dashboard' },
@@ -57,9 +58,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     <div className="pl-shell">
       <div className="pl-topbar">
         <div className="pl-brand">
-          <div className="pl-brand-mark">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 6" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" /><path d="M15 6H21V12" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </div>
+          <AriesBrandMark />
           <div>
             <div className="pl-brand-name">Pró-Labore</div>
             <div className="pl-brand-sub">Liquidez da operação &amp; pró-labore</div>

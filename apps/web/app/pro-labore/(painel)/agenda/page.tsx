@@ -134,7 +134,10 @@ function statusEquipe(pct: number): { label: string; classe: 'bom' | 'atencao' |
   return { label: 'Crítico', classe: 'critico' }
 }
 
-const AVATAR_CORES_AUDITORIA = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
+// --pl-accent fica de fora: inverte de claro pra escuro entre os temas, e
+// o texto do avatar é branco fixo — os outros 5 tokens formam a "família
+// cinza/prata/dourado" da paleta, sempre escuros o bastante pro contraste.
+const AVATAR_CORES_AUDITORIA = ['var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
 function iniciais(nome: string): string {
   return nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()

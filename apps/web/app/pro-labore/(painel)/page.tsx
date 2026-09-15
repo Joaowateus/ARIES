@@ -16,7 +16,11 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
   return ORDEM_ESTAGIO_LEAD.indexOf(estagioAtual as (typeof ORDEM_ESTAGIO_LEAD)[number]) >= ORDEM_ESTAGIO_LEAD.indexOf(alvo)
 }
 
-const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
+// --pl-accent fica de fora da rotação: ele inverte de claro pra escuro (e
+// vice-versa) entre os temas, e o texto do avatar é sempre branco fixo —
+// os outros 5 tokens são a "família cinza/prata/dourado" da paleta, sempre
+// escuros o bastante pra manter contraste com texto branco nos dois temas.
+const AVATAR_CORES = ['var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
 // Mesma semântica do preset "hoje" de /receitas-periodo — só o dia atual.
 function periodoHoje(): { inicio: string; fim: string } {
