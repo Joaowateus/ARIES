@@ -2,39 +2,45 @@
 
 /* ============ TOKENS (escopados em .pl-app, nunca em :root, pra não vazar no resto do ARIES) ============
    Paleta baseada na logo da Aries Sales Systems — preto, branco e prata,
-   sem cor decorativa nenhuma. As três cores de status (bom/atenção/crítico)
-   continuam verde/dourado/vermelho de propósito: são sinal funcional, não
-   estética, e ficariam ilegíveis num sistema todo em cinza. */
+   sem cor decorativa nenhuma, mas com um toque de vida: os neutros e as
+   cores secundárias puxam pro azul-aço ("titânio") em vez de cinza puro, o
+   contraste é mais profundo (preto mais preto, branco mais branco) e o
+   accent primário ganha um leve glow nos botões — a mistura que dá a
+   sensação "tech" sem sair do monocromático. As três cores de status
+   (bom/atenção/crítico) continuam verde/dourado/vermelho de propósito: são
+   sinal funcional, não estética, e ficariam ilegíveis num sistema em cinza. */
 .pl-app {
-  --pl-bg: #f4f4f6;
+  --pl-bg: #f1f2f6;
   --pl-surface: #ffffff;
-  --pl-surface-2: #ececef;
-  --pl-ink-1: #17171b;
-  --pl-ink-2: #4c4c53;
-  --pl-ink-muted: #83838b;
-  --pl-border: rgba(17, 17, 20, 0.10);
-  --pl-border-strong: rgba(17, 17, 20, 0.18);
+  --pl-surface-2: #e7e9f0;
+  --pl-ink-1: #0e0f13;
+  --pl-ink-2: #454b5a;
+  --pl-ink-muted: #7c8294;
 
-  --pl-accent: #17171b; /* preto — ação primária, links, destaque */
+  --pl-border: rgba(14, 16, 30, 0.10);
+  --pl-border-strong: rgba(14, 16, 30, 0.20);
+
+  --pl-accent: #0b0c10; /* preto-titânio — ação primária, links, destaque */
   --pl-accent-ink: #ffffff; /* texto por cima de --pl-accent */
-  --pl-accent-soft: rgba(17, 17, 20, 0.06);
-  --pl-accent-2: #5c5c66; /* prata médio — anúncios / identidade categórica */
-  --pl-accent-3: #3a3a41; /* grafite — lucro / pró-labore */
-  --pl-accent-3-soft: rgba(58, 58, 65, 0.08);
-  --pl-accent-4: #8a5f0a; /* dourado — ticket médio, dobra como "atenção" */
-  --pl-accent-5: #74747d; /* prata claro — funil / roas */
-  --pl-accent-6: #4a4a52; /* grafite médio — conversão */
+  --pl-accent-soft: rgba(11, 12, 16, 0.07);
+  --pl-accent-glow: rgba(11, 12, 16, 0.22);
+  --pl-accent-2: #4e5568; /* aço médio — anúncios / identidade categórica */
+  --pl-accent-3: #262b37; /* grafite-aço — lucro / pró-labore */
+  --pl-accent-3-soft: rgba(38, 43, 55, 0.08);
+  --pl-accent-4: #ad760b; /* dourado vivo — ticket médio, dobra como "atenção" */
+  --pl-accent-5: #656d82; /* aço claro — funil / roas */
+  --pl-accent-6: #333948; /* grafite-aço médio — conversão */
 
   --pl-good: #0ca30c;
   --pl-critical: #d03b3b;
 
-  --pl-grid-line: #e2e2e6;
-  --pl-baseline: #c9c9cf;
+  --pl-grid-line: #dee0e8;
+  --pl-baseline: #c3c6d1;
 
   --pl-radius-lg: 20px;
   --pl-radius-md: 14px;
   --pl-radius-sm: 9px;
-  --pl-shadow-card: 0 1px 2px rgba(17, 17, 20, 0.04), 0 8px 24px -12px rgba(17, 17, 20, 0.10);
+  --pl-shadow-card: 0 1px 2px rgba(14, 16, 30, 0.05), 0 10px 28px -14px rgba(14, 16, 30, 0.16);
 
   color-scheme: light;
   background: var(--pl-bg);
@@ -49,50 +55,52 @@
 @media (prefers-color-scheme: dark) {
   .pl-app:not([data-theme="light"]) {
     color-scheme: dark;
-    --pl-bg: #08080a;
-    --pl-surface: #131316;
-    --pl-surface-2: #1c1c20;
-    --pl-ink-1: #f4f4f6;
-    --pl-ink-2: #c3c3c9;
-    --pl-ink-muted: #87878f;
-    --pl-border: rgba(255, 255, 255, 0.08);
-    --pl-border-strong: rgba(255, 255, 255, 0.16);
-    --pl-accent: #e9e9eb; /* prata quase branco — ação primária no escuro */
-    --pl-accent-ink: #0a0a0c; /* texto por cima de --pl-accent */
-    --pl-accent-soft: rgba(233, 233, 235, 0.10);
-    --pl-accent-2: #6b6b74;
-    --pl-accent-3: #55555f;
-    --pl-accent-3-soft: rgba(85, 85, 95, 0.16);
-    --pl-accent-4: #a9791f;
-    --pl-accent-5: #6f707a;
-    --pl-accent-6: #45454d;
-    --pl-grid-line: #232327;
-    --pl-baseline: #333338;
-    --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
+    --pl-bg: #06070a;
+    --pl-surface: #131419;
+    --pl-surface-2: #1c1e26;
+    --pl-ink-1: #f8f9fb;
+    --pl-ink-2: #cbcdd7;
+    --pl-ink-muted: #8b90a0;
+    --pl-border: rgba(255, 255, 255, 0.09);
+    --pl-border-strong: rgba(255, 255, 255, 0.18);
+    --pl-accent: #f1f3f9; /* prata-cromado quase branco — ação primária no escuro */
+    --pl-accent-ink: #08080a; /* texto por cima de --pl-accent */
+    --pl-accent-soft: rgba(241, 243, 249, 0.12);
+    --pl-accent-glow: rgba(241, 243, 249, 0.28);
+    --pl-accent-2: #7c8599;
+    --pl-accent-3: #565e72;
+    --pl-accent-3-soft: rgba(86, 94, 114, 0.20);
+    --pl-accent-4: #b8830f;
+    --pl-accent-5: #7e879b;
+    --pl-accent-6: #3a3f4d;
+    --pl-grid-line: #23252d;
+    --pl-baseline: #363a46;
+    --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px -16px rgba(0, 0, 0, 0.75);
   }
 }
 .pl-app[data-theme="dark"] {
   color-scheme: dark;
-  --pl-bg: #08080a;
-  --pl-surface: #131316;
-  --pl-surface-2: #1c1c20;
-  --pl-ink-1: #f4f4f6;
-  --pl-ink-2: #c3c3c9;
-  --pl-ink-muted: #87878f;
-  --pl-border: rgba(255, 255, 255, 0.08);
-  --pl-border-strong: rgba(255, 255, 255, 0.16);
-  --pl-accent: #e9e9eb;
-  --pl-accent-ink: #0a0a0c;
-  --pl-accent-soft: rgba(233, 233, 235, 0.10);
-  --pl-accent-2: #6b6b74;
-  --pl-accent-3: #55555f;
-  --pl-accent-3-soft: rgba(85, 85, 95, 0.16);
-  --pl-accent-4: #a9791f;
-  --pl-accent-5: #6f707a;
-  --pl-accent-6: #45454d;
-  --pl-grid-line: #232327;
-  --pl-baseline: #333338;
-  --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
+  --pl-bg: #06070a;
+  --pl-surface: #131419;
+  --pl-surface-2: #1c1e26;
+  --pl-ink-1: #f8f9fb;
+  --pl-ink-2: #cbcdd7;
+  --pl-ink-muted: #8b90a0;
+  --pl-border: rgba(255, 255, 255, 0.09);
+  --pl-border-strong: rgba(255, 255, 255, 0.18);
+  --pl-accent: #f1f3f9;
+  --pl-accent-ink: #08080a;
+  --pl-accent-soft: rgba(241, 243, 249, 0.12);
+  --pl-accent-glow: rgba(241, 243, 249, 0.28);
+  --pl-accent-2: #7c8599;
+  --pl-accent-3: #565e72;
+  --pl-accent-3-soft: rgba(86, 94, 114, 0.20);
+  --pl-accent-4: #b8830f;
+  --pl-accent-5: #7e879b;
+  --pl-accent-6: #3a3f4d;
+  --pl-grid-line: #23252d;
+  --pl-baseline: #363a46;
+  --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px -16px rgba(0, 0, 0, 0.75);
 }
 
 .pl-app * { box-sizing: border-box; }
@@ -109,12 +117,14 @@
    muda com o tema claro/escuro do painel, igual à logo real da empresa. */
 .pl-brand-mark {
   width: 40px; height: 40px; border-radius: 11px;
-  background: #0c0c0e;
+  background: linear-gradient(155deg, #202329, #08090b 65%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 6px 16px -6px rgba(0, 0, 0, 0.6);
   display: flex; align-items: center; justify-content: center; flex: none;
 }
 .pl-brand-mark span {
   font-family: 'Sora', system-ui, sans-serif; font-weight: 800; font-size: 19px; line-height: 1;
-  color: #b9bac0; letter-spacing: -0.5px;
+  color: #c9cbd4; letter-spacing: -0.5px;
 }
 .pl-brand-name { font-family: 'Sora'; font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
 .pl-brand-sub { font-size: 12.5px; color: var(--pl-ink-muted); margin-top: 1px; }
@@ -323,9 +333,9 @@
   cursor: pointer; border: 1px solid transparent; transition: opacity .15s, background .15s;
   font-family: 'Manrope';
 }
-.pl-btn-primary { background: var(--pl-accent); color: var(--pl-accent-ink); }
-.pl-btn-primary:hover { opacity: .9; }
-.pl-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.pl-btn-primary { background: var(--pl-accent); color: var(--pl-accent-ink); box-shadow: 0 0 0 0 var(--pl-accent-glow), 0 4px 14px -4px var(--pl-accent-glow); transition: box-shadow .15s, opacity .15s; }
+.pl-btn-primary:hover { opacity: .9; box-shadow: 0 0 0 3px var(--pl-accent-glow), 0 6px 18px -4px var(--pl-accent-glow); }
+.pl-btn-primary:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
 .pl-btn-ghost { background: var(--pl-surface); color: var(--pl-ink-2); border-color: var(--pl-border-strong); }
 .pl-btn-ghost:hover { color: var(--pl-ink-1); }
 
