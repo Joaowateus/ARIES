@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez, Vendedor, Lead, TipoLead, PERIODOS_RECEITA, ReceitaPeriodo, ReceitaDetalhada, PontoReceita, MetaFunilProLabore, TipoMetaFunilPL, ETAPAS_FUNIL_PL } from '@/lib/proLaboreApi'
 import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { useCountUp } from '@/lib/useCountUp'
 
 // Mesma ordem/lógica do backend (estagioAtingiu em proLabore.ts) — usada só
 // pra recalcular o funil no cliente quando um filtro de vendedor/canal está
@@ -61,6 +62,31 @@ function DeltaChip({ curr, prev, invert }: { curr: number; prev: number | undefi
       </svg>
       {d.pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
     </span>
+  )
+}
+
+// Extraído do .map() do grid de KPIs porque useCountUp é um hook — teria que
+// ser chamado dentro de um componente próprio pra cada card, não solto num
+// callback de array (regra dos hooks).
+function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel }: {
+  label: string
+  format: (n: number) => React.ReactNode
+  color: string
+  curr: number
+  prev: number | undefined
+  invert?: boolean
+  anteriorLabel?: string
+}) {
+  const animated = useCountUp(curr)
+  return (
+    <div className="pl-kpi" style={{ ['--k-color' as string]: color }}>
+      <div className="pl-kpi-label">{label}</div>
+      <div className="pl-kpi-value">{format(animated)}</div>
+      <div className="pl-kpi-foot">
+        <DeltaChip curr={curr} prev={prev} invert={invert} />
+        {anteriorLabel && <span className="pl-kpi-vs">vs. {anteriorLabel}</span>}
+      </div>
+    </div>
   )
 }
 
@@ -285,22 +311,25 @@ export default function ProLaboreDashboardPage() {
     )
   }
 
+  const formatRoas = (n: number) => <>{n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}<span className="pl-unit">×</span></>
+  const formatConversao = (n: number) => formatPct(n / 100)
+
   const kpis = [
-    { label: 'Receita do mês', value: formatMoeda(atual.receita), color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
+    { label: 'Receita do mês', format: formatMoeda, color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
     ...(isDono
-      ? [{ label: 'Lucro (pró-labore)', value: formatMoeda(atual.proLaboreSacado), color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }]
+      ? [{ label: 'Lucro (pró-labore)', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }]
       : isSupervisor
         ? [] // não é dela nem da equipe como um todo — cada vendedor já vê a própria no Ranking
-        : [{ label: 'Comissão do mês', value: formatMoeda(atual.comissaoPaga), color: 'var(--pl-accent-3)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga }]),
-    { label: 'Ticket médio', value: formatMoeda(atual.ticketMedio), color: 'var(--pl-accent-4)', curr: atual.ticketMedio, prev: anterior?.ticketMedio },
+        : [{ label: 'Comissão do mês', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga }]),
+    { label: 'Ticket médio', format: formatMoeda, color: 'var(--pl-accent-4)', curr: atual.ticketMedio, prev: anterior?.ticketMedio },
     ...(isDono
       ? [
-          { label: 'Comissões pagas', value: formatMoeda(atual.comissaoPaga), color: 'var(--pl-accent-4)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
-          { label: 'Gasto com anúncios', value: formatMoeda(atual.gastoAnuncios), color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true },
-          { label: 'ROAS', value: <>{atual.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}<span className="pl-unit">×</span></>, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas },
+          { label: 'Comissões pagas', format: formatMoeda, color: 'var(--pl-accent-4)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
+          { label: 'Gasto com anúncios', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true },
+          { label: 'ROAS', format: formatRoas, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas },
         ]
       : []),
-    { label: 'Conversão lead→venda', value: formatPct(atual.conversaoLeadVenda / 100), color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
+    { label: 'Conversão lead→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
   ]
 
   return (
@@ -320,14 +349,7 @@ export default function ProLaboreDashboardPage() {
 
       <div className="pl-kpi-grid" style={{ marginTop: 16 }}>
         {kpis.map(k => (
-          <div key={k.label} className="pl-kpi" style={{ ['--k-color' as string]: k.color }}>
-            <div className="pl-kpi-label">{k.label}</div>
-            <div className="pl-kpi-value">{k.value}</div>
-            <div className="pl-kpi-foot">
-              <DeltaChip curr={k.curr} prev={k.prev} invert={k.invert} />
-              {anterior && <span className="pl-kpi-vs">vs. {anterior.label}</span>}
-            </div>
-          </div>
+          <KpiCard key={k.label} label={k.label} format={k.format} color={k.color} curr={k.curr} prev={k.prev} invert={k.invert} anteriorLabel={anterior?.label} />
         ))}
       </div>
 
@@ -545,10 +567,19 @@ export default function ProLaboreDashboardPage() {
 // visão de conjunto. No lugar, o vendedor vê a própria meta mensal (a dele,
 // se definida em Vendedores, senão o padrão da conta).
 function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEquipe, metaMensalVendedor }: { meses: MesPainel[]; atual: MesPainel; parametro: ParametroLiquidez | null; onParametroSalvo: (p: ParametroLiquidez) => void; isDono: boolean; vejaEquipe: boolean; metaMensalVendedor: number }) {
-  if (meses.length === 0) return null
-  const ano = meses[0].ano
+  // Os 4 useCountUp precisam vir antes do "return null" abaixo (regra dos
+  // hooks — nada de hook depois de um retorno condicional), mesmo que
+  // `meses` esteja vazio: `atual` já vem garantido pelo componente pai, e
+  // as somas em `meses` são seguras num array vazio (reduce começa do 0).
   const totalAnual = meses.reduce((s, m) => s + m.receita, 0)
   const metaAnual = parametro?.metaFaturamentoAnual ?? 5_000_000
+  const totalAnualAnimado = useCountUp(totalAnual)
+  const metaAnualAnimada = useCountUp(metaAnual)
+  const receitaMesAnimada = useCountUp(atual.receita)
+  const metaMensalAnimada = useCountUp(metaMensalVendedor)
+
+  if (meses.length === 0) return null
+  const ano = meses[0].ano
   const pctMetaAnual = metaAnual > 0 ? Math.min(1, totalAnual / metaAnual) : 0
   const faltamAnual = Math.max(0, metaAnual - totalAnual)
 
@@ -574,7 +605,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Acumulado de {meses[0].label} a {meses[meses.length - 1].label} de {ano}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(totalAnual)}</div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(totalAnualAnimado)}</div>
             </div>
 
             <div className="pl-card">
@@ -584,7 +615,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Objetivo de faturamento para {ano}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaAnual)}</div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaAnualAnimada)}</div>
               <div className="pl-bar-track" style={{ marginTop: 14 }}>
                 <div className="pl-bar-fill" style={{ width: `${pctMetaAnual * 100}%` }} />
               </div>
@@ -602,7 +633,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Receita das suas vendas em {atual.label} de {atual.ano}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(atual.receita)}</div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(receitaMesAnimada)}</div>
             </div>
 
             <div className="pl-card">
@@ -612,7 +643,7 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
                   <div className="pl-card-sub">Seu objetivo de faturamento em {atual.label}</div>
                 </div>
               </div>
-              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaMensalVendedor)}</div>
+              <div className="pl-kpi-value" style={{ fontSize: 32 }}>{formatMoeda(metaMensalAnimada)}</div>
               <div className="pl-bar-track" style={{ marginTop: 14 }}>
                 <div className="pl-bar-fill" style={{ width: `${pctMetaMensal * 100}%` }} />
               </div>
@@ -711,15 +742,18 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
         </defs>
         {gridVals.map((gv, i) => <line key={i} x1={padL} x2={W - padR} y1={y(gv)} y2={y(gv)} className="pl-grid-hline" />)}
         <path d={areaD} fill="url(#revGrad)" stroke="none" />
-        <path d={lineD} fill="none" stroke="var(--pl-accent)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={lineD} className="pl-line-path" fill="none" stroke="var(--pl-accent)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
         <line x1={padL} x2={W - padR} y1={padT + plotH} y2={padT + plotH} className="pl-baseline-line" />
         {meses.map((m, i) => (
           <text key={m.mes} x={x(i)} y={H - 6} className="pl-axis-label" textAnchor={i === 0 ? 'start' : i === meses.length - 1 ? 'end' : 'middle'}>{m.label}</text>
         ))}
         {hoverIdx !== null && <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={padT + plotH} className="pl-hover-x" style={{ opacity: 1 }} />}
         {hoverIdx !== null && <circle cx={x(hoverIdx)} cy={y(meses[hoverIdx].receita)} r={4.5} fill="var(--pl-accent)" stroke="var(--pl-surface)" strokeWidth={2} className="pl-hover-dot" style={{ opacity: 1 }} />}
+        {selectedIdx >= 0 && pts[selectedIdx] && (
+          <circle cx={pts[selectedIdx][0]} cy={pts[selectedIdx][1]} r={4.5} className="pl-dot-halo" />
+        )}
         {pts.map((p, i) => (
-          <circle key={i} cx={p[0]} cy={p[1]} r={i === selectedIdx ? 4.5 : 3} fill={i === selectedIdx ? 'var(--pl-accent)' : 'var(--pl-surface)'} stroke="var(--pl-accent)" strokeWidth={2} />
+          <circle key={i} cx={p[0]} cy={p[1]} r={i === selectedIdx ? 4.5 : 3} fill={i === selectedIdx ? 'var(--pl-accent)' : 'var(--pl-surface)'} stroke="var(--pl-accent)" strokeWidth={2} className={i === selectedIdx ? 'pl-dot-current' : undefined} />
         ))}
         {meses.map((m, i) => (
           <rect key={m.mes} x={x(i) - stepX / 2} y={padT} width={stepX || W} height={plotH + 14} className="pl-hit"
@@ -859,10 +893,17 @@ function LucroChart({ meses, selectedIdx, valorFn, color = 'var(--pl-accent-3)' 
   const maxV = Math.max(...meses.map(getValor), 1) * 1.15
   const slot = plotW / meses.length
   const bw = slot * 0.56
+  const gradId = `barGrad-${useId()}`
 
   return (
     <div className="pl-chart-wrap" ref={wrapRef}>
       <svg className="pl-chart-svg pl-chart-svg--bars" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="1" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.55" />
+          </linearGradient>
+        </defs>
         {meses.map((m, i) => {
           const bh = (getValor(m) / maxV) * plotH
           const bx = padL + i * slot + (slot - bw) / 2
@@ -870,7 +911,12 @@ function LucroChart({ meses, selectedIdx, valorFn, color = 'var(--pl-accent-3)' 
           const isSel = i === selectedIdx
           return (
             <g key={m.mes}>
-              <rect x={bx} y={by} width={bw} height={bh} rx={4} fill={isSel ? color : `color-mix(in srgb, ${color} 38%, transparent)`} />
+              <rect
+                x={bx} y={by} width={bw} height={bh} rx={4}
+                fill={isSel ? `url(#${gradId})` : `color-mix(in srgb, ${color} 38%, transparent)`}
+                className={isSel ? 'pl-bar-current' : undefined}
+                style={isSel ? { ['--bar-color' as string]: color } : undefined}
+              />
               <text x={bx + bw / 2} y={h - 8} className="pl-axis-label" textAnchor="middle">{m.label}</text>
             </g>
           )
@@ -1437,7 +1483,7 @@ function RoasBars({ meses, selectedIdx }: { meses: MesPainel[]; selectedIdx: num
         return (
           <div key={m.mes} className="pl-roas-col">
             <span className="pl-roas-val">{m.roas.toFixed(1)}×</span>
-            <div className="pl-roas-bar" style={{ height: `${hpct}%`, opacity: i === selectedIdx ? 1 : 0.55 }} />
+            <div className={`pl-roas-bar ${i === selectedIdx ? 'current' : ''}`} style={{ height: `${hpct}%`, opacity: i === selectedIdx ? 1 : 0.55 }} />
             <span className="pl-roas-lbl">{m.label}</span>
           </div>
         )
