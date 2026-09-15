@@ -80,16 +80,58 @@ function foiConcluido(conclusoes: AgendaConclusao[], itemId: string, autorId: st
   return conclusoes.some(c => c.agendaItemId === itemId && c.autorId === autorId && c.dataReferencia.slice(0, 10) === diaIso)
 }
 
-type PeriodoAuditoria = '7' | '30' | 'mes'
+type PeriodoAuditoria = 'hoje' | '7' | '30' | 'mes'
 
 function rangeAuditoria(periodo: PeriodoAuditoria): { inicio: Date; fim: Date } {
   const hoje = hojeUTC()
+  if (periodo === 'hoje') return { inicio: hoje, fim: hoje }
   if (periodo === 'mes') {
     return { inicio: new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 1)), fim: hoje }
   }
   const inicio = new Date(hoje)
   inicio.setUTCDate(inicio.getUTCDate() - (periodo === '7' ? 6 : 29))
   return { inicio, fim: hoje }
+}
+
+type StatusConclusao = 'PENDENTE' | 'NO_PRAZO' | 'ATRASADO' | 'SEM_HORARIO'
+
+// Prazo do item nesse dia, convertido pro UTC assumindo horário de Brasília
+// (UTC-3, fixo, sem horário de verão) — mesma convenção já usada no backend
+// (horaBrasilia, em proLabore.ts) pra tudo que envolve hora do dia.
+function prazoUTC(dia: Date, horario: string): Date | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(horario)
+  if (!m) return null
+  return new Date(Date.UTC(dia.getUTCFullYear(), dia.getUTCMonth(), dia.getUTCDate(), Number(m[1]) + 3, Number(m[2])))
+}
+
+// Cruza a conclusão (quando existe) com o horário do item pra dizer se foi
+// feito no prazo ou atrasado, e por quanto tempo — concluidoEm é o instante
+// real em que a pessoa marcou "feito" (setado pelo backend), não o dia de
+// referência, então dá pra comparar contra o prazo com precisão de minuto.
+function statusConclusao(conclusoes: AgendaConclusao[], item: AgendaItem, autorId: string, dia: Date): { status: StatusConclusao; atrasoMin: number | null } {
+  const diaIso = isoDia(dia)
+  const c = conclusoes.find(c => c.agendaItemId === item.id && c.autorId === autorId && c.dataReferencia.slice(0, 10) === diaIso)
+  if (!c) return { status: 'PENDENTE', atrasoMin: null }
+  const prazo = item.horario ? prazoUTC(dia, item.horario) : null
+  if (!prazo) return { status: 'SEM_HORARIO', atrasoMin: null }
+  const diffMin = (new Date(c.concluidoEm).getTime() - prazo.getTime()) / 60000
+  if (diffMin <= 0) return { status: 'NO_PRAZO', atrasoMin: null }
+  return { status: 'ATRASADO', atrasoMin: Math.round(diffMin) }
+}
+
+function formatAtraso(min: number): string {
+  if (min < 60) return `${min}min`
+  const h = Math.floor(min / 60)
+  const resto = min % 60
+  return resto > 0 ? `${h}h${String(resto).padStart(2, '0')}` : `${h}h`
+}
+
+// Mesmos limiares de corPct, mas como rótulo — pra deixar explícito na
+// linha do ranking quem está "em dia" e quem precisa de atenção do dono.
+function statusEquipe(pct: number): { label: string; classe: 'bom' | 'atencao' | 'critico' } {
+  if (pct >= 80) return { label: 'Em dia', classe: 'bom' }
+  if (pct >= 50) return { label: 'Atenção', classe: 'atencao' }
+  return { label: 'Crítico', classe: 'critico' }
 }
 
 const AVATAR_CORES_AUDITORIA = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
@@ -164,7 +206,7 @@ export default function ProLaboreAgendaPage() {
   const [diaSelecionado, setDiaSelecionado] = useState(() => isoDia(hojeUTC()))
   const [mostrarTodos, setMostrarTodos] = useState(false)
 
-  const [periodoAuditoria, setPeriodoAuditoria] = useState<PeriodoAuditoria>('7')
+  const [periodoAuditoria, setPeriodoAuditoria] = useState<PeriodoAuditoria>('hoje')
   const [conclusoesAuditoria, setConclusoesAuditoria] = useState<AgendaConclusao[]>([])
   const [carregandoAuditoria, setCarregandoAuditoria] = useState(false)
 
@@ -216,23 +258,12 @@ export default function ProLaboreAgendaPage() {
   const meusConcluidosHoje = meusItensHoje.filter(i => foiConcluido(conclusoes, i.id, meuAutorId, hojeIso)).length
 
   const vendedoresAtivos = vendedores.filter(v => v.ativo)
-  const aderenciaEquipeHoje = useMemo(() => {
-    if (!vejaEquipe || vendedoresAtivos.length === 0) return null
-    let somaPct = 0
-    let comItem = 0
-    for (const v of vendedoresAtivos) {
-      const aplicaveis = itens.filter(i => itemAplicaPara(i, v.id, false) && itemAplicaNoDia(i, hojeUTC()))
-      if (aplicaveis.length === 0) continue
-      comItem += 1
-      const feitos = aplicaveis.filter(i => foiConcluido(conclusoes, i.id, v.id, hojeIso)).length
-      somaPct += feitos / aplicaveis.length
-    }
-    return comItem > 0 ? (somaPct / comItem) * 100 : null
-  }, [vejaEquipe, vendedoresAtivos, itens, conclusoes, hojeIso])
 
-  // Ranking de aderência no período selecionado: pra cada pessoa (dono
+  // Ranking de auditoria no período selecionado: pra cada pessoa (dono
   // incluído, quando ele mesmo é alvo de algum item) soma quantos itens
-  // aplicáveis existiram em cada dia do período e quantos foram concluídos.
+  // aplicáveis existiram em cada dia do período, quantos foram concluídos,
+  // e — pros que tinham horário marcado — quantos no prazo vs. atrasados
+  // (e por quanto tempo, em média).
   const auditoria = useMemo(() => {
     if (!vejaEquipe) return []
     const { inicio, fim } = rangeAuditoria(periodoAuditoria)
@@ -248,17 +279,46 @@ export default function ProLaboreAgendaPage() {
       .map(p => {
         let total = 0
         let feitos = 0
+        let noPrazo = 0
+        let atrasado = 0
+        let somaAtrasoMin = 0
         for (const dia of dias) {
-          const diaIso = isoDia(dia)
           const aplicaveis = itens.filter(i => itemAplicaPara(i, p.ehDono ? null : p.id, p.ehDono) && itemAplicaNoDia(i, dia))
-          total += aplicaveis.length
-          feitos += aplicaveis.filter(i => foiConcluido(conclusoesAuditoria, i.id, p.id, diaIso)).length
+          for (const item of aplicaveis) {
+            total += 1
+            const { status, atrasoMin } = statusConclusao(conclusoesAuditoria, item, p.id, dia)
+            if (status === 'PENDENTE') continue
+            feitos += 1
+            if (status === 'NO_PRAZO') noPrazo += 1
+            else if (status === 'ATRASADO') { atrasado += 1; somaAtrasoMin += atrasoMin ?? 0 }
+          }
         }
-        return { id: p.id, nome: p.nome, total, feitos, pct: total > 0 ? (feitos / total) * 100 : 0 }
+        return {
+          id: p.id, nome: p.nome, total, feitos, pct: total > 0 ? (feitos / total) * 100 : 0,
+          noPrazo, atrasado, atrasoMedioMin: atrasado > 0 ? Math.round(somaAtrasoMin / atrasado) : null,
+        }
       })
       .filter(p => p.total > 0)
       .sort((a, b) => b.pct - a.pct)
   }, [vejaEquipe, periodoAuditoria, itens, vendedoresAtivos, conclusoesAuditoria])
+
+  // Resumo da equipe inteira no período — os números que respondem "como
+  // estamos indo" antes mesmo de olhar pessoa por pessoa.
+  const auditoriaResumo = useMemo(() => {
+    if (auditoria.length === 0) return null
+    const somaFeitos = auditoria.reduce((s, p) => s + p.feitos, 0)
+    const somaTotal = auditoria.reduce((s, p) => s + p.total, 0)
+    const somaNoPrazo = auditoria.reduce((s, p) => s + p.noPrazo, 0)
+    const somaAtrasado = auditoria.reduce((s, p) => s + p.atrasado, 0)
+    const comHorario = somaNoPrazo + somaAtrasado
+    const criticos = auditoria.filter(p => statusEquipe(p.pct).classe === 'critico').length
+    return {
+      aderenciaPct: somaTotal > 0 ? (somaFeitos / somaTotal) * 100 : 0,
+      pctNoPrazo: comHorario > 0 ? (somaNoPrazo / comHorario) * 100 : null,
+      atrasos: somaAtrasado,
+      criticos,
+    }
+  }, [auditoria])
 
   async function alternarConclusao(item: AgendaItem, diaIso: string) {
     const resultado = await proLaboreApi.agenda.itens.concluir(item.id, diaIso)
@@ -397,17 +457,97 @@ export default function ProLaboreAgendaPage() {
         )}
       </div>
 
-      <div className="pl-kpi-grid" style={{ marginTop: 16 }}>
+      {vejaEquipe && (
+        <div className="pl-card" style={{ marginTop: 16 }}>
+          <div className="pl-card-head">
+            <div>
+              <div className="pl-card-title">Auditoria comercial da equipe</div>
+              <div className="pl-section-note" style={{ marginTop: 2 }}>Quem está cumprindo a rotina — e no horário certo — nesse período.</div>
+            </div>
+            <div className="pl-period-row">
+              <button type="button" className={`pl-chip ${periodoAuditoria === 'hoje' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('hoje')}>Hoje</button>
+              <button type="button" className={`pl-chip ${periodoAuditoria === '7' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('7')}>7 dias</button>
+              <button type="button" className={`pl-chip ${periodoAuditoria === '30' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('30')}>30 dias</button>
+              <button type="button" className={`pl-chip ${periodoAuditoria === 'mes' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('mes')}>Este mês</button>
+            </div>
+          </div>
+
+          {carregandoAuditoria ? (
+            <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13, padding: '20px 0' }}>Carregando...</div>
+          ) : auditoria.length === 0 || !auditoriaResumo ? (
+            <div className="pl-empty" style={{ padding: '30px 10px' }}>
+              <div className="pl-emoji">📋</div>
+              Ninguém tem itens de agenda aplicáveis neste período.
+            </div>
+          ) : (
+            <>
+              <div className="pl-kpi-grid" style={{ marginTop: 4, marginBottom: 20 }}>
+                <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-3)' }}>
+                  <div className="pl-kpi-label">Aderência da equipe</div>
+                  <div className="pl-kpi-value">{auditoriaResumo.aderenciaPct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}<span className="pl-unit">%</span></div>
+                </div>
+                <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-good)' }}>
+                  <div className="pl-kpi-label">Cumprido no prazo</div>
+                  <div className="pl-kpi-value">{auditoriaResumo.pctNoPrazo != null ? auditoriaResumo.pctNoPrazo.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) : '—'}<span className="pl-unit">{auditoriaResumo.pctNoPrazo != null ? '%' : 'sem itens c/ horário'}</span></div>
+                </div>
+                <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-4)' }}>
+                  <div className="pl-kpi-label">Atrasos no período</div>
+                  <div className="pl-kpi-value">{auditoriaResumo.atrasos}<span className="pl-unit">{auditoriaResumo.atrasos === 1 ? 'ocorrência' : 'ocorrências'}</span></div>
+                </div>
+                <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-critical)' }}>
+                  <div className="pl-kpi-label">Em alerta</div>
+                  <div className="pl-kpi-value">{auditoriaResumo.criticos}<span className="pl-unit">{auditoriaResumo.criticos === 1 ? 'pessoa' : 'pessoas'}</span></div>
+                </div>
+              </div>
+
+              <div>
+                {auditoria.map((p, i) => {
+                  const status = statusEquipe(p.pct)
+                  return (
+                    <div key={p.id} className="pl-seller-row">
+                      <div className={`pl-rank ${i === 0 ? 'top' : ''}`}>{i + 1}</div>
+                      <div className="pl-seller-main">
+                        <div className="pl-seller-top">
+                          <div className="pl-seller-name">
+                            <span className="pl-avatar" style={{ background: corAvatar(p.id) }}>{iniciais(p.nome)}</span>
+                            {p.nome}
+                            <span className={`pl-status-badge ${status.classe}`}>{status.label}</span>
+                          </div>
+                          <div className="pl-seller-figs" style={{ color: corPct(p.pct) }}>{p.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>
+                        </div>
+                        <div className="pl-bar-track"><div className="pl-bar-fill" style={{ width: `${p.pct}%`, background: corPct(p.pct) }} /></div>
+                      </div>
+                      <div className="pl-seller-meta">
+                        {p.feitos}/{p.total} concluídos
+                        <br />
+                        {p.noPrazo + p.atrasado > 0 ? (
+                          <span style={{ color: p.atrasado > 0 ? 'var(--pl-critical)' : 'var(--pl-good)' }}>
+                            {p.noPrazo} no prazo
+                            {p.atrasado > 0 && ` · ${p.atrasado} atrasado${p.atrasado > 1 ? 's' : ''} (méd. ${formatAtraso(p.atrasoMedioMin ?? 0)})`}
+                          </span>
+                        ) : 'sem itens c/ horário'}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="pl-section-head" style={{ marginTop: 28 }}>
+        <div>
+          <div className="pl-eyebrow">Dia a dia</div>
+          <h2 className="pl-section-title" style={{ fontSize: 17 }}>Calendário e conclusões</h2>
+        </div>
+      </div>
+
+      <div className="pl-kpi-grid" style={{ marginTop: 12 }}>
         <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent)' }}>
           <div className="pl-kpi-label">Hoje</div>
           <div className="pl-kpi-value">{meusConcluidosHoje}/{meusItensHoje.length}<span className="pl-unit">concluídos</span></div>
         </div>
-        {vejaEquipe && aderenciaEquipeHoje != null && (
-          <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-3)' }}>
-            <div className="pl-kpi-label">Aderência da equipe hoje</div>
-            <div className="pl-kpi-value">{aderenciaEquipeHoje.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}<span className="pl-unit">%</span></div>
-          </div>
-        )}
       </div>
 
       <div className="pl-grid-2b" style={{ marginTop: 20 }}>
@@ -461,23 +601,29 @@ export default function ProLaboreAgendaPage() {
               {itensDoDiaSelecionado.map(item => {
                 const souAlvo = itemAplicaPara(item, meuVendedorId, isDono)
                 const euConcluido = foiConcluido(conclusoes, item.id, meuAutorId, diaSelecionado)
+                const meuStatus = statusConclusao(conclusoes, item, meuAutorId, diaSelecionadoDate)
                 let resumoEquipe: string | null = null
                 if (vejaEquipe) {
                   const alvos = alvosDoItem(item)
                   const temAlvo = alvos.length > 0 || item.incluiDono
+                  const rotuloStatus = (autorId: string) => {
+                    const { status, atrasoMin } = statusConclusao(conclusoes, item, autorId, diaSelecionadoDate)
+                    if (status === 'PENDENTE') return 'pendente'
+                    if (status === 'ATRASADO') return `atrasado ${formatAtraso(atrasoMin ?? 0)}`
+                    if (status === 'NO_PRAZO') return 'no prazo'
+                    return 'concluído'
+                  }
                   if (!temAlvo) {
                     const feitos = vendedoresAtivos.filter(v => foiConcluido(conclusoes, item.id, v.id, diaSelecionado)).length
                     resumoEquipe = vendedoresAtivos.length > 0 ? `${feitos} de ${vendedoresAtivos.length} vendedores concluíram` : null
                   } else {
                     const partes: string[] = []
                     if (item.incluiDono && !isDono) {
-                      const concluiu = foiConcluido(conclusoes, item.id, item.usuarioId, diaSelecionado)
-                      partes.push(`${ROTULO_DONO}: ${concluiu ? 'concluído' : 'pendente'}`)
+                      partes.push(`${ROTULO_DONO}: ${rotuloStatus(item.usuarioId)}`)
                     }
                     for (const id of alvos.filter(id => id !== meuVendedorId)) {
                       const nome = vendedores.find(v => v.id === id)?.nome ?? 'Vendedor'
-                      const concluiu = foiConcluido(conclusoes, item.id, id, diaSelecionado)
-                      partes.push(`${nome}: ${concluiu ? 'concluído' : 'pendente'}`)
+                      partes.push(`${nome}: ${rotuloStatus(id)}`)
                     }
                     resumoEquipe = partes.length > 0 ? partes.join(' · ') : null
                   }
@@ -510,11 +656,23 @@ export default function ProLaboreAgendaPage() {
                     </div>
                     {resumoEquipe && <div className="pl-kanban-card-meta">{resumoEquipe}</div>}
                     {souAlvo && (
-                      <button type="button" className={`pl-agenda-toggle-btn ${euConcluido ? 'done' : ''}`} onClick={() => alternarConclusao(item, diaSelecionado)}>
-                        {euConcluido ? (
-                          <><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg> Concluído</>
-                        ) : 'Marcar como feito'}
-                      </button>
+                      <>
+                        <button type="button" className={`pl-agenda-toggle-btn ${euConcluido ? 'done' : ''}`} onClick={() => alternarConclusao(item, diaSelecionado)}>
+                          {euConcluido ? (
+                            <><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg> Concluído</>
+                          ) : 'Marcar como feito'}
+                        </button>
+                        {euConcluido && meuStatus.status === 'ATRASADO' && (
+                          <div className="pl-kanban-card-meta" style={{ marginTop: 6, color: 'var(--pl-critical)', fontWeight: 700 }}>
+                            Atrasado {formatAtraso(meuStatus.atrasoMin ?? 0)} em relação ao horário ({item.horario})
+                          </div>
+                        )}
+                        {euConcluido && meuStatus.status === 'NO_PRAZO' && (
+                          <div className="pl-kanban-card-meta" style={{ marginTop: 6, color: 'var(--pl-good)', fontWeight: 700 }}>
+                            Concluído no prazo (horário: {item.horario})
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )
@@ -523,49 +681,6 @@ export default function ProLaboreAgendaPage() {
           )}
         </div>
       </div>
-
-      {vejaEquipe && (
-        <div className="pl-card" style={{ marginTop: 20 }}>
-          <div className="pl-card-head">
-            <div>
-              <div className="pl-card-title">Auditoria de aderência</div>
-              <div className="pl-section-note" style={{ marginTop: 2 }}>Quem está cumprindo a própria rotina de trabalho no período.</div>
-            </div>
-            <div className="pl-period-row">
-              <button type="button" className={`pl-chip ${periodoAuditoria === '7' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('7')}>7 dias</button>
-              <button type="button" className={`pl-chip ${periodoAuditoria === '30' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('30')}>30 dias</button>
-              <button type="button" className={`pl-chip ${periodoAuditoria === 'mes' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('mes')}>Este mês</button>
-            </div>
-          </div>
-          {carregandoAuditoria ? (
-            <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13, padding: '20px 0' }}>Carregando...</div>
-          ) : auditoria.length === 0 ? (
-            <div className="pl-empty" style={{ padding: '30px 10px' }}>
-              <div className="pl-emoji">📋</div>
-              Ninguém tem itens de agenda aplicáveis neste período.
-            </div>
-          ) : (
-            <div style={{ marginTop: 8 }}>
-              {auditoria.map((p, i) => (
-                <div key={p.id} className="pl-seller-row">
-                  <div className={`pl-rank ${i === 0 ? 'top' : ''}`}>{i + 1}</div>
-                  <div className="pl-seller-main">
-                    <div className="pl-seller-top">
-                      <div className="pl-seller-name">
-                        <span className="pl-avatar" style={{ background: corAvatar(p.id) }}>{iniciais(p.nome)}</span>
-                        {p.nome}
-                      </div>
-                      <div className="pl-seller-figs" style={{ color: corPct(p.pct) }}>{p.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>
-                    </div>
-                    <div className="pl-bar-track"><div className="pl-bar-fill" style={{ width: `${p.pct}%`, background: corPct(p.pct) }} /></div>
-                  </div>
-                  <div className="pl-seller-meta">{p.feitos}/{p.total}<br />concluídos</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {vejaEquipe && itens.length > 0 && (
         <div className="pl-section-note" style={{ margin: '16px 0' }}>

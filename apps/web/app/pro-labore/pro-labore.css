@@ -509,6 +509,14 @@
   background: color-mix(in srgb, var(--pl-good) 14%, transparent); border-color: color-mix(in srgb, var(--pl-good) 32%, transparent); color: var(--pl-good);
 }
 
+.pl-status-badge {
+  display: inline-flex; align-items: center; font-weight: 700; font-family: 'JetBrains Mono'; font-size: 10.5px;
+  padding: 2px 7px; border-radius: 6px; white-space: nowrap; letter-spacing: .01em;
+}
+.pl-status-badge.bom { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 14%, transparent); }
+.pl-status-badge.atencao { color: var(--pl-accent-4); background: color-mix(in srgb, var(--pl-accent-4) 16%, transparent); }
+.pl-status-badge.critico { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 14%, transparent); }
+
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
 .pl-modal-panel { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
