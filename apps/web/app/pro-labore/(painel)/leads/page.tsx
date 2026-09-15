@@ -17,7 +17,10 @@ const COLUNAS: { estagio: EstagioLead; titulo: string }[] = [
 const TIPO_LABEL: Record<TipoLead, string> = { TRAFEGO: 'Tráfego Pago', ORGANICO: 'Orgânico' }
 const TIPO_CLASS: Record<TipoLead, string> = { TRAFEGO: 'trafego', ORGANICO: 'organico' }
 
-const AVATAR_CORES = ['var(--pl-accent)', 'var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
+// --pl-accent fica de fora: inverte de claro pra escuro entre os temas, e
+// o texto do avatar é branco fixo — os outros 5 tokens formam a "família
+// cinza/prata/dourado" da paleta, sempre escuros o bastante pro contraste.
+const AVATAR_CORES = ['var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
 function iniciais(nome: string) {
   return nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()

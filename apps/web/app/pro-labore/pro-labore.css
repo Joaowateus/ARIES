@@ -1,35 +1,40 @@
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-/* ============ TOKENS (escopados em .pl-app, nunca em :root, pra não vazar no resto do ARIES) ============ */
+/* ============ TOKENS (escopados em .pl-app, nunca em :root, pra não vazar no resto do ARIES) ============
+   Paleta baseada na logo da Aries Sales Systems — preto, branco e prata,
+   sem cor decorativa nenhuma. As três cores de status (bom/atenção/crítico)
+   continuam verde/dourado/vermelho de propósito: são sinal funcional, não
+   estética, e ficariam ilegíveis num sistema todo em cinza. */
 .pl-app {
-  --pl-bg: #f5f7fb;
+  --pl-bg: #f4f4f6;
   --pl-surface: #ffffff;
-  --pl-surface-2: #eef1f7;
-  --pl-ink-1: #0b0e1a;
-  --pl-ink-2: #52545e;
-  --pl-ink-muted: #7b7f8c;
-  --pl-border: rgba(11, 14, 26, 0.10);
-  --pl-border-strong: rgba(11, 14, 26, 0.16);
+  --pl-surface-2: #ececef;
+  --pl-ink-1: #17171b;
+  --pl-ink-2: #4c4c53;
+  --pl-ink-muted: #83838b;
+  --pl-border: rgba(17, 17, 20, 0.10);
+  --pl-border-strong: rgba(17, 17, 20, 0.18);
 
-  --pl-accent: #2a78d6; /* receita */
-  --pl-accent-soft: #eaf1fc;
-  --pl-accent-2: #eb6834; /* anúncios */
-  --pl-accent-3: #1baf7a; /* lucro / pró-labore */
-  --pl-accent-3-soft: #e6f7f0;
-  --pl-accent-4: #eda100; /* ticket médio */
-  --pl-accent-5: #4a3aa7; /* funil / roas */
-  --pl-accent-6: #e34948; /* conversão */
+  --pl-accent: #17171b; /* preto — ação primária, links, destaque */
+  --pl-accent-ink: #ffffff; /* texto por cima de --pl-accent */
+  --pl-accent-soft: rgba(17, 17, 20, 0.06);
+  --pl-accent-2: #5c5c66; /* prata médio — anúncios / identidade categórica */
+  --pl-accent-3: #3a3a41; /* grafite — lucro / pró-labore */
+  --pl-accent-3-soft: rgba(58, 58, 65, 0.08);
+  --pl-accent-4: #8a5f0a; /* dourado — ticket médio, dobra como "atenção" */
+  --pl-accent-5: #74747d; /* prata claro — funil / roas */
+  --pl-accent-6: #4a4a52; /* grafite médio — conversão */
 
   --pl-good: #0ca30c;
   --pl-critical: #d03b3b;
 
-  --pl-grid-line: #e4e6ee;
-  --pl-baseline: #c7cad6;
+  --pl-grid-line: #e2e2e6;
+  --pl-baseline: #c9c9cf;
 
   --pl-radius-lg: 20px;
   --pl-radius-md: 14px;
   --pl-radius-sm: 9px;
-  --pl-shadow-card: 0 1px 2px rgba(11, 14, 26, 0.04), 0 8px 24px -12px rgba(11, 14, 26, 0.10);
+  --pl-shadow-card: 0 1px 2px rgba(17, 17, 20, 0.04), 0 8px 24px -12px rgba(17, 17, 20, 0.10);
 
   color-scheme: light;
   background: var(--pl-bg);
@@ -44,48 +49,50 @@
 @media (prefers-color-scheme: dark) {
   .pl-app:not([data-theme="light"]) {
     color-scheme: dark;
-    --pl-bg: #07080d;
-    --pl-surface: #12141f;
-    --pl-surface-2: #181b2b;
-    --pl-ink-1: #f5f6fb;
-    --pl-ink-2: #b8bccb;
-    --pl-ink-muted: #7d8296;
+    --pl-bg: #08080a;
+    --pl-surface: #131316;
+    --pl-surface-2: #1c1c20;
+    --pl-ink-1: #f4f4f6;
+    --pl-ink-2: #c3c3c9;
+    --pl-ink-muted: #87878f;
     --pl-border: rgba(255, 255, 255, 0.08);
-    --pl-border-strong: rgba(255, 255, 255, 0.14);
-    --pl-accent: #3987e5;
-    --pl-accent-soft: rgba(57, 135, 229, 0.14);
-    --pl-accent-2: #d95926;
-    --pl-accent-3: #199e70;
-    --pl-accent-3-soft: rgba(25, 158, 112, 0.16);
-    --pl-accent-4: #c98500;
-    --pl-accent-5: #9085e9;
-    --pl-accent-6: #e66767;
-    --pl-grid-line: #262a3a;
-    --pl-baseline: #333750;
-    --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.6);
+    --pl-border-strong: rgba(255, 255, 255, 0.16);
+    --pl-accent: #e9e9eb; /* prata quase branco — ação primária no escuro */
+    --pl-accent-ink: #0a0a0c; /* texto por cima de --pl-accent */
+    --pl-accent-soft: rgba(233, 233, 235, 0.10);
+    --pl-accent-2: #6b6b74;
+    --pl-accent-3: #55555f;
+    --pl-accent-3-soft: rgba(85, 85, 95, 0.16);
+    --pl-accent-4: #a9791f;
+    --pl-accent-5: #6f707a;
+    --pl-accent-6: #45454d;
+    --pl-grid-line: #232327;
+    --pl-baseline: #333338;
+    --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
   }
 }
 .pl-app[data-theme="dark"] {
   color-scheme: dark;
-  --pl-bg: #07080d;
-  --pl-surface: #12141f;
-  --pl-surface-2: #181b2b;
-  --pl-ink-1: #f5f6fb;
-  --pl-ink-2: #b8bccb;
-  --pl-ink-muted: #7d8296;
+  --pl-bg: #08080a;
+  --pl-surface: #131316;
+  --pl-surface-2: #1c1c20;
+  --pl-ink-1: #f4f4f6;
+  --pl-ink-2: #c3c3c9;
+  --pl-ink-muted: #87878f;
   --pl-border: rgba(255, 255, 255, 0.08);
-  --pl-border-strong: rgba(255, 255, 255, 0.14);
-  --pl-accent: #3987e5;
-  --pl-accent-soft: rgba(57, 135, 229, 0.14);
-  --pl-accent-2: #d95926;
-  --pl-accent-3: #199e70;
-  --pl-accent-3-soft: rgba(25, 158, 112, 0.16);
-  --pl-accent-4: #c98500;
-  --pl-accent-5: #9085e9;
-  --pl-accent-6: #e66767;
-  --pl-grid-line: #262a3a;
-  --pl-baseline: #333750;
-  --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.6);
+  --pl-border-strong: rgba(255, 255, 255, 0.16);
+  --pl-accent: #e9e9eb;
+  --pl-accent-ink: #0a0a0c;
+  --pl-accent-soft: rgba(233, 233, 235, 0.10);
+  --pl-accent-2: #6b6b74;
+  --pl-accent-3: #55555f;
+  --pl-accent-3-soft: rgba(85, 85, 95, 0.16);
+  --pl-accent-4: #a9791f;
+  --pl-accent-5: #6f707a;
+  --pl-accent-6: #45454d;
+  --pl-grid-line: #232327;
+  --pl-baseline: #333338;
+  --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
 }
 
 .pl-app * { box-sizing: border-box; }
@@ -98,12 +105,17 @@
 /* ============ HEADER ============ */
 .pl-topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
 .pl-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* A marca (badge com o "A" da Aries) é fixa — preto com letra prata — e não
+   muda com o tema claro/escuro do painel, igual à logo real da empresa. */
 .pl-brand-mark {
   width: 40px; height: 40px; border-radius: 11px;
-  background: linear-gradient(155deg, var(--pl-accent), var(--pl-accent-5));
+  background: #0c0c0e;
   display: flex; align-items: center; justify-content: center; flex: none;
 }
-.pl-brand-mark svg { width: 20px; height: 20px; }
+.pl-brand-mark span {
+  font-family: 'Sora', system-ui, sans-serif; font-weight: 800; font-size: 19px; line-height: 1;
+  color: #b9bac0; letter-spacing: -0.5px;
+}
 .pl-brand-name { font-family: 'Sora'; font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
 .pl-brand-sub { font-size: 12.5px; color: var(--pl-ink-muted); margin-top: 1px; }
 
@@ -311,7 +323,7 @@
   cursor: pointer; border: 1px solid transparent; transition: opacity .15s, background .15s;
   font-family: 'Manrope';
 }
-.pl-btn-primary { background: var(--pl-accent-3); color: #fff; }
+.pl-btn-primary { background: var(--pl-accent); color: var(--pl-accent-ink); }
 .pl-btn-primary:hover { opacity: .9; }
 .pl-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 .pl-btn-ghost { background: var(--pl-surface); color: var(--pl-ink-2); border-color: var(--pl-border-strong); }
@@ -319,7 +331,7 @@
 
 .pl-alert { border-radius: var(--pl-radius-sm); padding: 10px 13px; font-size: 13px; }
 .pl-alert-error { background: color-mix(in srgb, var(--pl-critical) 12%, transparent); color: var(--pl-critical); }
-.pl-alert-success { background: var(--pl-accent-3-soft); color: var(--pl-accent-3); }
+.pl-alert-success { background: color-mix(in srgb, var(--pl-good) 12%, transparent); color: var(--pl-good); }
 
 /* ============ TABLE ============ */
 /* overflow-x: auto (não hidden) — em telas estreitas a tabela é mais larga

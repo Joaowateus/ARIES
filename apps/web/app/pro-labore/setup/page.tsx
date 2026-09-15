@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { proLaboreApi, setToken, setUsuario } from '@/lib/proLaboreApi'
+import { AriesBrandMark } from '../AriesBrandMark'
 
 export default function ProLaboreSetupPage() {
   const router = useRouter()
@@ -48,8 +49,8 @@ export default function ProLaboreSetupPage() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div className="pl-brand-mark" style={{ margin: '0 auto 14px', width: 52, height: 52, borderRadius: 15 }}>
-            <svg viewBox="0 0 24 24" fill="none" style={{ width: 26, height: 26 }}><path d="M3 17L9 11L13 15L21 6" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" /><path d="M15 6H21V12" stroke="white" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <div style={{ margin: '0 auto 14px', display: 'flex', justifyContent: 'center' }}>
+            <AriesBrandMark size={52} />
           </div>
           <h1 style={{ fontFamily: 'Sora', fontWeight: 700, fontSize: 22, margin: 0 }}>Pró-Labore</h1>
           <p style={{ color: 'var(--pl-ink-muted)', fontSize: 13, marginTop: 4 }}>Configuração inicial da sua conta</p>
