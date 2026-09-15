@@ -16,11 +16,11 @@ export default function Icon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#0c0c0e',
+          background: '#08090b',
           borderRadius: 8,
         }}
       >
-        <div style={{ color: '#b9bac0', fontSize: 21, fontWeight: 800, display: 'flex' }}>A</div>
+        <div style={{ color: '#c9cbd4', fontSize: 21, fontWeight: 800, display: 'flex' }}>A</div>
       </div>
     ),
     { ...size },
