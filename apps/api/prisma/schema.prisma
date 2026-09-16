@@ -1179,6 +1179,7 @@ model AgendaItem {
 
   usuario    ProLaboreUsuario  @relation(fields: [usuarioId], references: [id])
   conclusoes AgendaConclusao[]
+  inicios    AgendaInicio[]
 
   @@index([usuarioId])
   @@map("pro_labore_agenda_itens")
@@ -1200,4 +1201,25 @@ model AgendaConclusao {
   @@unique([agendaItemId, autorId, dataReferencia])
   @@index([agendaItemId])
   @@map("pro_labore_agenda_conclusoes")
+}
+
+// Registro de "iniciado" de um item num dia — sinal independente da
+// conclusão (uma tabela nova, e não uma coluna a mais em AgendaConclusao,
+// porque a existência de uma linha em AgendaConclusao já É a semântica de
+// "feito"; misturar os dois estados na mesma tabela obrigaria a tornar
+// concluidoEm opcional e revisar todo código que assume que a linha existe
+// = concluído). Alimenta o funil previstas → iniciadas → concluídas no
+// prazo da Auditoria comercial.
+model AgendaInicio {
+  id             String   @id @default(cuid())
+  agendaItemId   String
+  autorId        String
+  dataReferencia DateTime
+  iniciadoEm     DateTime @default(now())
+
+  item AgendaItem @relation(fields: [agendaItemId], references: [id])
+
+  @@unique([agendaItemId, autorId, dataReferencia])
+  @@index([agendaItemId])
+  @@map("pro_labore_agenda_inicios")
 }
