@@ -116,6 +116,9 @@ export interface AgendaItem {
   // dono ao mesmo tempo.
   vendedorIds?: string | null // CSV de ids de Vendedor
   incluiDono: boolean
+  // Atividade externa (visita, entrega, test-drive) — exige o selo pontual
+  // de localização no momento do check-in (não é rastreamento contínuo).
+  exigeLocalizacao: boolean
   ativo: boolean
   criadoEm: string
   atualizadoEm: string
@@ -127,6 +130,8 @@ export interface AgendaConclusao {
   autorId: string
   dataReferencia: string
   concluidoEm: string
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export interface AgendaInicio {
@@ -351,6 +356,7 @@ export const proLaboreApi = {
         horario?: string
         vendedorIds?: string[]
         incluiDono?: boolean
+        exigeLocalizacao?: boolean
       }) => request<AgendaItem>('/pro-labore/agenda-itens', { method: 'POST', body: JSON.stringify(data) }),
       editar: (
         id: string,
@@ -366,12 +372,13 @@ export const proLaboreApi = {
           horario: string | null
           vendedorIds: string[] | null
           incluiDono: boolean
+          exigeLocalizacao: boolean
           ativo: boolean
         }>,
       ) => request<AgendaItem>(`/pro-labore/agenda-itens/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
       remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/agenda-itens/${id}`, { method: 'DELETE' }),
-      concluir: (id: string, data: string) =>
-        request<{ concluido: boolean; concluidoEm?: string }>(`/pro-labore/agenda-itens/${id}/concluir`, { method: 'POST', body: JSON.stringify({ data }) }),
+      concluir: (id: string, data: string, localizacao?: { latitude: number; longitude: number }) =>
+        request<{ concluido: boolean; concluidoEm?: string; latitude?: number | null; longitude?: number | null }>(`/pro-labore/agenda-itens/${id}/concluir`, { method: 'POST', body: JSON.stringify({ data, ...localizacao }) }),
       // Sinal independente da conclusão — "comecei a trabalhar nisso", sem
       // necessariamente já ter terminado. Alimenta o funil de aderência.
       iniciar: (id: string, data: string) =>
