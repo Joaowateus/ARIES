@@ -49,6 +49,16 @@ export interface ParametroLiquidez {
   // calculado em cada etapa mais funda (FunilJourney).
   custoPorLeadTopo: number
   fraseMotivacional?: string | null
+  // Limiares da Auditoria comercial da Agenda — todos parametrizáveis pela
+  // tela de Configurações, nada disso é fixo no código.
+  agendaLimiarBomPct: number
+  agendaLimiarAtencaoPct: number
+  agendaLimiarEfetividadeAltaPct: number
+  agendaLimiarOscilacaoPct: number
+  agendaAlertaAderenciaPct: number
+  agendaAlertaDiasConsecutivos: number
+  agendaAlertaQuedaEfetividadePct: number
+  agendaReconhecimentoSemanas: number
 }
 
 export type TipoMetaFunilPL = 'MINIMO' | 'MAXIMO_PERDA' | 'MAXIMO_CUSTO'
@@ -358,5 +368,18 @@ export const proLaboreApi = {
     conclusoes: {
       listar: (inicio: string, fim: string) => request<AgendaConclusao[]>(`/pro-labore/agenda-conclusoes?inicio=${inicio}&fim=${fim}`),
     },
+    // Efetividade comercial por vendedor no período (conversão real do
+    // funil de Leads — abordado → fechado) — complementa a aderência da
+    // Agenda, que só mede se a rotina foi cumprida, não se gerou resultado.
+    efetividade: {
+      listar: (inicio: string, fim: string) => request<EfetividadeVendedor[]>(`/pro-labore/agenda/efetividade?inicio=${inicio}&fim=${fim}`),
+    },
   },
+}
+
+export interface EfetividadeVendedor {
+  vendedorId: string
+  leadsAbordados: number
+  leadsFechados: number
+  efetividadePct: number
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   proLaboreApi, AgendaItem, AgendaConclusao, AgendaCategoria, AgendaTipoItem, AGENDA_CATEGORIAS, Vendedor,
+  ParametroLiquidez, EfetividadeVendedor,
 } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
@@ -93,6 +94,18 @@ function rangeAuditoria(periodo: PeriodoAuditoria): { inicio: Date; fim: Date } 
   return { inicio, fim: hoje }
 }
 
+// Janela imediatamente anterior à selecionada, com a mesma duração — não é
+// um filtro paralelo, é só o espelho do período atual pra comparação.
+function rangeAnterior(periodo: PeriodoAuditoria): { inicio: Date; fim: Date } {
+  const { inicio } = rangeAuditoria(periodo)
+  const fimAnterior = new Date(inicio)
+  fimAnterior.setUTCDate(fimAnterior.getUTCDate() - 1)
+  const duracaoDias = periodo === 'hoje' ? 1 : periodo === '7' ? 7 : periodo === '30' ? 30 : (fimAnterior.getTime() - inicio.getTime()) / 86400000 + 1
+  const inicioAnterior = new Date(fimAnterior)
+  inicioAnterior.setUTCDate(inicioAnterior.getUTCDate() - (duracaoDias - 1))
+  return { inicio: inicioAnterior, fim: fimAnterior }
+}
+
 type StatusConclusao = 'PENDENTE' | 'NO_PRAZO' | 'ATRASADO' | 'SEM_HORARIO'
 
 // Prazo do item nesse dia, convertido pro UTC assumindo horário de Brasília
@@ -126,12 +139,154 @@ function formatAtraso(min: number): string {
   return resto > 0 ? `${h}h${String(resto).padStart(2, '0')}` : `${h}h`
 }
 
-// Mesmos limiares de corPct, mas como rótulo — pra deixar explícito na
-// linha do ranking quem está "em dia" e quem precisa de atenção do dono.
-function statusEquipe(pct: number): { label: string; classe: 'bom' | 'atencao' | 'critico' } {
-  if (pct >= 80) return { label: 'Em dia', classe: 'bom' }
-  if (pct >= 50) return { label: 'Atenção', classe: 'atencao' }
+// Limiares configuráveis em Configurações (ParametroLiquidez) — nada disso
+// é mais fixo no código. bom/atencao seguem sempre limiarBom > limiarAtencao.
+function statusEquipe(pct: number, limiarBom: number, limiarAtencao: number): { label: string; classe: 'bom' | 'atencao' | 'critico' } {
+  if (pct >= limiarBom) return { label: 'Em dia', classe: 'bom' }
+  if (pct >= limiarAtencao) return { label: 'Atenção', classe: 'atencao' }
   return { label: 'Crítico', classe: 'critico' }
+}
+
+// ===== Efetividade, consistência e classificação (matriz 2x2 aderência x
+// efetividade) — camada adicional sobre os dados já existentes: aderência
+// vem da Agenda (AgendaConclusao), efetividade vem do funil de Leads
+// (LeadEstagioHistorico, via /agenda/efetividade). Nenhuma tabela nova. =====
+
+type Perfil = 'REFERENCIA' | 'ESTAVEL_SEM_SUBSTANCIA' | 'OSCILANTE' | 'OCIOSO' | 'INCONSISTENTE'
+
+const PERFIL_LABEL: Record<Perfil, string> = {
+  REFERENCIA: 'Referência',
+  ESTAVEL_SEM_SUBSTANCIA: 'Estável sem substância',
+  OSCILANTE: 'Oscilante',
+  OCIOSO: 'Ocioso',
+  INCONSISTENTE: 'Inconsistente',
+}
+
+const PERFIL_COR: Record<Perfil, string> = {
+  REFERENCIA: 'var(--pl-good)',
+  ESTAVEL_SEM_SUBSTANCIA: 'var(--pl-accent-4)',
+  OSCILANTE: 'var(--pl-accent-5)',
+  OCIOSO: 'var(--pl-accent-2)',
+  INCONSISTENTE: 'var(--pl-critical)',
+}
+
+// Coeficiente de variação (desvio padrão ÷ média, em %) — precisa de pelo
+// menos 2 pontos com produção real (dias sem nenhum item aplicável não
+// entram, senão um "0%" artificial distorceria a variação).
+function coeficienteVariacao(valores: number[]): number | null {
+  if (valores.length < 2) return null
+  const media = valores.reduce((s, v) => s + v, 0) / valores.length
+  if (media === 0) return null
+  const variancia = valores.reduce((s, v) => s + (v - media) ** 2, 0) / valores.length
+  return (Math.sqrt(variancia) / media) * 100
+}
+
+// Maior sequência de dias (com item aplicável) seguidos abaixo do limiar de
+// alerta — dias sem nada aplicável não contam nem quebram a sequência.
+function maiorSequenciaAbaixoDe(valoresOrdenados: number[], limiar: number): number {
+  let maior = 0
+  let atual = 0
+  for (const v of valoresOrdenados) {
+    if (v < limiar) { atual += 1; maior = Math.max(maior, atual) }
+    else atual = 0
+  }
+  return maior
+}
+
+// Aproximação de "semanas seguidas" a partir dos dias com produção real,
+// em blocos de até 7 (não necessariamente semana-calendário) — pra achar
+// quantos blocos mais recentes tiveram aderência média acima do limiar
+// "bom", sem precisar de uma nova granularidade de período.
+function blocosRecentesAcimaDe(valoresOrdenados: number[], limiar: number): number {
+  if (valoresOrdenados.length === 0) return 0
+  const blocos: number[] = []
+  let i = valoresOrdenados.length
+  while (i > 0) {
+    const inicio = Math.max(0, i - 7)
+    const bloco = valoresOrdenados.slice(inicio, i)
+    blocos.push(bloco.reduce((s, v) => s + v, 0) / bloco.length)
+    i = inicio
+  }
+  let streak = 0
+  for (const media of blocos) {
+    if (media >= limiar) streak++
+    else break
+  }
+  return streak
+}
+
+// Prioridade da classificação: oscilação alta domina (é o padrão "ótimo numa
+// semana, sumido noutra" que o badge único não capturava); depois aderência
+// baixa e esporádica vira "Inconsistente"; aderência baixa mas estável vira
+// "Ocioso"; aderência alta se separa só por efetividade (Referência vs.
+// Estável sem substância). efetividade null (sem lead abordado no período)
+// não penaliza — vira "alta" por omissão, pra não confundir "sem dado" com
+// "não converte".
+function classificarPerfil(params: {
+  aderenciaPct: number
+  efetividadePct: number | null
+  oscilacaoPct: number | null
+  limiarBom: number
+  limiarEfetividadeAlta: number
+  limiarOscilacao: number
+}): Perfil {
+  const { aderenciaPct, efetividadePct, oscilacaoPct, limiarBom, limiarEfetividadeAlta, limiarOscilacao } = params
+  const efetividadeAlta = efetividadePct == null || efetividadePct >= limiarEfetividadeAlta
+  const oscilaMuito = oscilacaoPct != null && oscilacaoPct >= limiarOscilacao
+  const aderenciaAlta = aderenciaPct >= limiarBom
+
+  if (oscilaMuito && aderenciaAlta) return 'OSCILANTE'
+  if (!aderenciaAlta && oscilaMuito) return 'INCONSISTENTE'
+  if (!aderenciaAlta) return 'OCIOSO'
+  return efetividadeAlta ? 'REFERENCIA' : 'ESTAVEL_SEM_SUBSTANCIA'
+}
+
+// Quadrante aderência x efetividade — SVG feito à mão (mesmo padrão do
+// FunilTrapezio no dashboard principal, já que o projeto não tem nenhuma
+// lib de gráficos). Cada ponto é um consultor; as linhas tracejadas marcam
+// os limiares configurados, dividindo o plano nos 4 quadrantes de base da
+// matriz (Oscilante/Inconsistente entram por cima, via cor do ponto).
+function QuadranteAderenciaEfetividade({ pontos, limiarBom, limiarEfetividadeAlta }: {
+  pontos: { id: string; nome: string; aderenciaPct: number; efetividadePct: number | null; perfil: Perfil }[]
+  limiarBom: number
+  limiarEfetividadeAlta: number
+}) {
+  const W = 400, H = 260, PAD = 34
+  const comDado = pontos.filter(p => p.efetividadePct != null)
+  const maxEfetividade = Math.max(limiarEfetividadeAlta * 1.5, ...comDado.map(p => p.efetividadePct ?? 0), 10)
+
+  const x = (aderencia: number) => PAD + (aderencia / 100) * (W - PAD * 2)
+  const y = (efetividade: number) => H - PAD - (efetividade / maxEfetividade) * (H - PAD * 2)
+
+  if (comDado.length === 0) {
+    return (
+      <div className="pl-empty" style={{ padding: '24px 10px' }}>
+        <div className="pl-emoji">🎯</div>
+        Ninguém abordou leads nesse período ainda — o quadrante aparece assim que houver dado de efetividade.
+      </div>
+    )
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 260, display: 'block', overflow: 'visible' }}>
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--pl-border-strong)" strokeWidth={1} />
+      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="var(--pl-border-strong)" strokeWidth={1} />
+      <line x1={x(limiarBom)} y1={PAD} x2={x(limiarBom)} y2={H - PAD} stroke="var(--pl-border)" strokeWidth={1} strokeDasharray="4 4" />
+      <line x1={PAD} y1={y(limiarEfetividadeAlta)} x2={W - PAD} y2={y(limiarEfetividadeAlta)} stroke="var(--pl-border)" strokeWidth={1} strokeDasharray="4 4" />
+
+      <text x={W - PAD} y={H - PAD + 16} textAnchor="end" fontSize={9} fill="var(--pl-ink-muted)">Aderência →</text>
+      <text x={PAD - 6} y={PAD - 8} textAnchor="start" fontSize={9} fill="var(--pl-ink-muted)">↑ Efetividade</text>
+
+      {comDado.map(p => (
+        <g key={p.id}>
+          <circle cx={x(p.aderenciaPct)} cy={y(p.efetividadePct ?? 0)} r={6} fill={PERFIL_COR[p.perfil]} stroke="var(--pl-bg)" strokeWidth={1.5} />
+          <text x={x(p.aderenciaPct)} y={y(p.efetividadePct ?? 0) - 10} textAnchor="middle" fontSize={9} fontWeight={600} fill="var(--pl-ink-1)">
+            {p.nome.split(' ')[0]}
+          </text>
+        </g>
+      ))}
+    </svg>
+  )
 }
 
 // --pl-accent fica de fora: inverte de claro pra escuro entre os temas, e
@@ -151,9 +306,9 @@ function corAvatar(id: string): string {
   return AVATAR_CORES_AUDITORIA[h % AVATAR_CORES_AUDITORIA.length]
 }
 
-function corPct(pct: number): string {
-  if (pct >= 80) return 'var(--pl-good)'
-  if (pct >= 50) return 'var(--pl-accent-4)'
+function corPct(pct: number, limiarBom: number, limiarAtencao: number): string {
+  if (pct >= limiarBom) return 'var(--pl-good)'
+  if (pct >= limiarAtencao) return 'var(--pl-accent-4)'
   return 'var(--pl-critical)'
 }
 
@@ -212,6 +367,12 @@ export default function ProLaboreAgendaPage() {
   const [periodoAuditoria, setPeriodoAuditoria] = useState<PeriodoAuditoria>('hoje')
   const [conclusoesAuditoria, setConclusoesAuditoria] = useState<AgendaConclusao[]>([])
   const [carregandoAuditoria, setCarregandoAuditoria] = useState(false)
+  const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
+  const [efetividade, setEfetividade] = useState<EfetividadeVendedor[]>([])
+  // Efetividade do período imediatamente anterior (mesma duração) — usada
+  // só pra "queda de efetividade vs. média móvel do consultor" na regra de
+  // alerta. Não é um filtro novo, é sempre o espelho do período selecionado.
+  const [efetividadeAnterior, setEfetividadeAnterior] = useState<EfetividadeVendedor[]>([])
 
   const [modalAberto, setModalAberto] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
@@ -228,6 +389,7 @@ export default function ProLaboreAgendaPage() {
     Promise.all([
       carregarItens(),
       vejaEquipe ? proLaboreApi.vendedores.listar().then(setVendedores) : Promise.resolve(),
+      vejaEquipe ? proLaboreApi.parametros.get().then(setParametro) : Promise.resolve(),
     ]).finally(() => setLoading(false))
   }, [vejaEquipe])
 
@@ -248,10 +410,13 @@ export default function ProLaboreAgendaPage() {
   useEffect(() => {
     if (!vejaEquipe) return
     const { inicio, fim } = rangeAuditoria(periodoAuditoria)
+    const anterior = rangeAnterior(periodoAuditoria)
     setCarregandoAuditoria(true)
-    proLaboreApi.agenda.conclusoes.listar(isoDia(inicio), isoDia(fim))
-      .then(setConclusoesAuditoria)
-      .finally(() => setCarregandoAuditoria(false))
+    Promise.all([
+      proLaboreApi.agenda.conclusoes.listar(isoDia(inicio), isoDia(fim)).then(setConclusoesAuditoria),
+      proLaboreApi.agenda.efetividade.listar(isoDia(inicio), isoDia(fim)).then(setEfetividade),
+      proLaboreApi.agenda.efetividade.listar(isoDia(anterior.inicio), isoDia(anterior.fim)).then(setEfetividadeAnterior),
+    ]).finally(() => setCarregandoAuditoria(false))
   }, [vejaEquipe, periodoAuditoria])
 
   const meusItens = useMemo(() => itens.filter(i => itemAplicaPara(i, meuVendedorId, isDono)), [itens, meuVendedorId, isDono])
@@ -278,6 +443,14 @@ export default function ProLaboreAgendaPage() {
     const dias: Date[] = []
     for (const d = new Date(inicio); d <= fim; d.setUTCDate(d.getUTCDate() + 1)) dias.push(new Date(d))
 
+    const limiarBom = parametro?.agendaLimiarBomPct ?? 80
+    const limiarEfetividadeAlta = parametro?.agendaLimiarEfetividadeAltaPct ?? 30
+    const limiarOscilacao = parametro?.agendaLimiarOscilacaoPct ?? 35
+    const alertaAderenciaPct = parametro?.agendaAlertaAderenciaPct ?? 50
+    const alertaDiasConsecutivos = parametro?.agendaAlertaDiasConsecutivos ?? 3
+    const alertaQuedaEfetividadePct = parametro?.agendaAlertaQuedaEfetividadePct ?? 30
+    const reconhecimentoSemanas = parametro?.agendaReconhecimentoSemanas ?? 4
+
     return pessoas
       .map(p => {
         let total = 0
@@ -285,25 +458,56 @@ export default function ProLaboreAgendaPage() {
         let noPrazo = 0
         let atrasado = 0
         let somaAtrasoMin = 0
+        const porDia: number[] = []
         for (const dia of dias) {
           const aplicaveis = itens.filter(i => itemAplicaPara(i, p.ehDono ? null : p.id, p.ehDono) && itemAplicaNoDia(i, dia))
+          if (aplicaveis.length === 0) continue
+          let totalDia = 0
+          let feitosDia = 0
           for (const item of aplicaveis) {
             total += 1
+            totalDia += 1
             const { status, atrasoMin } = statusConclusao(conclusoesAuditoria, item, p.id, dia)
             if (status === 'PENDENTE') continue
             feitos += 1
+            feitosDia += 1
             if (status === 'NO_PRAZO') noPrazo += 1
             else if (status === 'ATRASADO') { atrasado += 1; somaAtrasoMin += atrasoMin ?? 0 }
           }
+          porDia.push((feitosDia / totalDia) * 100)
         }
+
+        const pct = total > 0 ? (feitos / total) * 100 : 0
+        const oscilacaoPct = coeficienteVariacao(porDia)
+        const diasConsecutivosAbaixo = maiorSequenciaAbaixoDe(porDia, alertaAderenciaPct)
+
+        // Efetividade só existe pra quem tem Lead atribuído (vendedores) —
+        // o dono não aparece no endpoint (Lead.vendedorId nunca é dele).
+        const efet = p.ehDono ? undefined : efetividade.find(e => e.vendedorId === p.id)
+        const efetAnterior = p.ehDono ? undefined : efetividadeAnterior.find(e => e.vendedorId === p.id)
+        const efetividadePct = efet && efet.leadsAbordados > 0 ? efet.efetividadePct : null
+        const quedaEfetividadePct = efetividadePct != null && efetAnterior && efetAnterior.leadsAbordados > 0
+          ? ((efetAnterior.efetividadePct - efetividadePct) / efetAnterior.efetividadePct) * 100
+          : null
+
+        const perfil = classificarPerfil({ aderenciaPct: pct, efetividadePct, oscilacaoPct, limiarBom, limiarEfetividadeAlta, limiarOscilacao })
+        const emAlerta = diasConsecutivosAbaixo >= alertaDiasConsecutivos || (quedaEfetividadePct != null && quedaEfetividadePct >= alertaQuedaEfetividadePct)
+        const blocosSeguidos = blocosRecentesAcimaDe(porDia, limiarBom)
+        // Só considera "destaque" quando o período tem histórico suficiente
+        // pra avaliar de verdade N blocos — senão qualquer período curto
+        // (Hoje/7 dias) apareceria como destaque só por falta de dado ruim.
+        const destaque = porDia.length >= reconhecimentoSemanas * 7 && blocosSeguidos >= reconhecimentoSemanas
+          && (efetividadePct == null || efetividadePct >= limiarEfetividadeAlta)
+
         return {
-          id: p.id, nome: p.nome, total, feitos, pct: total > 0 ? (feitos / total) * 100 : 0,
+          id: p.id, nome: p.nome, total, feitos, pct,
           noPrazo, atrasado, atrasoMedioMin: atrasado > 0 ? Math.round(somaAtrasoMin / atrasado) : null,
+          efetividadePct, quedaEfetividadePct, oscilacaoPct, perfil, emAlerta, destaque,
         }
       })
       .filter(p => p.total > 0)
       .sort((a, b) => b.pct - a.pct)
-  }, [vejaEquipe, periodoAuditoria, itens, vendedoresAtivos, conclusoesAuditoria])
+  }, [vejaEquipe, periodoAuditoria, itens, vendedoresAtivos, conclusoesAuditoria, efetividade, efetividadeAnterior, parametro])
 
   // Resumo da equipe inteira no período — os números que respondem "como
   // estamos indo" antes mesmo de olhar pessoa por pessoa.
@@ -314,12 +518,14 @@ export default function ProLaboreAgendaPage() {
     const somaNoPrazo = auditoria.reduce((s, p) => s + p.noPrazo, 0)
     const somaAtrasado = auditoria.reduce((s, p) => s + p.atrasado, 0)
     const comHorario = somaNoPrazo + somaAtrasado
-    const criticos = auditoria.filter(p => statusEquipe(p.pct).classe === 'critico').length
+    const emAlerta = auditoria.filter(p => p.emAlerta).length
+    const destaques = auditoria.filter(p => p.destaque)
     return {
       aderenciaPct: somaTotal > 0 ? (somaFeitos / somaTotal) * 100 : 0,
       pctNoPrazo: comHorario > 0 ? (somaNoPrazo / comHorario) * 100 : null,
       atrasos: somaAtrasado,
-      criticos,
+      emAlerta,
+      destaques,
     }
   }, [auditoria])
 
@@ -499,13 +705,21 @@ export default function ProLaboreAgendaPage() {
                 </div>
                 <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-critical)' }}>
                   <div className="pl-kpi-label">Em alerta</div>
-                  <div className="pl-kpi-value">{auditoriaResumo.criticos}<span className="pl-unit">{auditoriaResumo.criticos === 1 ? 'pessoa' : 'pessoas'}</span></div>
+                  <div className="pl-kpi-value">{auditoriaResumo.emAlerta}<span className="pl-unit">{auditoriaResumo.emAlerta === 1 ? 'pessoa' : 'pessoas'}</span></div>
                 </div>
               </div>
 
+              {auditoriaResumo.destaques.length > 0 && (
+                <div className="pl-alert pl-alert-success" style={{ marginBottom: 16 }}>
+                  🏆 Destaque{auditoriaResumo.destaques.length > 1 ? 's' : ''}: {auditoriaResumo.destaques.map(p => p.nome).join(', ')} — perfil Referência sustentado há {parametro?.agendaReconhecimentoSemanas ?? 4}+ blocos seguidos nesse período. Bom momento pra um feedback positivo.
+                </div>
+              )}
+
               <div>
                 {auditoria.map((p, i) => {
-                  const status = statusEquipe(p.pct)
+                  const limiarBom = parametro?.agendaLimiarBomPct ?? 80
+                  const limiarAtencao = parametro?.agendaLimiarAtencaoPct ?? 50
+                  const status = statusEquipe(p.pct, limiarBom, limiarAtencao)
                   return (
                     <div key={p.id} className="pl-seller-row">
                       <div className={`pl-rank ${i === 0 ? 'top' : ''}`}>{i + 1}</div>
@@ -515,10 +729,17 @@ export default function ProLaboreAgendaPage() {
                             <span className="pl-avatar" style={{ background: corAvatar(p.id) }}>{iniciais(p.nome)}</span>
                             {p.nome}
                             <span className={`pl-status-badge ${status.classe}`}>{status.label}</span>
+                            <span className="pl-status-badge" style={{ color: PERFIL_COR[p.perfil], background: `color-mix(in srgb, ${PERFIL_COR[p.perfil]} 14%, transparent)` }}>{PERFIL_LABEL[p.perfil]}</span>
+                            {p.emAlerta && <span className="pl-status-badge critico">⚠ Alerta</span>}
                           </div>
-                          <div className="pl-seller-figs" style={{ color: corPct(p.pct) }}>{p.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                            <div className="pl-seller-figs" style={{ color: corPct(p.pct, limiarBom, limiarAtencao) }} title="Aderência (% da rotina cumprido)">{p.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>
+                            <div style={{ fontSize: 12.5, color: 'var(--pl-ink-muted)' }} title="Efetividade (% de leads abordados que fecharam venda no período)">
+                              efet. {p.efetividadePct != null ? `${p.efetividadePct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%` : '—'}
+                            </div>
+                          </div>
                         </div>
-                        <div className="pl-bar-track"><div className="pl-bar-fill" style={{ width: `${p.pct}%`, background: corPct(p.pct) }} /></div>
+                        <div className="pl-bar-track"><div className="pl-bar-fill" style={{ width: `${p.pct}%`, background: corPct(p.pct, limiarBom, limiarAtencao) }} /></div>
                       </div>
                       <div className="pl-seller-meta">
                         {p.feitos}/{p.total} concluídos
@@ -529,10 +750,36 @@ export default function ProLaboreAgendaPage() {
                             {p.atrasado > 0 && ` · ${p.atrasado} atrasado${p.atrasado > 1 ? 's' : ''} (méd. ${formatAtraso(p.atrasoMedioMin ?? 0)})`}
                           </span>
                         ) : 'sem itens c/ horário'}
+                        {p.oscilacaoPct != null && (
+                          <>
+                            <br />
+                            <span style={{ color: p.oscilacaoPct >= (parametro?.agendaLimiarOscilacaoPct ?? 35) ? 'var(--pl-accent-5)' : 'var(--pl-ink-muted)' }}>
+                              variação {p.oscilacaoPct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   )
                 })}
+              </div>
+
+              <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--pl-border)' }}>
+                <div className="pl-card-title" style={{ fontSize: 13.5 }}>Quadrante aderência × efetividade</div>
+                <div className="pl-section-note" style={{ marginTop: 2, marginBottom: 4 }}>Quem cumpre a rotina e converte (Referência) x quem cumpre mas não converte, oscila, ou está ocioso</div>
+                <QuadranteAderenciaEfetividade
+                  pontos={auditoria.filter(p => p.id !== itens[0]?.usuarioId).map(p => ({ id: p.id, nome: p.nome, aderenciaPct: p.pct, efetividadePct: p.efetividadePct, perfil: p.perfil }))}
+                  limiarBom={parametro?.agendaLimiarBomPct ?? 80}
+                  limiarEfetividadeAlta={parametro?.agendaLimiarEfetividadeAltaPct ?? 30}
+                />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 8 }}>
+                  {(Object.keys(PERFIL_LABEL) as Perfil[]).map(perfil => (
+                    <div key={perfil} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--pl-ink-muted)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: PERFIL_COR[perfil], display: 'inline-block' }} />
+                      {PERFIL_LABEL[perfil]}
+                    </div>
+                  ))}
+                </div>
               </div>
             </>
           )}

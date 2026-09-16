@@ -1022,7 +1022,34 @@ model ParametroLiquidez {
   // etapa mais funda da jornada (ver FunilJourney no dashboard).
   custoPorLeadTopo      Float    @default(0)
   fraseMotivacional     String?
-  atualizadoEm          DateTime @updatedAt
+
+  // ===== Limiares da Auditoria comercial da Agenda (todos parametrizáveis —
+  // nada disso pode ficar hardcoded no front, pra permitir calibrar por
+  // operação sem precisar de deploy) =====
+  // Aderência (% de itens da Agenda cumpridos no prazo) acima disso = "Em
+  // dia"/perfil de aderência alta; abaixo de agendaLimiarAtencaoPct = "Crítico".
+  agendaLimiarBomPct Float @default(80)
+  agendaLimiarAtencaoPct Float @default(50)
+  // Conversão do funil de Leads (abordado → fechado) no período, acima
+  // disso é considerada "efetividade alta" pra fins da matriz 2x2.
+  agendaLimiarEfetividadeAltaPct Float @default(30)
+  // Coeficiente de variação (desvio padrão ÷ média) da aderência diária no
+  // período — acima disso o consultor é classificado como "Oscilante".
+  agendaLimiarOscilacaoPct Float @default(35)
+  // Regra de alerta: aderência abaixo desse % por N dias seguidos dispara o
+  // card "Em alerta".
+  agendaAlertaAderenciaPct Float @default(50)
+  agendaAlertaDiasConsecutivos Int @default(3)
+  // Regra de alerta: queda de efetividade acima desse % em relação à média
+  // móvel do próprio consultor (não é limiar absoluto — é comparação com o
+  // histórico da pessoa).
+  agendaAlertaQuedaEfetividadePct Float @default(30)
+  // Reconhecimento automático: quantas semanas seguidas no perfil
+  // "Referência" pra disparar um destaque positivo (em vez de só sinalizar
+  // problema, como a Agenda faz hoje).
+  agendaReconhecimentoSemanas Int @default(4)
+
+  atualizadoEm DateTime @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
 

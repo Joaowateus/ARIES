@@ -258,6 +258,14 @@ const parametrosSchema = z.object({
   metaMensalPadrao: z.number().positive('Meta deve ser positiva').optional(),
   custoPorLeadTopo: z.number().nonnegative('Custo deve ser positivo ou zero').optional(),
   fraseMotivacional: z.string().max(280, 'Frase muito longa').optional(),
+  agendaLimiarBomPct: z.number().min(0).max(100).optional(),
+  agendaLimiarAtencaoPct: z.number().min(0).max(100).optional(),
+  agendaLimiarEfetividadeAltaPct: z.number().min(0).max(100).optional(),
+  agendaLimiarOscilacaoPct: z.number().min(0).max(100).optional(),
+  agendaAlertaAderenciaPct: z.number().min(0).max(100).optional(),
+  agendaAlertaDiasConsecutivos: z.number().int().positive().optional(),
+  agendaAlertaQuedaEfetividadePct: z.number().min(0).max(100).optional(),
+  agendaReconhecimentoSemanas: z.number().int().positive().optional(),
 })
 
 router.put('/parametros', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -1439,6 +1447,51 @@ router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Requ
     data: { agendaItemId: item.id, autorId, dataReferencia },
   })
   res.json({ concluido: true, concluidoEm: criada.concluidoEm })
+})
+
+// Efetividade comercial por vendedor no período: conversão real do funil de
+// Leads (abordado → fechado), não o quanto ele cumpriu a rotina da Agenda —
+// as duas métricas juntas é que diferenciam quem cumpre agenda mas não
+// converte de quem cumpre e converte. Não cria tabela nova: deriva de
+// LeadEstagioHistorico, que já registra cada transição de estágio.
+router.get('/agenda/efetividade', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const { inicio, fim } = req.query
+  const inicioData = typeof inicio === 'string' ? parseDataDiaUTC(inicio) : null
+  const fimData = typeof fim === 'string' ? parseDataDiaUTC(fim) : null
+  if (!inicioData || !fimData) {
+    res.status(400).json({ error: 'Período inválido' })
+    return
+  }
+  const fimExclusivo = new Date(fimData.getTime() + 24 * 60 * 60 * 1000)
+
+  const transicoes = await prisma.leadEstagioHistorico.findMany({
+    where: {
+      criadoEm: { gte: inicioData, lt: fimExclusivo },
+      estagioNovo: { in: ['ABORDADO', 'FECHADO'] },
+      lead: { usuarioId },
+    },
+    select: { leadId: true, estagioNovo: true, lead: { select: { vendedorId: true } } },
+  })
+
+  const porVendedor = new Map<string, { abordados: Set<string>; fechados: Set<string> }>()
+  for (const t of transicoes) {
+    const vendedorId = t.lead.vendedorId
+    if (!vendedorId) continue
+    if (!porVendedor.has(vendedorId)) porVendedor.set(vendedorId, { abordados: new Set(), fechados: new Set() })
+    const bucket = porVendedor.get(vendedorId)!
+    if (t.estagioNovo === 'ABORDADO') bucket.abordados.add(t.leadId)
+    else bucket.fechados.add(t.leadId)
+  }
+
+  res.json(
+    Array.from(porVendedor.entries()).map(([vendedorId, b]) => ({
+      vendedorId,
+      leadsAbordados: b.abordados.size,
+      leadsFechados: b.fechados.size,
+      efetividadePct: b.abordados.size > 0 ? (b.fechados.size / b.abordados.size) * 100 : 0,
+    }))
+  )
 })
 
 export default router
