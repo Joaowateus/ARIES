@@ -125,15 +125,15 @@ function prazoUTC(dia: Date, horario: string): Date | null {
 // feito no prazo ou atrasado, e por quanto tempo — concluidoEm é o instante
 // real em que a pessoa marcou "feito" (setado pelo backend), não o dia de
 // referência, então dá pra comparar contra o prazo com precisão de minuto.
-function statusConclusao(conclusoes: AgendaConclusao[], item: AgendaItem, autorId: string, dia: Date): { status: StatusConclusao; atrasoMin: number | null } {
+function statusConclusao(conclusoes: AgendaConclusao[], item: AgendaItem, autorId: string, dia: Date): { status: StatusConclusao; atrasoMin: number | null; conclusao: AgendaConclusao | null } {
   const diaIso = isoDia(dia)
-  const c = conclusoes.find(c => c.agendaItemId === item.id && c.autorId === autorId && c.dataReferencia.slice(0, 10) === diaIso)
-  if (!c) return { status: 'PENDENTE', atrasoMin: null }
+  const c = conclusoes.find(c => c.agendaItemId === item.id && c.autorId === autorId && c.dataReferencia.slice(0, 10) === diaIso) ?? null
+  if (!c) return { status: 'PENDENTE', atrasoMin: null, conclusao: null }
   const prazo = item.horario ? prazoUTC(dia, item.horario) : null
-  if (!prazo) return { status: 'SEM_HORARIO', atrasoMin: null }
+  if (!prazo) return { status: 'SEM_HORARIO', atrasoMin: null, conclusao: c }
   const diffMin = (new Date(c.concluidoEm).getTime() - prazo.getTime()) / 60000
-  if (diffMin <= 0) return { status: 'NO_PRAZO', atrasoMin: null }
-  return { status: 'ATRASADO', atrasoMin: Math.round(diffMin) }
+  if (diffMin <= 0) return { status: 'NO_PRAZO', atrasoMin: null, conclusao: c }
+  return { status: 'ATRASADO', atrasoMin: Math.round(diffMin), conclusao: c }
 }
 
 function formatAtraso(min: number): string {
@@ -339,12 +339,32 @@ type FormAgenda = {
   alvoModo: 'TODOS' | 'ESPECIFICO'
   alvoIncluiDono: boolean
   alvoVendedorIds: string[]
+  exigeLocalizacao: boolean
 }
 
 const FORM_VAZIO: FormAgenda = {
   titulo: '', descricao: '', categoria: 'META', tipo: 'RECORRENTE', data: '',
   diasSemana: [1, 2, 3, 4, 5], dataInicio: '', dataFim: '', horario: '',
-  alvoModo: 'TODOS', alvoIncluiDono: false, alvoVendedorIds: [],
+  alvoModo: 'TODOS', alvoIncluiDono: false, alvoVendedorIds: [], exigeLocalizacao: false,
+}
+
+// Selo pontual de localização — uma leitura só, no instante do check-in,
+// nunca rastreamento contínuo (sem watchPosition). Resolve `null` em vez de
+// rejeitar quando a permissão é negada ou o navegador não suporta: a
+// conclusão continua valendo, só sem o selo.
+function obterLocalizacaoPontual(): Promise<{ latitude: number; longitude: number } | null> {
+  return new Promise(resolve => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { resolve(null); return }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    )
+  })
+}
+
+function linkMapa(latitude: number, longitude: number): string {
+  return `https://www.google.com/maps?q=${latitude},${longitude}`
 }
 
 export default function ProLaboreAgendaPage() {
@@ -610,11 +630,18 @@ export default function ProLaboreAgendaPage() {
   }, [auditoria])
 
   async function alternarConclusao(item: AgendaItem, diaIso: string) {
-    const resultado = await proLaboreApi.agenda.itens.concluir(item.id, diaIso)
+    // Só busca localização ao MARCAR (não ao desmarcar) — uma leitura única
+    // no instante do check-in, nunca rastreamento contínuo.
+    const jaConcluido = foiConcluido(conclusoes, item.id, meuAutorId, diaIso)
+    const localizacao = !jaConcluido && item.exigeLocalizacao ? await obterLocalizacaoPontual() ?? undefined : undefined
+    const resultado = await proLaboreApi.agenda.itens.concluir(item.id, diaIso, localizacao)
     setConclusoes(atual => {
       const semEsse = atual.filter(c => !(c.agendaItemId === item.id && c.autorId === meuAutorId && c.dataReferencia.slice(0, 10) === diaIso))
       if (!resultado.concluido) return semEsse
-      return [...semEsse, { id: `${item.id}-${meuAutorId}-${diaIso}`, agendaItemId: item.id, autorId: meuAutorId, dataReferencia: diaIso, concluidoEm: resultado.concluidoEm ?? new Date().toISOString() }]
+      return [...semEsse, {
+        id: `${item.id}-${meuAutorId}-${diaIso}`, agendaItemId: item.id, autorId: meuAutorId, dataReferencia: diaIso,
+        concluidoEm: resultado.concluidoEm ?? new Date().toISOString(), latitude: resultado.latitude, longitude: resultado.longitude,
+      }]
     })
   }
 
@@ -667,6 +694,7 @@ export default function ProLaboreAgendaPage() {
       alvoModo: alvos.length > 0 || item.incluiDono ? 'ESPECIFICO' : 'TODOS',
       alvoIncluiDono: item.incluiDono,
       alvoVendedorIds: alvos,
+      exigeLocalizacao: item.exigeLocalizacao,
     })
     setErro('')
     setModalAberto(true)
@@ -707,6 +735,7 @@ export default function ProLaboreAgendaPage() {
         horario: form.horario || undefined,
         vendedorIds,
         incluiDono,
+        exigeLocalizacao: form.exigeLocalizacao,
       }
       if (editandoId) {
         await proLaboreApi.agenda.itens.editar(editandoId, { ...payload, vendedorIds: vendedorIds.length > 0 ? vendedorIds : null, horario: form.horario || null })
@@ -1063,6 +1092,7 @@ export default function ProLaboreAgendaPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span className="pl-agenda-item-badge">{CATEGORIA_LABEL[item.categoria]}</span>
                           {item.horario && <span className="pl-kanban-card-time">{item.horario}</span>}
+                          {item.exigeLocalizacao && <span title="Exige selo de localização no check-in">📍</span>}
                         </div>
                         <div className="pl-agenda-item-title">{item.titulo}</div>
                       </div>
@@ -1108,6 +1138,17 @@ export default function ProLaboreAgendaPage() {
                           <div className="pl-kanban-card-meta" style={{ marginTop: 6, color: 'var(--pl-good)', fontWeight: 700 }}>
                             Concluído no prazo (horário: {item.horario})
                           </div>
+                        )}
+                        {euConcluido && item.exigeLocalizacao && (
+                          meuStatus.conclusao?.latitude != null && meuStatus.conclusao?.longitude != null ? (
+                            <a href={linkMapa(meuStatus.conclusao.latitude, meuStatus.conclusao.longitude)} target="_blank" rel="noreferrer" className="pl-link-action" style={{ display: 'inline-block', marginTop: 6 }}>
+                              📍 Ver localização do check-in
+                            </a>
+                          ) : (
+                            <div className="pl-kanban-card-meta" style={{ marginTop: 6, color: 'var(--pl-accent-4)' }}>
+                              📍 Sem selo de localização (permissão não concedida)
+                            </div>
+                          )
                         )}
                       </>
                     )}
@@ -1185,6 +1226,10 @@ export default function ProLaboreAgendaPage() {
                   <input type="time" className="pl-input" value={form.horario} onChange={e => setForm(f => ({ ...f, horario: e.target.value }))} />
                 </div>
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--pl-ink-2)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.exigeLocalizacao} onChange={e => setForm(f => ({ ...f, exigeLocalizacao: e.target.checked }))} style={{ accentColor: 'var(--pl-accent-3)' }} />
+                Exige selo de localização (visita, entrega, test-drive)
+              </label>
               <div className="pl-field">
                 <label>Atribuído a</label>
                 <div className="pl-period-row">
@@ -1273,12 +1318,13 @@ export default function ProLaboreAgendaPage() {
                     <div className="pl-emoji">🗒️</div>
                     Nada previsto pra essa pessoa nesse dia.
                   </div>
-                ) : timelineItens.map(({ item, status, atrasoMin }) => (
+                ) : timelineItens.map(({ item, status, atrasoMin, conclusao }) => (
                   <div key={item.id} className="pl-agenda-item-card" style={{ ['--cat-cor' as string]: CATEGORIA_COR[item.categoria] }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className="pl-kanban-card-time">{item.horario ?? 'sem horário'}</span>
                         <span className="pl-agenda-item-title" style={{ fontSize: 13 }}>{item.titulo}</span>
+                        {item.exigeLocalizacao && <span title="Exige selo de localização">📍</span>}
                       </div>
                       <span
                         className="pl-status-badge"
@@ -1290,6 +1336,11 @@ export default function ProLaboreAgendaPage() {
                         {status === 'NO_PRAZO' ? 'no prazo' : status === 'ATRASADO' ? `atrasado ${formatAtraso(atrasoMin ?? 0)}` : status === 'SEM_HORARIO' ? 'concluído' : 'pendente'}
                       </span>
                     </div>
+                    {item.exigeLocalizacao && conclusao?.latitude != null && conclusao?.longitude != null && (
+                      <a href={linkMapa(conclusao.latitude, conclusao.longitude)} target="_blank" rel="noreferrer" className="pl-link-action" style={{ display: 'inline-block', marginTop: 6 }}>
+                        📍 Ver localização do check-in
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>

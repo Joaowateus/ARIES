@@ -1260,6 +1260,7 @@ const agendaItemSchema = z
     // si (dá pra escolher vendedores específicos E o dono ao mesmo tempo).
     vendedorIds: z.array(z.string()).optional(),
     incluiDono: z.boolean().optional(),
+    exigeLocalizacao: z.boolean().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.tipo === 'UNICO' && (!val.data || !parseDataDiaUTC(val.data))) {
@@ -1277,7 +1278,7 @@ router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, asyn
     return
   }
   const usuarioId = req.proLaboreUser!.sub
-  const { titulo, descricao, categoria, tipo, data, diasSemana, dataInicio, dataFim, horario, vendedorIds, incluiDono } = parse.data
+  const { titulo, descricao, categoria, tipo, data, diasSemana, dataInicio, dataFim, horario, vendedorIds, incluiDono, exigeLocalizacao } = parse.data
 
   const idsUnicos = [...new Set(vendedorIds ?? [])]
   if (idsUnicos.length > 0) {
@@ -1302,6 +1303,7 @@ router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, asyn
       horario: horario || undefined,
       vendedorIds: idsUnicos.length > 0 ? idsUnicos.join(',') : undefined,
       incluiDono: !!incluiDono,
+      exigeLocalizacao: !!exigeLocalizacao,
     },
   })
   res.status(201).json(item)
@@ -1319,6 +1321,7 @@ const agendaItemEditSchema = z.object({
   horario: z.string().regex(HORARIO_REGEX, 'Horário inválido (use HH:mm)').nullable().optional(),
   vendedorIds: z.array(z.string()).nullable().optional(),
   incluiDono: z.boolean().optional(),
+  exigeLocalizacao: z.boolean().optional(),
   ativo: z.boolean().optional(),
 })
 
@@ -1398,7 +1401,14 @@ router.get('/agenda-conclusoes', requireProLaboreAuth, async (req: Request, res:
   res.json(conclusoes)
 })
 
-const concluirSchema = z.object({ data: z.string() })
+// latitude/longitude são opcionais e só fazem sentido em /concluir (não em
+// /iniciar) — reaproveitar o mesmo schema nos dois é seguro porque campo
+// extra opcional não quebra nada, e evita duplicar validação.
+const concluirSchema = z.object({
+  data: z.string(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+})
 
 // Busca o item (escopado à conta) e confirma que quem chamou é alvo dele —
 // compartilhado entre /concluir e /iniciar, que têm exatamente a mesma
@@ -1450,10 +1460,18 @@ router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Requ
     res.json({ concluido: false })
     return
   }
+  const { latitude, longitude } = parse.data
   const criada = await prisma.agendaConclusao.create({
-    data: { agendaItemId: auth.item.id, autorId, dataReferencia },
+    data: {
+      agendaItemId: auth.item.id,
+      autorId,
+      dataReferencia,
+      // Só grava o selo se o item realmente exige — coordenadas mandadas
+      // pra um item sem exigeLocalizacao são ignoradas, não persistidas.
+      ...(auth.item.exigeLocalizacao && latitude != null && longitude != null ? { latitude, longitude } : {}),
+    },
   })
-  res.json({ concluido: true, concluidoEm: criada.concluidoEm })
+  res.json({ concluido: true, concluidoEm: criada.concluidoEm, latitude: criada.latitude, longitude: criada.longitude })
 })
 
 // Início da atividade — sinal independente da conclusão (ver comentário do

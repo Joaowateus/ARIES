@@ -1173,6 +1173,11 @@ model AgendaItem {
   // vendedorIds) e/ou o dono ("Head Comercial", incluiDono).
   vendedorIds  String? // CSV de ids de Vendedor — sem FK porque é multivalorado
   incluiDono   Boolean   @default(false)
+  // Pra atividades externas (visita, entrega, test-drive) — exige um selo
+  // pontual de localização no momento em que a pessoa marca "feito"
+  // (coordenadas na própria AgendaConclusao). Não é rastreamento contínuo:
+  // só a posição naquele instante, uma vez, igual a um check-in.
+  exigeLocalizacao Boolean @default(false)
   ativo        Boolean   @default(true)
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
@@ -1195,6 +1200,13 @@ model AgendaConclusao {
   autorId        String
   dataReferencia DateTime
   concluidoEm    DateTime @default(now())
+  // Selo de localização pontual — só preenchido quando o item tem
+  // exigeLocalizacao=true e o navegador da pessoa cedeu a permissão no
+  // instante do check-in. Fica null quando o item não exige, ou quando
+  // exige mas a permissão foi negada/indisponível (a conclusão ainda vale,
+  // só sem o selo).
+  latitude       Float?
+  longitude      Float?
 
   item AgendaItem @relation(fields: [agendaItemId], references: [id])
 
