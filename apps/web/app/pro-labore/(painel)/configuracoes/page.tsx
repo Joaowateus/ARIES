@@ -17,6 +17,20 @@ export default function ProLaboreConfiguracoesPage() {
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
 
+  // Limiares da Auditoria comercial da Agenda — antes eram fixos no código
+  // (80%/50%); agora vivem aqui, parametrizáveis por operação.
+  const [limiarBom, setLimiarBom] = useState('')
+  const [limiarAtencao, setLimiarAtencao] = useState('')
+  const [limiarEfetividade, setLimiarEfetividade] = useState('')
+  const [limiarOscilacao, setLimiarOscilacao] = useState('')
+  const [alertaAderencia, setAlertaAderencia] = useState('')
+  const [alertaDias, setAlertaDias] = useState('')
+  const [alertaQuedaEfetividade, setAlertaQuedaEfetividade] = useState('')
+  const [reconhecimentoSemanas, setReconhecimentoSemanas] = useState('')
+  const [salvandoAgenda, setSalvandoAgenda] = useState(false)
+  const [erroAgenda, setErroAgenda] = useState('')
+  const [sucessoAgenda, setSucessoAgenda] = useState(false)
+
   useEffect(() => {
     if (!isDono) { setLoading(false); return }
     proLaboreApi.parametros.get().then((p: ParametroLiquidez) => {
@@ -24,6 +38,14 @@ export default function ProLaboreConfiguracoesPage() {
       setTetoComissao(String(p.tetoComissaoPadrao))
       setMetaAnual(String(p.metaFaturamentoAnual))
       setMetaMensalPadrao(String(p.metaMensalPadrao))
+      setLimiarBom(String(p.agendaLimiarBomPct))
+      setLimiarAtencao(String(p.agendaLimiarAtencaoPct))
+      setLimiarEfetividade(String(p.agendaLimiarEfetividadeAltaPct))
+      setLimiarOscilacao(String(p.agendaLimiarOscilacaoPct))
+      setAlertaAderencia(String(p.agendaAlertaAderenciaPct))
+      setAlertaDias(String(p.agendaAlertaDiasConsecutivos))
+      setAlertaQuedaEfetividade(String(p.agendaAlertaQuedaEfetividadePct))
+      setReconhecimentoSemanas(String(p.agendaReconhecimentoSemanas))
     }).finally(() => setLoading(false))
   }, [isDono])
 
@@ -48,6 +70,42 @@ export default function ProLaboreConfiguracoesPage() {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar')
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function handleSubmitAgenda(e: React.FormEvent) {
+    e.preventDefault()
+    setErroAgenda('')
+    setSucessoAgenda(false)
+    if (Number(limiarAtencao) >= Number(limiarBom)) {
+      setErroAgenda('O limiar de "Atenção" precisa ser menor que o de "Em dia"')
+      return
+    }
+    setSalvandoAgenda(true)
+    try {
+      const atualizado = await proLaboreApi.parametros.atualizar({
+        agendaLimiarBomPct: Number(limiarBom),
+        agendaLimiarAtencaoPct: Number(limiarAtencao),
+        agendaLimiarEfetividadeAltaPct: Number(limiarEfetividade),
+        agendaLimiarOscilacaoPct: Number(limiarOscilacao),
+        agendaAlertaAderenciaPct: Number(alertaAderencia),
+        agendaAlertaDiasConsecutivos: Number(alertaDias),
+        agendaAlertaQuedaEfetividadePct: Number(alertaQuedaEfetividade),
+        agendaReconhecimentoSemanas: Number(reconhecimentoSemanas),
+      })
+      setLimiarBom(String(atualizado.agendaLimiarBomPct))
+      setLimiarAtencao(String(atualizado.agendaLimiarAtencaoPct))
+      setLimiarEfetividade(String(atualizado.agendaLimiarEfetividadeAltaPct))
+      setLimiarOscilacao(String(atualizado.agendaLimiarOscilacaoPct))
+      setAlertaAderencia(String(atualizado.agendaAlertaAderenciaPct))
+      setAlertaDias(String(atualizado.agendaAlertaDiasConsecutivos))
+      setAlertaQuedaEfetividade(String(atualizado.agendaAlertaQuedaEfetividadePct))
+      setReconhecimentoSemanas(String(atualizado.agendaReconhecimentoSemanas))
+      setSucessoAgenda(true)
+    } catch (err: unknown) {
+      setErroAgenda(err instanceof Error ? err.message : 'Erro ao salvar')
+    } finally {
+      setSalvandoAgenda(false)
     }
   }
 
@@ -102,6 +160,65 @@ export default function ProLaboreConfiguracoesPage() {
         {sucesso && <div className="pl-alert pl-alert-success">Configurações atualizadas.</div>}
 
         <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando} style={{ alignSelf: 'flex-start' }}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+      </form>
+
+      <form onSubmit={handleSubmitAgenda} className="pl-card" style={{ maxWidth: 480, marginTop: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <div className="pl-card-title">Auditoria comercial da Agenda</div>
+          <div className="pl-card-sub">Limiares de classificação e regras de alerta — nada disso é fixo, calibre pela realidade da sua equipe</div>
+        </div>
+
+        <div className="pl-field">
+          <label>Aderência “Em dia” a partir de (%)</label>
+          <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarBom} onChange={e => setLimiarBom(e.target.value)} required />
+          <span className="pl-hint">Abaixo disso e acima do limiar de “Atenção”, o consultor aparece como “Atenção” na Agenda</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Aderência “Atenção” a partir de (%)</label>
+          <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarAtencao} onChange={e => setLimiarAtencao(e.target.value)} required />
+          <span className="pl-hint">Abaixo disso o consultor aparece como “Crítico”</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Efetividade “alta” a partir de (%)</label>
+          <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarEfetividade} onChange={e => setLimiarEfetividade(e.target.value)} required />
+          <span className="pl-hint">% de leads abordados que viram venda no período — usado na matriz de classificação (aderência × efetividade)</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Limiar de oscilação (coef. de variação, %)</label>
+          <input type="number" step="1" min="0" max="200" className="pl-input" value={limiarOscilacao} onChange={e => setLimiarOscilacao(e.target.value)} required />
+          <span className="pl-hint">Acima disso, a variação da aderência diária no período classifica o consultor como “Oscilante”</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Alerta: aderência abaixo de (%)</label>
+          <input type="number" step="1" min="0" max="100" className="pl-input" value={alertaAderencia} onChange={e => setAlertaAderencia(e.target.value)} required />
+          <span className="pl-hint">Combinado com o campo abaixo — dispara o card “Em alerta”</span>
+        </div>
+
+        <div className="pl-field">
+          <label>...por quantos dias seguidos</label>
+          <input type="number" step="1" min="1" className="pl-input" value={alertaDias} onChange={e => setAlertaDias(e.target.value)} required />
+        </div>
+
+        <div className="pl-field">
+          <label>Alerta: queda de efetividade acima de (%)</label>
+          <input type="number" step="1" min="0" max="100" className="pl-input" value={alertaQuedaEfetividade} onChange={e => setAlertaQuedaEfetividade(e.target.value)} required />
+          <span className="pl-hint">Em relação à própria média móvel do consultor no período — não é um limiar absoluto</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Reconhecimento: semanas seguidas como “Referência”</label>
+          <input type="number" step="1" min="1" className="pl-input" value={reconhecimentoSemanas} onChange={e => setReconhecimentoSemanas(e.target.value)} required />
+          <span className="pl-hint">Gatilho de destaque positivo — a Agenda só sinalizava problema, isso sinaliza quando alguém merece reconhecimento</span>
+        </div>
+
+        {erroAgenda && <div className="pl-alert pl-alert-error">{erroAgenda}</div>}
+        {sucessoAgenda && <div className="pl-alert pl-alert-success">Regras da Agenda atualizadas.</div>}
+
+        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoAgenda} style={{ alignSelf: 'flex-start' }}>{salvandoAgenda ? 'Salvando...' : 'Salvar'}</button>
       </form>
     </div>
   )
