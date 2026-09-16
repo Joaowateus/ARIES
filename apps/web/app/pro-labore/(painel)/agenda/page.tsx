@@ -245,54 +245,6 @@ function classificarPerfil(params: {
   return efetividadeAlta ? 'REFERENCIA' : 'ESTAVEL_SEM_SUBSTANCIA'
 }
 
-// Quadrante aderência x efetividade — SVG feito à mão (mesmo padrão do
-// FunilTrapezio no dashboard principal, já que o projeto não tem nenhuma
-// lib de gráficos). Cada ponto é um consultor; as linhas tracejadas marcam
-// os limiares configurados, dividindo o plano nos 4 quadrantes de base da
-// matriz (Oscilante/Inconsistente entram por cima, via cor do ponto).
-function QuadranteAderenciaEfetividade({ pontos, limiarBom, limiarEfetividadeAlta }: {
-  pontos: { id: string; nome: string; aderenciaPct: number; efetividadePct: number | null; perfil: Perfil }[]
-  limiarBom: number
-  limiarEfetividadeAlta: number
-}) {
-  const W = 400, H = 260, PAD = 34
-  const comDado = pontos.filter(p => p.efetividadePct != null)
-  const maxEfetividade = Math.max(limiarEfetividadeAlta * 1.5, ...comDado.map(p => p.efetividadePct ?? 0), 10)
-
-  const x = (aderencia: number) => PAD + (aderencia / 100) * (W - PAD * 2)
-  const y = (efetividade: number) => H - PAD - (efetividade / maxEfetividade) * (H - PAD * 2)
-
-  if (comDado.length === 0) {
-    return (
-      <div className="pl-empty" style={{ padding: '24px 10px' }}>
-        <div className="pl-emoji">🎯</div>
-        Ninguém abordou leads nesse período ainda — o quadrante aparece assim que houver dado de efetividade.
-      </div>
-    )
-  }
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 260, display: 'block', overflow: 'visible' }}>
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--pl-border-strong)" strokeWidth={1} />
-      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="var(--pl-border-strong)" strokeWidth={1} />
-      <line x1={x(limiarBom)} y1={PAD} x2={x(limiarBom)} y2={H - PAD} stroke="var(--pl-border)" strokeWidth={1} strokeDasharray="4 4" />
-      <line x1={PAD} y1={y(limiarEfetividadeAlta)} x2={W - PAD} y2={y(limiarEfetividadeAlta)} stroke="var(--pl-border)" strokeWidth={1} strokeDasharray="4 4" />
-
-      <text x={W - PAD} y={H - PAD + 16} textAnchor="end" fontSize={9} fill="var(--pl-ink-muted)">Aderência →</text>
-      <text x={PAD - 6} y={PAD - 8} textAnchor="start" fontSize={9} fill="var(--pl-ink-muted)">↑ Efetividade</text>
-
-      {comDado.map(p => (
-        <g key={p.id}>
-          <circle cx={x(p.aderenciaPct)} cy={y(p.efetividadePct ?? 0)} r={6} fill={PERFIL_COR[p.perfil]} stroke="var(--pl-bg)" strokeWidth={1.5} />
-          <text x={x(p.aderenciaPct)} y={y(p.efetividadePct ?? 0) - 10} textAnchor="middle" fontSize={9} fontWeight={600} fill="var(--pl-ink-1)">
-            {p.nome.split(' ')[0]}
-          </text>
-        </g>
-      ))}
-    </svg>
-  )
-}
-
 // --pl-accent fica de fora: inverte de claro pra escuro entre os temas, e
 // o texto do avatar é branco fixo — os outros 5 tokens formam a "família
 // cinza/prata/dourado" da paleta, sempre escuros o bastante pro contraste.
@@ -897,24 +849,6 @@ export default function ProLaboreAgendaPage() {
                     </div>
                   )
                 })}
-              </div>
-
-              <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--pl-border)' }}>
-                <div className="pl-card-title" style={{ fontSize: 13.5 }}>Quadrante aderência × efetividade</div>
-                <div className="pl-section-note" style={{ marginTop: 2, marginBottom: 4 }}>Quem cumpre a rotina e converte (Referência) x quem cumpre mas não converte, oscila, ou está ocioso</div>
-                <QuadranteAderenciaEfetividade
-                  pontos={auditoria.filter(p => p.id !== itens[0]?.usuarioId).map(p => ({ id: p.id, nome: p.nome, aderenciaPct: p.pct, efetividadePct: p.efetividadePct, perfil: p.perfil }))}
-                  limiarBom={parametro?.agendaLimiarBomPct ?? 80}
-                  limiarEfetividadeAlta={parametro?.agendaLimiarEfetividadeAltaPct ?? 30}
-                />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 8 }}>
-                  {(Object.keys(PERFIL_LABEL) as Perfil[]).map(perfil => (
-                    <div key={perfil} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--pl-ink-muted)' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: PERFIL_COR[perfil], display: 'inline-block' }} />
-                      {PERFIL_LABEL[perfil]}
-                    </div>
-                  ))}
-                </div>
               </div>
 
               <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--pl-border)' }}>
