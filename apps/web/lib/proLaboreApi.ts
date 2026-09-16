@@ -129,6 +129,14 @@ export interface AgendaConclusao {
   concluidoEm: string
 }
 
+export interface AgendaInicio {
+  id: string
+  agendaItemId: string
+  autorId: string
+  dataReferencia: string
+  iniciadoEm: string
+}
+
 export interface Lead {
   id: string
   nomeCliente: string
@@ -364,9 +372,16 @@ export const proLaboreApi = {
       remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/agenda-itens/${id}`, { method: 'DELETE' }),
       concluir: (id: string, data: string) =>
         request<{ concluido: boolean; concluidoEm?: string }>(`/pro-labore/agenda-itens/${id}/concluir`, { method: 'POST', body: JSON.stringify({ data }) }),
+      // Sinal independente da conclusão — "comecei a trabalhar nisso", sem
+      // necessariamente já ter terminado. Alimenta o funil de aderência.
+      iniciar: (id: string, data: string) =>
+        request<{ iniciado: boolean; iniciadoEm?: string }>(`/pro-labore/agenda-itens/${id}/iniciar`, { method: 'POST', body: JSON.stringify({ data }) }),
     },
     conclusoes: {
       listar: (inicio: string, fim: string) => request<AgendaConclusao[]>(`/pro-labore/agenda-conclusoes?inicio=${inicio}&fim=${fim}`),
+    },
+    inicios: {
+      listar: (inicio: string, fim: string) => request<AgendaInicio[]>(`/pro-labore/agenda-inicios?inicio=${inicio}&fim=${fim}`),
     },
     // Efetividade comercial por vendedor no período (conversão real do
     // funil de Leads — abordado → fechado) — complementa a aderência da

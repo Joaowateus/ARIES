@@ -1400,6 +1400,24 @@ router.get('/agenda-conclusoes', requireProLaboreAuth, async (req: Request, res:
 
 const concluirSchema = z.object({ data: z.string() })
 
+// Busca o item (escopado à conta) e confirma que quem chamou é alvo dele —
+// compartilhado entre /concluir e /iniciar, que têm exatamente a mesma
+// regra de autorização (só mexe na própria marca, nunca na de outra
+// pessoa, mesmo sendo dono/supervisor).
+async function itemEAutorizacao(req: Request, itemId: string): Promise<{ item: NonNullable<Awaited<ReturnType<typeof prisma.agendaItem.findFirst>>> } | { erro: number; mensagem: string }> {
+  const usuarioId = req.proLaboreUser!.sub
+  const item = await prisma.agendaItem.findFirst({ where: { id: itemId, usuarioId } })
+  if (!item) return { erro: 404, mensagem: 'Item de agenda não encontrado' }
+  const meuVendedorId = req.proLaboreUser!.vendedorId ?? null
+  const alvos = (item.vendedorIds ?? '').split(',').filter(Boolean)
+  const temAlvoEspecifico = alvos.length > 0 || item.incluiDono
+  if (temAlvoEspecifico) {
+    const souAlvo = (item.incluiDono && req.proLaboreUser!.papel === 'DONO') || (meuVendedorId != null && alvos.includes(meuVendedorId))
+    if (!souAlvo) return { erro: 403, mensagem: 'Este item é de outra pessoa' }
+  }
+  return { item }
+}
+
 // Marca/desmarca (alterna) a conclusão do item pra HOJE-do-ponto-de-vista-de
 // quem pede, na data informada — cada pessoa só mexe na própria conclusão,
 // nunca na de outra (mesmo dono/supervisor não marcam "no lugar de"
@@ -1416,26 +1434,15 @@ router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Requ
     return
   }
 
-  const usuarioId = req.proLaboreUser!.sub
-  const item = await prisma.agendaItem.findFirst({ where: { id: String(req.params.id), usuarioId } })
-  if (!item) {
-    res.status(404).json({ error: 'Item de agenda não encontrado' })
+  const auth = await itemEAutorizacao(req, String(req.params.id))
+  if ('erro' in auth) {
+    res.status(auth.erro).json({ error: auth.mensagem })
     return
-  }
-  const meuVendedorId = req.proLaboreUser!.vendedorId ?? null
-  const alvos = (item.vendedorIds ?? '').split(',').filter(Boolean)
-  const temAlvoEspecifico = alvos.length > 0 || item.incluiDono
-  if (temAlvoEspecifico) {
-    const souAlvo = (item.incluiDono && req.proLaboreUser!.papel === 'DONO') || (meuVendedorId != null && alvos.includes(meuVendedorId))
-    if (!souAlvo) {
-      res.status(403).json({ error: 'Este item é de outra pessoa' })
-      return
-    }
   }
 
   const autorId = autorIdAtual(req)
   const existente = await prisma.agendaConclusao.findUnique({
-    where: { agendaItemId_autorId_dataReferencia: { agendaItemId: item.id, autorId, dataReferencia } },
+    where: { agendaItemId_autorId_dataReferencia: { agendaItemId: auth.item.id, autorId, dataReferencia } },
   })
 
   if (existente) {
@@ -1444,9 +1451,72 @@ router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Requ
     return
   }
   const criada = await prisma.agendaConclusao.create({
-    data: { agendaItemId: item.id, autorId, dataReferencia },
+    data: { agendaItemId: auth.item.id, autorId, dataReferencia },
   })
   res.json({ concluido: true, concluidoEm: criada.concluidoEm })
+})
+
+// Início da atividade — sinal independente da conclusão (ver comentário do
+// model AgendaInicio), pra medir em que etapa a rotina "fura": previstas →
+// iniciadas → concluídas no prazo.
+router.post('/agenda-itens/:id/iniciar', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = concluirSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const dataReferencia = parseDataDiaUTC(parse.data.data)
+  if (!dataReferencia) {
+    res.status(400).json({ error: 'Data inválida' })
+    return
+  }
+
+  const auth = await itemEAutorizacao(req, String(req.params.id))
+  if ('erro' in auth) {
+    res.status(auth.erro).json({ error: auth.mensagem })
+    return
+  }
+
+  const autorId = autorIdAtual(req)
+  const existente = await prisma.agendaInicio.findUnique({
+    where: { agendaItemId_autorId_dataReferencia: { agendaItemId: auth.item.id, autorId, dataReferencia } },
+  })
+
+  if (existente) {
+    await prisma.agendaInicio.delete({ where: { id: existente.id } })
+    res.json({ iniciado: false })
+    return
+  }
+  const criado = await prisma.agendaInicio.create({
+    data: { agendaItemId: auth.item.id, autorId, dataReferencia },
+  })
+  res.json({ iniciado: true, iniciadoEm: criado.iniciadoEm })
+})
+
+// Inícios no intervalo pedido — mesma regra de visibilidade de
+// /agenda-conclusoes (vendedor só vê o próprio, dono/supervisor vê a
+// equipe), pra alimentar o funil de aderência.
+router.get('/agenda-inicios', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const papel = req.proLaboreUser!.papel
+  const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
+  const { inicio, fim } = req.query
+
+  const inicioData = typeof inicio === 'string' ? parseDataDiaUTC(inicio) : null
+  const fimData = typeof fim === 'string' ? parseDataDiaUTC(fim) : null
+  if (!inicioData || !fimData) {
+    res.status(400).json({ error: 'Período inválido' })
+    return
+  }
+
+  const inicios = await prisma.agendaInicio.findMany({
+    where: {
+      dataReferencia: { gte: inicioData, lte: fimData },
+      item: { usuarioId },
+      ...(vejaEquipe ? {} : { autorId: autorIdAtual(req) }),
+    },
+  })
+  res.json(inicios)
 })
 
 // Efetividade comercial por vendedor no período: conversão real do funil de
