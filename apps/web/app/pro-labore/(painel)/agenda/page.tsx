@@ -110,6 +110,15 @@ function rangeAnterior(periodo: PeriodoAuditoria): { inicio: Date; fim: Date } {
   return { inicio: inicioAnterior, fim: fimAnterior }
 }
 
+// Prende um dia ISO dentro dos limites do período — usado pra timeline da
+// aba Individual nunca cair fora da janela carregada (ex: trocar de "7
+// dias" pra "Hoje" com um dia antigo ainda selecionado).
+function clampDia(diaIso: string, inicio: Date, fim: Date): string {
+  if (diaIso < isoDia(inicio)) return isoDia(inicio)
+  if (diaIso > isoDia(fim)) return isoDia(fim)
+  return diaIso
+}
+
 type StatusConclusao = 'PENDENTE' | 'NO_PRAZO' | 'ATRASADO' | 'SEM_HORARIO'
 
 // Prazo do item nesse dia, convertido pro UTC assumindo horário de Brasília
@@ -268,6 +277,68 @@ function corPct(pct: number, limiarBom: number, limiarAtencao: number): string {
   return 'var(--pl-critical)'
 }
 
+// Resumo em texto direto — em vez de obrigar quem audita a interpretar
+// 4-5 números crus lado a lado, a linha já entrega o diagnóstico pronto.
+// Os números continuam disponíveis, só que na aba individual da pessoa.
+function diagnosticoPessoa(p: { perfil: Perfil; emAlerta: boolean; destaque: boolean }): string {
+  const base: Record<Perfil, string> = {
+    REFERENCIA: 'Cumpre a rotina e converte bem — referência da equipe.',
+    ESTAVEL_SEM_SUBSTANCIA: 'Cumpre a rotina, mas converte pouco — abaixo da meta de efetividade.',
+    OSCILANTE: 'Rendimento instável: ótimo em alguns dias, ausente em outros.',
+    OCIOSO: 'Aderência baixa e estável — não está acompanhando a rotina.',
+    INCONSISTENTE: 'Aderência baixa e imprevisível — pede atenção redobrada.',
+  }
+  let texto = base[p.perfil]
+  if (p.emAlerta) texto += ' Em alerta agora.'
+  else if (p.destaque) texto += ' Merece reconhecimento.'
+  return texto
+}
+
+function media(valores: number[]): number | null {
+  return valores.length > 0 ? valores.reduce((s, v) => s + v, 0) / valores.length : null
+}
+
+type Heatmap = { horarios: string[]; grade: Map<string, { total: number; feitos: number }[]> }
+
+// Grade horário x dia da semana — reaproveitada tanto na Auditoria (com
+// seletor de pessoa/equipe) quanto na aba Individual (sempre travada na
+// pessoa aberta), pra não duplicar a marcação de 40+ linhas duas vezes.
+function HeatmapGrid({ heatmap }: { heatmap: Heatmap }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `72px repeat(7, minmax(52px, 1fr))`, gap: 3, minWidth: 460 }}>
+        <div />
+        {DIAS_SEMANA_LABEL.map(d => (
+          <div key={d} style={{ textAlign: 'center', fontSize: 10.5, color: 'var(--pl-ink-muted)', fontWeight: 700 }}>{d}</div>
+        ))}
+        {heatmap.horarios.map(horario => (
+          <div key={horario} style={{ display: 'contents' }}>
+            <div style={{ fontSize: 11, color: 'var(--pl-ink-muted)', display: 'flex', alignItems: 'center' }}>{horario}</div>
+            {heatmap.grade.get(horario)!.map((celula, diaSemana) => {
+              const pct = celula.total > 0 ? (celula.feitos / celula.total) * 100 : null
+              return (
+                <div
+                  key={diaSemana}
+                  title={celula.total > 0 ? `${DIAS_SEMANA_LABEL[diaSemana]} ${horario}: ${celula.feitos}/${celula.total} (${pct!.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%)` : 'Sem item aplicável'}
+                  style={{
+                    height: 30, borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 10, fontWeight: 700, color: 'var(--pl-ink-1)',
+                    background: pct != null ? `color-mix(in srgb, var(--pl-good) ${pct}%, var(--pl-critical))` : 'var(--pl-surface)',
+                    opacity: pct != null ? 0.28 + (pct / 100) * 0.55 : 0.4,
+                    border: pct == null ? '1px dashed var(--pl-border)' : 'none',
+                  }}
+                >
+                  {pct != null ? `${Math.round(pct)}` : ''}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function diasDoMesGrid(ano: number, mes: number): (Date | null)[] {
   const primeiro = new Date(Date.UTC(ano, mes, 1))
   const diasNoMes = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate()
@@ -339,7 +410,13 @@ export default function ProLaboreAgendaPage() {
 
   const [mesVisivel, setMesVisivel] = useState(() => { const h = hojeUTC(); return { ano: h.getUTCFullYear(), mes: h.getUTCMonth() } })
   const [diaSelecionado, setDiaSelecionado] = useState(() => isoDia(hojeUTC()))
-  const [mostrarTodos, setMostrarTodos] = useState(false)
+
+  // Abas isoladas — minha agenda pessoal, auditoria da equipe, drill-down
+  // de uma pessoa e cadastro de rotinas nunca mais compartilham o mesmo
+  // scroll. Só existe seletor de aba pra quem enxerga a equipe; vendedor
+  // sempre vê só a própria rotina (não tem outra aba pra ele).
+  type Aba = 'ROTINA' | 'AUDITORIA' | 'INDIVIDUAL' | 'CADASTRO'
+  const [abaAtiva, setAbaAtiva] = useState<Aba>('AUDITORIA')
 
   const [periodoAuditoria, setPeriodoAuditoria] = useState<PeriodoAuditoria>('hoje')
   const [conclusoesAuditoria, setConclusoesAuditoria] = useState<AgendaConclusao[]>([])
@@ -360,10 +437,13 @@ export default function ProLaboreAgendaPage() {
 
   // Heatmap: "equipe" mostra a média de todo mundo; escolher uma pessoa
   // troca pro heatmap individual dela, sem sair do período selecionado.
+  // Sincronizado com a pessoa aberta na aba Individual (ver useEffect abaixo).
   const [heatmapPessoaId, setHeatmapPessoaId] = useState<string>('equipe')
-  // Timeline individual: abre ao clicar num consultor no ranking, mostrando
-  // o dia hora a hora — inicia no último dia do período selecionado.
-  const [timeline, setTimeline] = useState<{ pessoaId: string; pessoaNome: string; ehDono: boolean; dia: string } | null>(null)
+
+  // Aba Individual: quem está sendo analisado e o dia aberto na timeline
+  // dela — clicar num nome no ranking da Auditoria leva pra cá.
+  const [individualId, setIndividualId] = useState<string | null>(null)
+  const [diaIndividual, setDiaIndividual] = useState<string | null>(null)
 
   function carregarItens() {
     return proLaboreApi.agenda.itens.listar().then(setItens)
@@ -413,6 +493,7 @@ export default function ProLaboreAgendaPage() {
   const meusConcluidosHoje = meusItensHoje.filter(i => foiConcluido(conclusoes, i.id, meuAutorId, hojeIso)).length
 
   const vendedoresAtivos = vendedores.filter(v => v.ativo)
+  const donoAutorId = itens[0]?.usuarioId
 
   // Ranking de auditoria no período selecionado: pra cada pessoa (dono
   // incluído, quando ele mesmo é alvo de algum item) soma quantos itens
@@ -510,6 +591,11 @@ export default function ProLaboreAgendaPage() {
     return { previstas, iniciadas, concluidasNoPrazo }
   }, [auditoria])
 
+  // Na aba Individual o heatmap trava sempre na pessoa aberta ali; na
+  // Auditoria segue o seletor (heatmapPessoaId, que pode ser "equipe" ou
+  // qualquer pessoa). Derivado direto, sem efeito sincronizando estado.
+  const heatmapAlvo = abaAtiva === 'INDIVIDUAL' && individualId ? individualId : heatmapPessoaId
+
   // Heatmap horário x dia da semana: em que horário/dia a produção
   // historicamente cai — o mapeamento de ociosidade que o "atraso médio"
   // sozinho não mostrava. Linhas = horário configurado no item (itens sem
@@ -521,9 +607,9 @@ export default function ProLaboreAgendaPage() {
     const dias: Date[] = []
     for (const d = new Date(inicio); d <= fim; d.setUTCDate(d.getUTCDate() + 1)) dias.push(new Date(d))
 
-    const pessoasAlvo = heatmapPessoaId === 'equipe'
+    const pessoasAlvo = heatmapAlvo === 'equipe'
       ? auditoria.map(p => ({ id: p.id, ehDono: p.id === donoAutorId }))
-      : auditoria.filter(p => p.id === heatmapPessoaId).map(p => ({ id: p.id, ehDono: p.id === donoAutorId }))
+      : auditoria.filter(p => p.id === heatmapAlvo).map(p => ({ id: p.id, ehDono: p.id === donoAutorId }))
 
     const grade = new Map<string, { total: number; feitos: number }[]>()
     for (const dia of dias) {
@@ -547,19 +633,50 @@ export default function ProLaboreAgendaPage() {
       return a.localeCompare(b)
     })
     return { horarios, grade }
-  }, [vejaEquipe, periodoAuditoria, itens, auditoria, heatmapPessoaId, conclusoesAuditoria])
+  }, [vejaEquipe, periodoAuditoria, itens, auditoria, heatmapAlvo, conclusoesAuditoria])
 
   // Itens do dia aberto na timeline individual, previstos x realizados —
   // mesma lógica de status já usada no painel do dia selecionado, só que
   // pra uma pessoa específica em vez de "eu".
-  const timelineItens = useMemo(() => {
-    if (!timeline) return []
-    const dia = new Date(`${timeline.dia}T00:00:00.000Z`)
+  const itensIndividual = useMemo(() => {
+    if (!individualId || !diaIndividual) return []
+    const ehDono = individualId === donoAutorId
+    const { inicio, fim } = rangeAuditoria(periodoAuditoria)
+    const dia = new Date(`${clampDia(diaIndividual, inicio, fim)}T00:00:00.000Z`)
     return itens
-      .filter(i => itemAplicaPara(i, timeline.ehDono ? null : timeline.pessoaId, timeline.ehDono) && itemAplicaNoDia(i, dia))
-      .map(item => ({ item, ...statusConclusao(conclusoesAuditoria, item, timeline.pessoaId, dia) }))
+      .filter(i => itemAplicaPara(i, ehDono ? null : individualId, ehDono) && itemAplicaNoDia(i, dia))
+      .map(item => ({ item, ...statusConclusao(conclusoesAuditoria, item, individualId, dia) }))
       .sort((a, b) => (a.item.horario ?? '99:99').localeCompare(b.item.horario ?? '99:99'))
-  }, [timeline, itens, conclusoesAuditoria])
+  }, [individualId, diaIndividual, periodoAuditoria, donoAutorId, itens, conclusoesAuditoria])
+
+  // Log completo de atrasos da pessoa no período — a "visão incisiva" que
+  // faltava: cada ocorrência com data, item e por quanto atrasou, não só a
+  // média. Reaproveita o mesmo laço de dias da auditoria, só que pra uma
+  // pessoa só e guardando cada ocorrência em vez de só somar.
+  const atrasosIndividual = useMemo(() => {
+    if (!individualId) return []
+    const ehDono = individualId === donoAutorId
+    const { inicio, fim } = rangeAuditoria(periodoAuditoria)
+    const dias: Date[] = []
+    for (const d = new Date(inicio); d <= fim; d.setUTCDate(d.getUTCDate() + 1)) dias.push(new Date(d))
+
+    const ocorrencias: { dia: Date; item: AgendaItem; atrasoMin: number }[] = []
+    for (const dia of dias) {
+      const aplicaveis = itens.filter(i => itemAplicaPara(i, ehDono ? null : individualId, ehDono) && itemAplicaNoDia(i, dia))
+      for (const item of aplicaveis) {
+        const { status, atrasoMin } = statusConclusao(conclusoesAuditoria, item, individualId, dia)
+        if (status === 'ATRASADO') ocorrencias.push({ dia, item, atrasoMin: atrasoMin ?? 0 })
+      }
+    }
+    return ocorrencias.sort((a, b) => b.dia.getTime() - a.dia.getTime())
+  }, [individualId, donoAutorId, periodoAuditoria, itens, conclusoesAuditoria])
+
+  // Abrir a aba Individual sem ter clicado em ninguém ainda (ex: direto
+  // pela aba) cai por padrão no topo do ranking, assim que ele carregar.
+  useEffect(() => {
+    if (abaAtiva === 'INDIVIDUAL' && !individualId && auditoria.length > 0) abrirIndividual(auditoria[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaAtiva, auditoria])
 
   // Resumo da equipe inteira no período — os números que respondem "como
   // estamos indo" antes mesmo de olhar pessoa por pessoa.
@@ -606,20 +723,21 @@ export default function ProLaboreAgendaPage() {
     })
   }
 
-  function abrirTimeline(pessoa: { id: string; nome: string }) {
-    const donoAutorId = itens[0]?.usuarioId
+  function abrirIndividual(pessoa: { id: string }) {
     const { fim } = rangeAuditoria(periodoAuditoria)
-    setTimeline({ pessoaId: pessoa.id, pessoaNome: pessoa.nome, ehDono: pessoa.id === donoAutorId, dia: isoDia(fim) })
+    setIndividualId(pessoa.id)
+    setDiaIndividual(isoDia(fim))
+    setAbaAtiva('INDIVIDUAL')
   }
 
-  function moverTimelineDia(deltaDias: number) {
-    setTimeline(t => {
-      if (!t) return t
+  function moverDiaIndividual(deltaDias: number) {
+    setDiaIndividual(d => {
+      if (!d) return d
       const { inicio, fim } = rangeAuditoria(periodoAuditoria)
-      const novoDia = new Date(`${t.dia}T00:00:00.000Z`)
+      const novoDia = new Date(`${clampDia(d, inicio, fim)}T00:00:00.000Z`)
       novoDia.setUTCDate(novoDia.getUTCDate() + deltaDias)
-      if (novoDia < inicio || novoDia > fim) return t
-      return { ...t, dia: isoDia(novoDia) }
+      if (novoDia < inicio || novoDia > fim) return d
+      return isoDia(novoDia)
     })
   }
 
@@ -735,6 +853,11 @@ export default function ProLaboreAgendaPage() {
     setDiaSelecionado(isoDia(h))
   }
 
+  // Só quem vê a equipe navega entre abas — vendedor sempre cai direto na
+  // própria rotina, que é a única coisa que ele tem pra ver por aqui.
+  const abaEfetiva: Aba = vejaEquipe ? abaAtiva : 'ROTINA'
+  const pessoaIndividual = auditoria.find(p => p.id === individualId) ?? null
+
   return (
     <div>
       <div className="pl-section-head" style={{ marginTop: 0 }}>
@@ -742,18 +865,21 @@ export default function ProLaboreAgendaPage() {
           <div className="pl-eyebrow">Rotina</div>
           <h2 className="pl-section-title">Agenda de trabalho</h2>
           <div className="pl-section-note" style={{ marginTop: 4 }}>
-            {vejaEquipe ? 'Metas diárias, processos, auditorias e protocolos — cadastrados pra toda a equipe seguir' : 'Sua rotina do dia a dia'}
+            {vejaEquipe ? 'Sua agenda pessoal, a auditoria da equipe e o cadastro de rotinas — separados, cada um na sua aba' : 'Sua rotina do dia a dia'}
           </div>
         </div>
-        {vejaEquipe && (
-          <button type="button" className="pl-btn pl-btn-primary" onClick={abrirNovoItem}>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-            Novo item
-          </button>
-        )}
       </div>
 
       {vejaEquipe && (
+        <div className="pl-period-row" style={{ marginTop: 16, marginBottom: 4 }}>
+          <button type="button" className={`pl-chip ${abaAtiva === 'AUDITORIA' ? 'active' : ''}`} onClick={() => setAbaAtiva('AUDITORIA')}>📊 Auditoria da Equipe</button>
+          <button type="button" className={`pl-chip ${abaAtiva === 'INDIVIDUAL' ? 'active' : ''}`} onClick={() => setAbaAtiva('INDIVIDUAL')}>🔍 Vendedor Individual</button>
+          <button type="button" className={`pl-chip ${abaAtiva === 'ROTINA' ? 'active' : ''}`} onClick={() => setAbaAtiva('ROTINA')}>🗓️ Minha Rotina</button>
+          <button type="button" className={`pl-chip ${abaAtiva === 'CADASTRO' ? 'active' : ''}`} onClick={() => setAbaAtiva('CADASTRO')}>⚙️ Rotinas Cadastradas</button>
+        </div>
+      )}
+
+      {abaEfetiva === 'AUDITORIA' && (
         <div className="pl-card" style={{ marginTop: 16 }}>
           <div className="pl-card-head">
             <div>
@@ -808,44 +934,23 @@ export default function ProLaboreAgendaPage() {
                   const limiarAtencao = parametro?.agendaLimiarAtencaoPct ?? 50
                   const status = statusEquipe(p.pct, limiarBom, limiarAtencao)
                   return (
-                    <div key={p.id} className="pl-seller-row" style={{ cursor: 'pointer' }} onClick={() => abrirTimeline(p)} title="Ver o dia hora a hora dessa pessoa">
+                    <div key={p.id} className="pl-seller-row" style={{ cursor: 'pointer' }} onClick={() => abrirIndividual(p)} title="Ver o detalhe individual dessa pessoa">
                       <div className={`pl-rank ${i === 0 ? 'top' : ''}`}>{i + 1}</div>
                       <div className="pl-seller-main">
                         <div className="pl-seller-top">
                           <div className="pl-seller-name">
                             <span className="pl-avatar" style={{ background: corAvatar(p.id) }}>{iniciais(p.nome)}</span>
                             {p.nome}
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: PERFIL_COR[p.perfil], display: 'inline-block' }} title={PERFIL_LABEL[p.perfil]} />
                             <span className={`pl-status-badge ${status.classe}`}>{status.label}</span>
-                            <span className="pl-status-badge" style={{ color: PERFIL_COR[p.perfil], background: `color-mix(in srgb, ${PERFIL_COR[p.perfil]} 14%, transparent)` }}>{PERFIL_LABEL[p.perfil]}</span>
                             {p.emAlerta && <span className="pl-status-badge critico">⚠ Alerta</span>}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                            <div className="pl-seller-figs" style={{ color: corPct(p.pct, limiarBom, limiarAtencao) }} title="Aderência (% da rotina cumprido)">{p.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>
-                            <div style={{ fontSize: 12.5, color: 'var(--pl-ink-muted)' }} title="Efetividade (% de leads abordados que fecharam venda no período)">
-                              efet. {p.efetividadePct != null ? `${p.efetividadePct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%` : '—'}
-                            </div>
-                          </div>
+                          <div className="pl-seller-figs" style={{ color: corPct(p.pct, limiarBom, limiarAtencao) }} title="Aderência (% da rotina cumprido)">{p.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>
                         </div>
                         <div className="pl-bar-track"><div className="pl-bar-fill" style={{ width: `${p.pct}%`, background: corPct(p.pct, limiarBom, limiarAtencao) }} /></div>
+                        <div style={{ fontSize: 12, color: 'var(--pl-ink-muted)', marginTop: 6 }}>{diagnosticoPessoa(p)}</div>
                       </div>
-                      <div className="pl-seller-meta">
-                        {p.feitos}/{p.total} concluídos
-                        <br />
-                        {p.noPrazo + p.atrasado > 0 ? (
-                          <span style={{ color: p.atrasado > 0 ? 'var(--pl-critical)' : 'var(--pl-good)' }}>
-                            {p.noPrazo} no prazo
-                            {p.atrasado > 0 && ` · ${p.atrasado} atrasado${p.atrasado > 1 ? 's' : ''} (méd. ${formatAtraso(p.atrasoMedioMin ?? 0)})`}
-                          </span>
-                        ) : 'sem itens c/ horário'}
-                        {p.oscilacaoPct != null && (
-                          <>
-                            <br />
-                            <span style={{ color: p.oscilacaoPct >= (parametro?.agendaLimiarOscilacaoPct ?? 35) ? 'var(--pl-accent-5)' : 'var(--pl-ink-muted)' }}>
-                              variação {p.oscilacaoPct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
-                            </span>
-                          </>
-                        )}
-                      </div>
+                      <div className="pl-seller-meta" style={{ alignSelf: 'center' }}>Ver detalhes →</div>
                     </div>
                   )
                 })}
@@ -888,37 +993,7 @@ export default function ProLaboreAgendaPage() {
                       {auditoria.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                     </select>
                   </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: `72px repeat(7, minmax(52px, 1fr))`, gap: 3, minWidth: 460 }}>
-                      <div />
-                      {DIAS_SEMANA_LABEL.map(d => (
-                        <div key={d} style={{ textAlign: 'center', fontSize: 10.5, color: 'var(--pl-ink-muted)', fontWeight: 700 }}>{d}</div>
-                      ))}
-                      {heatmap.horarios.map(horario => (
-                        <div key={horario} style={{ display: 'contents' }}>
-                          <div style={{ fontSize: 11, color: 'var(--pl-ink-muted)', display: 'flex', alignItems: 'center' }}>{horario}</div>
-                          {heatmap.grade.get(horario)!.map((celula, diaSemana) => {
-                            const pct = celula.total > 0 ? (celula.feitos / celula.total) * 100 : null
-                            return (
-                              <div
-                                key={diaSemana}
-                                title={celula.total > 0 ? `${DIAS_SEMANA_LABEL[diaSemana]} ${horario}: ${celula.feitos}/${celula.total} (${pct!.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%)` : 'Sem item aplicável'}
-                                style={{
-                                  height: 30, borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: 10, fontWeight: 700, color: 'var(--pl-ink-1)',
-                                  background: pct != null ? `color-mix(in srgb, var(--pl-good) ${pct}%, var(--pl-critical))` : 'var(--pl-surface)',
-                                  opacity: pct != null ? 0.28 + (pct / 100) * 0.55 : 0.4,
-                                  border: pct == null ? '1px dashed var(--pl-border)' : 'none',
-                                }}
-                              >
-                                {pct != null ? `${Math.round(pct)}` : ''}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <HeatmapGrid heatmap={heatmap} />
                 </div>
               )}
             </>
@@ -926,6 +1001,168 @@ export default function ProLaboreAgendaPage() {
         </div>
       )}
 
+      {abaEfetiva === 'INDIVIDUAL' && (
+        <div className="pl-card" style={{ marginTop: 16 }}>
+          <div className="pl-card-head">
+            <div>
+              <div className="pl-card-title">Vendedor Individual</div>
+              <div className="pl-section-note" style={{ marginTop: 2 }}>Drill-down de uma pessoa por vez — atrasos, produção e eficiência em detalhe.</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <select className="pl-select" value={individualId ?? ''} onChange={e => abrirIndividual({ id: e.target.value })} style={{ maxWidth: 200 }}>
+                {auditoria.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              </select>
+              <div className="pl-period-row">
+                <button type="button" className={`pl-chip ${periodoAuditoria === 'hoje' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('hoje')}>Hoje</button>
+                <button type="button" className={`pl-chip ${periodoAuditoria === '7' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('7')}>7 dias</button>
+                <button type="button" className={`pl-chip ${periodoAuditoria === '30' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('30')}>30 dias</button>
+                <button type="button" className={`pl-chip ${periodoAuditoria === 'mes' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('mes')}>Este mês</button>
+              </div>
+            </div>
+          </div>
+
+          {carregandoAuditoria ? (
+            <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13, padding: '20px 0' }}>Carregando...</div>
+          ) : !pessoaIndividual ? (
+            <div className="pl-empty" style={{ padding: '30px 10px' }}>
+              <div className="pl-emoji">🔍</div>
+              Ninguém tem itens de agenda aplicáveis neste período.
+            </div>
+          ) : (() => {
+            const limiarBom = parametro?.agendaLimiarBomPct ?? 80
+            const limiarAtencao = parametro?.agendaLimiarAtencaoPct ?? 50
+            const status = statusEquipe(pessoaIndividual.pct, limiarBom, limiarAtencao)
+            const mediaAderencia = media(auditoria.map(p => p.pct))
+            const mediaEfetividade = media(auditoria.map(p => p.efetividadePct).filter((v): v is number => v != null))
+            const mediaAtraso = media(auditoria.map(p => p.atrasoMedioMin).filter((v): v is number => v != null))
+            const mediaOscilacao = media(auditoria.map(p => p.oscilacaoPct).filter((v): v is number => v != null))
+            const { inicio: inicioPeriodo, fim: fimPeriodo } = rangeAuditoria(periodoAuditoria)
+            const diaAtual = diaIndividual ? new Date(`${clampDia(diaIndividual, inicioPeriodo, fimPeriodo)}T00:00:00.000Z`) : null
+            return (
+              <>
+                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span className="pl-avatar" style={{ background: corAvatar(pessoaIndividual.id), width: 40, height: 40, fontSize: 15 }}>{iniciais(pessoaIndividual.nome)}</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: 15 }}>{pessoaIndividual.nome}</span>
+                      <span className={`pl-status-badge ${status.classe}`}>{status.label}</span>
+                      <span className="pl-status-badge" style={{ color: PERFIL_COR[pessoaIndividual.perfil], background: `color-mix(in srgb, ${PERFIL_COR[pessoaIndividual.perfil]} 14%, transparent)` }}>{PERFIL_LABEL[pessoaIndividual.perfil]}</span>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--pl-ink-muted)', marginTop: 2 }}>{diagnosticoPessoa(pessoaIndividual)}</div>
+                  </div>
+                </div>
+
+                <div className="pl-kpi-grid" style={{ marginTop: 16, marginBottom: 20 }}>
+                  <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-3)' }}>
+                    <div className="pl-kpi-label">Aderência</div>
+                    <div className="pl-kpi-value">{pessoaIndividual.pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}<span className="pl-unit">%</span></div>
+                    {mediaAderencia != null && <div className="pl-section-note" style={{ marginTop: 4 }}>equipe: {mediaAderencia.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>}
+                  </div>
+                  <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-good)' }}>
+                    <div className="pl-kpi-label">Efetividade</div>
+                    <div className="pl-kpi-value">{pessoaIndividual.efetividadePct != null ? pessoaIndividual.efetividadePct.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) : '—'}<span className="pl-unit">{pessoaIndividual.efetividadePct != null ? '%' : 'sem leads abordados'}</span></div>
+                    {mediaEfetividade != null && <div className="pl-section-note" style={{ marginTop: 4 }}>equipe: {mediaEfetividade.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>}
+                  </div>
+                  <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-4)' }}>
+                    <div className="pl-kpi-label">Atraso médio</div>
+                    <div className="pl-kpi-value">{pessoaIndividual.atrasoMedioMin != null ? formatAtraso(pessoaIndividual.atrasoMedioMin) : '—'}</div>
+                    {mediaAtraso != null && <div className="pl-section-note" style={{ marginTop: 4 }}>equipe: {formatAtraso(Math.round(mediaAtraso))}</div>}
+                  </div>
+                  <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-5)' }}>
+                    <div className="pl-kpi-label">Oscilação</div>
+                    <div className="pl-kpi-value">{pessoaIndividual.oscilacaoPct != null ? pessoaIndividual.oscilacaoPct.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) : '—'}<span className="pl-unit">{pessoaIndividual.oscilacaoPct != null ? '%' : 'sem histórico'}</span></div>
+                    {mediaOscilacao != null && <div className="pl-section-note" style={{ marginTop: 4 }}>equipe: {mediaOscilacao.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</div>}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 4 }}>
+                  <div className="pl-card-title" style={{ fontSize: 13.5 }}>Atrasos no período ({atrasosIndividual.length})</div>
+                  {atrasosIndividual.length === 0 ? (
+                    <div className="pl-empty" style={{ padding: '20px 10px' }}>
+                      <div className="pl-emoji">✅</div>
+                      Nenhum atraso registrado nesse período.
+                    </div>
+                  ) : (
+                    <div className="pl-table-wrap" style={{ marginTop: 10 }}>
+                      <table className="pl-table">
+                        <thead>
+                          <tr><th>Data</th><th>Item</th><th>Horário previsto</th><th className="pl-right">Atraso</th></tr>
+                        </thead>
+                        <tbody>
+                          {atrasosIndividual.map((o, i) => (
+                            <tr key={`${o.item.id}-${isoDia(o.dia)}-${i}`}>
+                              <td>{o.dia.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                              <td>{o.item.titulo}</td>
+                              <td>{o.item.horario ?? '—'}</td>
+                              <td className="pl-right" style={{ color: 'var(--pl-critical)', fontWeight: 700 }}>{formatAtraso(o.atrasoMin)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {heatmap && heatmap.horarios.length > 0 && (
+                  <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--pl-border)' }}>
+                    <div className="pl-card-title" style={{ fontSize: 13.5 }}>Heatmap horário × dia da semana</div>
+                    <div className="pl-section-note" style={{ marginTop: 2, marginBottom: 10 }}>Em que horário/dia a produção dessa pessoa historicamente cai ou desaparece</div>
+                    <HeatmapGrid heatmap={heatmap} />
+                  </div>
+                )}
+
+                {diaAtual && (
+                  <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--pl-border)' }}>
+                    <div className="pl-card-title" style={{ fontSize: 13.5 }}>Timeline do dia</div>
+                    <div className="pl-section-note" style={{ marginTop: 2, marginBottom: 8, textTransform: 'capitalize' }}>
+                      {diaAtual.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '5px 12px' }} disabled={diaAtual <= inicioPeriodo} onClick={() => moverDiaIndividual(-1)}>← Dia anterior</button>
+                      <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '5px 12px' }} disabled={diaAtual >= fimPeriodo} onClick={() => moverDiaIndividual(1)}>Próximo dia →</button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {itensIndividual.length === 0 ? (
+                        <div className="pl-empty" style={{ padding: '24px 10px' }}>
+                          <div className="pl-emoji">🗒️</div>
+                          Nada previsto pra essa pessoa nesse dia.
+                        </div>
+                      ) : itensIndividual.map(({ item, status: statusItem, atrasoMin, conclusao }) => (
+                        <div key={item.id} className="pl-agenda-item-card" style={{ ['--cat-cor' as string]: CATEGORIA_COR[item.categoria] }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span className="pl-kanban-card-time">{item.horario ?? 'sem horário'}</span>
+                              <span className="pl-agenda-item-title" style={{ fontSize: 13 }}>{item.titulo}</span>
+                              {item.exigeLocalizacao && <span title="Exige selo de localização">📍</span>}
+                            </div>
+                            <span
+                              className="pl-status-badge"
+                              style={{
+                                color: statusItem === 'NO_PRAZO' ? 'var(--pl-good)' : statusItem === 'ATRASADO' ? 'var(--pl-critical)' : 'var(--pl-ink-muted)',
+                                background: statusItem === 'NO_PRAZO' ? 'color-mix(in srgb, var(--pl-good) 14%, transparent)' : statusItem === 'ATRASADO' ? 'color-mix(in srgb, var(--pl-critical) 14%, transparent)' : 'var(--pl-surface-2)',
+                              }}
+                            >
+                              {statusItem === 'NO_PRAZO' ? 'no prazo' : statusItem === 'ATRASADO' ? `atrasado ${formatAtraso(atrasoMin ?? 0)}` : statusItem === 'SEM_HORARIO' ? 'concluído' : 'pendente'}
+                            </span>
+                          </div>
+                          {item.exigeLocalizacao && conclusao?.latitude != null && conclusao?.longitude != null && (
+                            <a href={linkMapa(conclusao.latitude, conclusao.longitude)} target="_blank" rel="noreferrer" className="pl-link-action" style={{ display: 'inline-block', marginTop: 6 }}>
+                              📍 Ver localização do check-in
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          })()}
+        </div>
+      )}
+
+      {abaEfetiva === 'ROTINA' && (
+      <>
       <div className="pl-section-head" style={{ marginTop: 28 }}>
         <div>
           <div className="pl-eyebrow">Dia a dia</div>
@@ -1093,45 +1330,61 @@ export default function ProLaboreAgendaPage() {
           )}
         </div>
       </div>
-
-      {vejaEquipe && itens.length > 0 && (
-        <div className="pl-section-note" style={{ margin: '16px 0' }}>
-          <span className="pl-leads-textlink" onClick={() => setMostrarTodos(m => !m)}>{mostrarTodos ? 'Ocultar' : 'Ver'} todos os itens cadastrados ({itens.length})</span>
-        </div>
+      </>
       )}
 
-      {vejaEquipe && mostrarTodos && (
-        <div className="pl-table-wrap">
-          <table className="pl-table">
-            <thead>
-              <tr>
-                <th>Título</th>
-                <th>Categoria</th>
-                <th>Horário</th>
-                <th>Tipo</th>
-                <th>Atribuído a</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {itens.map(item => (
-                <tr key={item.id}>
-                  <td>{item.titulo}</td>
-                  <td>{CATEGORIA_LABEL[item.categoria]}</td>
-                  <td>{item.horario ?? '—'}</td>
-                  <td>{item.tipo === 'UNICO' ? `Único · ${item.data ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}` : `Recorrente · ${(item.diasSemana ?? '').split(',').filter(Boolean).map(d => DIAS_SEMANA_LABEL[Number(d)]).join(', ')}`}</td>
-                  <td>{alvoLabel(item, vendedores, true)}</td>
-                  <td>{item.ativo ? 'Ativo' : 'Inativo'}</td>
-                  <td className="pl-right">
-                    <span className="pl-link-action" style={{ marginRight: 14 }} onClick={() => abrirEdicaoItem(item)}>Editar</span>
-                    <span className="pl-link-action" style={{ marginRight: 14 }} onClick={() => alternarAtivo(item)}>{item.ativo ? 'Desativar' : 'Ativar'}</span>
-                    <span className="pl-link-action pl-danger" onClick={() => removerItem(item)}>Remover</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {abaEfetiva === 'CADASTRO' && (
+        <div className="pl-card" style={{ marginTop: 16 }}>
+          <div className="pl-card-head">
+            <div>
+              <div className="pl-card-title">Rotinas Cadastradas</div>
+              <div className="pl-section-note" style={{ marginTop: 2 }}>Metas diárias, processos, auditorias e protocolos — cadastro isolado de qualquer métrica</div>
+            </div>
+            <button type="button" className="pl-btn pl-btn-primary" onClick={abrirNovoItem}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+              Novo item
+            </button>
+          </div>
+
+          {itens.length === 0 ? (
+            <div className="pl-empty" style={{ padding: '30px 10px' }}>
+              <div className="pl-emoji">🗒️</div>
+              Nenhum item cadastrado ainda.
+            </div>
+          ) : (
+            <div className="pl-table-wrap" style={{ marginTop: 14 }}>
+              <table className="pl-table">
+                <thead>
+                  <tr>
+                    <th>Título</th>
+                    <th>Categoria</th>
+                    <th>Horário</th>
+                    <th>Tipo</th>
+                    <th>Atribuído a</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {itens.map(item => (
+                    <tr key={item.id}>
+                      <td>{item.titulo}</td>
+                      <td>{CATEGORIA_LABEL[item.categoria]}</td>
+                      <td>{item.horario ?? '—'}</td>
+                      <td>{item.tipo === 'UNICO' ? `Único · ${item.data ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}` : `Recorrente · ${(item.diasSemana ?? '').split(',').filter(Boolean).map(d => DIAS_SEMANA_LABEL[Number(d)]).join(', ')}`}</td>
+                      <td>{alvoLabel(item, vendedores, true)}</td>
+                      <td>{item.ativo ? 'Ativo' : 'Inativo'}</td>
+                      <td className="pl-right">
+                        <span className="pl-link-action" style={{ marginRight: 14 }} onClick={() => abrirEdicaoItem(item)}>Editar</span>
+                        <span className="pl-link-action" style={{ marginRight: 14 }} onClick={() => alternarAtivo(item)}>{item.ativo ? 'Desativar' : 'Ativar'}</span>
+                        <span className="pl-link-action pl-danger" onClick={() => removerItem(item)}>Remover</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1226,62 +1479,6 @@ export default function ProLaboreAgendaPage() {
         </div>
       )}
 
-      {timeline && (() => {
-        const { inicio, fim } = rangeAuditoria(periodoAuditoria)
-        const diaAtual = new Date(`${timeline.dia}T00:00:00.000Z`)
-        const rotuloDia = diaAtual.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
-        return (
-          <div className="pl-modal-backdrop" onClick={() => setTimeline(null)}>
-            <div className="pl-card pl-modal-panel" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
-              <div className="pl-card-head">
-                <div>
-                  <div className="pl-card-title">{timeline.pessoaNome}</div>
-                  <div className="pl-section-note" style={{ marginTop: 2, textTransform: 'capitalize' }}>{rotuloDia}</div>
-                </div>
-                <button type="button" className="pl-kanban-icon-btn" onClick={() => setTimeline(null)} title="Fechar" aria-label="Fechar">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10, marginBottom: 4 }}>
-                <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '5px 12px' }} disabled={diaAtual <= inicio} onClick={() => moverTimelineDia(-1)}>← Dia anterior</button>
-                <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '5px 12px' }} disabled={diaAtual >= fim} onClick={() => moverTimelineDia(1)}>Próximo dia →</button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12, maxHeight: 420, overflowY: 'auto' }}>
-                {timelineItens.length === 0 ? (
-                  <div className="pl-empty" style={{ padding: '24px 10px' }}>
-                    <div className="pl-emoji">🗒️</div>
-                    Nada previsto pra essa pessoa nesse dia.
-                  </div>
-                ) : timelineItens.map(({ item, status, atrasoMin, conclusao }) => (
-                  <div key={item.id} className="pl-agenda-item-card" style={{ ['--cat-cor' as string]: CATEGORIA_COR[item.categoria] }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="pl-kanban-card-time">{item.horario ?? 'sem horário'}</span>
-                        <span className="pl-agenda-item-title" style={{ fontSize: 13 }}>{item.titulo}</span>
-                        {item.exigeLocalizacao && <span title="Exige selo de localização">📍</span>}
-                      </div>
-                      <span
-                        className="pl-status-badge"
-                        style={{
-                          color: status === 'NO_PRAZO' ? 'var(--pl-good)' : status === 'ATRASADO' ? 'var(--pl-critical)' : 'var(--pl-ink-muted)',
-                          background: status === 'NO_PRAZO' ? 'color-mix(in srgb, var(--pl-good) 14%, transparent)' : status === 'ATRASADO' ? 'color-mix(in srgb, var(--pl-critical) 14%, transparent)' : 'var(--pl-surface-2)',
-                        }}
-                      >
-                        {status === 'NO_PRAZO' ? 'no prazo' : status === 'ATRASADO' ? `atrasado ${formatAtraso(atrasoMin ?? 0)}` : status === 'SEM_HORARIO' ? 'concluído' : 'pendente'}
-                      </span>
-                    </div>
-                    {item.exigeLocalizacao && conclusao?.latitude != null && conclusao?.longitude != null && (
-                      <a href={linkMapa(conclusao.latitude, conclusao.longitude)} target="_blank" rel="noreferrer" className="pl-link-action" style={{ display: 'inline-block', marginTop: 6 }}>
-                        📍 Ver localização do check-in
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
     </div>
   )
 }
