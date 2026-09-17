@@ -93,7 +93,7 @@ export type EstagioFunilPL = (typeof ETAPAS_FUNIL_PL)[number]
 export const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
 export type TipoLead = (typeof TIPOS_LEAD)[number]
 
-export const AGENDA_CATEGORIAS = ['META', 'PROCESSO', 'AUDITORIA', 'PROTOCOLO', 'OUTRO'] as const
+export const AGENDA_CATEGORIAS = ['META', 'PROCESSO', 'AUDITORIA', 'PROTOCOLO', 'OUTRO', 'REUNIAO'] as const
 export type AgendaCategoria = (typeof AGENDA_CATEGORIAS)[number]
 
 export const AGENDA_TIPOS = ['UNICO', 'RECORRENTE'] as const
