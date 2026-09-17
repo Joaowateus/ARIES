@@ -11,10 +11,28 @@ const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
 const DIAS_SEMANA_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 const CATEGORIA_LABEL: Record<AgendaCategoria, string> = {
-  META: 'Meta diária', PROCESSO: 'Processo', AUDITORIA: 'Auditoria', PROTOCOLO: 'Protocolo', OUTRO: 'Outro',
+  META: 'Rotina', PROCESSO: 'Processo', AUDITORIA: 'Auditoria', PROTOCOLO: 'Protocolo', OUTRO: 'Outro', REUNIAO: 'Reunião',
 }
 const CATEGORIA_COR: Record<AgendaCategoria, string> = {
-  META: 'var(--pl-accent)', PROCESSO: 'var(--pl-accent-3)', AUDITORIA: 'var(--pl-accent-5)', PROTOCOLO: 'var(--pl-accent-4)', OUTRO: 'var(--pl-ink-muted)',
+  META: 'var(--pl-accent)', PROCESSO: 'var(--pl-accent-3)', AUDITORIA: 'var(--pl-accent-5)', PROTOCOLO: 'var(--pl-accent-4)', OUTRO: 'var(--pl-ink-muted)', REUNIAO: 'var(--pl-accent-2)',
+}
+
+// Sub-abas da "Minha Rotina" — separa a rotina pessoal por tipo de
+// atividade, em vez de uma lista só misturando tudo. "Rotina" é o balde
+// genérico (inclui itens categorizados como OUTRO também, pra nenhum item
+// cadastrado ficar invisível por não caber nas 4 categorias mais
+// específicas).
+const CATEGORIAS_MINHA_ROTINA: { valor: AgendaCategoria; label: string }[] = [
+  { valor: 'AUDITORIA', label: 'Auditoria' },
+  { valor: 'PROCESSO', label: 'Processos' },
+  { valor: 'PROTOCOLO', label: 'Protocolos' },
+  { valor: 'META', label: 'Rotina' },
+  { valor: 'REUNIAO', label: 'Reunião' },
+]
+
+function itemNaSubabaRotina(item: AgendaItem, sub: AgendaCategoria): boolean {
+  if (sub === 'META') return item.categoria === 'META' || item.categoria === 'OUTRO'
+  return item.categoria === sub
 }
 
 const ROTULO_DONO = 'Você (Head Comercial)'
@@ -410,6 +428,9 @@ export default function ProLaboreAgendaPage() {
 
   const [mesVisivel, setMesVisivel] = useState(() => { const h = hojeUTC(); return { ano: h.getUTCFullYear(), mes: h.getUTCMonth() } })
   const [diaSelecionado, setDiaSelecionado] = useState(() => isoDia(hojeUTC()))
+  // Sub-aba da Minha Rotina — a rotina pessoal separada por tipo de
+  // atividade, não mais uma lista única misturando tudo.
+  const [categoriaRotina, setCategoriaRotina] = useState<AgendaCategoria>('META')
 
   // Abas isoladas — minha agenda pessoal, auditoria da equipe, drill-down
   // de uma pessoa e cadastro de rotinas nunca mais compartilham o mesmo
@@ -486,7 +507,10 @@ export default function ProLaboreAgendaPage() {
     ]).finally(() => setCarregandoAuditoria(false))
   }, [vejaEquipe, periodoAuditoria])
 
-  const meusItens = useMemo(() => itens.filter(i => itemAplicaPara(i, meuVendedorId, isDono)), [itens, meuVendedorId, isDono])
+  const meusItens = useMemo(
+    () => itens.filter(i => itemAplicaPara(i, meuVendedorId, isDono) && itemNaSubabaRotina(i, categoriaRotina)),
+    [itens, meuVendedorId, isDono, categoriaRotina],
+  )
 
   const hojeIso = isoDia(hojeUTC())
   const meusItensHoje = useMemo(() => meusItens.filter(i => itemAplicaNoDia(i, hojeUTC())), [meusItens])
@@ -836,8 +860,11 @@ export default function ProLaboreAgendaPage() {
 
   const grid = diasDoMesGrid(mesVisivel.ano, mesVisivel.mes)
   const diaSelecionadoDate = new Date(`${diaSelecionado}T00:00:00.000Z`)
+  // Minha Rotina é só minhas obrigações — nunca a visão da equipe (essa
+  // fica nas abas Auditoria/Individual). Por isso sempre exige
+  // itemAplicaPara, mesmo pra quem vê a equipe (dono/supervisor).
   const itensDoDiaSelecionado = itens
-    .filter(i => itemAplicaNoDia(i, diaSelecionadoDate) && (vejaEquipe || itemAplicaPara(i, meuVendedorId, isDono)))
+    .filter(i => itemAplicaNoDia(i, diaSelecionadoDate) && itemAplicaPara(i, meuVendedorId, isDono) && itemNaSubabaRotina(i, categoriaRotina))
     .sort((a, b) => (a.horario ?? '99:99').localeCompare(b.horario ?? '99:99'))
   const rotuloDiaSelecionado = diaSelecionadoDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
 
@@ -1167,10 +1194,17 @@ export default function ProLaboreAgendaPage() {
         <div>
           <div className="pl-eyebrow">Dia a dia</div>
           <h2 className="pl-section-title" style={{ fontSize: 17 }}>Calendário e conclusões</h2>
+          <div className="pl-section-note" style={{ marginTop: 4 }}>Só as suas obrigações — a visão da equipe fica nas abas Auditoria e Vendedor Individual</div>
         </div>
       </div>
 
-      <div className="pl-kpi-grid" style={{ marginTop: 12 }}>
+      <div className="pl-period-row" style={{ marginTop: 10 }}>
+        {CATEGORIAS_MINHA_ROTINA.map(c => (
+          <button key={c.valor} type="button" className={`pl-chip ${categoriaRotina === c.valor ? 'active' : ''}`} onClick={() => setCategoriaRotina(c.valor)}>{c.label}</button>
+        ))}
+      </div>
+
+      <div className="pl-kpi-grid" style={{ marginTop: 16 }}>
         <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent)' }}>
           <div className="pl-kpi-label">Hoje</div>
           <div className="pl-kpi-value">{meusConcluidosHoje}/{meusItensHoje.length}<span className="pl-unit">concluídos</span></div>
@@ -1197,7 +1231,6 @@ export default function ProLaboreAgendaPage() {
               if (!dia) return <div key={`vazio-${i}`} className="pl-agenda-day empty" />
               const diaIso = isoDia(dia)
               const itensAplicaveis = meusItens.filter(item => itemAplicaNoDia(item, dia))
-              const totalNoDia = itens.filter(item => item.ativo && itemAplicaNoDia(item, dia)).length
               const concluidosNoDia = itensAplicaveis.filter(item => foiConcluido(conclusoes, item.id, meuAutorId, diaIso)).length
               const status = itensAplicaveis.length === 0 ? null : concluidosNoDia === itensAplicaveis.length ? 'completo' : concluidosNoDia > 0 ? 'parcial' : 'pendente'
               return (
@@ -1208,7 +1241,7 @@ export default function ProLaboreAgendaPage() {
                   onClick={() => setDiaSelecionado(diaIso)}
                 >
                   <span className="pl-agenda-day-num">{dia.getUTCDate()}</span>
-                  {totalNoDia > 0 && <span className="pl-agenda-day-count">{totalNoDia}</span>}
+                  {itensAplicaveis.length > 0 && <span className="pl-agenda-day-count">{itensAplicaveis.length}</span>}
                   {status && <span className={`pl-agenda-day-dot ${status}`} />}
                 </button>
               )
@@ -1230,32 +1263,6 @@ export default function ProLaboreAgendaPage() {
                 const euConcluido = foiConcluido(conclusoes, item.id, meuAutorId, diaSelecionado)
                 const euIniciado = foiIniciado(inicios, item.id, meuAutorId, diaSelecionado)
                 const meuStatus = statusConclusao(conclusoes, item, meuAutorId, diaSelecionadoDate)
-                let resumoEquipe: string | null = null
-                if (vejaEquipe) {
-                  const alvos = alvosDoItem(item)
-                  const temAlvo = alvos.length > 0 || item.incluiDono
-                  const rotuloStatus = (autorId: string) => {
-                    const { status, atrasoMin } = statusConclusao(conclusoes, item, autorId, diaSelecionadoDate)
-                    if (status === 'PENDENTE') return 'pendente'
-                    if (status === 'ATRASADO') return `atrasado ${formatAtraso(atrasoMin ?? 0)}`
-                    if (status === 'NO_PRAZO') return 'no prazo'
-                    return 'concluído'
-                  }
-                  if (!temAlvo) {
-                    const feitos = vendedoresAtivos.filter(v => foiConcluido(conclusoes, item.id, v.id, diaSelecionado)).length
-                    resumoEquipe = vendedoresAtivos.length > 0 ? `${feitos} de ${vendedoresAtivos.length} vendedores concluíram` : null
-                  } else {
-                    const partes: string[] = []
-                    if (item.incluiDono && !isDono) {
-                      partes.push(`${ROTULO_DONO}: ${rotuloStatus(item.usuarioId)}`)
-                    }
-                    for (const id of alvos.filter(id => id !== meuVendedorId)) {
-                      const nome = vendedores.find(v => v.id === id)?.nome ?? 'Vendedor'
-                      partes.push(`${nome}: ${rotuloStatus(id)}`)
-                    }
-                    resumoEquipe = partes.length > 0 ? partes.join(' · ') : null
-                  }
-                }
                 return (
                   <div key={item.id} className="pl-agenda-item-card" style={{ ['--cat-cor' as string]: CATEGORIA_COR[item.categoria] }}>
                     <div className="pl-agenda-item-head">
@@ -1283,7 +1290,6 @@ export default function ProLaboreAgendaPage() {
                       {alvoLabel(item, vendedores, vejaEquipe)}
                       {item.tipo === 'RECORRENTE' ? ' · recorrente' : ' · data única'}
                     </div>
-                    {resumoEquipe && <div className="pl-kanban-card-meta">{resumoEquipe}</div>}
                     {souAlvo && (
                       <>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

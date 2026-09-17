@@ -1159,7 +1159,7 @@ model AgendaItem {
   usuarioId    String
   titulo       String
   descricao    String?
-  categoria    String // META | PROCESSO | AUDITORIA | PROTOCOLO | OUTRO
+  categoria    String // META | PROCESSO | AUDITORIA | PROTOCOLO | OUTRO | REUNIAO
   tipo         String // UNICO | RECORRENTE
   data         DateTime? // usado quando tipo = UNICO
   diasSemana   String? // usado quando tipo = RECORRENTE — CSV de 0(dom) a 6(sáb), ex "1,2,3,4,5"

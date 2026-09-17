@@ -1200,7 +1200,7 @@ router.get('/receitas-periodo', requireProLaboreAuth, requireDono, async (req: R
 // quantidade de itens é pequena, então não vale a pena materializar uma
 // linha por dia no banco). O servidor só guarda as regras e as conclusões.
 
-const AGENDA_CATEGORIAS = ['META', 'PROCESSO', 'AUDITORIA', 'PROTOCOLO', 'OUTRO'] as const
+const AGENDA_CATEGORIAS = ['META', 'PROCESSO', 'AUDITORIA', 'PROTOCOLO', 'OUTRO', 'REUNIAO'] as const
 const AGENDA_TIPOS = ['UNICO', 'RECORRENTE'] as const
 
 // "Quem sou eu" pra fins de completude da agenda — supervisor e vendedor
