@@ -47,6 +47,11 @@ export interface ParametroLiquidez {
   tetoProLaborePorVenda: number
   // Teto padrão de comissão, usado por vendedores sem comissão individual.
   tetoComissaoPadrao: number
+  // Tetos usados só quando o lead está classificado como "R" (renegociação)
+  // — substituem os dois de cima (e qualquer teto individual do vendedor)
+  // na conversão em venda.
+  tetoProLaboreRenegociacao: number
+  tetoComissaoRenegociacao: number
   metaFaturamentoAnual: number
   // Meta mensal padrão, usada por vendedores sem meta mensal individual.
   metaMensalPadrao: number
@@ -98,6 +103,11 @@ export type EstagioFunilPL = (typeof ETAPAS_FUNIL_PL)[number]
 
 export const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
 export type TipoLead = (typeof TIPOS_LEAD)[number]
+
+// P = pagamento integral (tetos normais da conta) | R = renegociação (tetos
+// reduzidos, configuráveis em ParametroLiquidez).
+export const TIPOS_NEGOCIACAO = ['P', 'R'] as const
+export type TipoNegociacao = (typeof TIPOS_NEGOCIACAO)[number]
 
 export const AGENDA_CATEGORIAS = ['META', 'PROCESSO', 'AUDITORIA', 'PROTOCOLO', 'OUTRO', 'REUNIAO'] as const
 export type AgendaCategoria = (typeof AGENDA_CATEGORIAS)[number]
@@ -158,6 +168,10 @@ export interface Lead {
   modeloInteresse?: string | null
   observacao?: string | null
   tipoLead?: TipoLead | null
+  // Como a negociação vai ser paga — muda o teto de pró-labore/comissão
+  // usado na conversão em venda. null = ainda não classificada (tratada
+  // igual a P na conversão).
+  tipoNegociacao?: TipoNegociacao | null
   // Quanto o cliente teria capacidade de gerar de faturamento — base do
   // indicador de oportunidade de faturamento no funil.
   valorNegociacao: number
@@ -319,9 +333,9 @@ export const proLaboreApi = {
   },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
-    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; valorNegociacao: number }) =>
+    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; tipoNegociacao?: TipoNegociacao; valorNegociacao: number }) =>
       request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
-    editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; valorNegociacao?: number }) =>
+    editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; tipoNegociacao?: TipoNegociacao | null; valorNegociacao?: number }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     mudarEstagio: (id: string, estagio: EstagioLead) =>
       request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio }) }),

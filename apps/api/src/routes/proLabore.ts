@@ -14,30 +14,37 @@ const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, tetoComissaoPorVenda: true, metaMensal: true, criadoEm: true, atualizadoEm: true } as const
 
 // Pró-labore é sempre do dono — sacado de qualquer venda da operação,
-// independente de quem vendeu. O teto é um único valor por conta.
-async function resolverTetoProLabore(usuarioId: string): Promise<number> {
+// independente de quem vendeu. O teto é um único valor por conta, exceto
+// quando o lead que originou a venda está classificado como "R"
+// (renegociação) — aí usa o teto reduzido da conta, também configurável.
+async function resolverTetoProLabore(usuarioId: string, tipoNegociacao?: string | null): Promise<number> {
   const parametro = await prisma.parametroLiquidez.upsert({
     where: { usuarioId },
     update: {},
     create: { usuarioId, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
   })
+  if (tipoNegociacao === 'R') return parametro.tetoProLaboreRenegociacao
   return parametro.tetoProLaborePorVenda
 }
 
 // Comissão é o que se paga ao vendedor daquela venda — usa o teto
 // individual do vendedor quando definido, senão cai pro padrão da conta.
 // Cada vendedor pode ter uma comissão diferente; sem isso, o teto era um
-// valor único compartilhado por toda a operação.
-async function resolverTetoComissao(usuarioId: string, vendedorId?: string | null): Promise<number> {
-  if (vendedorId) {
-    const vendedor = await prisma.vendedor.findUnique({ where: { id: vendedorId }, select: { tetoComissaoPorVenda: true } })
-    if (vendedor?.tetoComissaoPorVenda != null) return vendedor.tetoComissaoPorVenda
-  }
+// valor único compartilhado por toda a operação. Numa negociação "R"
+// (renegociação), o teto reduzido da conta vale sempre, mesmo se o
+// vendedor tiver um teto individual definido — é uma regra da negociação,
+// não do vendedor.
+async function resolverTetoComissao(usuarioId: string, vendedorId?: string | null, tipoNegociacao?: string | null): Promise<number> {
   const parametro = await prisma.parametroLiquidez.upsert({
     where: { usuarioId },
     update: {},
     create: { usuarioId, tetoComissaoPadrao: TETO_PRO_LABORE_PADRAO },
   })
+  if (tipoNegociacao === 'R') return parametro.tetoComissaoRenegociacao
+  if (vendedorId) {
+    const vendedor = await prisma.vendedor.findUnique({ where: { id: vendedorId }, select: { tetoComissaoPorVenda: true } })
+    if (vendedor?.tetoComissaoPorVenda != null) return vendedor.tetoComissaoPorVenda
+  }
   return parametro.tetoComissaoPadrao
 }
 
@@ -254,6 +261,8 @@ router.get('/parametros', requireProLaboreAuth, async (req: Request, res: Respon
 const parametrosSchema = z.object({
   tetoProLaborePorVenda: z.number().positive('Teto deve ser positivo').optional(),
   tetoComissaoPadrao: z.number().positive('Teto deve ser positivo').optional(),
+  tetoProLaboreRenegociacao: z.number().nonnegative('Teto deve ser positivo ou zero').optional(),
+  tetoComissaoRenegociacao: z.number().nonnegative('Teto deve ser positivo ou zero').optional(),
   metaFaturamentoAnual: z.number().positive('Meta deve ser positiva').optional(),
   metaMensalPadrao: z.number().positive('Meta deve ser positiva').optional(),
   custoPorLeadTopo: z.number().nonnegative('Custo deve ser positivo ou zero').optional(),
@@ -626,6 +635,9 @@ router.delete('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Requ
 const ESTAGIOS_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO', 'PERDIDO'] as const
 const ORDEM_ESTAGIO_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO'] as const
 const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
+// P = pagamento integral (tetos normais da conta) | R = renegociação (tetos
+// reduzidos, ver ParametroLiquidez.tetoProLaboreRenegociacao/tetoComissaoRenegociacao).
+const TIPOS_NEGOCIACAO = ['P', 'R'] as const
 
 function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[number]): boolean {
   if (estagioAtual === 'PERDIDO') return false
@@ -666,6 +678,7 @@ const criarLeadSchema = z.object({
   observacao: z.string().optional(),
   vendedorId: z.string().optional(),
   tipoLead: z.enum(TIPOS_LEAD).optional(),
+  tipoNegociacao: z.enum(TIPOS_NEGOCIACAO).optional(),
   valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero'),
 })
 
@@ -702,6 +715,7 @@ router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) 
       modeloInteresse: parse.data.modeloInteresse,
       observacao: parse.data.observacao,
       tipoLead: parse.data.tipoLead,
+      tipoNegociacao: parse.data.tipoNegociacao,
       valorNegociacao: parse.data.valorNegociacao,
     },
     include: LEAD_INCLUDE,
@@ -720,6 +734,7 @@ const editarLeadSchema = z.object({
   observacao: z.string().optional(),
   vendedorId: z.string().nullable().optional(),
   tipoLead: z.enum(TIPOS_LEAD).nullable().optional(),
+  tipoNegociacao: z.enum(TIPOS_NEGOCIACAO).nullable().optional(),
   valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero').optional(),
 })
 
@@ -741,7 +756,7 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
   const data: {
     nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string
     modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: string | null
-    valorNegociacao?: number
+    tipoNegociacao?: string | null; valorNegociacao?: number
   } = {
     nomeCliente: parse.data.nomeCliente,
     telefone: parse.data.telefone,
@@ -751,6 +766,7 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
     modeloInteresse: parse.data.modeloInteresse,
     observacao: parse.data.observacao,
     tipoLead: parse.data.tipoLead,
+    tipoNegociacao: parse.data.tipoNegociacao,
     valorNegociacao: parse.data.valorNegociacao,
   }
   // Dono e supervisor podem reatribuir um lead a outro vendedor.
@@ -836,7 +852,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireDono, async (re
   const { valorVenda, valorProLabore } = parse.data
   const valorComissao = atual.vendedorId ? parse.data.valorComissao ?? 0 : undefined
 
-  const tetoProLabore = await resolverTetoProLabore(usuarioId)
+  const tetoProLabore = await resolverTetoProLabore(usuarioId, atual.tipoNegociacao)
   if (valorProLabore > tetoProLabore) {
     res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${tetoProLabore})` })
     return
@@ -847,7 +863,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireDono, async (re
   }
 
   if (valorComissao !== undefined) {
-    const tetoComissao = await resolverTetoComissao(usuarioId, atual.vendedorId)
+    const tetoComissao = await resolverTetoComissao(usuarioId, atual.vendedorId, atual.tipoNegociacao)
     if (valorComissao > tetoComissao) {
       res.status(400).json({ error: `A comissão não pode ultrapassar o teto configurado (${tetoComissao})` })
       return

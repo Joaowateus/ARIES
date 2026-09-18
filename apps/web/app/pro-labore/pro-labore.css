@@ -583,6 +583,28 @@
 }
 .pl-kanban-card-tag.trafego { background: var(--pl-accent-soft); color: var(--pl-accent); }
 .pl-kanban-card-tag.organico { background: var(--pl-accent-3-soft); color: var(--pl-accent-3); }
+/* Selo só com a abreviação (P/R) — o significado completo fica no title
+   (hover), nunca escrito por extenso na tela. */
+.pl-tipo-negociacao-tag {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  font-size: 10px; font-weight: 800; letter-spacing: .02em; border-radius: 5px;
+  background: color-mix(in srgb, var(--pl-accent-5) 16%, transparent);
+  color: var(--pl-accent-5); font-family: 'JetBrains Mono';
+}
+/* Toggle P/R do card — só o dono vê (define os tetos de pró-labore/comissão
+   na conversão). Clicar no já ativo desmarca (volta pra "não classificado"). */
+.pl-kanban-card-tiponeg-row { display: flex; gap: 6px; margin-top: 8px; }
+.pl-kanban-card-tiponeg-btn {
+  flex: 1; padding: 4px 0; border-radius: 7px; border: 1px solid var(--pl-border-strong);
+  background: var(--pl-surface); color: var(--pl-ink-muted); font-size: 11px; font-weight: 800;
+  font-family: 'JetBrains Mono'; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.pl-kanban-card-tiponeg-btn:hover { color: var(--pl-ink-1); border-color: var(--pl-border-strong); }
+.pl-kanban-card-tiponeg-btn.active {
+  background: color-mix(in srgb, var(--pl-accent-5) 18%, transparent);
+  border-color: color-mix(in srgb, var(--pl-accent-5) 45%, transparent);
+  color: var(--pl-accent-5);
+}
 /* Botão de avançar — move o card uma etapa adiante com um clique só, sem
    precisar arrastar. Resolve o atrito de colunas com muitos leads, onde
    arrastar um card lá de baixo até a próxima coluna exige rolar a lista

@@ -10,6 +10,8 @@ export default function ProLaboreConfiguracoesPage() {
   const isDono = usuario?.papel === 'DONO'
   const [teto, setTeto] = useState('')
   const [tetoComissao, setTetoComissao] = useState('')
+  const [tetoProLaboreR, setTetoProLaboreR] = useState('')
+  const [tetoComissaoR, setTetoComissaoR] = useState('')
   const [metaAnual, setMetaAnual] = useState('')
   const [metaMensalPadrao, setMetaMensalPadrao] = useState('')
   const [loading, setLoading] = useState(true)
@@ -36,6 +38,8 @@ export default function ProLaboreConfiguracoesPage() {
     proLaboreApi.parametros.get().then((p: ParametroLiquidez) => {
       setTeto(String(p.tetoProLaborePorVenda))
       setTetoComissao(String(p.tetoComissaoPadrao))
+      setTetoProLaboreR(String(p.tetoProLaboreRenegociacao))
+      setTetoComissaoR(String(p.tetoComissaoRenegociacao))
       setMetaAnual(String(p.metaFaturamentoAnual))
       setMetaMensalPadrao(String(p.metaMensalPadrao))
       setLimiarBom(String(p.agendaLimiarBomPct))
@@ -58,11 +62,15 @@ export default function ProLaboreConfiguracoesPage() {
       const atualizado = await proLaboreApi.parametros.atualizar({
         tetoProLaborePorVenda: Number(teto),
         tetoComissaoPadrao: Number(tetoComissao),
+        tetoProLaboreRenegociacao: Number(tetoProLaboreR),
+        tetoComissaoRenegociacao: Number(tetoComissaoR),
         metaFaturamentoAnual: Number(metaAnual),
         metaMensalPadrao: Number(metaMensalPadrao),
       })
       setTeto(String(atualizado.tetoProLaborePorVenda))
       setTetoComissao(String(atualizado.tetoComissaoPadrao))
+      setTetoProLaboreR(String(atualizado.tetoProLaboreRenegociacao))
+      setTetoComissaoR(String(atualizado.tetoComissaoRenegociacao))
       setMetaAnual(String(atualizado.metaFaturamentoAnual))
       setMetaMensalPadrao(String(atualizado.metaMensalPadrao))
       setSucesso(true)
@@ -142,6 +150,18 @@ export default function ProLaboreConfiguracoesPage() {
           <label>Teto de comissão padrão (R$)</label>
           <input type="number" step="0.01" min="0" className="pl-input" value={tetoComissao} onChange={e => setTetoComissao(e.target.value)} required />
           <span className="pl-hint">Usado só por vendedores sem comissão individual definida (em Vendedores) — hoje: {formatMoeda(Number(tetoComissao) || 0)}</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Teto de pró-labore em negociação “R” (R$)</label>
+          <input type="number" step="0.01" min="0" className="pl-input" value={tetoProLaboreR} onChange={e => setTetoProLaboreR(e.target.value)} required />
+          <span className="pl-hint">Usado no lugar do teto normal quando o lead está classificado como “R” (renegociação), no CRM — hoje: {formatMoeda(Number(tetoProLaboreR) || 0)}</span>
+        </div>
+
+        <div className="pl-field">
+          <label>Teto de comissão em negociação “R” (R$)</label>
+          <input type="number" step="0.01" min="0" className="pl-input" value={tetoComissaoR} onChange={e => setTetoComissaoR(e.target.value)} required />
+          <span className="pl-hint">Vale sempre pra negociação “R”, mesmo que o vendedor tenha um teto individual definido — hoje: {formatMoeda(Number(tetoComissaoR) || 0)}</span>
         </div>
 
         <div className="pl-field">
