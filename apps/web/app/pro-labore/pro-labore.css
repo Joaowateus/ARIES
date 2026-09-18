@@ -490,6 +490,25 @@
   padding: 12px; min-height: 140px; transition: background .15s, border-color .15s;
 }
 .pl-kanban-col.drop-active { background: var(--pl-accent-soft); border-color: var(--pl-accent); }
+/* Etapa fora da meta configurada — a coluna inteira fica avermelhada pra
+   sinalizar, de forma difícil de ignorar rolando o quadro, que aquela etapa
+   está travando a produção comercial. */
+.pl-kanban-col.fora-meta {
+  background: color-mix(in srgb, var(--pl-critical) 9%, var(--pl-surface-2));
+  border-color: color-mix(in srgb, var(--pl-critical) 40%, var(--pl-border));
+}
+.pl-kanban-col.fora-meta .pl-kanban-col-title { color: var(--pl-critical); }
+
+/* ============ CRM: PAINEL DE PERFORMANCE POR ETAPA ============ */
+.pl-crm-perf-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 2px; }
+.pl-crm-perf-card {
+  background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
+  padding: 10px 8px; text-align: center; transition: background .15s, border-color .15s;
+}
+.pl-crm-perf-card.fora-meta {
+  background: color-mix(in srgb, var(--pl-critical) 9%, var(--pl-surface-2));
+  border-color: color-mix(in srgb, var(--pl-critical) 40%, var(--pl-border));
+}
 .pl-kanban-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .pl-kanban-col-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-2); }
 .pl-kanban-col-hint { font-size: 10px; color: var(--pl-ink-muted); text-transform: none; letter-spacing: normal; margin-top: 2px; font-weight: 500; }
@@ -535,6 +554,7 @@
   color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 10%, transparent);
   border-color: color-mix(in srgb, var(--pl-critical) 35%, transparent);
 }
+.pl-kanban-card-valor { font-size: 13px; font-weight: 700; color: var(--pl-accent-4); margin-top: 3px; }
 .pl-kanban-card-meta { font-size: 11.5px; color: var(--pl-ink-muted); margin-top: 3px; }
 .pl-kanban-card-vendor { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11.5px; color: var(--pl-ink-muted); }
 .pl-kanban-card-tag {
@@ -667,7 +687,7 @@
 
 @media (max-width: 980px) {
   .pl-grid-2, .pl-grid-2b { grid-template-columns: 1fr; }
-  .pl-kanban { grid-template-columns: repeat(5, 240px); }
+  .pl-kanban, .pl-crm-perf-row { grid-template-columns: repeat(5, 240px); }
 
   /* Menu vira gaveta deslizante — o botão hambúrguer some em telas largas
      (o nav cabe inline ali em cima) e aparece só aqui. */

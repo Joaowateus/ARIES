@@ -152,6 +152,9 @@ export interface Lead {
   modeloInteresse?: string | null
   observacao?: string | null
   tipoLead?: TipoLead | null
+  // Quanto o cliente teria capacidade de gerar de faturamento — base do
+  // indicador de oportunidade de faturamento no funil.
+  valorNegociacao: number
   estagio: EstagioLead
   vendaId?: string | null
   vendedorId?: string | null
@@ -310,9 +313,9 @@ export const proLaboreApi = {
   },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
-    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead }) =>
+    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; valorNegociacao: number }) =>
       request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
-    editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null }) =>
+    editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; valorNegociacao?: number }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     mudarEstagio: (id: string, estagio: EstagioLead) =>
       request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio }) }),
