@@ -511,7 +511,24 @@
 }
 /* Separa a trilha em quantidade (já existia) da trilha em R$ (nova),
    dentro do mesmo card — duas leituras paralelas da mesma etapa. */
-.pl-crm-perf-divider { border-top: 1px dashed var(--pl-border); margin: 8px 0; }
+.pl-crm-perf-divider { border-top: 1px dashed var(--pl-border); margin: 8px 0 4px; }
+.pl-crm-perf-subhead {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--pl-ink-muted); text-align: center; margin-bottom: 6px;
+}
+
+/* Mini-cards de Oportunidade/Pró-labore/Comissão, um por etapa, alinhados
+   acima do card de performance da mesma etapa e da coluna do Kanban
+   correspondente — substituem os 3 cards largos e agregados que ficavam
+   soltos no topo da página. */
+.pl-crm-fin-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
+.pl-crm-fin-card {
+  background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.pl-crm-fin-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--pl-ink-muted); }
+.pl-crm-fin-item b { font-family: 'JetBrains Mono'; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); font-weight: 700; }
+.pl-crm-fin-oportunidade { color: var(--pl-accent-4) !important; }
 .pl-kanban-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .pl-kanban-col-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-2); }
 .pl-kanban-col-hint { font-size: 10px; color: var(--pl-ink-muted); text-transform: none; letter-spacing: normal; margin-top: 2px; font-weight: 500; }
@@ -690,7 +707,7 @@
 
 @media (max-width: 980px) {
   .pl-grid-2, .pl-grid-2b { grid-template-columns: 1fr; }
-  .pl-kanban, .pl-crm-perf-row { grid-template-columns: repeat(5, 240px); }
+  .pl-kanban, .pl-crm-perf-row, .pl-crm-fin-row { grid-template-columns: repeat(5, 240px); }
 
   /* Menu vira gaveta deslizante — o botão hambúrguer some em telas largas
      (o nav cabe inline ali em cima) e aparece só aqui. */
