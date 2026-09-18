@@ -34,6 +34,12 @@ export interface ProLaboreUsuario {
   // Só existe pra quem loga como VENDEDOR/SUPERVISOR — meta mensal
   // individual, usada no lugar da meta anual no dashboard de um VENDEDOR.
   metaMensal?: number | null
+  // Idem — teto de comissão individual do próprio vendedor. Necessário
+  // porque quem loga como VENDEDOR não carrega a lista de Vendedor da
+  // conta (só dono/supervisor veem a equipe), então sem isso não teria
+  // como calcular a própria comissão potencial sem cair no padrão da
+  // conta inteira.
+  tetoComissaoPorVenda?: number | null
 }
 
 export interface ParametroLiquidez {

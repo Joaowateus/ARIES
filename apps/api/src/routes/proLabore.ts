@@ -156,7 +156,7 @@ router.post('/auth/login', async (req: Request, res: Response) => {
       papel: papelVendedor,
       vendedorId: vendedor.id,
     })
-    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: papelVendedor, metaMensal: vendedor.metaMensal } })
+    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: papelVendedor, metaMensal: vendedor.metaMensal, tetoComissaoPorVenda: vendedor.tetoComissaoPorVenda } })
     return
   }
 
@@ -169,7 +169,7 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
   if (papel === 'VENDEDOR' || papel === 'SUPERVISOR') {
     const vendedor = await prisma.vendedor.findUnique({
       where: { id: vendedorId },
-      select: { id: true, nome: true, email: true, metaMensal: true },
+      select: { id: true, nome: true, email: true, metaMensal: true, tetoComissaoPorVenda: true },
     })
     if (!vendedor || !vendedor.email) {
       res.status(404).json({ error: 'Vendedor não encontrado' })
@@ -180,7 +180,7 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
     // que o que o resto das rotas está de fato aplicando, a pessoa veria a
     // tela de supervisor mas os dados viriam escopados como vendedor. Uma
     // promoção só entra em vigor no próximo login (novo token).
-    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel, metaMensal: vendedor.metaMensal })
+    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel, metaMensal: vendedor.metaMensal, tetoComissaoPorVenda: vendedor.tetoComissaoPorVenda })
     return
   }
 

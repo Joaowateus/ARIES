@@ -402,7 +402,14 @@ export default function ProLaboreLeadsPage() {
   const tetoProLabore = parametro?.tetoProLaborePorVenda ?? 900
   function tetoComissao(vendedorId?: string | null): number {
     const vendedor = vendedorId ? vendedores.find(v => v.id === vendedorId) : undefined
-    return vendedor?.tetoComissaoPorVenda ?? parametro?.tetoComissaoPadrao ?? 900
+    if (vendedor?.tetoComissaoPorVenda != null) return vendedor.tetoComissaoPorVenda
+    // Quem loga como VENDEDOR não carrega `vendedores` (só dono/supervisor
+    // veem a equipe inteira) — sem isso, o teto individual do próprio
+    // vendedor nunca seria encontrado ali em cima e a conta cairia sempre
+    // no padrão da conta inteira, mesmo quando o vendedor tem um teto
+    // próprio diferente. O login/me já manda o teto individual pra esse caso.
+    if (!vejaEquipe && vendedorId && usuario?.tetoComissaoPorVenda != null) return usuario.tetoComissaoPorVenda
+    return parametro?.tetoComissaoPadrao ?? 900
   }
 
   function abrirConversao(lead: Lead) {
