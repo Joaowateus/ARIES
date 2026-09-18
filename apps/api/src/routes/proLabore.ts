@@ -666,6 +666,7 @@ const criarLeadSchema = z.object({
   observacao: z.string().optional(),
   vendedorId: z.string().optional(),
   tipoLead: z.enum(TIPOS_LEAD).optional(),
+  valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero'),
 })
 
 router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) => {
@@ -701,6 +702,7 @@ router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) 
       modeloInteresse: parse.data.modeloInteresse,
       observacao: parse.data.observacao,
       tipoLead: parse.data.tipoLead,
+      valorNegociacao: parse.data.valorNegociacao,
     },
     include: LEAD_INCLUDE,
   })
@@ -718,6 +720,7 @@ const editarLeadSchema = z.object({
   observacao: z.string().optional(),
   vendedorId: z.string().nullable().optional(),
   tipoLead: z.enum(TIPOS_LEAD).nullable().optional(),
+  valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero').optional(),
 })
 
 router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
@@ -738,6 +741,7 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
   const data: {
     nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string
     modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: string | null
+    valorNegociacao?: number
   } = {
     nomeCliente: parse.data.nomeCliente,
     telefone: parse.data.telefone,
@@ -747,6 +751,7 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
     modeloInteresse: parse.data.modeloInteresse,
     observacao: parse.data.observacao,
     tipoLead: parse.data.tipoLead,
+    valorNegociacao: parse.data.valorNegociacao,
   }
   // Dono e supervisor podem reatribuir um lead a outro vendedor.
   if ((papel === 'DONO' || papel === 'SUPERVISOR') && parse.data.vendedorId !== undefined) {

@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, Vendedor, ParametroLiquidez } from '@/lib/proLaboreApi'
-import { formatMoeda } from '@/lib/format'
+import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
+import { formatMoeda, formatPct } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/lib/proLaboreFunilFiltro'
 
-const COLUNAS: { estagio: EstagioLead; titulo: string }[] = [
+const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
   { estagio: 'ABORDADO', titulo: 'Abordados' },
   { estagio: 'NEGOCIACAO', titulo: 'Negociação (MQL)' },
@@ -53,10 +54,17 @@ function hojeIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function rotuloMetaCrm(meta: MetaFunilProLabore | undefined): string {
+  if (!meta) return 'Meta: —'
+  if (meta.tipoMeta === 'MAXIMO_CUSTO') return `Meta: ${formatMoeda(meta.metaCusto ?? 0)} (máx.)`
+  if (meta.tipoMeta === 'MAXIMO_PERDA') return `Meta: ${formatPct(meta.metaPct)} (máx.)`
+  return `Meta: ${formatPct(meta.metaPct)} (mín.)`
+}
+
 // Etapas em ordem de progressão, sem PERDIDO — usada tanto pelo botão
 // "Avançar" (sempre uma etapa adiante) quanto pelo menu "Mover para"
 // (qualquer etapa, inclusive voltando, sem precisar arrastar).
-const ORDEM_COLUNAS = COLUNAS.map(c => c.estagio)
+const ORDEM_COLUNAS: EstagioLead[] = COLUNAS.map(c => c.estagio)
 function proximaEtapaSimples(estagio: EstagioLead): EstagioLead | null {
   const idx = ORDEM_COLUNAS.indexOf(estagio)
   if (idx === -1 || idx >= ORDEM_COLUNAS.length - 2) return null
@@ -80,9 +88,10 @@ type FormLead = {
   observacao: string
   vendedorId: string
   tipoLead: TipoLead | ''
+  valorNegociacao: string
 }
 
-const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '' }
+const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '', valorNegociacao: '' }
 
 export default function ProLaboreLeadsPage() {
   const { usuario } = useProLaboreAuth()
@@ -96,16 +105,50 @@ export default function ProLaboreLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
+  const [metasFunil, setMetasFunil] = useState<MetaFunilProLabore[]>([])
   const [loading, setLoading] = useState(true)
 
   // Busca + filtros — tudo client-side (a lista de leads já vem inteira pra
   // quem vê a equipe). Ficam mais importantes conforme o CRM acumula leads,
   // que é exatamente onde achar um card "no olho" deixa de dar conta.
+  // Canal, vendedor e período moram todos no mesmo popover (FunilFiltro,
+  // igual à Jornada de compra do Painel) — sem controles soltos duplicados.
   const [busca, setBusca] = useState('')
   const [filtroCanal, setFiltroCanal] = useState<TipoLead | ''>('')
-  const [filtroVendedorId, setFiltroVendedorId] = useState('')
-  const [ordem, setOrdem] = useState<'recentes' | 'antigos'>('recentes')
+  const [filtroVendedorId, setFiltroVendedorId] = useState<string | null>(null)
+  const [filtroPeriodo, setFiltroPeriodo] = useState<{ inicio: string; fim: string } | null>(null)
+  const [filtroCustomInicio, setFiltroCustomInicio] = useState('')
+  const [filtroCustomFim, setFiltroCustomFim] = useState('')
   const [mostrarPerdidos, setMostrarPerdidos] = useState(false)
+
+  function aplicarFiltroPeriodo() {
+    if (!filtroCustomInicio || !filtroCustomFim) return
+    setFiltroPeriodo({ inicio: filtroCustomInicio, fim: filtroCustomFim })
+  }
+
+  function selecionarFiltroPreset(tipo: 'hoje' | 'semana') {
+    const p = tipo === 'hoje' ? periodoHoje() : periodoSemanaAtual()
+    setFiltroCustomInicio(p.inicio)
+    setFiltroCustomFim(p.fim)
+    setFiltroPeriodo(p)
+  }
+
+  function limparFiltroPeriodo() {
+    setFiltroPeriodo(null)
+    setFiltroCustomInicio('')
+    setFiltroCustomFim('')
+  }
+
+  // Edição de meta por etapa e de custo/lead — mesma interação do painel
+  // (FunilJourney), só que aqui refletindo direto na etapa do CRM.
+  const [editandoEtapaMeta, setEditandoEtapaMeta] = useState<EstagioLead | null>(null)
+  const [tipoMetaEdicao, setTipoMetaEdicao] = useState<TipoMetaFunilPL>('MINIMO')
+  const [valorMetaEdicao, setValorMetaEdicao] = useState('')
+  const [salvandoMeta, setSalvandoMeta] = useState(false)
+
+  const [editandoCustoLead, setEditandoCustoLead] = useState(false)
+  const [custoLeadValor, setCustoLeadValor] = useState('')
+  const [salvandoCustoLead, setSalvandoCustoLead] = useState(false)
 
   // "Novo lead" virou modal (era um formulário grande sempre aberto no topo,
   // empurrando o quadro pra baixo toda vez) — abre só quando precisa.
@@ -142,8 +185,9 @@ export default function ProLaboreLeadsPage() {
       proLaboreApi.leads.listar(),
       vejaEquipe ? proLaboreApi.vendedores.listar() : Promise.resolve<Vendedor[]>([]),
       proLaboreApi.parametros.get(),
+      proLaboreApi.funilMetas.listar(),
     ])
-      .then(([l, v, p]) => { setLeads(l); setVendedores(v); setParametro(p) })
+      .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v); setParametro(p); setMetasFunil(metas) })
       .finally(() => setLoading(false))
   }, [vejaEquipe])
 
@@ -180,6 +224,7 @@ export default function ProLaboreLeadsPage() {
         observacao: form.observacao || undefined,
         vendedorId: form.vendedorId || undefined,
         tipoLead: form.tipoLead || undefined,
+        valorNegociacao: Number(form.valorNegociacao),
       })
       setForm(FORM_VAZIO)
       setNovoLeadAberto(false)
@@ -228,6 +273,7 @@ export default function ProLaboreLeadsPage() {
       observacao: lead.observacao ?? '',
       vendedorId: lead.vendedorId ?? '',
       tipoLead: lead.tipoLead ?? '',
+      valorNegociacao: String(lead.valorNegociacao),
     })
     setEditErro('')
   }
@@ -252,6 +298,7 @@ export default function ProLaboreLeadsPage() {
         observacao: editForm.observacao || undefined,
         ...(vejaEquipe ? { vendedorId: editForm.vendedorId || null } : {}),
         tipoLead: editForm.tipoLead || null,
+        valorNegociacao: Number(editForm.valorNegociacao),
       })
       fecharEdicao()
       carregar()
@@ -259,6 +306,53 @@ export default function ProLaboreLeadsPage() {
       setEditErro(err instanceof Error ? err.message : 'Erro ao salvar lead')
     } finally {
       setEditSalvando(false)
+    }
+  }
+
+  function iniciarEdicaoMeta(etapa: EstagioLead) {
+    const meta = metasFunil.find(m => m.etapa === etapa)
+    setEditandoEtapaMeta(etapa)
+    setTipoMetaEdicao(meta?.tipoMeta ?? 'MINIMO')
+    setValorMetaEdicao(meta?.tipoMeta === 'MAXIMO_CUSTO' ? String(meta.metaCusto ?? 0) : String(Math.round((meta?.metaPct ?? 0) * 100)))
+  }
+
+  async function salvarMeta() {
+    if (!editandoEtapaMeta) return
+    setSalvandoMeta(true)
+    try {
+      const etapa = editandoEtapaMeta as EstagioFunilPL
+      let atualizado
+      if (tipoMetaEdicao === 'MAXIMO_CUSTO') {
+        const valor = Number(valorMetaEdicao)
+        if (!Number.isFinite(valor) || valor < 0) return
+        atualizado = await proLaboreApi.funilMetas.atualizar(etapa, { tipoMeta: tipoMetaEdicao, metaCusto: valor })
+      } else {
+        const valor = Number(valorMetaEdicao) / 100
+        if (!Number.isFinite(valor) || valor < 0 || valor > 1) return
+        atualizado = await proLaboreApi.funilMetas.atualizar(etapa, { tipoMeta: tipoMetaEdicao, metaPct: valor })
+      }
+      setMetasFunil(ms => [...ms.filter(m => m.etapa !== atualizado.etapa), atualizado])
+      setEditandoEtapaMeta(null)
+    } finally {
+      setSalvandoMeta(false)
+    }
+  }
+
+  function iniciarEdicaoCustoLead() {
+    setCustoLeadValor(String(parametro?.custoPorLeadTopo ?? 0))
+    setEditandoCustoLead(true)
+  }
+
+  async function salvarCustoLead() {
+    const valor = Number(custoLeadValor)
+    if (!Number.isFinite(valor) || valor < 0) return
+    setSalvandoCustoLead(true)
+    try {
+      const atualizado = await proLaboreApi.parametros.atualizar({ custoPorLeadTopo: valor })
+      setParametro(atualizado)
+      setEditandoCustoLead(false)
+    } finally {
+      setSalvandoCustoLead(false)
     }
   }
 
@@ -378,22 +472,69 @@ export default function ProLaboreLeadsPage() {
     .filter(l => !filtroCanal || l.tipoLead === filtroCanal)
     .filter(l => !filtroVendedorId || l.vendedorId === filtroVendedorId)
     .filter(l => correspondeBusca(l, busca))
+    .filter(l => {
+      if (!filtroPeriodo) return true
+      const d = new Date(l.criadoEm)
+      return d >= new Date(`${filtroPeriodo.inicio}T00:00:00`) && d <= new Date(`${filtroPeriodo.fim}T23:59:59.999`)
+    })
   const leadsAtivos = leadsFiltrados.filter(l => l.estagio !== 'PERDIDO')
   const leadsPerdidos = leadsFiltrados.filter(l => l.estagio === 'PERDIDO')
-  const leadsAtivosOrdenados = [...leadsAtivos].sort((a, b) =>
-    ordem === 'recentes' ? b.criadoEm.localeCompare(a.criadoEm) : a.criadoEm.localeCompare(b.criadoEm),
-  )
+  const leadsAtivosOrdenados = [...leadsAtivos].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
   const totalFiltrado = leadsFiltrados.length
   const fechadosFiltrado = leadsFiltrados.filter(l => l.vendaId).length
   const conversaoFiltrado = totalFiltrado > 0 ? (fechadosFiltrado / totalFiltrado) * 100 : 0
-  const filtroTextualAtivo = busca !== '' || filtroCanal !== '' || filtroVendedorId !== ''
+  const filtroTextualAtivo = busca !== '' || filtroCanal !== '' || filtroVendedorId !== null || filtroPeriodo !== null
 
   function limparFiltros() {
     setBusca('')
     setFiltroCanal('')
-    setFiltroVendedorId('')
+    setFiltroVendedorId(null)
+    limparFiltroPeriodo()
   }
+
+  // Indicadores de performance por etapa — mesma lógica de conversão/perda/
+  // meta/custo da Jornada de compra do Painel (FunilJourney), só que
+  // calculada em cima da contagem por estágio do próprio Kanban (respeitando
+  // os filtros de canal/vendedor/período/busca já aplicados acima).
+  const custoPorLeadTopo = parametro?.custoPorLeadTopo ?? 0
+  const metaPorEtapa = new Map<EstagioLead, MetaFunilProLabore>(metasFunil.map(m => [m.etapa, m]))
+  const valoresPorEtapa = COLUNAS.map(col =>
+    col.estagio === 'LEAD'
+      ? leadsFiltrados.length
+      : col.estagio === 'FECHADO'
+        ? leadsFiltrados.filter(l => l.estagio === 'FECHADO').length
+        : leadsFiltrados.filter(l => estagioAtingiu(l.estagio, col.estagio)).length,
+  )
+  const totalTopoFunil = valoresPorEtapa[0]
+  const stagesDados = COLUNAS.map((col, i) => {
+    const value = valoresPorEtapa[i]
+    const convFromPrev = i === 0 ? 1 : (valoresPorEtapa[i - 1] > 0 ? Math.min(1, value / valoresPorEtapa[i - 1]) : (value > 0 ? 1 : 0))
+    const perdaQuantidade = i === 0 ? null : Math.max(0, valoresPorEtapa[i - 1] - value)
+    const perdaPct = i === 0 ? null : 1 - convFromPrev
+    const conversaoTotal = totalTopoFunil > 0 ? value / totalTopoFunil : 0
+    const custoPorLead = custoPorLeadTopo > 0 && conversaoTotal > 0 ? custoPorLeadTopo / conversaoTotal : null
+    const meta = metaPorEtapa.get(col.estagio)
+    let statusOk: boolean | null = null
+    if (meta) {
+      if (meta.tipoMeta === 'MAXIMO_PERDA') statusOk = perdaPct == null ? null : perdaPct <= meta.metaPct
+      else if (meta.tipoMeta === 'MAXIMO_CUSTO') statusOk = meta.metaCusto == null || custoPorLead == null ? null : custoPorLead <= meta.metaCusto
+      else statusOk = conversaoTotal >= meta.metaPct
+    }
+    return { ...col, i, value, convFromPrev, perdaQuantidade, perdaPct, conversaoTotal, custoPorLead, meta, statusOk }
+  })
+  const statusPorEtapa = new Map(stagesDados.map(d => [d.estagio, d.statusOk]))
+
+  // Oportunidade de faturamento: quanto os leads ativos do funil (filtrado)
+  // teriam capacidade de gerar — soma simples de valorNegociacao, sem
+  // depender de nenhuma venda já ter sido fechada.
+  const oportunidadeFaturamento = leadsAtivos.reduce((s, l) => s + l.valorNegociacao, 0)
+  // Comissão/pró-labore "em risco" no funil — soma dos tetos fixos (nunca
+  // percentual do valorNegociacao) aplicáveis a cada lead ativo, pra
+  // visualizar o quanto se deixa de captar quando as metas de conversão de
+  // cada etapa não são batidas.
+  const proLaboreNoFunil = leadsAtivos.length * tetoProLabore
+  const comissaoNoFunil = leadsAtivos.reduce((s, l) => s + (l.vendedorId ? tetoComissao(l.vendedorId) : 0), 0)
 
   const leadConvertendo = convertendoId ? leads.find(l => l.id === convertendoId) ?? null : null
   const tetoComissaoAtual = leadConvertendo?.vendedorId ? tetoComissao(leadConvertendo.vendedorId) : null
@@ -425,22 +566,22 @@ export default function ProLaboreLeadsPage() {
             placeholder="Buscar por nome, telefone, e-mail, modelo..."
           />
         </div>
-        <div className="pl-period-row">
-          <button type="button" className={`pl-chip ${filtroCanal === '' ? 'active' : ''}`} onClick={() => setFiltroCanal('')}>Todos os canais</button>
-          {TIPOS_LEAD.map(t => (
-            <button key={t} type="button" className={`pl-chip ${filtroCanal === t ? 'active' : ''}`} onClick={() => setFiltroCanal(t)}>{TIPO_LABEL[t]}</button>
-          ))}
-        </div>
-        {vejaEquipe && (
-          <select className={`pl-select-chip ${filtroVendedorId ? 'active' : ''}`} value={filtroVendedorId} onChange={e => setFiltroVendedorId(e.target.value)}>
-            <option value="">Todos os vendedores</option>
-            {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
-          </select>
-        )}
-        <select className="pl-select-chip" value={ordem} onChange={e => setOrdem(e.target.value as 'recentes' | 'antigos')}>
-          <option value="recentes">Mais recentes</option>
-          <option value="antigos">Mais antigos</option>
-        </select>
+        <FunilFiltro
+          vendedores={vejaEquipe ? vendedores : []}
+          vendedorId={filtroVendedorId}
+          vendedorGeralId=""
+          canal={filtroCanal}
+          onChangeVendedor={setFiltroVendedorId}
+          onChangeCanal={setFiltroCanal}
+          periodo={filtroPeriodo}
+          customInicio={filtroCustomInicio}
+          customFim={filtroCustomFim}
+          onChangeCustomInicio={setFiltroCustomInicio}
+          onChangeCustomFim={setFiltroCustomFim}
+          onAplicarPeriodo={aplicarFiltroPeriodo}
+          onLimparPeriodo={limparFiltroPeriodo}
+          onSelecionarPreset={selecionarFiltroPreset}
+        />
       </div>
 
       <div className="pl-section-note" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -454,6 +595,112 @@ export default function ProLaboreLeadsPage() {
           <span className="pl-link-action pl-leads-textlink" onClick={limparFiltros}>Limpar filtros</span>
         )}
       </div>
+
+      {!loading && (
+        <>
+          <div className="pl-kpi-grid" style={{ marginBottom: 16 }}>
+            <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-4)' }}>
+              <div className="pl-kpi-label">Oportunidade de faturamento no funil</div>
+              <div className="pl-kpi-value">{formatMoeda(oportunidadeFaturamento)}</div>
+              <div className="pl-kpi-foot"><span className="pl-kpi-vs">soma do valor de negociação dos leads ativos</span></div>
+            </div>
+            {isDono && (
+              <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-3)' }}>
+                <div className="pl-kpi-label">Pró-labore potencial no funil</div>
+                <div className="pl-kpi-value">{formatMoeda(proLaboreNoFunil)}</div>
+                <div className="pl-kpi-foot"><span className="pl-kpi-vs">teto por venda × leads ativos</span></div>
+              </div>
+            )}
+            {(isDono || isSupervisor) && (
+              <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-2)' }}>
+                <div className="pl-kpi-label">Comissão potencial da equipe</div>
+                <div className="pl-kpi-value">{formatMoeda(comissaoNoFunil)}</div>
+                <div className="pl-kpi-foot"><span className="pl-kpi-vs">soma dos tetos de comissão dos leads com vendedor</span></div>
+              </div>
+            )}
+            {!vejaEquipe && (
+              <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-2)' }}>
+                <div className="pl-kpi-label">Sua comissão potencial no funil</div>
+                <div className="pl-kpi-value">{formatMoeda(comissaoNoFunil)}</div>
+                <div className="pl-kpi-foot"><span className="pl-kpi-vs">teto de comissão × seus leads ativos</span></div>
+              </div>
+            )}
+          </div>
+
+          {isDono && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <span className="pl-hint">Custo por lead (topo do funil):</span>
+              {editandoCustoLead ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="number" step="0.01" min="0" autoFocus
+                    className="pl-input" style={{ width: 100, padding: '4px 8px' }}
+                    value={custoLeadValor} onChange={e => setCustoLeadValor(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && salvarCustoLead()}
+                  />
+                  <button type="button" className="pl-btn pl-btn-primary" disabled={salvandoCustoLead} onClick={salvarCustoLead} style={{ padding: '4px 10px' }}>OK</button>
+                  <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setEditandoCustoLead(false)} style={{ padding: '4px 10px' }}>Cancelar</button>
+                </div>
+              ) : (
+                <span className="pl-link-action" onClick={iniciarEdicaoCustoLead} style={{ fontWeight: 600 }}>
+                  {formatMoeda(custoPorLeadTopo)} ✎
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="pl-crm-perf-row">
+            {stagesDados.map(d => (
+              <div key={d.estagio} className={`pl-crm-perf-card ${d.statusOk === false ? 'fora-meta' : ''}`}>
+                <div className="pl-stage-conv" style={{ marginTop: 0 }}>
+                  {d.i === 0 ? 'topo do funil' : <>conv. anterior <b>{(d.convFromPrev * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b></>}
+                </div>
+                {d.i > 0 && (
+                  <div className="pl-stage-conv">
+                    Perda <b>{d.perdaQuantidade} ({formatPct(d.perdaPct ?? 0)})</b>
+                  </div>
+                )}
+                {editandoEtapaMeta === d.estagio ? (
+                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                    <select
+                      className="pl-select" style={{ fontSize: 11, padding: '2px 4px' }}
+                      value={tipoMetaEdicao} onChange={e => setTipoMetaEdicao(e.target.value as TipoMetaFunilPL)}
+                    >
+                      <option value="MINIMO">Conversão mín.</option>
+                      <option value="MAXIMO_PERDA">Perda máx.</option>
+                      <option value="MAXIMO_CUSTO">Custo máx.</option>
+                    </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {tipoMetaEdicao === 'MAXIMO_CUSTO' && <span className="pl-hint">R$</span>}
+                      <input
+                        type="number" autoFocus className="pl-input" style={{ width: 56, padding: '2px 4px', fontSize: 11, textAlign: 'center' }}
+                        value={valorMetaEdicao} onChange={e => setValorMetaEdicao(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && salvarMeta()}
+                      />
+                      {tipoMetaEdicao !== 'MAXIMO_CUSTO' && <span className="pl-hint">%</span>}
+                      <button type="button" className="pl-link-action" disabled={salvandoMeta} onClick={salvarMeta}>OK</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pl-stage-conv" style={{ marginTop: 6 }}>
+                    {isDono ? (
+                      <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(d.estagio)}>{rotuloMetaCrm(d.meta)} ✎</span>
+                    ) : (
+                      <span>{rotuloMetaCrm(d.meta)}</span>
+                    )}
+                    {d.statusOk != null && <span className={`pl-delta ${d.statusOk ? 'up' : 'down'}`} style={{ marginLeft: 6 }}>{d.statusOk ? 'ok' : 'fora'}</span>}
+                  </div>
+                )}
+                {d.custoPorLead != null && (
+                  <div className="pl-stage-conv">
+                    Custo/lead <b>{formatMoeda(d.custoPorLead)}</b>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {loading ? (
         <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
@@ -473,7 +720,7 @@ export default function ProLaboreLeadsPage() {
                 <div
                   key={col.estagio}
                   ref={el => { if (el) colRefs.current.set(col.estagio, el); else colRefs.current.delete(col.estagio) }}
-                  className={`pl-kanban-col ${dragOverCol === col.estagio ? 'drop-active' : ''}`}
+                  className={`pl-kanban-col ${dragOverCol === col.estagio ? 'drop-active' : ''} ${statusPorEtapa.get(col.estagio) === false ? 'fora-meta' : ''}`}
                 >
                   <div className="pl-kanban-col-head">
                     <div>
@@ -566,6 +813,11 @@ export default function ProLaboreLeadsPage() {
               <div className="pl-field">
                 <label>Modelo de interesse (opcional)</label>
                 <input className="pl-input" value={form.modeloInteresse} onChange={e => setForm(f => ({ ...f, modeloInteresse: e.target.value }))} placeholder="Ex: CG 160" />
+              </div>
+              <div className="pl-field">
+                <label>Valor da negociação (R$)</label>
+                <input type="number" step="0.01" min="0.01" className="pl-input" value={form.valorNegociacao} onChange={e => setForm(f => ({ ...f, valorNegociacao: e.target.value }))} placeholder="0,00" required />
+                <span className="pl-hint">Quanto o cliente teria capacidade de gerar de faturamento</span>
               </div>
               <div className="pl-field">
                 <label>Canal (opcional)</label>
@@ -670,6 +922,11 @@ export default function ProLaboreLeadsPage() {
                 <input className="pl-input" value={editForm.modeloInteresse} onChange={e => setEditForm(f => ({ ...f, modeloInteresse: e.target.value }))} placeholder="Ex: CG 160" />
               </div>
               <div className="pl-field">
+                <label>Valor da negociação (R$)</label>
+                <input type="number" step="0.01" min="0.01" className="pl-input" value={editForm.valorNegociacao} onChange={e => setEditForm(f => ({ ...f, valorNegociacao: e.target.value }))} placeholder="0,00" required />
+                <span className="pl-hint">Quanto o cliente teria capacidade de gerar de faturamento</span>
+              </div>
+              <div className="pl-field">
                 <label>Canal (opcional)</label>
                 <select className="pl-select" value={editForm.tipoLead} onChange={e => setEditForm(f => ({ ...f, tipoLead: e.target.value as TipoLead | '' }))}>
                   <option value="">— Não informado —</option>
@@ -746,6 +1003,7 @@ function KanbanCard({
         <div className="pl-kanban-card-name">{lead.nomeCliente}</div>
         {!lead.vendaId && <span className={`pl-kanban-card-time ${parado ? 'stale' : ''}`} title={`Há ${tempoParado(dias)} sem mudar de etapa`}>{tempoParado(dias)}</span>}
       </div>
+      <div className="pl-kanban-card-valor pl-mono" title="Valor da negociação">{formatMoeda(lead.valorNegociacao)}</div>
       {lead.telefone && <div className="pl-kanban-card-meta">{lead.telefone}</div>}
       {vejaEquipe && lead.vendedor && (
         <div className="pl-kanban-card-vendor">
