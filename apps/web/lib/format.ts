@@ -2,6 +2,15 @@ export function formatMoeda(valor: number): string {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+/** Converte uma string de dígitos (o usuário digita só números, os 2 últimos
+ * são sempre os centavos) pro valor em reais — mesmo padrão de campo de
+ * valor usado em apps bancários, evita a confusão de vírgula/ponto decimal
+ * de um input numérico nativo. */
+export function centavosParaReais(digitos: string): number {
+  const limpo = digitos.replace(/\D/g, '')
+  return limpo === '' ? 0 : Number(limpo) / 100
+}
+
 export function formatPct(valor: number): string {
   return `${Math.round(valor * 100)}%`
 }

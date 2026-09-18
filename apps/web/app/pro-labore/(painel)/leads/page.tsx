@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
-import { formatMoeda, formatPct } from '@/lib/format'
+import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/lib/proLaboreFunilFiltro'
 
@@ -59,6 +59,36 @@ function rotuloMetaCrm(meta: MetaFunilProLabore | undefined): string {
   if (meta.tipoMeta === 'MAXIMO_CUSTO') return `Meta: ${formatMoeda(meta.metaCusto ?? 0)} (máx.)`
   if (meta.tipoMeta === 'MAXIMO_PERDA') return `Meta: ${formatPct(meta.metaPct)} (máx.)`
   return `Meta: ${formatPct(meta.metaPct)} (mín.)`
+}
+
+// Campo de valor em R$ no formato centavos: a pessoa digita só números (os 2
+// últimos dígitos são sempre os centavos) e o campo formata pro real
+// conforme digita — evita o problema de vírgula/ponto decimal de um input
+// numérico nativo (o navegador só aceita ponto, mas todo mundo digita vírgula).
+function CampoValorCentavos({ valorDigitos, onChange, id }: { valorDigitos: string; onChange: (v: string) => void; id?: string }) {
+  const ref = useRef<HTMLInputElement>(null)
+  const texto = formatMoeda(centavosParaReais(valorDigitos))
+
+  // Sempre reposiciona o cursor no fim — sem isso, ao re-renderizar com o
+  // valor formatado (símbolo, milhar, vírgula), o cursor pode "pular" pro
+  // meio do texto, quebrando a digitação contínua.
+  useEffect(() => {
+    const el = ref.current
+    if (el && document.activeElement === el) el.setSelectionRange(texto.length, texto.length)
+  }, [texto])
+
+  return (
+    <input
+      ref={ref}
+      id={id}
+      type="text"
+      inputMode="numeric"
+      className="pl-input"
+      value={texto}
+      onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+      placeholder="R$ 0,00"
+    />
+  )
 }
 
 // Etapas em ordem de progressão, sem PERDIDO — usada tanto pelo botão
@@ -212,6 +242,11 @@ export default function ProLaboreLeadsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
+    const valorNegociacao = centavosParaReais(form.valorNegociacao)
+    if (valorNegociacao <= 0) {
+      setErro('Informe o valor da negociação')
+      return
+    }
     setSalvando(true)
     try {
       await proLaboreApi.leads.criar({
@@ -224,7 +259,7 @@ export default function ProLaboreLeadsPage() {
         observacao: form.observacao || undefined,
         vendedorId: form.vendedorId || undefined,
         tipoLead: form.tipoLead || undefined,
-        valorNegociacao: Number(form.valorNegociacao),
+        valorNegociacao,
       })
       setForm(FORM_VAZIO)
       setNovoLeadAberto(false)
@@ -273,7 +308,7 @@ export default function ProLaboreLeadsPage() {
       observacao: lead.observacao ?? '',
       vendedorId: lead.vendedorId ?? '',
       tipoLead: lead.tipoLead ?? '',
-      valorNegociacao: String(lead.valorNegociacao),
+      valorNegociacao: String(Math.round(lead.valorNegociacao * 100)),
     })
     setEditErro('')
   }
@@ -286,6 +321,11 @@ export default function ProLaboreLeadsPage() {
   async function salvarEdicao() {
     if (!editandoId) return
     setEditErro('')
+    const valorNegociacao = centavosParaReais(editForm.valorNegociacao)
+    if (valorNegociacao <= 0) {
+      setEditErro('Informe o valor da negociação')
+      return
+    }
     setEditSalvando(true)
     try {
       await proLaboreApi.leads.editar(editandoId, {
@@ -298,7 +338,7 @@ export default function ProLaboreLeadsPage() {
         observacao: editForm.observacao || undefined,
         ...(vejaEquipe ? { vendedorId: editForm.vendedorId || null } : {}),
         tipoLead: editForm.tipoLead || null,
-        valorNegociacao: Number(editForm.valorNegociacao),
+        valorNegociacao,
       })
       fecharEdicao()
       carregar()
@@ -839,7 +879,7 @@ export default function ProLaboreLeadsPage() {
               </div>
               <div className="pl-field">
                 <label>Valor da negociação (R$)</label>
-                <input type="number" step="0.01" min="0.01" className="pl-input" value={form.valorNegociacao} onChange={e => setForm(f => ({ ...f, valorNegociacao: e.target.value }))} placeholder="0,00" required />
+                <CampoValorCentavos valorDigitos={form.valorNegociacao} onChange={v => setForm(f => ({ ...f, valorNegociacao: v }))} />
                 <span className="pl-hint">Quanto o cliente teria capacidade de gerar de faturamento</span>
               </div>
               <div className="pl-field">
@@ -946,7 +986,7 @@ export default function ProLaboreLeadsPage() {
               </div>
               <div className="pl-field">
                 <label>Valor da negociação (R$)</label>
-                <input type="number" step="0.01" min="0.01" className="pl-input" value={editForm.valorNegociacao} onChange={e => setEditForm(f => ({ ...f, valorNegociacao: e.target.value }))} placeholder="0,00" required />
+                <CampoValorCentavos valorDigitos={editForm.valorNegociacao} onChange={v => setEditForm(f => ({ ...f, valorNegociacao: v }))} />
                 <span className="pl-hint">Quanto o cliente teria capacidade de gerar de faturamento</span>
               </div>
               <div className="pl-field">
