@@ -432,6 +432,13 @@ export default function ProLaboreLeadsPage() {
     if (lead.tipoNegociacao === 'R') return parametro?.tetoComissaoRenegociacao ?? 0
     return lead.vendedorId ? tetoComissao(lead.vendedorId) : 0
   }
+  // Comissão que o lead pagaria fora da regra de renegociação — a diferença
+  // pra tetoComissaoEfetivo é exatamente o quanto se perdeu de comissão por
+  // causa da negociação ser "R" (pra "P"/sem classificação essa diferença é
+  // sempre zero, já que os dois coincidem).
+  function tetoComissaoNormal(lead: Lead): number {
+    return lead.vendedorId ? tetoComissao(lead.vendedorId) : 0
+  }
 
   async function definirTipoNegociacao(lead: Lead, tipo: TipoNegociacao) {
     if (!isDono) return
@@ -620,10 +627,14 @@ export default function ProLaboreLeadsPage() {
     const perdaPctRS = perdaRS == null || oportunidadePorEtapaRS[i - 1] <= 0 ? null : perdaRS / oportunidadePorEtapaRS[i - 1]
     const proLaborePotencialRS = ativosNaEtapaAgora[i].reduce((s, l) => s + tetoProLaboreEfetivo(l), 0)
     const comissaoPotencialRS = ativosNaEtapaAgora[i].reduce((s, l) => s + tetoComissaoEfetivo(l), 0)
+    // Comissão (Perdida): quanto deixou de entrar pro vendedor por causa de
+    // negociações "R" — soma da diferença entre o teto normal e o efetivo
+    // de cada lead ativo da etapa (zero pra lead "P"/sem classificação).
+    const comissaoPerdidaRS = ativosNaEtapaAgora[i].reduce((s, l) => s + Math.max(0, tetoComissaoNormal(l) - tetoComissaoEfetivo(l)), 0)
 
     return {
       ...col, i, value, convFromPrev, perdaQuantidade, perdaPct, conversaoTotal, custoPorLead, meta, statusOk,
-      oportunidadeRS, convAnteriorRS, perdaRS, perdaPctRS, proLaborePotencialRS, comissaoPotencialRS,
+      oportunidadeRS, convAnteriorRS, perdaRS, perdaPctRS, proLaborePotencialRS, comissaoPotencialRS, comissaoPerdidaRS,
     }
   })
   const statusPorEtapa = new Map(stagesDados.map(d => [d.estagio, d.statusOk]))
@@ -728,8 +739,12 @@ export default function ProLaboreLeadsPage() {
                   </div>
                 )}
                 <div className="pl-crm-fin-item">
-                  <span>Comissão</span>
+                  <span>Comissão (Previsão)</span>
                   <b>{formatMoeda(d.comissaoPotencialRS)}</b>
+                </div>
+                <div className="pl-crm-fin-item pl-crm-fin-perdida">
+                  <span>Comissão (Perdida)</span>
+                  <b>{formatMoeda(d.comissaoPerdidaRS)}</b>
                 </div>
               </div>
             ))}

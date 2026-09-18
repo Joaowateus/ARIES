@@ -529,6 +529,10 @@
 .pl-crm-fin-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--pl-ink-muted); }
 .pl-crm-fin-item b { font-family: 'JetBrains Mono'; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); font-weight: 700; }
 .pl-crm-fin-oportunidade { color: var(--pl-accent-4) !important; }
+/* Comissão (Perdida) — o quanto deixa de entrar pro vendedor nas
+   negociações "R", sempre em vermelho pra ficar difícil de ignorar. */
+.pl-crm-fin-perdida { color: var(--pl-critical); }
+.pl-crm-fin-perdida b { color: var(--pl-critical) !important; }
 .pl-kanban-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .pl-kanban-col-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-2); }
 .pl-kanban-col-hint { font-size: 10px; color: var(--pl-ink-muted); text-transform: none; letter-spacing: normal; margin-top: 2px; font-weight: 500; }
