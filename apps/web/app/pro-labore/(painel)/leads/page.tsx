@@ -553,16 +553,6 @@ export default function ProLaboreLeadsPage() {
   })
   const statusPorEtapa = new Map(stagesDados.map(d => [d.estagio, d.statusOk]))
 
-  // Oportunidade de faturamento: quanto os leads ativos do funil (filtrado)
-  // teriam capacidade de gerar — soma simples de valorNegociacao, sem
-  // depender de nenhuma venda já ter sido fechada.
-  const oportunidadeFaturamento = leadsAtivos.reduce((s, l) => s + l.valorNegociacao, 0)
-  // Comissão/pró-labore "em risco" no funil — soma dos tetos fixos (nunca
-  // percentual do valorNegociacao) aplicáveis a cada lead ativo, pra
-  // visualizar o quanto se deixa de captar quando as metas de conversão de
-  // cada etapa não são batidas.
-  const proLaboreNoFunil = leadsAtivos.length * tetoProLabore
-  const comissaoNoFunil = leadsAtivos.reduce((s, l) => s + (l.vendedorId ? tetoComissao(l.vendedorId) : 0), 0)
 
   const leadConvertendo = convertendoId ? leads.find(l => l.id === convertendoId) ?? null : null
   const tetoComissaoAtual = leadConvertendo?.vendedorId ? tetoComissao(leadConvertendo.vendedorId) : null
@@ -626,35 +616,6 @@ export default function ProLaboreLeadsPage() {
 
       {!loading && (
         <>
-          <div className="pl-kpi-grid" style={{ marginBottom: 16 }}>
-            <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-4)' }}>
-              <div className="pl-kpi-label">Oportunidade de faturamento no funil</div>
-              <div className="pl-kpi-value">{formatMoeda(oportunidadeFaturamento)}</div>
-              <div className="pl-kpi-foot"><span className="pl-kpi-vs">soma do valor de negociação dos leads ativos</span></div>
-            </div>
-            {isDono && (
-              <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-3)' }}>
-                <div className="pl-kpi-label">Pró-labore potencial no funil</div>
-                <div className="pl-kpi-value">{formatMoeda(proLaboreNoFunil)}</div>
-                <div className="pl-kpi-foot"><span className="pl-kpi-vs">teto por venda × leads ativos</span></div>
-              </div>
-            )}
-            {(isDono || isSupervisor) && (
-              <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-2)' }}>
-                <div className="pl-kpi-label">Comissão potencial da equipe</div>
-                <div className="pl-kpi-value">{formatMoeda(comissaoNoFunil)}</div>
-                <div className="pl-kpi-foot"><span className="pl-kpi-vs">soma dos tetos de comissão dos leads com vendedor</span></div>
-              </div>
-            )}
-            {!vejaEquipe && (
-              <div className="pl-kpi" style={{ ['--k-color' as string]: 'var(--pl-accent-2)' }}>
-                <div className="pl-kpi-label">Sua comissão potencial no funil</div>
-                <div className="pl-kpi-value">{formatMoeda(comissaoNoFunil)}</div>
-                <div className="pl-kpi-foot"><span className="pl-kpi-vs">teto de comissão × seus leads ativos</span></div>
-              </div>
-            )}
-          </div>
-
           {isDono && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <span className="pl-hint">Custo por lead (topo do funil):</span>
@@ -676,6 +637,27 @@ export default function ProLaboreLeadsPage() {
               )}
             </div>
           )}
+
+          <div className="pl-crm-fin-row">
+            {stagesDados.map(d => (
+              <div key={d.estagio} className="pl-crm-fin-card">
+                <div className="pl-crm-fin-item">
+                  <span>Oportunidade</span>
+                  <b className="pl-crm-fin-oportunidade">{formatMoeda(d.oportunidadeRS)}</b>
+                </div>
+                {isDono && (
+                  <div className="pl-crm-fin-item">
+                    <span>Pró-labore</span>
+                    <b>{formatMoeda(d.proLaborePotencialRS)}</b>
+                  </div>
+                )}
+                <div className="pl-crm-fin-item">
+                  <span>Comissão</span>
+                  <b>{formatMoeda(d.comissaoPotencialRS)}</b>
+                </div>
+              </div>
+            ))}
+          </div>
 
           <div className="pl-crm-perf-row">
             {stagesDados.map(d => (
@@ -725,28 +707,18 @@ export default function ProLaboreLeadsPage() {
                   </div>
                 )}
 
-                <div className="pl-crm-perf-divider" />
-                <div className="pl-stage-conv">
-                  Oportunidade <b>{formatMoeda(d.oportunidadeRS)}</b>
-                </div>
                 {d.i > 0 && (
-                  <div className="pl-stage-conv">
-                    conv. anterior (R$) <b>{d.convAnteriorRS != null ? `${(d.convAnteriorRS * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</b>
-                  </div>
+                  <>
+                    <div className="pl-crm-perf-divider" />
+                    <div className="pl-crm-perf-subhead">Valores em R$</div>
+                    <div className="pl-stage-conv">
+                      conv. anterior (R$) <b>{d.convAnteriorRS != null ? `${(d.convAnteriorRS * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</b>
+                    </div>
+                    <div className="pl-stage-conv">
+                      Perda (R$) <b>{d.perdaRS != null ? <>{formatMoeda(d.perdaRS)} ({d.perdaPctRS != null ? formatPct(d.perdaPctRS) : '—'})</> : '—'}</b>
+                    </div>
+                  </>
                 )}
-                {d.i > 0 && (
-                  <div className="pl-stage-conv">
-                    Perda (R$) <b>{d.perdaRS != null ? <>{formatMoeda(d.perdaRS)} ({d.perdaPctRS != null ? formatPct(d.perdaPctRS) : '—'})</> : '—'}</b>
-                  </div>
-                )}
-                {isDono && (
-                  <div className="pl-stage-conv">
-                    Pró-labore <b>{formatMoeda(d.proLaborePotencialRS)}</b>
-                  </div>
-                )}
-                <div className="pl-stage-conv">
-                  Comissão <b>{formatMoeda(d.comissaoPotencialRS)}</b>
-                </div>
               </div>
             ))}
           </div>
