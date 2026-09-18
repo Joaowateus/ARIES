@@ -499,14 +499,28 @@ export default function ProLaboreLeadsPage() {
   // os filtros de canal/vendedor/período/busca já aplicados acima).
   const custoPorLeadTopo = parametro?.custoPorLeadTopo ?? 0
   const metaPorEtapa = new Map<EstagioLead, MetaFunilProLabore>(metasFunil.map(m => [m.etapa, m]))
-  const valoresPorEtapa = COLUNAS.map(col =>
+  // População de cada etapa pra fins de conversão/perda: "alcançou essa etapa
+  // ou foi além" (cumulativo, mesmo conceito do FunilJourney) — não é o
+  // mesmo grupo que está literalmente parado nessa coluna do Kanban agora.
+  const populacaoPorEtapa: Lead[][] = COLUNAS.map(col =>
     col.estagio === 'LEAD'
-      ? leadsFiltrados.length
+      ? leadsFiltrados
       : col.estagio === 'FECHADO'
-        ? leadsFiltrados.filter(l => l.estagio === 'FECHADO').length
-        : leadsFiltrados.filter(l => estagioAtingiu(l.estagio, col.estagio)).length,
+        ? leadsFiltrados.filter(l => l.estagio === 'FECHADO')
+        : leadsFiltrados.filter(l => estagioAtingiu(l.estagio, col.estagio)),
   )
+  const valoresPorEtapa = populacaoPorEtapa.map(pop => pop.length)
   const totalTopoFunil = valoresPorEtapa[0]
+  // Valor de negociação usado nos cálculos em R$: o valor ATUAL salvo no
+  // lead (não existe histórico do valor por etapa no modelo — só o
+  // histórico de troca de estágio — então não dá pra saber quanto o lead
+  // valia no momento em que passou por cada etapa).
+  const oportunidadePorEtapaRS = populacaoPorEtapa.map(pop => pop.reduce((s, l) => s + l.valorNegociacao, 0))
+  // Pró-labore/comissão potencial por etapa usa a população que está
+  // LITERALMENTE na coluna agora (não a cumulativa) — é o que permite abrir
+  // os 2 indicadores agregados do topo (que somam sobre leadsAtivos inteiro,
+  // um valor por lead) em 5 fatias que somadas batem com o total do topo.
+  const ativosNaEtapaAgora = COLUNAS.map(col => leadsAtivos.filter(l => l.estagio === col.estagio))
   const stagesDados = COLUNAS.map((col, i) => {
     const value = valoresPorEtapa[i]
     const convFromPrev = i === 0 ? 1 : (valoresPorEtapa[i - 1] > 0 ? Math.min(1, value / valoresPorEtapa[i - 1]) : (value > 0 ? 1 : 0))
@@ -521,7 +535,21 @@ export default function ProLaboreLeadsPage() {
       else if (meta.tipoMeta === 'MAXIMO_CUSTO') statusOk = meta.metaCusto == null || custoPorLead == null ? null : custoPorLead <= meta.metaCusto
       else statusOk = conversaoTotal >= meta.metaPct
     }
-    return { ...col, i, value, convFromPrev, perdaQuantidade, perdaPct, conversaoTotal, custoPorLead, meta, statusOk }
+
+    // ---- Trilha paralela em R$ (mesmo padrão acima, só que somando
+    // valorNegociacao em vez de contar leads) ----
+    const oportunidadeRS = oportunidadePorEtapaRS[i]
+    const convAnteriorRS = i === 0 || oportunidadePorEtapaRS[i - 1] <= 0 ? null : oportunidadeRS / oportunidadePorEtapaRS[i - 1]
+    const perdaRS = i === 0 || oportunidadePorEtapaRS[i - 1] <= 0 ? null : Math.max(0, oportunidadePorEtapaRS[i - 1] - oportunidadeRS)
+    const perdaPctRS = perdaRS == null || oportunidadePorEtapaRS[i - 1] <= 0 ? null : perdaRS / oportunidadePorEtapaRS[i - 1]
+    const proLaborePotencialRS = ativosNaEtapaAgora[i].length * tetoProLabore
+    const comVendedorNaEtapa = ativosNaEtapaAgora[i].filter(l => l.vendedorId)
+    const comissaoPotencialRS = comVendedorNaEtapa.reduce((s, l) => s + tetoComissao(l.vendedorId), 0)
+
+    return {
+      ...col, i, value, convFromPrev, perdaQuantidade, perdaPct, conversaoTotal, custoPorLead, meta, statusOk,
+      oportunidadeRS, convAnteriorRS, perdaRS, perdaPctRS, proLaborePotencialRS, comissaoPotencialRS,
+    }
   })
   const statusPorEtapa = new Map(stagesDados.map(d => [d.estagio, d.statusOk]))
 
@@ -696,6 +724,29 @@ export default function ProLaboreLeadsPage() {
                     Custo/lead <b>{formatMoeda(d.custoPorLead)}</b>
                   </div>
                 )}
+
+                <div className="pl-crm-perf-divider" />
+                <div className="pl-stage-conv">
+                  Oportunidade <b>{formatMoeda(d.oportunidadeRS)}</b>
+                </div>
+                {d.i > 0 && (
+                  <div className="pl-stage-conv">
+                    conv. anterior (R$) <b>{d.convAnteriorRS != null ? `${(d.convAnteriorRS * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</b>
+                  </div>
+                )}
+                {d.i > 0 && (
+                  <div className="pl-stage-conv">
+                    Perda (R$) <b>{d.perdaRS != null ? <>{formatMoeda(d.perdaRS)} ({d.perdaPctRS != null ? formatPct(d.perdaPctRS) : '—'})</> : '—'}</b>
+                  </div>
+                )}
+                {isDono && (
+                  <div className="pl-stage-conv">
+                    Pró-labore <b>{formatMoeda(d.proLaborePotencialRS)}</b>
+                  </div>
+                )}
+                <div className="pl-stage-conv">
+                  Comissão <b>{formatMoeda(d.comissaoPotencialRS)}</b>
+                </div>
               </div>
             ))}
           </div>
