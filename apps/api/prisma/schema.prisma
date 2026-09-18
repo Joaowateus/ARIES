@@ -1011,6 +1011,12 @@ model ParametroLiquidez {
   // Teto padrão de comissão por venda, usado quando o vendedor daquela
   // venda não tem um Vendedor.tetoComissaoPorVenda próprio definido.
   tetoComissaoPadrao    Float    @default(900)
+  // Tetos usados só quando o Lead está classificado como "R" (renegociação)
+  // — substituem tetoProLaborePorVenda/tetoComissaoPadrao (e qualquer teto
+  // individual do vendedor) na conversão em venda. Lead sem classificação
+  // ou classificado como "P" continua usando os tetos normais acima.
+  tetoProLaboreRenegociacao Float @default(600)
+  tetoComissaoRenegociacao  Float @default(0)
   metaFaturamentoAnual  Float    @default(5000000)
   // Meta mensal padrão, usada por vendedores sem Vendedor.metaMensal
   // próprio definido. Substitui a meta anual no dashboard de quem loga
@@ -1121,6 +1127,12 @@ model Lead {
   // Default 0 só pra não quebrar leads já cadastrados antes deste campo
   // existir; obrigatório em todo lead novo (exigido na validação da rota).
   valorNegociacao Float @default(0)
+  // P | R — como a negociação vai ser paga, e não como o lead entrou
+  // (isso é tipoLead/canal). Muda o teto de pró-labore/comissão usado na
+  // conversão em venda (ver tetoProLaboreRenegociacao/tetoComissaoRenegociacao
+  // em ParametroLiquidez) — null se ainda não classificada, o que a
+  // conversão trata igual a P (pagamento integral, tetos normais da conta).
+  tipoNegociacao String?
   estagio      String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
   vendaId      String?   @unique
   criadoEm     DateTime  @default(now())

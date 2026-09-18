@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
+import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/lib/proLaboreFunilFiltro'
@@ -17,6 +17,11 @@ const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
 
 const TIPO_LABEL: Record<TipoLead, string> = { TRAFEGO: 'Tráfego Pago', ORGANICO: 'Orgânico' }
 const TIPO_CLASS: Record<TipoLead, string> = { TRAFEGO: 'trafego', ORGANICO: 'organico' }
+
+// Rótulo fica só na abreviação (P/R) — o significado completo (Pagamento
+// integral / Renegociação) aparece só no title (hover), nunca escrito por
+// extenso na tela.
+const TIPO_NEGOCIACAO_TITLE: Record<TipoNegociacao, string> = { P: 'Pagamento integral', R: 'Renegociação' }
 
 // --pl-accent fica de fora: inverte de claro pra escuro entre os temas, e
 // o texto do avatar é branco fixo — os outros 5 tokens formam a "família
@@ -118,10 +123,11 @@ type FormLead = {
   observacao: string
   vendedorId: string
   tipoLead: TipoLead | ''
+  tipoNegociacao: TipoNegociacao | ''
   valorNegociacao: string
 }
 
-const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '', valorNegociacao: '' }
+const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '', tipoNegociacao: '', valorNegociacao: '' }
 
 export default function ProLaboreLeadsPage() {
   const { usuario } = useProLaboreAuth()
@@ -308,6 +314,7 @@ export default function ProLaboreLeadsPage() {
       observacao: lead.observacao ?? '',
       vendedorId: lead.vendedorId ?? '',
       tipoLead: lead.tipoLead ?? '',
+      tipoNegociacao: lead.tipoNegociacao ?? '',
       valorNegociacao: String(Math.round(lead.valorNegociacao * 100)),
     })
     setEditErro('')
@@ -338,6 +345,7 @@ export default function ProLaboreLeadsPage() {
         observacao: editForm.observacao || undefined,
         ...(vejaEquipe ? { vendedorId: editForm.vendedorId || null } : {}),
         tipoLead: editForm.tipoLead || null,
+        ...(isDono ? { tipoNegociacao: editForm.tipoNegociacao || null } : {}),
         valorNegociacao,
       })
       fecharEdicao()
@@ -412,10 +420,30 @@ export default function ProLaboreLeadsPage() {
     return parametro?.tetoComissaoPadrao ?? 900
   }
 
+  // Negociação "R" (renegociação) usa os tetos reduzidos da conta em vez
+  // dos normais — vale mesmo se o vendedor tiver um teto individual, é uma
+  // regra da negociação, não do vendedor. Sem classificação (null), trata
+  // igual a "P" (tetos normais).
+  function tetoProLaboreEfetivo(lead: Lead): number {
+    if (lead.tipoNegociacao === 'R') return parametro?.tetoProLaboreRenegociacao ?? 600
+    return tetoProLabore
+  }
+  function tetoComissaoEfetivo(lead: Lead): number {
+    if (lead.tipoNegociacao === 'R') return parametro?.tetoComissaoRenegociacao ?? 0
+    return lead.vendedorId ? tetoComissao(lead.vendedorId) : 0
+  }
+
+  async function definirTipoNegociacao(lead: Lead, tipo: TipoNegociacao) {
+    if (!isDono) return
+    const tipoNovo = lead.tipoNegociacao === tipo ? null : tipo
+    await proLaboreApi.leads.editar(lead.id, { tipoNegociacao: tipoNovo })
+    carregar()
+  }
+
   function abrirConversao(lead: Lead) {
     if (!isDono) return
     setConvertendoId(lead.id)
-    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(tetoProLabore), valorComissao: lead.vendedorId ? String(tetoComissao(lead.vendedorId)) : '', observacao: '' })
+    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(tetoProLaboreEfetivo(lead)), valorComissao: lead.vendedorId ? String(tetoComissaoEfetivo(lead)) : '', observacao: '' })
     setConvertErro('')
   }
 
@@ -425,8 +453,9 @@ export default function ProLaboreLeadsPage() {
   }
 
   function atualizarValorVendaConversao(valor: string) {
+    const teto = leadConvertendo ? tetoProLaboreEfetivo(leadConvertendo) : tetoProLabore
     const numero = Number(valor)
-    const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, tetoProLabore) : tetoProLabore
+    const sugestao = Number.isFinite(numero) && numero > 0 ? Math.min(numero, teto) : teto
     setConvertForm(f => ({ ...f, valorVenda: valor, valorProLabore: String(sugestao) }))
   }
 
@@ -589,9 +618,8 @@ export default function ProLaboreLeadsPage() {
     const convAnteriorRS = i === 0 || oportunidadePorEtapaRS[i - 1] <= 0 ? null : oportunidadeRS / oportunidadePorEtapaRS[i - 1]
     const perdaRS = i === 0 || oportunidadePorEtapaRS[i - 1] <= 0 ? null : Math.max(0, oportunidadePorEtapaRS[i - 1] - oportunidadeRS)
     const perdaPctRS = perdaRS == null || oportunidadePorEtapaRS[i - 1] <= 0 ? null : perdaRS / oportunidadePorEtapaRS[i - 1]
-    const proLaborePotencialRS = ativosNaEtapaAgora[i].length * tetoProLabore
-    const comVendedorNaEtapa = ativosNaEtapaAgora[i].filter(l => l.vendedorId)
-    const comissaoPotencialRS = comVendedorNaEtapa.reduce((s, l) => s + tetoComissao(l.vendedorId), 0)
+    const proLaborePotencialRS = ativosNaEtapaAgora[i].reduce((s, l) => s + tetoProLaboreEfetivo(l), 0)
+    const comissaoPotencialRS = ativosNaEtapaAgora[i].reduce((s, l) => s + tetoComissaoEfetivo(l), 0)
 
     return {
       ...col, i, value, convFromPrev, perdaQuantidade, perdaPct, conversaoTotal, custoPorLead, meta, statusOk,
@@ -602,7 +630,8 @@ export default function ProLaboreLeadsPage() {
 
 
   const leadConvertendo = convertendoId ? leads.find(l => l.id === convertendoId) ?? null : null
-  const tetoComissaoAtual = leadConvertendo?.vendedorId ? tetoComissao(leadConvertendo.vendedorId) : null
+  const tetoProLaboreAtual = leadConvertendo ? tetoProLaboreEfetivo(leadConvertendo) : tetoProLabore
+  const tetoComissaoAtual = leadConvertendo?.vendedorId ? tetoComissaoEfetivo(leadConvertendo) : null
   const leadEditando = editandoId ? leads.find(l => l.id === editandoId) ?? null : null
 
   return (
@@ -817,6 +846,7 @@ export default function ProLaboreLeadsPage() {
                         onEditar={() => abrirEdicao(lead)}
                         onPerdido={() => marcarPerdido(lead)}
                         onRemover={() => remover(lead)}
+                        onDefinirTipoNegociacao={tipo => definirTipoNegociacao(lead, tipo)}
                       />
                     ))}
                   </div>
@@ -923,7 +953,14 @@ export default function ProLaboreLeadsPage() {
         <div className="pl-modal-backdrop" onClick={fecharConversao}>
           <div className="pl-card pl-modal-panel" onClick={e => e.stopPropagation()}>
             <div className="pl-card-title" style={{ marginBottom: 4 }}>Converter em venda</div>
-            <div className="pl-card-sub" style={{ marginBottom: 16 }}>{leadConvertendo.nomeCliente}</div>
+            <div className="pl-card-sub" style={{ marginBottom: 16 }}>
+              {leadConvertendo.nomeCliente}
+              {leadConvertendo.tipoNegociacao && (
+                <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[leadConvertendo.tipoNegociacao]} style={{ marginLeft: 8 }}>
+                  {leadConvertendo.tipoNegociacao}
+                </span>
+              )}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="pl-field">
                 <label>Data da venda</label>
@@ -935,8 +972,8 @@ export default function ProLaboreLeadsPage() {
               </div>
               <div className="pl-field">
                 <label>Pró-labore sacado (R$)</label>
-                <input type="number" step="0.01" min="0" max={tetoProLabore} className="pl-input" value={convertForm.valorProLabore} onChange={e => setConvertForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
-                <span className="pl-hint">Máximo {formatMoeda(tetoProLabore)}</span>
+                <input type="number" step="0.01" min="0" max={tetoProLaboreAtual} className="pl-input" value={convertForm.valorProLabore} onChange={e => setConvertForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
+                <span className="pl-hint">Máximo {formatMoeda(tetoProLaboreAtual)}</span>
               </div>
               {leadConvertendo.vendedorId && (
                 <div className="pl-field">
@@ -1033,7 +1070,7 @@ export default function ProLaboreLeadsPage() {
 
 /* ============ CARD DO KANBAN ============ */
 function KanbanCard({
-  lead, estagio, isDono, vejaEquipe, dragging, onPointerDown, onMudarEstagio, onConverter, onEditar, onPerdido, onRemover,
+  lead, estagio, isDono, vejaEquipe, dragging, onPointerDown, onMudarEstagio, onConverter, onEditar, onPerdido, onRemover, onDefinirTipoNegociacao,
 }: {
   lead: Lead
   estagio: EstagioLead
@@ -1046,6 +1083,7 @@ function KanbanCard({
   onEditar: () => void
   onPerdido: () => void
   onRemover: () => void
+  onDefinirTipoNegociacao: (tipo: TipoNegociacao) => void
 }) {
   const movivel = !lead.vendaId
   const proxima = proximaEtapaSimples(estagio)
@@ -1084,10 +1122,30 @@ function KanbanCard({
       {lead.modeloInteresse && <div className="pl-kanban-card-meta">Interesse: {lead.modeloInteresse}</div>}
       {lead.observacao && <div className="pl-kanban-card-meta">{lead.observacao}</div>}
       {lead.tipoLead && <span className={`pl-kanban-card-tag ${TIPO_CLASS[lead.tipoLead]}`}>{TIPO_LABEL[lead.tipoLead]}</span>}
+      {lead.tipoNegociacao && (
+        <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]} style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>
+          {lead.tipoNegociacao}
+        </span>
+      )}
       {lead.vendaId ? (
         <div className="pl-kanban-card-badge">✓ Convertido em venda</div>
       ) : (
         <>
+          {isDono && (
+            <div className="pl-kanban-card-tiponeg-row">
+              {TIPOS_NEGOCIACAO.map(tipo => (
+                <button
+                  key={tipo}
+                  type="button"
+                  className={`pl-kanban-card-tiponeg-btn ${lead.tipoNegociacao === tipo ? 'active' : ''}`}
+                  onClick={() => onDefinirTipoNegociacao(tipo)}
+                  title={TIPO_NEGOCIACAO_TITLE[tipo]}
+                >
+                  {tipo}
+                </button>
+              ))}
+            </div>
+          )}
           {proxima && (
             <button type="button" className="pl-kanban-card-advance" onClick={() => onMudarEstagio(proxima)} title={`Mover para ${proximaTitulo}`}>
               Avançar
