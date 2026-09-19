@@ -14,6 +14,12 @@ import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/
 // escuros o bastante pra manter contraste com texto branco nos dois temas.
 const AVATAR_CORES = ['var(--pl-accent-3)', 'var(--pl-accent-4)', 'var(--pl-accent-5)', 'var(--pl-accent-2)', 'var(--pl-accent-6)']
 
+// Mesmos nomes/ordem de etapa do FunilJourney logo abaixo — usado só pra
+// rotular a nova linha de indicadores em R$ (Oportunidade/Comissão).
+const NOME_ETAPA_FUNIL: Record<(typeof ETAPAS_FUNIL_PL)[number], string> = {
+  LEAD: 'Leads', ABORDADO: 'Abordados', NEGOCIACAO: 'Negociação', PROPOSTA: 'Proposta', FECHADO: 'Fechamento',
+}
+
 function initials(nome: string) {
   return nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
 }
@@ -273,6 +279,31 @@ export default function ProLaboreDashboardPage() {
     return painelPorVendedor[chaveFunilVendedor]?.meses[selectedIdx]?.funil ?? null
   }, [atual, filtroFunilAtivo, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor, painelPorVendedor, selectedIdx])
 
+  // População de leads por trás dos indicadores em R$ da Jornada de compra
+  // (Oportunidade/Pró-labore/Comissão) — sempre recalculada a partir dos
+  // Leads já carregados (não dá pra usar o /painel agregado aqui porque ele
+  // não carrega valorNegociacao/tipoNegociacao por lead), respeitando o
+  // mesmo recorte de vendedor/canal/período do funil de contagem acima.
+  const leadsFunilFinanceiro = useMemo(() => {
+    if (filtroFunilPeriodo) {
+      const inicioData = new Date(`${filtroFunilPeriodo.inicio}T00:00:00`)
+      const fimData = new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`)
+      return leads.filter(l => {
+        const d = new Date(l.criadoEm)
+        return d >= inicioData && d <= fimData
+          && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
+          && (!filtroCanal || l.tipoLead === filtroCanal)
+      })
+    }
+    if (!atual) return []
+    return leads.filter(l => {
+      const d = new Date(l.criadoEm)
+      return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes
+        && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
+        && (!filtroCanal || l.tipoLead === filtroCanal)
+    })
+  }, [atual, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor])
+
   if (loading) return <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
 
   if (meses.length === 0 || !atual) {
@@ -306,6 +337,48 @@ export default function ProLaboreDashboardPage() {
       : []),
     { label: 'Conversão lead→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
   ]
+
+  // Indicadores em R$ por etapa da Jornada de compra (Oportunidade,
+  // Pró-labore, Comissão prevista/perdida) — mesma lógica já usada no CRM
+  // (Funil de vendas), só que aplicada à população de leads recortada pelo
+  // mês/período selecionado aqui no Dashboard, em vez do pipeline vivo.
+  const tetoProLabore = parametro?.tetoProLaborePorVenda ?? 900
+  function tetoComissao(vendedorId?: string | null): number {
+    const vendedor = vendedorId ? vendedores.find(v => v.id === vendedorId) : undefined
+    if (vendedor?.tetoComissaoPorVenda != null) return vendedor.tetoComissaoPorVenda
+    if (!vejaEquipe && vendedorId && usuario?.tetoComissaoPorVenda != null) return usuario.tetoComissaoPorVenda
+    return parametro?.tetoComissaoPadrao ?? 900
+  }
+  function tetoProLaboreEfetivo(lead: Lead): number {
+    if (lead.tipoNegociacao === 'R') return parametro?.tetoProLaboreRenegociacao ?? 600
+    return tetoProLabore
+  }
+  function tetoComissaoEfetivo(lead: Lead): number {
+    if (lead.tipoNegociacao === 'R') return parametro?.tetoComissaoRenegociacao ?? 0
+    return lead.vendedorId ? tetoComissao(lead.vendedorId) : 0
+  }
+
+  const populacaoPorEtapaFin: Lead[][] = ETAPAS_FUNIL_PL.map(etapa =>
+    etapa === 'LEAD'
+      ? leadsFunilFinanceiro
+      : etapa === 'FECHADO'
+        ? leadsFunilFinanceiro.filter(l => l.estagio === 'FECHADO')
+        : leadsFunilFinanceiro.filter(l => estagioAtingiu(l.estagio, etapa)),
+  )
+  const ativosNaEtapaAgoraFin = ETAPAS_FUNIL_PL.map(etapa => leadsFunilFinanceiro.filter(l => l.estagio === etapa))
+  const oportunidadePorEtapaRS = populacaoPorEtapaFin.map(pop => pop.reduce((s, l) => s + l.valorNegociacao, 0))
+  const comissaoPorEtapaCumulativaRS = populacaoPorEtapaFin.map(pop => pop.reduce((s, l) => s + tetoComissaoEfetivo(l), 0))
+
+  const dadosFin = ETAPAS_FUNIL_PL.map((etapa, i) => {
+    const oportunidadeRS = oportunidadePorEtapaRS[i]
+    const convAnteriorRS = i === 0 || oportunidadePorEtapaRS[i - 1] <= 0 ? null : oportunidadeRS / oportunidadePorEtapaRS[i - 1]
+    const perdaRS = i === 0 || oportunidadePorEtapaRS[i - 1] <= 0 ? null : Math.max(0, oportunidadePorEtapaRS[i - 1] - oportunidadeRS)
+    const perdaPctRS = perdaRS == null || oportunidadePorEtapaRS[i - 1] <= 0 ? null : perdaRS / oportunidadePorEtapaRS[i - 1]
+    const proLaborePotencialRS = ativosNaEtapaAgoraFin[i].reduce((s, l) => s + tetoProLaboreEfetivo(l), 0)
+    const comissaoPotencialRS = ativosNaEtapaAgoraFin[i].reduce((s, l) => s + tetoComissaoEfetivo(l), 0)
+    const comissaoPerdidaRS = i === 0 ? 0 : Math.max(0, comissaoPorEtapaCumulativaRS[i - 1] - comissaoPorEtapaCumulativaRS[i])
+    return { etapa, i, oportunidadeRS, convAnteriorRS, perdaRS, perdaPctRS, proLaborePotencialRS, comissaoPotencialRS, comissaoPerdidaRS }
+  })
 
   return (
     <div>
@@ -484,6 +557,46 @@ export default function ProLaboreDashboardPage() {
         </div>
       </div>
       <div className="pl-card">
+        <div className="pl-journey-row" style={{ marginBottom: 4 }}>
+          {ETAPAS_FUNIL_PL.map(etapa => (
+            <div key={etapa} className="pl-stage-name" style={{ textAlign: 'center' }}>{NOME_ETAPA_FUNIL[etapa]}</div>
+          ))}
+        </div>
+        <div className="pl-crm-fin-row" style={{ marginBottom: 20 }}>
+          {dadosFin.map(d => (
+            <div key={d.etapa} className="pl-crm-fin-card">
+              <div className="pl-crm-fin-item">
+                <span>Oportunidade</span>
+                <b className="pl-crm-fin-oportunidade">{formatMoeda(d.oportunidadeRS)}</b>
+              </div>
+              {isDono && (
+                <div className="pl-crm-fin-item">
+                  <span>Pró-labore</span>
+                  <b>{formatMoeda(d.proLaborePotencialRS)}</b>
+                </div>
+              )}
+              <div className="pl-crm-fin-item">
+                <span>Comissão (Previsão)</span>
+                <b>{formatMoeda(d.comissaoPotencialRS)}</b>
+              </div>
+              <div className="pl-crm-fin-item pl-crm-fin-perdida">
+                <span>Comissão (Perdida)</span>
+                <b>{formatMoeda(d.comissaoPerdidaRS)}</b>
+              </div>
+              {d.i > 0 && (
+                <>
+                  <div className="pl-crm-perf-divider" />
+                  <div className="pl-stage-conv">
+                    conv. anterior (R$) <b>{d.convAnteriorRS != null ? `${(d.convAnteriorRS * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</b>
+                  </div>
+                  <div className="pl-stage-conv">
+                    Perda (R$) <b>{d.perdaRS != null ? <>{formatMoeda(d.perdaRS)} ({d.perdaPctRS != null ? formatPct(d.perdaPctRS) : '—'})</> : '—'}</b>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
         <FunilJourney
           funil={funilFiltrado ?? atual.funil}
           metas={metasFunil}
