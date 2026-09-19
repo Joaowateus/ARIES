@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf'
 import { Ocorrencia, TIPO_OCORRENCIA_LABEL, GRAVIDADE_OCORRENCIA_LABEL, MEDIDA_DISCIPLINAR_LABEL } from './proLaboreApi'
 
 const NOME_EMPRESA = 'MM Negócios Veículos'
@@ -20,7 +19,11 @@ function formatarData(iso?: string | null): string {
 // arquivo nesse repo, então o PDF não fica hospedado em lugar nenhum; ele é
 // baixado na hora e o registro no backend (marcarDocumentoGerado) guarda só
 // o carimbo de que foi emitido, não o arquivo em si.
-export function gerarDocumentoOcorrenciaPdf(o: Ocorrencia, vendedorNome: string, vendedorPapel?: string): void {
+// jsPDF só é importado aqui dentro (não no topo do arquivo) pra não entrar
+// no chunk inicial da aba Ocorrências — ele só é baixado quando alguém
+// realmente clica em "Gerar documento".
+export async function gerarDocumentoOcorrenciaPdf(o: Ocorrencia, vendedorNome: string, vendedorPapel?: string): Promise<void> {
+  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const margemEsq = 56
   const larguraUtil = 595 - margemEsq * 2

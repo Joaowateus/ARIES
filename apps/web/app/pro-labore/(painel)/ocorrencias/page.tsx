@@ -308,7 +308,7 @@ function OcorrenciasConteudo() {
     setGerandoDocumento(true)
     try {
       const vendedor = vendedores.find(v => v.id === o.vendedorId)
-      gerarDocumentoOcorrenciaPdf(o, o.vendedor?.nome ?? vendedor?.nome ?? vendedorNome(o.vendedorId), vendedor?.papel)
+      await gerarDocumentoOcorrenciaPdf(o, o.vendedor?.nome ?? vendedor?.nome ?? vendedorNome(o.vendedorId), vendedor?.papel)
       const atualizada = await proLaboreApi.ocorrencias.marcarDocumentoGerado(o.id)
       setSelecionada(atualizada)
       carregar()
