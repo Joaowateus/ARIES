@@ -541,7 +541,7 @@ export default function ProLaboreDashboardPage() {
             <div key={etapa} className="pl-stage-name" style={{ textAlign: 'center' }}>{NOME_ETAPA_FUNIL[etapa]}</div>
           ))}
         </div>
-        <div className="pl-crm-fin-row" style={{ marginBottom: 20 }}>
+        <div className="pl-crm-fin-row" style={{ marginBottom: 14 }}>
           {dadosFin.map(d => (
             <div key={d.etapa} className="pl-crm-fin-card">
               <div className="pl-crm-fin-item">

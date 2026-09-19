@@ -381,7 +381,7 @@
 .pl-journey-details { gap: 4px; }
 .pl-stage-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pl-ink-2); }
 .pl-stage-value { font-family: 'JetBrains Mono', 'Sora', monospace; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; margin-top: 5px; }
-.pl-stage-conv { margin-top: 8px; font-size: 11.5px; color: var(--pl-ink-muted); display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
+.pl-stage-conv { margin-top: 5px; font-size: 11.5px; color: var(--pl-ink-muted); display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
 .pl-stage-conv b { color: var(--pl-ink-1); font-family: 'JetBrains Mono'; }
 
 /* ============ SELLER LEADERBOARD ============ */
@@ -511,7 +511,7 @@
 }
 /* Separa a trilha em quantidade (já existia) da trilha em R$ (nova),
    dentro do mesmo card — duas leituras paralelas da mesma etapa. */
-.pl-crm-perf-divider { border-top: 1px dashed var(--pl-border); margin: 8px 0 4px; }
+.pl-crm-perf-divider { border-top: 1px dashed var(--pl-border); margin: 6px 0 2px; }
 .pl-crm-perf-subhead {
   font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
   color: var(--pl-ink-muted); text-align: center; margin-bottom: 6px;
@@ -521,10 +521,13 @@
    acima do card de performance da mesma etapa e da coluna do Kanban
    correspondente — substituem os 3 cards largos e agregados que ficavam
    soltos no topo da página. */
-.pl-crm-fin-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
+/* align-items: start (em vez do stretch padrão do grid) — sem isso, a
+   etapa "Leads" (sem conv./perda anterior, só Oportunidade) esticava até a
+   altura das etapas seguintes e sobrava um vão vazio grande dentro do card. */
+.pl-crm-fin-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; gap: 14px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
 .pl-crm-fin-card {
   background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
-  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 4px;
 }
 .pl-crm-fin-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--pl-ink-muted); }
 .pl-crm-fin-item b { font-family: 'JetBrains Mono'; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); font-weight: 700; }
