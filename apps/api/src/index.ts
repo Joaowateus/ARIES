@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import compression from 'compression'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import { pinoHttp } from 'pino-http'
@@ -41,6 +42,11 @@ const app = express()
 // Security headers
 app.use(helmet())
 
+// Comprime toda resposta JSON (o /painel, em especial, manda um ano inteiro
+// de dados mês a mês) — sem isso cada resposta trafega maior do que
+// precisa, o que pesa mais ainda em conexões mais lentas.
+app.use(compression())
+
 // Request ID — must be first so all middleware/handlers can use it
 app.use(requestId)
 
@@ -52,10 +58,15 @@ app.use(pinoHttp({
   quietReqLogger: true,
 }))
 
-// CORS
+// CORS — maxAge faz o navegador guardar a resposta do preflight (OPTIONS)
+// por 24h em vez de repeti-lo antes de cada chamada. Toda requisição daqui
+// carrega Authorization (não é "simple request"), então sem isso cada ida
+// à API — login, trocar de aba, salvar algo — pagava dois round-trips de
+// rede (preflight + a requisição em si) em vez de um só.
 app.use(cors({
   origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
   credentials: true,
+  maxAge: 86400,
 }))
 
 // Global rate limit — 200 req/min per IP
