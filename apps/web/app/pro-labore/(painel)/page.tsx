@@ -338,6 +338,14 @@ export default function ProLaboreDashboardPage() {
     { label: 'Conversão lead→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
   ]
 
+  // Rótulo do período em vista — mesmo usado na nota ao lado do filtro,
+  // reaproveitado dentro de cada mini-card de Oportunidade pra preencher o
+  // espaço que sobra nas etapas sem conversão/perda anterior (Leads) com
+  // informação útil em vez de deixar em branco.
+  const rotuloPeriodoJornada = filtroFunilPeriodo
+    ? `${filtroFunilPeriodo.inicio.split('-').reverse().join('/')} – ${filtroFunilPeriodo.fim.split('-').reverse().join('/')}`
+    : `${atual.label} ${atual.ano}`
+
   // Indicadores em R$ por etapa da Jornada de compra (Oportunidade e sua
   // conversão/perda entre etapas) — mesma lógica de oportunidade já usada
   // no CRM (Funil de vendas), aplicada à população de leads recortada pelo
@@ -512,9 +520,7 @@ export default function ProLaboreDashboardPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div className="pl-section-note">
-            {filtroFunilPeriodo
-              ? `${filtroFunilPeriodo.inicio.split('-').reverse().join('/')} – ${filtroFunilPeriodo.fim.split('-').reverse().join('/')}`
-              : `${atual.label} ${atual.ano}`}
+            {rotuloPeriodoJornada}
             {filtroFunilAtivo && ' · filtrado'}
           </div>
           <FunilFiltro
@@ -559,6 +565,7 @@ export default function ProLaboreDashboardPage() {
                   </div>
                 </>
               )}
+              <div className="pl-crm-fin-periodo">{rotuloPeriodoJornada}</div>
             </div>
           ))}
         </div>
