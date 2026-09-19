@@ -13,7 +13,9 @@ const NAV = [
   { href: '/pro-labore/leads', label: 'CRM' },
   { href: '/pro-labore/agenda', label: 'Agenda' },
   { href: '/pro-labore/vendedores', label: 'Vendedores', donoOnly: true },
-  { href: '/pro-labore/ocorrencias', label: 'Ocorrências', donoOnly: true },
+  // Ocorrências é a única aba visível pra supervisor mas escondida de
+  // vendedor comum — por isso usa hideFromVendedor em vez de donoOnly.
+  { href: '/pro-labore/ocorrencias', label: 'Ocorrências', hideFromVendedor: true },
   { href: '/pro-labore/indicadores', label: 'Indicadores', donoOnly: true },
   { href: '/pro-labore/configuracoes', label: 'Configurações', donoOnly: true },
 ]
@@ -52,7 +54,8 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   if (!usuario) return null
 
   const isDono = usuario.papel === 'DONO'
-  const nav = NAV.filter(item => !item.donoOnly || isDono)
+  const isVendedor = usuario.papel === 'VENDEDOR'
+  const nav = NAV.filter(item => (!item.donoOnly || isDono) && (!item.hideFromVendedor || !isVendedor))
   const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : null
 
   return (

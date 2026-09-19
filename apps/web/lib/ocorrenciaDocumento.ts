@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import { Ocorrencia, TIPO_OCORRENCIA_LABEL, GRAVIDADE_OCORRENCIA_LABEL, MEDIDA_DISCIPLINAR_LABEL } from './proLaboreApi'
 
-const NOME_EMPRESA = 'MM Negócios & Veículos'
+const NOME_EMPRESA = 'MM Negócios Veículos'
 
 function tituloDocumento(o: Ocorrencia): string {
   if (o.medidaAplicada === 'ADVERTENCIA_VERBAL' || o.medidaAplicada === 'ADVERTENCIA_ESCRITA') return 'Termo de Advertência'
