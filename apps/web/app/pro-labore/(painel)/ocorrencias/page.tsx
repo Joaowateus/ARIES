@@ -74,7 +74,9 @@ export default function ProLaboreOcorrenciasPage() {
 
 function OcorrenciasConteudo() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel === 'DONO'
+  // Aba disponível pro dono e pro supervisor — vendedor comum não deve
+  // enxergar ocorrências disciplinares/feedback da equipe.
+  const podeAcessar = usuario?.papel === 'DONO' || usuario?.papel === 'SUPERVISOR'
   // Permite chegar aqui já filtrado por vendedor a partir do bloco "Histórico
   // de Ocorrências" no perfil dele, em Vendedores (?vendedorId=...).
   const searchParams = useSearchParams()
@@ -116,7 +118,7 @@ function OcorrenciasConteudo() {
   const [sugestaoDesfecho, setSugestaoDesfecho] = useState<SugestaoMedidaOcorrencia | null>(null)
 
   const carregar = useCallback(() => {
-    if (!isDono) { setLoading(false); return }
+    if (!podeAcessar) { setLoading(false); return }
     Promise.all([
       proLaboreApi.ocorrencias.listar({
         vendedorId: filtroVendedor || undefined,
@@ -129,7 +131,7 @@ function OcorrenciasConteudo() {
       proLaboreApi.parametros.get(),
     ]).then(([o, r, v, p]) => { setOcorrencias(o); setResumo(r); setVendedores(v); setParametro(p) })
       .finally(() => setLoading(false))
-  }, [isDono, filtroVendedor, filtroTipo, filtroGravidade, filtroStatus])
+  }, [podeAcessar, filtroVendedor, filtroTipo, filtroGravidade, filtroStatus])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -321,11 +323,11 @@ function OcorrenciasConteudo() {
     carregar()
   }
 
-  if (!isDono) {
+  if (!podeAcessar) {
     return (
       <div className="pl-empty pl-card">
         <div className="pl-emoji">🔒</div>
-        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
+        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita a supervisores e ao dono da operação</h3>
         <p style={{ marginTop: 6 }}>Fale com o responsável se precisar registrar ou consultar ocorrências.</p>
       </div>
     )
@@ -479,6 +481,7 @@ function OcorrenciasConteudo() {
                   <datalist id="pl-motivos-ocorrencia">
                     {motivosSugeridos.map(m => <option key={m} value={m} />)}
                   </datalist>
+                  <span className="pl-hint">Não achou o motivo? Digite um novo — ele fica salvo pra próxima vez</span>
                 </div>
                 <div className="pl-field">
                   <label>Gravidade</label>

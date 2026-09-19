@@ -1631,6 +1631,27 @@ async function gerarProtocoloOcorrencia(usuarioId: string): Promise<string> {
   throw new Error('Não foi possível gerar um protocolo único para a ocorrência')
 }
 
+// Motivo digitado que ainda não está na lista da conta é adicionado
+// automaticamente — assim dá pra "criar um motivo" só digitando um novo no
+// formulário, sem precisar de uma tela de cadastro separada, e ele já
+// aparece como sugestão da próxima vez (mesma lista usada em Configurações).
+async function garantirMotivoNaLista(usuarioId: string, motivo: string): Promise<void> {
+  const motivoNormalizado = motivo.trim()
+  if (!motivoNormalizado) return
+  const parametro = await prisma.parametroLiquidez.upsert({
+    where: { usuarioId },
+    update: {},
+    create: { usuarioId, tetoProLaborePorVenda: TETO_PRO_LABORE_PADRAO },
+  })
+  const existentes = parametro.motivosOcorrenciaCsv.split(',').map(m => m.trim()).filter(Boolean)
+  const jaExiste = existentes.some(m => m.toLowerCase() === motivoNormalizado.toLowerCase())
+  if (jaExiste) return
+  await prisma.parametroLiquidez.update({
+    where: { usuarioId },
+    data: { motivosOcorrenciaCsv: [...existentes, motivoNormalizado].join(',') },
+  })
+}
+
 router.get('/ocorrencias', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const { vendedorId, tipo, gravidade, status, inicio, fim } = req.query
@@ -1741,7 +1762,7 @@ const criarOcorrenciaSchema = z.object({
   ocorrenciaAnteriorId: z.string().optional(),
 })
 
-router.post('/ocorrencias', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/ocorrencias', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const parse = criarOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1777,6 +1798,7 @@ router.post('/ocorrencias', requireProLaboreAuth, requireDono, async (req: Reque
   }
 
   const protocolo = await gerarProtocoloOcorrencia(usuarioId)
+  await garantirMotivoNaLista(usuarioId, parse.data.motivo)
 
   const ocorrencia = await prisma.ocorrencia.create({
     data: {
@@ -1845,7 +1867,7 @@ const editarOcorrenciaSchema = z.object({
 // sobrescrito silenciosamente, preservando o rastro de auditoria exigido
 // pelo processo disciplinar. protocolo, vendedorId e dataRegistro nunca são
 // editáveis (por isso nem entram no schema acima).
-router.patch('/ocorrencias/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.patch('/ocorrencias/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const parse = editarOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1874,6 +1896,7 @@ router.patch('/ocorrencias/:id', requireProLaboreAuth, requireDono, async (req: 
   if (parse.data.motivo !== undefined && parse.data.motivo !== atual.motivo) {
     data.motivo = parse.data.motivo
     eventos.push({ autor, acao: `Motivo alterado de "${atual.motivo}" para "${parse.data.motivo}"` })
+    await garantirMotivoNaLista(usuarioId, parse.data.motivo)
   }
   if (parse.data.gravidade !== undefined && parse.data.gravidade !== atual.gravidade) {
     data.gravidade = parse.data.gravidade
@@ -1957,7 +1980,7 @@ const desfechoOcorrenciaSchema = z.object({
 // em /sugestao-medida é só uma sugestão — a decisão final é sempre manual).
 // Se o gestor quiser abrir uma nova ocorrência vinculada (reincidência),
 // isso é feito num POST /ocorrencias normal passando ocorrenciaAnteriorId.
-router.post('/ocorrencias/:id/desfecho', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/ocorrencias/:id/desfecho', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const parse = desfechoOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2002,7 +2025,7 @@ router.post('/ocorrencias/:id/desfecho', requireProLaboreAuth, requireDono, asyn
 // (carimbo pra auditoria) e, se já tinha prazo de correção definido,
 // avança o status de Aberta pra "Em prazo de correção", como no fluxo
 // descrito: o prazo só passa a valer depois que o documento é emitido.
-router.post('/ocorrencias/:id/documento', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/ocorrencias/:id/documento', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const atual = await prisma.ocorrencia.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
@@ -2040,7 +2063,7 @@ const assinaturaOcorrenciaSchema = z.object({
 // A assinatura em si acontece no papel — aqui só se registra que ela
 // aconteceu (checkbox + data), mantendo o sistema como fonte da verdade
 // mesmo sem armazenar o documento físico.
-router.post('/ocorrencias/:id/assinatura', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/ocorrencias/:id/assinatura', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const parse = assinaturaOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
