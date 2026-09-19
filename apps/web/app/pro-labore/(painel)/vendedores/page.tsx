@@ -1,7 +1,8 @@
 'use client'
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
-import { proLaboreApi, Vendedor, ParametroLiquidez } from '@/lib/proLaboreApi'
+import Link from 'next/link'
+import { proLaboreApi, Vendedor, ParametroLiquidez, Ocorrencia, TIPO_OCORRENCIA_LABEL, GRAVIDADE_OCORRENCIA_LABEL, STATUS_OCORRENCIA_LABEL } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 
@@ -30,6 +31,10 @@ export default function ProLaboreVendedoresPage() {
   const [metaValor, setMetaValor] = useState('')
   const [metaErro, setMetaErro] = useState('')
   const [metaSalvando, setMetaSalvando] = useState(false)
+
+  const [ocorrenciasAbertoId, setOcorrenciasAbertoId] = useState<string | null>(null)
+  const [ocorrenciasPorVendedor, setOcorrenciasPorVendedor] = useState<Record<string, Ocorrencia[]>>({})
+  const [carregandoOcorrenciasId, setCarregandoOcorrenciasId] = useState<string | null>(null)
 
   const carregar = useCallback(() => {
     if (!isDono) { setLoading(false); return }
@@ -172,6 +177,19 @@ export default function ProLaboreVendedoresPage() {
     }
   }
 
+  async function toggleOcorrencias(v: Vendedor) {
+    if (ocorrenciasAbertoId === v.id) { setOcorrenciasAbertoId(null); return }
+    setOcorrenciasAbertoId(v.id)
+    if (ocorrenciasPorVendedor[v.id]) return
+    setCarregandoOcorrenciasId(v.id)
+    try {
+      const lista = await proLaboreApi.ocorrencias.listar({ vendedorId: v.id })
+      setOcorrenciasPorVendedor(prev => ({ ...prev, [v.id]: lista }))
+    } finally {
+      setCarregandoOcorrenciasId(null)
+    }
+  }
+
   if (!isDono) {
     return (
       <div className="pl-empty pl-card">
@@ -263,6 +281,9 @@ export default function ProLaboreVendedoresPage() {
                       <span className="pl-link-action" onClick={() => (editandoMetaId === v.id ? fecharEdicaoMeta() : abrirEdicaoMeta(v))} style={{ marginRight: 14 }}>
                         Editar meta mensal
                       </span>
+                      <span className="pl-link-action" onClick={() => toggleOcorrencias(v)} style={{ marginRight: 14 }}>
+                        {ocorrenciasAbertoId === v.id ? 'Ocultar ocorrências' : 'Ver ocorrências'}
+                      </span>
                       <span className="pl-link-action" onClick={() => (concedendoId === v.id ? fecharConcessao() : abrirConcessao(v))} style={{ marginRight: 14 }}>
                         {v.email ? 'Trocar acesso' : 'Dar acesso'}
                       </span>
@@ -325,6 +346,38 @@ export default function ProLaboreVendedoresPage() {
                           <button type="button" className="pl-btn pl-btn-ghost" onClick={fecharConcessao}>Cancelar</button>
                         </div>
                         {acessoErro && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{acessoErro}</div>}
+                      </td>
+                    </tr>
+                  )}
+                  {ocorrenciasAbertoId === v.id && (
+                    <tr>
+                      <td colSpan={7}>
+                        <div style={{ padding: '10px 0' }}>
+                          {carregandoOcorrenciasId === v.id ? (
+                            <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
+                          ) : (() => {
+                            const lista = ocorrenciasPorVendedor[v.id] ?? []
+                            const reincidencias = lista.filter(o => o.status === 'REINCIDENTE' || o.status === 'ESCALONADA').length
+                            return lista.length === 0 ? (
+                              <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Nenhuma ocorrência registrada para este vendedor.</div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13 }}>
+                                  <span><strong>{lista.length}</strong> {lista.length === 1 ? 'ocorrência' : 'ocorrências'} no total</span>
+                                  <span><strong>{reincidencias}</strong> {reincidencias === 1 ? 'reincidência' : 'reincidências'}</span>
+                                </div>
+                                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  {lista.slice(0, 5).map(o => (
+                                    <li key={o.id} style={{ fontSize: 12.5, color: 'var(--pl-ink-2)' }}>
+                                      <span className="pl-mono">{o.protocolo}</span> · {TIPO_OCORRENCIA_LABEL[o.tipo]} · {GRAVIDADE_OCORRENCIA_LABEL[o.gravidade]} · {STATUS_OCORRENCIA_LABEL[o.status]} · {new Date(o.dataOcorrencia).toLocaleDateString('pt-BR')}
+                                    </li>
+                                  ))}
+                                </ul>
+                                <Link href={`/pro-labore/ocorrencias?vendedorId=${v.id}`} className="pl-link-action">Ver todas na aba Ocorrências</Link>
+                              </div>
+                            )
+                          })()}
+                        </div>
                       </td>
                     </tr>
                   )}

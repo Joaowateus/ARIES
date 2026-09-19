@@ -718,6 +718,32 @@
 .pl-status-badge.bom { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 14%, transparent); text-shadow: 0 0 8px color-mix(in srgb, var(--pl-good) 50%, transparent); }
 .pl-status-badge.atencao { color: var(--pl-accent-4); background: color-mix(in srgb, var(--pl-accent-4) 16%, transparent); text-shadow: 0 0 8px color-mix(in srgb, var(--pl-accent-4) 50%, transparent); }
 .pl-status-badge.critico { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 14%, transparent); text-shadow: 0 0 8px color-mix(in srgb, var(--pl-critical) 50%, transparent); }
+.pl-status-badge.neutro { color: var(--pl-ink-muted); background: var(--pl-surface-2); }
+
+/* Gravidade de Ocorrências — ramp de leve a gravíssima; a última usa fundo
+   sólido em vez de tingido pra marcar visualmente o topo da escala. */
+.pl-gravidade-badge {
+  display: inline-flex; align-items: center; font-weight: 700; font-family: 'JetBrains Mono'; font-size: 10.5px;
+  padding: 2px 7px; border-radius: 6px; white-space: nowrap; letter-spacing: .01em;
+}
+.pl-gravidade-badge.leve { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 14%, transparent); }
+.pl-gravidade-badge.moderada { color: var(--pl-accent-4); background: color-mix(in srgb, var(--pl-accent-4) 16%, transparent); }
+.pl-gravidade-badge.grave { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 14%, transparent); }
+.pl-gravidade-badge.gravissima { color: #fff; background: var(--pl-critical); }
+
+/* Timeline de histórico (Ocorrências) — trilha vertical com um ponto por
+   evento; não existia um padrão de log/auditoria no app antes disso. */
+.pl-timeline { display: flex; flex-direction: column; }
+.pl-timeline-item { position: relative; padding: 0 0 16px 20px; border-left: 2px solid var(--pl-border); }
+.pl-timeline-item:last-child { border-left-color: transparent; padding-bottom: 0; }
+.pl-timeline-item::before {
+  content: ''; position: absolute; left: -6px; top: 2px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--pl-accent); border: 2px solid var(--pl-surface);
+}
+.pl-timeline-date { font-size: 11px; color: var(--pl-ink-muted); font-family: 'JetBrains Mono'; }
+.pl-timeline-autor { font-size: 12px; font-weight: 700; color: var(--pl-ink-1); margin-top: 2px; }
+.pl-timeline-acao { font-size: 13px; color: var(--pl-ink-2); margin-top: 2px; }
+.pl-timeline-transicao { font-size: 11.5px; color: var(--pl-ink-muted); margin-top: 3px; }
 
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
