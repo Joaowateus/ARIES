@@ -70,6 +70,9 @@ export interface ParametroLiquidez {
   agendaAlertaDiasConsecutivos: number
   agendaAlertaQuedaEfetividadePct: number
   agendaReconhecimentoSemanas: number
+  // Lista de motivos de Ocorrência, editável em Configurações — CSV numa
+  // coluna só (mesmo padrão de AgendaItem.diasSemana/vendedorIds).
+  motivosOcorrenciaCsv: string
 }
 
 export type TipoMetaFunilPL = 'MINIMO' | 'MAXIMO_PERDA' | 'MAXIMO_CUSTO'
@@ -420,6 +423,56 @@ export const proLaboreApi = {
       listar: (inicio: string, fim: string) => request<EfetividadeVendedor[]>(`/pro-labore/agenda/efetividade?inicio=${inicio}&fim=${fim}`),
     },
   },
+  ocorrencias: {
+    listar: (filtros?: { vendedorId?: string; tipo?: TipoOcorrencia; gravidade?: GravidadeOcorrencia; status?: StatusOcorrencia; inicio?: string; fim?: string }) => {
+      const params = new URLSearchParams()
+      if (filtros?.vendedorId) params.set('vendedorId', filtros.vendedorId)
+      if (filtros?.tipo) params.set('tipo', filtros.tipo)
+      if (filtros?.gravidade) params.set('gravidade', filtros.gravidade)
+      if (filtros?.status) params.set('status', filtros.status)
+      if (filtros?.inicio) params.set('inicio', filtros.inicio)
+      if (filtros?.fim) params.set('fim', filtros.fim)
+      const qs = params.toString()
+      return request<Ocorrencia[]>(`/pro-labore/ocorrencias${qs ? `?${qs}` : ''}`)
+    },
+    resumo: () => request<ResumoOcorrencias>('/pro-labore/ocorrencias/resumo'),
+    sugestaoMedida: (vendedorId: string, tipo: TipoOcorrencia) =>
+      request<SugestaoMedidaOcorrencia>(`/pro-labore/ocorrencias/sugestao-medida?vendedorId=${vendedorId}&tipo=${tipo}`),
+    obter: (id: string) => request<Ocorrencia>(`/pro-labore/ocorrencias/${id}`),
+    criar: (data: {
+      vendedorId: string
+      tipo: TipoOcorrencia
+      motivo: string
+      gravidade: GravidadeOcorrencia
+      descricao: string
+      anexosCsv?: string
+      dataOcorrencia: string
+      registradoPor: string
+      planoDeCorrecao?: string
+      prazoCorrecao?: string
+      ocorrenciaAnteriorId?: string
+    }) => request<Ocorrencia>('/pro-labore/ocorrencias', { method: 'POST', body: JSON.stringify(data) }),
+    editar: (id: string, data: Partial<{
+      tipo: TipoOcorrencia
+      motivo: string
+      gravidade: GravidadeOcorrencia
+      descricao: string
+      anexosCsv: string | null
+      dataOcorrencia: string
+      planoDeCorrecao: string | null
+      prazoCorrecao: string | null
+      status: StatusOcorrencia
+      medidaAplicada: MedidaDisciplinar
+    }>) => request<Ocorrencia>(`/pro-labore/ocorrencias/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    registrarDesfecho: (id: string, data: { resultado: 'CORRIGIDO' | 'NAO_CORRIGIDO'; encaminhamento?: 'REINCIDENTE' | 'ESCALONADA'; medidaAplicada?: MedidaDisciplinar; observacao?: string }) =>
+      request<Ocorrencia>(`/pro-labore/ocorrencias/${id}/desfecho`, { method: 'POST', body: JSON.stringify(data) }),
+    // O PDF é gerado no próprio navegador (ver gerarDocumentoOcorrenciaPdf em
+    // lib/ocorrenciaDocumento.ts) — isso só registra no backend que o
+    // documento foi emitido, pra virar carimbo de auditoria.
+    marcarDocumentoGerado: (id: string) => request<Ocorrencia>(`/pro-labore/ocorrencias/${id}/documento`, { method: 'POST' }),
+    registrarAssinatura: (id: string, parte: 'VENDEDOR' | 'GESTOR', assinado: boolean) =>
+      request<Ocorrencia>(`/pro-labore/ocorrencias/${id}/assinatura`, { method: 'POST', body: JSON.stringify({ parte, assinado }) }),
+  },
 }
 
 export interface EfetividadeVendedor {
@@ -428,3 +481,101 @@ export interface EfetividadeVendedor {
   leadsFechados: number
   efetividadePct: number
 }
+
+// --- Ocorrências (registro disciplinar/feedback da equipe comercial) ---
+
+export const TIPOS_OCORRENCIA = ['DISCIPLINAR', 'INEFICIENCIA_PRODUCAO', 'FEEDBACK_MELHORIA', 'FEEDBACK_POSITIVO', 'OUTROS'] as const
+export type TipoOcorrencia = (typeof TIPOS_OCORRENCIA)[number]
+
+export const TIPO_OCORRENCIA_LABEL: Record<TipoOcorrencia, string> = {
+  DISCIPLINAR: 'Disciplinar',
+  INEFICIENCIA_PRODUCAO: 'Ineficiência de Produção',
+  FEEDBACK_MELHORIA: 'Feedback de Melhoria',
+  FEEDBACK_POSITIVO: 'Feedback Positivo',
+  OUTROS: 'Outros',
+}
+
+export const GRAVIDADES_OCORRENCIA = ['LEVE', 'MODERADA', 'GRAVE', 'GRAVISSIMA'] as const
+export type GravidadeOcorrencia = (typeof GRAVIDADES_OCORRENCIA)[number]
+
+export const GRAVIDADE_OCORRENCIA_LABEL: Record<GravidadeOcorrencia, string> = {
+  LEVE: 'Leve',
+  MODERADA: 'Moderada',
+  GRAVE: 'Grave',
+  GRAVISSIMA: 'Gravíssima',
+}
+
+export const STATUS_OCORRENCIA = ['ABERTA', 'EM_PRAZO', 'EM_VERIFICACAO', 'RESOLVIDA', 'REINCIDENTE', 'ESCALONADA', 'ENCERRADA'] as const
+export type StatusOcorrencia = (typeof STATUS_OCORRENCIA)[number]
+
+export const STATUS_OCORRENCIA_LABEL: Record<StatusOcorrencia, string> = {
+  ABERTA: 'Aberta',
+  EM_PRAZO: 'Em prazo de correção',
+  EM_VERIFICACAO: 'Em verificação',
+  RESOLVIDA: 'Resolvida',
+  REINCIDENTE: 'Reincidente',
+  ESCALONADA: 'Escalonada',
+  ENCERRADA: 'Encerrada',
+}
+
+export const MEDIDAS_DISCIPLINARES = ['NENHUMA', 'ADVERTENCIA_VERBAL', 'ADVERTENCIA_ESCRITA', 'SUSPENSAO', 'DESLIGAMENTO'] as const
+export type MedidaDisciplinar = (typeof MEDIDAS_DISCIPLINARES)[number]
+
+export const MEDIDA_DISCIPLINAR_LABEL: Record<MedidaDisciplinar, string> = {
+  NENHUMA: 'Nenhuma',
+  ADVERTENCIA_VERBAL: 'Advertência verbal',
+  ADVERTENCIA_ESCRITA: 'Advertência escrita',
+  SUSPENSAO: 'Suspensão',
+  DESLIGAMENTO: 'Desligamento',
+}
+
+export interface OcorrenciaHistoricoItem {
+  id: string
+  autor: string
+  acao: string
+  statusAnterior?: string | null
+  statusNovo?: string | null
+  criadoEm: string
+}
+
+export interface Ocorrencia {
+  id: string
+  protocolo: string
+  vendedorId: string
+  vendedor?: { id: string; nome: string } | null
+  tipo: TipoOcorrencia
+  motivo: string
+  gravidade: GravidadeOcorrencia
+  descricao: string
+  anexosCsv?: string | null
+  dataOcorrencia: string
+  dataRegistro: string
+  registradoPor: string
+  planoDeCorrecao?: string | null
+  prazoCorrecao?: string | null
+  status: StatusOcorrencia
+  medidaAplicada: MedidaDisciplinar
+  ocorrenciaAnteriorId?: string | null
+  ocorrenciaAnterior?: { id: string; protocolo: string; status: StatusOcorrencia; dataOcorrencia: string } | null
+  reincidencias?: { id: string; protocolo: string; status: StatusOcorrencia; dataOcorrencia: string }[]
+  documentoGeradoUrl?: string | null
+  documentoGeradoEm?: string | null
+  assinaturaVendedorOk: boolean
+  assinaturaVendedorData?: string | null
+  assinaturaGestorOk: boolean
+  assinaturaGestorData?: string | null
+  historico: OcorrenciaHistoricoItem[]
+  criadoEm: string
+  atualizadoEm: string
+}
+
+export interface ResumoOcorrencias {
+  abertas: number
+  prazosVencendo: number
+  reincidenciasAtivas: number
+  resolvidasNoMes: number
+}
+
+export type SugestaoMedidaOcorrencia =
+  | { aplicavel: false }
+  | { aplicavel: true; categoria: 'DISCIPLINAR' | 'DESEMPENHO'; ordinal: number; medidaSugerida: MedidaDisciplinar; descricaoSugerida: string }

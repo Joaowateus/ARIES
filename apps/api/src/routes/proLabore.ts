@@ -275,6 +275,7 @@ const parametrosSchema = z.object({
   agendaAlertaDiasConsecutivos: z.number().int().positive().optional(),
   agendaAlertaQuedaEfetividadePct: z.number().min(0).max(100).optional(),
   agendaReconhecimentoSemanas: z.number().int().positive().optional(),
+  motivosOcorrenciaCsv: z.string().optional(),
 })
 
 router.put('/parametros', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -1601,6 +1602,474 @@ router.get('/agenda/efetividade', requireProLaboreAuth, requireDonoOuSupervisor,
       efetividadePct: b.abordados.size > 0 ? (b.fechados.size / b.abordados.size) * 100 : 0,
     }))
   )
+})
+
+// --- Ocorrências (registro disciplinar/feedback da equipe comercial) ---
+
+const TIPOS_OCORRENCIA = ['DISCIPLINAR', 'INEFICIENCIA_PRODUCAO', 'FEEDBACK_MELHORIA', 'FEEDBACK_POSITIVO', 'OUTROS'] as const
+const GRAVIDADES_OCORRENCIA = ['LEVE', 'MODERADA', 'GRAVE', 'GRAVISSIMA'] as const
+const STATUS_OCORRENCIA = ['ABERTA', 'EM_PRAZO', 'EM_VERIFICACAO', 'RESOLVIDA', 'REINCIDENTE', 'ESCALONADA', 'ENCERRADA'] as const
+const MEDIDAS_DISCIPLINARES = ['NENHUMA', 'ADVERTENCIA_VERBAL', 'ADVERTENCIA_ESCRITA', 'SUSPENSAO', 'DESLIGAMENTO'] as const
+
+const OCORRENCIA_INCLUDE = {
+  vendedor: { select: { id: true, nome: true } },
+  historico: { orderBy: { criadoEm: 'asc' as const } },
+}
+
+// Protocolo sequencial por conta e por ano civil (reinicia toda virada de
+// ano), no formato OC-{ano}-{sequencial de 4 dígitos}. É gerado uma única
+// vez na criação e nunca pode ser editado depois — é a referência que liga
+// a tela ao documento assinado em papel.
+async function gerarProtocoloOcorrencia(usuarioId: string): Promise<string> {
+  const ano = new Date().getUTCFullYear()
+  const total = await prisma.ocorrencia.count({ where: { usuarioId, protocolo: { startsWith: `OC-${ano}-` } } })
+  for (let tentativa = 0; tentativa < 5; tentativa++) {
+    const protocolo = `OC-${ano}-${String(total + 1 + tentativa).padStart(4, '0')}`
+    const jaExiste = await prisma.ocorrencia.findUnique({ where: { protocolo } })
+    if (!jaExiste) return protocolo
+  }
+  throw new Error('Não foi possível gerar um protocolo único para a ocorrência')
+}
+
+router.get('/ocorrencias', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const { vendedorId, tipo, gravidade, status, inicio, fim } = req.query
+
+  const where: {
+    usuarioId: string; vendedorId?: string; tipo?: string; gravidade?: string; status?: string
+    dataOcorrencia?: { gte?: Date; lt?: Date }
+  } = { usuarioId }
+
+  if (typeof vendedorId === 'string' && vendedorId) where.vendedorId = vendedorId
+  if (typeof tipo === 'string' && (TIPOS_OCORRENCIA as readonly string[]).includes(tipo)) where.tipo = tipo
+  if (typeof gravidade === 'string' && (GRAVIDADES_OCORRENCIA as readonly string[]).includes(gravidade)) where.gravidade = gravidade
+  if (typeof status === 'string' && (STATUS_OCORRENCIA as readonly string[]).includes(status)) where.status = status
+
+  const inicioData = typeof inicio === 'string' ? parseDataDiaUTC(inicio) : null
+  const fimData = typeof fim === 'string' ? parseDataDiaUTC(fim) : null
+  if (inicioData || fimData) {
+    where.dataOcorrencia = {}
+    if (inicioData) where.dataOcorrencia.gte = inicioData
+    if (fimData) where.dataOcorrencia.lt = new Date(fimData.getTime() + 24 * 60 * 60 * 1000)
+  }
+
+  const ocorrencias = await prisma.ocorrencia.findMany({ where, include: OCORRENCIA_INCLUDE, orderBy: { dataRegistro: 'desc' } })
+  res.json(ocorrencias)
+})
+
+// Cards de resumo do topo da tela — calculados à parte da listagem pra não
+// dependerem dos filtros ativos na tabela. Precisa vir antes de '/:id' pra
+// não ser interpretada como um id de ocorrência.
+router.get('/ocorrencias/resumo', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const agora = new Date()
+  const daqui7Dias = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const inicioDoMes = primeiroDiaDoMesUTC(agora)
+
+  const [abertas, prazosVencendo, reincidenciasAtivas, resolvidasNoMes] = await Promise.all([
+    prisma.ocorrencia.count({ where: { usuarioId, status: { in: ['ABERTA', 'EM_PRAZO', 'EM_VERIFICACAO'] } } }),
+    prisma.ocorrencia.count({
+      where: { usuarioId, status: { in: ['ABERTA', 'EM_PRAZO'] }, prazoCorrecao: { not: null, lte: daqui7Dias } },
+    }),
+    prisma.ocorrencia.count({ where: { usuarioId, status: { in: ['REINCIDENTE', 'ESCALONADA'] } } }),
+    prisma.ocorrencia.count({ where: { usuarioId, status: 'RESOLVIDA', atualizadoEm: { gte: inicioDoMes } } }),
+  ])
+
+  res.json({ abertas, prazosVencendo, reincidenciasAtivas, resolvidasNoMes })
+})
+
+// Só ocorrências desses tipos entram na régua disciplinar — feedback
+// positivo e "outros" são só registro histórico, não escalonam medida.
+function categoriaRegua(tipo: string): 'DISCIPLINAR' | 'DESEMPENHO' | null {
+  if (tipo === 'DISCIPLINAR') return 'DISCIPLINAR'
+  if (tipo === 'INEFICIENCIA_PRODUCAO') return 'DESEMPENHO'
+  return null
+}
+
+// Régua sugerida (1ª leve→feedback verbal registrado, 2ª→advertência verbal,
+// 3ª→advertência escrita, 4ª→suspensão, 5ª em diante→desligamento),
+// separada por categoria (Disciplinar x Desempenho). O sistema só SUGERE a
+// próxima medida a partir do histórico do vendedor — a decisão final de
+// aplicar (ou não) é sempre manual do gestor.
+const REGUA_DISCIPLINAR = ['NENHUMA', 'ADVERTENCIA_VERBAL', 'ADVERTENCIA_ESCRITA', 'SUSPENSAO', 'DESLIGAMENTO'] as const
+const REGUA_DISCIPLINAR_LABEL: Record<(typeof REGUA_DISCIPLINAR)[number], string> = {
+  NENHUMA: 'Feedback verbal registrado',
+  ADVERTENCIA_VERBAL: 'Advertência verbal formal',
+  ADVERTENCIA_ESCRITA: 'Advertência escrita',
+  SUSPENSAO: 'Suspensão',
+  DESLIGAMENTO: 'Desligamento',
+}
+
+// Precisa vir antes de '/:id' pra não ser interpretada como um id de ocorrência.
+router.get('/ocorrencias/sugestao-medida', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const { vendedorId, tipo } = req.query
+  if (typeof vendedorId !== 'string' || !vendedorId || typeof tipo !== 'string' || !tipo) {
+    res.status(400).json({ error: 'vendedorId e tipo são obrigatórios' })
+    return
+  }
+
+  const categoria = categoriaRegua(tipo)
+  if (!categoria) {
+    res.json({ aplicavel: false })
+    return
+  }
+
+  const totalAnteriores = await prisma.ocorrencia.count({ where: { usuarioId, vendedorId, tipo } })
+  const ordinal = totalAnteriores + 1
+  const medidaSugerida = REGUA_DISCIPLINAR[Math.min(ordinal, REGUA_DISCIPLINAR.length) - 1]
+  res.json({
+    aplicavel: true,
+    categoria,
+    ordinal,
+    medidaSugerida,
+    descricaoSugerida: REGUA_DISCIPLINAR_LABEL[medidaSugerida],
+  })
+})
+
+const criarOcorrenciaSchema = z.object({
+  vendedorId: z.string().min(1, 'Vendedor obrigatório'),
+  tipo: z.enum(TIPOS_OCORRENCIA),
+  motivo: z.string().min(1, 'Motivo obrigatório'),
+  gravidade: z.enum(GRAVIDADES_OCORRENCIA),
+  descricao: z.string().min(1, 'Descrição obrigatória'),
+  anexosCsv: z.string().optional(),
+  dataOcorrencia: z.string().min(1, 'Data da ocorrência obrigatória'),
+  registradoPor: z.string().min(1, 'Responsável pelo registro obrigatório'),
+  planoDeCorrecao: z.string().optional(),
+  prazoCorrecao: z.string().optional(),
+  ocorrenciaAnteriorId: z.string().optional(),
+})
+
+router.post('/ocorrencias', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = criarOcorrenciaSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+
+  const usuarioId = req.proLaboreUser!.sub
+
+  const vendedor = await prisma.vendedor.findFirst({ where: { id: parse.data.vendedorId, usuarioId } })
+  if (!vendedor) {
+    res.status(400).json({ error: 'Vendedor não encontrado' })
+    return
+  }
+
+  const dataOcorrencia = parseDataDiaUTC(parse.data.dataOcorrencia)
+  if (!dataOcorrencia) {
+    res.status(400).json({ error: 'Data da ocorrência inválida' })
+    return
+  }
+
+  const prazoCorrecao = parse.data.prazoCorrecao ? parseDataDiaUTC(parse.data.prazoCorrecao) : null
+  if (parse.data.prazoCorrecao && !prazoCorrecao) {
+    res.status(400).json({ error: 'Prazo de correção inválido' })
+    return
+  }
+
+  if (parse.data.ocorrenciaAnteriorId) {
+    const anterior = await prisma.ocorrencia.findFirst({ where: { id: parse.data.ocorrenciaAnteriorId, usuarioId } })
+    if (!anterior) {
+      res.status(400).json({ error: 'Ocorrência anterior (para reincidência) não encontrada' })
+      return
+    }
+  }
+
+  const protocolo = await gerarProtocoloOcorrencia(usuarioId)
+
+  const ocorrencia = await prisma.ocorrencia.create({
+    data: {
+      usuarioId,
+      protocolo,
+      vendedorId: parse.data.vendedorId,
+      tipo: parse.data.tipo,
+      motivo: parse.data.motivo,
+      gravidade: parse.data.gravidade,
+      descricao: parse.data.descricao,
+      anexosCsv: parse.data.anexosCsv,
+      dataOcorrencia,
+      registradoPor: parse.data.registradoPor,
+      planoDeCorrecao: parse.data.planoDeCorrecao,
+      prazoCorrecao,
+      ocorrenciaAnteriorId: parse.data.ocorrenciaAnteriorId,
+    },
+  })
+
+  await prisma.ocorrenciaHistorico.create({
+    data: {
+      ocorrenciaId: ocorrencia.id,
+      autor: req.proLaboreUser!.nome,
+      acao: `Ocorrência registrada (protocolo ${protocolo})`,
+      statusAnterior: null,
+      statusNovo: ocorrencia.status,
+    },
+  })
+
+  const comHistorico = await prisma.ocorrencia.findUnique({ where: { id: ocorrencia.id }, include: OCORRENCIA_INCLUDE })
+  res.status(201).json(comHistorico)
+})
+
+router.get('/ocorrencias/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const ocorrencia = await prisma.ocorrencia.findFirst({
+    where: { id: String(req.params.id), usuarioId },
+    include: {
+      ...OCORRENCIA_INCLUDE,
+      ocorrenciaAnterior: { select: { id: true, protocolo: true, status: true, dataOcorrencia: true } },
+      reincidencias: { select: { id: true, protocolo: true, status: true, dataOcorrencia: true } },
+    },
+  })
+  if (!ocorrencia) {
+    res.status(404).json({ error: 'Ocorrência não encontrada' })
+    return
+  }
+  res.json(ocorrencia)
+})
+
+const editarOcorrenciaSchema = z.object({
+  tipo: z.enum(TIPOS_OCORRENCIA).optional(),
+  motivo: z.string().min(1).optional(),
+  gravidade: z.enum(GRAVIDADES_OCORRENCIA).optional(),
+  descricao: z.string().min(1).optional(),
+  anexosCsv: z.string().nullable().optional(),
+  dataOcorrencia: z.string().min(1).optional(),
+  planoDeCorrecao: z.string().nullable().optional(),
+  prazoCorrecao: z.string().nullable().optional(),
+  status: z.enum(STATUS_OCORRENCIA).optional(),
+  medidaAplicada: z.enum(MEDIDAS_DISCIPLINARES).optional(),
+})
+
+// Toda alteração pós-criação passa por aqui e cada campo relevante que
+// mudar gera uma entrada em historico[] — o registro original nunca é
+// sobrescrito silenciosamente, preservando o rastro de auditoria exigido
+// pelo processo disciplinar. protocolo, vendedorId e dataRegistro nunca são
+// editáveis (por isso nem entram no schema acima).
+router.patch('/ocorrencias/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = editarOcorrenciaSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.ocorrencia.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!atual) {
+    res.status(404).json({ error: 'Ocorrência não encontrada' })
+    return
+  }
+
+  const data: {
+    tipo?: string; motivo?: string; gravidade?: string; descricao?: string; anexosCsv?: string | null
+    dataOcorrencia?: Date; planoDeCorrecao?: string | null; prazoCorrecao?: Date | null
+    status?: string; medidaAplicada?: string
+  } = {}
+  const autor = req.proLaboreUser!.nome
+  const eventos: { autor: string; acao: string; statusAnterior?: string | null; statusNovo?: string | null }[] = []
+
+  if (parse.data.tipo !== undefined && parse.data.tipo !== atual.tipo) {
+    data.tipo = parse.data.tipo
+    eventos.push({ autor, acao: `Tipo alterado de "${atual.tipo}" para "${parse.data.tipo}"` })
+  }
+  if (parse.data.motivo !== undefined && parse.data.motivo !== atual.motivo) {
+    data.motivo = parse.data.motivo
+    eventos.push({ autor, acao: `Motivo alterado de "${atual.motivo}" para "${parse.data.motivo}"` })
+  }
+  if (parse.data.gravidade !== undefined && parse.data.gravidade !== atual.gravidade) {
+    data.gravidade = parse.data.gravidade
+    eventos.push({ autor, acao: `Gravidade alterada de "${atual.gravidade}" para "${parse.data.gravidade}"` })
+  }
+  if (parse.data.descricao !== undefined && parse.data.descricao !== atual.descricao) {
+    data.descricao = parse.data.descricao
+    eventos.push({ autor, acao: 'Descrição da ocorrência editada' })
+  }
+  if (parse.data.anexosCsv !== undefined && parse.data.anexosCsv !== atual.anexosCsv) {
+    data.anexosCsv = parse.data.anexosCsv
+    eventos.push({ autor, acao: 'Anexos atualizados' })
+  }
+  if (parse.data.planoDeCorrecao !== undefined && parse.data.planoDeCorrecao !== atual.planoDeCorrecao) {
+    data.planoDeCorrecao = parse.data.planoDeCorrecao
+    eventos.push({ autor, acao: 'Plano de correção atualizado' })
+  }
+  if (parse.data.medidaAplicada !== undefined && parse.data.medidaAplicada !== atual.medidaAplicada) {
+    data.medidaAplicada = parse.data.medidaAplicada
+    eventos.push({ autor, acao: `Medida aplicada definida como "${parse.data.medidaAplicada}"` })
+  }
+
+  if (parse.data.dataOcorrencia !== undefined) {
+    const dataOcorrencia = parseDataDiaUTC(parse.data.dataOcorrencia)
+    if (!dataOcorrencia) {
+      res.status(400).json({ error: 'Data da ocorrência inválida' })
+      return
+    }
+    if (dataOcorrencia.getTime() !== atual.dataOcorrencia.getTime()) {
+      data.dataOcorrencia = dataOcorrencia
+      eventos.push({ autor, acao: 'Data da ocorrência corrigida' })
+    }
+  }
+
+  if (parse.data.prazoCorrecao !== undefined) {
+    const prazoCorrecao = parse.data.prazoCorrecao ? parseDataDiaUTC(parse.data.prazoCorrecao) : null
+    if (parse.data.prazoCorrecao && !prazoCorrecao) {
+      res.status(400).json({ error: 'Prazo de correção inválido' })
+      return
+    }
+    if (prazoCorrecao?.getTime() !== atual.prazoCorrecao?.getTime()) {
+      data.prazoCorrecao = prazoCorrecao
+      eventos.push({ autor, acao: prazoCorrecao ? 'Prazo de correção definido/alterado' : 'Prazo de correção removido' })
+    }
+  }
+
+  if (parse.data.status !== undefined && parse.data.status !== atual.status) {
+    data.status = parse.data.status
+    eventos.push({ autor, acao: 'Status alterado', statusAnterior: atual.status, statusNovo: parse.data.status })
+  }
+
+  if (Object.keys(data).length > 0) {
+    await prisma.ocorrencia.update({ where: { id: atual.id }, data })
+  }
+  if (eventos.length > 0) {
+    await prisma.ocorrenciaHistorico.createMany({
+      data: eventos.map(e => ({
+        ocorrenciaId: atual.id,
+        autor: e.autor,
+        acao: e.acao,
+        statusAnterior: e.statusAnterior ?? null,
+        statusNovo: e.statusNovo ?? null,
+      })),
+    })
+  }
+
+  const ocorrencia = await prisma.ocorrencia.findUnique({ where: { id: atual.id }, include: OCORRENCIA_INCLUDE })
+  res.json(ocorrencia)
+})
+
+const desfechoOcorrenciaSchema = z.object({
+  resultado: z.enum(['CORRIGIDO', 'NAO_CORRIGIDO']),
+  encaminhamento: z.enum(['REINCIDENTE', 'ESCALONADA']).optional(),
+  medidaAplicada: z.enum(MEDIDAS_DISCIPLINARES).optional(),
+  observacao: z.string().optional(),
+})
+
+// Registra o desfecho da verificação de prazo: "Corrigido" fecha como
+// Resolvida; "Não corrigido" exige dizer se vira Reincidente ou é
+// Escalonada, junto da medida que o gestor decidiu aplicar (a régua sugerida
+// em /sugestao-medida é só uma sugestão — a decisão final é sempre manual).
+// Se o gestor quiser abrir uma nova ocorrência vinculada (reincidência),
+// isso é feito num POST /ocorrencias normal passando ocorrenciaAnteriorId.
+router.post('/ocorrencias/:id/desfecho', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = desfechoOcorrenciaSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  if (parse.data.resultado === 'NAO_CORRIGIDO' && !parse.data.encaminhamento) {
+    res.status(400).json({ error: 'Informe se a ocorrência vira Reincidente ou é Escalonada' })
+    return
+  }
+
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.ocorrencia.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!atual) {
+    res.status(404).json({ error: 'Ocorrência não encontrada' })
+    return
+  }
+
+  const novoStatus = parse.data.resultado === 'CORRIGIDO' ? 'RESOLVIDA' : parse.data.encaminhamento!
+  const data: { status: string; medidaAplicada?: string } = { status: novoStatus }
+  if (parse.data.medidaAplicada) data.medidaAplicada = parse.data.medidaAplicada
+  await prisma.ocorrencia.update({ where: { id: atual.id }, data })
+
+  const acaoBase = parse.data.resultado === 'CORRIGIDO'
+    ? 'Desfecho registrado: plano de correção cumprido'
+    : `Desfecho registrado: plano não cumprido (${parse.data.encaminhamento === 'REINCIDENTE' ? 'reincidência' : 'escalonada'})`
+  await prisma.ocorrenciaHistorico.create({
+    data: {
+      ocorrenciaId: atual.id,
+      autor: req.proLaboreUser!.nome,
+      acao: parse.data.observacao ? `${acaoBase} — ${parse.data.observacao}` : acaoBase,
+      statusAnterior: atual.status,
+      statusNovo: novoStatus,
+    },
+  })
+
+  const ocorrencia = await prisma.ocorrencia.findUnique({ where: { id: atual.id }, include: OCORRENCIA_INCLUDE })
+  res.json(ocorrencia)
+})
+
+// O PDF em si é montado no cliente (não existe infra de storage de arquivo
+// nesse repo) — esse endpoint só registra que o documento foi gerado
+// (carimbo pra auditoria) e, se já tinha prazo de correção definido,
+// avança o status de Aberta pra "Em prazo de correção", como no fluxo
+// descrito: o prazo só passa a valer depois que o documento é emitido.
+router.post('/ocorrencias/:id/documento', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.ocorrencia.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!atual) {
+    res.status(404).json({ error: 'Ocorrência não encontrada' })
+    return
+  }
+
+  const agora = new Date()
+  const novoStatus = atual.status === 'ABERTA' && atual.prazoCorrecao ? 'EM_PRAZO' : atual.status
+
+  await prisma.ocorrencia.update({
+    where: { id: atual.id },
+    data: { documentoGeradoEm: agora, status: novoStatus },
+  })
+
+  await prisma.ocorrenciaHistorico.create({
+    data: {
+      ocorrenciaId: atual.id,
+      autor: req.proLaboreUser!.nome,
+      acao: 'Documento de ocorrência gerado',
+      statusAnterior: novoStatus !== atual.status ? atual.status : null,
+      statusNovo: novoStatus !== atual.status ? novoStatus : null,
+    },
+  })
+
+  const ocorrencia = await prisma.ocorrencia.findUnique({ where: { id: atual.id }, include: OCORRENCIA_INCLUDE })
+  res.json(ocorrencia)
+})
+
+const assinaturaOcorrenciaSchema = z.object({
+  parte: z.enum(['VENDEDOR', 'GESTOR']),
+  assinado: z.boolean(),
+})
+
+// A assinatura em si acontece no papel — aqui só se registra que ela
+// aconteceu (checkbox + data), mantendo o sistema como fonte da verdade
+// mesmo sem armazenar o documento físico.
+router.post('/ocorrencias/:id/assinatura', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = assinaturaOcorrenciaSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.ocorrencia.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!atual) {
+    res.status(404).json({ error: 'Ocorrência não encontrada' })
+    return
+  }
+
+  const agora = parse.data.assinado ? new Date() : null
+  const data = parse.data.parte === 'VENDEDOR'
+    ? { assinaturaVendedorOk: parse.data.assinado, assinaturaVendedorData: agora }
+    : { assinaturaGestorOk: parse.data.assinado, assinaturaGestorData: agora }
+
+  await prisma.ocorrencia.update({ where: { id: atual.id }, data })
+  await prisma.ocorrenciaHistorico.create({
+    data: {
+      ocorrenciaId: atual.id,
+      autor: req.proLaboreUser!.nome,
+      acao: `Assinatura do ${parse.data.parte === 'VENDEDOR' ? 'colaborador' : 'gestor'} ${parse.data.assinado ? 'confirmada' : 'desfeita'}`,
+    },
+  })
+
+  const ocorrencia = await prisma.ocorrencia.findUnique({ where: { id: atual.id }, include: OCORRENCIA_INCLUDE })
+  res.json(ocorrencia)
 })
 
 export default router

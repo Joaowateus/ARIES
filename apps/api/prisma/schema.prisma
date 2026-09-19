@@ -924,6 +924,7 @@ model ProLaboreUsuario {
   leads          Lead[]
   metasFunil     MetaFunilProLabore[]
   agendaItens    AgendaItem[]
+  ocorrencias    Ocorrencia[]
 
   @@map("pro_labore_usuarios")
 }
@@ -957,9 +958,10 @@ model Vendedor {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  vendas  Venda[]
-  leads   Lead[]
+  usuario     ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  vendas      Venda[]
+  leads       Lead[]
+  ocorrencias Ocorrencia[]
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -1054,6 +1056,11 @@ model ParametroLiquidez {
   // "Referência" pra disparar um destaque positivo (em vez de só sinalizar
   // problema, como a Agenda faz hoje).
   agendaReconhecimentoSemanas Int @default(4)
+
+  // Lista de motivos de Ocorrência, editável em Configurações — CSV numa
+  // coluna só (mesmo padrão de AgendaItem.diasSemana/vendedorIds), em vez
+  // de uma tabela à parte, já que é só uma lista de rótulos por conta.
+  motivosOcorrenciaCsv String @default("Atraso recorrente,Não cumprimento de meta,Não preenchimento do CRM,Postura com cliente,Quebra de processo comercial,Falta não justificada,Não cumprimento de protocolo")
 
   atualizadoEm DateTime @updatedAt
 
@@ -1251,4 +1258,85 @@ model AgendaInicio {
   @@unique([agendaItemId, autorId, dataReferencia])
   @@index([agendaItemId])
   @@map("pro_labore_agenda_inicios")
+}
+
+// =====================================================================
+// OCORRÊNCIAS — auditoria disciplinar/de desempenho da equipe comercial.
+// Registro formal com protocolo, prazo de correção, histórico imutável de
+// mudanças e (opcional) documento gerado pro vendedor assinar. Nunca é
+// excluída — só encerrada — pra preservar o rastro como auditoria.
+// =====================================================================
+model Ocorrencia {
+  id         String @id @default(cuid())
+  usuarioId  String
+  // OC-{ano}-{sequencial de 4 dígitos}, reiniciando a cada ano — gerado no
+  // backend a partir da contagem de ocorrências já criadas naquele ano
+  // pra essa conta. Nunca editado depois de criado.
+  protocolo  String @unique
+  vendedorId String
+
+  tipo      String // Disciplinar | Ineficiência de Produção | Feedback de Melhoria | Feedback Positivo | Outros
+  // Subcategoria — lista sugerida vem de ParametroLiquidez.motivosOcorrenciaCsv,
+  // mas o campo aqui é livre (String) pra não travar em nenhum lançamento
+  // se a lista mudar depois ou o motivo real não estiver nela ainda.
+  motivo    String
+  gravidade String // Leve | Moderada | Grave | Gravíssima
+  descricao String
+  // Referências a evidências (link, nome de arquivo já hospedado em outro
+  // lugar etc.) — CSV simples, mesmo padrão de AgendaItem.vendedorIds; não
+  // existe upload/armazenamento de arquivo nesse projeto ainda.
+  anexosCsv String?
+
+  dataOcorrencia DateTime
+  dataRegistro   DateTime @default(now())
+  registradoPor  String // nome de quem lançou (dono ou supervisor)
+
+  planoDeCorrecao String?
+  prazoCorrecao   DateTime?
+
+  status         String  @default("ABERTA") // ABERTA | EM_PRAZO | EM_VERIFICACAO | RESOLVIDA | REINCIDENTE | ESCALONADA | ENCERRADA
+  medidaAplicada String  @default("NENHUMA") // NENHUMA | ADVERTENCIA_VERBAL | ADVERTENCIA_ESCRITA | SUSPENSAO | DESLIGAMENTO
+
+  // Auto-relação: aponta pra ocorrência anterior do mesmo vendedor/motivo
+  // quando esta é uma reincidência.
+  ocorrenciaAnteriorId String?
+
+  documentoGeradoUrl String?
+  documentoGeradoEm  DateTime?
+  assinaturaVendedorOk   Boolean   @default(false)
+  assinaturaVendedorData DateTime?
+  assinaturaGestorOk     Boolean   @default(false)
+  assinaturaGestorData   DateTime?
+
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario            ProLaboreUsuario       @relation(fields: [usuarioId], references: [id])
+  vendedor           Vendedor               @relation(fields: [vendedorId], references: [id])
+  ocorrenciaAnterior Ocorrencia?            @relation("Reincidencia", fields: [ocorrenciaAnteriorId], references: [id])
+  reincidencias      Ocorrencia[]           @relation("Reincidencia")
+  historico          OcorrenciaHistorico[]
+
+  @@index([usuarioId])
+  @@index([usuarioId, status])
+  @@index([vendedorId])
+  @@map("pro_labore_ocorrencias")
+}
+
+// Log imutável de mudanças da Ocorrência — toda alteração de campo
+// relevante depois da criação gera uma linha aqui (quem, quando, o quê),
+// nunca sobrescreve o registro original em silêncio.
+model OcorrenciaHistorico {
+  id             String   @id @default(cuid())
+  ocorrenciaId   String
+  autor          String
+  acao           String // texto curto descrevendo a mudança
+  statusAnterior String?
+  statusNovo     String?
+  criadoEm       DateTime @default(now())
+
+  ocorrencia Ocorrencia @relation(fields: [ocorrenciaId], references: [id])
+
+  @@index([ocorrenciaId])
+  @@map("pro_labore_ocorrencia_historico")
 }
