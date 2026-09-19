@@ -43,6 +43,12 @@ import proLaboreRoutes from './routes/proLabore'
 // chama listen(), quem recebe a conexão HTTP é a própria plataforma).
 const app = express()
 
+// A Vercel entrega a requisição através do próprio proxy dela — sem isso,
+// o express-rate-limit não confia no cabeçalho X-Forwarded-For e loga um
+// ValidationError a cada requisição, além de arriscar tratar todo mundo
+// como se viesse do mesmo IP.
+app.set('trust proxy', 1)
+
 // Security headers
 app.use(helmet())
 
