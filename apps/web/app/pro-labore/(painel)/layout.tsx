@@ -16,6 +16,7 @@ const NAV = [
   // Ocorrências é a única aba visível pra supervisor mas escondida de
   // vendedor comum — por isso usa hideFromVendedor em vez de donoOnly.
   { href: '/pro-labore/ocorrencias', label: 'Ocorrências', hideFromVendedor: true },
+  { href: '/pro-labore/social-media', label: 'Social Media', donoOnly: true },
   { href: '/pro-labore/indicadores', label: 'Indicadores', donoOnly: true },
   { href: '/pro-labore/configuracoes', label: 'Configurações', donoOnly: true },
 ]
