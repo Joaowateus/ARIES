@@ -473,6 +473,19 @@ export const proLaboreApi = {
     registrarAssinatura: (id: string, parte: 'VENDEDOR' | 'GESTOR', assinado: boolean) =>
       request<Ocorrencia>(`/pro-labore/ocorrencias/${id}/assinatura`, { method: 'POST', body: JSON.stringify({ parte, assinado }) }),
   },
+  socialMedia: {
+    conta: () => request<SocialMediaConta | null>('/pro-labore/social-media/conta'),
+    conectar: (accessToken: string) =>
+      request<SocialMediaConta>('/pro-labore/social-media/conectar', { method: 'POST', body: JSON.stringify({ accessToken }) }),
+    desconectar: () => request<void>('/pro-labore/social-media/conta', { method: 'DELETE' }),
+    sincronizar: () => request<SocialMediaConta>('/pro-labore/social-media/sincronizar', { method: 'POST' }),
+    resumo: (periodo?: { inicio: string; fim: string }) => {
+      const params = new URLSearchParams()
+      if (periodo) { params.set('inicio', periodo.inicio); params.set('fim', periodo.fim) }
+      const qs = params.toString()
+      return request<ResumoSocialMedia>(`/pro-labore/social-media/resumo${qs ? `?${qs}` : ''}`)
+    },
+  },
 }
 
 export interface EfetividadeVendedor {
@@ -579,3 +592,67 @@ export interface ResumoOcorrencias {
 export type SugestaoMedidaOcorrencia =
   | { aplicavel: false }
   | { aplicavel: true; categoria: 'DISCIPLINAR' | 'DESEMPENHO'; ordinal: number; medidaSugerida: MedidaDisciplinar; descricaoSugerida: string }
+
+// --- Social Media (integração real com Instagram) ---
+
+export interface SocialMediaConta {
+  id: string
+  instagramUserId: string
+  nomeUsuario: string
+  nomeExibicao?: string | null
+  fotoUrl?: string | null
+  seguidores: number
+  seguindo: number
+  publicacoesTotal: number
+  conectadoEm: string
+  atualizadoEm: string
+  tokenExpiraEm: string
+}
+
+export interface PublicacaoSocialMedia {
+  id: string
+  tipo: string
+  urlPermalink?: string | null
+  urlMidia?: string | null
+  publicadoEm: string
+  alcance: number
+  curtidas: number
+  comentarios: number
+  salvamentos: number
+}
+
+export type ResumoSocialMedia =
+  | { conectado: false }
+  | {
+      conectado: true
+      conta: { nomeUsuario: string; nomeExibicao?: string | null; fotoUrl?: string | null; seguidores: number }
+      periodo: { inicio: string; fim: string }
+      volume: {
+        totalPublicacoes: number
+        metaPostagensSemanais: number
+        metaPeriodo: number
+        porTipo: { tipo: string; quantidade: number }[]
+      }
+      desempenho: {
+        alcanceTotal: number
+        engajamentoTotal: number
+        taxaEngajamento: number
+        topPublicacoes: PublicacaoSocialMedia[]
+      }
+      crescimento: {
+        seguidoresAtual: number
+        novosSeguidoresPeriodo: number
+        serie: { data: string; seguidores: number; novosSeguidoresDia: number }[]
+      }
+      relacaoVendas: {
+        leadsGerados: number
+        leadsGanhos: number
+        valorNegociadoTotal: number
+      }
+      jornada: {
+        alcance: number
+        visitasPerfil: number
+        novosSeguidores: number
+        leadsGerados: number
+      }
+    }

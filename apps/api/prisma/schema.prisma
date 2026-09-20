@@ -929,6 +929,7 @@ model ProLaboreUsuario {
   metasFunil     MetaFunilProLabore[]
   agendaItens    AgendaItem[]
   ocorrencias    Ocorrencia[]
+  socialMediaConta SocialMediaConta?
 
   @@map("pro_labore_usuarios")
 }
@@ -1034,6 +1035,10 @@ model ParametroLiquidez {
   // etapa mais funda da jornada (ver FunilJourney no dashboard).
   custoPorLeadTopo      Float    @default(0)
   fraseMotivacional     String?
+  // Meta de volume de produção de conteúdo (posts/reels/stories por
+  // semana) usada pra auditar a equipe de Social Media — comparação
+  // simples de "quanto devia vs quanto saiu".
+  metaPostagensSemanais Int      @default(3)
 
   // ===== Limiares da Auditoria comercial da Agenda (todos parametrizáveis —
   // nada disso pode ficar hardcoded no front, pra permitir calibrar por
@@ -1343,4 +1348,79 @@ model OcorrenciaHistorico {
 
   @@index([ocorrenciaId])
   @@map("pro_labore_ocorrencia_historico")
+}
+
+// Conta do Instagram conectada via Instagram Graph API. Um usuarioId (dono)
+// só conecta uma conta — o accessToken é de longa duração (~60 dias) e
+// precisa ser renovado antes de expirar (ver rota de refresh).
+model SocialMediaConta {
+  id                String   @id @default(cuid())
+  usuarioId         String   @unique
+  instagramUserId   String
+  nomeUsuario       String
+  nomeExibicao      String?
+  fotoUrl           String?
+  seguidores        Int      @default(0)
+  seguindo          Int      @default(0)
+  publicacoesTotal  Int      @default(0)
+  // Nunca exposto pro frontend — só usado nas chamadas server-to-server
+  // pra Graph API.
+  accessToken       String
+  tokenExpiraEm     DateTime
+  conectadoEm       DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+
+  usuario   ProLaboreUsuario           @relation(fields: [usuarioId], references: [id])
+  midias    SocialMediaMidia[]
+  snapshots SocialMediaSnapshotDiario[]
+
+  @@map("pro_labore_social_media_contas")
+}
+
+// Post/reels/carrossel sincronizado da conta. Stories não ficam disponíveis
+// na Graph API depois de 24h, então não são sincronizadas individualmente
+// — só entram no snapshot diário agregado.
+model SocialMediaMidia {
+  id               String   @id @default(cuid())
+  contaId          String
+  instagramMediaId String   @unique
+  tipo             String // IMAGE | VIDEO | CAROUSEL_ALBUM
+  legenda          String?
+  urlMidia         String?
+  urlPermalink     String?
+  publicadoEm      DateTime
+  curtidas         Int      @default(0)
+  comentarios      Int      @default(0)
+  salvamentos      Int      @default(0)
+  compartilhamentos Int     @default(0)
+  alcance          Int      @default(0)
+  impressoes       Int      @default(0)
+  atualizadoEm     DateTime @updatedAt
+
+  conta SocialMediaConta @relation(fields: [contaId], references: [id])
+
+  @@index([contaId, publicadoEm])
+  @@map("pro_labore_social_media_midias")
+}
+
+// Uma linha por dia por conta — o Instagram não guarda histórico longo de
+// métricas de conta (seguidores, alcance diário), então esse snapshot é a
+// única forma de montar um gráfico de evolução ao longo do tempo. Gerado
+// pelo job de sincronização periódica (cron), não por ação do usuário.
+model SocialMediaSnapshotDiario {
+  id                 String   @id @default(cuid())
+  contaId            String
+  data               DateTime // meia-noite (UTC) do dia do snapshot
+  seguidores         Int
+  novosSeguidoresDia Int      @default(0)
+  alcanceContaDia    Int      @default(0)
+  impressoesContaDia Int      @default(0)
+  visitasPerfilDia   Int      @default(0)
+  publicacoesNoDia   Int      @default(0)
+  criadoEm           DateTime @default(now())
+
+  conta SocialMediaConta @relation(fields: [contaId], references: [id])
+
+  @@unique([contaId, data])
+  @@map("pro_labore_social_media_snapshots")
 }

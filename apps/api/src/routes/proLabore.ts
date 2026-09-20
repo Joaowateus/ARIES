@@ -4,6 +4,13 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
+import {
+  trocarOuRenovarTokenLongo,
+  buscarContaInstagram,
+  buscarMidiasRecentes,
+  buscarInsightsMidia,
+  buscarInsightsContaHoje,
+} from '../lib/instagramGraph'
 
 const router = Router()
 
@@ -276,6 +283,7 @@ const parametrosSchema = z.object({
   agendaAlertaQuedaEfetividadePct: z.number().min(0).max(100).optional(),
   agendaReconhecimentoSemanas: z.number().int().positive().optional(),
   motivosOcorrenciaCsv: z.string().optional(),
+  metaPostagensSemanais: z.number().int().positive('Meta deve ser positiva').optional(),
 })
 
 router.put('/parametros', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -2093,6 +2101,249 @@ router.post('/ocorrencias/:id/assinatura', requireProLaboreAuth, requireDonoOuSu
 
   const ocorrencia = await prisma.ocorrencia.findUnique({ where: { id: atual.id }, include: OCORRENCIA_INCLUDE })
   res.json(ocorrencia)
+})
+
+// ===================== Social Media (integração real com Instagram) =====================
+// Auditoria da produção da equipe a partir de dados reais puxados da
+// Instagram Graph API — nada aqui é lançado manualmente.
+
+const SOCIAL_MEDIA_SELECT = {
+  id: true, instagramUserId: true, nomeUsuario: true, nomeExibicao: true, fotoUrl: true,
+  seguidores: true, seguindo: true, publicacoesTotal: true, conectadoEm: true, atualizadoEm: true,
+  tokenExpiraEm: true,
+} as const
+
+router.get('/social-media/conta', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const conta = await prisma.socialMediaConta.findUnique({
+    where: { usuarioId: req.proLaboreUser!.sub },
+    select: SOCIAL_MEDIA_SELECT,
+  })
+  res.json(conta)
+})
+
+const conectarSocialMediaSchema = z.object({ accessToken: z.string().min(20, 'Token inválido') })
+
+router.post('/social-media/conectar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = conectarSocialMediaSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const appId = process.env.META_APP_ID
+  const appSecret = process.env.META_APP_SECRET
+  if (!appId || !appSecret) {
+    res.status(500).json({ error: 'Integração do Instagram não configurada no servidor.' })
+    return
+  }
+
+  try {
+    const tokenLongo = await trocarOuRenovarTokenLongo(appId, appSecret, parse.data.accessToken)
+    const infoConta = await buscarContaInstagram(tokenLongo.accessToken)
+    const conta = await prisma.socialMediaConta.upsert({
+      where: { usuarioId: req.proLaboreUser!.sub },
+      update: { ...infoConta, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
+      create: { ...infoConta, usuarioId: req.proLaboreUser!.sub, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
+      select: SOCIAL_MEDIA_SELECT,
+    })
+    res.status(201).json(conta)
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Falha ao conectar com o Instagram' })
+  }
+})
+
+router.delete('/social-media/conta', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
+  if (!conta) {
+    res.status(404).json({ error: 'Nenhuma conta conectada' })
+    return
+  }
+  await prisma.socialMediaMidia.deleteMany({ where: { contaId: conta.id } })
+  await prisma.socialMediaSnapshotDiario.deleteMany({ where: { contaId: conta.id } })
+  await prisma.socialMediaConta.delete({ where: { id: conta.id } })
+  res.status(204).end()
+})
+
+// Sincroniza mídias recentes + grava o snapshot diário de hoje. Renova o
+// token automaticamente quando faltam menos de 10 dias pra expirar (dura
+// ~60 dias) — sem isso, a conta ficaria desconectada sozinha com o tempo.
+async function sincronizarContaSocialMedia(conta: { id: string; instagramUserId: string; accessToken: string; tokenExpiraEm: Date }) {
+  let accessToken = conta.accessToken
+  const diasParaExpirar = (conta.tokenExpiraEm.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  const appId = process.env.META_APP_ID
+  const appSecret = process.env.META_APP_SECRET
+  if (diasParaExpirar < 10 && appId && appSecret) {
+    const renovado = await trocarOuRenovarTokenLongo(appId, appSecret, accessToken)
+    accessToken = renovado.accessToken
+    await prisma.socialMediaConta.update({ where: { id: conta.id }, data: { accessToken: renovado.accessToken, tokenExpiraEm: renovado.expiraEm } })
+  }
+
+  const infoConta = await buscarContaInstagram(accessToken)
+  const midias = await buscarMidiasRecentes(conta.instagramUserId, accessToken)
+
+  for (const midia of midias) {
+    const insights = await buscarInsightsMidia(midia.instagramMediaId, accessToken)
+    await prisma.socialMediaMidia.upsert({
+      where: { instagramMediaId: midia.instagramMediaId },
+      update: { ...midia, ...insights },
+      create: { ...midia, ...insights, contaId: conta.id },
+    })
+  }
+
+  const insightsHoje = await buscarInsightsContaHoje(conta.instagramUserId, accessToken)
+  const hoje = inicioDoDiaUTC(new Date())
+  const publicacoesNoDia = midias.filter(m => inicioDoDiaUTC(m.publicadoEm).getTime() === hoje.getTime()).length
+
+  const ultimoSnapshot = await prisma.socialMediaSnapshotDiario.findFirst({
+    where: { contaId: conta.id, data: { lt: hoje } },
+    orderBy: { data: 'desc' },
+  })
+  const novosSeguidoresDia = ultimoSnapshot ? Math.max(0, infoConta.seguidores - ultimoSnapshot.seguidores) : 0
+
+  await prisma.socialMediaSnapshotDiario.upsert({
+    where: { contaId_data: { contaId: conta.id, data: hoje } },
+    update: {
+      seguidores: infoConta.seguidores,
+      novosSeguidoresDia,
+      alcanceContaDia: insightsHoje.alcance,
+      impressoesContaDia: insightsHoje.impressoes,
+      visitasPerfilDia: insightsHoje.visitasPerfil,
+      publicacoesNoDia,
+    },
+    create: {
+      contaId: conta.id,
+      data: hoje,
+      seguidores: infoConta.seguidores,
+      novosSeguidoresDia,
+      alcanceContaDia: insightsHoje.alcance,
+      impressoesContaDia: insightsHoje.impressoes,
+      visitasPerfilDia: insightsHoje.visitasPerfil,
+      publicacoesNoDia,
+    },
+  })
+
+  await prisma.socialMediaConta.update({
+    where: { id: conta.id },
+    data: { seguidores: infoConta.seguidores, seguindo: infoConta.seguindo, publicacoesTotal: infoConta.publicacoesTotal },
+  })
+}
+
+router.post('/social-media/sincronizar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
+  if (!conta) {
+    res.status(404).json({ error: 'Nenhuma conta do Instagram conectada' })
+    return
+  }
+  try {
+    await sincronizarContaSocialMedia(conta)
+    const atualizado = await prisma.socialMediaConta.findUnique({ where: { id: conta.id }, select: SOCIAL_MEDIA_SELECT })
+    res.json(atualizado)
+  } catch (e) {
+    res.status(502).json({ error: e instanceof Error ? e.message : 'Falha ao sincronizar com o Instagram' })
+  }
+})
+
+// Chamado pelo cron externo (mesmo cron-job.org do keep-alive da API) a
+// cada poucas horas — autenticado por segredo compartilhado, não por login,
+// já que quem chama é um serviço externo sem sessão de usuário.
+router.post('/social-media/sincronizar-cron', async (req: Request, res: Response) => {
+  const segredo = req.header('x-cron-secret')
+  if (!process.env.SOCIAL_MEDIA_CRON_SECRET || segredo !== process.env.SOCIAL_MEDIA_CRON_SECRET) {
+    res.status(401).json({ error: 'Não autorizado' })
+    return
+  }
+  const contas = await prisma.socialMediaConta.findMany()
+  const resultados = await Promise.allSettled(contas.map(c => sincronizarContaSocialMedia(c)))
+  res.json({
+    total: contas.length,
+    sucesso: resultados.filter(r => r.status === 'fulfilled').length,
+    falhas: resultados.filter(r => r.status === 'rejected').length,
+  })
+})
+
+router.get('/social-media/resumo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId } })
+  if (!conta) {
+    res.json({ conectado: false })
+    return
+  }
+
+  const { inicio, fim } = req.query
+  const fimData = (typeof fim === 'string' ? parseDataDiaUTC(fim) : null) ?? inicioDoDiaUTC(new Date())
+  const fimExclusivo = new Date(fimData.getTime() + 24 * 60 * 60 * 1000)
+  const inicioData = (typeof inicio === 'string' ? parseDataDiaUTC(inicio) : null) ?? inicioDoDiaUTC(new Date(fimData.getTime() - 29 * 24 * 60 * 60 * 1000))
+
+  const [midias, snapshots, parametro, leadsPeriodo] = await Promise.all([
+    prisma.socialMediaMidia.findMany({
+      where: { contaId: conta.id, publicadoEm: { gte: inicioData, lt: fimExclusivo } },
+      orderBy: { publicadoEm: 'desc' },
+    }),
+    prisma.socialMediaSnapshotDiario.findMany({
+      where: { contaId: conta.id, data: { gte: inicioData, lt: fimExclusivo } },
+      orderBy: { data: 'asc' },
+    }),
+    prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
+    prisma.lead.findMany({
+      where: { usuarioId, tipoLead: 'ORGANICO', criadoEm: { gte: inicioData, lt: fimExclusivo } },
+      select: { id: true, criadoEm: true, valorNegociacao: true, estagio: true },
+    }),
+  ])
+
+  const semanasNoPeriodo = Math.max(1, Math.ceil((fimExclusivo.getTime() - inicioData.getTime()) / (7 * 24 * 60 * 60 * 1000)))
+  const volume = {
+    totalPublicacoes: midias.length,
+    metaPostagensSemanais: parametro.metaPostagensSemanais,
+    metaPeriodo: parametro.metaPostagensSemanais * semanasNoPeriodo,
+    porTipo: ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM'].map(tipo => ({ tipo, quantidade: midias.filter(m => m.tipo === tipo).length })),
+  }
+
+  const somaAlcance = midias.reduce((s, m) => s + m.alcance, 0)
+  const engajamentoTotal = midias.reduce((s, m) => s + m.curtidas + m.comentarios + m.salvamentos + m.compartilhamentos, 0)
+  const desempenho = {
+    alcanceTotal: somaAlcance,
+    engajamentoTotal,
+    taxaEngajamento: somaAlcance > 0 ? engajamentoTotal / somaAlcance : 0,
+    topPublicacoes: [...midias]
+      .sort((a, b) => (b.alcance + b.curtidas) - (a.alcance + a.curtidas))
+      .slice(0, 5)
+      .map(m => ({
+        id: m.id, tipo: m.tipo, urlPermalink: m.urlPermalink, urlMidia: m.urlMidia, publicadoEm: m.publicadoEm,
+        alcance: m.alcance, curtidas: m.curtidas, comentarios: m.comentarios, salvamentos: m.salvamentos,
+      })),
+  }
+
+  const novosSeguidoresPeriodo = snapshots.reduce((s, sn) => s + sn.novosSeguidoresDia, 0)
+  const crescimento = {
+    seguidoresAtual: conta.seguidores,
+    novosSeguidoresPeriodo,
+    serie: snapshots.map(sn => ({ data: sn.data, seguidores: sn.seguidores, novosSeguidoresDia: sn.novosSeguidoresDia })),
+  }
+
+  const leadsGanhos = leadsPeriodo.filter(l => l.estagio === 'FECHADO')
+  const relacaoVendas = {
+    leadsGerados: leadsPeriodo.length,
+    leadsGanhos: leadsGanhos.length,
+    valorNegociadoTotal: leadsGanhos.reduce((s, l) => s + l.valorNegociacao, 0),
+  }
+
+  const visitasPerfilPeriodo = snapshots.reduce((s, sn) => s + sn.visitasPerfilDia, 0)
+  const jornada = {
+    alcance: somaAlcance,
+    visitasPerfil: visitasPerfilPeriodo,
+    novosSeguidores: novosSeguidoresPeriodo,
+    leadsGerados: leadsPeriodo.length,
+  }
+
+  res.json({
+    conectado: true,
+    conta: { nomeUsuario: conta.nomeUsuario, nomeExibicao: conta.nomeExibicao, fotoUrl: conta.fotoUrl, seguidores: conta.seguidores },
+    periodo: { inicio: inicioData, fim: fimData },
+    volume,
+    desempenho,
+    crescimento,
+    relacaoVendas,
+    jornada,
+  })
 })
 
 export default router
