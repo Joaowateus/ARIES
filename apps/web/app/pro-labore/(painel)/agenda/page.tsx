@@ -896,10 +896,10 @@ export default function ProLaboreAgendaPage() {
 
       {vejaEquipe && (
         <div className="pl-period-row" style={{ marginTop: 16, marginBottom: 4 }}>
-          <button type="button" className={`pl-chip ${abaAtiva === 'AUDITORIA' ? 'active' : ''}`} onClick={() => setAbaAtiva('AUDITORIA')}>📊 Auditoria da Equipe</button>
-          <button type="button" className={`pl-chip ${abaAtiva === 'INDIVIDUAL' ? 'active' : ''}`} onClick={() => setAbaAtiva('INDIVIDUAL')}>🔍 Vendedor Individual</button>
-          <button type="button" className={`pl-chip ${abaAtiva === 'ROTINA' ? 'active' : ''}`} onClick={() => setAbaAtiva('ROTINA')}>🗓️ Minha Rotina</button>
-          <button type="button" className={`pl-chip ${abaAtiva === 'CADASTRO' ? 'active' : ''}`} onClick={() => setAbaAtiva('CADASTRO')}>⚙️ Rotinas Cadastradas</button>
+          <button type="button" className={`pl-chip ${abaAtiva === 'AUDITORIA' ? 'active' : ''}`} onClick={() => setAbaAtiva('AUDITORIA')}>Auditoria da Equipe</button>
+          <button type="button" className={`pl-chip ${abaAtiva === 'INDIVIDUAL' ? 'active' : ''}`} onClick={() => setAbaAtiva('INDIVIDUAL')}>Vendedor Individual</button>
+          <button type="button" className={`pl-chip ${abaAtiva === 'ROTINA' ? 'active' : ''}`} onClick={() => setAbaAtiva('ROTINA')}>Minha Rotina</button>
+          <button type="button" className={`pl-chip ${abaAtiva === 'CADASTRO' ? 'active' : ''}`} onClick={() => setAbaAtiva('CADASTRO')}>Rotinas Cadastradas</button>
         </div>
       )}
 
@@ -907,8 +907,8 @@ export default function ProLaboreAgendaPage() {
         <div className="pl-card" style={{ marginTop: 16 }}>
           <div className="pl-card-head">
             <div>
-              <div className="pl-card-title">Auditoria comercial da equipe</div>
-              <div className="pl-section-note" style={{ marginTop: 2 }}>Quem está cumprindo a rotina — e no horário certo — nesse período.</div>
+              <div className="pl-eyebrow">Auditoria comercial da equipe</div>
+              <div className="pl-card-title" style={{ fontSize: 17, marginTop: 4 }}>Quem está cumprindo a rotina — e no horário certo</div>
             </div>
             <div className="pl-period-row">
               <button type="button" className={`pl-chip ${periodoAuditoria === 'hoje' ? 'active' : ''}`} onClick={() => setPeriodoAuditoria('hoje')}>Hoje</button>
