@@ -1,18 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 /* ============ TOKENS (escopados em .pl-app, nunca em :root, pra não vazar no resto do ARIES) ============
-   Paleta baseada na logo da Aries Sales Systems — preto, branco e prata,
-   sem cor decorativa nenhuma, mas com um toque de vida: os neutros e as
-   cores secundárias puxam pro azul-aço ("titânio") em vez de cinza puro, o
-   contraste é mais profundo (preto mais preto, branco mais branco) e o
-   accent primário ganha um leve glow nos botões — a mistura que dá a
-   sensação "tech" sem sair do monocromático. As três cores de status
-   (bom/atenção/crítico) continuam verde/dourado/vermelho de propósito: são
-   sinal funcional, não estética, e ficariam ilegíveis num sistema em cinza. */
+   Sistema plano, sem vidro/blur/glow — cartões com fundo sólido e borda de
+   1px só, sem sombra. Paleta baseada na logo da Aries Sales Systems (preto,
+   branco e prata), com o mesmo tom "aço" nos neutros secundários. As três
+   cores de status (bom/atenção/crítico) continuam verde/dourado/vermelho de
+   propósito: são sinal funcional, não estética. */
 .pl-app {
   --pl-bg: #f1f2f6;
   --pl-surface: #ffffff;
   --pl-surface-2: #e7e9f0;
+  --pl-surface-3: #dcdee6;
   --pl-ink-1: #0e0f13;
   --pl-ink-2: #454b5a;
   --pl-ink-muted: #7c8294;
@@ -22,8 +20,8 @@
 
   --pl-accent: #0b0c10; /* preto-titânio — ação primária, links, destaque */
   --pl-accent-ink: #ffffff; /* texto por cima de --pl-accent */
+  --pl-accent-strong: #0b0c10; /* texto sobre --pl-accent-soft (ex: item de menu ativo) */
   --pl-accent-soft: rgba(11, 12, 16, 0.07);
-  --pl-accent-glow: rgba(11, 12, 16, 0.22);
   --pl-accent-2: #4e5568; /* aço médio — anúncios / identidade categórica */
   --pl-accent-3: #262b37; /* grafite-aço — lucro / pró-labore */
   --pl-accent-3-soft: rgba(38, 43, 55, 0.08);
@@ -33,105 +31,87 @@
 
   --pl-good: #0ca30c;
   --pl-critical: #d03b3b;
+  --pl-info: #2f6fe0;
 
   --pl-grid-line: #dee0e8;
   --pl-baseline: #c3c6d1;
 
-  --pl-radius-lg: 20px;
-  --pl-radius-md: 14px;
-  --pl-radius-sm: 9px;
-  --pl-shadow-card: 0 1px 2px rgba(14, 16, 30, 0.05), 0 10px 28px -14px rgba(14, 16, 30, 0.16);
-  --pl-shadow-card-hover: 0 1px 2px rgba(14, 16, 30, 0.06), 0 22px 44px -18px rgba(14, 16, 30, 0.26), 0 4px 14px -6px rgba(14, 16, 30, 0.16);
-
-  /* Vidro dos cards: fundo semitransparente + blur + borda em gradiente
-     sutil (truque padding-box/border-box, sem precisar de wrapper extra). */
-  --pl-glass-bg: rgba(255, 255, 255, 0.62);
-  --pl-glass-blur: 18px;
-  --pl-glass-border-a: rgba(14, 16, 30, 0.14);
-  --pl-glass-border-b: rgba(14, 16, 30, 0.03);
-
-  /* Textura de fundo: grid finíssimo + scanline, opacidade quase zero —
-     só dá uma sensação de "painel técnico" sem virar poluição visual. */
-  --pl-grid-texture: rgba(14, 16, 30, 0.05);
+  --pl-radius-lg: 12px;
+  --pl-radius-md: 10px;
+  --pl-radius-sm: 8px;
+  --pl-shadow-card: none;
+  --pl-shadow-card-hover: none;
 
   color-scheme: light;
   background: var(--pl-bg);
   color: var(--pl-ink-1);
-  font-family: 'Manrope', system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
   min-height: 100vh;
-  background-image:
-    radial-gradient(1200px 600px at 90% -10%, var(--pl-accent-soft), transparent 60%),
-    radial-gradient(900px 500px at -10% 0%, var(--pl-accent-3-soft), transparent 55%),
-    repeating-linear-gradient(90deg, var(--pl-grid-texture) 0 1px, transparent 1px 96px),
-    repeating-linear-gradient(0deg, var(--pl-grid-texture) 0 1px, transparent 1px 96px);
-  background-attachment: fixed;
 }
 @media (prefers-color-scheme: dark) {
   .pl-app:not([data-theme="light"]) {
     color-scheme: dark;
     --pl-bg: #06070a;
     --pl-surface: #131419;
-    --pl-surface-2: #1c1e26;
-    --pl-ink-1: #f8f9fb;
-    --pl-ink-2: #cbcdd7;
-    --pl-ink-muted: #8b90a0;
-    --pl-border: rgba(255, 255, 255, 0.09);
-    --pl-border-strong: rgba(255, 255, 255, 0.18);
-    --pl-accent: #f1f3f9; /* prata-cromado quase branco — ação primária no escuro */
-    --pl-accent-ink: #08080a; /* texto por cima de --pl-accent */
-    --pl-accent-soft: rgba(241, 243, 249, 0.12);
-    --pl-accent-glow: rgba(241, 243, 249, 0.28);
+    --pl-surface-2: #1a1c1f;
+    --pl-surface-3: #232529;
+    --pl-ink-1: #f4f4f5;
+    --pl-ink-2: #a2a4aa;
+    --pl-ink-muted: #6b6d73;
+    --pl-border: #28292e;
+    --pl-border-strong: #3a3c42;
+    --pl-accent: #c7cbd1; /* prata-titânio — ação primária no escuro */
+    --pl-accent-ink: #0b0b0c; /* texto por cima de --pl-accent */
+    --pl-accent-strong: #eceef1; /* texto sobre --pl-accent-soft (ex: item de menu ativo) */
+    --pl-accent-soft: rgba(199, 203, 209, 0.12);
     --pl-accent-2: #7c8599;
     --pl-accent-3: #565e72;
     --pl-accent-3-soft: rgba(86, 94, 114, 0.20);
-    --pl-accent-4: #b8830f;
+    --pl-accent-4: #e0a83e;
     --pl-accent-5: #7e879b;
     --pl-accent-6: #3a3f4d;
+    --pl-good: #3ecf8e;
+    --pl-critical: #ef5b52;
+    --pl-info: #6ea8fe;
     --pl-grid-line: #23252d;
-    --pl-baseline: #363a46;
-    --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px -16px rgba(0, 0, 0, 0.75);
-    --pl-shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 26px 54px -18px rgba(0, 0, 0, 0.85), 0 6px 18px -6px rgba(0, 0, 0, 0.6);
-    --pl-glass-bg: rgba(19, 20, 25, 0.58);
-    --pl-glass-blur: 20px;
-    --pl-glass-border-a: rgba(255, 255, 255, 0.16);
-    --pl-glass-border-b: rgba(255, 255, 255, 0.03);
-    --pl-grid-texture: rgba(255, 255, 255, 0.045);
+    --pl-baseline: #3a3c42;
+    --pl-shadow-card: none;
+    --pl-shadow-card-hover: none;
   }
 }
 .pl-app[data-theme="dark"] {
   color-scheme: dark;
-  --pl-bg: #06070a;
-  --pl-surface: #131419;
-  --pl-surface-2: #1c1e26;
-  --pl-ink-1: #f8f9fb;
-  --pl-ink-2: #cbcdd7;
-  --pl-ink-muted: #8b90a0;
-  --pl-border: rgba(255, 255, 255, 0.09);
-  --pl-border-strong: rgba(255, 255, 255, 0.18);
-  --pl-accent: #f1f3f9;
-  --pl-accent-ink: #08080a;
-  --pl-accent-soft: rgba(241, 243, 249, 0.12);
-  --pl-accent-glow: rgba(241, 243, 249, 0.28);
+  --pl-bg: #07080a;
+  --pl-surface: #131417;
+  --pl-surface-2: #1a1c1f;
+  --pl-surface-3: #232529;
+  --pl-ink-1: #f4f4f5;
+  --pl-ink-2: #a2a4aa;
+  --pl-ink-muted: #6b6d73;
+  --pl-border: #28292e;
+  --pl-border-strong: #3a3c42;
+  --pl-accent: #c7cbd1;
+  --pl-accent-ink: #0b0b0c;
+  --pl-accent-strong: #eceef1;
+  --pl-accent-soft: rgba(199, 203, 209, 0.12);
   --pl-accent-2: #7c8599;
   --pl-accent-3: #565e72;
   --pl-accent-3-soft: rgba(86, 94, 114, 0.20);
-  --pl-accent-4: #b8830f;
+  --pl-accent-4: #e0a83e;
   --pl-accent-5: #7e879b;
   --pl-accent-6: #3a3f4d;
+  --pl-good: #3ecf8e;
+  --pl-critical: #ef5b52;
+  --pl-info: #6ea8fe;
   --pl-grid-line: #23252d;
-  --pl-baseline: #363a46;
-  --pl-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px -16px rgba(0, 0, 0, 0.75);
-  --pl-shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 26px 54px -18px rgba(0, 0, 0, 0.85), 0 6px 18px -6px rgba(0, 0, 0, 0.6);
-  --pl-glass-bg: rgba(19, 20, 25, 0.58);
-  --pl-glass-blur: 20px;
-  --pl-glass-border-a: rgba(255, 255, 255, 0.16);
-  --pl-glass-border-b: rgba(255, 255, 255, 0.03);
-  --pl-grid-texture: rgba(255, 255, 255, 0.045);
+  --pl-baseline: #3a3c42;
+  --pl-shadow-card: none;
+  --pl-shadow-card-hover: none;
 }
 
 .pl-app * { box-sizing: border-box; }
 .pl-app h1, .pl-app h2, .pl-app h3, .pl-display { font-family: 'Sora', system-ui, sans-serif; text-wrap: balance; }
-.pl-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-variant-numeric: tabular-nums; }
+.pl-mono { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace; font-variant-numeric: tabular-nums; }
 .pl-app a { color: inherit; text-decoration: none; }
 
 /* width:100% é necessário desde que a sidebar virou um flex container: sem
@@ -174,13 +154,16 @@
   color: var(--pl-ink-muted); padding: 0 10px; margin-bottom: 5px;
 }
 .pl-sidebar-link {
-  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px;
-  font-size: 13.5px; font-weight: 600; color: var(--pl-ink-2);
-  transition: background .2s ease, color .2s ease, box-shadow .2s ease;
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px;
+  font-size: 13.5px; font-weight: 600; color: var(--pl-ink-2); border-left: 2.5px solid transparent;
+  transition: background .2s ease, color .2s ease;
 }
 .pl-sidebar-link svg { width: 17px; height: 17px; flex: none; }
 .pl-sidebar-link:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
-.pl-sidebar-link.active { background: var(--pl-ink-1); color: var(--pl-bg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pl-accent-4) 55%, transparent), 0 0 14px 0 color-mix(in srgb, var(--pl-accent-4) 45%, transparent); }
+.pl-sidebar-link.active {
+  background: var(--pl-accent-soft); color: var(--pl-accent-strong);
+  border-left-color: var(--pl-accent); padding-left: 7.5px;
+}
 .pl-sidebar-footer { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--pl-border); padding-top: 14px; }
 .pl-sidebar-user { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
 .pl-sidebar-backdrop { display: none; }
@@ -208,10 +191,10 @@
 .pl-theme-toggle button {
   border: none; background: transparent; color: var(--pl-ink-muted); cursor: pointer;
   width: 28px; height: 28px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
-  transition: background .3s ease, color .3s ease, box-shadow .3s ease;
+  transition: background .3s ease, color .3s ease;
 }
 .pl-theme-toggle button svg { width: 14px; height: 14px; }
-.pl-theme-toggle button.active { background: var(--pl-ink-1); color: var(--pl-bg); box-shadow: 0 0 10px 0 color-mix(in srgb, var(--pl-accent-4) 50%, transparent); }
+.pl-theme-toggle button.active { background: var(--pl-ink-1); color: var(--pl-bg); }
 
 .pl-user { font-size: 13px; color: var(--pl-ink-muted); }
 .pl-logout {
@@ -230,33 +213,23 @@
 .pl-period-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pl-chip {
   border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-ink-2);
-  font-family: 'JetBrains Mono'; font-size: 12px; font-weight: 500;
+  font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 500;
   padding: 7px 12px; border-radius: 9px; cursor: pointer; transition: all .3s ease;
 }
 .pl-chip:hover { border-color: var(--pl-border-strong); color: var(--pl-ink-1); }
 .pl-chip.active {
   background: var(--pl-ink-1); color: var(--pl-bg); border-color: var(--pl-ink-1);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pl-accent-4) 55%, transparent), 0 0 14px 0 color-mix(in srgb, var(--pl-accent-4) 45%, transparent);
 }
 
 /* ============ CARD ============ */
-/* Glassmorphism: fundo translúcido + blur do que está atrás + borda em
-   gradiente sutil (truque padding-box/border-box — sem wrapper extra, sem
-   pseudo-elemento) + sombra em camadas. Hover eleva o card levemente. */
+/* Plano: fundo sólido + borda de 1px, sem vidro/blur/sombra. */
 .pl-card {
   container-type: inline-size;
-  background:
-    linear-gradient(var(--pl-glass-bg), var(--pl-glass-bg)) padding-box,
-    linear-gradient(135deg, var(--pl-glass-border-a), var(--pl-glass-border-b)) border-box;
-  border: 1px solid transparent;
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-border);
   border-radius: var(--pl-radius-lg);
-  box-shadow: var(--pl-shadow-card);
-  padding: 22px;
-  backdrop-filter: blur(var(--pl-glass-blur));
-  -webkit-backdrop-filter: blur(var(--pl-glass-blur));
-  transition: transform .3s ease, box-shadow .3s ease;
+  padding: 20px 22px;
 }
-.pl-card:hover { transform: translateY(-3px); box-shadow: var(--pl-shadow-card-hover); }
 .pl-card-title { font-size: 15px; font-weight: 700; }
 .pl-card-sub { font-size: 12px; color: var(--pl-ink-muted); margin-top: 2px; }
 .pl-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -273,7 +246,7 @@
    170px) porque na largura máxima do shell (1264px de conteúdo) os 7 cards
    do dono só cabem numa linha só com um mínimo de até ~168px — acima disso
    o navegador quebra pra 6 colunas e sobra o mesmo card órfão de antes. */
-/* minmax subiu de 150 pra 168px — era estreito demais pro JetBrains Mono
+/* minmax subiu de 150 pra 168px — era estreito demais pro IBM Plex Mono
    (mais largo que a Sora usada antes) caber num valor tipo "R$ 111.500,00"
    sem cortar. Ainda assim, container query + clamp() no valor é o que
    garante que NENHUM valor corta, em qualquer largura de card/tela — o
@@ -284,31 +257,21 @@
 .pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
 .pl-kpi {
   container-type: inline-size;
-  background:
-    linear-gradient(var(--pl-glass-bg), var(--pl-glass-bg)) padding-box,
-    linear-gradient(135deg, var(--pl-glass-border-a), var(--pl-glass-border-b)) border-box;
-  border: 1px solid transparent; border-radius: var(--pl-radius-md);
-  box-shadow: var(--pl-shadow-card); padding: 16px 16px 14px; position: relative; overflow: hidden;
-  backdrop-filter: blur(var(--pl-glass-blur)); -webkit-backdrop-filter: blur(var(--pl-glass-blur));
-  transition: transform .3s ease, box-shadow .3s ease;
-}
-.pl-kpi:hover { transform: translateY(-3px); box-shadow: var(--pl-shadow-card-hover); }
-.pl-kpi::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
-  background: linear-gradient(90deg, var(--k-color, var(--pl-accent)), transparent 85%);
-  box-shadow: 0 0 12px 0 var(--k-color, var(--pl-accent));
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
+  padding: 16px 16px 14px; position: relative;
 }
 .pl-kpi-label { font-size: 11px; color: var(--pl-ink-muted); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
 .pl-kpi-value {
-  font-family: 'JetBrains Mono', 'Sora', monospace; font-variant-numeric: tabular-nums;
+  font-family: 'IBM Plex Mono', 'Sora', monospace; font-variant-numeric: tabular-nums;
   font-size: clamp(14px, 9cqi, 22px); font-weight: 700; margin-top: 9px; letter-spacing: -0.01em;
   white-space: nowrap;
 }
-.pl-kpi-value .pl-unit { font-family: 'Manrope'; font-size: .6em; font-weight: 600; color: var(--pl-ink-muted); margin-left: 2px; }
+.pl-kpi-value .pl-unit { font-family: 'IBM Plex Sans'; font-size: .6em; font-weight: 600; color: var(--pl-ink-muted); margin-left: 2px; }
 .pl-kpi-foot { display: flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 12px; flex-wrap: wrap; }
-.pl-delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-family: 'JetBrains Mono'; font-size: 11.5px; padding: 2px 6px 2px 5px; border-radius: 6px; transition: text-shadow .3s ease; }
-.pl-delta.up { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 13%, transparent); text-shadow: 0 0 10px color-mix(in srgb, var(--pl-good) 55%, transparent); }
-.pl-delta.down { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 13%, transparent); text-shadow: 0 0 10px color-mix(in srgb, var(--pl-critical) 55%, transparent); }
+.pl-delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-family: 'IBM Plex Mono'; font-size: 11.5px; padding: 2px 6px 2px 5px; border-radius: 6px; }
+.pl-delta.up { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 13%, transparent); }
+.pl-delta.down { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 13%, transparent); }
 .pl-delta svg { width: 9px; height: 9px; }
 .pl-kpi-vs { color: var(--pl-ink-muted); }
 
@@ -330,41 +293,38 @@
    inflar junto (a altura "auto" segue a proporção do viewBox) e as barras
    ficavam enormes e desproporcionais. */
 .pl-chart-svg--bars { height: 190px; }
-.pl-axis-label { font-family: 'JetBrains Mono'; font-size: 10.5px; fill: var(--pl-ink-muted); }
+.pl-axis-label { font-family: 'IBM Plex Mono'; font-size: 10.5px; fill: var(--pl-ink-muted); }
 .pl-grid-hline { stroke: var(--pl-grid-line); stroke-width: 1; }
 .pl-baseline-line { stroke: var(--pl-baseline); stroke-width: 1; }
 .pl-hover-x { stroke: var(--pl-border-strong); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; pointer-events: none; }
 .pl-hover-dot { opacity: 0; pointer-events: none; }
 .pl-tooltip {
   position: absolute; pointer-events: none; background: var(--pl-ink-1); color: var(--pl-bg);
-  font-family: 'JetBrains Mono'; font-size: 11.5px; padding: 8px 10px; border-radius: 8px;
+  font-family: 'IBM Plex Mono'; font-size: 11.5px; padding: 8px 10px; border-radius: 8px;
   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, .4); opacity: 0; transform: translate(-50%, -115%);
   transition: opacity .1s ease; white-space: nowrap; z-index: 5; line-height: 1.5;
 }
 .pl-tooltip b { display: block; font-family: 'Sora'; font-size: 12px; margin-bottom: 2px; }
 .pl-hit { fill: transparent; cursor: crosshair; }
 
-/* Glow sutil na linha e halo pulsante no ponto do mês selecionado — o
-   "r"/"opacity" de um <circle> são animáveis via CSS nos browsers atuais,
-   então não precisa de <animate> nem de JS pra pulsar. */
-.pl-line-path { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--pl-accent) 55%, transparent)); }
-.pl-dot-current { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--pl-accent) 70%, transparent)); }
+/* Halo pulsante no ponto do mês selecionado — o "r"/"opacity" de um <circle>
+   são animáveis via CSS nos browsers atuais, então não precisa de <animate>
+   nem de JS pra pulsar. */
 .pl-dot-halo { fill: none; stroke: var(--pl-accent); stroke-width: 2; animation: pl-dot-pulse 2.2s ease-out infinite; }
 @keyframes pl-dot-pulse {
   0% { r: 4.5; opacity: .7; }
   70% { r: 12; opacity: 0; }
   100% { r: 12; opacity: 0; }
 }
-.pl-bar-current { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--bar-color, var(--pl-accent)) 55%, transparent)); }
 
 .pl-month-detail { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--pl-surface-2); display: flex; gap: 22px; flex-wrap: wrap; border: 1px solid var(--pl-border); }
 .pl-month-detail div { font-size: 11.5px; color: var(--pl-ink-muted); }
-.pl-month-detail strong { display: block; font-family: 'JetBrains Mono'; font-size: 14px; color: var(--pl-ink-1); margin-top: 2px; font-weight: 700; }
+.pl-month-detail strong { display: block; font-family: 'IBM Plex Mono'; font-size: 14px; color: var(--pl-ink-1); margin-top: 2px; font-weight: 700; }
 
 /* ============ FILTRO UNIVERSAL DE VENDEDOR ============ */
 .pl-select-chip {
   border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-ink-2);
-  font-family: 'JetBrains Mono'; font-size: 12px; font-weight: 500;
+  font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 500;
   padding: 7px 10px; border-radius: 9px; cursor: pointer; transition: all .15s ease;
 }
 .pl-select-chip:hover { border-color: var(--pl-border-strong); color: var(--pl-ink-1); }
@@ -384,12 +344,8 @@
 .pl-icon-btn-dot { position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--pl-accent); border: 2px solid var(--pl-bg); }
 .pl-filter-pop {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 10; width: 200px;
-  background:
-    linear-gradient(var(--pl-glass-bg), var(--pl-glass-bg)) padding-box,
-    linear-gradient(135deg, var(--pl-glass-border-a), var(--pl-glass-border-b)) border-box;
-  border: 1px solid transparent; border-radius: var(--pl-radius-md);
-  box-shadow: var(--pl-shadow-card-hover); padding: 14px; display: flex; flex-direction: column; gap: 12px;
-  backdrop-filter: blur(var(--pl-glass-blur)); -webkit-backdrop-filter: blur(var(--pl-glass-blur));
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: var(--pl-radius-md);
+  padding: 14px; display: flex; flex-direction: column; gap: 12px;
 }
 .pl-filter-pop .pl-field label { font-size: 11px; }
 .pl-filter-clear { font-size: 11.5px; color: var(--pl-accent); cursor: pointer; text-align: right; font-weight: 600; }
@@ -406,50 +362,42 @@
 .pl-journey-row { display: grid; grid-template-columns: repeat(5, minmax(84px, 1fr)); }
 .pl-journey-details { gap: 4px; }
 .pl-stage-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pl-ink-2); }
-.pl-stage-value { font-family: 'JetBrains Mono', 'Sora', monospace; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; margin-top: 5px; }
+.pl-stage-value { font-family: 'IBM Plex Mono', 'Sora', monospace; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; margin-top: 5px; }
 .pl-stage-conv { margin-top: 5px; font-size: 11.5px; color: var(--pl-ink-muted); display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
-.pl-stage-conv b { color: var(--pl-ink-1); font-family: 'JetBrains Mono'; }
+.pl-stage-conv b { color: var(--pl-ink-1); font-family: 'IBM Plex Mono'; }
 
 /* ============ SELLER LEADERBOARD ============ */
 .pl-seller-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--pl-border); }
 .pl-seller-row:last-child { border-bottom: none; }
-.pl-rank { font-family: 'JetBrains Mono'; font-size: 12px; color: var(--pl-ink-muted); font-weight: 600; text-align: center; }
-.pl-rank.top { color: var(--pl-accent-4); text-shadow: 0 0 10px color-mix(in srgb, var(--pl-accent-4) 60%, transparent); }
+.pl-rank { font-family: 'IBM Plex Mono'; font-size: 12px; color: var(--pl-ink-muted); font-weight: 600; text-align: center; }
+.pl-rank.top { color: var(--pl-accent-4); }
 .pl-seller-main { min-width: 0; }
 .pl-seller-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .pl-seller-name { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
 .pl-avatar { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Sora'; font-size: 10.5px; font-weight: 700; color: #fff; flex: none; }
-.pl-seller-figs { font-family: 'JetBrains Mono'; font-size: 13px; font-weight: 700; }
+.pl-seller-figs { font-family: 'IBM Plex Mono'; font-size: 13px; font-weight: 700; }
 .pl-bar-track { height: 8px; border-radius: 5px; background: var(--pl-surface-2); overflow: hidden; }
 .pl-bar-fill {
-  height: 100%; border-radius: 5px; position: relative;
-  background: linear-gradient(90deg, var(--pl-accent-3), color-mix(in srgb, var(--pl-accent-3) 60%, var(--pl-accent)));
-  background-size: 200% 100%;
-  animation: pl-bar-shimmer 3.2s linear infinite;
+  height: 100%; border-radius: 5px; background: var(--pl-accent);
   transition: width .6s cubic-bezier(.22, 1, .36, 1);
 }
-.pl-bar-fill::after {
-  content: ""; position: absolute; top: 50%; right: 0; width: 8px; height: 8px; border-radius: 50%;
-  transform: translate(30%, -50%); background: var(--pl-accent); box-shadow: 0 0 9px 2px var(--pl-accent);
-}
-@keyframes pl-bar-shimmer { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
 .pl-seller-meta { font-size: 11px; color: var(--pl-ink-muted); text-align: right; white-space: nowrap; }
 
 /* ============ ROAS BARS ============ */
 .pl-roas-bars { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; height: 130px; margin-top: 6px; }
 .pl-roas-col { flex: 0 1 40px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 6px; }
 .pl-roas-bar {
-  width: 100%; border-radius: 5px 5px 3px 3px; background: linear-gradient(180deg, var(--pl-accent-2), color-mix(in srgb, var(--pl-accent-2) 55%, transparent));
-  position: relative; min-height: 4px; transition: opacity .3s ease, box-shadow .3s ease;
+  width: 100%; border-radius: 5px 5px 3px 3px; background: var(--pl-accent-2);
+  position: relative; min-height: 4px; transition: opacity .3s ease;
 }
-.pl-roas-bar.current { box-shadow: 0 0 14px 1px color-mix(in srgb, var(--pl-accent-2) 65%, transparent); }
-.pl-roas-val { font-family: 'JetBrains Mono'; font-size: 10.5px; color: var(--pl-ink-2); font-weight: 600; }
-.pl-roas-lbl { font-family: 'JetBrains Mono'; font-size: 10px; color: var(--pl-ink-muted); margin-top: 4px; }
+.pl-roas-bar.current { background: var(--pl-accent); }
+.pl-roas-val { font-family: 'IBM Plex Mono'; font-size: 10.5px; color: var(--pl-ink-2); font-weight: 600; }
+.pl-roas-lbl { font-family: 'IBM Plex Mono'; font-size: 10px; color: var(--pl-ink-muted); margin-top: 4px; }
 
 .pl-stat-strip { display: flex; gap: 18px; margin-top: 16px; flex-wrap: wrap; }
 .pl-stat-strip .pl-s { flex: 1; min-width: 120px; }
 .pl-stat-strip .pl-l { font-size: 11px; color: var(--pl-ink-muted); text-transform: uppercase; letter-spacing: .03em; font-weight: 600; }
-.pl-stat-strip .pl-v { font-family: 'JetBrains Mono'; font-size: 16px; font-weight: 700; margin-top: 4px; }
+.pl-stat-strip .pl-v { font-family: 'IBM Plex Mono'; font-size: 16px; font-weight: 700; margin-top: 4px; }
 
 /* ============ FORMS ============ */
 .pl-field { display: flex; flex-direction: column; gap: 6px; }
@@ -460,7 +408,7 @@
 .pl-field label { font-size: 12.5px; font-weight: 600; color: var(--pl-ink-2); }
 .pl-input, .pl-select {
   width: 100%; padding: 9px 12px; border-radius: var(--pl-radius-sm); border: 1px solid var(--pl-border-strong);
-  background: var(--pl-surface); color: var(--pl-ink-1); font-family: 'Manrope'; font-size: 13.5px;
+  background: var(--pl-surface); color: var(--pl-ink-1); font-family: 'IBM Plex Sans'; font-size: 13.5px;
 }
 .pl-input:focus, .pl-select:focus { outline: 2px solid var(--pl-accent); outline-offset: 1px; }
 .pl-hint { font-size: 11.5px; color: var(--pl-ink-muted); }
@@ -469,11 +417,11 @@
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   border-radius: var(--pl-radius-sm); padding: 9px 16px; font-size: 13px; font-weight: 700;
   cursor: pointer; border: 1px solid transparent; transition: opacity .15s, background .15s;
-  font-family: 'Manrope';
+  font-family: 'IBM Plex Sans';
 }
-.pl-btn-primary { background: var(--pl-accent); color: var(--pl-accent-ink); box-shadow: 0 0 0 0 var(--pl-accent-glow), 0 4px 14px -4px var(--pl-accent-glow); transition: box-shadow .15s, opacity .15s; }
-.pl-btn-primary:hover { opacity: .9; box-shadow: 0 0 0 3px var(--pl-accent-glow), 0 6px 18px -4px var(--pl-accent-glow); }
-.pl-btn-primary:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.pl-btn-primary { background: var(--pl-accent); color: var(--pl-accent-ink); transition: opacity .15s; }
+.pl-btn-primary:hover { opacity: .9; }
+.pl-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 .pl-btn-ghost { background: var(--pl-surface); color: var(--pl-ink-2); border-color: var(--pl-border-strong); }
 .pl-btn-ghost:hover { color: var(--pl-ink-1); }
 
@@ -486,11 +434,7 @@
    que o card, e sem isso colunas inteiras (às vezes até os botões de ação)
    ficavam cortadas e inacessíveis em vez de roláveis. */
 .pl-table-wrap {
-  background:
-    linear-gradient(var(--pl-glass-bg), var(--pl-glass-bg)) padding-box,
-    linear-gradient(135deg, var(--pl-glass-border-a), var(--pl-glass-border-b)) border-box;
-  border: 1px solid transparent; border-radius: var(--pl-radius-lg); box-shadow: var(--pl-shadow-card); overflow-x: auto;
-  backdrop-filter: blur(var(--pl-glass-blur)); -webkit-backdrop-filter: blur(var(--pl-glass-blur));
+  background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); overflow-x: auto;
 }
 .pl-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 .pl-table thead { background: var(--pl-surface-2); }
@@ -557,7 +501,7 @@
   padding: 8px 10px; display: flex; flex-direction: column; gap: 4px;
 }
 .pl-crm-fin-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--pl-ink-muted); }
-.pl-crm-fin-item b { font-family: 'JetBrains Mono'; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); font-weight: 700; }
+.pl-crm-fin-item b { font-family: 'IBM Plex Mono'; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); font-weight: 700; }
 .pl-crm-fin-oportunidade { color: var(--pl-accent-4) !important; }
 /* Rótulo do período, fixado no rodapé do card via margin-top: auto — evita
    que a etapa "Leads" (sem bloco de conversão/perda anterior) sobre com um
@@ -576,7 +520,7 @@
 .pl-kanban-col-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-2); }
 .pl-kanban-col-hint { font-size: 10px; color: var(--pl-ink-muted); text-transform: none; letter-spacing: normal; margin-top: 2px; font-weight: 500; }
 .pl-kanban-col-count {
-  font-family: 'JetBrains Mono'; font-size: 11px; font-weight: 700; color: var(--pl-ink-muted);
+  font-family: 'IBM Plex Mono'; font-size: 11px; font-weight: 700; color: var(--pl-ink-muted);
   background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 999px; padding: 2px 8px; flex: none;
 }
 /* Altura máxima com rolagem própria por coluna — sem isso, uma etapa que
@@ -597,12 +541,11 @@
    gesto de arrastar nunca chega a começar. */
 .pl-kanban-card {
   background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm);
-  box-shadow: var(--pl-shadow-card); padding: 11px 12px; cursor: grab; transition: transform .12s, opacity .12s;
+  padding: 11px 12px; cursor: grab; transition: opacity .12s;
   touch-action: none; -webkit-user-select: none; user-select: none;
 }
 .pl-kanban-card:active { cursor: grabbing; }
 .pl-kanban-card.dragging { opacity: .4; }
-.pl-kanban-card:hover { transform: translateY(-1px); }
 .pl-kanban-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .pl-kanban-card-name { font-size: 13px; font-weight: 700; color: var(--pl-ink-1); }
 /* Pílula de "tempo parado nesta etapa" — sinal que fica mais útil quanto
@@ -610,7 +553,7 @@
    passa despercebido rolando a coluna. Vermelha (stale) com 7+ dias sem
    avançar. */
 .pl-kanban-card-time {
-  font-family: 'JetBrains Mono'; font-size: 9.5px; font-weight: 700; color: var(--pl-ink-muted);
+  font-family: 'IBM Plex Mono'; font-size: 9.5px; font-weight: 700; color: var(--pl-ink-muted);
   background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 999px; padding: 1px 6px; flex: none; white-space: nowrap;
 }
 .pl-kanban-card-time.stale {
@@ -632,7 +575,7 @@
   display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
   font-size: 10px; font-weight: 800; letter-spacing: .02em; border-radius: 5px;
   background: color-mix(in srgb, var(--pl-accent-5) 16%, transparent);
-  color: var(--pl-accent-5); font-family: 'JetBrains Mono';
+  color: var(--pl-accent-5); font-family: 'IBM Plex Mono';
 }
 /* Toggle P/R do card — só o dono vê (define os tetos de pró-labore/comissão
    na conversão). Clicar no já ativo desmarca (volta pra "não classificado"). */
@@ -640,7 +583,7 @@
 .pl-kanban-card-tiponeg-btn {
   flex: 1; padding: 4px 0; border-radius: 7px; border: 1px solid var(--pl-border-strong);
   background: var(--pl-surface); color: var(--pl-ink-muted); font-size: 11px; font-weight: 800;
-  font-family: 'JetBrains Mono'; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+  font-family: 'IBM Plex Mono'; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
 }
 .pl-kanban-card-tiponeg-btn:hover { color: var(--pl-ink-1); border-color: var(--pl-border-strong); }
 .pl-kanban-card-tiponeg-btn.active {
@@ -655,13 +598,12 @@
    diferente dos ícones de ação abaixo. */
 .pl-kanban-card-advance {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; margin-top: 10px; padding: 7px 10px; border-radius: 8px;
-  background: color-mix(in srgb, var(--pl-accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--pl-accent) 30%, transparent);
-  color: var(--pl-accent); font-size: 11.5px; font-weight: 700; font-family: 'Manrope';
-  cursor: pointer; transition: background .15s;
+  width: 100%; margin-top: 10px; padding: 7px 10px; border-radius: 7px;
+  background: var(--pl-accent); border: 1px solid var(--pl-accent);
+  color: var(--pl-accent-ink); font-size: 11.5px; font-weight: 700; font-family: 'IBM Plex Sans';
+  cursor: pointer; transition: opacity .15s;
 }
-.pl-kanban-card-advance:hover { background: color-mix(in srgb, var(--pl-accent) 24%, transparent); }
+.pl-kanban-card-advance:hover { opacity: .85; }
 .pl-kanban-card-advance svg { width: 12px; height: 12px; flex: none; }
 /* "Converter em venda" — mesmo formato do Avançar, mas em verde (pl-good) e
    com peso visual próprio: é a ação de maior valor do card (fecha o
@@ -669,13 +611,12 @@
    nos links de texto das ações secundárias. */
 .pl-kanban-card-convert {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; margin-top: 8px; padding: 7px 10px; border-radius: 8px;
-  background: color-mix(in srgb, var(--pl-good) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--pl-good) 32%, transparent);
-  color: var(--pl-good); font-size: 11.5px; font-weight: 700; font-family: 'Manrope';
-  cursor: pointer; transition: background .15s;
+  width: 100%; margin-top: 8px; padding: 7px 10px; border-radius: 7px;
+  background: var(--pl-good); border: 1px solid var(--pl-good);
+  color: #052b19; font-size: 11.5px; font-weight: 700; font-family: 'IBM Plex Sans';
+  cursor: pointer; transition: opacity .15s;
 }
-.pl-kanban-card-convert:hover { background: color-mix(in srgb, var(--pl-good) 24%, transparent); }
+.pl-kanban-card-convert:hover { opacity: .85; }
 .pl-kanban-card-convert svg { width: 12px; height: 12px; flex: none; }
 
 /* Ações secundárias (mover, editar, perdido, remover) como ícones — alvo de
@@ -690,7 +631,11 @@
 .pl-kanban-icon-btn svg { width: 12px; height: 12px; }
 .pl-kanban-icon-btn:hover { color: var(--pl-ink-1); border-color: var(--pl-border-strong); }
 .pl-kanban-icon-btn.pl-danger:hover { color: var(--pl-critical); border-color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 10%, transparent); }
-.pl-kanban-card-badge { font-size: 10.5px; color: var(--pl-ink-muted); margin-top: 9px; }
+.pl-kanban-card-badge {
+  display: block; text-align: center; font-size: 11.5px; font-weight: 700; margin-top: 8px;
+  padding: 7px 10px; border-radius: 7px;
+  background: color-mix(in srgb, var(--pl-good) 16%, transparent); color: var(--pl-good);
+}
 .pl-kanban-empty { font-size: 11.5px; color: var(--pl-ink-muted); text-align: center; padding: 16px 4px; border: 1px dashed var(--pl-border-strong); border-radius: var(--pl-radius-sm); }
 
 /* Menu "mover para etapa" — renderizado via portal (ver MoverEtapaMenu),
@@ -704,7 +649,7 @@
 }
 .pl-kanban-move-item {
   text-align: left; padding: 7px 9px; border-radius: 7px; font-size: 12.5px; font-weight: 600;
-  color: var(--pl-ink-2); background: transparent; border: none; cursor: pointer; transition: background .12s; font-family: 'Manrope';
+  color: var(--pl-ink-2); background: transparent; border: none; cursor: pointer; transition: background .12s; font-family: 'IBM Plex Sans';
 }
 .pl-kanban-move-item:hover { background: var(--pl-surface); color: var(--pl-ink-1); }
 
@@ -720,9 +665,9 @@
 .pl-agenda-day:not(.empty):hover { border-color: var(--pl-border-strong); }
 .pl-agenda-day.today { border-color: var(--pl-accent); }
 .pl-agenda-day.selected { background: var(--pl-accent-soft); border-color: var(--pl-accent); }
-.pl-agenda-day-num { font-family: 'JetBrains Mono'; font-size: 12px; font-weight: 700; color: var(--pl-ink-1); }
+.pl-agenda-day-num { font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 700; color: var(--pl-ink-1); }
 .pl-agenda-day-count {
-  position: absolute; top: 3px; right: 4px; font-family: 'JetBrains Mono'; font-size: 8.5px; font-weight: 700;
+  position: absolute; top: 3px; right: 4px; font-family: 'IBM Plex Mono'; font-size: 8.5px; font-weight: 700;
   color: var(--pl-ink-muted);
 }
 .pl-agenda-day-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pl-ink-muted); }
@@ -743,7 +688,7 @@
 .pl-agenda-toggle-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 7px 10px;
   border-radius: 8px; background: var(--pl-surface); border: 1px solid var(--pl-border-strong); color: var(--pl-ink-2);
-  font-size: 11.5px; font-weight: 700; font-family: 'Manrope'; cursor: pointer; transition: all .15s;
+  font-size: 11.5px; font-weight: 700; font-family: 'IBM Plex Sans'; cursor: pointer; transition: all .15s;
 }
 .pl-agenda-toggle-btn:hover { border-color: var(--pl-accent); color: var(--pl-accent); }
 .pl-agenda-toggle-btn.done {
@@ -751,18 +696,18 @@
 }
 
 .pl-status-badge {
-  display: inline-flex; align-items: center; font-weight: 700; font-family: 'JetBrains Mono'; font-size: 10.5px;
+  display: inline-flex; align-items: center; font-weight: 700; font-family: 'IBM Plex Mono'; font-size: 10.5px;
   padding: 2px 7px; border-radius: 6px; white-space: nowrap; letter-spacing: .01em;
 }
-.pl-status-badge.bom { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 14%, transparent); text-shadow: 0 0 8px color-mix(in srgb, var(--pl-good) 50%, transparent); }
-.pl-status-badge.atencao { color: var(--pl-accent-4); background: color-mix(in srgb, var(--pl-accent-4) 16%, transparent); text-shadow: 0 0 8px color-mix(in srgb, var(--pl-accent-4) 50%, transparent); }
-.pl-status-badge.critico { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 14%, transparent); text-shadow: 0 0 8px color-mix(in srgb, var(--pl-critical) 50%, transparent); }
+.pl-status-badge.bom { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 14%, transparent); }
+.pl-status-badge.atencao { color: var(--pl-accent-4); background: color-mix(in srgb, var(--pl-accent-4) 16%, transparent); }
+.pl-status-badge.critico { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 14%, transparent); }
 .pl-status-badge.neutro { color: var(--pl-ink-muted); background: var(--pl-surface-2); }
 
 /* Gravidade de Ocorrências — ramp de leve a gravíssima; a última usa fundo
    sólido em vez de tingido pra marcar visualmente o topo da escala. */
 .pl-gravidade-badge {
-  display: inline-flex; align-items: center; font-weight: 700; font-family: 'JetBrains Mono'; font-size: 10.5px;
+  display: inline-flex; align-items: center; font-weight: 700; font-family: 'IBM Plex Mono'; font-size: 10.5px;
   padding: 2px 7px; border-radius: 6px; white-space: nowrap; letter-spacing: .01em;
 }
 .pl-gravidade-badge.leve { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 14%, transparent); }
@@ -779,7 +724,7 @@
   content: ''; position: absolute; left: -6px; top: 2px; width: 10px; height: 10px; border-radius: 50%;
   background: var(--pl-accent); border: 2px solid var(--pl-surface);
 }
-.pl-timeline-date { font-size: 11px; color: var(--pl-ink-muted); font-family: 'JetBrains Mono'; }
+.pl-timeline-date { font-size: 11px; color: var(--pl-ink-muted); font-family: 'IBM Plex Mono'; }
 .pl-timeline-autor { font-size: 12px; font-weight: 700; color: var(--pl-ink-1); margin-top: 2px; }
 .pl-timeline-acao { font-size: 13px; color: var(--pl-ink-2); margin-top: 2px; }
 .pl-timeline-transicao { font-size: 11.5px; color: var(--pl-ink-muted); margin-top: 3px; }
