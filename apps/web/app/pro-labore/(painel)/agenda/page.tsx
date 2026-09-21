@@ -6,6 +6,7 @@ import {
   ParametroLiquidez, EfetividadeVendedor,
 } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { PageHeader } from '../../PageHeader'
 
 const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const DIAS_SEMANA_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -887,15 +888,11 @@ export default function ProLaboreAgendaPage() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">Rotina</div>
-          <h2 className="pl-section-title">Agenda de trabalho</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>
-            {vejaEquipe ? 'Sua agenda pessoal, a auditoria da equipe e o cadastro de rotinas — separados, cada um na sua aba' : 'Sua rotina do dia a dia'}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Rotina"
+        title="Agenda de trabalho"
+        subtitle={vejaEquipe ? 'Sua agenda pessoal, a auditoria da equipe e o cadastro de rotinas — separados, cada um na sua aba' : 'Sua rotina do dia a dia'}
+      />
 
       {vejaEquipe && (
         <div className="pl-period-row" style={{ marginTop: 16, marginBottom: 4 }}>

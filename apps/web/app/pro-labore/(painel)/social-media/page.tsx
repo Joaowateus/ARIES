@@ -5,6 +5,7 @@ import { proLaboreApi, SocialMediaConta, ResumoSocialMedia } from '@/lib/proLabo
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { SocialJourneyCircular } from './SocialJourneyCircular'
+import { PageHeader } from '../../PageHeader'
 
 const TIPO_MIDIA_LABEL: Record<string, string> = {
   IMAGE: 'Fotos',
@@ -92,13 +93,11 @@ export default function ProLaboreSocialMediaPage() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">Equipe</div>
-          <h2 className="pl-section-title">Social Media</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Produção, desempenho e crescimento reais do Instagram — puxados direto da conta, sem lançamento manual</div>
-        </div>
-        {conta && (
+      <PageHeader
+        eyebrow="Equipe"
+        title="Social Media"
+        subtitle="Produção, desempenho e crescimento reais do Instagram — puxados direto da conta, sem lançamento manual"
+        actions={conta && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar}>Desconectar</button>
             <button type="button" className="pl-btn pl-btn-primary" onClick={sincronizar} disabled={sincronizando}>
@@ -106,7 +105,7 @@ export default function ProLaboreSocialMediaPage() {
             </button>
           </div>
         )}
-      </div>
+      />
 
       {carregando && <div className="pl-hint">Carregando…</div>}
 

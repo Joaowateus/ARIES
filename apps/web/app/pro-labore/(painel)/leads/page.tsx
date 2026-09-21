@@ -6,6 +6,7 @@ import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, 
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/lib/proLaboreFunilFiltro'
+import { PageHeader } from '../../PageHeader'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
@@ -648,19 +649,17 @@ export default function ProLaboreLeadsPage() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">CRM</div>
-          <h2 className="pl-section-title">Funil de vendas</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>
-            {vejaEquipe ? 'Arraste os cards entre as etapas, use "Avançar" ou o menu de mover em cada card' : 'Seus leads, do primeiro contato ao fechamento'}
-          </div>
-        </div>
-        <button type="button" className="pl-btn pl-btn-primary" onClick={abrirNovoLead}>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-          Novo lead
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="CRM"
+        title="Funil de vendas"
+        subtitle={vejaEquipe ? 'Arraste os cards entre as etapas, use "Avançar" ou o menu de mover em cada card' : 'Seus leads, do primeiro contato ao fechamento'}
+        actions={
+          <button type="button" className="pl-btn pl-btn-primary" onClick={abrirNovoLead}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+            Novo lead
+          </button>
+        }
+      />
 
       <div className="pl-leads-toolbar">
         <div className="pl-search-wrap">

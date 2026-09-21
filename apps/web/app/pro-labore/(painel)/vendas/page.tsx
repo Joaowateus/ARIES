@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { proLaboreApi, Venda, ParametroLiquidez, Vendedor } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { PageHeader } from '../../PageHeader'
 
 const MESES_MAP: Record<string, number> = {
   jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
@@ -264,13 +265,7 @@ export default function ProLaboreVendasPage() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">Vendas</div>
-          <h2 className="pl-section-title">Registro de vendas</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Cada venda define seu pró-labore (teto: {formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele</div>
-        </div>
-      </div>
+      <PageHeader eyebrow="Vendas" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} />
 
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-title" style={{ marginBottom: 14 }}>{editandoId ? 'Editar venda' : 'Nova venda'}</div>

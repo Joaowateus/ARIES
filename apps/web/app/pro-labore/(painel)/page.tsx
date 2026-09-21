@@ -7,6 +7,7 @@ import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { useCountUp } from '@/lib/useCountUp'
 import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/lib/proLaboreFunilFiltro'
+import { PageHeader } from '../PageHeader'
 
 // --pl-accent fica de fora da rotação: ele inverte de claro pra escuro (e
 // vice-versa) entre os temas, e o texto do avatar é sempre branco fixo —
@@ -369,7 +370,9 @@ export default function ProLaboreDashboardPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
+      <PageHeader eyebrow="Visão geral" title="Dashboard" subtitle="Receita, lucro, funil e produção da equipe em um só lugar" />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div className="pl-period-row">
           {meses.map((m, i) => (
             <button key={m.mes} type="button" className={`pl-chip ${i === selectedIdx ? 'active' : ''}`} onClick={() => setSelectedIdx(i)}>

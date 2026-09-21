@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { proLaboreApi, Vendedor, ParametroLiquidez, Ocorrencia, TIPO_OCORRENCIA_LABEL, GRAVIDADE_OCORRENCIA_LABEL, STATUS_OCORRENCIA_LABEL } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { PageHeader } from '../../PageHeader'
 
 export default function ProLaboreVendedoresPage() {
   const { usuario } = useProLaboreAuth()
@@ -202,13 +203,7 @@ export default function ProLaboreVendedoresPage() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">Times</div>
-          <h2 className="pl-section-title">Vendedores</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Quem faz parte da produção da sua operação — usado no ranking do dashboard</div>
-        </div>
-      </div>
+      <PageHeader eyebrow="Times" title="Vendedores" subtitle="Quem faz parte da produção da sua operação — usado no ranking do dashboard" />
 
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-title" style={{ marginBottom: 14 }}>Novo vendedor</div>

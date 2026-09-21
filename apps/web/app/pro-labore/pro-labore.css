@@ -136,9 +136,9 @@
 
 .pl-shell { max-width: 1320px; margin: 0 auto; padding: 28px 28px 80px; }
 
-/* ============ HEADER ============ */
-.pl-topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
-.pl-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* ============ SHELL: SIDEBAR + CONTEÚDO ============ */
+.pl-app-shell { display: flex; min-height: 100vh; align-items: stretch; }
+
 /* A marca (badge com o "A" da Aries) é fixa — preto com letra prata — e não
    muda com o tema claro/escuro do painel, igual à logo real da empresa. */
 .pl-brand-mark {
@@ -152,25 +152,42 @@
   font-family: 'Sora', system-ui, sans-serif; font-weight: 800; font-size: 19px; line-height: 1;
   color: #c9cbd4; letter-spacing: -0.5px;
 }
-.pl-brand-name { font-family: 'Sora'; font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
-.pl-brand-sub { font-size: 12.5px; color: var(--pl-ink-muted); margin-top: 1px; }
+.pl-brand-name { font-family: 'Sora'; font-weight: 700; font-size: 15.5px; letter-spacing: 0.2px; }
+.pl-brand-sub { font-size: 11.5px; color: var(--pl-ink-muted); margin-top: 1px; }
 
-.pl-header-right { display: flex; align-items: center; gap: 10px; }
-
-.pl-nav { display: flex; align-items: center; gap: 2px; }
-.pl-nav a {
-  padding: 8px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--pl-ink-2);
-  transition: background .3s ease, color .3s ease, box-shadow .3s ease;
+.pl-sidebar {
+  width: 240px; flex: none; background: var(--pl-surface); border-right: 1px solid var(--pl-border);
+  display: flex; flex-direction: column; gap: 22px; padding: 18px 12px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; z-index: 40;
 }
-.pl-nav a:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
-.pl-nav a.active { background: var(--pl-ink-1); color: var(--pl-bg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pl-accent-4) 55%, transparent), 0 0 14px 0 color-mix(in srgb, var(--pl-accent-4) 45%, transparent); }
+.pl-sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.pl-sidebar-close { display: none; margin-left: auto; }
+.pl-sidebar-nav { display: flex; flex-direction: column; gap: 20px; flex: 1; }
+.pl-sidebar-group-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--pl-ink-muted); padding: 0 10px; margin-bottom: 5px;
+}
+.pl-sidebar-link {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px;
+  font-size: 13.5px; font-weight: 600; color: var(--pl-ink-2);
+  transition: background .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.pl-sidebar-link svg { width: 17px; height: 17px; flex: none; }
+.pl-sidebar-link:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
+.pl-sidebar-link.active { background: var(--pl-ink-1); color: var(--pl-bg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pl-accent-4) 55%, transparent), 0 0 14px 0 color-mix(in srgb, var(--pl-accent-4) 45%, transparent); }
+.pl-sidebar-footer { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--pl-border); padding-top: 14px; }
+.pl-sidebar-user { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
+.pl-sidebar-backdrop { display: none; }
 
-/* Gaveta de navegação — em telas largas é só um wrapper inline (nav de um
-   lado, usuário/tema/sair do outro); vira painel deslizante só abaixo de
-   980px, junto com o botão hambúrguer (ambos escondidos até lá). */
-.pl-drawer { display: flex; align-items: center; justify-content: space-between; flex: 1; gap: 20px; min-width: 0; }
-.pl-drawer-head { display: none; }
-.pl-drawer-backdrop { display: none; }
+.pl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pl-topbar-v2 {
+  display: none; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 20px; border-bottom: 1px solid var(--pl-border);
+  position: sticky; top: 0; background: var(--pl-bg); z-index: 30;
+}
+.pl-breadcrumb { font-size: 13px; color: var(--pl-ink-muted); display: flex; align-items: center; gap: 6px; }
+.pl-breadcrumb b { color: var(--pl-ink-1); font-weight: 700; }
+
 .pl-menu-toggle {
   display: none; align-items: center; justify-content: center; flex: none;
   width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--pl-border-strong);
@@ -770,25 +787,19 @@
   .pl-grid-2, .pl-grid-2b { grid-template-columns: 1fr; }
   .pl-kanban, .pl-crm-perf-row, .pl-crm-fin-row { grid-template-columns: repeat(5, 240px); }
 
-  /* Menu vira gaveta deslizante — o botão hambúrguer some em telas largas
-     (o nav cabe inline ali em cima) e aparece só aqui. */
+  /* Sidebar vira painel deslizante da esquerda — o topbar com breadcrumb +
+     botão hambúrguer aparece só aqui (em telas largas a sidebar já fica
+     sempre visível, não precisa de gatilho nenhum). */
+  .pl-topbar-v2 { display: flex; }
   .pl-menu-toggle { display: flex; }
-  .pl-drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(300px, 84vw);
-    background: var(--pl-surface); border-left: 1px solid var(--pl-border-strong);
-    box-shadow: -16px 0 40px -20px rgba(0, 0, 0, .5);
-    flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0;
-    padding: 20px 18px; z-index: 60; overflow-y: auto;
-    transform: translateX(100%); transition: transform .22s ease;
+  .pl-sidebar-close { display: flex; }
+  .pl-sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(280px, 84vw);
+    box-shadow: 16px 0 40px -20px rgba(0, 0, 0, .5);
+    transform: translateX(-100%); transition: transform .22s ease;
   }
-  .pl-drawer.open { transform: translateX(0); }
-  .pl-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--pl-border); }
-  .pl-drawer-title { font-family: 'Sora'; font-weight: 700; font-size: 15px; }
-  .pl-drawer-backdrop { display: block; position: fixed; inset: 0; background: rgba(4, 6, 14, .55); z-index: 55; }
-  .pl-nav { flex-direction: column; align-items: stretch; gap: 2px; }
-  .pl-nav a { padding: 11px 12px; }
-  .pl-header-right { flex-direction: column; align-items: stretch; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--pl-border); }
-  .pl-theme-toggle, .pl-logout { align-self: flex-start; }
+  .pl-sidebar.open { transform: translateX(0); }
+  .pl-sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(4, 6, 14, .55); z-index: 35; }
 }
 @media (max-width: 620px) {
   .pl-shell { padding: 20px 16px 60px; }
