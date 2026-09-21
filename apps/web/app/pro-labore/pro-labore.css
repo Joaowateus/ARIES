@@ -36,9 +36,9 @@
   --pl-grid-line: #dee0e8;
   --pl-baseline: #c3c6d1;
 
-  --pl-radius-lg: 12px;
-  --pl-radius-md: 10px;
-  --pl-radius-sm: 8px;
+  --pl-radius-lg: 14px;
+  --pl-radius-md: 12px;
+  --pl-radius-sm: 9px;
   --pl-shadow-card: none;
   --pl-shadow-card-hover: none;
 
@@ -47,7 +47,14 @@
   color: var(--pl-ink-1);
   font-family: 'IBM Plex Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
   min-height: 100vh;
+  scrollbar-width: thin; scrollbar-color: var(--pl-border-strong) transparent;
 }
+.pl-app *::-webkit-scrollbar { width: 8px; height: 8px; }
+.pl-app *::-webkit-scrollbar-track { background: transparent; }
+.pl-app *::-webkit-scrollbar-thumb { background: var(--pl-border-strong); border-radius: 999px; }
+.pl-app *::-webkit-scrollbar-thumb:hover { background: var(--pl-ink-muted); }
+.pl-app ::selection { background: var(--pl-accent-soft); color: var(--pl-ink-1); }
+.pl-app *:focus-visible { outline: 2px solid var(--pl-accent); outline-offset: 2px; border-radius: 4px; }
 @media (prefers-color-scheme: dark) {
   .pl-app:not([data-theme="light"]) {
     color-scheme: dark;
@@ -58,7 +65,7 @@
     --pl-ink-1: #f4f4f5;
     --pl-ink-2: #a2a4aa;
     --pl-ink-muted: #6b6d73;
-    --pl-border: #28292e;
+    --pl-border: #1f2024;
     --pl-border-strong: #3a3c42;
     --pl-accent: #c7cbd1; /* prata-titânio — ação primária no escuro */
     --pl-accent-ink: #0b0b0c; /* texto por cima de --pl-accent */
@@ -88,7 +95,7 @@
   --pl-ink-1: #f4f4f5;
   --pl-ink-2: #a2a4aa;
   --pl-ink-muted: #6b6d73;
-  --pl-border: #28292e;
+  --pl-border: #1f2024;
   --pl-border-strong: #3a3c42;
   --pl-accent: #c7cbd1;
   --pl-accent-ink: #0b0b0c;
@@ -120,7 +127,7 @@
    com grids largos, mas ficava bem estreito em páginas só com .pl-card
    (que tem container-type: inline-size, cujo tamanho intrínseco não conta
    o conteúdo interno pra evitar dependência circular do container query). */
-.pl-shell { width: 100%; max-width: 1320px; margin: 0 auto; padding: 28px 28px 80px; }
+.pl-shell { width: 100%; max-width: 1320px; margin: 0 auto; padding: 40px 44px 100px; }
 
 /* ============ SHELL: SIDEBAR + CONTEÚDO ============ */
 .pl-app-shell { display: flex; min-height: 100vh; align-items: stretch; }
@@ -240,23 +247,23 @@
 .pl-sidebar.collapsed .pl-logout-label { display: none; }
 
 /* ============ SECTION LABELS ============ */
-.pl-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 30px 0 14px; flex-wrap: wrap; }
+.pl-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 44px 0 18px; flex-wrap: wrap; }
 .pl-eyebrow { font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--pl-ink-muted); }
-.pl-section-title { font-family: 'Sora'; font-size: 21px; font-weight: 700; margin: 2px 0 0; color: var(--pl-ink-1); }
-.pl-section-note { font-size: 12.5px; color: var(--pl-ink-muted); }
+.pl-section-title { font-family: 'Sora'; font-size: 21px; font-weight: 700; margin: 3px 0 0; color: var(--pl-ink-1); letter-spacing: -0.01em; }
+.pl-section-note { font-size: 12.5px; color: var(--pl-ink-muted); line-height: 1.5; }
 
 /* Título de página (PageHeader) — maior e mais pesado que .pl-section-title
    (usado pros títulos de seção DENTRO da página), pra dar a sensação de
    hierarquia "produto" que o Neon usa nos títulos grandes. */
-.pl-page-title { font-family: 'Sora'; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 0; color: var(--pl-ink-1); }
-.pl-page-subtitle { font-family: 'IBM Plex Sans'; font-weight: 400; font-size: 16px; color: var(--pl-ink-2); margin-top: 6px; }
+.pl-page-title { font-family: 'Sora'; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 0; color: var(--pl-ink-1); }
+.pl-page-subtitle { font-family: 'IBM Plex Sans'; font-weight: 400; font-size: 16px; line-height: 1.55; color: var(--pl-ink-2); margin-top: 8px; max-width: 62ch; }
 
 /* ============ PERIOD CHIPS ============ */
 .pl-period-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pl-chip {
   border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-ink-2);
   font-family: 'IBM Plex Mono'; font-size: 13.5px; font-weight: 500;
-  padding: 7px 12px; border-radius: 9px; cursor: pointer; transition: all .3s ease;
+  padding: 8px 14px; border-radius: 10px; cursor: pointer; transition: all .2s ease;
 }
 .pl-chip:hover { border-color: var(--pl-border-strong); color: var(--pl-ink-1); }
 .pl-chip.active {
@@ -270,11 +277,11 @@
   background: var(--pl-surface);
   border: 1px solid var(--pl-border);
   border-radius: var(--pl-radius-lg);
-  padding: 20px 22px;
+  padding: 24px 26px;
 }
 .pl-card-title { font-family: 'Sora'; font-size: 16px; font-weight: 600; color: var(--pl-ink-1); }
-.pl-card-sub { font-size: 13px; color: var(--pl-ink-muted); margin-top: 2px; }
-.pl-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.pl-card-sub { font-size: 13px; color: var(--pl-ink-muted); margin-top: 3px; line-height: 1.5; }
+.pl-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
 
 /* Valores "hero" (ex: faturamento anual) usam a mesma lógica de encolher-pra-caber
    do .pl-kpi-value, mas com teto maior já que estes cards são mais largos. */
@@ -296,12 +303,12 @@
 /* auto-fill (não auto-fit) — quando sobra 1-2 cards numa fileira incompleta,
    eles mantêm a mesma largura dos outros em vez de esticar pra preencher o
    espaço vazio (o que criava um "buraco" visual entre eles). */
-.pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
+.pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 16px; }
 .pl-kpi {
   container-type: inline-size;
   background: var(--pl-surface);
   border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
-  padding: 16px 16px 14px; position: relative;
+  padding: 18px 18px 16px; position: relative;
 }
 .pl-kpi-label { font-family: 'IBM Plex Mono'; font-size: 11.5px; color: var(--pl-ink-muted); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .pl-kpi-value {
@@ -318,11 +325,11 @@
 .pl-kpi-vs { font-family: 'IBM Plex Sans'; font-weight: 400; font-size: 12.5px; color: var(--pl-ink-muted); }
 
 /* ============ MAIN GRID ============ */
-.pl-grid-2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; align-items: stretch; }
+.pl-grid-2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; align-items: stretch; }
 /* align-items: start (não stretch) — a lista de ranking cresce com o número
    de vendedores; esticar o card vizinho (ROAS) até essa altura deixava uma
    sobra vazia enorme embaixo do gráfico dele. */
-.pl-grid-2b { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+.pl-grid-2b { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
 .pl-legend { display: flex; gap: 14px; flex-wrap: wrap; }
 .pl-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--pl-ink-2); }
 .pl-legend-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
@@ -411,8 +418,13 @@
 .pl-stage-conv b { color: var(--pl-ink-1); font-family: 'IBM Plex Mono'; }
 
 /* ============ SELLER LEADERBOARD ============ */
-.pl-seller-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--pl-border); }
+.pl-seller-row {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center;
+  padding: 12px 10px; margin: 0 -10px; border-radius: var(--pl-radius-sm);
+  border-bottom: 1px solid var(--pl-border); transition: background .15s ease;
+}
 .pl-seller-row:last-child { border-bottom: none; }
+.pl-seller-row:hover { background: var(--pl-surface-2); }
 .pl-rank { font-family: 'IBM Plex Mono'; font-size: 12px; color: var(--pl-ink-muted); font-weight: 600; text-align: center; }
 .pl-rank.top { color: var(--pl-accent-4); }
 .pl-seller-main { min-width: 0; }
@@ -451,23 +463,25 @@
 .pl-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 24px; }
 .pl-field label { font-size: 12.5px; font-weight: 600; color: var(--pl-ink-2); }
 .pl-input, .pl-select {
-  width: 100%; padding: 9px 12px; border-radius: var(--pl-radius-sm); border: 1px solid var(--pl-border-strong);
+  width: 100%; padding: 10px 13px; border-radius: var(--pl-radius-sm); border: 1px solid var(--pl-border-strong);
   background: var(--pl-surface); color: var(--pl-ink-1); font-family: 'IBM Plex Sans'; font-size: 13.5px;
+  transition: border-color .15s ease;
 }
-.pl-input:focus, .pl-select:focus { outline: 2px solid var(--pl-accent); outline-offset: 1px; }
+.pl-input:hover, .pl-select:hover { border-color: var(--pl-ink-muted); }
+.pl-input:focus, .pl-select:focus { outline: 2px solid var(--pl-accent); outline-offset: 1px; border-color: var(--pl-accent); }
 .pl-hint { font-family: 'IBM Plex Sans'; font-weight: 500; font-size: 13px; color: var(--pl-ink-muted); }
 
 .pl-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border-radius: var(--pl-radius-sm); padding: 9px 16px; font-size: 13px; font-weight: 700;
-  cursor: pointer; border: 1px solid transparent; transition: opacity .15s, background .15s;
+  border-radius: var(--pl-radius-sm); padding: 10px 18px; font-size: 13px; font-weight: 700;
+  cursor: pointer; border: 1px solid transparent; transition: opacity .15s ease, background .15s ease, border-color .15s ease, color .15s ease;
   font-family: 'IBM Plex Sans';
 }
-.pl-btn-primary { background: var(--pl-accent); color: var(--pl-accent-ink); transition: opacity .15s; }
-.pl-btn-primary:hover { opacity: .9; }
+.pl-btn-primary { background: var(--pl-accent); color: var(--pl-accent-ink); }
+.pl-btn-primary:hover { opacity: .88; }
 .pl-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 .pl-btn-ghost { background: var(--pl-surface); color: var(--pl-ink-2); border-color: var(--pl-border-strong); }
-.pl-btn-ghost:hover { color: var(--pl-ink-1); }
+.pl-btn-ghost:hover { color: var(--pl-ink-1); border-color: var(--pl-accent); }
 
 .pl-alert { border-radius: var(--pl-radius-sm); padding: 10px 13px; font-size: 13px; }
 .pl-alert-error { background: color-mix(in srgb, var(--pl-critical) 12%, transparent); color: var(--pl-critical); }
@@ -482,9 +496,9 @@
 }
 .pl-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 .pl-table thead { background: var(--pl-surface-2); }
-.pl-table th { text-align: left; padding: 11px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-muted); }
+.pl-table th { text-align: left; padding: 13px 18px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--pl-ink-muted); }
 .pl-table th.pl-right { text-align: right; }
-.pl-table td { padding: 11px 16px; border-top: 1px solid var(--pl-border); color: var(--pl-ink-1); transition: background .3s ease; }
+.pl-table td { padding: 13px 18px; border-top: 1px solid var(--pl-border); color: var(--pl-ink-1); transition: background .15s ease; }
 .pl-table td.pl-right { text-align: right; }
 .pl-table tbody tr:hover { background: var(--pl-surface-2); }
 .pl-table .pl-link-action { font-size: 12px; color: var(--pl-accent); cursor: pointer; font-weight: 600; }
@@ -502,10 +516,10 @@
 .pl-leads-textlink:hover { text-decoration: underline; }
 
 /* ============ CRM KANBAN ============ */
-.pl-kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; align-items: start; overflow-x: auto; padding-bottom: 4px; }
+.pl-kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; align-items: start; overflow-x: auto; padding-bottom: 4px; }
 .pl-kanban-col {
   background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
-  padding: 12px; min-height: 140px; transition: background .15s, border-color .15s;
+  padding: 14px; min-height: 140px; transition: background .15s, border-color .15s;
 }
 .pl-kanban-col.drop-active { background: var(--pl-accent-soft); border-color: var(--pl-accent); }
 /* Etapa fora da meta configurada — a coluna inteira fica avermelhada pra
@@ -518,7 +532,7 @@
 .pl-kanban-col.fora-meta .pl-kanban-col-title { color: var(--pl-critical); }
 
 /* ============ CRM: PAINEL DE PERFORMANCE POR ETAPA ============ */
-.pl-crm-perf-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 2px; }
+.pl-crm-perf-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 2px; }
 .pl-crm-perf-card {
   background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
   padding: 10px 8px; text-align: center; transition: background .15s, border-color .15s;
@@ -539,7 +553,7 @@
    acima do card de performance da mesma etapa e da coluna do Kanban
    correspondente — substituem os 3 cards largos e agregados que ficavam
    soltos no topo da página. */
-.pl-crm-fin-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
+.pl-crm-fin-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 2px; }
 .pl-crm-fin-card {
   background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
   padding: 8px 10px; display: flex; flex-direction: column; gap: 4px;
@@ -573,7 +587,7 @@
    diferentes. O cabeçalho da coluna fica fora deste bloco (não rola com os
    cards), então título e contador continuam sempre visíveis. */
 .pl-kanban-cards {
-  display: flex; flex-direction: column; gap: 9px; min-height: 40px;
+  display: flex; flex-direction: column; gap: 10px; min-height: 40px;
   max-height: 620px; overflow-y: auto; padding-right: 3px; margin-right: -3px;
   scrollbar-width: thin; scrollbar-color: var(--pl-border-strong) transparent;
 }
@@ -585,9 +599,10 @@
    gesto de arrastar nunca chega a começar. */
 .pl-kanban-card {
   background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm);
-  padding: 11px 12px; cursor: grab; transition: opacity .12s;
+  padding: 13px 14px; cursor: grab; transition: opacity .12s, border-color .15s ease;
   touch-action: none; -webkit-user-select: none; user-select: none;
 }
+.pl-kanban-card:hover { border-color: var(--pl-border-strong); }
 .pl-kanban-card:active { cursor: grabbing; }
 .pl-kanban-card.dragging { opacity: .4; }
 .pl-kanban-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
