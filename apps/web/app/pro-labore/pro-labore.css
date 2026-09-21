@@ -854,3 +854,29 @@
 @media (max-width: 620px) {
   .pl-journey-circular { flex-direction: column; align-items: stretch; }
 }
+
+/* ============ ASSISTENTE COMERCIAL (chat) ============ */
+.pl-chat-list { display: flex; flex-direction: column; gap: 2px; }
+.pl-chat-item {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 10px; border-radius: var(--pl-radius-sm);
+  cursor: pointer; transition: background .15s ease; text-align: left; background: none; border: none; width: 100%;
+}
+.pl-chat-item:hover { background: var(--pl-surface-2); }
+.pl-chat-item.active { background: var(--pl-accent-soft); }
+.pl-chat-item-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+  font-family: 'Sora'; font-size: 12px; font-weight: 700; color: #fff; background: var(--pl-accent-3);
+}
+.pl-chat-item-body { flex: 1; min-width: 0; }
+.pl-chat-item-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.pl-chat-item-name { font-size: 13.5px; font-weight: 600; color: var(--pl-ink-1); }
+.pl-chat-item-time { font-family: 'IBM Plex Mono'; font-size: 10.5px; color: var(--pl-ink-muted); flex: none; }
+.pl-chat-item-snippet { font-size: 12px; color: var(--pl-ink-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pl-chat-thread { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
+.pl-chat-bubble-row { display: flex; }
+.pl-chat-bubble-row.assistente { justify-content: flex-end; }
+.pl-chat-bubble { max-width: 78%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+.pl-chat-bubble-row.contato .pl-chat-bubble { background: var(--pl-surface-2); color: var(--pl-ink-1); border-bottom-left-radius: 4px; }
+.pl-chat-bubble-row.assistente .pl-chat-bubble { background: var(--pl-accent); color: var(--pl-accent-ink); border-bottom-right-radius: 4px; }
+.pl-chat-bubble-time { display: block; font-family: 'IBM Plex Mono'; font-size: 9.5px; opacity: .6; margin-top: 4px; }

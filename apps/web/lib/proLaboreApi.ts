@@ -486,6 +486,22 @@ export const proLaboreApi = {
       return request<ResumoSocialMedia>(`/pro-labore/social-media/resumo${qs ? `?${qs}` : ''}`)
     },
   },
+  assistente: {
+    config: (vendedorId?: string) =>
+      request<{ assistente: AssistenteComercial | null; vendedor: { id: string; nome: string } | null }>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
+    conectar: (data: { numeroWhatsapp: string; nomeExibicao?: string; vendedorId?: string }) =>
+      request<AssistenteComercial>('/pro-labore/assistente/config', { method: 'POST', body: JSON.stringify(data) }),
+    desconectar: (vendedorId?: string) =>
+      request<{ ok: boolean }>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`, { method: 'DELETE' }),
+    conversas: (params?: { vendedorId?: string; tipo?: 'SUPORTE' | 'LEAD' }) => {
+      const qs = new URLSearchParams()
+      if (params?.vendedorId) qs.set('vendedorId', params.vendedorId)
+      if (params?.tipo) qs.set('tipo', params.tipo)
+      const s = qs.toString()
+      return request<AssistenteConversa[]>(`/pro-labore/assistente/conversas${s ? `?${s}` : ''}`)
+    },
+    conversa: (id: string) => request<AssistenteConversaDetalhe>(`/pro-labore/assistente/conversas/${id}`),
+  },
 }
 
 export interface EfetividadeVendedor {
@@ -656,3 +672,45 @@ export type ResumoSocialMedia =
         leadsGerados: number
       }
     }
+
+// --- Assistente Comercial (WhatsApp) ---
+
+export type StatusAssistente = 'NAO_CONECTADO' | 'PENDENTE' | 'CONECTADO'
+export type TipoConversaAssistente = 'SUPORTE' | 'LEAD'
+export type StatusConversaAssistente = 'ATIVA' | 'QUALIFICADO' | 'ENCERRADA'
+export type RemetenteMensagemAssistente = 'CONTATO' | 'ASSISTENTE'
+
+export interface AssistenteComercial {
+  id: string
+  vendedorId: string
+  numeroWhatsapp?: string | null
+  nomeExibicao?: string | null
+  status: StatusAssistente
+  criadoEm: string
+}
+
+export interface AssistenteMensagem {
+  id: string
+  conversaId: string
+  remetente: RemetenteMensagemAssistente
+  texto: string
+  criadoEm: string
+}
+
+export interface AssistenteConversa {
+  id: string
+  assistenteId: string
+  tipo: TipoConversaAssistente
+  nomeContato: string
+  numeroContato: string
+  status: StatusConversaAssistente
+  leadId?: string | null
+  lead?: { id: string; nomeCliente: string; estagio: EstagioLead } | null
+  ultimaMensagemEm: string
+  criadoEm: string
+  mensagens: AssistenteMensagem[] // só o último item na listagem
+}
+
+export interface AssistenteConversaDetalhe extends Omit<AssistenteConversa, 'mensagens'> {
+  mensagens: AssistenteMensagem[] // histórico completo, em ordem cronológica
+}

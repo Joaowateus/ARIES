@@ -967,6 +967,7 @@ model Vendedor {
   vendas      Venda[]
   leads       Lead[]
   ocorrencias Ocorrencia[]
+  assistenteComercial AssistenteComercial?
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -1159,6 +1160,7 @@ model Lead {
   vendedor  Vendedor?               @relation(fields: [vendedorId], references: [id])
   venda     Venda?                  @relation(fields: [vendaId], references: [id])
   historico LeadEstagioHistorico[]
+  assistenteConversas AssistenteConversa[]
 
   @@index([usuarioId])
   @@index([usuarioId, estagio])
@@ -1423,4 +1425,67 @@ model SocialMediaSnapshotDiario {
 
   @@unique([contaId, data])
   @@map("pro_labore_social_media_snapshots")
+}
+
+// Assistente comercial de WhatsApp — um por vendedor, ligado ao número que
+// ele já usa. O mesmo número atende dois papéis diferentes dependendo de
+// quem manda mensagem: o próprio vendedor (suporte — dúvidas de uso,
+// perguntas sobre os próprios dados, sugestão de próximas ações) ou um lead
+// de campanha (pré-atendimento e qualificação, que pode virar um Lead no
+// CRM). A conexão de verdade com o WhatsApp Business API depende da mesma
+// conta Meta usada no Social Media — até lá, este modelo só guarda a
+// configuração e o histórico (populado com dados simulados na tela).
+model AssistenteComercial {
+  id             String   @id @default(cuid())
+  vendedorId     String   @unique
+  numeroWhatsapp String?
+  nomeExibicao   String?
+  // NAO_CONECTADO | PENDENTE | CONECTADO — hoje sempre NAO_CONECTADO na
+  // prática (a conexão real ainda depende do desbloqueio da conta Meta).
+  status         String   @default("NAO_CONECTADO")
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  vendedor  Vendedor              @relation(fields: [vendedorId], references: [id])
+  conversas AssistenteConversa[]
+
+  @@map("pro_labore_assistente_comercial")
+}
+
+// Uma conversa = um número de contato falando com o assistente de um
+// vendedor. `tipo` decide a lógica: SUPORTE quando o número é do próprio
+// vendedor (ou de alguém da equipe), LEAD quando é um contato de campanha
+// sendo pré-qualificado. `leadId` só é preenchido quando a conversa já
+// resultou (ou está ligada) num Lead real do CRM.
+model AssistenteConversa {
+  id               String    @id @default(cuid())
+  assistenteId     String
+  tipo             String // SUPORTE | LEAD
+  nomeContato      String
+  numeroContato    String
+  leadId           String?
+  status           String    @default("ATIVA") // ATIVA | QUALIFICADO | ENCERRADA
+  ultimaMensagemEm DateTime  @default(now())
+  criadoEm         DateTime  @default(now())
+
+  assistente AssistenteComercial   @relation(fields: [assistenteId], references: [id])
+  lead       Lead?                 @relation(fields: [leadId], references: [id])
+  mensagens  AssistenteMensagem[]
+
+  @@index([assistenteId])
+  @@index([assistenteId, tipo])
+  @@map("pro_labore_assistente_conversas")
+}
+
+model AssistenteMensagem {
+  id         String   @id @default(cuid())
+  conversaId String
+  remetente  String // CONTATO | ASSISTENTE
+  texto      String
+  criadoEm   DateTime @default(now())
+
+  conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
+
+  @@index([conversaId])
+  @@map("pro_labore_assistente_mensagens")
 }
