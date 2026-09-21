@@ -682,8 +682,9 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
               <div className="pl-bar-track" style={{ marginTop: 14 }}>
                 <div className="pl-bar-fill" style={{ width: `${pctMetaAnual * 100}%` }} />
               </div>
-              <div style={{ fontSize: 12, color: 'var(--pl-ink-muted)', marginTop: 8 }}>
-                {formatPct(pctMetaAnual)} da meta atingida{faltamAnual > 0 ? ` — faltam ${formatMoeda(faltamAnual)}` : ' — meta batida! 🎉'}
+              <div className="pl-mono" style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--pl-ink-2)', marginTop: 8 }}>
+                {formatPct(pctMetaAnual)} da meta atingida
+                {faltamAnual > 0 ? <span style={{ color: 'var(--pl-critical)' }}> — faltam {formatMoeda(faltamAnual)}</span> : ' — meta batida! 🎉'}
               </div>
             </div>
           </>
@@ -710,8 +711,9 @@ function AnoEMetas({ meses, atual, parametro, onParametroSalvo, isDono, vejaEqui
               <div className="pl-bar-track" style={{ marginTop: 14 }}>
                 <div className="pl-bar-fill" style={{ width: `${pctMetaMensal * 100}%` }} />
               </div>
-              <div style={{ fontSize: 12, color: 'var(--pl-ink-muted)', marginTop: 8 }}>
-                {formatPct(pctMetaMensal)} da meta atingida{faltamMensal > 0 ? ` — faltam ${formatMoeda(faltamMensal)}` : ' — meta batida! 🎉'}
+              <div className="pl-mono" style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--pl-ink-2)', marginTop: 8 }}>
+                {formatPct(pctMetaMensal)} da meta atingida
+                {faltamMensal > 0 ? <span style={{ color: 'var(--pl-critical)' }}> — faltam {formatMoeda(faltamMensal)}</span> : ' — meta batida! 🎉'}
               </div>
             </div>
           </>

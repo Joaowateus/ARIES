@@ -138,34 +138,62 @@
   font-family: 'Sora', system-ui, sans-serif; font-weight: 800; font-size: 19px; line-height: 1;
   color: #c9cbd4; letter-spacing: -0.5px;
 }
-.pl-brand-name { font-family: 'Sora'; font-weight: 700; font-size: 15.5px; letter-spacing: 0.2px; }
-.pl-brand-sub { font-size: 11.5px; color: var(--pl-ink-muted); margin-top: 1px; }
+.pl-brand-name { font-family: 'Sora'; font-weight: 700; font-size: 17px; color: var(--pl-ink-1); white-space: nowrap; }
+.pl-brand-sub { font-family: 'IBM Plex Sans'; font-weight: 400; font-size: 12.5px; color: var(--pl-ink-muted); margin-top: 1px; white-space: nowrap; }
 
+/* Largura reduzida de 240 pra 216px — a antiga sobrava espaço demais pro
+   quanto cada label de navegação realmente precisa. Recolhida vira uma
+   trilha só de ícones (68px), com toggle salvo em localStorage (ver
+   layout.tsx) — .pl-sidebar-brand-text, os .pl-sidebar-link-label e o texto
+   do rodapé somem, e cada link ganha `title` pra continuar acessível. */
 .pl-sidebar {
-  width: 240px; flex: none; background: var(--pl-surface); border-right: 1px solid var(--pl-border);
+  width: 216px; flex: none; background: var(--pl-surface); border-right: 1px solid var(--pl-border);
   display: flex; flex-direction: column; gap: 22px; padding: 18px 12px;
   position: sticky; top: 0; height: 100vh; overflow-y: auto; z-index: 40;
+  transition: width .18s ease;
 }
-.pl-sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.pl-sidebar.collapsed { width: 68px; padding-left: 10px; padding-right: 10px; }
+.pl-sidebar-brand { display: flex; align-items: center; gap: 8px; padding: 0 8px; }
+.pl-sidebar.collapsed .pl-sidebar-brand { padding: 0 2px; }
+.pl-sidebar-brand-text { min-width: 0; overflow: hidden; }
+.pl-sidebar.collapsed .pl-sidebar-brand-text { display: none; }
+.pl-sidebar-collapse-toggle {
+  display: flex; align-items: center; justify-content: center; flex: none; margin-left: auto;
+  width: 24px; height: 24px; border-radius: 7px; border: 1px solid var(--pl-border);
+  background: transparent; color: var(--pl-ink-muted); cursor: pointer; transition: all .15s ease;
+}
+.pl-sidebar-collapse-toggle:hover { color: var(--pl-ink-1); border-color: var(--pl-border-strong); }
+.pl-sidebar-collapse-toggle svg { width: 13px; height: 13px; }
+.pl-sidebar.collapsed .pl-sidebar-collapse-toggle { margin-left: 0; }
 .pl-sidebar-close { display: none; margin-left: auto; }
 .pl-sidebar-nav { display: flex; flex-direction: column; gap: 20px; flex: 1; }
 .pl-sidebar-group-label {
-  font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--pl-ink-muted); padding: 0 10px; margin-bottom: 5px;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%;
+  font-family: 'IBM Plex Mono'; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--pl-ink-muted); padding: 4px 10px; margin-bottom: 5px;
+  background: none; border: none; cursor: pointer; transition: color .15s ease;
 }
+.pl-sidebar-group-label:hover { color: var(--pl-ink-2); }
+.pl-sidebar-group-chevron { width: 12px; height: 12px; flex: none; transition: transform .15s ease; }
+.pl-sidebar-group-chevron.collapsed { transform: rotate(-90deg); }
+.pl-sidebar.collapsed .pl-sidebar-group-label { display: none; }
 .pl-sidebar-link {
   display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px;
-  font-size: 13.5px; font-weight: 600; color: var(--pl-ink-2); border-left: 2.5px solid transparent;
+  font-family: 'IBM Plex Sans'; font-size: 14.5px; font-weight: 500; color: var(--pl-ink-2);
   transition: background .2s ease, color .2s ease;
 }
 .pl-sidebar-link svg { width: 17px; height: 17px; flex: none; }
+.pl-sidebar-link-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-sidebar.collapsed .pl-sidebar-link { justify-content: center; padding: 9px; }
+.pl-sidebar.collapsed .pl-sidebar-link-label { display: none; }
 .pl-sidebar-link:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
 .pl-sidebar-link.active {
-  background: var(--pl-accent-soft); color: var(--pl-accent-strong);
-  border-left-color: var(--pl-accent); padding-left: 7.5px;
+  background: var(--pl-accent-strong); color: var(--pl-accent-ink); font-weight: 600;
 }
 .pl-sidebar-footer { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--pl-border); padding-top: 14px; }
 .pl-sidebar-user { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
+.pl-sidebar.collapsed .pl-sidebar-user { justify-content: center; }
+.pl-sidebar.collapsed .pl-sidebar-user .pl-user { display: none; }
 .pl-sidebar-backdrop { display: none; }
 
 .pl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -196,29 +224,43 @@
 .pl-theme-toggle button svg { width: 14px; height: 14px; }
 .pl-theme-toggle button.active { background: var(--pl-ink-1); color: var(--pl-bg); }
 
-.pl-user { font-size: 13px; color: var(--pl-ink-muted); }
+.pl-user {
+  font-family: 'IBM Plex Mono'; font-weight: 500; font-size: 11.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--pl-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .pl-logout {
-  font-size: 12px; color: var(--pl-ink-muted); background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--pl-ink-muted);
+  background: none; border: none; cursor: pointer;
   padding: 6px 10px; border-radius: 8px; transition: background .15s, color .15s;
 }
+.pl-logout svg { width: 15px; height: 15px; flex: none; }
+.pl-logout-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-logout:hover { background: var(--pl-accent-3-soft); color: var(--pl-critical); }
+.pl-sidebar.collapsed .pl-logout { justify-content: center; padding: 6px; }
+.pl-sidebar.collapsed .pl-logout-label { display: none; }
 
 /* ============ SECTION LABELS ============ */
 .pl-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 30px 0 14px; flex-wrap: wrap; }
-.pl-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--pl-accent); }
-.pl-section-title { font-size: 18px; font-weight: 700; margin: 2px 0 0; }
+.pl-eyebrow { font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--pl-ink-muted); }
+.pl-section-title { font-family: 'Sora'; font-size: 21px; font-weight: 700; margin: 2px 0 0; color: var(--pl-ink-1); }
 .pl-section-note { font-size: 12.5px; color: var(--pl-ink-muted); }
+
+/* Título de página (PageHeader) — maior e mais pesado que .pl-section-title
+   (usado pros títulos de seção DENTRO da página), pra dar a sensação de
+   hierarquia "produto" que o Neon usa nos títulos grandes. */
+.pl-page-title { font-family: 'Sora'; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 0; color: var(--pl-ink-1); }
+.pl-page-subtitle { font-family: 'IBM Plex Sans'; font-weight: 400; font-size: 16px; color: var(--pl-ink-2); margin-top: 6px; }
 
 /* ============ PERIOD CHIPS ============ */
 .pl-period-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pl-chip {
   border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-ink-2);
-  font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 500;
+  font-family: 'IBM Plex Mono'; font-size: 13.5px; font-weight: 500;
   padding: 7px 12px; border-radius: 9px; cursor: pointer; transition: all .3s ease;
 }
 .pl-chip:hover { border-color: var(--pl-border-strong); color: var(--pl-ink-1); }
 .pl-chip.active {
-  background: var(--pl-ink-1); color: var(--pl-bg); border-color: var(--pl-ink-1);
+  background: var(--pl-accent-strong); color: var(--pl-accent-ink); border-color: var(--pl-accent-strong); font-weight: 600;
 }
 
 /* ============ CARD ============ */
@@ -230,13 +272,13 @@
   border-radius: var(--pl-radius-lg);
   padding: 20px 22px;
 }
-.pl-card-title { font-size: 15px; font-weight: 700; }
-.pl-card-sub { font-size: 12px; color: var(--pl-ink-muted); margin-top: 2px; }
+.pl-card-title { font-family: 'Sora'; font-size: 16px; font-weight: 600; color: var(--pl-ink-1); }
+.pl-card-sub { font-size: 13px; color: var(--pl-ink-muted); margin-top: 2px; }
 .pl-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 
 /* Valores "hero" (ex: faturamento anual) usam a mesma lógica de encolher-pra-caber
-   do .pl-kpi-value, mas com teto maior (32px) já que estes cards são mais largos. */
-.pl-kpi-value.pl-value-lg { font-size: clamp(18px, 8cqi, 32px); }
+   do .pl-kpi-value, mas com teto maior já que estes cards são mais largos. */
+.pl-kpi-value.pl-value-lg { font-size: clamp(20px, 9cqi, 38px); }
 
 /* ============ KPI GRID ============ */
 /* auto-fit (não um número fixo de colunas) — o total de cards varia por
@@ -261,19 +303,19 @@
   border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md);
   padding: 16px 16px 14px; position: relative;
 }
-.pl-kpi-label { font-size: 11px; color: var(--pl-ink-muted); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.pl-kpi-label { font-family: 'IBM Plex Mono'; font-size: 11.5px; color: var(--pl-ink-muted); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .pl-kpi-value {
   font-family: 'IBM Plex Mono', 'Sora', monospace; font-variant-numeric: tabular-nums;
-  font-size: clamp(14px, 9cqi, 22px); font-weight: 700; margin-top: 9px; letter-spacing: -0.01em;
+  font-size: clamp(14px, 9cqi, 26px); font-weight: 700; margin-top: 9px; letter-spacing: -0.01em;
   white-space: nowrap;
 }
 .pl-kpi-value .pl-unit { font-family: 'IBM Plex Sans'; font-size: .6em; font-weight: 600; color: var(--pl-ink-muted); margin-left: 2px; }
 .pl-kpi-foot { display: flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 12px; flex-wrap: wrap; }
-.pl-delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-family: 'IBM Plex Mono'; font-size: 11.5px; padding: 2px 6px 2px 5px; border-radius: 6px; }
+.pl-delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-family: 'IBM Plex Mono'; font-size: 12.5px; padding: 2px 6px 2px 5px; border-radius: 6px; }
 .pl-delta.up { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 13%, transparent); }
 .pl-delta.down { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 13%, transparent); }
 .pl-delta svg { width: 9px; height: 9px; }
-.pl-kpi-vs { color: var(--pl-ink-muted); }
+.pl-kpi-vs { font-family: 'IBM Plex Sans'; font-weight: 400; font-size: 12.5px; color: var(--pl-ink-muted); }
 
 /* ============ MAIN GRID ============ */
 .pl-grid-2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; align-items: stretch; }
@@ -322,9 +364,11 @@
 .pl-month-detail strong { display: block; font-family: 'IBM Plex Mono'; font-size: 14px; color: var(--pl-ink-1); margin-top: 2px; font-weight: 700; }
 
 /* ============ FILTRO UNIVERSAL DE VENDEDOR ============ */
+/* Sans (não Mono) de propósito — é o nome escolhido de uma pessoa/opção, não
+   um dado tabular como as datas dos chips de período. */
 .pl-select-chip {
-  border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-ink-2);
-  font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 500;
+  border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-ink-1);
+  font-family: 'IBM Plex Sans'; font-size: 14.5px; font-weight: 500;
   padding: 7px 10px; border-radius: 9px; cursor: pointer; transition: all .15s ease;
 }
 .pl-select-chip:hover { border-color: var(--pl-border-strong); color: var(--pl-ink-1); }
@@ -376,7 +420,7 @@
 .pl-seller-name { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
 .pl-avatar { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Sora'; font-size: 10.5px; font-weight: 700; color: #fff; flex: none; }
 .pl-seller-figs { font-family: 'IBM Plex Mono'; font-size: 13px; font-weight: 700; }
-.pl-bar-track { height: 8px; border-radius: 5px; background: var(--pl-surface-2); overflow: hidden; }
+.pl-bar-track { height: 8px; border-radius: 5px; background: var(--pl-surface-3); overflow: hidden; }
 .pl-bar-fill {
   height: 100%; border-radius: 5px; background: var(--pl-accent);
   transition: width .6s cubic-bezier(.22, 1, .36, 1);
@@ -411,7 +455,7 @@
   background: var(--pl-surface); color: var(--pl-ink-1); font-family: 'IBM Plex Sans'; font-size: 13.5px;
 }
 .pl-input:focus, .pl-select:focus { outline: 2px solid var(--pl-accent); outline-offset: 1px; }
-.pl-hint { font-size: 11.5px; color: var(--pl-ink-muted); }
+.pl-hint { font-family: 'IBM Plex Sans'; font-weight: 500; font-size: 13px; color: var(--pl-ink-muted); }
 
 .pl-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -758,6 +802,20 @@
   }
   .pl-sidebar.open { transform: translateX(0); }
   .pl-sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(4, 6, 14, .55); z-index: 35; }
+
+  /* No mobile a sidebar é sempre a gaveta cheia — o modo ícone-only é só
+     pra quando ela fica fixa ao lado do conteúdo (telas largas), então o
+     botão de colapsar some e qualquer preferência .collapsed salva é ignorada. */
+  .pl-sidebar-collapse-toggle { display: none; }
+  .pl-sidebar.collapsed { width: min(280px, 84vw); padding-left: 12px; padding-right: 12px; }
+  .pl-sidebar.collapsed .pl-sidebar-brand-text,
+  .pl-sidebar.collapsed .pl-sidebar-link-label,
+  .pl-sidebar.collapsed .pl-sidebar-user .pl-user,
+  .pl-sidebar.collapsed .pl-logout-label { display: revert; }
+  .pl-sidebar.collapsed .pl-sidebar-group-label { display: flex; }
+  .pl-sidebar.collapsed .pl-sidebar-link { justify-content: flex-start; padding: 9px 10px; }
+  .pl-sidebar.collapsed .pl-logout { justify-content: flex-start; padding: 6px 10px; }
+  .pl-sidebar.collapsed .pl-sidebar-user { justify-content: space-between; }
 }
 @media (max-width: 620px) {
   .pl-shell { padding: 20px 16px 60px; }

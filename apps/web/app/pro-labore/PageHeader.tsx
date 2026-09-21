@@ -11,8 +11,8 @@ export function PageHeader({ eyebrow, title, subtitle, actions }: {
     <div className="pl-section-head" style={{ marginTop: 0 }}>
       <div>
         <div className="pl-eyebrow">{eyebrow}</div>
-        <h2 className="pl-section-title">{title}</h2>
-        {subtitle && <div className="pl-section-note" style={{ marginTop: 4 }}>{subtitle}</div>}
+        <h1 className="pl-page-title">{title}</h1>
+        {subtitle && <div className="pl-page-subtitle">{subtitle}</div>}
       </div>
       {actions}
     </div>
