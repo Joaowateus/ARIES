@@ -134,106 +134,118 @@ export default function ProLaboreConfiguracoesPage() {
     <div>
       <PageHeader eyebrow="Preferências" title="Configurações" subtitle="Teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
 
-      <form onSubmit={handleSubmit} className="pl-card" style={{ maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div className="pl-field">
-          <label>Teto de pró-labore por venda (R$)</label>
-          <input type="number" step="0.01" min="0" className="pl-input" value={teto} onChange={e => setTeto(e.target.value)} required />
-          <span className="pl-hint">Seu pró-labore pessoal — sacado de qualquer venda, nunca acima deste teto — hoje: {formatMoeda(Number(teto) || 0)}</span>
+      <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
+        <div className="pl-card-head">
+          <div>
+            <div className="pl-card-title">Tetos e metas</div>
+            <div className="pl-card-sub">Limites de pró-labore, comissão e metas de faturamento da operação</div>
+          </div>
+        </div>
+        <div className="pl-field-grid">
+          <div className="pl-field">
+            <label>Teto de pró-labore por venda (R$)</label>
+            <input type="number" step="0.01" min="0" className="pl-input" value={teto} onChange={e => setTeto(e.target.value)} required />
+            <span className="pl-hint">Seu pró-labore pessoal — sacado de qualquer venda, nunca acima deste teto — hoje: {formatMoeda(Number(teto) || 0)}</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Teto de comissão padrão (R$)</label>
+            <input type="number" step="0.01" min="0" className="pl-input" value={tetoComissao} onChange={e => setTetoComissao(e.target.value)} required />
+            <span className="pl-hint">Usado só por vendedores sem comissão individual definida (em Vendedores) — hoje: {formatMoeda(Number(tetoComissao) || 0)}</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Teto de pró-labore em negociação “R” (R$)</label>
+            <input type="number" step="0.01" min="0" className="pl-input" value={tetoProLaboreR} onChange={e => setTetoProLaboreR(e.target.value)} required />
+            <span className="pl-hint">Usado no lugar do teto normal quando o lead está classificado como “R” (renegociação), no CRM — hoje: {formatMoeda(Number(tetoProLaboreR) || 0)}</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Teto de comissão em negociação “R” (R$)</label>
+            <input type="number" step="0.01" min="0" className="pl-input" value={tetoComissaoR} onChange={e => setTetoComissaoR(e.target.value)} required />
+            <span className="pl-hint">Vale sempre pra negociação “R”, mesmo que o vendedor tenha um teto individual definido — hoje: {formatMoeda(Number(tetoComissaoR) || 0)}</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Meta de faturamento anual (R$)</label>
+            <input type="number" step="0.01" min="0" className="pl-input" value={metaAnual} onChange={e => setMetaAnual(e.target.value)} required />
+            <span className="pl-hint">Aparece no dashboard do dono e do supervisor como referência do progresso do ano — hoje: {formatMoeda(Number(metaAnual) || 0)}</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Meta mensal padrão por vendedor (R$)</label>
+            <input type="number" step="0.01" min="0.01" className="pl-input" value={metaMensalPadrao} onChange={e => setMetaMensalPadrao(e.target.value)} required />
+            <span className="pl-hint">Vendedor não vê a meta anual — no lugar, vê essa meta mensal (ou a individual dele, se definida em Vendedores) — hoje: {formatMoeda(Number(metaMensalPadrao) || 0)}</span>
+          </div>
         </div>
 
-        <div className="pl-field">
-          <label>Teto de comissão padrão (R$)</label>
-          <input type="number" step="0.01" min="0" className="pl-input" value={tetoComissao} onChange={e => setTetoComissao(e.target.value)} required />
-          <span className="pl-hint">Usado só por vendedores sem comissão individual definida (em Vendedores) — hoje: {formatMoeda(Number(tetoComissao) || 0)}</span>
-        </div>
+        {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 18 }}>{erro}</div>}
+        {sucesso && <div className="pl-alert pl-alert-success" style={{ marginTop: 18 }}>Configurações atualizadas.</div>}
 
-        <div className="pl-field">
-          <label>Teto de pró-labore em negociação “R” (R$)</label>
-          <input type="number" step="0.01" min="0" className="pl-input" value={tetoProLaboreR} onChange={e => setTetoProLaboreR(e.target.value)} required />
-          <span className="pl-hint">Usado no lugar do teto normal quando o lead está classificado como “R” (renegociação), no CRM — hoje: {formatMoeda(Number(tetoProLaboreR) || 0)}</span>
-        </div>
-
-        <div className="pl-field">
-          <label>Teto de comissão em negociação “R” (R$)</label>
-          <input type="number" step="0.01" min="0" className="pl-input" value={tetoComissaoR} onChange={e => setTetoComissaoR(e.target.value)} required />
-          <span className="pl-hint">Vale sempre pra negociação “R”, mesmo que o vendedor tenha um teto individual definido — hoje: {formatMoeda(Number(tetoComissaoR) || 0)}</span>
-        </div>
-
-        <div className="pl-field">
-          <label>Meta de faturamento anual (R$)</label>
-          <input type="number" step="0.01" min="0" className="pl-input" value={metaAnual} onChange={e => setMetaAnual(e.target.value)} required />
-          <span className="pl-hint">Aparece no dashboard do dono e do supervisor como referência do progresso do ano — hoje: {formatMoeda(Number(metaAnual) || 0)}</span>
-        </div>
-
-        <div className="pl-field">
-          <label>Meta mensal padrão por vendedor (R$)</label>
-          <input type="number" step="0.01" min="0.01" className="pl-input" value={metaMensalPadrao} onChange={e => setMetaMensalPadrao(e.target.value)} required />
-          <span className="pl-hint">Vendedor não vê a meta anual — no lugar, vê essa meta mensal (ou a individual dele, se definida em Vendedores) — hoje: {formatMoeda(Number(metaMensalPadrao) || 0)}</span>
-        </div>
-
-        {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
-        {sucesso && <div className="pl-alert pl-alert-success">Configurações atualizadas.</div>}
-
-        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando} style={{ alignSelf: 'flex-start' }}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando} style={{ marginTop: 18 }}>{salvando ? 'Salvando...' : 'Salvar'}</button>
       </form>
 
-      <form onSubmit={handleSubmitAgenda} className="pl-card" style={{ maxWidth: 480, marginTop: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div>
-          <div className="pl-card-title">Auditoria comercial da Agenda</div>
-          <div className="pl-card-sub">Limiares de classificação e regras de alerta — nada disso é fixo, calibre pela realidade da sua equipe</div>
+      <form onSubmit={handleSubmitAgenda} className="pl-card">
+        <div className="pl-card-head">
+          <div>
+            <div className="pl-card-title">Auditoria comercial da Agenda</div>
+            <div className="pl-card-sub">Limiares de classificação e regras de alerta — nada disso é fixo, calibre pela realidade da sua equipe</div>
+          </div>
         </div>
 
-        <div className="pl-field">
-          <label>Aderência “Em dia” a partir de (%)</label>
-          <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarBom} onChange={e => setLimiarBom(e.target.value)} required />
-          <span className="pl-hint">Abaixo disso e acima do limiar de “Atenção”, o consultor aparece como “Atenção” na Agenda</span>
+        <div className="pl-field-grid">
+          <div className="pl-field">
+            <label>Aderência “Em dia” a partir de (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarBom} onChange={e => setLimiarBom(e.target.value)} required />
+            <span className="pl-hint">Abaixo disso e acima do limiar de “Atenção”, o consultor aparece como “Atenção” na Agenda</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Aderência “Atenção” a partir de (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarAtencao} onChange={e => setLimiarAtencao(e.target.value)} required />
+            <span className="pl-hint">Abaixo disso o consultor aparece como “Crítico”</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Efetividade “alta” a partir de (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarEfetividade} onChange={e => setLimiarEfetividade(e.target.value)} required />
+            <span className="pl-hint">% de leads abordados que viram venda no período — usado na matriz de classificação (aderência × efetividade)</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Limiar de oscilação (coef. de variação, %)</label>
+            <input type="number" step="1" min="0" max="200" className="pl-input" value={limiarOscilacao} onChange={e => setLimiarOscilacao(e.target.value)} required />
+            <span className="pl-hint">Acima disso, a variação da aderência diária no período classifica o consultor como “Oscilante”</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Alerta: aderência abaixo de (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={alertaAderencia} onChange={e => setAlertaAderencia(e.target.value)} required />
+            <span className="pl-hint">Combinado com o campo abaixo — dispara o card “Em alerta”</span>
+          </div>
+
+          <div className="pl-field">
+            <label>...por quantos dias seguidos</label>
+            <input type="number" step="1" min="1" className="pl-input" value={alertaDias} onChange={e => setAlertaDias(e.target.value)} required />
+          </div>
+
+          <div className="pl-field">
+            <label>Alerta: queda de efetividade acima de (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={alertaQuedaEfetividade} onChange={e => setAlertaQuedaEfetividade(e.target.value)} required />
+            <span className="pl-hint">Em relação à própria média móvel do consultor no período — não é um limiar absoluto</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Reconhecimento: semanas seguidas como “Referência”</label>
+            <input type="number" step="1" min="1" className="pl-input" value={reconhecimentoSemanas} onChange={e => setReconhecimentoSemanas(e.target.value)} required />
+            <span className="pl-hint">Gatilho de destaque positivo — a Agenda só sinalizava problema, isso sinaliza quando alguém merece reconhecimento</span>
+          </div>
         </div>
 
-        <div className="pl-field">
-          <label>Aderência “Atenção” a partir de (%)</label>
-          <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarAtencao} onChange={e => setLimiarAtencao(e.target.value)} required />
-          <span className="pl-hint">Abaixo disso o consultor aparece como “Crítico”</span>
-        </div>
+        {erroAgenda && <div className="pl-alert pl-alert-error" style={{ marginTop: 18 }}>{erroAgenda}</div>}
+        {sucessoAgenda && <div className="pl-alert pl-alert-success" style={{ marginTop: 18 }}>Regras da Agenda atualizadas.</div>}
 
-        <div className="pl-field">
-          <label>Efetividade “alta” a partir de (%)</label>
-          <input type="number" step="1" min="0" max="100" className="pl-input" value={limiarEfetividade} onChange={e => setLimiarEfetividade(e.target.value)} required />
-          <span className="pl-hint">% de leads abordados que viram venda no período — usado na matriz de classificação (aderência × efetividade)</span>
-        </div>
-
-        <div className="pl-field">
-          <label>Limiar de oscilação (coef. de variação, %)</label>
-          <input type="number" step="1" min="0" max="200" className="pl-input" value={limiarOscilacao} onChange={e => setLimiarOscilacao(e.target.value)} required />
-          <span className="pl-hint">Acima disso, a variação da aderência diária no período classifica o consultor como “Oscilante”</span>
-        </div>
-
-        <div className="pl-field">
-          <label>Alerta: aderência abaixo de (%)</label>
-          <input type="number" step="1" min="0" max="100" className="pl-input" value={alertaAderencia} onChange={e => setAlertaAderencia(e.target.value)} required />
-          <span className="pl-hint">Combinado com o campo abaixo — dispara o card “Em alerta”</span>
-        </div>
-
-        <div className="pl-field">
-          <label>...por quantos dias seguidos</label>
-          <input type="number" step="1" min="1" className="pl-input" value={alertaDias} onChange={e => setAlertaDias(e.target.value)} required />
-        </div>
-
-        <div className="pl-field">
-          <label>Alerta: queda de efetividade acima de (%)</label>
-          <input type="number" step="1" min="0" max="100" className="pl-input" value={alertaQuedaEfetividade} onChange={e => setAlertaQuedaEfetividade(e.target.value)} required />
-          <span className="pl-hint">Em relação à própria média móvel do consultor no período — não é um limiar absoluto</span>
-        </div>
-
-        <div className="pl-field">
-          <label>Reconhecimento: semanas seguidas como “Referência”</label>
-          <input type="number" step="1" min="1" className="pl-input" value={reconhecimentoSemanas} onChange={e => setReconhecimentoSemanas(e.target.value)} required />
-          <span className="pl-hint">Gatilho de destaque positivo — a Agenda só sinalizava problema, isso sinaliza quando alguém merece reconhecimento</span>
-        </div>
-
-        {erroAgenda && <div className="pl-alert pl-alert-error">{erroAgenda}</div>}
-        {sucessoAgenda && <div className="pl-alert pl-alert-success">Regras da Agenda atualizadas.</div>}
-
-        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoAgenda} style={{ alignSelf: 'flex-start' }}>{salvandoAgenda ? 'Salvando...' : 'Salvar'}</button>
+        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoAgenda} style={{ marginTop: 18 }}>{salvandoAgenda ? 'Salvando...' : 'Salvar'}</button>
       </form>
     </div>
   )
