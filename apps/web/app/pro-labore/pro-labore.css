@@ -134,7 +134,13 @@
 .pl-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-variant-numeric: tabular-nums; }
 .pl-app a { color: inherit; text-decoration: none; }
 
-.pl-shell { max-width: 1320px; margin: 0 auto; padding: 28px 28px 80px; }
+/* width:100% é necessário desde que a sidebar virou um flex container: sem
+   isso, .pl-shell (item de um flex column) encolhe pro tamanho do conteúdo
+   em vez de ocupar a largura disponível — passava despercebido em páginas
+   com grids largos, mas ficava bem estreito em páginas só com .pl-card
+   (que tem container-type: inline-size, cujo tamanho intrínseco não conta
+   o conteúdo interno pra evitar dependência circular do container query). */
+.pl-shell { width: 100%; max-width: 1320px; margin: 0 auto; padding: 28px 28px 80px; }
 
 /* ============ SHELL: SIDEBAR + CONTEÚDO ============ */
 .pl-app-shell { display: flex; min-height: 100vh; align-items: stretch; }
@@ -272,7 +278,10 @@
    sem cortar. Ainda assim, container query + clamp() no valor é o que
    garante que NENHUM valor corta, em qualquer largura de card/tela — o
    número encolhe até caber em vez de estourar (ver .pl-kpi-value abaixo). */
-.pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; }
+/* auto-fill (não auto-fit) — quando sobra 1-2 cards numa fileira incompleta,
+   eles mantêm a mesma largura dos outros em vez de esticar pra preencher o
+   espaço vazio (o que criava um "buraco" visual entre eles). */
+.pl-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; }
 .pl-kpi {
   container-type: inline-size;
   background:
@@ -444,6 +453,10 @@
 
 /* ============ FORMS ============ */
 .pl-field { display: flex; flex-direction: column; gap: 6px; }
+/* Formulários de configuração (Configurações) — os campos fluem em 2-3
+   colunas conforme o espaço em vez de empilhar um por linha, pra não
+   sobrar uma faixa enorme em branco do lado em telas largas. */
+.pl-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 24px; }
 .pl-field label { font-size: 12.5px; font-weight: 600; color: var(--pl-ink-2); }
 .pl-input, .pl-select {
   width: 100%; padding: 9px 12px; border-radius: var(--pl-radius-sm); border: 1px solid var(--pl-border-strong);
