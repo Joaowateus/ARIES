@@ -20,6 +20,10 @@ const NAV_GROUPS: NavGroup[] = [
     { href: '/pro-labore/agenda', label: 'Agenda', icon: 'calendar' },
     { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', donoOnly: true },
     { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', donoOnly: true },
+    // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o
+    // próprio assistente, ligado ao próprio número, então todo mundo
+    // precisa enxergar a própria aba (o escopo por pessoa é feito no backend).
+    { href: '/pro-labore/assistente', label: 'Assistente Comercial', icon: 'chat' },
   ] },
   { label: 'Equipe', items: [
     { href: '/pro-labore/vendedores', label: 'Vendedores', icon: 'users', donoOnly: true },
