@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { proLaboreApi, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { PageHeader } from '../../PageHeader'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -131,13 +132,7 @@ export default function ProLaboreConfiguracoesPage() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">Preferências</div>
-          <h2 className="pl-section-title">Configurações</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Teto de pró-labore, teto padrão de comissão e meta anual de faturamento</div>
-        </div>
-      </div>
+      <PageHeader eyebrow="Preferências" title="Configurações" subtitle="Teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
 
       <form onSubmit={handleSubmit} className="pl-card" style={{ maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div className="pl-field">

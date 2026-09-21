@@ -12,6 +12,7 @@ import {
 } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { gerarDocumentoOcorrenciaPdf } from '@/lib/ocorrenciaDocumento'
+import { PageHeader } from '../../PageHeader'
 
 const STATUS_BADGE_CLASS: Record<StatusOcorrencia, string> = {
   ABERTA: 'atencao',
@@ -335,14 +336,12 @@ function OcorrenciasConteudo() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">Equipe</div>
-          <h2 className="pl-section-title">Ocorrências</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>Registro disciplinar e de feedback da equipe comercial — protocolo, prazos e histórico de correção</div>
-        </div>
-        <button type="button" className="pl-btn pl-btn-primary" onClick={() => abrirModal()}>Nova Ocorrência</button>
-      </div>
+      <PageHeader
+        eyebrow="Equipe"
+        title="Ocorrências"
+        subtitle="Registro disciplinar e de feedback da equipe comercial — protocolo, prazos e histórico de correção"
+        actions={<button type="button" className="pl-btn pl-btn-primary" onClick={() => abrirModal()}>Nova Ocorrência</button>}
+      />
 
       {resumo && (
         <div className="pl-kpi-grid" style={{ marginBottom: 20 }}>

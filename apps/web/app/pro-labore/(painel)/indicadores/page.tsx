@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { proLaboreApi, FunilMensal, GastoAnuncioMensal } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { PageHeader } from '../../PageHeader'
 
 function mesAtualStr() {
   const d = new Date()
@@ -84,15 +85,11 @@ export default function ProLaboreIndicadoresPage() {
 
   return (
     <div>
-      <div className="pl-section-head" style={{ marginTop: 0 }}>
-        <div>
-          <div className="pl-eyebrow">Funil &amp; anúncios</div>
-          <h2 className="pl-section-title">Indicadores mensais</h2>
-          <div className="pl-section-note" style={{ marginTop: 4 }}>
-            Cadastro manual — o Fechamento do funil e o ROAS são calculados automaticamente a partir das vendas
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Funil &amp; anúncios"
+        title="Indicadores mensais"
+        subtitle="Cadastro manual — o Fechamento do funil e o ROAS são calculados automaticamente a partir das vendas"
+      />
 
       <form onSubmit={handleSubmit} className="pl-card">
         <div className="pl-field" style={{ maxWidth: 220, marginBottom: 20 }}>
