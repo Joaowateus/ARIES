@@ -502,6 +502,9 @@ export const proLaboreApi = {
     },
     conversa: (id: string) => request<AssistenteConversaDetalhe>(`/pro-labore/assistente/conversas/${id}`),
   },
+  planoCrescimento: {
+    obter: () => request<PlanoCrescimento>('/pro-labore/plano-crescimento'),
+  },
 }
 
 export interface EfetividadeVendedor {
@@ -713,4 +716,37 @@ export interface AssistenteConversa {
 
 export interface AssistenteConversaDetalhe extends Omit<AssistenteConversa, 'mensagens'> {
   mensagens: AssistenteMensagem[] // histórico completo, em ordem cronológica
+}
+
+export type EstagioCrescimento = 'INICIAR' | 'MANTER' | 'ESCALONAR' | 'ESCALAR'
+export type FormatoMetricaCrescimento = 'moeda' | 'percentual' | 'numero'
+export type ChavePilarCrescimento = 'aquisicao' | 'conversao' | 'execucao' | 'financeiro'
+
+export interface MetricaPilarCrescimento {
+  label: string
+  valor: number
+  formato: FormatoMetricaCrescimento
+}
+
+export interface GateCrescimento {
+  descricao: string
+  atingido: boolean
+}
+
+export interface PilarCrescimento {
+  chave: ChavePilarCrescimento
+  nome: string
+  estagio: EstagioCrescimento
+  resumo: string
+  metricas: MetricaPilarCrescimento[]
+  gates: GateCrescimento[]
+  acoes: string[]
+  ritmo: string
+}
+
+export interface PlanoCrescimento {
+  estagioGeral: EstagioCrescimento
+  resumoGeral: string
+  gargalo: ChavePilarCrescimento
+  pilares: PilarCrescimento[]
 }

@@ -11,6 +11,7 @@ import {
   buscarInsightsMidia,
   buscarInsightsContaHoje,
 } from '../lib/instagramGraph'
+import { gerarPlanoDeCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
 
 const router = Router()
 
@@ -2344,6 +2345,93 @@ router.get('/social-media/resumo', requireProLaboreAuth, requireDono, async (req
     relacaoVendas,
     jornada,
   })
+})
+
+// --- Plano de Crescimento: diagnóstico + plano de ação por regras, cruzando
+// funil, vendas, ROAS e redes sociais num único retrato do momento da
+// operação. Ver `lib/planoCrescimento.ts` pro motor de regras em si — esta
+// rota só busca e agrega os números reais. Exclusiva do dono, porque cruza
+// dado de anúncio/ROAS (já restrito a ele em qualquer outra rota).
+router.get('/plano-crescimento', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const agora = new Date()
+  const inicioMesAtual = primeiroDiaDoMesUTC(agora)
+  const inicioMesAnterior = primeiroDiaDoMesUTC(new Date(Date.UTC(inicioMesAtual.getUTCFullYear(), inicioMesAtual.getUTCMonth() - 1, 1)))
+
+  const [vendas, leadsMesAtual, vendedores, gastosRegistros, conta] = await Promise.all([
+    prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: inicioMesAnterior } } }),
+    prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioMesAtual } } }),
+    prisma.vendedor.findMany({ where: { usuarioId } }),
+    prisma.gastoAnuncioMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioMesAnterior } } }),
+    prisma.socialMediaConta.findUnique({ where: { usuarioId } }),
+  ])
+
+  const vendasMesAtual = vendas.filter(v => v.data >= inicioMesAtual)
+  const vendasMesAnterior = vendas.filter(v => v.data >= inicioMesAnterior && v.data < inicioMesAtual)
+  const receitaAtual = vendasMesAtual.reduce((s, v) => s + v.valorVenda, 0)
+  const receitaAnterior = vendasMesAnterior.reduce((s, v) => s + v.valorVenda, 0)
+
+  const gastoAtualRegistro = gastosRegistros.find(g => g.mesReferencia.getTime() === inicioMesAtual.getTime())
+  const gastoAtual = gastoAtualRegistro?.valor ?? 0
+  const roas = gastoAtual > 0 ? receitaAtual / gastoAtual : 0
+
+  // Concentração de receita no vendedor líder: sinal de risco de depender
+  // de uma única pessoa — mesmo cálculo de base do ranking do Dashboard,
+  // só que aqui reduzido a "quem é o líder e quanto ele pesa no total".
+  const receitaPorVendedor = new Map<string, number>()
+  for (const v of vendasMesAtual) {
+    if (!v.vendedorId) continue
+    receitaPorVendedor.set(v.vendedorId, (receitaPorVendedor.get(v.vendedorId) ?? 0) + v.valorVenda)
+  }
+  const maiorReceitaVendedor = receitaPorVendedor.size > 0 ? Math.max(...receitaPorVendedor.values()) : 0
+  const concentracaoMaiorVendedorPct = receitaAtual > 0 ? (maiorReceitaVendedor / receitaAtual) * 100 : 0
+
+  const periodoDias = 30
+  let socialConectado = false
+  let publicacoesPeriodo = 0
+  let metaPostagensPeriodo = 0
+  let taxaEngajamento = 0
+  let novosSeguidoresPeriodo = 0
+  let leadsOrganicosPeriodo = 0
+
+  if (conta) {
+    socialConectado = true
+    const fimExclusivo = new Date(inicioDoDiaUTC(agora).getTime() + 24 * 60 * 60 * 1000)
+    const inicioPeriodo = new Date(fimExclusivo.getTime() - periodoDias * 24 * 60 * 60 * 1000)
+    const [midias, snapshots, parametro, leadsOrganicos] = await Promise.all([
+      prisma.socialMediaMidia.findMany({ where: { contaId: conta.id, publicadoEm: { gte: inicioPeriodo, lt: fimExclusivo } } }),
+      prisma.socialMediaSnapshotDiario.findMany({ where: { contaId: conta.id, data: { gte: inicioPeriodo, lt: fimExclusivo } } }),
+      prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
+      prisma.lead.findMany({ where: { usuarioId, tipoLead: 'ORGANICO', criadoEm: { gte: inicioPeriodo, lt: fimExclusivo } }, select: { id: true } }),
+    ])
+    const semanasNoPeriodo = Math.max(1, Math.ceil(periodoDias / 7))
+    publicacoesPeriodo = midias.length
+    metaPostagensPeriodo = parametro.metaPostagensSemanais * semanasNoPeriodo
+    const somaAlcance = midias.reduce((s, m) => s + m.alcance, 0)
+    const engajamentoTotal = midias.reduce((s, m) => s + m.curtidas + m.comentarios + m.salvamentos + m.compartilhamentos, 0)
+    taxaEngajamento = somaAlcance > 0 ? engajamentoTotal / somaAlcance : 0
+    novosSeguidoresPeriodo = snapshots.reduce((s, sn) => s + sn.novosSeguidoresDia, 0)
+    leadsOrganicosPeriodo = leadsOrganicos.length
+  }
+
+  const metricas: MetricasNegocio = {
+    periodoDias,
+    socialConectado, publicacoesPeriodo, metaPostagensPeriodo, taxaEngajamento, novosSeguidoresPeriodo, leadsOrganicosPeriodo,
+    leadsAtual: leadsMesAtual.length,
+    conversaoLeadVenda: leadsMesAtual.length > 0 ? (vendasMesAtual.length / leadsMesAtual.length) * 100 : 0,
+    ticketMedioAtual: vendasMesAtual.length > 0 ? receitaAtual / vendasMesAtual.length : 0,
+    ticketMedioAnterior: vendasMesAnterior.length > 0 ? receitaAnterior / vendasMesAnterior.length : 0,
+    quantidadeVendasAtual: vendasMesAtual.length,
+    quantidadeVendasAnterior: vendasMesAnterior.length,
+    quantidadeVendedoresAtivos: vendedores.filter(v => v.ativo).length,
+    quantidadeVendedoresComVenda: receitaPorVendedor.size,
+    concentracaoMaiorVendedorPct,
+    roas,
+    receitaAtual,
+    receitaAnterior,
+  }
+
+  res.json(gerarPlanoDeCrescimento(metricas))
 })
 
 // ============ ASSISTENTE COMERCIAL (WhatsApp) ============
