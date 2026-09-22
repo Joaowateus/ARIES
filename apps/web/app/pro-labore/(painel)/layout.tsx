@@ -33,6 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
   ] },
   { label: 'Sistema', items: [
     { href: '/pro-labore/indicadores', label: 'Indicadores', icon: 'chart', donoOnly: true },
+    { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', icon: 'compass', donoOnly: true },
     { href: '/pro-labore/configuracoes', label: 'Configurações', icon: 'gear', donoOnly: true },
   ] },
 ]
