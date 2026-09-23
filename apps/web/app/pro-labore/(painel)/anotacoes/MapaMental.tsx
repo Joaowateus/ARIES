@@ -10,12 +10,61 @@
 // esforço aqui.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, Handle, Position, BaseEdge, NodeToolbar,
+  ReactFlow, ReactFlowProvider, Background, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar,
   getBezierPath, useInternalNode, useReactFlow, applyNodeChanges,
   type Node, type Edge, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { NoMapa } from '@/lib/proLaboreApi'
+
+// Ícones da toolbar vertical flutuante (réplica da barra da referência) —
+// mesmo estilo Feather (stroke, 24x24) do restante do app.
+function IconeCursor() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4l7.07 17 2.51-7.39L21 11.07z" />
+    </svg>
+  )
+}
+function IconeMao() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 11V6a2 2 0 0 0-4 0v5" />
+      <path d="M14 10V4a2 2 0 0 0-4 0v6" />
+      <path d="M10 10.5V6a2 2 0 0 0-4 0v8" />
+      <path d="M7 15a4 4 0 0 0 4 4h2a6 6 0 0 0 6-6v-2a2 2 0 0 0-4 0" />
+    </svg>
+  )
+}
+function IconeMais() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+function IconeLixeiraToolbar() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  )
+}
+function IconeAjustarTela() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  )
+}
 
 function gerarIdNo(): string {
   return `n${Date.now()}${Math.random().toString(36).slice(2, 8)}`
@@ -122,7 +171,7 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
   function sairEdicao() { setEditando(false) }
 
   return (
-    <div className={`pl-mapa-no ${data.ehCentral ? 'pl-mapa-no-central' : ''}`} style={{ borderColor: data.cor }}>
+    <div className={`pl-mapa-no ${data.ehCentral ? 'pl-mapa-no-central' : ''}`}>
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
         <button type="button" className="pl-mapa-toolbar-btn" title="Adicionar ideia filha" onClick={() => acoes.onAdicionarFilho(id)}>+</button>
@@ -202,6 +251,11 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
     () => arvoreParaFlow(garantirPosicoes(raizInicial as NoMapaLegado, 0, 0)),
   )
+  // Modo "mão" (pan): desliga o arraste de nó, então segurar e arrastar em
+  // qualquer ponto do canvas move a tela em vez de mover o nó — réplica do
+  // par cursor/mão da barra da referência.
+  const [modoMao, setModoMao] = useState(false)
+  const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? raizId
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
   // xyflow dispara onNodesChange (posição final, dragging:false) e em
   // seguida onNodeDragStop no mesmo evento de mouseup, síncronos entre si —
@@ -286,14 +340,39 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChangeFlow}
           onNodeDragStop={finalizarArraste}
+          nodesDraggable={!modoMao}
           fitView
           minZoom={0.2}
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={22} size={1} color="var(--pl-border-strong)" />
-          <Controls showInteractive={false} />
-          <MiniMap pannable zoomable nodeColor={n => (n.data as DadosNo).cor} maskColor="rgba(4,6,14,0.55)" />
+          <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />
+          <Panel position="top-left" className="pl-mapa-toolbar-vertical">
+            <button type="button" className={`pl-mapa-tv-btn ${!modoMao ? 'ativo' : ''}`} title="Selecionar" onClick={() => setModoMao(false)}>
+              <IconeCursor />
+            </button>
+            <button type="button" className={`pl-mapa-tv-btn ${modoMao ? 'ativo' : ''}`} title="Mover tela" onClick={() => setModoMao(true)}>
+              <IconeMao />
+            </button>
+            <div className="pl-mapa-tv-divisor" />
+            <button type="button" className="pl-mapa-tv-btn" title="Adicionar ideia" onClick={() => onAdicionarFilho(noSelecionadoId)}>
+              <IconeMais />
+            </button>
+            <button
+              type="button"
+              className="pl-mapa-tv-btn pl-mapa-tv-btn-danger"
+              title="Excluir selecionado"
+              disabled={noSelecionadoId === raizId}
+              onClick={() => onExcluir(noSelecionadoId)}
+            >
+              <IconeLixeiraToolbar />
+            </button>
+            <div className="pl-mapa-tv-divisor" />
+            <button type="button" className="pl-mapa-tv-btn" title="Ajustar à tela" onClick={() => fitView({ padding: 0.3, duration: 300 })}>
+              <IconeAjustarTela />
+            </button>
+          </Panel>
         </ReactFlow>
       </div>
     </AcoesMapaContext.Provider>
