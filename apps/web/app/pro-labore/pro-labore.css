@@ -1158,6 +1158,31 @@
 .pl-secao-resize-linha { border-color: var(--pl-accent) !important; }
 .pl-secao-resize-alca { width: 8px !important; height: 8px !important; border-radius: 2px !important; background: var(--pl-accent) !important; border: none !important; }
 
+/* Overlay do conector (EdgeLabelRenderer, dentro de EdgeFlutuante) — label
+   sempre visível quando existe, barrinha de estilo (cor/tracejado/seta/
+   label/excluir) só quando o conector está selecionado. */
+.pl-conector-overlay { position: absolute; z-index: 20; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pl-conector-overlay > * { pointer-events: all; }
+/* O renderer da lib fica no mesmo nível das camadas de nó por padrão — sem
+   isso, a barrinha de estilo do conector fica atrás de um nó que esteja
+   fisicamente por cima do ponto médio da linha (comum quando os dois
+   objetos conectados estão próximos), impossível de clicar. */
+.pl-mapa-canvas .react-flow__edgelabel-renderer { z-index: 20; position: relative; }
+.pl-conector-label {
+  background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 6px; padding: 2px 8px;
+  font-family: 'IBM Plex Sans'; font-size: 11.5px; font-weight: 600; color: var(--pl-ink-1); white-space: nowrap;
+}
+.pl-conector-toolbar {
+  display: flex; align-items: center; gap: 4px; background: var(--pl-surface); border: 1px solid var(--pl-border-strong);
+  border-radius: 10px; padding: 4px 6px; box-shadow: var(--pl-shadow-card);
+}
+.pl-conector-label-input {
+  width: 76px; border: none; background: var(--pl-surface-2); border-radius: 6px; padding: 3px 6px;
+  font-family: 'IBM Plex Sans'; font-size: 11.5px; color: var(--pl-ink-1); outline: none;
+}
+.pl-conector-cor-swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); cursor: pointer; padding: 0; }
+.pl-conector-cor-swatch:hover { transform: scale(1.15); }
+
 /* Chrome do React Flow (fundo, controles) combinando com o tema escuro/claro do app */
 .pl-mapa-canvas .react-flow__controls {
   box-shadow: var(--pl-shadow-card); border-radius: var(--pl-radius-sm); overflow: hidden;
