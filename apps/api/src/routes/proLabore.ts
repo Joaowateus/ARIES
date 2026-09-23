@@ -3008,15 +3008,21 @@ router.delete('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Res
 // Anotações (mora dentro de uma Pasta como uma Nota). A árvore de nós
 // inteira vive em `raiz`, validada de forma recursiva e solta (só limites
 // de tamanho, sem impor semântica) — ver comentário do modelo no schema.
-interface NoMapaInput { id: string; texto: string; filhos: NoMapaInput[] }
+// `x`/`y` são a posição livre do nó no canvas (MapaMental.tsx no
+// frontend, via @xyflow/react) — mapas criados antes dessa posição existir
+// não têm esses campos; o frontend calcula uma posição padrão na primeira
+// abertura e ela é persistida no primeiro autosave.
+interface NoMapaInput { id: string; texto: string; x: number; y: number; filhos: NoMapaInput[] }
 const noMapaSchema: z.ZodType<NoMapaInput> = z.lazy(() => z.object({
   id: z.string(),
   texto: z.string().max(300, 'Texto do nó muito longo'),
+  x: z.number(),
+  y: z.number(),
   filhos: z.array(noMapaSchema).max(40, 'Muitos nós filhos'),
 }))
 
 function criarNoMapaPadrao(texto: string): NoMapaInput {
-  return { id: 'raiz', texto, filhos: [] }
+  return { id: 'raiz', texto, x: 0, y: 0, filhos: [] }
 }
 
 router.get('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Response) => {

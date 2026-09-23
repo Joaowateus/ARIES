@@ -983,38 +983,52 @@
   .pl-notion-main { max-height: none; }
 }
 
-/* ============ MAPA MENTAL (MapaMental.tsx) ============ */
-.pl-mapa-canvas { overflow-x: auto; padding: 24px 4px 40px; }
-.pl-mapa-no-linha { display: flex; align-items: center; }
-.pl-mapa-no-caixa {
-  position: relative; display: flex; align-items: center; gap: 6px; background: var(--pl-surface-2);
-  border: 1px solid var(--pl-border-strong); border-radius: var(--pl-radius-md); padding: 7px 8px;
-  min-width: 160px; transition: border-color .12s ease;
+/* ============ MAPA MENTAL — canvas livre (MapaMental.tsx, @xyflow/react) ============ */
+.pl-mapa-canvas {
+  width: 100%; height: 640px; border-radius: var(--pl-radius-lg); border: 1px solid var(--pl-border);
+  overflow: hidden; background: var(--pl-bg);
 }
-.pl-mapa-no-caixa.pl-mapa-no-sobre { border-color: var(--pl-accent); background: var(--pl-accent-soft); }
-.pl-mapa-no-handle { flex: none; cursor: grab; color: var(--pl-ink-muted); font-size: 12px; padding: 0 2px; user-select: none; }
+.pl-mapa-canvas .react-flow__attribution { display: none; }
+
+.pl-mapa-no {
+  display: flex; align-items: center; gap: 6px; background: var(--pl-surface-2);
+  border: 2px solid var(--pl-border-strong); border-radius: 999px; padding: 8px 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18); transition: box-shadow .12s ease;
+}
+.pl-mapa-no:hover { box-shadow: 0 4px 16px rgba(0,0,0,.28); }
+.pl-mapa-no-central {
+  padding: 15px 24px; border-radius: 18px; background: var(--pl-surface); box-shadow: 0 6px 22px rgba(0,0,0,.32);
+}
 .pl-mapa-no-input {
-  flex: 1; min-width: 90px; border: none; background: none; font-family: 'IBM Plex Sans'; font-size: 13.5px;
-  color: var(--pl-ink-1); padding: 3px 2px;
+  border: none; background: none; font-family: 'IBM Plex Sans'; font-size: 13.5px; font-weight: 600;
+  color: var(--pl-ink-1); padding: 2px; cursor: text;
 }
 .pl-mapa-no-input:focus { outline: none; }
-.pl-mapa-no-linha:first-child .pl-mapa-no-caixa .pl-mapa-no-input { font-weight: 700; font-size: 15px; }
+.pl-mapa-no-central .pl-mapa-no-input { font-size: 16px; font-weight: 800; }
+.pl-mapa-no-texto {
+  font-family: 'IBM Plex Sans'; font-size: 13.5px; font-weight: 600; color: var(--pl-ink-1);
+  padding: 2px; cursor: grab; user-select: none; white-space: nowrap; min-width: 60px;
+}
+.pl-mapa-no-texto:active { cursor: grabbing; }
+.pl-mapa-no-central .pl-mapa-no-texto { font-size: 16px; font-weight: 800; }
 .pl-mapa-no-acoes { flex: none; display: flex; gap: 2px; opacity: 0; transition: opacity .12s ease; }
-.pl-mapa-no-caixa:hover .pl-mapa-no-acoes { opacity: 1; }
+.pl-mapa-no:hover .pl-mapa-no-acoes { opacity: 1; }
 .pl-mapa-no-acao-btn {
-  width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 5px;
-  background: none; border: none; cursor: pointer; color: var(--pl-ink-muted); font-size: 13px; line-height: 1;
+  width: 19px; height: 19px; display: flex; align-items: center; justify-content: center; border-radius: 999px;
+  background: var(--pl-surface-3); border: none; cursor: pointer; color: var(--pl-ink-2); font-size: 13px; line-height: 1;
 }
-.pl-mapa-no-acao-btn:hover { background: var(--pl-surface-3); color: var(--pl-ink-1); }
+.pl-mapa-no-acao-btn:hover { background: var(--pl-accent); color: var(--pl-accent-ink); }
 
-.pl-mapa-no-filhos { display: flex; flex-direction: column; gap: 14px; position: relative; padding-left: 28px; margin-left: 4px; }
-.pl-mapa-no-filhos::before {
-  content: ''; position: absolute; left: 14px; top: 20px; bottom: 20px; width: 1px; background: var(--pl-border-strong);
+/* Chrome do React Flow (fundo, controles, minimapa) combinando com o tema escuro/claro do app */
+.pl-mapa-canvas .react-flow__controls {
+  box-shadow: var(--pl-shadow-card); border-radius: var(--pl-radius-sm); overflow: hidden;
+  border: 1px solid var(--pl-border);
 }
-.pl-mapa-no-filhos > .pl-mapa-no-linha { position: relative; }
-.pl-mapa-no-filhos > .pl-mapa-no-linha::before {
-  content: ''; position: absolute; left: -14px; top: 50%; width: 14px; height: 1px; background: var(--pl-border-strong);
+.pl-mapa-canvas .react-flow__controls-button {
+  background: var(--pl-surface); border-bottom: 1px solid var(--pl-border); fill: var(--pl-ink-2);
 }
+.pl-mapa-canvas .react-flow__controls-button:hover { background: var(--pl-surface-2); }
+.pl-mapa-canvas .react-flow__minimap { border-radius: var(--pl-radius-sm); overflow: hidden; border: 1px solid var(--pl-border); }
 
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }

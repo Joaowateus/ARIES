@@ -898,9 +898,12 @@ export interface Pasta {
 
 // Mapa mental: outro "tipo de página" dentro da árvore de Anotações, ao
 // lado de Nota. A árvore de nós inteira mora em `raiz`, um nó recursivo.
+// x/y = posição livre no canvas (MapaMentalCanvas, via @xyflow/react).
 export interface NoMapa {
   id: string
   texto: string
+  x: number
+  y: number
   filhos: NoMapa[]
 }
 
