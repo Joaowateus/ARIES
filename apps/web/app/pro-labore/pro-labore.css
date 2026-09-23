@@ -1070,6 +1070,16 @@
 .pl-mapa-tv-btn:disabled:hover { background: none; color: var(--pl-ink-2); }
 .pl-mapa-tv-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--pl-critical) 16%, transparent); color: var(--pl-critical); }
 .pl-mapa-tv-divisor { width: 20px; height: 1px; background: var(--pl-border); margin: 3px 0; }
+
+/* Barra de seleção múltipla (Panel top-center) — travar, camadas, alinhar,
+   distribuir, agrupar. Só aparece com 1+ objetos selecionados; os grupos de
+   botão de alinhar/agrupar (2+) e distribuir (3+) entram condicionalmente. */
+.pl-mapa-toolbar-selecao {
+  display: flex; align-items: center; gap: 3px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 12px;
+  padding: 6px; box-shadow: var(--pl-shadow-card);
+}
+.pl-mapa-tv-divisor-h { width: 1px; height: 20px; background: var(--pl-border); margin: 0 3px; }
 .pl-mapa-tv-item { position: relative; }
 
 /* Flyout do botão "Formas" — grade de miniaturas do catálogo de formas de
