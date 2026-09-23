@@ -1019,15 +1019,12 @@
 }
 .pl-mapa-canvas .react-flow__attribution { display: none; }
 
-.pl-mapa-no {
-  display: flex; align-items: center; gap: 6px; background: var(--pl-surface-2);
-  border: 2px solid var(--pl-border-strong); border-radius: 12px; padding: 10px 16px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.18); transition: box-shadow .12s ease;
-}
-.pl-mapa-no:hover { box-shadow: 0 4px 16px rgba(0,0,0,.28); }
+.pl-mapa-no { display: flex; align-items: center; gap: 6px; }
 .pl-mapa-no-central {
-  padding: 16px 26px; border-radius: 14px; background: var(--pl-surface); box-shadow: 0 6px 22px rgba(0,0,0,.32);
+  background: var(--pl-surface); border-radius: 14px; padding: 16px 26px;
+  box-shadow: 0 6px 22px rgba(0,0,0,.32); transition: box-shadow .12s ease;
 }
+.pl-mapa-no-central:hover { box-shadow: 0 8px 28px rgba(0,0,0,.4); }
 .pl-mapa-no-input {
   border: none; background: none; font-family: 'IBM Plex Sans'; font-size: 13.5px; font-weight: 600;
   color: var(--pl-ink-1); padding: 2px; cursor: text;
@@ -1054,16 +1051,36 @@
 .pl-mapa-toolbar-btn:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
 .pl-mapa-toolbar-btn-danger:hover { background: color-mix(in srgb, var(--pl-critical) 16%, transparent); color: var(--pl-critical); }
 
-/* Chrome do React Flow (fundo, controles, minimapa) combinando com o tema escuro/claro do app */
+/* Toolbar vertical flutuante (Panel top-left do @xyflow/react) — réplica da
+   barra de ferramentas da referência: cursor/mão pra alternar seleção vs.
+   pan da tela, adicionar/excluir nó selecionado, ajustar zoom. */
+.pl-mapa-toolbar-vertical {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 12px;
+  padding: 6px; box-shadow: var(--pl-shadow-card);
+}
+.pl-mapa-tv-btn {
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: none; border: none; cursor: pointer; color: var(--pl-ink-2);
+}
+.pl-mapa-tv-btn svg { width: 16px; height: 16px; }
+.pl-mapa-tv-btn:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
+.pl-mapa-tv-btn.ativo { background: var(--pl-accent); color: #fff; }
+.pl-mapa-tv-btn:disabled { opacity: .35; cursor: not-allowed; }
+.pl-mapa-tv-btn:disabled:hover { background: none; color: var(--pl-ink-2); }
+.pl-mapa-tv-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--pl-critical) 16%, transparent); color: var(--pl-critical); }
+.pl-mapa-tv-divisor { width: 20px; height: 1px; background: var(--pl-border); margin: 3px 0; }
+
+/* Chrome do React Flow (fundo, controles) combinando com o tema escuro/claro do app */
 .pl-mapa-canvas .react-flow__controls {
   box-shadow: var(--pl-shadow-card); border-radius: var(--pl-radius-sm); overflow: hidden;
   border: 1px solid var(--pl-border);
 }
 .pl-mapa-canvas .react-flow__controls-button {
-  background: var(--pl-surface); border-bottom: 1px solid var(--pl-border); fill: var(--pl-ink-2);
+  background: var(--pl-surface); border-right: 1px solid var(--pl-border); border-bottom: none; fill: var(--pl-ink-2);
 }
+.pl-mapa-canvas .react-flow__controls-button:last-child { border-right: none; }
 .pl-mapa-canvas .react-flow__controls-button:hover { background: var(--pl-surface-2); }
-.pl-mapa-canvas .react-flow__minimap { border-radius: var(--pl-radius-sm); overflow: hidden; border: 1px solid var(--pl-border); }
 
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
