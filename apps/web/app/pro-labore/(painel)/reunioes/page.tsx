@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  proLaboreApi, Bloco, CATEGORIAS_NOTA, CategoriaNota, Nota, Pasta, Reuniao, ReuniaoDetalhe, ReuniaoResumo, TIPOS_REUNIAO, TipoReuniao,
+  proLaboreApi, Bloco, CATEGORIAS_NOTA, CategoriaNota, MapaMental, Nota, Pasta, Reuniao, ReuniaoDetalhe, ReuniaoResumo, TIPOS_REUNIAO, TipoReuniao,
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
+import MapaMentalCanvas, { criarNoMapa } from './MapaMental'
 
 const EMOJIS_NOTA = ['📄', '📝', '💡', '🎯', '📌', '✅', '🔥', '📊', '🚀', '⭐', '🗂️', '📅', '💬', '🧠', '⚙️', '📈', '📚', '🧩']
 
@@ -282,7 +283,7 @@ function IconeLixeira() {
   )
 }
 
-type VisaoAnotacoes = { tipo: 'pasta'; id: string | null } | { tipo: 'nota'; id: string }
+type VisaoAnotacoes = { tipo: 'pasta'; id: string | null } | { tipo: 'nota'; id: string } | { tipo: 'mapa'; id: string }
 
 function SeletorIcone({ valor, tamanhoClasse, onEscolher }: { valor: string; tamanhoClasse: string; onEscolher: (icone: string | null) => void }) {
   const [aberto, setAberto] = useState(false)
@@ -302,22 +303,26 @@ function SeletorIcone({ valor, tamanhoClasse, onEscolher }: { valor: string; tam
 }
 
 function NoArvore({
-  pasta, nivel, pastas, notas, visao, abertas, onAlternarAberta, onAbrirPasta, onAbrirNota, onNovaNota,
+  pasta, nivel, pastas, notas, mapas, visao, abertas, onAlternarAberta, onAbrirPasta, onAbrirNota, onAbrirMapa, onNovaNota, onNovoMapa,
 }: {
   pasta: Pasta
   nivel: number
   pastas: Pasta[]
   notas: Nota[]
+  mapas: MapaMental[]
   visao: VisaoAnotacoes
   abertas: Set<string>
   onAlternarAberta: (id: string) => void
   onAbrirPasta: (id: string | null) => void
   onAbrirNota: (id: string) => void
+  onAbrirMapa: (id: string) => void
   onNovaNota: (pastaId: string | null) => void
+  onNovoMapa: (pastaId: string | null) => void
 }) {
   const subpastas = pastas.filter(p => (p.paiId ?? null) === pasta.id)
   const filhosNotas = notas.filter(n => (n.pastaId ?? null) === pasta.id)
-  const temFilhos = subpastas.length > 0 || filhosNotas.length > 0
+  const filhosMapas = mapas.filter(m => (m.pastaId ?? null) === pasta.id)
+  const temFilhos = subpastas.length > 0 || filhosNotas.length > 0 || filhosMapas.length > 0
   const aberta = abertas.has(pasta.id)
   const ativa = visao.tipo === 'pasta' && visao.id === pasta.id
 
@@ -337,8 +342,9 @@ function NoArvore({
         <div>
           {subpastas.map(p => (
             <NoArvore
-              key={p.id} pasta={p} nivel={nivel + 1} pastas={pastas} notas={notas} visao={visao} abertas={abertas}
-              onAlternarAberta={onAlternarAberta} onAbrirPasta={onAbrirPasta} onAbrirNota={onAbrirNota} onNovaNota={onNovaNota}
+              key={p.id} pasta={p} nivel={nivel + 1} pastas={pastas} notas={notas} mapas={mapas} visao={visao} abertas={abertas}
+              onAlternarAberta={onAlternarAberta} onAbrirPasta={onAbrirPasta} onAbrirNota={onAbrirNota} onAbrirMapa={onAbrirMapa}
+              onNovaNota={onNovaNota} onNovoMapa={onNovoMapa}
             />
           ))}
           {filhosNotas.map(n => (
@@ -349,6 +355,14 @@ function NoArvore({
               </button>
             </div>
           ))}
+          {filhosMapas.map(m => (
+            <div key={m.id} className={`pl-arvore-item ${visao.tipo === 'mapa' && visao.id === m.id ? 'active' : ''}`} style={{ marginLeft: (nivel + 1) * 14 + 18 }}>
+              <button type="button" className="pl-arvore-label" onClick={() => onAbrirMapa(m.id)}>
+                <span className="pl-arvore-icone">{m.icone || '🧠'}</span>
+                <span className="pl-arvore-nome">{m.titulo || 'Sem título'}</span>
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -356,19 +370,24 @@ function NoArvore({
 }
 
 function VisaoPasta({
-  pasta, pastas, notas, onAbrirPasta, onAbrirNota, onNovaNota, onNovaPasta, onRenomearPasta, onIconePasta, onExcluirPasta, onExcluirNota,
+  pasta, pastas, notas, mapas, onAbrirPasta, onAbrirNota, onAbrirMapa, onNovaNota, onNovoMapa, onNovaPasta,
+  onRenomearPasta, onIconePasta, onExcluirPasta, onExcluirNota, onExcluirMapa,
 }: {
   pasta: Pasta | null
   pastas: Pasta[]
   notas: Nota[]
+  mapas: MapaMental[]
   onAbrirPasta: (id: string | null) => void
   onAbrirNota: (id: string) => void
+  onAbrirMapa: (id: string) => void
   onNovaNota: () => void
+  onNovoMapa: () => void
   onNovaPasta: () => void
   onRenomearPasta: (id: string, nome: string) => void
   onIconePasta: (id: string, icone: string | null) => void
   onExcluirPasta: (id: string) => void
   onExcluirNota: (id: string) => void
+  onExcluirMapa: (id: string) => void
 }) {
   const [rascunhoNome, setRascunhoNome] = useState(pasta?.nome ?? '')
   useEffect(() => { setRascunhoNome(pasta?.nome ?? '') }, [pasta?.id, pasta?.nome])
@@ -378,6 +397,7 @@ function VisaoPasta({
 
   const subpastas = pastas.filter(p => (p.paiId ?? null) === (pasta?.id ?? null))
   const filhosNotas = notas.filter(n => (n.pastaId ?? null) === (pasta?.id ?? null))
+  const filhosMapas = mapas.filter(m => (m.pastaId ?? null) === (pasta?.id ?? null))
 
   function salvarNome() {
     const nome = rascunhoNome.trim()
@@ -423,10 +443,11 @@ function VisaoPasta({
 
       <div className="pl-notion-acoes-rapidas">
         <button type="button" className="pl-btn pl-btn-ghost" onClick={onNovaNota}>+ Nova página</button>
+        <button type="button" className="pl-btn pl-btn-ghost" onClick={onNovoMapa}>+ Novo mapa mental</button>
         <button type="button" className="pl-btn pl-btn-ghost" onClick={onNovaPasta}>+ Nova pasta</button>
       </div>
 
-      {subpastas.length === 0 && filhosNotas.length === 0 ? (
+      {subpastas.length === 0 && filhosNotas.length === 0 && filhosMapas.length === 0 ? (
         <div className="pl-empty pl-card">
           <div className="pl-emoji">📝</div>
           Nada por aqui ainda.
@@ -434,7 +455,9 @@ function VisaoPasta({
       ) : (
         <div className="pl-notion-lista">
           {subpastas.map(p => {
-            const quantidade = pastas.filter(x => (x.paiId ?? null) === p.id).length + notas.filter(n => (n.pastaId ?? null) === p.id).length
+            const quantidade = pastas.filter(x => (x.paiId ?? null) === p.id).length
+              + notas.filter(n => (n.pastaId ?? null) === p.id).length
+              + mapas.filter(m => (m.pastaId ?? null) === p.id).length
             return (
               <div key={p.id} className="pl-notion-lista-item" onClick={() => onAbrirPasta(p.id)}>
                 <span className="pl-notion-lista-icone">{p.icone || '📁'}</span>
@@ -449,6 +472,16 @@ function VisaoPasta({
               <span className="pl-notion-lista-nome">{n.titulo || 'Sem título'}</span>
               <span className="pl-status-badge neutro">{CATEGORIA_LABEL[n.categoria]}</span>
               <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={e => { e.stopPropagation(); onExcluirNota(n.id) }}>
+                <IconeLixeira />
+              </button>
+            </div>
+          ))}
+          {filhosMapas.map(m => (
+            <div key={m.id} className="pl-notion-lista-item" onClick={() => onAbrirMapa(m.id)}>
+              <span className="pl-notion-lista-icone">{m.icone || '🧠'}</span>
+              <span className="pl-notion-lista-nome">{m.titulo || 'Sem título'}</span>
+              <span className="pl-status-badge neutro">Mapa mental</span>
+              <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={e => { e.stopPropagation(); onExcluirMapa(m.id) }}>
                 <IconeLixeira />
               </button>
             </div>
@@ -555,16 +588,90 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
   )
 }
 
+function PaginaMapaMental({ mapa, onAtualizado, onExcluir }: { mapa: MapaMental | null; onAtualizado: (mapa: MapaMental) => void; onExcluir: () => void }) {
+  const [titulo, setTitulo] = useState(mapa?.titulo ?? '')
+  const [icone, setIcone] = useState(mapa?.icone ?? '')
+  const [raizInicial, setRaizInicial] = useState(mapa?.raiz ?? criarNoMapa('Ideia central'))
+  const [status, setStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo')
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  type CamposMapa = Partial<{ titulo: string; icone: string | null; raiz: typeof raizInicial }>
+  const pendenteRef = useRef<CamposMapa>({})
+
+  useEffect(() => {
+    setTitulo(mapa?.titulo ?? '')
+    setIcone(mapa?.icone ?? '')
+    setRaizInicial(mapa?.raiz ?? criarNoMapa('Ideia central'))
+    pendenteRef.current = {}
+    setStatus('salvo')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapa?.id])
+
+  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }, [])
+
+  // Mesmo padrão de merge de campos pendentes do autosave da PaginaNota —
+  // ver comentário lá: sem isso, editar o título e mexer no mapa na mesma
+  // janela de debounce descartaria o título.
+  function agendarSalvar(dados: CamposMapa) {
+    if (!mapa) return
+    pendenteRef.current = { ...pendenteRef.current, ...dados }
+    setStatus('salvando')
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(async () => {
+      const paraSalvar = pendenteRef.current
+      pendenteRef.current = {}
+      try {
+        const atualizado = await proLaboreApi.mapasMentais.atualizar(mapa.id, paraSalvar)
+        onAtualizado(atualizado)
+        setStatus('salvo')
+      } catch {
+        setStatus('erro')
+      }
+    }, 500)
+  }
+
+  if (!mapa) return <div className="pl-card"><div className="pl-empty">Mapa mental não encontrado.</div></div>
+
+  return (
+    <div className="pl-notion-pagina">
+      <div className="pl-notion-pagina-topo">
+        <SeletorIcone
+          valor={icone || '🧠'}
+          tamanhoClasse="pl-notion-pagina-icone"
+          onEscolher={novoIcone => { setIcone(novoIcone ?? ''); agendarSalvar({ icone: novoIcone }) }}
+        />
+        <div className="pl-notion-pagina-status">{status === 'salvando' ? 'Salvando...' : status === 'erro' ? 'Erro ao salvar' : 'Salvo'}</div>
+        <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={onExcluir}>
+          <IconeLixeira />
+        </button>
+      </div>
+
+      <input
+        className="pl-notion-pagina-titulo"
+        value={titulo}
+        placeholder="Sem título"
+        autoFocus
+        onChange={e => { setTitulo(e.target.value); agendarSalvar({ titulo: e.target.value }) }}
+      />
+
+      <MapaMentalCanvas
+        raizInicial={raizInicial}
+        onChange={novaRaiz => agendarSalvar({ raiz: novaRaiz })}
+      />
+    </div>
+  )
+}
+
 function AbaAnotacoes() {
   const [pastas, setPastas] = useState<Pasta[]>([])
   const [notas, setNotas] = useState<Nota[]>([])
+  const [mapas, setMapas] = useState<MapaMental[]>([])
   const [visao, setVisao] = useState<VisaoAnotacoes>({ tipo: 'pasta', id: null })
   const [abertas, setAbertas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
 
   const carregarTudo = useCallback(() => {
-    Promise.all([proLaboreApi.pastas.listar(), proLaboreApi.notas.listar()])
-      .then(([ps, ns]) => { setPastas(ps); setNotas(ns) })
+    Promise.all([proLaboreApi.pastas.listar(), proLaboreApi.notas.listar(), proLaboreApi.mapasMentais.listar()])
+      .then(([ps, ns, ms]) => { setPastas(ps); setNotas(ns); setMapas(ms) })
       .finally(() => setCarregando(false))
   }, [])
   useEffect(() => { carregarTudo() }, [carregarTudo])
@@ -581,6 +688,13 @@ function AbaAnotacoes() {
     const nota = await proLaboreApi.notas.criar({ pastaId })
     setNotas(prev => [nota, ...prev])
     setVisao({ tipo: 'nota', id: nota.id })
+    if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
+  }
+
+  async function criarMapa(pastaId: string | null) {
+    const mapa = await proLaboreApi.mapasMentais.criar({ pastaId })
+    setMapas(prev => [mapa, ...prev])
+    setVisao({ tipo: 'mapa', id: mapa.id })
     if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
   }
 
@@ -608,6 +722,7 @@ function AbaAnotacoes() {
     await proLaboreApi.pastas.excluir(id)
     setPastas(prev => prev.filter(p => p.id !== id).map(p => (p.paiId === id ? { ...p, paiId } : p)))
     setNotas(prev => prev.map(n => (n.pastaId === id ? { ...n, pastaId: paiId } : n)))
+    setMapas(prev => prev.map(m => (m.pastaId === id ? { ...m, pastaId: paiId } : m)))
     setVisao(atual => (atual.tipo === 'pasta' && atual.id === id ? { tipo: 'pasta', id: paiId } : atual))
   }
 
@@ -619,8 +734,20 @@ function AbaAnotacoes() {
     setVisao(atual => (atual.tipo === 'nota' && atual.id === id ? { tipo: 'pasta', id: nota?.pastaId ?? null } : atual))
   }
 
+  async function excluirMapa(id: string) {
+    if (!confirm('Excluir esse mapa mental?')) return
+    const mapa = mapas.find(m => m.id === id)
+    await proLaboreApi.mapasMentais.excluir(id)
+    setMapas(prev => prev.filter(m => m.id !== id))
+    setVisao(atual => (atual.tipo === 'mapa' && atual.id === id ? { tipo: 'pasta', id: mapa?.pastaId ?? null } : atual))
+  }
+
   function atualizarNotaLocal(nota: Nota) {
     setNotas(prev => prev.map(n => (n.id === nota.id ? nota : n)))
+  }
+
+  function atualizarMapaLocal(mapa: MapaMental) {
+    setMapas(prev => prev.map(m => (m.id === mapa.id ? mapa : m)))
   }
 
   if (carregando) return <div className="pl-card"><div className="pl-hint">Carregando...</div></div>
@@ -642,11 +769,13 @@ function AbaAnotacoes() {
           </div>
           {pastas.filter(p => (p.paiId ?? null) === null).map(p => (
             <NoArvore
-              key={p.id} pasta={p} nivel={0} pastas={pastas} notas={notas} visao={visao} abertas={abertas}
+              key={p.id} pasta={p} nivel={0} pastas={pastas} notas={notas} mapas={mapas} visao={visao} abertas={abertas}
               onAlternarAberta={alternarAberta}
               onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
               onAbrirNota={id => setVisao({ tipo: 'nota', id })}
+              onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
               onNovaNota={criarNota}
+              onNovoMapa={criarMapa}
             />
           ))}
           {notas.filter(n => (n.pastaId ?? null) === null).map(n => (
@@ -655,6 +784,15 @@ function AbaAnotacoes() {
               <button type="button" className="pl-arvore-label" onClick={() => setVisao({ tipo: 'nota', id: n.id })}>
                 <span className="pl-arvore-icone">{n.icone || '📄'}</span>
                 <span className="pl-arvore-nome">{n.titulo || 'Sem título'}</span>
+              </button>
+            </div>
+          ))}
+          {mapas.filter(m => (m.pastaId ?? null) === null).map(m => (
+            <div key={m.id} className={`pl-arvore-item ${visao.tipo === 'mapa' && visao.id === m.id ? 'active' : ''}`}>
+              <span className="pl-arvore-chevron invisivel" />
+              <button type="button" className="pl-arvore-label" onClick={() => setVisao({ tipo: 'mapa', id: m.id })}>
+                <span className="pl-arvore-icone">{m.icone || '🧠'}</span>
+                <span className="pl-arvore-nome">{m.titulo || 'Sem título'}</span>
               </button>
             </div>
           ))}
@@ -668,21 +806,32 @@ function AbaAnotacoes() {
             pasta={visao.id ? pastas.find(p => p.id === visao.id) ?? null : null}
             pastas={pastas}
             notas={notas}
+            mapas={mapas}
             onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
             onAbrirNota={id => setVisao({ tipo: 'nota', id })}
+            onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
             onNovaNota={() => criarNota(visao.id)}
+            onNovoMapa={() => criarMapa(visao.id)}
             onNovaPasta={() => criarPasta(visao.id)}
             onRenomearPasta={renomearPasta}
             onIconePasta={definirIconePasta}
             onExcluirPasta={excluirPasta}
             onExcluirNota={excluirNota}
+            onExcluirMapa={excluirMapa}
           />
-        ) : (
+        ) : visao.tipo === 'nota' ? (
           <PaginaNota
             key={visao.id}
             nota={notas.find(n => n.id === visao.id) ?? null}
             onAtualizada={atualizarNotaLocal}
             onExcluir={() => excluirNota(visao.id)}
+          />
+        ) : (
+          <PaginaMapaMental
+            key={visao.id}
+            mapa={mapas.find(m => m.id === visao.id) ?? null}
+            onAtualizado={atualizarMapaLocal}
+            onExcluir={() => excluirMapa(visao.id)}
           />
         )}
       </div>
