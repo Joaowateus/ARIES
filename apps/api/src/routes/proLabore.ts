@@ -3035,6 +3035,7 @@ const boardObjetoSchema = z.object({
   largura: z.number().optional(),
   altura: z.number().optional(),
   travado: z.boolean().optional(),
+  zIndex: z.number().optional(),
   estilo: z.record(z.string(), z.unknown()).optional(),
   conteudo: z.record(z.string(), z.unknown()),
 }).refine(o => JSON.stringify(o).length <= 5000, 'Objeto do board muito grande')

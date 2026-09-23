@@ -112,6 +112,128 @@ function IconeSecao() {
   )
 }
 
+// Ícones da barra de seleção múltipla (alinhar/distribuir/agrupar/camadas/
+// travar) — mesmo estilo Feather do resto do arquivo.
+function IconeAlinharEsq() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="4" y1="2" x2="4" y2="22" />
+      <rect x="7" y="5" width="7" height="4" />
+      <rect x="7" y="11" width="13" height="4" />
+      <rect x="7" y="17" width="4" height="4" />
+    </svg>
+  )
+}
+function IconeAlinharCentroH() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="12" y1="2" x2="12" y2="22" />
+      <rect x="8.5" y="5" width="7" height="4" />
+      <rect x="5.5" y="11" width="13" height="4" />
+      <rect x="10" y="17" width="4" height="4" />
+    </svg>
+  )
+}
+function IconeAlinharDir() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="20" y1="2" x2="20" y2="22" />
+      <rect x="10" y="5" width="7" height="4" />
+      <rect x="4" y="11" width="13" height="4" />
+      <rect x="13" y="17" width="4" height="4" />
+    </svg>
+  )
+}
+function IconeAlinharTopo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="2" y1="4" x2="22" y2="4" />
+      <rect x="5" y="7" width="4" height="7" />
+      <rect x="11" y="7" width="4" height="13" />
+      <rect x="17" y="7" width="4" height="4" />
+    </svg>
+  )
+}
+function IconeAlinharMeio() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <rect x="5" y="8.5" width="4" height="7" />
+      <rect x="11" y="5.5" width="4" height="13" />
+      <rect x="17" y="10" width="4" height="4" />
+    </svg>
+  )
+}
+function IconeAlinharBase() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="2" y1="20" x2="22" y2="20" />
+      <rect x="5" y="13" width="4" height="7" />
+      <rect x="11" y="7" width="4" height="13" />
+      <rect x="17" y="16" width="4" height="4" />
+    </svg>
+  )
+}
+function IconeDistribuirH() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <rect x="2" y="8" width="4" height="8" />
+      <rect x="10" y="8" width="4" height="8" />
+      <rect x="18" y="8" width="4" height="8" />
+    </svg>
+  )
+}
+function IconeDistribuirV() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <rect x="8" y="2" width="8" height="4" />
+      <rect x="8" y="10" width="8" height="4" />
+      <rect x="8" y="18" width="8" height="4" />
+    </svg>
+  )
+}
+function IconeAgrupar() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="8" height="8" rx="1" />
+      <rect x="13" y="13" width="8" height="8" rx="1" />
+      <path d="M11 7h4a2 2 0 0 1 2 2v4" />
+    </svg>
+  )
+}
+function IconeDesagrupar() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="8" height="8" rx="1" />
+      <rect x="13" y="13" width="8" height="8" rx="1" />
+    </svg>
+  )
+}
+function IconeTrazerFrente() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="12" height="12" rx="1" opacity="0.4" />
+      <rect x="9" y="9" width="12" height="12" rx="1" />
+    </svg>
+  )
+}
+function IconeEnviarTras() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="12" height="12" rx="1" />
+      <rect x="9" y="9" width="12" height="12" rx="1" opacity="0.4" />
+    </svg>
+  )
+}
+function IconeCadeadoSelecao() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
 function gerarIdNo(): string {
   return `n${Date.now()}${Math.random().toString(36).slice(2, 8)}`
 }
@@ -316,11 +438,20 @@ type DadosObjeto = DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIc
 type NoFlow = Node<DadosObjeto>
 
 function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
+  // grupoId (agrupamento) mora dentro de `conteudo` (não é um campo
+  // dedicado do BoardObjeto) pra não precisar mexer no schema/validação
+  // do backend; travado/zIndex já eram campos de primeira classe.
+  const grupoId = o.conteudo.grupoId as string | undefined
+  const base = {
+    id: o.id, position: { x: o.x, y: o.y },
+    ...(o.travado ? { draggable: false } : {}),
+    ...(typeof o.zIndex === 'number' ? { zIndex: o.zIndex } : {}),
+  }
   if (o.tipo === 'forma') {
     return {
-      id: o.id, type: 'forma', position: { x: o.x, y: o.y },
+      ...base, type: 'forma',
       data: {
-        tipoObjeto: 'forma',
+        tipoObjeto: 'forma', grupoId,
         forma: (o.conteudo.forma as TipoForma) ?? 'retangulo',
         texto: (o.conteudo.texto as string) ?? '',
         cor: (o.estilo?.cor as string) ?? corHerdada,
@@ -329,60 +460,71 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
   }
   if (o.tipo === 'sticky') {
     return {
-      id: o.id, type: 'sticky', position: { x: o.x, y: o.y },
-      data: { tipoObjeto: 'sticky', texto: (o.conteudo.texto as string) ?? '', cor: (o.estilo?.cor as string) ?? PALETA_STICKY[0] },
+      ...base, type: 'sticky',
+      data: { tipoObjeto: 'sticky', grupoId, texto: (o.conteudo.texto as string) ?? '', cor: (o.estilo?.cor as string) ?? PALETA_STICKY[0] },
     }
   }
   if (o.tipo === 'texto') {
-    return {
-      id: o.id, type: 'texto', position: { x: o.x, y: o.y },
-      data: { tipoObjeto: 'texto', texto: (o.conteudo.texto as string) ?? '' },
-    }
+    return { ...base, type: 'texto', data: { tipoObjeto: 'texto', grupoId, texto: (o.conteudo.texto as string) ?? '' } }
   }
   if (o.tipo === 'icone') {
     return {
-      id: o.id, type: 'icone', position: { x: o.x, y: o.y },
-      data: { tipoObjeto: 'icone', icone: (o.conteudo.icone as TipoIcone) ?? 'estrela', cor: (o.estilo?.cor as string) ?? corHerdada },
+      ...base, type: 'icone',
+      data: { tipoObjeto: 'icone', grupoId, icone: (o.conteudo.icone as TipoIcone) ?? 'estrela', cor: (o.estilo?.cor as string) ?? corHerdada },
     }
   }
   if (o.tipo === 'secao') {
     return {
-      id: o.id, type: 'secao', position: { x: o.x, y: o.y }, width: o.largura ?? 420, height: o.altura ?? 280, zIndex: -1,
-      data: { tipoObjeto: 'secao', texto: (o.conteudo.texto as string) ?? '', cor: (o.estilo?.cor as string) ?? 'var(--pl-accent)' },
+      ...base, type: 'secao', width: o.largura ?? 420, height: o.altura ?? 280,
+      zIndex: typeof o.zIndex === 'number' ? o.zIndex : -1,
+      data: { tipoObjeto: 'secao', grupoId, texto: (o.conteudo.texto as string) ?? '', cor: (o.estilo?.cor as string) ?? 'var(--pl-accent)' },
     }
   }
   return {
-    id: o.id, type: 'noMapa', position: { x: o.x, y: o.y },
-    data: { tipoObjeto: 'noMapa', texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
+    ...base, type: 'noMapa',
+    data: { tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
   }
 }
 
 function nodeParaObjeto(n: NoFlow): BoardObjeto {
+  const grupoId = (n.data as Record<string, unknown>).grupoId as string | undefined
+  const comuns = {
+    ...(n.draggable === false ? { travado: true } : {}),
+    ...(typeof n.zIndex === 'number' ? { zIndex: n.zIndex } : {}),
+  }
+  const comGrupo = (conteudo: Record<string, unknown>) => (grupoId ? { ...conteudo, grupoId } : conteudo)
+
   if (n.data.tipoObjeto === 'forma') {
     return {
-      id: n.id, tipo: 'forma', x: n.position.x, y: n.position.y,
-      estilo: { cor: n.data.cor }, conteudo: { forma: n.data.forma, texto: n.data.texto },
+      id: n.id, tipo: 'forma', x: n.position.x, y: n.position.y, ...comuns,
+      estilo: { cor: n.data.cor }, conteudo: comGrupo({ forma: n.data.forma, texto: n.data.texto }),
     }
   }
   if (n.data.tipoObjeto === 'sticky') {
-    return { id: n.id, tipo: 'sticky', x: n.position.x, y: n.position.y, estilo: { cor: n.data.cor }, conteudo: { texto: n.data.texto } }
+    return {
+      id: n.id, tipo: 'sticky', x: n.position.x, y: n.position.y, ...comuns,
+      estilo: { cor: n.data.cor }, conteudo: comGrupo({ texto: n.data.texto }),
+    }
   }
   if (n.data.tipoObjeto === 'texto') {
-    return { id: n.id, tipo: 'texto', x: n.position.x, y: n.position.y, conteudo: { texto: n.data.texto } }
+    return { id: n.id, tipo: 'texto', x: n.position.x, y: n.position.y, ...comuns, conteudo: comGrupo({ texto: n.data.texto }) }
   }
   if (n.data.tipoObjeto === 'icone') {
-    return { id: n.id, tipo: 'icone', x: n.position.x, y: n.position.y, estilo: { cor: n.data.cor }, conteudo: { icone: n.data.icone } }
+    return {
+      id: n.id, tipo: 'icone', x: n.position.x, y: n.position.y, ...comuns,
+      estilo: { cor: n.data.cor }, conteudo: comGrupo({ icone: n.data.icone }),
+    }
   }
   if (n.data.tipoObjeto === 'secao') {
     return {
-      id: n.id, tipo: 'secao', x: n.position.x, y: n.position.y,
+      id: n.id, tipo: 'secao', x: n.position.x, y: n.position.y, ...comuns,
       largura: n.width ?? 420, altura: n.height ?? 280,
-      estilo: { cor: n.data.cor }, conteudo: { texto: n.data.texto },
+      estilo: { cor: n.data.cor }, conteudo: comGrupo({ texto: n.data.texto }),
     }
   }
   return {
-    id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y,
-    conteudo: { texto: n.data.texto, ehCentral: n.data.ehCentral },
+    id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y, ...comuns,
+    conteudo: comGrupo({ texto: n.data.texto, ehCentral: n.data.ehCentral }),
   }
 }
 
@@ -823,7 +965,25 @@ function Canvas({ dadosIniciais, onChange }: {
 
   const onNodesChangeFlow = useCallback((changes: NodeChange<NoFlow>[]) => {
     setGrafo(atual => {
-      const novo = { ...atual, nodes: applyNodeChanges(changes, atual.nodes) }
+      // Objeto com grupoId: replica o mesmo delta de posição pros outros
+      // membros do grupo — arrastar qualquer um move o grupo inteiro junto,
+      // não só ele. Sem isso "Agrupar" seria só um rótulo sem efeito real.
+      const porId = new Map(atual.nodes.map(n => [n.id, n]))
+      const extras: NodeChange<NoFlow>[] = []
+      changes.forEach(c => {
+        if (c.type !== 'position' || !c.position) return
+        const no = porId.get(c.id)
+        const grupoId = (no?.data as Record<string, unknown> | undefined)?.grupoId as string | undefined
+        if (!grupoId || !no) return
+        const dx = c.position.x - no.position.x
+        const dy = c.position.y - no.position.y
+        if (dx === 0 && dy === 0) return
+        atual.nodes.forEach(n => {
+          if (n.id === c.id || (n.data as Record<string, unknown>).grupoId !== grupoId) return
+          extras.push({ id: n.id, type: 'position', position: { x: n.position.x + dx, y: n.position.y + dy }, dragging: c.dragging })
+        })
+      })
+      const novo = { ...atual, nodes: applyNodeChanges([...changes, ...extras], atual.nodes) }
       grafoRef.current = novo
       return novo
     })
@@ -991,6 +1151,113 @@ function Canvas({ dadosIniciais, onChange }: {
     commit({ ...atual, edges: atual.edges.filter(e => e.id !== id) })
   }, [])
 
+  // Largura/altura reais medidas pelo React Flow depois do primeiro render;
+  // 150x60 é só o fallback antes disso (mesmo padrão do interseccaoComNo).
+  function medidas(n: NoFlow) {
+    return { w: n.measured?.width ?? 150, h: n.measured?.height ?? 60 }
+  }
+
+  const onAlinhar = useCallback((modo: 'esquerda' | 'centroH' | 'direita' | 'topo' | 'meio' | 'base') => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    if (selecionados.length < 2) return
+    const caixas = selecionados.map(n => ({ n, ...medidas(n) }))
+    let alvo: number
+    if (modo === 'esquerda') alvo = Math.min(...caixas.map(c => c.n.position.x))
+    else if (modo === 'direita') alvo = Math.max(...caixas.map(c => c.n.position.x + c.w))
+    else if (modo === 'centroH') alvo = (Math.min(...caixas.map(c => c.n.position.x)) + Math.max(...caixas.map(c => c.n.position.x + c.w))) / 2
+    else if (modo === 'topo') alvo = Math.min(...caixas.map(c => c.n.position.y))
+    else if (modo === 'base') alvo = Math.max(...caixas.map(c => c.n.position.y + c.h))
+    else alvo = (Math.min(...caixas.map(c => c.n.position.y)) + Math.max(...caixas.map(c => c.n.position.y + c.h))) / 2
+
+    const idsSel = new Set(selecionados.map(n => n.id))
+    const nodes = atual.nodes.map(n => {
+      if (!idsSel.has(n.id)) return n
+      const { w, h } = medidas(n)
+      if (modo === 'esquerda') return { ...n, position: { ...n.position, x: alvo } }
+      if (modo === 'direita') return { ...n, position: { ...n.position, x: alvo - w } }
+      if (modo === 'centroH') return { ...n, position: { ...n.position, x: alvo - w / 2 } }
+      if (modo === 'topo') return { ...n, position: { ...n.position, y: alvo } }
+      if (modo === 'base') return { ...n, position: { ...n.position, y: alvo - h } }
+      return { ...n, position: { ...n.position, y: alvo - h / 2 } }
+    })
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onDistribuir = useCallback((eixo: 'horizontal' | 'vertical') => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    if (selecionados.length < 3) return
+    const comMedidas = selecionados.map(n => ({ n, ...medidas(n) }))
+    const eixoX = eixo === 'horizontal'
+    comMedidas.sort((a, b) => (eixoX ? a.n.position.x - b.n.position.x : a.n.position.y - b.n.position.y))
+    const primeiro = comMedidas[0]
+    const ultimo = comMedidas[comMedidas.length - 1]
+    const fimPrimeiro = eixoX ? primeiro.n.position.x + primeiro.w : primeiro.n.position.y + primeiro.h
+    const inicioUltimo = eixoX ? ultimo.n.position.x : ultimo.n.position.y
+    const somaMeio = comMedidas.slice(1, -1).reduce((s, c) => s + (eixoX ? c.w : c.h), 0)
+    const gap = (inicioUltimo - fimPrimeiro - somaMeio) / (comMedidas.length - 1)
+    let cursor = fimPrimeiro + gap
+    const novasPos = new Map<string, number>()
+    comMedidas.slice(1, -1).forEach(c => { novasPos.set(c.n.id, cursor); cursor += (eixoX ? c.w : c.h) + gap })
+    const nodes = atual.nodes.map(n => {
+      if (!novasPos.has(n.id)) return n
+      const valor = novasPos.get(n.id)!
+      return { ...n, position: eixoX ? { ...n.position, x: valor } : { ...n.position, y: valor } }
+    })
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onAgrupar = useCallback(() => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    if (selecionados.length < 2) return
+    const grupoId = gerarIdNo()
+    const idsSel = new Set(selecionados.map(n => n.id))
+    const nodes = atual.nodes.map(n => (idsSel.has(n.id) ? { ...n, data: { ...n.data, grupoId } } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onDesagrupar = useCallback(() => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    const idsSel = new Set(selecionados.map(n => n.id))
+    const nodes = atual.nodes.map(n => {
+      if (!idsSel.has(n.id)) return n
+      const { grupoId: _grupoId, ...resto } = n.data as Record<string, unknown>
+      return { ...n, data: resto as DadosObjeto }
+    })
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onAlternarTravado = useCallback(() => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    if (selecionados.length === 0) return
+    // Se algum dos selecionados ainda está destravado, trava todos; só
+    // destrava todos quando a seleção inteira já estava travada — evita um
+    // clique só destravar metade da seleção sem o usuário perceber.
+    const travarTudo = selecionados.some(n => n.draggable !== false)
+    const idsSel = new Set(selecionados.map(n => n.id))
+    const nodes = atual.nodes.map(n => (idsSel.has(n.id) ? { ...n, draggable: !travarTudo } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onCamada = useCallback((direcao: 'frente' | 'tras') => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    if (selecionados.length === 0) return
+    const zIndices = atual.nodes.map(n => n.zIndex ?? 0)
+    const alvo = direcao === 'frente' ? Math.max(...zIndices, 0) + 1 : Math.min(...zIndices, 0) - 1
+    const idsSel = new Set(selecionados.map(n => n.id))
+    const nodes = atual.nodes.map(n => (idsSel.has(n.id) ? { ...n, zIndex: alvo } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
+  const totalSelecionados = grafo.nodes.filter(n => n.selected).length
+  const algumTravado = grafo.nodes.some(n => n.selected && n.draggable === false)
+  const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
+
   return (
     <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector }}>
       <div className="pl-mapa-canvas">
@@ -1004,6 +1271,10 @@ function Canvas({ dadosIniciais, onChange }: {
           onNodeDragStop={finalizarArraste}
           onConnect={onConnect}
           nodesDraggable={!modoMao}
+          // Padrão da lib é só 'Meta' (Cmd) — sem isso, Ctrl+clique (o normal
+          // em Windows/Linux) não adiciona à seleção, só troca o nó
+          // selecionado. Aceita os dois, Ctrl e Cmd, conforme a plataforma.
+          multiSelectionKeyCode={['Control', 'Meta']}
           fitView
           minZoom={0.2}
           maxZoom={2}
@@ -1086,6 +1357,42 @@ function Canvas({ dadosIniciais, onChange }: {
               <IconeAjustarTela />
             </button>
           </Panel>
+          {totalSelecionados >= 1 && (
+            <Panel position="top-center" className="pl-mapa-toolbar-selecao">
+              <button type="button" className={`pl-mapa-tv-btn ${algumTravado ? 'ativo' : ''}`} title={algumTravado ? 'Destravar' : 'Travar'} onClick={onAlternarTravado}>
+                <IconeCadeadoSelecao />
+              </button>
+              <button type="button" className="pl-mapa-tv-btn" title="Trazer pra frente" onClick={() => onCamada('frente')}>
+                <IconeTrazerFrente />
+              </button>
+              <button type="button" className="pl-mapa-tv-btn" title="Enviar pra trás" onClick={() => onCamada('tras')}>
+                <IconeEnviarTras />
+              </button>
+              {totalSelecionados >= 2 && (
+                <>
+                  <div className="pl-mapa-tv-divisor-h" />
+                  <button type="button" className="pl-mapa-tv-btn" title="Alinhar à esquerda" onClick={() => onAlinhar('esquerda')}><IconeAlinharEsq /></button>
+                  <button type="button" className="pl-mapa-tv-btn" title="Centralizar horizontalmente" onClick={() => onAlinhar('centroH')}><IconeAlinharCentroH /></button>
+                  <button type="button" className="pl-mapa-tv-btn" title="Alinhar à direita" onClick={() => onAlinhar('direita')}><IconeAlinharDir /></button>
+                  <button type="button" className="pl-mapa-tv-btn" title="Alinhar ao topo" onClick={() => onAlinhar('topo')}><IconeAlinharTopo /></button>
+                  <button type="button" className="pl-mapa-tv-btn" title="Centralizar verticalmente" onClick={() => onAlinhar('meio')}><IconeAlinharMeio /></button>
+                  <button type="button" className="pl-mapa-tv-btn" title="Alinhar à base" onClick={() => onAlinhar('base')}><IconeAlinharBase /></button>
+                  <div className="pl-mapa-tv-divisor-h" />
+                  {algumAgrupado ? (
+                    <button type="button" className="pl-mapa-tv-btn" title="Desagrupar" onClick={onDesagrupar}><IconeDesagrupar /></button>
+                  ) : (
+                    <button type="button" className="pl-mapa-tv-btn" title="Agrupar" onClick={onAgrupar}><IconeAgrupar /></button>
+                  )}
+                </>
+              )}
+              {totalSelecionados >= 3 && (
+                <>
+                  <button type="button" className="pl-mapa-tv-btn" title="Distribuir horizontalmente" onClick={() => onDistribuir('horizontal')}><IconeDistribuirH /></button>
+                  <button type="button" className="pl-mapa-tv-btn" title="Distribuir verticalmente" onClick={() => onDistribuir('vertical')}><IconeDistribuirV /></button>
+                </>
+              )}
+            </Panel>
+          )}
         </ReactFlow>
       </div>
     </AcoesMapaContext.Provider>

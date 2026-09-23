@@ -922,6 +922,7 @@ export interface BoardObjeto {
   largura?: number
   altura?: number
   travado?: boolean
+  zIndex?: number
   estilo?: Record<string, unknown>
   conteudo: Record<string, unknown>
 }
