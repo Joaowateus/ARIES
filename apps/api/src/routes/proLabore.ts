@@ -3026,7 +3026,7 @@ function criarNoMapaPadrao(texto: string): NoMapaInput {
   return { id: 'raiz', texto, x: 0, y: 0, filhos: [] }
 }
 
-const TIPOS_OBJETO_BOARD = ['noMapa', 'forma'] as const
+const TIPOS_OBJETO_BOARD = ['noMapa', 'forma', 'sticky', 'texto', 'icone', 'secao'] as const
 const boardObjetoSchema = z.object({
   id: z.string(),
   tipo: z.enum(TIPOS_OBJETO_BOARD),

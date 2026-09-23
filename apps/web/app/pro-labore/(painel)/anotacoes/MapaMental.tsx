@@ -12,7 +12,7 @@
 // primeira abertura, ver `dadosIniciaisDoBoard`.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar,
+  ReactFlow, ReactFlowProvider, Background, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
   getBezierPath, useInternalNode, useReactFlow, applyNodeChanges,
   type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange,
 } from '@xyflow/react'
@@ -72,6 +72,41 @@ function IconeFormas() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="11" height="11" rx="2" />
       <circle cx="16.5" cy="16.5" r="5.5" />
+    </svg>
+  )
+}
+function IconeSticky() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 3H3v14l4 4h14V3z" />
+      <path d="M17 21v-4a2 2 0 0 1 2-2h2" />
+    </svg>
+  )
+}
+function IconeTexto() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 7 4 4 20 4 20 7" />
+      <line x1="9" y1="20" x2="15" y2="20" />
+      <line x1="12" y1="4" x2="12" y2="20" />
+    </svg>
+  )
+}
+function IconeIconeBiblioteca() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="5" />
+      <polyline points="9 21 9 15 15 15 15 21" />
+    </svg>
+  )
+}
+function IconeSecao() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 3H5a2 2 0 0 0-2 2v4" />
+      <path d="M15 3h4a2 2 0 0 1 2 2v4" />
+      <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
+      <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
     </svg>
   )
 }
@@ -153,6 +188,92 @@ const CONFIG_FORMA: Record<TipoForma, ConfigForma> = {
 
 const ORDEM_FORMAS: TipoForma[] = ['retangulo', 'pilula', 'oval', 'losango', 'trapezio', 'triangulo', 'hexagono', 'cilindro', 'linha', 'colchete', 'estrela', 'nuvem']
 
+// Cores pastel pra sticky notes — paleta separada da PALETA_RAMOS (que é
+// pra linhas/ramos, cores mais saturadas): sticky note de verdade tem
+// fundo claro com texto escuro por cima, não o contrário.
+const PALETA_STICKY = ['#f5d76e', '#f7a1c4', '#a8e6a3', '#9fd8f7', '#d9b8f5', '#f7b787']
+
+// --- Biblioteca de ícones (6.7 do mapeamento) — subconjunto curado no
+// mesmo estilo Feather do resto do app; não é a biblioteca completa da
+// referência (que inclui ícones de arquitetura cloud etc.), só os mais
+// genéricos/úteis pra anotar um diagrama. ---
+export type TipoIcone = 'estrela' | 'coracao' | 'check' | 'alerta' | 'lampada' | 'bandeira' | 'relogio' | 'calendario' | 'cadeado' | 'usuario' | 'seta' | 'pergunta'
+
+const ICONE_PATHS: Record<TipoIcone, React.ReactNode> = {
+  estrela: <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9" />,
+  coracao: <path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 2.5 5 6 5c2 0 3.5 1.2 4 2.5C10.5 6.2 12 5 14 5c3.5 0 5.5 3.5 3.5 7.5C19 16.65 12 21 12 21z" />,
+  check: <polyline points="20 6 9 17 4 12" />,
+  alerta: (
+    <>
+      <path d="M12 2 1 21h22L12 2z" />
+      <line x1="12" y1="9" x2="12" y2="14" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </>
+  ),
+  lampada: (
+    <>
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+      <path d="M12 2a7 7 0 0 0-4 12.75V17h8v-2.25A7 7 0 0 0 12 2z" />
+    </>
+  ),
+  bandeira: (
+    <>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" y1="22" x2="4" y2="15" />
+    </>
+  ),
+  relogio: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </>
+  ),
+  calendario: (
+    <>
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </>
+  ),
+  cadeado: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>
+  ),
+  usuario: (
+    <>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </>
+  ),
+  seta: (
+    <>
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="12 5 19 12 12 19" />
+    </>
+  ),
+  pergunta: (
+    <>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+      <circle cx="12" cy="12" r="10" />
+    </>
+  ),
+}
+
+const ORDEM_ICONES: TipoIcone[] = ['estrela', 'coracao', 'check', 'alerta', 'lampada', 'bandeira', 'relogio', 'calendario', 'cadeado', 'usuario', 'seta', 'pergunta']
+
+function IconeObjetoSvg({ tipo }: { tipo: TipoIcone }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {ICONE_PATHS[tipo]}
+    </svg>
+  )
+}
+
 interface DadosNoMapa extends Record<string, unknown> {
   tipoObjeto: 'noMapa'
   texto: string
@@ -167,7 +288,30 @@ interface DadosForma extends Record<string, unknown> {
   cor: string
 }
 
-type DadosObjeto = DadosNoMapa | DadosForma
+interface DadosSticky extends Record<string, unknown> {
+  tipoObjeto: 'sticky'
+  texto: string
+  cor: string
+}
+
+interface DadosTexto extends Record<string, unknown> {
+  tipoObjeto: 'texto'
+  texto: string
+}
+
+interface DadosIcone extends Record<string, unknown> {
+  tipoObjeto: 'icone'
+  icone: TipoIcone
+  cor: string
+}
+
+interface DadosSecao extends Record<string, unknown> {
+  tipoObjeto: 'secao'
+  texto: string
+  cor: string
+}
+
+type DadosObjeto = DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao
 type NoFlow = Node<DadosObjeto>
 
 function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
@@ -182,6 +326,30 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
       },
     }
   }
+  if (o.tipo === 'sticky') {
+    return {
+      id: o.id, type: 'sticky', position: { x: o.x, y: o.y },
+      data: { tipoObjeto: 'sticky', texto: (o.conteudo.texto as string) ?? '', cor: (o.estilo?.cor as string) ?? PALETA_STICKY[0] },
+    }
+  }
+  if (o.tipo === 'texto') {
+    return {
+      id: o.id, type: 'texto', position: { x: o.x, y: o.y },
+      data: { tipoObjeto: 'texto', texto: (o.conteudo.texto as string) ?? '' },
+    }
+  }
+  if (o.tipo === 'icone') {
+    return {
+      id: o.id, type: 'icone', position: { x: o.x, y: o.y },
+      data: { tipoObjeto: 'icone', icone: (o.conteudo.icone as TipoIcone) ?? 'estrela', cor: (o.estilo?.cor as string) ?? corHerdada },
+    }
+  }
+  if (o.tipo === 'secao') {
+    return {
+      id: o.id, type: 'secao', position: { x: o.x, y: o.y }, width: o.largura ?? 420, height: o.altura ?? 280, zIndex: -1,
+      data: { tipoObjeto: 'secao', texto: (o.conteudo.texto as string) ?? '', cor: (o.estilo?.cor as string) ?? 'var(--pl-accent)' },
+    }
+  }
   return {
     id: o.id, type: 'noMapa', position: { x: o.x, y: o.y },
     data: { tipoObjeto: 'noMapa', texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
@@ -193,6 +361,22 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
     return {
       id: n.id, tipo: 'forma', x: n.position.x, y: n.position.y,
       estilo: { cor: n.data.cor }, conteudo: { forma: n.data.forma, texto: n.data.texto },
+    }
+  }
+  if (n.data.tipoObjeto === 'sticky') {
+    return { id: n.id, tipo: 'sticky', x: n.position.x, y: n.position.y, estilo: { cor: n.data.cor }, conteudo: { texto: n.data.texto } }
+  }
+  if (n.data.tipoObjeto === 'texto') {
+    return { id: n.id, tipo: 'texto', x: n.position.x, y: n.position.y, conteudo: { texto: n.data.texto } }
+  }
+  if (n.data.tipoObjeto === 'icone') {
+    return { id: n.id, tipo: 'icone', x: n.position.x, y: n.position.y, estilo: { cor: n.data.cor }, conteudo: { icone: n.data.icone } }
+  }
+  if (n.data.tipoObjeto === 'secao') {
+    return {
+      id: n.id, tipo: 'secao', x: n.position.x, y: n.position.y,
+      largura: n.width ?? 420, altura: n.height ?? 280,
+      estilo: { cor: n.data.cor }, conteudo: { texto: n.data.texto },
     }
   }
   return {
@@ -246,6 +430,15 @@ function flowParaBoard(nodes: NoFlow[], edges: Edge[]): { objetos: BoardObjeto[]
       return { id: e.id, origemId: e.source, destinoId: e.target, ...(cor ? { estilo: { cor } } : {}) }
     }),
   }
+}
+
+// Deslocamento em cascata a partir do nó de referência — sem isso, clicar
+// em vários botões de "adicionar X" em sequência sem selecionar nada entre
+// um clique e outro empilha os objetos exatamente na mesma posição (todos
+// usam o mesmo `noSelecionadoId` como base).
+function posicaoEmCascata(base: NoFlow | undefined, totalNos: number) {
+  const passo = totalNos % 6
+  return { x: (base?.position.x ?? 0) + 260 + passo * 220, y: (base?.position.y ?? 0) + passo * 30 }
 }
 
 function idsDaSubarvore(edges: Edge[], raizId: string): Set<string> {
@@ -360,6 +553,127 @@ function FormaNode({ id, data }: NodeProps<NoFlow>) {
   )
 }
 
+function StickyNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosSticky
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(d.texto === '')
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-sticky-no" style={{ background: d.cor }}>
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      {editando ? (
+        <textarea
+          className="nodrag nopan pl-sticky-textarea"
+          autoFocus
+          value={valor}
+          placeholder="Escreva algo..."
+          onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+          onBlur={sairEdicao}
+          onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.blur() }}
+        />
+      ) : (
+        <div className="pl-sticky-texto" onDoubleClick={entrarEdicao}>{valor || 'Escreva algo...'}</div>
+      )}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  )
+}
+
+function TextoNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosTexto
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(d.texto === '')
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-texto-no">
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      {editando ? (
+        <input
+          className="nodrag nopan pl-texto-input"
+          autoFocus
+          value={valor}
+          placeholder="Texto"
+          style={{ width: `${Math.max(valor.length, 4) + 2}ch` }}
+          onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+          onBlur={sairEdicao}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+        />
+      ) : (
+        <div className="pl-texto-texto" onDoubleClick={entrarEdicao}>{valor || 'Texto'}</div>
+      )}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  )
+}
+
+function IconeNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosIcone
+
+  return (
+    <div className="pl-icone-no" style={{ color: d.cor }}>
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <IconeObjetoSvg tipo={d.icone} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  )
+}
+
+function SecaoNode({ id, data, selected }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosSecao
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(false)
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-secao-no" style={{ background: `color-mix(in srgb, ${d.cor} 12%, transparent)`, borderColor: d.cor }}>
+      <NodeResizer minWidth={220} minHeight={160} isVisible={!!selected} lineClassName="pl-secao-resize-linha" handleClassName="pl-secao-resize-alca" />
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Renomear" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      {editando ? (
+        <input
+          className="nodrag nopan pl-secao-input"
+          autoFocus
+          value={valor}
+          placeholder="Nome da seção"
+          onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+          onBlur={sairEdicao}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+        />
+      ) : (
+        <div className="pl-secao-titulo" onDoubleClick={entrarEdicao}>{valor || 'Seção'}</div>
+      )}
+    </div>
+  )
+}
+
 // Aresta "flutuante": em vez de sair de um ponto fixo (esquerda/direita) do
 // nó, calcula onde a reta entre os dois centros cruza a borda de cada
 // caixa — assim a curva sempre aponta na direção real do outro nó, não
@@ -401,7 +715,9 @@ function EdgeFlutuante({ id, source, target, style }: EdgeProps) {
   return <BaseEdge id={id} path={caminho} style={style} />
 }
 
-const nodeTypes = { noMapa: NoMapaNode, forma: FormaNode } as unknown as NodeTypes
+const nodeTypes = {
+  noMapa: NoMapaNode, forma: FormaNode, sticky: StickyNode, texto: TextoNode, icone: IconeNode, secao: SecaoNode,
+} as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
 function Canvas({ dadosIniciais, onChange }: {
@@ -417,6 +733,7 @@ function Canvas({ dadosIniciais, onChange }: {
   // par cursor/mão da barra da referência.
   const [modoMao, setModoMao] = useState(false)
   const [formasAbertas, setFormasAbertas] = useState(false)
+  const [iconesAbertos, setIconesAbertos] = useState(false)
   const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
   const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
@@ -475,7 +792,10 @@ function Canvas({ dadosIniciais, onChange }: {
     if (!pai) return
     const paiEhCentral = pai.data.tipoObjeto === 'noMapa' && pai.data.ehCentral
     const filhosExistentes = atual.edges.filter(e => e.source === paiId).length
-    const cor = paiEhCentral ? PALETA_RAMOS[filhosExistentes % PALETA_RAMOS.length] : pai.data.cor
+    // Nem todo tipo de objeto tem cor própria (ex.: texto livre) — cai pro
+    // neutro padrão nesse caso, em vez de herdar uma cor inexistente.
+    const corPai = typeof pai.data.cor === 'string' ? pai.data.cor : 'var(--pl-ink-2)'
+    const cor = paiEhCentral ? PALETA_RAMOS[filhosExistentes % PALETA_RAMOS.length] : corPai
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'noMapa',
@@ -500,8 +820,59 @@ function Canvas({ dadosIniciais, onChange }: {
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'forma',
-      position: { x: (base?.position.x ?? 0) + 260, y: base?.position.y ?? 0 },
+      position: posicaoEmCascata(base, atual.nodes.length),
       data: { tipoObjeto: 'forma', forma, texto: '', cor: PALETA_RAMOS[0] },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarSticky = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const cor = PALETA_STICKY[atual.nodes.filter(n => n.type === 'sticky').length % PALETA_STICKY.length]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'sticky',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'sticky', texto: '', cor },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarTexto = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'texto',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'texto', texto: '' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarIcone = useCallback((icone: TipoIcone) => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'icone',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'icone', icone, cor: 'var(--pl-accent)' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarSecao = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const passo = atual.nodes.length % 6
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'secao',
+      position: { x: (base?.position.x ?? 0) - 460 - passo * 18, y: (base?.position.y ?? 0) - 140 + passo * 20 },
+      width: 420, height: 280, zIndex: -1,
+      data: { tipoObjeto: 'secao', texto: 'Seção', cor: 'var(--pl-accent)' },
     }
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
@@ -569,6 +940,33 @@ function Canvas({ dadosIniciais, onChange }: {
                 </div>
               )}
             </div>
+            <button type="button" className="pl-mapa-tv-btn" title="Sticky note" onClick={onAdicionarSticky}>
+              <IconeSticky />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Texto" onClick={onAdicionarTexto}>
+              <IconeTexto />
+            </button>
+            <div className="pl-mapa-tv-item">
+              <button type="button" className={`pl-mapa-tv-btn ${iconesAbertos ? 'ativo' : ''}`} title="Ícones" onClick={() => setIconesAbertos(v => !v)}>
+                <IconeIconeBiblioteca />
+              </button>
+              {iconesAbertos && (
+                <div className="pl-mapa-formas-flyout">
+                  {ORDEM_ICONES.map(tipo => (
+                    <button
+                      key={tipo} type="button" className="pl-mapa-forma-opcao" title={tipo}
+                      onClick={() => { onAdicionarIcone(tipo); setIconesAbertos(false) }}
+                    >
+                      <IconeObjetoSvg tipo={tipo} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button type="button" className="pl-mapa-tv-btn" title="Seção" onClick={onAdicionarSecao}>
+              <IconeSecao />
+            </button>
+            <div className="pl-mapa-tv-divisor" />
             <button
               type="button"
               className="pl-mapa-tv-btn pl-mapa-tv-btn-danger"
