@@ -554,6 +554,15 @@ export const proLaboreApi = {
       request<Pasta>(`/pro-labore/pastas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/pastas/${id}`, { method: 'DELETE' }),
   },
+  mapasMentais: {
+    // pastaId: undefined = sem filtro (lista tudo, uso da árvore); '' = raiz; string = dentro daquela pasta.
+    listar: (pastaId?: string) => request<MapaMental[]>(`/pro-labore/mapas-mentais${pastaId !== undefined ? `?pastaId=${pastaId}` : ''}`),
+    criar: (data: { titulo?: string; icone?: string | null; raiz?: NoMapa; pastaId?: string | null }) =>
+      request<MapaMental>('/pro-labore/mapas-mentais', { method: 'POST', body: JSON.stringify(data) }),
+    atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; raiz: NoMapa; pastaId: string | null }>) =>
+      request<MapaMental>(`/pro-labore/mapas-mentais/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/mapas-mentais/${id}`, { method: 'DELETE' }),
+  },
 }
 
 export interface EfetividadeVendedor {
@@ -883,6 +892,24 @@ export interface Pasta {
   nome: string
   icone?: string | null
   paiId?: string | null
+  criadoEm: string
+  atualizadoEm: string
+}
+
+// Mapa mental: outro "tipo de página" dentro da árvore de Anotações, ao
+// lado de Nota. A árvore de nós inteira mora em `raiz`, um nó recursivo.
+export interface NoMapa {
+  id: string
+  texto: string
+  filhos: NoMapa[]
+}
+
+export interface MapaMental {
+  id: string
+  titulo?: string | null
+  icone?: string | null
+  raiz: NoMapa
+  pastaId?: string | null
   criadoEm: string
   atualizadoEm: string
 }

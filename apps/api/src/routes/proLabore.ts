@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
+import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import {
@@ -3000,6 +3001,78 @@ router.delete('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Res
   // Subpastas e notas soltam pro nível de cima (paiId/pastaId -> null),
   // nunca são apagadas junto — ver comentário do modelo Pasta.
   await prisma.pasta.delete({ where: { id: existente.id } })
+  res.json({ ok: true })
+})
+
+// --- Mapas mentais: outro "tipo de página" dentro da mesma árvore de
+// Anotações (mora dentro de uma Pasta como uma Nota). A árvore de nós
+// inteira vive em `raiz`, validada de forma recursiva e solta (só limites
+// de tamanho, sem impor semântica) — ver comentário do modelo no schema.
+interface NoMapaInput { id: string; texto: string; filhos: NoMapaInput[] }
+const noMapaSchema: z.ZodType<NoMapaInput> = z.lazy(() => z.object({
+  id: z.string(),
+  texto: z.string().max(300, 'Texto do nó muito longo'),
+  filhos: z.array(noMapaSchema).max(40, 'Muitos nós filhos'),
+}))
+
+function criarNoMapaPadrao(texto: string): NoMapaInput {
+  return { id: 'raiz', texto, filhos: [] }
+}
+
+router.get('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const { pastaId } = req.query
+  const mapas = await prisma.mapaMental.findMany({
+    where: {
+      ...reuniaoWhereBase(req),
+      // Mesma convenção de /notas: sem o parâmetro = sem filtro (lista tudo,
+      // uso da árvore da sidebar); com o parâmetro = filtra por aquela pasta.
+      ...(typeof pastaId === 'string' ? { pastaId: pastaId || null } : {}),
+    },
+    orderBy: { criadoEm: 'desc' },
+  })
+  res.json(mapas)
+})
+
+const mapaMentalSchema = z.object({
+  titulo: z.string().trim().max(200, 'Título muito longo').optional(),
+  icone: z.string().max(8, 'Ícone inválido').nullable().optional(),
+  raiz: noMapaSchema.optional(),
+  pastaId: z.string().nullable().optional(),
+})
+
+router.post('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = mapaMentalSchema.safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
+    res.status(404).json({ error: 'Pasta não encontrada' }); return
+  }
+  const { raiz, ...resto } = parse.data
+  const mapa = await prisma.mapaMental.create({
+    data: { ...reuniaoWhereBase(req), ...resto, raiz: (raiz ?? criarNoMapaPadrao('Ideia central')) as unknown as Prisma.InputJsonValue },
+  })
+  res.status(201).json(mapa)
+})
+
+router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = mapaMentalSchema.partial().safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
+    res.status(404).json({ error: 'Pasta não encontrada' }); return
+  }
+  const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
+  const { raiz, ...resto } = parse.data
+  const atualizado = await prisma.mapaMental.update({
+    where: { id: existente.id },
+    data: { ...resto, ...(raiz ? { raiz: raiz as unknown as Prisma.InputJsonValue } : {}) },
+  })
+  res.json(atualizado)
+})
+
+router.delete('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
+  await prisma.mapaMental.delete({ where: { id: existente.id } })
   res.json({ ok: true })
 })
 

@@ -935,6 +935,7 @@ model ProLaboreUsuario {
   reunioes Reuniao[]
   notas    Nota[]
   pastas   Pasta[]
+  mapasMentais MapaMental[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1645,8 +1646,33 @@ model Pasta {
   pai       Pasta?           @relation("PastaFilhas", fields: [paiId], references: [id])
   subpastas Pasta[]          @relation("PastaFilhas")
   notas     Nota[]
+  mapasMentais MapaMental[]
 
   @@index([usuarioId, vendedorId])
   @@index([paiId])
   @@map("pro_labore_pastas")
+}
+
+// Mapa mental: outro "tipo de página" dentro da mesma árvore de Anotações
+// (mora dentro de uma Pasta como uma Nota, só que abre um canvas de nós em
+// vez do editor de blocos). A árvore inteira do mapa fica em `raiz`, um nó
+// recursivo { id, texto, filhos: [...] } — mais simples de versionar como um
+// blob só do que normalizar em linhas com parentId.
+model MapaMental {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  vendedorId   String?
+  pastaId      String?
+  titulo       String?
+  icone        String? // emoji, opcional — mapa sem ícone usa o ícone padrão
+  raiz         Json
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  pasta   Pasta?           @relation(fields: [pastaId], references: [id])
+
+  @@index([usuarioId, vendedorId])
+  @@index([pastaId])
+  @@map("pro_labore_mapas_mentais")
 }
