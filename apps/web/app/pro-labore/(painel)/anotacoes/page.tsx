@@ -408,7 +408,25 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
   )
 }
 
-function PaginaMapaMental({ mapa, onAtualizado, onExcluir }: { mapa: MapaMental | null; onAtualizado: (mapa: MapaMental) => void; onExcluir: () => void }) {
+function IconeVoltar() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  )
+}
+
+// Board em tela cheia (estilo Whimsical): sem a sidebar/topbar do resto do
+// app — só uma barra fina própria (voltar, ícone/título, status, excluir) e
+// o canvas ocupando o resto da tela. `position: fixed` cobrindo o app
+// inteiro é mais simples que reestruturar a rota/layout só pra essa página.
+function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
+  mapa: MapaMental | null
+  onAtualizado: (mapa: MapaMental) => void
+  onExcluir: () => void
+  onVoltar: () => void
+}) {
   const [titulo, setTitulo] = useState(mapa?.titulo ?? '')
   const [icone, setIcone] = useState(mapa?.icone ?? '')
   const [dadosIniciais, setDadosIniciais] = useState(() => dadosIniciaisDoBoard(mapa))
@@ -452,31 +470,34 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir }: { mapa: MapaMental 
   if (!mapa) return <div className="pl-card"><div className="pl-empty">Mapa mental não encontrado.</div></div>
 
   return (
-    <div className="pl-notion-pagina">
-      <div className="pl-notion-pagina-topo">
+    <div className="pl-board-fullscreen">
+      <div className="pl-board-topbar">
+        <button type="button" className="pl-board-voltar" title="Voltar pra Anotações" onClick={onVoltar}>
+          <IconeVoltar />
+        </button>
         <SeletorIcone
           valor={icone || '🧠'}
-          tamanhoClasse="pl-notion-pagina-icone"
+          tamanhoClasse="pl-board-topbar-icone"
           onEscolher={novoIcone => { setIcone(novoIcone ?? ''); agendarSalvar({ icone: novoIcone }) }}
         />
-        <div className="pl-notion-pagina-status">{status === 'salvando' ? 'Salvando...' : status === 'erro' ? 'Erro ao salvar' : 'Salvo'}</div>
+        <input
+          className="pl-board-topbar-titulo"
+          value={titulo}
+          placeholder="Sem título"
+          onChange={e => { setTitulo(e.target.value); agendarSalvar({ titulo: e.target.value }) }}
+        />
+        <div className="pl-board-topbar-status">{status === 'salvando' ? 'Salvando...' : status === 'erro' ? 'Erro ao salvar' : 'Salvo'}</div>
         <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={onExcluir}>
           <IconeLixeira />
         </button>
       </div>
 
-      <input
-        className="pl-notion-pagina-titulo"
-        value={titulo}
-        placeholder="Sem título"
-        autoFocus
-        onChange={e => { setTitulo(e.target.value); agendarSalvar({ titulo: e.target.value }) }}
-      />
-
-      <MapaMentalCanvas
-        dadosIniciais={dadosIniciais}
-        onChange={dados => agendarSalvar(dados)}
-      />
+      <div className="pl-board-canvas-area">
+        <MapaMentalCanvas
+          dadosIniciais={dadosIniciais}
+          onChange={dados => agendarSalvar(dados)}
+        />
+      </div>
     </div>
   )
 }
@@ -504,25 +525,41 @@ export default function ProLaboreAnotacoesPage() {
     })
   }
 
+  // As três funções abaixo não tinham tratamento de erro nenhum — se a API
+  // falhasse por qualquer motivo (rede, sessão expirada, erro do servidor),
+  // o clique no botão simplesmente não fazia nada visível, sem mensagem
+  // nenhuma pro usuário (parecia que "não abre").
   async function criarNota(pastaId: string | null) {
-    const nota = await proLaboreApi.notas.criar({ pastaId })
-    setNotas(prev => [nota, ...prev])
-    setVisao({ tipo: 'nota', id: nota.id })
-    if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
+    try {
+      const nota = await proLaboreApi.notas.criar({ pastaId })
+      setNotas(prev => [nota, ...prev])
+      setVisao({ tipo: 'nota', id: nota.id })
+      if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
+    } catch {
+      alert('Não foi possível criar a página. Tente novamente.')
+    }
   }
 
   async function criarMapa(pastaId: string | null) {
-    const mapa = await proLaboreApi.mapasMentais.criar({ pastaId })
-    setMapas(prev => [mapa, ...prev])
-    setVisao({ tipo: 'mapa', id: mapa.id })
-    if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
+    try {
+      const mapa = await proLaboreApi.mapasMentais.criar({ pastaId })
+      setMapas(prev => [mapa, ...prev])
+      setVisao({ tipo: 'mapa', id: mapa.id })
+      if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
+    } catch {
+      alert('Não foi possível criar o mapa mental. Tente novamente.')
+    }
   }
 
   async function criarPasta(paiId: string | null) {
-    const pasta = await proLaboreApi.pastas.criar({ nome: 'Nova pasta', paiId })
-    setPastas(prev => [...prev, pasta])
-    setVisao({ tipo: 'pasta', id: pasta.id })
-    if (paiId) setAbertas(prev => new Set(prev).add(paiId))
+    try {
+      const pasta = await proLaboreApi.pastas.criar({ nome: 'Nova pasta', paiId })
+      setPastas(prev => [...prev, pasta])
+      setVisao({ tipo: 'pasta', id: pasta.id })
+      if (paiId) setAbertas(prev => new Set(prev).add(paiId))
+    } catch {
+      alert('Não foi possível criar a pasta. Tente novamente.')
+    }
   }
 
   async function renomearPasta(id: string, nome: string) {
@@ -568,6 +605,22 @@ export default function ProLaboreAnotacoesPage() {
 
   function atualizarMapaLocal(mapa: MapaMental) {
     setMapas(prev => prev.map(m => (m.id === mapa.id ? mapa : m)))
+  }
+
+  // Board em tela cheia: renderizado fora da sidebar/topbar do resto do app
+  // (nem PageHeader nem pl-notion-shell), igual ao comportamento da
+  // referência — abrir um mapa mental troca a tela inteira pro canvas.
+  if (visao.tipo === 'mapa') {
+    const mapa = mapas.find(m => m.id === visao.id) ?? null
+    return (
+      <PaginaMapaMental
+        key={visao.id}
+        mapa={mapa}
+        onAtualizado={atualizarMapaLocal}
+        onExcluir={() => excluirMapa(visao.id)}
+        onVoltar={() => setVisao({ tipo: 'pasta', id: mapa?.pastaId ?? null })}
+      />
+    )
   }
 
   return (
@@ -616,7 +669,9 @@ export default function ProLaboreAnotacoesPage() {
                 </div>
               ))}
               {mapas.filter(m => (m.pastaId ?? null) === null).map(m => (
-                <div key={m.id} className={`pl-arvore-item ${visao.tipo === 'mapa' && visao.id === m.id ? 'active' : ''}`}>
+                // Nunca "active": abrir um mapa mental sai desta árvore (vira
+                // tela cheia, ver early-return de PaginaMapaMental acima).
+                <div key={m.id} className="pl-arvore-item">
                   <span className="pl-arvore-chevron invisivel" />
                   <button type="button" className="pl-arvore-label" onClick={() => setVisao({ tipo: 'mapa', id: m.id })}>
                     <span className="pl-arvore-icone">{m.icone || '🧠'}</span>
@@ -647,19 +702,12 @@ export default function ProLaboreAnotacoesPage() {
                 onExcluirNota={excluirNota}
                 onExcluirMapa={excluirMapa}
               />
-            ) : visao.tipo === 'nota' ? (
+            ) : (
               <PaginaNota
                 key={visao.id}
                 nota={notas.find(n => n.id === visao.id) ?? null}
                 onAtualizada={atualizarNotaLocal}
                 onExcluir={() => excluirNota(visao.id)}
-              />
-            ) : (
-              <PaginaMapaMental
-                key={visao.id}
-                mapa={mapas.find(m => m.id === visao.id) ?? null}
-                onAtualizado={atualizarMapaLocal}
-                onExcluir={() => excluirMapa(visao.id)}
               />
             )}
           </div>

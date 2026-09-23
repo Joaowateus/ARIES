@@ -1012,6 +1012,39 @@
   .pl-notion-main { max-height: none; }
 }
 
+/* ============ Board em tela cheia (estilo Whimsical) — cobre a sidebar/
+   topbar do resto do app; barra própria fina (voltar/ícone/título/status/
+   excluir) + canvas ocupando o resto do viewport. ============ */
+.pl-board-fullscreen {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; background: var(--pl-bg);
+}
+.pl-board-topbar {
+  flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+  background: var(--pl-surface); border-bottom: 1px solid var(--pl-border);
+}
+.pl-board-voltar {
+  flex: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: none; border: none; cursor: pointer; color: var(--pl-ink-2);
+}
+.pl-board-voltar:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
+.pl-board-voltar svg { width: 18px; height: 18px; }
+.pl-board-topbar-icone { font-size: 19px; line-height: 1; background: none; border: none; cursor: pointer; border-radius: 8px; padding: 2px 5px; }
+.pl-board-topbar-icone:hover { background: var(--pl-surface-2); }
+.pl-board-topbar-titulo {
+  border: none; background: none; outline: none; font-family: 'IBM Plex Sans'; font-size: 14px; font-weight: 700;
+  color: var(--pl-ink-1); padding: 4px 6px; border-radius: 6px; min-width: 0; flex: 0 1 320px;
+}
+.pl-board-topbar-titulo:focus { background: var(--pl-surface-2); }
+.pl-board-topbar-titulo::placeholder { color: var(--pl-ink-muted); }
+.pl-board-topbar-status { flex: 1; text-align: right; font-family: 'IBM Plex Mono'; font-size: 10.5px; color: var(--pl-ink-muted); }
+.pl-board-canvas-area { flex: 1; min-height: 0; }
+.pl-board-canvas-area .pl-mapa-canvas { height: 100%; border: none; border-radius: 0; }
+
+@media (max-width: 700px) {
+  .pl-board-topbar-titulo { flex-basis: 140px; }
+}
+
 /* ============ MAPA MENTAL — canvas livre (MapaMental.tsx, @xyflow/react) ============ */
 .pl-mapa-canvas {
   width: 100%; height: 640px; border-radius: var(--pl-radius-lg); border: 1px solid var(--pl-border);
