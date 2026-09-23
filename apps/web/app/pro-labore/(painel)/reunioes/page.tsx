@@ -467,6 +467,8 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
   const [status, setStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo')
   const blocosAtuaisRef = useRef<Bloco[]>(blocosIniciais)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  type CamposNota = Partial<{ titulo: string; icone: string | null; categoria: CategoriaNota; blocos: Bloco[] }>
+  const pendenteRef = useRef<CamposNota>({})
 
   useEffect(() => {
     setTitulo(nota?.titulo ?? '')
@@ -475,6 +477,7 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
     const iniciais = criarBlocosIniciais(nota)
     setBlocosIniciais(iniciais)
     blocosAtuaisRef.current = iniciais
+    pendenteRef.current = {}
     setStatus('salvo')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nota?.id])
@@ -486,15 +489,21 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
     return [{ id: 'inicial', tipo: 'paragrafo', texto: n?.conteudo ?? '' }]
   }
 
-  function agendarSalvar(dados: Partial<{ titulo: string; icone: string | null; categoria: CategoriaNota; blocos: Bloco[] }>) {
+  // Acumula os campos pendentes entre chamadas — sem isso, editar o título e
+  // logo em seguida um bloco (dentro da mesma janela de debounce) descartaria
+  // o título, já que cada chamada só carregava os campos daquela edição.
+  function agendarSalvar(dados: CamposNota) {
     if (!nota) return
+    pendenteRef.current = { ...pendenteRef.current, ...dados }
     setStatus('salvando')
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     timeoutRef.current = setTimeout(async () => {
+      const paraSalvar = pendenteRef.current
+      pendenteRef.current = {}
       try {
-        const blocos = dados.blocos ?? blocosAtuaisRef.current
+        const blocos = paraSalvar.blocos ?? blocosAtuaisRef.current
         const conteudo = blocos.map(b => b.texto).filter(Boolean).join('\n')
-        const atualizada = await proLaboreApi.notas.atualizar(nota.id, { ...dados, conteudo })
+        const atualizada = await proLaboreApi.notas.atualizar(nota.id, { ...paraSalvar, conteudo })
         onAtualizada(atualizada)
         setStatus('salvo')
       } catch {
