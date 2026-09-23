@@ -1601,6 +1601,15 @@ model Nota {
   pastaId      String?
   titulo       String?
   conteudo     String
+  // Conteúdo "de verdade" da página, no formato editor de blocos (título,
+  // lista, checkbox, citação, código, divisor — ver EditorBlocos no
+  // frontend). Nulo pra notas antigas, criadas antes dessa funcionalidade;
+  // nesse caso a tela monta um bloco único de parágrafo a partir de
+  // `conteudo` na primeira abertura. `conteudo` continua existindo como
+  // texto puro derivado dos blocos — serve pro preview/snippet na listagem
+  // sem precisar interpretar o JSON toda hora.
+  blocos       Json?
+  icone        String? // emoji, opcional — página sem ícone usa o ícone padrão
   categoria    String   @default("TRABALHO") // TRABALHO | IDEIA | APRENDIZADO | OUTRO
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -1627,6 +1636,7 @@ model Pasta {
   usuarioId    String
   vendedorId   String?
   nome         String
+  icone        String? // emoji, opcional — pasta sem ícone usa o ícone padrão
   paiId        String?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt

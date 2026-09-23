@@ -540,17 +540,17 @@ export const proLaboreApi = {
       const s = qs.toString()
       return request<Nota[]>(`/pro-labore/notas${s ? `?${s}` : ''}`)
     },
-    criar: (data: { titulo?: string; conteudo: string; categoria?: CategoriaNota; reuniaoId?: string; pastaId?: string | null }) =>
+    criar: (data: { titulo?: string; conteudo?: string; blocos?: Bloco[]; icone?: string | null; categoria?: CategoriaNota; reuniaoId?: string; pastaId?: string | null }) =>
       request<Nota>('/pro-labore/notas', { method: 'POST', body: JSON.stringify(data) }),
-    atualizar: (id: string, data: Partial<{ titulo: string; conteudo: string; categoria: CategoriaNota; pastaId: string | null }>) =>
+    atualizar: (id: string, data: Partial<{ titulo: string; conteudo: string; blocos: Bloco[]; icone: string | null; categoria: CategoriaNota; pastaId: string | null }>) =>
       request<Nota>(`/pro-labore/notas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/notas/${id}`, { method: 'DELETE' }),
   },
   pastas: {
     listar: () => request<Pasta[]>('/pro-labore/pastas'),
-    criar: (data: { nome: string; paiId?: string | null }) =>
+    criar: (data: { nome: string; icone?: string | null; paiId?: string | null }) =>
       request<Pasta>('/pro-labore/pastas', { method: 'POST', body: JSON.stringify(data) }),
-    atualizar: (id: string, data: Partial<{ nome: string; paiId: string | null }>) =>
+    atualizar: (id: string, data: Partial<{ nome: string; icone: string | null; paiId: string | null }>) =>
       request<Pasta>(`/pro-labore/pastas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/pastas/${id}`, { method: 'DELETE' }),
   },
@@ -849,10 +849,24 @@ export interface Reuniao {
   atualizadoEm: string
 }
 
+// Tipos de bloco do editor estilo Notion (EditorBlocos.tsx). `marcado` só
+// tem sentido pra 'checkbox'; os demais tipos ignoram o campo.
+export const TIPOS_BLOCO = ['paragrafo', 'titulo1', 'titulo2', 'titulo3', 'lista', 'lista_numerada', 'checkbox', 'citacao', 'codigo', 'divisor'] as const
+export type TipoBloco = (typeof TIPOS_BLOCO)[number]
+
+export interface Bloco {
+  id: string
+  tipo: TipoBloco
+  texto: string
+  marcado?: boolean
+}
+
 export interface Nota {
   id: string
   titulo?: string | null
   conteudo: string
+  blocos?: Bloco[] | null
+  icone?: string | null
   categoria: CategoriaNota
   reuniaoId?: string | null
   pastaId?: string | null
@@ -867,6 +881,7 @@ export interface ReuniaoDetalhe extends Reuniao {
 export interface Pasta {
   id: string
   nome: string
+  icone?: string | null
   paiId?: string | null
   criadoEm: string
   atualizadoEm: string
