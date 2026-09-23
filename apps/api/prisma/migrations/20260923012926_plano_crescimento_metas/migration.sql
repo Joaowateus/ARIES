@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "pro_labore_parametros" ADD COLUMN     "planoConcentracaoMaximaLiderPct" DOUBLE PRECISION NOT NULL DEFAULT 70,
+ADD COLUMN     "planoConversaoConsolidadaPct" DOUBLE PRECISION NOT NULL DEFAULT 10,
+ADD COLUMN     "planoConversaoMinimaPct" DOUBLE PRECISION NOT NULL DEFAULT 5,
+ADD COLUMN     "planoEngajamentoMinimoPct" DOUBLE PRECISION NOT NULL DEFAULT 2,
+ADD COLUMN     "planoLeadsOrganicosMinimo" INTEGER NOT NULL DEFAULT 5,
+ADD COLUMN     "planoRoasMinimo" DOUBLE PRECISION NOT NULL DEFAULT 1,
+ADD COLUMN     "planoRoasSaudavel" DOUBLE PRECISION NOT NULL DEFAULT 3;

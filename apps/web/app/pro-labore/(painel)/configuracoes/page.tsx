@@ -34,6 +34,19 @@ export default function ProLaboreConfiguracoesPage() {
   const [erroAgenda, setErroAgenda] = useState('')
   const [sucessoAgenda, setSucessoAgenda] = useState(false)
 
+  // Limiares do Plano de Crescimento — mesma lógica dos limiares da
+  // Agenda acima: eram fixos no motor de regras, agora vivem aqui.
+  const [roasMinimo, setRoasMinimo] = useState('')
+  const [roasSaudavel, setRoasSaudavel] = useState('')
+  const [conversaoMinima, setConversaoMinima] = useState('')
+  const [conversaoConsolidada, setConversaoConsolidada] = useState('')
+  const [engajamentoMinimo, setEngajamentoMinimo] = useState('')
+  const [leadsOrganicosMinimo, setLeadsOrganicosMinimo] = useState('')
+  const [concentracaoMaxima, setConcentracaoMaxima] = useState('')
+  const [salvandoPlano, setSalvandoPlano] = useState(false)
+  const [erroPlano, setErroPlano] = useState('')
+  const [sucessoPlano, setSucessoPlano] = useState(false)
+
   useEffect(() => {
     if (!isDono) { setLoading(false); return }
     proLaboreApi.parametros.get().then((p: ParametroLiquidez) => {
@@ -51,6 +64,13 @@ export default function ProLaboreConfiguracoesPage() {
       setAlertaDias(String(p.agendaAlertaDiasConsecutivos))
       setAlertaQuedaEfetividade(String(p.agendaAlertaQuedaEfetividadePct))
       setReconhecimentoSemanas(String(p.agendaReconhecimentoSemanas))
+      setRoasMinimo(String(p.planoRoasMinimo))
+      setRoasSaudavel(String(p.planoRoasSaudavel))
+      setConversaoMinima(String(p.planoConversaoMinimaPct))
+      setConversaoConsolidada(String(p.planoConversaoConsolidadaPct))
+      setEngajamentoMinimo(String(p.planoEngajamentoMinimoPct))
+      setLeadsOrganicosMinimo(String(p.planoLeadsOrganicosMinimo))
+      setConcentracaoMaxima(String(p.planoConcentracaoMaximaLiderPct))
     }).finally(() => setLoading(false))
   }, [isDono])
 
@@ -115,6 +135,36 @@ export default function ProLaboreConfiguracoesPage() {
       setErroAgenda(err instanceof Error ? err.message : 'Erro ao salvar')
     } finally {
       setSalvandoAgenda(false)
+    }
+  }
+
+  async function handleSubmitPlano(e: React.FormEvent) {
+    e.preventDefault()
+    setErroPlano('')
+    setSucessoPlano(false)
+    setSalvandoPlano(true)
+    try {
+      const atualizado = await proLaboreApi.parametros.atualizar({
+        planoRoasMinimo: Number(roasMinimo),
+        planoRoasSaudavel: Number(roasSaudavel),
+        planoConversaoMinimaPct: Number(conversaoMinima),
+        planoConversaoConsolidadaPct: Number(conversaoConsolidada),
+        planoEngajamentoMinimoPct: Number(engajamentoMinimo),
+        planoLeadsOrganicosMinimo: Number(leadsOrganicosMinimo),
+        planoConcentracaoMaximaLiderPct: Number(concentracaoMaxima),
+      })
+      setRoasMinimo(String(atualizado.planoRoasMinimo))
+      setRoasSaudavel(String(atualizado.planoRoasSaudavel))
+      setConversaoMinima(String(atualizado.planoConversaoMinimaPct))
+      setConversaoConsolidada(String(atualizado.planoConversaoConsolidadaPct))
+      setEngajamentoMinimo(String(atualizado.planoEngajamentoMinimoPct))
+      setLeadsOrganicosMinimo(String(atualizado.planoLeadsOrganicosMinimo))
+      setConcentracaoMaxima(String(atualizado.planoConcentracaoMaximaLiderPct))
+      setSucessoPlano(true)
+    } catch (err: unknown) {
+      setErroPlano(err instanceof Error ? err.message : 'Erro ao salvar')
+    } finally {
+      setSalvandoPlano(false)
     }
   }
 
@@ -246,6 +296,64 @@ export default function ProLaboreConfiguracoesPage() {
         {sucessoAgenda && <div className="pl-alert pl-alert-success" style={{ marginTop: 18 }}>Regras da Agenda atualizadas.</div>}
 
         <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoAgenda} style={{ marginTop: 18 }}>{salvandoAgenda ? 'Salvando...' : 'Salvar'}</button>
+      </form>
+
+      <form onSubmit={handleSubmitPlano} className="pl-card" style={{ marginTop: 20 }}>
+        <div className="pl-card-head">
+          <div>
+            <div className="pl-card-title">Metas do Plano de Crescimento</div>
+            <div className="pl-card-sub">Limiares que classificam cada pilar em Iniciar/Manter/Escalonar/Escalar — calibre pela realidade do seu negócio, não são regra fixa</div>
+          </div>
+        </div>
+
+        <div className="pl-field-grid">
+          <div className="pl-field">
+            <label>ROAS mínimo (anúncio se pagando)</label>
+            <input type="number" step="0.1" min="0" className="pl-input" value={roasMinimo} onChange={e => setRoasMinimo(e.target.value)} required />
+            <span className="pl-hint">Abaixo disso, o pilar Financeiro fica em “Iniciar”</span>
+          </div>
+
+          <div className="pl-field">
+            <label>ROAS saudável</label>
+            <input type="number" step="0.1" min="0" className="pl-input" value={roasSaudavel} onChange={e => setRoasSaudavel(e.target.value)} required />
+            <span className="pl-hint">A partir daqui o pilar Financeiro avança pra “Escalonar”/“Escalar”</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Conversão lead → venda mínima (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={conversaoMinima} onChange={e => setConversaoMinima(e.target.value)} required />
+            <span className="pl-hint">Abaixo disso, o pilar Conversão fica em “Iniciar”</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Conversão lead → venda consolidada (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={conversaoConsolidada} onChange={e => setConversaoConsolidada(e.target.value)} required />
+            <span className="pl-hint">A partir daqui o funil é considerado maduro o bastante pra escalar</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Engajamento mínimo nas redes (%)</label>
+            <input type="number" step="0.1" min="0" max="100" className="pl-input" value={engajamentoMinimo} onChange={e => setEngajamentoMinimo(e.target.value)} required />
+            <span className="pl-hint">% do alcance que precisa virar curtida/comentário/salvamento pra considerar o engajamento saudável</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Leads orgânicos mínimos no período</label>
+            <input type="number" step="1" min="0" className="pl-input" value={leadsOrganicosMinimo} onChange={e => setLeadsOrganicosMinimo(e.target.value)} required />
+            <span className="pl-hint">Quantidade de leads vindos de rede social (últimos 30 dias) pra considerar a aquisição orgânica provada</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Concentração máxima no vendedor líder (%)</label>
+            <input type="number" step="1" min="0" max="100" className="pl-input" value={concentracaoMaxima} onChange={e => setConcentracaoMaxima(e.target.value)} required />
+            <span className="pl-hint">Acima disso, o resultado da equipe é considerado concentrado demais numa única pessoa</span>
+          </div>
+        </div>
+
+        {erroPlano && <div className="pl-alert pl-alert-error" style={{ marginTop: 18 }}>{erroPlano}</div>}
+        {sucessoPlano && <div className="pl-alert pl-alert-success" style={{ marginTop: 18 }}>Metas do Plano de Crescimento atualizadas.</div>}
+
+        <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoPlano} style={{ marginTop: 18 }}>{salvandoPlano ? 'Salvando...' : 'Salvar'}</button>
       </form>
     </div>
   )

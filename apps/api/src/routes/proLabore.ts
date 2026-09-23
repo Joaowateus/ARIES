@@ -11,7 +11,7 @@ import {
   buscarInsightsMidia,
   buscarInsightsContaHoje,
 } from '../lib/instagramGraph'
-import { gerarPlanoDeCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
+import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
 
 const router = Router()
 
@@ -285,6 +285,13 @@ const parametrosSchema = z.object({
   agendaReconhecimentoSemanas: z.number().int().positive().optional(),
   motivosOcorrenciaCsv: z.string().optional(),
   metaPostagensSemanais: z.number().int().positive('Meta deve ser positiva').optional(),
+  planoRoasMinimo: z.number().nonnegative('Meta deve ser positiva ou zero').optional(),
+  planoRoasSaudavel: z.number().nonnegative('Meta deve ser positiva ou zero').optional(),
+  planoConversaoMinimaPct: z.number().min(0).max(100).optional(),
+  planoConversaoConsolidadaPct: z.number().min(0).max(100).optional(),
+  planoEngajamentoMinimoPct: z.number().min(0).max(100).optional(),
+  planoLeadsOrganicosMinimo: z.number().int().nonnegative('Meta deve ser positiva ou zero').optional(),
+  planoConcentracaoMaximaLiderPct: z.number().min(0).max(100).optional(),
 })
 
 router.put('/parametros', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -2358,12 +2365,13 @@ router.get('/plano-crescimento', requireProLaboreAuth, requireDono, async (req: 
   const inicioMesAtual = primeiroDiaDoMesUTC(agora)
   const inicioMesAnterior = primeiroDiaDoMesUTC(new Date(Date.UTC(inicioMesAtual.getUTCFullYear(), inicioMesAtual.getUTCMonth() - 1, 1)))
 
-  const [vendas, leadsMesAtual, vendedores, gastosRegistros, conta] = await Promise.all([
+  const [vendas, leadsMesAtual, vendedores, gastosRegistros, conta, parametro] = await Promise.all([
     prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: inicioMesAnterior } } }),
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioMesAtual } } }),
     prisma.vendedor.findMany({ where: { usuarioId } }),
     prisma.gastoAnuncioMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioMesAnterior } } }),
     prisma.socialMediaConta.findUnique({ where: { usuarioId } }),
+    prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
   ])
 
   const vendasMesAtual = vendas.filter(v => v.data >= inicioMesAtual)
@@ -2398,10 +2406,9 @@ router.get('/plano-crescimento', requireProLaboreAuth, requireDono, async (req: 
     socialConectado = true
     const fimExclusivo = new Date(inicioDoDiaUTC(agora).getTime() + 24 * 60 * 60 * 1000)
     const inicioPeriodo = new Date(fimExclusivo.getTime() - periodoDias * 24 * 60 * 60 * 1000)
-    const [midias, snapshots, parametro, leadsOrganicos] = await Promise.all([
+    const [midias, snapshots, leadsOrganicos] = await Promise.all([
       prisma.socialMediaMidia.findMany({ where: { contaId: conta.id, publicadoEm: { gte: inicioPeriodo, lt: fimExclusivo } } }),
       prisma.socialMediaSnapshotDiario.findMany({ where: { contaId: conta.id, data: { gte: inicioPeriodo, lt: fimExclusivo } } }),
-      prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
       prisma.lead.findMany({ where: { usuarioId, tipoLead: 'ORGANICO', criadoEm: { gte: inicioPeriodo, lt: fimExclusivo } }, select: { id: true } }),
     ])
     const semanasNoPeriodo = Math.max(1, Math.ceil(periodoDias / 7))
@@ -2431,7 +2438,171 @@ router.get('/plano-crescimento', requireProLaboreAuth, requireDono, async (req: 
     receitaAnterior,
   }
 
-  res.json(gerarPlanoDeCrescimento(metricas))
+  const metas: MetasCrescimento = {
+    roasMinimo: parametro.planoRoasMinimo,
+    roasSaudavel: parametro.planoRoasSaudavel,
+    conversaoMinimaPct: parametro.planoConversaoMinimaPct,
+    conversaoConsolidadaPct: parametro.planoConversaoConsolidadaPct,
+    engajamentoMinimoPct: parametro.planoEngajamentoMinimoPct,
+    leadsOrganicosMinimo: parametro.planoLeadsOrganicosMinimo,
+    concentracaoMaximaLiderPct: parametro.planoConcentracaoMaximaLiderPct,
+  }
+
+  const plano = gerarPlanoDeCrescimento(metricas, metas)
+
+  // Registra (upsert) o retrato do mês corrente — alimenta a grade de
+  // evolução mensal. O mês atual fica sempre atualizado com o estágio mais
+  // recente; meses passados congelam sozinhos assim que vira o mês, porque
+  // o próximo upsert já mira outra chave (usuarioId + mesReferencia).
+  const pilarPorChave = new Map(plano.pilares.map(p => [p.chave, p]))
+  await prisma.planoCrescimentoSnapshot.upsert({
+    where: { usuarioId_mesReferencia: { usuarioId, mesReferencia: inicioMesAtual } },
+    update: {
+      estagioGeral: plano.estagioGeral,
+      estagioAquisicao: pilarPorChave.get('aquisicao')!.estagio,
+      estagioConversao: pilarPorChave.get('conversao')!.estagio,
+      estagioExecucao: pilarPorChave.get('execucao')!.estagio,
+      estagioFinanceiro: pilarPorChave.get('financeiro')!.estagio,
+    },
+    create: {
+      usuarioId, mesReferencia: inicioMesAtual,
+      estagioGeral: plano.estagioGeral,
+      estagioAquisicao: pilarPorChave.get('aquisicao')!.estagio,
+      estagioConversao: pilarPorChave.get('conversao')!.estagio,
+      estagioExecucao: pilarPorChave.get('execucao')!.estagio,
+      estagioFinanceiro: pilarPorChave.get('financeiro')!.estagio,
+    },
+  })
+
+  // As ações sugeridas pelo motor viram itens persistidos e marcáveis — ver
+  // o comentário do modelo PlanoCrescimentoAcao pra entender a `chave`
+  // estável por trás disso (pilar+estágio+índice, não o texto em si, que
+  // pode ter números ao vivo interpolados).
+  const acoesExistentes = await prisma.planoCrescimentoAcao.findMany({ where: { usuarioId } })
+  const existentePorChave = new Map(acoesExistentes.filter(a => a.chave).map(a => [a.chave as string, a]))
+
+  const operacoesSeed: ReturnType<typeof prisma.planoCrescimentoAcao.create>[] = []
+  for (const pilar of plano.pilares) {
+    pilar.acoes.forEach((texto, indice) => {
+      const chave = `${pilar.chave}:${pilar.estagio}:${indice}`
+      const existente = existentePorChave.get(chave)
+      if (!existente) {
+        operacoesSeed.push(prisma.planoCrescimentoAcao.create({ data: { usuarioId, pilar: pilar.chave, chave, texto, origem: 'SUGERIDA' } }))
+      } else if (!existente.editadoManualmente && existente.texto !== texto) {
+        operacoesSeed.push(prisma.planoCrescimentoAcao.update({ where: { id: existente.id }, data: { texto } }))
+      }
+    })
+  }
+  if (operacoesSeed.length > 0) await prisma.$transaction(operacoesSeed)
+
+  const todasAcoes = await prisma.planoCrescimentoAcao.findMany({
+    where: { usuarioId },
+    orderBy: [{ concluida: 'asc' }, { criadoEm: 'asc' }],
+  })
+
+  const resposta = {
+    estagioGeral: plano.estagioGeral,
+    resumoGeral: plano.resumoGeral,
+    gargalo: plano.gargalo,
+    pilares: plano.pilares.map(pilar => ({
+      chave: pilar.chave,
+      nome: pilar.nome,
+      estagio: pilar.estagio,
+      resumo: pilar.resumo,
+      metricas: pilar.metricas,
+      gates: pilar.gates,
+      ritmo: pilar.ritmo,
+      // Sugestão só aparece se pertence ao estágio atual do pilar — de um
+      // estágio anterior, some sozinha quando o pilar avança (ou volta).
+      // Itens customizados (chave nula) aparecem sempre.
+      itens: todasAcoes
+        .filter(a => a.pilar === pilar.chave && (a.origem === 'CUSTOMIZADA' || a.chave?.startsWith(`${pilar.chave}:${pilar.estagio}:`)))
+        .map(a => ({ id: a.id, texto: a.texto, concluida: a.concluida, origem: a.origem })),
+    })),
+  }
+
+  res.json(resposta)
+})
+
+const acaoCrescimentoSchema = z.object({
+  pilar: z.enum(['aquisicao', 'conversao', 'execucao', 'financeiro']),
+  texto: z.string().trim().min(1, 'Texto não pode ser vazio').max(500, 'Texto muito longo'),
+})
+
+router.post('/plano-crescimento/acoes', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = acaoCrescimentoSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const acao = await prisma.planoCrescimentoAcao.create({
+    data: { usuarioId: req.proLaboreUser!.sub, pilar: parse.data.pilar, texto: parse.data.texto, origem: 'CUSTOMIZADA' },
+  })
+  res.status(201).json({ id: acao.id, texto: acao.texto, concluida: acao.concluida, origem: acao.origem })
+})
+
+const acaoCrescimentoUpdateSchema = z.object({
+  concluida: z.boolean().optional(),
+  texto: z.string().trim().min(1, 'Texto não pode ser vazio').max(500, 'Texto muito longo').optional(),
+})
+
+router.patch('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = acaoCrescimentoUpdateSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const acao = await prisma.planoCrescimentoAcao.findFirst({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub } })
+  if (!acao) { res.status(404).json({ error: 'Ação não encontrada' }); return }
+
+  const atualizada = await prisma.planoCrescimentoAcao.update({
+    where: { id: acao.id },
+    data: {
+      concluida: parse.data.concluida,
+      // Editar o texto de uma sugestão trava esse texto — o seeding do GET
+      // /plano-crescimento não sobrescreve mais o que o dono escreveu.
+      ...(parse.data.texto !== undefined ? { texto: parse.data.texto, editadoManualmente: true } : {}),
+    },
+  })
+  res.json({ id: atualizada.id, texto: atualizada.texto, concluida: atualizada.concluida, origem: atualizada.origem })
+})
+
+router.delete('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const acao = await prisma.planoCrescimentoAcao.findFirst({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub } })
+  if (!acao) { res.status(404).json({ error: 'Ação não encontrada' }); return }
+  // Só item customizado pode ser apagado — uma sugestão apagada voltaria
+  // sozinha no próximo carregamento (a chave continuaria "faltando"), então
+  // o jeito de "descartar" uma sugestão é marcá-la como concluída.
+  if (acao.origem !== 'CUSTOMIZADA') { res.status(400).json({ error: 'Só é possível excluir itens adicionados por você — marque a sugestão como concluída em vez de excluir' }); return }
+  await prisma.planoCrescimentoAcao.delete({ where: { id: acao.id } })
+  res.json({ ok: true })
+})
+
+// Evolução mensal: retrato do estágio de cada pilar mês a mês (ver upsert em
+// GET /plano-crescimento) — alimenta a grade de histórico na tela.
+router.get('/plano-crescimento/historico', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const mesesParam = Number(req.query.meses)
+  const quantidadeMeses = Number.isInteger(mesesParam) && mesesParam >= 1 && mesesParam <= 24 ? mesesParam : 6
+
+  const inicioMesAtual = primeiroDiaDoMesUTC(new Date())
+  const inicioJanela = new Date(Date.UTC(inicioMesAtual.getUTCFullYear(), inicioMesAtual.getUTCMonth() - (quantidadeMeses - 1), 1))
+
+  const snapshots = await prisma.planoCrescimentoSnapshot.findMany({
+    where: { usuarioId, mesReferencia: { gte: inicioJanela } },
+    orderBy: { mesReferencia: 'asc' },
+  })
+
+  res.json(snapshots.map(s => ({
+    mes: s.mesReferencia.getUTCMonth(),
+    ano: s.mesReferencia.getUTCFullYear(),
+    label: MESES_LABEL[s.mesReferencia.getUTCMonth()],
+    estagioGeral: s.estagioGeral,
+    estagioAquisicao: s.estagioAquisicao,
+    estagioConversao: s.estagioConversao,
+    estagioExecucao: s.estagioExecucao,
+    estagioFinanceiro: s.estagioFinanceiro,
+  })))
 })
 
 // ============ ASSISTENTE COMERCIAL (WhatsApp) ============
