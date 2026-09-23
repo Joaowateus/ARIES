@@ -843,20 +843,145 @@
 .pl-breadcrumb-pastas button.active { color: var(--pl-ink-1); font-weight: 700; }
 .pl-breadcrumb-sep { color: var(--pl-ink-muted); margin: 0 2px; }
 
-.pl-pasta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-.pl-pasta-card {
-  display: flex; align-items: center; gap: 6px; background: var(--pl-surface); border: 1px solid var(--pl-border);
-  border-radius: var(--pl-radius-md); padding: 4px 6px 4px 4px; transition: border-color .15s ease;
+/* ============ ANOTAÇÕES ESTILO NOTION (sidebar em árvore + página) ============ */
+.pl-notion-shell {
+  display: grid; grid-template-columns: 260px 1fr; gap: 0; min-height: 560px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); overflow: hidden;
 }
-.pl-pasta-card:hover { border-color: var(--pl-border-strong); }
-.pl-pasta-card-body {
-  flex: 1; display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer;
-  padding: 6px; text-align: left; min-width: 0;
+.pl-notion-sidebar {
+  border-right: 1px solid var(--pl-border); background: var(--pl-surface-2); padding: 14px 8px;
+  display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 720px;
 }
-.pl-pasta-card-icon { flex: none; width: 18px; height: 18px; color: var(--pl-accent); }
-.pl-pasta-card-icon svg { width: 100%; height: 100%; }
-.pl-pasta-card-nome { font-size: 13px; font-weight: 600; color: var(--pl-ink-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pl-pasta-card .pl-input { padding: 5px 8px; font-size: 13px; }
+.pl-notion-sidebar-head {
+  display: flex; align-items: center; justify-content: space-between; padding: 2px 8px 10px;
+  font-family: 'IBM Plex Mono'; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--pl-ink-muted);
+}
+.pl-arvore-raiz { display: flex; flex-direction: column; gap: 1px; }
+.pl-arvore-item { display: flex; align-items: center; gap: 2px; border-radius: 7px; }
+.pl-arvore-item:hover { background: var(--pl-surface-3); }
+.pl-arvore-item.active { background: var(--pl-accent-soft); }
+.pl-arvore-chevron {
+  flex: none; width: 18px; height: 22px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; color: var(--pl-ink-muted); font-size: 10px;
+}
+.pl-arvore-chevron.invisivel { visibility: hidden; cursor: default; }
+.pl-arvore-label {
+  flex: 1; display: flex; align-items: center; gap: 7px; min-width: 0; background: none; border: none;
+  cursor: pointer; padding: 5px 4px; text-align: left;
+}
+.pl-arvore-icone { flex: none; font-size: 13px; line-height: 1; }
+.pl-arvore-nome { flex: 1; min-width: 0; font-size: 13px; color: var(--pl-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-arvore-item.active .pl-arvore-nome { color: var(--pl-ink-1); font-weight: 600; }
+.pl-arvore-acao {
+  flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 5px;
+  background: none; border: none; cursor: pointer; color: var(--pl-ink-muted); font-size: 13px; opacity: 0; transition: opacity .12s ease;
+}
+.pl-arvore-item:hover .pl-arvore-acao { opacity: 1; }
+.pl-arvore-acao:hover { background: var(--pl-surface); color: var(--pl-ink-1); }
+.pl-arvore-nova-pasta {
+  margin-top: 8px; background: none; border: none; cursor: pointer; text-align: left; padding: 6px 8px; border-radius: 7px;
+  font-size: 12.5px; color: var(--pl-ink-muted);
+}
+.pl-arvore-nova-pasta:hover { background: var(--pl-surface-3); color: var(--pl-ink-1); }
+
+.pl-notion-main { padding: 20px 26px; overflow-y: auto; max-height: 720px; }
+.pl-notion-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.pl-notion-header-icone, .pl-notion-header-icone-btn {
+  font-size: 22px; line-height: 1; background: none; border: none; cursor: pointer; border-radius: 8px; padding: 2px 6px;
+}
+.pl-notion-header-icone-btn:hover { background: var(--pl-surface-2); }
+.pl-notion-titulo-input {
+  flex: 1; border: none; background: none; font-family: 'IBM Plex Sans'; font-size: 20px; font-weight: 700;
+  color: var(--pl-ink-1); padding: 4px 2px; border-radius: 6px;
+}
+.pl-notion-titulo-input:focus { background: var(--pl-surface-2); outline: none; }
+.pl-notion-titulo-estatico { padding: 4px 2px; }
+.pl-notion-acoes-rapidas { display: flex; gap: 8px; margin-bottom: 18px; }
+
+.pl-notion-lista { display: flex; flex-direction: column; gap: 1px; }
+.pl-notion-lista-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; transition: background .12s ease;
+}
+.pl-notion-lista-item:hover { background: var(--pl-surface-2); }
+.pl-notion-lista-icone { flex: none; font-size: 15px; }
+.pl-notion-lista-nome { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--pl-ink-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-notion-lista-item .pl-kanban-icon-btn { opacity: 0; transition: opacity .12s ease; }
+.pl-notion-lista-item:hover .pl-kanban-icon-btn { opacity: 1; }
+
+.pl-notion-pagina-topo { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.pl-notion-pagina-icone-wrap { position: relative; }
+.pl-notion-pagina-icone { font-size: 32px; line-height: 1; background: none; border: none; cursor: pointer; border-radius: 8px; padding: 2px 6px; }
+.pl-notion-pagina-icone:hover { background: var(--pl-surface-2); }
+.pl-notion-pagina-status { flex: 1; text-align: right; font-family: 'IBM Plex Mono'; font-size: 10.5px; color: var(--pl-ink-muted); }
+.pl-nota-icone-menu {
+  position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--pl-surface); border: 1px solid var(--pl-border-strong);
+  border-radius: var(--pl-radius-md); box-shadow: 0 8px 24px rgba(0,0,0,.16); padding: 8px;
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; z-index: 10; width: 216px;
+}
+.pl-nota-icone-menu button { background: none; border: none; cursor: pointer; font-size: 17px; padding: 5px; border-radius: 6px; }
+.pl-nota-icone-menu button:hover { background: var(--pl-surface-2); }
+.pl-nota-icone-remover { grid-column: 1 / -1; font-size: 11.5px !important; color: var(--pl-ink-muted); text-align: center; }
+
+.pl-notion-pagina-titulo {
+  width: 100%; border: none; background: none; font-family: 'IBM Plex Sans'; font-size: 28px; font-weight: 800;
+  color: var(--pl-ink-1); padding: 4px 2px; margin-bottom: 12px; border-radius: 6px;
+}
+.pl-notion-pagina-titulo:focus { background: var(--pl-surface-2); outline: none; }
+.pl-notion-pagina-titulo::placeholder { color: var(--pl-ink-muted); }
+
+/* Editor de blocos (EditorBlocos.tsx) */
+.pl-editor-blocos { display: flex; flex-direction: column; gap: 1px; margin-top: 4px; }
+.pl-bloco-linha { display: flex; align-items: flex-start; gap: 2px; border-radius: 6px; padding: 1px 0; position: relative; }
+.pl-bloco-linha.pl-bloco-sobre { background: var(--pl-accent-soft); }
+.pl-bloco-handle {
+  flex: none; width: 18px; text-align: center; cursor: grab; color: var(--pl-ink-muted); font-size: 13px;
+  line-height: 28px; opacity: 0; transition: opacity .12s ease; user-select: none;
+}
+.pl-bloco-linha:hover .pl-bloco-handle { opacity: 1; }
+.pl-bloco-conteudo { flex: 1; min-width: 0; position: relative; }
+.pl-bloco-tipo-lista, .pl-bloco-tipo-lista_numerada, .pl-bloco-tipo-checkbox { display: flex; align-items: flex-start; gap: 8px; }
+.pl-bloco-tipo-citacao { display: flex; border-left: 3px solid var(--pl-border-strong); padding-left: 10px; }
+.pl-bloco-tipo-codigo { display: flex; background: var(--pl-surface-2); border-radius: 7px; padding: 2px 4px; }
+.pl-bloco-marcador { flex: none; color: var(--pl-ink-muted); font-size: 13.5px; line-height: 28px; min-width: 14px; }
+.pl-bloco-checkbox { flex: none; margin-top: 8px; width: 14px; height: 14px; accent-color: var(--pl-accent); cursor: pointer; }
+.pl-bloco-texto {
+  flex: 1; width: 100%; border: none; background: none; resize: none; overflow: hidden; font-family: 'IBM Plex Sans';
+  font-size: 13.5px; line-height: 1.65; color: var(--pl-ink-1); padding: 4px 2px; border-radius: 5px;
+}
+.pl-bloco-texto:focus { background: var(--pl-surface-2); outline: none; }
+.pl-bloco-texto.pl-bloco-marcado { color: var(--pl-ink-muted); text-decoration: line-through; }
+.pl-bloco-tipo-titulo1 .pl-bloco-texto { font-size: 21px; font-weight: 800; }
+.pl-bloco-tipo-titulo2 .pl-bloco-texto { font-size: 17px; font-weight: 700; }
+.pl-bloco-tipo-titulo3 .pl-bloco-texto { font-size: 14.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.pl-bloco-tipo-citacao .pl-bloco-texto { font-style: italic; color: var(--pl-ink-2); }
+.pl-bloco-tipo-codigo .pl-bloco-texto { font-family: 'IBM Plex Mono'; font-size: 12.5px; }
+.pl-bloco-divisor { border: none; border-top: 1px solid var(--pl-border-strong); margin: 10px 0; }
+.pl-bloco-acoes { flex: none; display: flex; align-items: center; gap: 2px; opacity: 0; transition: opacity .12s ease; padding-top: 2px; }
+.pl-bloco-linha:hover .pl-bloco-acoes { opacity: 1; }
+.pl-bloco-acao-btn {
+  width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 5px;
+  background: none; border: none; cursor: pointer; color: var(--pl-ink-muted); font-size: 15px; line-height: 1;
+}
+.pl-bloco-acao-btn:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
+.pl-bloco-menu {
+  position: absolute; top: 100%; left: 0; margin-top: 2px; background: var(--pl-surface); border: 1px solid var(--pl-border-strong);
+  border-radius: var(--pl-radius-md); box-shadow: 0 8px 24px rgba(0,0,0,.16); padding: 6px; display: flex; flex-direction: column;
+  gap: 1px; z-index: 10; min-width: 180px; max-height: 260px; overflow-y: auto;
+}
+.pl-bloco-menu-item {
+  display: flex; align-items: center; gap: 10px; background: none; border: none; cursor: pointer; text-align: left;
+  padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--pl-ink-1);
+}
+.pl-bloco-menu-item:hover { background: var(--pl-surface-2); }
+.pl-bloco-menu-icone {
+  flex: none; width: 24px; text-align: center; font-family: 'IBM Plex Mono'; font-size: 11px; font-weight: 700; color: var(--pl-ink-muted);
+}
+
+@media (max-width: 780px) {
+  .pl-notion-shell { grid-template-columns: 1fr; }
+  .pl-notion-sidebar { max-height: 240px; border-right: none; border-bottom: 1px solid var(--pl-border); }
+  .pl-notion-main { max-height: none; }
+}
 
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }

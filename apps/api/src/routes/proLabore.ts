@@ -2897,9 +2897,22 @@ router.get('/notas', requireProLaboreAuth, async (req: Request, res: Response) =
   res.json(notas)
 })
 
+// Tipos de bloco do EditorBlocos (frontend) — ver comentário do campo
+// Nota.blocos no schema. Validado de forma solta (zod não força a coerência
+// tipo/marcado — quem faz isso é o editor), só protegendo tamanho.
+const TIPOS_BLOCO = ['paragrafo', 'titulo1', 'titulo2', 'titulo3', 'lista', 'lista_numerada', 'checkbox', 'citacao', 'codigo', 'divisor'] as const
+const blocoSchema = z.object({
+  id: z.string(),
+  tipo: z.enum(TIPOS_BLOCO),
+  texto: z.string().max(5000, 'Bloco muito longo'),
+  marcado: z.boolean().optional(),
+})
+
 const notaSchema = z.object({
   titulo: z.string().trim().max(200, 'Título muito longo').optional(),
-  conteudo: z.string().trim().min(1, 'Conteúdo não pode ser vazio').max(20000, 'Conteúdo muito longo'),
+  conteudo: z.string().max(20000, 'Conteúdo muito longo').optional(),
+  blocos: z.array(blocoSchema).max(1000, 'Página com blocos demais').optional(),
+  icone: z.string().max(8, 'Ícone inválido').nullable().optional(),
   categoria: z.enum(CATEGORIAS_NOTA).optional(),
   reuniaoId: z.string().optional(),
   pastaId: z.string().nullable().optional(),
@@ -2920,7 +2933,7 @@ router.post('/notas', requireProLaboreAuth, async (req: Request, res: Response) 
   if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
     res.status(404).json({ error: 'Pasta não encontrada' }); return
   }
-  const nota = await prisma.nota.create({ data: { ...reuniaoWhereBase(req), ...parse.data } })
+  const nota = await prisma.nota.create({ data: { ...reuniaoWhereBase(req), ...parse.data, conteudo: parse.data.conteudo ?? '' } })
   res.status(201).json(nota)
 })
 
@@ -2954,6 +2967,7 @@ router.get('/pastas', requireProLaboreAuth, async (req: Request, res: Response) 
 
 const pastaSchema = z.object({
   nome: z.string().trim().min(1, 'Nome não pode ser vazio').max(100, 'Nome muito longo'),
+  icone: z.string().max(8, 'Ícone inválido').nullable().optional(),
   paiId: z.string().nullable().optional(),
 })
 
