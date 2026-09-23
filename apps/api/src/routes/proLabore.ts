@@ -2880,11 +2880,16 @@ router.delete('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: R
 })
 
 router.get('/notas', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const { reuniaoId, categoria } = req.query
+  const { reuniaoId, categoria, pastaId } = req.query
   const notas = await prisma.nota.findMany({
     where: {
       ...reuniaoWhereBase(req),
       reuniaoId: typeof reuniaoId === 'string' ? reuniaoId : null,
+      // Sem o parâmetro = sem filtro de pasta (uso antigo, lista tudo).
+      // Com o parâmetro presente (mesmo vazio) = filtra por aquela pasta
+      // exata, "" virando null (nível raiz) — é como a tela de Anotações
+      // navega pasta por pasta.
+      ...(typeof pastaId === 'string' ? { pastaId: pastaId || null } : {}),
       ...(typeof categoria === 'string' && (CATEGORIAS_NOTA as readonly string[]).includes(categoria) ? { categoria } : {}),
     },
     orderBy: { criadoEm: 'desc' },
@@ -2897,7 +2902,13 @@ const notaSchema = z.object({
   conteudo: z.string().trim().min(1, 'Conteúdo não pode ser vazio').max(20000, 'Conteúdo muito longo'),
   categoria: z.enum(CATEGORIAS_NOTA).optional(),
   reuniaoId: z.string().optional(),
+  pastaId: z.string().nullable().optional(),
 })
+
+async function validarPastaDoUsuario(req: Request, pastaId: string): Promise<boolean> {
+  const pasta = await prisma.pasta.findFirst({ where: { id: pastaId, ...reuniaoWhereBase(req) } })
+  return !!pasta
+}
 
 router.post('/notas', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = notaSchema.safeParse(req.body)
@@ -2906,6 +2917,9 @@ router.post('/notas', requireProLaboreAuth, async (req: Request, res: Response) 
     const reuniao = await prisma.reuniao.findFirst({ where: { id: parse.data.reuniaoId, ...reuniaoWhereBase(req) } })
     if (!reuniao) { res.status(404).json({ error: 'Reunião não encontrada' }); return }
   }
+  if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
+    res.status(404).json({ error: 'Pasta não encontrada' }); return
+  }
   const nota = await prisma.nota.create({ data: { ...reuniaoWhereBase(req), ...parse.data } })
   res.status(201).json(nota)
 })
@@ -2913,6 +2927,9 @@ router.post('/notas', requireProLaboreAuth, async (req: Request, res: Response) 
 router.patch('/notas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = notaSchema.omit({ reuniaoId: true }).partial().safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
+    res.status(404).json({ error: 'Pasta não encontrada' }); return
+  }
   const existente = await prisma.nota.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Nota não encontrada' }); return }
   const atualizada = await prisma.nota.update({ where: { id: existente.id }, data: parse.data })
@@ -2923,6 +2940,52 @@ router.delete('/notas/:id', requireProLaboreAuth, async (req: Request, res: Resp
   const existente = await prisma.nota.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Nota não encontrada' }); return }
   await prisma.nota.delete({ where: { id: existente.id } })
+  res.json({ ok: true })
+})
+
+// --- Pastas: organização em árvore das Anotações (departamento, módulo,
+// pasta, subpasta — é tudo o mesmo conceito de container aninhável). Volta
+// sempre a lista inteira e achatada (ver comentário do modelo Pasta) —
+// dá pra montar a árvore/breadcrumb no cliente sem N chamadas.
+router.get('/pastas', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const pastas = await prisma.pasta.findMany({ where: reuniaoWhereBase(req), orderBy: { nome: 'asc' } })
+  res.json(pastas)
+})
+
+const pastaSchema = z.object({
+  nome: z.string().trim().min(1, 'Nome não pode ser vazio').max(100, 'Nome muito longo'),
+  paiId: z.string().nullable().optional(),
+})
+
+router.post('/pastas', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = pastaSchema.safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  if (parse.data.paiId && !(await validarPastaDoUsuario(req, parse.data.paiId))) {
+    res.status(404).json({ error: 'Pasta pai não encontrada' }); return
+  }
+  const pasta = await prisma.pasta.create({ data: { ...reuniaoWhereBase(req), ...parse.data } })
+  res.status(201).json(pasta)
+})
+
+router.patch('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = pastaSchema.partial().safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  const existente = await prisma.pasta.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Pasta não encontrada' }); return }
+  if (parse.data.paiId) {
+    if (parse.data.paiId === existente.id) { res.status(400).json({ error: 'Uma pasta não pode ser pai dela mesma' }); return }
+    if (!(await validarPastaDoUsuario(req, parse.data.paiId))) { res.status(404).json({ error: 'Pasta pai não encontrada' }); return }
+  }
+  const atualizada = await prisma.pasta.update({ where: { id: existente.id }, data: parse.data })
+  res.json(atualizada)
+})
+
+router.delete('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const existente = await prisma.pasta.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Pasta não encontrada' }); return }
+  // Subpastas e notas soltam pro nível de cima (paiId/pastaId -> null),
+  // nunca são apagadas junto — ver comentário do modelo Pasta.
+  await prisma.pasta.delete({ where: { id: existente.id } })
   res.json({ ok: true })
 })
 

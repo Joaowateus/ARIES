@@ -833,6 +833,31 @@
 .pl-historico-tabela td:first-child, .pl-historico-tabela th:first-child { text-align: left; font-weight: 600; color: var(--pl-ink-1); font-size: 13px; }
 .pl-historico-tabela tr:last-child td { border-bottom: none; }
 
+/* ============ PASTAS (Anotações) ============ */
+.pl-breadcrumb-pastas { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; font-size: 13px; }
+.pl-breadcrumb-pastas button {
+  background: none; border: none; cursor: pointer; padding: 3px 6px; border-radius: 6px;
+  color: var(--pl-ink-muted); font-family: 'IBM Plex Sans'; font-size: 13px;
+}
+.pl-breadcrumb-pastas button:hover { color: var(--pl-ink-1); background: var(--pl-surface-2); }
+.pl-breadcrumb-pastas button.active { color: var(--pl-ink-1); font-weight: 700; }
+.pl-breadcrumb-sep { color: var(--pl-ink-muted); margin: 0 2px; }
+
+.pl-pasta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.pl-pasta-card {
+  display: flex; align-items: center; gap: 6px; background: var(--pl-surface); border: 1px solid var(--pl-border);
+  border-radius: var(--pl-radius-md); padding: 4px 6px 4px 4px; transition: border-color .15s ease;
+}
+.pl-pasta-card:hover { border-color: var(--pl-border-strong); }
+.pl-pasta-card-body {
+  flex: 1; display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer;
+  padding: 6px; text-align: left; min-width: 0;
+}
+.pl-pasta-card-icon { flex: none; width: 18px; height: 18px; color: var(--pl-accent); }
+.pl-pasta-card-icon svg { width: 100%; height: 100%; }
+.pl-pasta-card-nome { font-size: 13px; font-weight: 600; color: var(--pl-ink-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-pasta-card .pl-input { padding: 5px 8px; font-size: 13px; }
+
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
 .pl-modal-panel { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
