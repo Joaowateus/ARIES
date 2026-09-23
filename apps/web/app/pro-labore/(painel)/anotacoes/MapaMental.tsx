@@ -13,8 +13,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow, ReactFlowProvider, Background, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
-  getBezierPath, useInternalNode, useReactFlow, applyNodeChanges,
-  type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange,
+  EdgeLabelRenderer, MarkerType,
+  getBezierPath, useInternalNode, useReactFlow, applyNodeChanges, applyEdgeChanges,
+  type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange, type EdgeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreApi'
@@ -415,10 +416,17 @@ function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { n
   }
 
   const nodes = objetos.map(o => objetoParaNode(o, corPorObjeto.get(o.id) ?? 'var(--pl-ink-2)'))
-  const edges: Edge[] = conectores.map(c => ({
-    id: c.id, source: c.origemId, target: c.destinoId, type: 'flutuante',
-    style: { stroke: (c.estilo?.cor as string) ?? corPorObjeto.get(c.destinoId) ?? 'var(--pl-ink-2)', strokeWidth: 2.5 },
-  }))
+  const edges: Edge[] = conectores.map(c => {
+    const cor = (c.estilo?.cor as string) ?? corPorObjeto.get(c.destinoId) ?? 'var(--pl-ink-2)'
+    const tracejado = !!c.estilo?.tracejado
+    const seta = !!c.estilo?.seta
+    return {
+      id: c.id, source: c.origemId, target: c.destinoId, type: 'flutuante',
+      style: { stroke: cor, strokeWidth: 2.5, ...(tracejado ? { strokeDasharray: '6 4' } : {}) },
+      ...(seta ? { markerEnd: { type: MarkerType.ArrowClosed, color: cor } } : {}),
+      ...(c.label ? { label: c.label } : {}),
+    }
+  })
   return { nodes, edges }
 }
 
@@ -426,8 +434,15 @@ function flowParaBoard(nodes: NoFlow[], edges: Edge[]): { objetos: BoardObjeto[]
   return {
     objetos: nodes.map(nodeParaObjeto),
     conectores: edges.map(e => {
-      const cor = e.style && typeof e.style === 'object' && 'stroke' in e.style ? (e.style as { stroke?: string }).stroke : undefined
-      return { id: e.id, origemId: e.source, destinoId: e.target, ...(cor ? { estilo: { cor } } : {}) }
+      const estiloEdge = (e.style ?? {}) as Record<string, unknown>
+      const cor = typeof estiloEdge.stroke === 'string' ? estiloEdge.stroke : undefined
+      const tracejado = !!estiloEdge.strokeDasharray
+      const seta = !!e.markerEnd
+      const estilo = cor || tracejado || seta ? { ...(cor ? { cor } : {}), ...(tracejado ? { tracejado } : {}), ...(seta ? { seta } : {}) } : undefined
+      return {
+        id: e.id, origemId: e.source, destinoId: e.target,
+        ...(estilo ? { estilo } : {}), ...(e.label ? { label: e.label as string } : {}),
+      }
     }),
   }
 }
@@ -461,6 +476,9 @@ const AcoesMapaContext = createContext<{
   onMudarTexto: (id: string, texto: string) => void
   onAdicionarFilho: (id: string) => void
   onExcluir: (id: string) => void
+  onMudarEstiloConector: (id: string, patch: Partial<{ cor: string; tracejado: boolean; seta: boolean }>) => void
+  onMudarLabelConector: (id: string, label: string) => void
+  onExcluirConector: (id: string) => void
 } | null>(null)
 
 function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
@@ -701,18 +719,65 @@ function interseccaoComNo(noOrigem: ReturnType<typeof useInternalNode>, noAlvo: 
   return { x: w * (a * xx1 + 1) + x2, y: h * (a * yy1 + 1) + y2 }
 }
 
-function EdgeFlutuante({ id, source, target, style }: EdgeProps) {
+// Cores disponíveis no seletor rápido do conector (paleta separada e mais
+// enxuta que PALETA_RAMOS/PALETA_STICKY — só as cores mais úteis pra linha).
+const PALETA_CONECTOR = ['#8d9de0', '#e0687a', '#57c785', '#e0a83e', '#a679e0', '#8b93a6']
+
+function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }: EdgeProps) {
+  const acoes = useContext(AcoesMapaContext)!
   const noOrigem = useInternalNode(source)
   const noAlvo = useInternalNode(target)
   if (!noOrigem || !noAlvo) return null
 
   const pontoOrigem = interseccaoComNo(noOrigem, noAlvo)
   const pontoAlvo = interseccaoComNo(noAlvo, noOrigem)
-  const [caminho] = getBezierPath({
+  const [caminho, labelX, labelY] = getBezierPath({
     sourceX: pontoOrigem.x, sourceY: pontoOrigem.y, targetX: pontoAlvo.x, targetY: pontoAlvo.y,
   })
 
-  return <BaseEdge id={id} path={caminho} style={style} />
+  const tracejadoAtivo = !!(style as Record<string, unknown> | undefined)?.strokeDasharray
+  const setaAtiva = !!markerEnd
+
+  return (
+    <>
+      <BaseEdge id={id} path={caminho} style={style} markerEnd={markerEnd} />
+      {(!!label || selected) && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan pl-conector-overlay"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+          >
+            {!!label && <div className="pl-conector-label">{label as string}</div>}
+            {selected && (
+              <div className="pl-conector-toolbar">
+                <input
+                  className="pl-conector-label-input"
+                  value={(label as string) ?? ''}
+                  placeholder="Label"
+                  onChange={e => acoes.onMudarLabelConector(id, e.target.value)}
+                />
+                {PALETA_CONECTOR.map(cor => (
+                  <button
+                    key={cor} type="button" className="pl-conector-cor-swatch" style={{ background: cor }}
+                    title="Cor" onClick={() => acoes.onMudarEstiloConector(id, { cor })}
+                  />
+                ))}
+                <button
+                  type="button" className={`pl-mapa-toolbar-btn ${tracejadoAtivo ? 'ativo' : ''}`} title="Tracejado"
+                  onClick={() => acoes.onMudarEstiloConector(id, { tracejado: !tracejadoAtivo })}
+                >┄</button>
+                <button
+                  type="button" className={`pl-mapa-toolbar-btn ${setaAtiva ? 'ativo' : ''}`} title="Ponta de seta"
+                  onClick={() => acoes.onMudarEstiloConector(id, { seta: !setaAtiva })}
+                >→</button>
+                <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir conector" onClick={() => acoes.onExcluirConector(id)}>×</button>
+              </div>
+            )}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  )
 }
 
 const nodeTypes = {
@@ -759,6 +824,17 @@ function Canvas({ dadosIniciais, onChange }: {
   const onNodesChangeFlow = useCallback((changes: NodeChange<NoFlow>[]) => {
     setGrafo(atual => {
       const novo = { ...atual, nodes: applyNodeChanges(changes, atual.nodes) }
+      grafoRef.current = novo
+      return novo
+    })
+  }, [])
+
+  // Sem isso, clicar num conector pra selecioná-lo (e abrir a barrinha de
+  // estilo) não teria efeito nenhum — o React Flow só atualiza `selected`
+  // via onEdgesChange, igual onNodesChange faz pra nó.
+  const onEdgesChangeFlow = useCallback((changes: EdgeChange<Edge>[]) => {
+    setGrafo(atual => {
+      const novo = { ...atual, edges: applyEdgeChanges(changes, atual.edges) }
       grafoRef.current = novo
       return novo
     })
@@ -878,8 +954,8 @@ function Canvas({ dadosIniciais, onChange }: {
   }, [noSelecionadoId])
 
   // Conectar dois objetos livremente arrastando de um Handle a outro (6.3
-  // do mapeamento) — sem estilo customizável ainda (linha reta/curva,
-  // tracejado, ponta), só a linha "flutuante" padrão com cor neutra.
+  // do mapeamento) — cor neutra padrão, sem tracejado/seta; o usuário ajusta
+  // depois selecionando o conector (barrinha de estilo do EdgeFlutuante).
   const onConnect = useCallback((params: Connection) => {
     if (!params.source || !params.target) return
     const atual = grafoRef.current
@@ -887,8 +963,36 @@ function Canvas({ dadosIniciais, onChange }: {
     commit({ ...atual, edges: [...atual.edges, novaAresta] })
   }, [])
 
+  const onMudarEstiloConector = useCallback((id: string, patch: Partial<{ cor: string; tracejado: boolean; seta: boolean }>) => {
+    const atual = grafoRef.current
+    const edges = atual.edges.map(e => {
+      if (e.id !== id) return e
+      const estiloAtual = (e.style ?? {}) as Record<string, unknown>
+      const cor = patch.cor ?? (typeof estiloAtual.stroke === 'string' ? estiloAtual.stroke : 'var(--pl-ink-2)')
+      const tracejado = patch.tracejado ?? !!estiloAtual.strokeDasharray
+      const seta = patch.seta ?? !!e.markerEnd
+      return {
+        ...e,
+        style: { stroke: cor, strokeWidth: 2.5, ...(tracejado ? { strokeDasharray: '6 4' } : {}) },
+        markerEnd: seta ? { type: MarkerType.ArrowClosed, color: cor } : undefined,
+      }
+    })
+    commit({ ...atual, edges })
+  }, [])
+
+  const onMudarLabelConector = useCallback((id: string, label: string) => {
+    const atual = grafoRef.current
+    const edges = atual.edges.map(e => (e.id === id ? { ...e, label } : e))
+    commit({ ...atual, edges })
+  }, [])
+
+  const onExcluirConector = useCallback((id: string) => {
+    const atual = grafoRef.current
+    commit({ ...atual, edges: atual.edges.filter(e => e.id !== id) })
+  }, [])
+
   return (
-    <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir }}>
+    <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector }}>
       <div className="pl-mapa-canvas">
         <ReactFlow
           nodes={grafo.nodes}
@@ -896,6 +1000,7 @@ function Canvas({ dadosIniciais, onChange }: {
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChangeFlow}
+          onEdgesChange={onEdgesChangeFlow}
           onNodeDragStop={finalizarArraste}
           onConnect={onConnect}
           nodesDraggable={!modoMao}
