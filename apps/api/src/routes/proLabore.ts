@@ -2803,4 +2803,127 @@ async function semearConversasExemplo(assistenteId: string, nomeVendedor: string
   })
 }
 
+// ============ REUNIÕES E ANOTAÇÕES ============
+// Bloco pessoal do usuário logado — reuniões/aulas/vídeos que ele quer
+// manter registrados, com transcrição (por enquanto digitada/colada à mão;
+// o campo já existe pronto pra receber texto de uma transcrição automática
+// por IA quando essa integração for feita) e anotações livres, soltas ou
+// vinculadas a uma reunião. Estritamente privado por identidade logada —
+// mesmo o dono não vê o bloco pessoal de um vendedor, e vice-versa.
+
+const TIPOS_REUNIAO = ['REUNIAO', 'AULA', 'VIDEO', 'OUTRO'] as const
+const CATEGORIAS_NOTA = ['TRABALHO', 'IDEIA', 'APRENDIZADO', 'OUTRO'] as const
+
+function reuniaoWhereBase(req: Request): { usuarioId: string; vendedorId: string | null } {
+  const usuarioId = req.proLaboreUser!.sub
+  const vendedorId = req.proLaboreUser!.papel === 'DONO' ? null : req.proLaboreUser!.vendedorId!
+  return { usuarioId, vendedorId }
+}
+
+router.get('/reunioes', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const { tipo } = req.query
+  const reunioes = await prisma.reuniao.findMany({
+    where: { ...reuniaoWhereBase(req), ...(typeof tipo === 'string' && (TIPOS_REUNIAO as readonly string[]).includes(tipo) ? { tipo } : {}) },
+    include: { _count: { select: { notas: true } } },
+    orderBy: { data: 'desc' },
+  })
+  res.json(reunioes.map(r => ({
+    id: r.id, titulo: r.titulo, tipo: r.tipo, data: r.data, duracaoSegundos: r.duracaoSegundos,
+    nomeArquivoOriginal: r.nomeArquivoOriginal, temTranscricao: !!r.transcricao, quantidadeNotas: r._count.notas,
+  })))
+})
+
+const reuniaoSchema = z.object({
+  titulo: z.string().trim().min(1, 'Título não pode ser vazio').max(200, 'Título muito longo'),
+  tipo: z.enum(TIPOS_REUNIAO).optional(),
+  data: z.string().datetime().optional(),
+  duracaoSegundos: z.number().int().nonnegative().optional(),
+  nomeArquivoOriginal: z.string().max(255).optional(),
+  transcricao: z.string().max(50000, 'Transcrição muito longa').optional(),
+})
+
+router.post('/reunioes', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = reuniaoSchema.safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  const reuniao = await prisma.reuniao.create({
+    data: { ...reuniaoWhereBase(req), ...parse.data, data: parse.data.data ? new Date(parse.data.data) : undefined },
+  })
+  res.status(201).json(reuniao)
+})
+
+router.get('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const reuniao = await prisma.reuniao.findFirst({
+    where: { id: String(req.params.id), ...reuniaoWhereBase(req) },
+    include: { notas: { orderBy: { criadoEm: 'asc' } } },
+  })
+  if (!reuniao) { res.status(404).json({ error: 'Reunião não encontrada' }); return }
+  res.json(reuniao)
+})
+
+router.patch('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = reuniaoSchema.partial().safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  const existente = await prisma.reuniao.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Reunião não encontrada' }); return }
+  const atualizada = await prisma.reuniao.update({
+    where: { id: existente.id },
+    data: { ...parse.data, data: parse.data.data ? new Date(parse.data.data) : undefined },
+  })
+  res.json(atualizada)
+})
+
+router.delete('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const existente = await prisma.reuniao.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Reunião não encontrada' }); return }
+  await prisma.reuniao.delete({ where: { id: existente.id } })
+  res.json({ ok: true })
+})
+
+router.get('/notas', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const { reuniaoId, categoria } = req.query
+  const notas = await prisma.nota.findMany({
+    where: {
+      ...reuniaoWhereBase(req),
+      reuniaoId: typeof reuniaoId === 'string' ? reuniaoId : null,
+      ...(typeof categoria === 'string' && (CATEGORIAS_NOTA as readonly string[]).includes(categoria) ? { categoria } : {}),
+    },
+    orderBy: { criadoEm: 'desc' },
+  })
+  res.json(notas)
+})
+
+const notaSchema = z.object({
+  titulo: z.string().trim().max(200, 'Título muito longo').optional(),
+  conteudo: z.string().trim().min(1, 'Conteúdo não pode ser vazio').max(20000, 'Conteúdo muito longo'),
+  categoria: z.enum(CATEGORIAS_NOTA).optional(),
+  reuniaoId: z.string().optional(),
+})
+
+router.post('/notas', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = notaSchema.safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  if (parse.data.reuniaoId) {
+    const reuniao = await prisma.reuniao.findFirst({ where: { id: parse.data.reuniaoId, ...reuniaoWhereBase(req) } })
+    if (!reuniao) { res.status(404).json({ error: 'Reunião não encontrada' }); return }
+  }
+  const nota = await prisma.nota.create({ data: { ...reuniaoWhereBase(req), ...parse.data } })
+  res.status(201).json(nota)
+})
+
+router.patch('/notas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = notaSchema.omit({ reuniaoId: true }).partial().safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
+  const existente = await prisma.nota.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Nota não encontrada' }); return }
+  const atualizada = await prisma.nota.update({ where: { id: existente.id }, data: parse.data })
+  res.json(atualizada)
+})
+
+router.delete('/notas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const existente = await prisma.nota.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Nota não encontrada' }); return }
+  await prisma.nota.delete({ where: { id: existente.id } })
+  res.json({ ok: true })
+})
+
 export default router

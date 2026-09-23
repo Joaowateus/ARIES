@@ -521,6 +521,29 @@ export const proLaboreApi = {
     excluirAcao: (id: string) => request<{ ok: boolean }>(`/pro-labore/plano-crescimento/acoes/${id}`, { method: 'DELETE' }),
     historico: (meses = 6) => request<HistoricoCrescimentoMes[]>(`/pro-labore/plano-crescimento/historico?meses=${meses}`),
   },
+  reunioes: {
+    listar: (tipo?: TipoReuniao) => request<ReuniaoResumo[]>(`/pro-labore/reunioes${tipo ? `?tipo=${tipo}` : ''}`),
+    criar: (data: { titulo: string; tipo?: TipoReuniao; data?: string; duracaoSegundos?: number; nomeArquivoOriginal?: string; transcricao?: string }) =>
+      request<Reuniao>('/pro-labore/reunioes', { method: 'POST', body: JSON.stringify(data) }),
+    obter: (id: string) => request<ReuniaoDetalhe>(`/pro-labore/reunioes/${id}`),
+    atualizar: (id: string, data: Partial<{ titulo: string; tipo: TipoReuniao; transcricao: string }>) =>
+      request<Reuniao>(`/pro-labore/reunioes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/reunioes/${id}`, { method: 'DELETE' }),
+  },
+  notas: {
+    listar: (params?: { reuniaoId?: string; categoria?: CategoriaNota }) => {
+      const qs = new URLSearchParams()
+      if (params?.reuniaoId) qs.set('reuniaoId', params.reuniaoId)
+      if (params?.categoria) qs.set('categoria', params.categoria)
+      const s = qs.toString()
+      return request<Nota[]>(`/pro-labore/notas${s ? `?${s}` : ''}`)
+    },
+    criar: (data: { titulo?: string; conteudo: string; categoria?: CategoriaNota; reuniaoId?: string }) =>
+      request<Nota>('/pro-labore/notas', { method: 'POST', body: JSON.stringify(data) }),
+    atualizar: (id: string, data: Partial<{ titulo: string; conteudo: string; categoria: CategoriaNota }>) =>
+      request<Nota>(`/pro-labore/notas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/notas/${id}`, { method: 'DELETE' }),
+  },
 }
 
 export interface EfetividadeVendedor {
@@ -785,4 +808,47 @@ export interface HistoricoCrescimentoMes {
   estagioConversao: EstagioCrescimento
   estagioExecucao: EstagioCrescimento
   estagioFinanceiro: EstagioCrescimento
+}
+
+export const TIPOS_REUNIAO = ['REUNIAO', 'AULA', 'VIDEO', 'OUTRO'] as const
+export type TipoReuniao = (typeof TIPOS_REUNIAO)[number]
+
+export const CATEGORIAS_NOTA = ['TRABALHO', 'IDEIA', 'APRENDIZADO', 'OUTRO'] as const
+export type CategoriaNota = (typeof CATEGORIAS_NOTA)[number]
+
+export interface ReuniaoResumo {
+  id: string
+  titulo: string
+  tipo: TipoReuniao
+  data: string
+  duracaoSegundos?: number | null
+  nomeArquivoOriginal?: string | null
+  temTranscricao: boolean
+  quantidadeNotas: number
+}
+
+export interface Reuniao {
+  id: string
+  titulo: string
+  tipo: TipoReuniao
+  data: string
+  duracaoSegundos?: number | null
+  nomeArquivoOriginal?: string | null
+  transcricao?: string | null
+  criadoEm: string
+  atualizadoEm: string
+}
+
+export interface Nota {
+  id: string
+  titulo?: string | null
+  conteudo: string
+  categoria: CategoriaNota
+  reuniaoId?: string | null
+  criadoEm: string
+  atualizadoEm: string
+}
+
+export interface ReuniaoDetalhe extends Reuniao {
+  notas: Nota[]
 }

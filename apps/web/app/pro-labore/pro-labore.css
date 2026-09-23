@@ -469,6 +469,7 @@
 }
 .pl-input:hover, .pl-select:hover { border-color: var(--pl-ink-muted); }
 .pl-input:focus, .pl-select:focus { outline: 2px solid var(--pl-accent); outline-offset: 1px; border-color: var(--pl-accent); }
+.pl-textarea { resize: vertical; min-height: 70px; line-height: 1.55; font-family: 'IBM Plex Sans'; }
 .pl-hint { font-family: 'IBM Plex Sans'; font-weight: 500; font-size: 13px; color: var(--pl-ink-muted); }
 
 .pl-btn {
