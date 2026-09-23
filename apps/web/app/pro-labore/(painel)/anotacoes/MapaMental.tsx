@@ -1,21 +1,23 @@
 'use client'
 
-// Canvas de mapa mental livre, estilo MindMeister: nó central + ramos que
-// saem em qualquer direção, cada nó arrastável pra qualquer posição (via
-// @xyflow/react — pan, zoom, drag e arestas "flutuantes" já vêm prontos da
-// lib, sem precisar reinventar motor de canvas). A hierarquia (quem é filho
-// de quem) só muda pelos botões "+"/"×"; arrastar só reposiciona, nunca
-// reparenta — MindMeister de verdade permite os dois, mas reparentar por
-// proximidade exigiria uma heurística de "soltar perto de" que não vale o
-// esforço aqui.
+// Canvas de board livre, estilo Whimsical: qualquer objeto (nó de mapa
+// mental, forma de diagrama) arrastável pra qualquer posição, conectado
+// livremente a qualquer outro objeto — via @xyflow/react (pan, zoom, drag e
+// arestas "flutuantes" já vêm prontos da lib, sem precisar reinventar motor
+// de canvas). O board é guardado como uma estrutura PLANA (`objetos` +
+// `conectores`), não uma árvore — a hierarquia do mapa mental (quem é filho
+// de quem) é só um caso particular de conectores partindo de um nó central,
+// não uma limitação estrutural do modelo. Mapas antigos (formato legado
+// `raiz`, árvore recursiva) são convertidos pra essa estrutura plana na
+// primeira abertura, ver `dadosIniciaisDoBoard`.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow, ReactFlowProvider, Background, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar,
   getBezierPath, useInternalNode, useReactFlow, applyNodeChanges,
-  type Node, type Edge, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange,
+  type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { NoMapa } from '@/lib/proLaboreApi'
+import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreApi'
 
 // Ícones da toolbar vertical flutuante (réplica da barra da referência) —
 // mesmo estilo Feather (stroke, 24x24) do restante do app.
@@ -65,19 +67,23 @@ function IconeAjustarTela() {
     </svg>
   )
 }
+function IconeFormas() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="11" height="11" rx="2" />
+      <circle cx="16.5" cy="16.5" r="5.5" />
+    </svg>
+  )
+}
 
 function gerarIdNo(): string {
   return `n${Date.now()}${Math.random().toString(36).slice(2, 8)}`
 }
 
-export function criarNoMapa(texto = '', x = 0, y = 0): NoMapa {
-  return { id: gerarIdNo(), texto, x, y, filhos: [] }
-}
-
 // Mapas criados antes da posição livre existir não têm x/y no JSON salvo —
 // calcula uma posição padrão em camadas (a partir do pai) na primeira
 // abertura. Nó que já tem posição (arrastado manualmente, ou já migrado)
-// nunca é movido daqui.
+// nunca é movido daqui. Só usado pra converter o formato legado (`raiz`).
 type NoMapaLegado = Omit<NoMapa, 'x' | 'y' | 'filhos'> & { x?: number; y?: number; filhos: NoMapaLegado[] }
 
 function garantirPosicoes(no: NoMapaLegado, xPadrao: number, yPadrao: number): NoMapa {
@@ -88,34 +94,158 @@ function garantirPosicoes(no: NoMapaLegado, xPadrao: number, yPadrao: number): N
   return { id: no.id, texto: no.texto, x, y, filhos }
 }
 
+function arvoreParaBoard(raiz: NoMapa): { objetos: BoardObjeto[]; conectores: BoardConector[] } {
+  const objetos: BoardObjeto[] = []
+  const conectores: BoardConector[] = []
+  function visitar(no: NoMapa, ehCentral: boolean) {
+    objetos.push({ id: no.id, tipo: 'noMapa', x: no.x, y: no.y, conteudo: { texto: no.texto, ehCentral } })
+    no.filhos.forEach(filho => {
+      conectores.push({ id: `${no.id}-${filho.id}`, origemId: no.id, destinoId: filho.id })
+      visitar(filho, false)
+    })
+  }
+  visitar(raiz, true)
+  return { objetos, conectores }
+}
+
+export function criarBoardPadrao(texto = 'Ideia central'): { objetos: BoardObjeto[]; conectores: BoardConector[] } {
+  return { objetos: [{ id: gerarIdNo(), tipo: 'noMapa', x: 0, y: 0, conteudo: { texto, ehCentral: true } }], conectores: [] }
+}
+
+// Resolve o formato inicial do board a partir do que veio da API: já no
+// formato novo (objetos/conectores) → usa direto; só formato legado (raiz)
+// → converte a árvore pra plano; nenhum dos dois (mapa novo, ainda sem
+// resposta da API) → board padrão com um nó central.
+export function dadosIniciaisDoBoard(mapa: MapaMental | null): { objetos: BoardObjeto[]; conectores: BoardConector[] } {
+  if (mapa?.objetos && mapa.objetos.length > 0) return { objetos: mapa.objetos, conectores: mapa.conectores ?? [] }
+  if (mapa?.raiz) return arvoreParaBoard(garantirPosicoes(mapa.raiz as NoMapaLegado, 0, 0))
+  return criarBoardPadrao()
+}
+
 const PALETA_RAMOS = ['#5b8def', '#e0a83e', '#e0687a', '#57c785', '#a679e0', '#4fc3d9', '#e08d4f', '#8d9de0']
 
-interface DadosNo extends Record<string, unknown> {
+// --- Catálogo de formas de diagrama (6.2 do mapeamento) — cada forma é só
+// uma combinação de largura/altura/clip-path (ou borda, pras sem
+// preenchimento). O texto fica numa camada separada por cima do
+// preenchimento, nunca dentro da área com clip-path, senão formas
+// pontudas (losango/triângulo/estrela) cortariam o próprio texto. ---
+export type TipoForma = 'retangulo' | 'pilula' | 'oval' | 'losango' | 'trapezio' | 'triangulo' | 'hexagono' | 'cilindro' | 'linha' | 'colchete' | 'estrela' | 'nuvem'
+
+interface ConfigForma { rotulo: string; atalho: string; largura: number; altura: number; clipPath?: string; borderRadius?: string; semPreenchimento?: boolean }
+
+const CONFIG_FORMA: Record<TipoForma, ConfigForma> = {
+  retangulo: { rotulo: 'Retângulo', atalho: 'R', largura: 160, altura: 90, borderRadius: '10px' },
+  pilula: { rotulo: 'Pílula', atalho: 'U', largura: 170, altura: 64, borderRadius: '999px' },
+  oval: { rotulo: 'Oval', atalho: 'O', largura: 160, altura: 100, borderRadius: '50%' },
+  losango: { rotulo: 'Losango', atalho: 'D', largura: 170, altura: 120, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' },
+  trapezio: { rotulo: 'Trapézio', atalho: 'A', largura: 170, altura: 100, clipPath: 'polygon(22% 0%, 78% 0%, 100% 100%, 0% 100%)' },
+  triangulo: { rotulo: 'Triângulo', atalho: 'G', largura: 160, altura: 130, clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)' },
+  hexagono: { rotulo: 'Hexágono', atalho: 'H', largura: 170, altura: 100, clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' },
+  cilindro: { rotulo: 'Cilindro', atalho: 'Y', largura: 140, altura: 110, borderRadius: '50% 50% 10px 10px / 22% 22% 10px 10px' },
+  linha: { rotulo: 'Linha', atalho: 'L', largura: 180, altura: 14, borderRadius: '999px' },
+  colchete: { rotulo: 'Colchete', atalho: 'B', largura: 46, altura: 120, semPreenchimento: true },
+  estrela: {
+    rotulo: 'Estrela', atalho: 'V', largura: 140, altura: 140,
+    clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
+  },
+  nuvem: { rotulo: 'Nuvem', atalho: 'J', largura: 180, altura: 110, borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%' },
+}
+
+const ORDEM_FORMAS: TipoForma[] = ['retangulo', 'pilula', 'oval', 'losango', 'trapezio', 'triangulo', 'hexagono', 'cilindro', 'linha', 'colchete', 'estrela', 'nuvem']
+
+interface DadosNoMapa extends Record<string, unknown> {
+  tipoObjeto: 'noMapa'
   texto: string
   ehCentral: boolean
   cor: string
 }
 
-type NoFlow = Node<DadosNo>
+interface DadosForma extends Record<string, unknown> {
+  tipoObjeto: 'forma'
+  forma: TipoForma
+  texto: string
+  cor: string
+}
 
-function arvoreParaFlow(raiz: NoMapa): { nodes: NoFlow[]; edges: Edge[] } {
-  const nodes: NoFlow[] = []
-  const edges: Edge[] = []
+type DadosObjeto = DadosNoMapa | DadosForma
+type NoFlow = Node<DadosObjeto>
 
-  function visitar(no: NoMapa, ehCentral: boolean, cor: string) {
-    nodes.push({ id: no.id, type: 'noMapa', position: { x: no.x, y: no.y }, data: { texto: no.texto, ehCentral, cor } })
-    no.filhos.forEach((filho, i) => {
-      const corRamo = ehCentral ? PALETA_RAMOS[i % PALETA_RAMOS.length] : cor
-      edges.push({
-        id: `${no.id}-${filho.id}`, source: no.id, target: filho.id, type: 'flutuante',
-        style: { stroke: corRamo, strokeWidth: 2.5 },
+function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
+  if (o.tipo === 'forma') {
+    return {
+      id: o.id, type: 'forma', position: { x: o.x, y: o.y },
+      data: {
+        tipoObjeto: 'forma',
+        forma: (o.conteudo.forma as TipoForma) ?? 'retangulo',
+        texto: (o.conteudo.texto as string) ?? '',
+        cor: (o.estilo?.cor as string) ?? corHerdada,
+      },
+    }
+  }
+  return {
+    id: o.id, type: 'noMapa', position: { x: o.x, y: o.y },
+    data: { tipoObjeto: 'noMapa', texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
+  }
+}
+
+function nodeParaObjeto(n: NoFlow): BoardObjeto {
+  if (n.data.tipoObjeto === 'forma') {
+    return {
+      id: n.id, tipo: 'forma', x: n.position.x, y: n.position.y,
+      estilo: { cor: n.data.cor }, conteudo: { forma: n.data.forma, texto: n.data.texto },
+    }
+  }
+  return {
+    id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y,
+    conteudo: { texto: n.data.texto, ehCentral: n.data.ehCentral },
+  }
+}
+
+// Monta nodes/edges do React Flow a partir do board plano, calculando a cor
+// de cada ramo do mapa mental por BFS a partir do nó central (mesma lógica
+// visual de antes, só que operando sobre conectores livres em vez de uma
+// árvore fixa — formas soltas sem caminho até o central ficam com a cor
+// neutra padrão).
+function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { nodes: NoFlow[]; edges: Edge[] } {
+  const central = objetos.find(o => o.tipo === 'noMapa' && o.conteudo.ehCentral)
+  const corPorObjeto = new Map<string, string>()
+  if (central) corPorObjeto.set(central.id, 'var(--pl-accent)')
+
+  const saidaPorOrigem = new Map<string, BoardConector[]>()
+  conectores.forEach(c => saidaPorOrigem.set(c.origemId, [...(saidaPorOrigem.get(c.origemId) ?? []), c]))
+
+  if (central) {
+    const fila = [central.id]
+    const visitados = new Set([central.id])
+    while (fila.length > 0) {
+      const atualId = fila.shift()!
+      const corAtual = corPorObjeto.get(atualId) ?? PALETA_RAMOS[0]
+      const saidas = saidaPorOrigem.get(atualId) ?? []
+      saidas.forEach((c, i) => {
+        if (visitados.has(c.destinoId)) return
+        visitados.add(c.destinoId)
+        corPorObjeto.set(c.destinoId, atualId === central.id ? PALETA_RAMOS[i % PALETA_RAMOS.length] : corAtual)
+        fila.push(c.destinoId)
       })
-      visitar(filho, false, corRamo)
-    })
+    }
   }
 
-  visitar(raiz, true, 'var(--pl-accent)')
+  const nodes = objetos.map(o => objetoParaNode(o, corPorObjeto.get(o.id) ?? 'var(--pl-ink-2)'))
+  const edges: Edge[] = conectores.map(c => ({
+    id: c.id, source: c.origemId, target: c.destinoId, type: 'flutuante',
+    style: { stroke: (c.estilo?.cor as string) ?? corPorObjeto.get(c.destinoId) ?? 'var(--pl-ink-2)', strokeWidth: 2.5 },
+  }))
   return { nodes, edges }
+}
+
+function flowParaBoard(nodes: NoFlow[], edges: Edge[]): { objetos: BoardObjeto[]; conectores: BoardConector[] } {
+  return {
+    objetos: nodes.map(nodeParaObjeto),
+    conectores: edges.map(e => {
+      const cor = e.style && typeof e.style === 'object' && 'stroke' in e.style ? (e.style as { stroke?: string }).stroke : undefined
+      return { id: e.id, origemId: e.source, destinoId: e.target, ...(cor ? { estilo: { cor } } : {}) }
+    }),
+  }
 }
 
 function idsDaSubarvore(edges: Edge[], raizId: string): Set<string> {
@@ -132,22 +262,6 @@ function idsDaSubarvore(edges: Edge[], raizId: string): Set<string> {
   return ids
 }
 
-function reconstruirArvore(nodes: NoFlow[], edges: Edge[], raizId: string): NoMapa {
-  const porId = new Map(nodes.map(n => [n.id, n]))
-  const filhosPorPai = new Map<string, string[]>()
-  edges.forEach(e => filhosPorPai.set(e.source, [...(filhosPorPai.get(e.source) ?? []), e.target]))
-
-  function construir(id: string): NoMapa {
-    const no = porId.get(id)!
-    return {
-      id, texto: no.data.texto, x: no.position.x, y: no.position.y,
-      filhos: (filhosPorPai.get(id) ?? []).map(construir),
-    }
-  }
-
-  return construir(raizId)
-}
-
 // --- Contexto com as ações dos botões do nó, pra não precisar embutir
 // funções dentro de `data` (que precisa ficar serializável/simples). ---
 const AcoesMapaContext = createContext<{
@@ -158,24 +272,25 @@ const AcoesMapaContext = createContext<{
 
 function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
   const acoes = useContext(AcoesMapaContext)!
-  const [valor, setValor] = useState(data.texto)
+  const d = data as DadosNoMapa
+  const [valor, setValor] = useState(d.texto)
   // Nó novo (texto vazio) já abre editando; senão começa só "rótulo" —
   // arrastável em qualquer ponto. Precisa desse split de modo (rótulo vs.
   // input) porque o input, marcado nodrag pra não brigar com seleção de
   // texto, cobre quase o nó inteiro — sem ele, clicar no meio do nó pra
   // arrastar sempre cairia em cima do input e nunca iniciaria o arraste.
-  const [editando, setEditando] = useState(data.texto === '')
-  useEffect(() => { setValor(data.texto) }, [data.texto])
+  const [editando, setEditando] = useState(d.texto === '')
+  useEffect(() => { setValor(d.texto) }, [d.texto])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
 
   return (
-    <div className={`pl-mapa-no ${data.ehCentral ? 'pl-mapa-no-central' : ''}`}>
+    <div className={`pl-mapa-no ${d.ehCentral ? 'pl-mapa-no-central' : ''}`}>
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
         <button type="button" className="pl-mapa-toolbar-btn" title="Adicionar ideia filha" onClick={() => acoes.onAdicionarFilho(id)}>+</button>
-        {!data.ehCentral && (
+        {!d.ehCentral && (
           <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
         )}
       </NodeToolbar>
@@ -185,7 +300,7 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
           className="nodrag nopan pl-mapa-no-input"
           autoFocus
           value={valor}
-          placeholder={data.ehCentral ? 'Ideia central' : 'Nova ideia'}
+          placeholder={d.ehCentral ? 'Ideia central' : 'Nova ideia'}
           style={{ width: `${Math.max(valor.length, 4) + 2}ch` }}
           onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
           onBlur={sairEdicao}
@@ -193,9 +308,53 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
         />
       ) : (
         <div className="pl-mapa-no-texto" onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover">
-          {valor || (data.ehCentral ? 'Ideia central' : 'Nova ideia')}
+          {valor || (d.ehCentral ? 'Ideia central' : 'Nova ideia')}
         </div>
       )}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  )
+}
+
+function FormaNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosForma
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(d.texto === '')
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+  const config = CONFIG_FORMA[d.forma]
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-forma-no" style={{ width: config.largura, height: config.altura }}>
+      <div
+        className="pl-forma-preenchimento"
+        style={config.semPreenchimento
+          ? { border: `2.5px solid ${d.cor}`, borderRadius: config.borderRadius }
+          : { background: d.cor, clipPath: config.clipPath, borderRadius: config.borderRadius }}
+      />
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <div className="pl-forma-conteudo" style={{ color: config.semPreenchimento ? 'var(--pl-ink-1)' : '#fff' }} onDoubleClick={entrarEdicao}>
+        {editando ? (
+          <input
+            className="nodrag nopan pl-forma-input"
+            autoFocus
+            value={valor}
+            placeholder="Texto"
+            onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+            onBlur={sairEdicao}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+          />
+        ) : (
+          <div className="pl-forma-texto">{valor}</div>
+        )}
+      </div>
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </div>
   )
@@ -242,20 +401,24 @@ function EdgeFlutuante({ id, source, target, style }: EdgeProps) {
   return <BaseEdge id={id} path={caminho} style={style} />
 }
 
-const nodeTypes = { noMapa: NoMapaNode } as unknown as NodeTypes
+const nodeTypes = { noMapa: NoMapaNode, forma: FormaNode } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
-function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (raiz: NoMapa) => void }) {
-  const raizId = raizInicial.id
+function Canvas({ dadosIniciais, onChange }: {
+  dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
+  onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
+}) {
   const { fitView } = useReactFlow()
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
-    () => arvoreParaFlow(garantirPosicoes(raizInicial as NoMapaLegado, 0, 0)),
+    () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores),
   )
   // Modo "mão" (pan): desliga o arraste de nó, então segurar e arrastar em
   // qualquer ponto do canvas move a tela em vez de mover o nó — réplica do
   // par cursor/mão da barra da referência.
   const [modoMao, setModoMao] = useState(false)
-  const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? raizId
+  const [formasAbertas, setFormasAbertas] = useState(false)
+  const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
+  const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
   // xyflow dispara onNodesChange (posição final, dragging:false) e em
   // seguida onNodeDragStop no mesmo evento de mouseup, síncronos entre si —
@@ -285,7 +448,7 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
   }, [])
 
   function finalizarArraste() {
-    onChange(reconstruirArvore(grafoRef.current.nodes, grafoRef.current.edges, raizId))
+    onChange(flowParaBoard(grafoRef.current.nodes, grafoRef.current.edges))
   }
 
   // Nunca chama `onChange` (que sobe até o setState da PaginaMapaMental) de
@@ -297,30 +460,31 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
   function commit(novoGrafo: { nodes: NoFlow[]; edges: Edge[] }) {
     grafoRef.current = novoGrafo
     setGrafo(novoGrafo)
-    onChange(reconstruirArvore(novoGrafo.nodes, novoGrafo.edges, raizId))
+    onChange(flowParaBoard(novoGrafo.nodes, novoGrafo.edges))
   }
 
   const onMudarTexto = useCallback((id: string, texto: string) => {
     const atual = grafoRef.current
     const nodes = atual.nodes.map(n => (n.id === id ? { ...n, data: { ...n.data, texto } } : n))
     commit({ ...atual, nodes })
-  }, [onChange, raizId])
+  }, [])
 
   const onAdicionarFilho = useCallback((paiId: string) => {
     const atual = grafoRef.current
     const pai = atual.nodes.find(n => n.id === paiId)
     if (!pai) return
+    const paiEhCentral = pai.data.tipoObjeto === 'noMapa' && pai.data.ehCentral
     const filhosExistentes = atual.edges.filter(e => e.source === paiId).length
-    const cor = pai.data.ehCentral ? PALETA_RAMOS[filhosExistentes % PALETA_RAMOS.length] : pai.data.cor
+    const cor = paiEhCentral ? PALETA_RAMOS[filhosExistentes % PALETA_RAMOS.length] : pai.data.cor
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'noMapa',
       position: { x: pai.position.x + 260, y: pai.position.y + filhosExistentes * 90 - (filhosExistentes > 0 ? 45 : 0) },
-      data: { texto: '', ehCentral: false, cor },
+      data: { tipoObjeto: 'noMapa', texto: '', ehCentral: false, cor },
     }
     const novaAresta: Edge = { id: `${paiId}-${novoId}`, source: paiId, target: novoId, type: 'flutuante', style: { stroke: cor, strokeWidth: 2.5 } }
     commit({ nodes: [...atual.nodes, novoNo], edges: [...atual.edges, novaAresta] })
-  }, [onChange, raizId])
+  }, [])
 
   const onExcluir = useCallback((id: string) => {
     const atual = grafoRef.current
@@ -328,7 +492,29 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
     const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
     const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
     commit({ nodes, edges })
-  }, [onChange, raizId])
+  }, [])
+
+  const onAdicionarForma = useCallback((forma: TipoForma) => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'forma',
+      position: { x: (base?.position.x ?? 0) + 260, y: base?.position.y ?? 0 },
+      data: { tipoObjeto: 'forma', forma, texto: '', cor: PALETA_RAMOS[0] },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  // Conectar dois objetos livremente arrastando de um Handle a outro (6.3
+  // do mapeamento) — sem estilo customizável ainda (linha reta/curva,
+  // tracejado, ponta), só a linha "flutuante" padrão com cor neutra.
+  const onConnect = useCallback((params: Connection) => {
+    if (!params.source || !params.target) return
+    const atual = grafoRef.current
+    const novaAresta: Edge = { id: `c${gerarIdNo()}`, source: params.source, target: params.target, type: 'flutuante', style: { stroke: 'var(--pl-ink-2)', strokeWidth: 2.5 } }
+    commit({ ...atual, edges: [...atual.edges, novaAresta] })
+  }, [])
 
   return (
     <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir }}>
@@ -340,6 +526,7 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChangeFlow}
           onNodeDragStop={finalizarArraste}
+          onConnect={onConnect}
           nodesDraggable={!modoMao}
           fitView
           minZoom={0.2}
@@ -356,15 +543,38 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
               <IconeMao />
             </button>
             <div className="pl-mapa-tv-divisor" />
-            <button type="button" className="pl-mapa-tv-btn" title="Adicionar ideia" onClick={() => onAdicionarFilho(noSelecionadoId)}>
+            <button type="button" className="pl-mapa-tv-btn" title="Adicionar ideia" onClick={() => noSelecionadoId && onAdicionarFilho(noSelecionadoId)}>
               <IconeMais />
             </button>
+            <div className="pl-mapa-tv-item">
+              <button type="button" className={`pl-mapa-tv-btn ${formasAbertas ? 'ativo' : ''}`} title="Formas" onClick={() => setFormasAbertas(v => !v)}>
+                <IconeFormas />
+              </button>
+              {formasAbertas && (
+                <div className="pl-mapa-formas-flyout">
+                  {ORDEM_FORMAS.map(tipo => (
+                    <button
+                      key={tipo} type="button" className="pl-mapa-forma-opcao"
+                      title={`${CONFIG_FORMA[tipo].rotulo} (${CONFIG_FORMA[tipo].atalho})`}
+                      onClick={() => { onAdicionarForma(tipo); setFormasAbertas(false) }}
+                    >
+                      <span
+                        className="pl-mapa-forma-preview"
+                        style={CONFIG_FORMA[tipo].semPreenchimento
+                          ? { border: '2px solid var(--pl-ink-2)', borderRadius: CONFIG_FORMA[tipo].borderRadius }
+                          : { background: 'var(--pl-ink-2)', clipPath: CONFIG_FORMA[tipo].clipPath, borderRadius: CONFIG_FORMA[tipo].borderRadius }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               className="pl-mapa-tv-btn pl-mapa-tv-btn-danger"
               title="Excluir selecionado"
-              disabled={noSelecionadoId === raizId}
-              onClick={() => onExcluir(noSelecionadoId)}
+              disabled={!noSelecionadoId || noSelecionadoId === centralId}
+              onClick={() => noSelecionadoId && onExcluir(noSelecionadoId)}
             >
               <IconeLixeiraToolbar />
             </button>
@@ -379,7 +589,10 @@ function Canvas({ raizInicial, onChange }: { raizInicial: NoMapa; onChange: (rai
   )
 }
 
-export default function MapaMentalCanvas(props: { raizInicial: NoMapa; onChange: (raiz: NoMapa) => void }) {
+export default function MapaMentalCanvas(props: {
+  dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
+  onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
+}) {
   return (
     <ReactFlowProvider>
       <Canvas {...props} />

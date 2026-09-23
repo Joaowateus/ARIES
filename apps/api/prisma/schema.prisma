@@ -1653,11 +1653,18 @@ model Pasta {
   @@map("pro_labore_pastas")
 }
 
-// Mapa mental: outro "tipo de página" dentro da mesma árvore de Anotações
-// (mora dentro de uma Pasta como uma Nota, só que abre um canvas de nós em
-// vez do editor de blocos). A árvore inteira do mapa fica em `raiz`, um nó
-// recursivo { id, texto, filhos: [...] } — mais simples de versionar como um
-// blob só do que normalizar em linhas com parentId.
+// Mapa mental / board: outro "tipo de página" dentro da mesma árvore de
+// Anotações (mora dentro de uma Pasta como uma Nota, só que abre um canvas
+// em vez do editor de blocos). Guardava só uma árvore de nós (`raiz`,
+// recursivo { id, texto, filhos: [...] }); virou um board genérico com
+// `objetos`/`conectores` planos (array de BoardObjeto/BoardConector — ver
+// tipos em MapaMental.tsx no frontend), que suporta formas soltas
+// conectadas livremente, não só uma hierarquia de ideias. `raiz` continua
+// existindo só pra mapas antigos que nunca foram salvos no formato novo —
+// o frontend converte a árvore pra objetos/conectores na primeira abertura
+// e passa a salvar só no formato novo dali em diante; nunca é escrito de
+// novo depois da migração, então não precisa ficar em sincronia com
+// objetos/conectores.
 model MapaMental {
   id           String   @id @default(cuid())
   usuarioId    String
@@ -1665,7 +1672,9 @@ model MapaMental {
   pastaId      String?
   titulo       String?
   icone        String? // emoji, opcional — mapa sem ícone usa o ícone padrão
-  raiz         Json
+  raiz         Json?
+  objetos      Json?
+  conectores   Json?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 

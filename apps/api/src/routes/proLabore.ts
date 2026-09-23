@@ -3004,14 +3004,15 @@ router.delete('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Res
   res.json({ ok: true })
 })
 
-// --- Mapas mentais: outro "tipo de página" dentro da mesma árvore de
-// Anotações (mora dentro de uma Pasta como uma Nota). A árvore de nós
-// inteira vive em `raiz`, validada de forma recursiva e solta (só limites
-// de tamanho, sem impor semântica) — ver comentário do modelo no schema.
-// `x`/`y` são a posição livre do nó no canvas (MapaMental.tsx no
-// frontend, via @xyflow/react) — mapas criados antes dessa posição existir
-// não têm esses campos; o frontend calcula uma posição padrão na primeira
-// abertura e ela é persistida no primeiro autosave.
+// --- Mapas mentais / board: outro "tipo de página" dentro da mesma árvore
+// de Anotações (mora dentro de uma Pasta como uma Nota). `raiz` é o formato
+// legado (árvore recursiva de nós, só mapa mental puro) — mantido só pra
+// mapas antigos nunca reabertos ainda no formato novo, nunca mais escrito
+// pelo backend. O formato atual é plano: `objetos` (qualquer forma/nó no
+// canvas) + `conectores` (ligação entre dois objetos quaisquer, não só
+// pai→filho), validados de forma solta como os blocos do EditorBlocos — só
+// protegem tamanho/quantidade, não impõem a coerência tipo/conteúdo (quem
+// faz isso é o frontend, MapaMental.tsx via @xyflow/react).
 interface NoMapaInput { id: string; texto: string; x: number; y: number; filhos: NoMapaInput[] }
 const noMapaSchema: z.ZodType<NoMapaInput> = z.lazy(() => z.object({
   id: z.string(),
@@ -3023,6 +3024,35 @@ const noMapaSchema: z.ZodType<NoMapaInput> = z.lazy(() => z.object({
 
 function criarNoMapaPadrao(texto: string): NoMapaInput {
   return { id: 'raiz', texto, x: 0, y: 0, filhos: [] }
+}
+
+const TIPOS_OBJETO_BOARD = ['noMapa', 'forma'] as const
+const boardObjetoSchema = z.object({
+  id: z.string(),
+  tipo: z.enum(TIPOS_OBJETO_BOARD),
+  x: z.number(),
+  y: z.number(),
+  largura: z.number().optional(),
+  altura: z.number().optional(),
+  travado: z.boolean().optional(),
+  estilo: z.record(z.string(), z.unknown()).optional(),
+  conteudo: z.record(z.string(), z.unknown()),
+}).refine(o => JSON.stringify(o).length <= 5000, 'Objeto do board muito grande')
+
+const boardConectorSchema = z.object({
+  id: z.string(),
+  origemId: z.string(),
+  destinoId: z.string(),
+  estilo: z.record(z.string(), z.unknown()).optional(),
+  label: z.string().max(200, 'Label do conector muito longo').optional(),
+})
+
+function criarBoardPadrao(texto: string) {
+  const idCentral = 'central'
+  return {
+    objetos: [{ id: idCentral, tipo: 'noMapa' as const, x: 0, y: 0, conteudo: { texto, ehCentral: true } }],
+    conectores: [] as unknown[],
+  }
 }
 
 router.get('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Response) => {
@@ -3043,6 +3073,8 @@ const mapaMentalSchema = z.object({
   titulo: z.string().trim().max(200, 'Título muito longo').optional(),
   icone: z.string().max(8, 'Ícone inválido').nullable().optional(),
   raiz: noMapaSchema.optional(),
+  objetos: z.array(boardObjetoSchema).max(500, 'Board com objetos demais').optional(),
+  conectores: z.array(boardConectorSchema).max(1000, 'Board com conectores demais').optional(),
   pastaId: z.string().nullable().optional(),
 })
 
@@ -3052,9 +3084,15 @@ router.post('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Re
   if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
     res.status(404).json({ error: 'Pasta não encontrada' }); return
   }
-  const { raiz, ...resto } = parse.data
+  const { raiz, objetos, conectores, ...resto } = parse.data
+  const padrao = objetos ? null : criarBoardPadrao('Ideia central')
   const mapa = await prisma.mapaMental.create({
-    data: { ...reuniaoWhereBase(req), ...resto, raiz: (raiz ?? criarNoMapaPadrao('Ideia central')) as unknown as Prisma.InputJsonValue },
+    data: {
+      ...reuniaoWhereBase(req), ...resto,
+      objetos: (objetos ?? padrao?.objetos) as unknown as Prisma.InputJsonValue,
+      conectores: (conectores ?? padrao?.conectores) as unknown as Prisma.InputJsonValue,
+      ...(raiz ? { raiz: raiz as unknown as Prisma.InputJsonValue } : {}),
+    },
   })
   res.status(201).json(mapa)
 })
@@ -3067,10 +3105,15 @@ router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, re
   }
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
-  const { raiz, ...resto } = parse.data
+  const { raiz, objetos, conectores, ...resto } = parse.data
   const atualizado = await prisma.mapaMental.update({
     where: { id: existente.id },
-    data: { ...resto, ...(raiz ? { raiz: raiz as unknown as Prisma.InputJsonValue } : {}) },
+    data: {
+      ...resto,
+      ...(raiz ? { raiz: raiz as unknown as Prisma.InputJsonValue } : {}),
+      ...(objetos ? { objetos: objetos as unknown as Prisma.InputJsonValue } : {}),
+      ...(conectores ? { conectores: conectores as unknown as Prisma.InputJsonValue } : {}),
+    },
   })
   res.json(atualizado)
 })
