@@ -912,7 +912,7 @@ export interface NoMapa {
   filhos: NoMapa[]
 }
 
-export type TipoObjetoBoard = 'noMapa' | 'forma'
+export type TipoObjetoBoard = 'noMapa' | 'forma' | 'sticky' | 'texto' | 'icone' | 'secao'
 
 export interface BoardObjeto {
   id: string

@@ -1087,6 +1087,7 @@
 }
 .pl-mapa-forma-opcao:hover { background: var(--pl-surface-2); }
 .pl-mapa-forma-preview { display: block; width: 18px; height: 14px; }
+.pl-mapa-forma-opcao svg { width: 18px; height: 18px; color: var(--pl-ink-2); }
 
 /* Objeto de forma de diagrama (FormaNode) — preenchimento numa camada com
    clip-path/border-radius (por trás), texto numa camada separada por cima
@@ -1104,6 +1105,58 @@
   border: none; background: none; outline: none; text-align: center; width: 100%;
   font-family: 'IBM Plex Sans'; font-size: 13px; font-weight: 600; color: inherit;
 }
+
+/* Sticky note (StickyNode) — fundo pastel sólido, texto escuro por cima
+   (papel de verdade), textarea multi-linha pra edição. */
+.pl-sticky-no {
+  width: 180px; min-height: 150px; border-radius: 6px; padding: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.28); display: flex; cursor: grab; transition: box-shadow .12s ease;
+}
+.pl-sticky-no:hover { box-shadow: 0 6px 20px rgba(0,0,0,.36); }
+.pl-sticky-no:active { cursor: grabbing; }
+.pl-sticky-texto {
+  font-family: 'IBM Plex Sans'; font-size: 13px; font-weight: 600; color: #1a1a1a;
+  white-space: pre-wrap; word-break: break-word; width: 100%;
+}
+.pl-sticky-textarea {
+  width: 100%; min-height: 120px; border: none; background: none; outline: none; resize: none;
+  font-family: 'IBM Plex Sans'; font-size: 13px; font-weight: 600; color: #1a1a1a;
+}
+
+/* Texto livre (TextoNode) — sem caixa/fundo, só a palavra flutuando no canvas. */
+.pl-texto-no { display: inline-flex; }
+.pl-texto-texto {
+  font-family: 'IBM Plex Sans'; font-size: 16px; font-weight: 700; color: var(--pl-ink-1);
+  cursor: grab; white-space: nowrap; padding: 4px;
+}
+.pl-texto-texto:active { cursor: grabbing; }
+.pl-texto-input {
+  border: none; background: none; outline: none; font-family: 'IBM Plex Sans'; font-size: 16px;
+  font-weight: 700; color: var(--pl-ink-1); padding: 4px;
+}
+
+/* Ícone (IconeNode) — só o glifo, arrastável, sem texto/edição. */
+.pl-icone-no { width: 48px; height: 48px; cursor: grab; }
+.pl-icone-no svg { width: 100%; height: 100%; }
+.pl-icone-no:active { cursor: grabbing; }
+
+/* Seção (SecaoNode) — container grande atrás dos outros objetos (zIndex -1
+   no node), redimensionável (NodeResizer), fundo bem sutil na cor do tema. */
+.pl-secao-no {
+  width: 100%; height: 100%; border: 2px dashed; border-radius: 10px; padding: 10px;
+  cursor: grab;
+}
+.pl-secao-no:active { cursor: grabbing; }
+.pl-secao-titulo {
+  display: inline-block; font-family: 'IBM Plex Sans'; font-size: 12.5px; font-weight: 700;
+  color: var(--pl-ink-1); background: var(--pl-surface); padding: 2px 8px; border-radius: 6px;
+}
+.pl-secao-input {
+  border: none; outline: none; background: var(--pl-surface); font-family: 'IBM Plex Sans'; font-size: 12.5px;
+  font-weight: 700; color: var(--pl-ink-1); padding: 2px 8px; border-radius: 6px;
+}
+.pl-secao-resize-linha { border-color: var(--pl-accent) !important; }
+.pl-secao-resize-alca { width: 8px !important; height: 8px !important; border-radius: 2px !important; background: var(--pl-accent) !important; border: none !important; }
 
 /* Chrome do React Flow (fundo, controles) combinando com o tema escuro/claro do app */
 .pl-mapa-canvas .react-flow__controls {
