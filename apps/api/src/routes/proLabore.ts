@@ -3026,7 +3026,10 @@ function criarNoMapaPadrao(texto: string): NoMapaInput {
   return { id: 'raiz', texto, x: 0, y: 0, filhos: [] }
 }
 
-const TIPOS_OBJETO_BOARD = ['noMapa', 'forma', 'sticky', 'texto', 'icone', 'secao', 'tabela'] as const
+const TIPOS_OBJETO_BOARD = [
+  'noMapa', 'forma', 'sticky', 'texto', 'icone', 'secao', 'tabela',
+  'desenho', 'frame', 'botao', 'inputWireframe', 'avatar', 'pilha', 'tarefa',
+] as const
 const boardObjetoSchema = z.object({
   id: z.string(),
   tipo: z.enum(TIPOS_OBJETO_BOARD),
@@ -3038,7 +3041,10 @@ const boardObjetoSchema = z.object({
   zIndex: z.number().optional(),
   estilo: z.record(z.string(), z.unknown()).optional(),
   conteudo: z.record(z.string(), z.unknown()),
-}).refine(o => JSON.stringify(o).length <= 5000, 'Objeto do board muito grande')
+  // Limite bem mais alto que os outros tipos de objeto por causa do
+  // desenho à mão livre — um traço razoável já tem centenas de pontos
+  // {x,y}, cada um uns 20-30 caracteres de JSON.
+}).refine(o => JSON.stringify(o).length <= 40000, 'Objeto do board muito grande')
 
 const boardConectorSchema = z.object({
   id: z.string(),
