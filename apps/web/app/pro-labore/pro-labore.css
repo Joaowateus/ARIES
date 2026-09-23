@@ -1168,6 +1168,38 @@
 .pl-secao-resize-linha { border-color: var(--pl-accent) !important; }
 .pl-secao-resize-alca { width: 8px !important; height: 8px !important; border-radius: 2px !important; background: var(--pl-accent) !important; border: none !important; }
 
+/* Tabela (TabelaNode) — alça de arraste separada da grade de células (só a
+   grade é nodrag, senão clicar numa célula pra digitar arrastaria o nó).
+   Linhas alternadas fixas (sem toggle de estilo — escopo reduzido do item
+   "estilos de tabela" da referência). */
+.pl-tabela-no {
+  display: flex; flex-direction: column; background: var(--pl-surface); border: 1px solid var(--pl-border-strong);
+  border-radius: 10px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,.28); min-width: 260px;
+}
+.pl-tabela-alca {
+  cursor: grab; padding: 6px 10px; font-family: 'IBM Plex Mono'; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--pl-ink-muted); background: var(--pl-surface-2);
+  border-bottom: 1px solid var(--pl-border);
+}
+.pl-tabela-alca:active { cursor: grabbing; }
+.pl-tabela-grade { display: flex; flex-direction: column; }
+.pl-tabela-linha { display: grid; }
+.pl-tabela-linha:nth-child(even) { background: color-mix(in srgb, var(--pl-surface-2) 55%, transparent); }
+.pl-tabela-celula { position: relative; border-right: 1px solid var(--pl-border); border-bottom: 1px solid var(--pl-border); }
+.pl-tabela-celula:last-child { border-right: none; }
+.pl-tabela-cabecalho { background: var(--pl-surface-2); }
+.pl-tabela-input {
+  width: 100%; border: none; background: none; outline: none; padding: 6px 8px;
+  font-family: 'IBM Plex Sans'; font-size: 12.5px; color: var(--pl-ink-1);
+}
+.pl-tabela-cabecalho .pl-tabela-input { font-weight: 700; padding-left: 22px; }
+.pl-tabela-ordenar {
+  position: absolute; left: 3px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px;
+  display: flex; align-items: center; justify-content: center; border: none; background: none; cursor: pointer;
+  color: var(--pl-ink-muted); font-size: 10px; padding: 0;
+}
+.pl-tabela-ordenar:hover { color: var(--pl-ink-1); }
+
 /* Overlay do conector (EdgeLabelRenderer, dentro de EdgeFlutuante) — label
    sempre visível quando existe, barrinha de estilo (cor/tracejado/seta/
    label/excluir) só quando o conector está selecionado. */
