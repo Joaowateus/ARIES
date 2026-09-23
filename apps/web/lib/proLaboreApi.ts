@@ -531,18 +531,28 @@ export const proLaboreApi = {
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/reunioes/${id}`, { method: 'DELETE' }),
   },
   notas: {
-    listar: (params?: { reuniaoId?: string; categoria?: CategoriaNota }) => {
+    // pastaId: undefined = sem filtro de pasta; '' = raiz (sem pasta); string = dentro daquela pasta.
+    listar: (params?: { reuniaoId?: string; categoria?: CategoriaNota; pastaId?: string }) => {
       const qs = new URLSearchParams()
       if (params?.reuniaoId) qs.set('reuniaoId', params.reuniaoId)
       if (params?.categoria) qs.set('categoria', params.categoria)
+      if (params?.pastaId !== undefined) qs.set('pastaId', params.pastaId)
       const s = qs.toString()
       return request<Nota[]>(`/pro-labore/notas${s ? `?${s}` : ''}`)
     },
-    criar: (data: { titulo?: string; conteudo: string; categoria?: CategoriaNota; reuniaoId?: string }) =>
+    criar: (data: { titulo?: string; conteudo: string; categoria?: CategoriaNota; reuniaoId?: string; pastaId?: string | null }) =>
       request<Nota>('/pro-labore/notas', { method: 'POST', body: JSON.stringify(data) }),
-    atualizar: (id: string, data: Partial<{ titulo: string; conteudo: string; categoria: CategoriaNota }>) =>
+    atualizar: (id: string, data: Partial<{ titulo: string; conteudo: string; categoria: CategoriaNota; pastaId: string | null }>) =>
       request<Nota>(`/pro-labore/notas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/notas/${id}`, { method: 'DELETE' }),
+  },
+  pastas: {
+    listar: () => request<Pasta[]>('/pro-labore/pastas'),
+    criar: (data: { nome: string; paiId?: string | null }) =>
+      request<Pasta>('/pro-labore/pastas', { method: 'POST', body: JSON.stringify(data) }),
+    atualizar: (id: string, data: Partial<{ nome: string; paiId: string | null }>) =>
+      request<Pasta>(`/pro-labore/pastas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/pastas/${id}`, { method: 'DELETE' }),
   },
 }
 
@@ -845,10 +855,19 @@ export interface Nota {
   conteudo: string
   categoria: CategoriaNota
   reuniaoId?: string | null
+  pastaId?: string | null
   criadoEm: string
   atualizadoEm: string
 }
 
 export interface ReuniaoDetalhe extends Reuniao {
   notas: Nota[]
+}
+
+export interface Pasta {
+  id: string
+  nome: string
+  paiId?: string | null
+  criadoEm: string
+  atualizadoEm: string
 }

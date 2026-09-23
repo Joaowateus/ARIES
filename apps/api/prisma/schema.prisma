@@ -934,6 +934,7 @@ model ProLaboreUsuario {
   planoCrescimentoSnapshots PlanoCrescimentoSnapshot[]
   reunioes Reuniao[]
   notas    Nota[]
+  pastas   Pasta[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1597,6 +1598,7 @@ model Nota {
   usuarioId    String
   vendedorId   String?
   reuniaoId    String?
+  pastaId      String?
   titulo       String?
   conteudo     String
   categoria    String   @default("TRABALHO") // TRABALHO | IDEIA | APRENDIZADO | OUTRO
@@ -1605,8 +1607,36 @@ model Nota {
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
   reuniao Reuniao?         @relation(fields: [reuniaoId], references: [id])
+  pasta   Pasta?           @relation(fields: [pastaId], references: [id])
 
   @@index([usuarioId, vendedorId])
   @@index([reuniaoId])
+  @@index([pastaId])
   @@map("pro_labore_notas")
+}
+
+// Organização livre das Anotações em árvore — o usuário pode chamar de
+// pasta, departamento, módulo, o que fizer sentido pra ele; pro sistema é
+// só um container que pode ter outros containers dentro (`paiId` aninha
+// livremente). Excluir uma pasta não apaga o que está dentro: subpastas e
+// notas soltam pro nível de cima (`paiId`/`pastaId` viram nulos), porque
+// perder conteúdo silenciosamente numa exclusão de pasta seria pior que
+// só desorganizar.
+model Pasta {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  vendedorId   String?
+  nome         String
+  paiId        String?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario   ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  pai       Pasta?           @relation("PastaFilhas", fields: [paiId], references: [id])
+  subpastas Pasta[]          @relation("PastaFilhas")
+  notas     Nota[]
+
+  @@index([usuarioId, vendedorId])
+  @@index([paiId])
+  @@map("pro_labore_pastas")
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  proLaboreApi, CATEGORIAS_NOTA, CategoriaNota, Nota, Reuniao, ReuniaoDetalhe, ReuniaoResumo, TIPOS_REUNIAO, TipoReuniao,
+  proLaboreApi, CATEGORIAS_NOTA, CategoriaNota, Nota, Pasta, Reuniao, ReuniaoDetalhe, ReuniaoResumo, TIPOS_REUNIAO, TipoReuniao,
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 
@@ -271,35 +271,150 @@ function AbaReunioes() {
   )
 }
 
+function IconePasta() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+    </svg>
+  )
+}
+
+function CartaoPasta({ pasta, onAbrir, onRenomear, onExcluir }: { pasta: Pasta; onAbrir: () => void; onRenomear: (nome: string) => void; onExcluir: () => void }) {
+  const [renomeando, setRenomeando] = useState(false)
+  const [rascunho, setRascunho] = useState(pasta.nome)
+
+  function salvar() {
+    const nome = rascunho.trim()
+    setRenomeando(false)
+    if (nome && nome !== pasta.nome) onRenomear(nome)
+    else setRascunho(pasta.nome)
+  }
+
+  return (
+    <div className="pl-pasta-card">
+      {renomeando ? (
+        <input
+          className="pl-input"
+          value={rascunho}
+          autoFocus
+          onChange={e => setRascunho(e.target.value)}
+          onBlur={salvar}
+          onKeyDown={e => { if (e.key === 'Enter') salvar(); if (e.key === 'Escape') { setRascunho(pasta.nome); setRenomeando(false) } }}
+          onClick={e => e.stopPropagation()}
+        />
+      ) : (
+        <button type="button" className="pl-pasta-card-body" onClick={onAbrir}>
+          <span className="pl-pasta-card-icon"><IconePasta /></span>
+          <span className="pl-pasta-card-nome">{pasta.nome}</span>
+        </button>
+      )}
+      <div className="pl-acao-item-actions" style={{ opacity: 1 }}>
+        <button type="button" className="pl-kanban-icon-btn" title="Renomear" onClick={() => setRenomeando(true)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+          </svg>
+        </button>
+        <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir pasta" onClick={onExcluir}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AbaAnotacoes() {
+  const [pastas, setPastas] = useState<Pasta[]>([])
+  const [pastaAtualId, setPastaAtualId] = useState<string | null>(null)
   const [notas, setNotas] = useState<Nota[]>([])
   const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaNota | null>(null)
   const [conteudo, setConteudo] = useState('')
   const [categoria, setCategoria] = useState<CategoriaNota>('TRABALHO')
+  const [novaPastaNome, setNovaPastaNome] = useState('')
   const [carregando, setCarregando] = useState(true)
 
-  const carregar = useCallback(() => {
-    proLaboreApi.notas.listar(categoriaFiltro ? { categoria: categoriaFiltro } : undefined).then(setNotas).finally(() => setCarregando(false))
-  }, [categoriaFiltro])
+  const carregarPastas = useCallback(() => { proLaboreApi.pastas.listar().then(setPastas) }, [])
+  useEffect(() => { carregarPastas() }, [carregarPastas])
 
-  useEffect(() => { carregar() }, [carregar])
+  const carregarNotas = useCallback(() => {
+    setCarregando(true)
+    proLaboreApi.notas.listar({ pastaId: pastaAtualId ?? '', ...(categoriaFiltro ? { categoria: categoriaFiltro } : {}) })
+      .then(setNotas).finally(() => setCarregando(false))
+  }, [pastaAtualId, categoriaFiltro])
+  useEffect(() => { carregarNotas() }, [carregarNotas])
 
-  async function criar(e: React.FormEvent) {
-    e.preventDefault()
-    if (!conteudo.trim()) return
-    await proLaboreApi.notas.criar({ conteudo: conteudo.trim(), categoria })
-    setConteudo('')
-    carregar()
+  const subpastas = pastas.filter(p => (p.paiId ?? null) === pastaAtualId)
+  const caminho: Pasta[] = []
+  for (let atual = pastas.find(p => p.id === pastaAtualId); atual; atual = pastas.find(p => p.id === atual!.paiId)) {
+    caminho.unshift(atual)
   }
 
-  async function excluir(id: string) {
+  async function criarNota(e: React.FormEvent) {
+    e.preventDefault()
+    if (!conteudo.trim()) return
+    await proLaboreApi.notas.criar({ conteudo: conteudo.trim(), categoria, pastaId: pastaAtualId })
+    setConteudo('')
+    carregarNotas()
+  }
+
+  async function excluirNota(id: string) {
     await proLaboreApi.notas.excluir(id)
-    carregar()
+    carregarNotas()
+  }
+
+  async function criarPasta(e: React.FormEvent) {
+    e.preventDefault()
+    const nome = novaPastaNome.trim()
+    if (!nome) return
+    await proLaboreApi.pastas.criar({ nome, paiId: pastaAtualId })
+    setNovaPastaNome('')
+    carregarPastas()
+  }
+
+  async function renomearPasta(id: string, nome: string) {
+    await proLaboreApi.pastas.atualizar(id, { nome })
+    carregarPastas()
+  }
+
+  async function excluirPasta(id: string) {
+    if (!confirm('Excluir essa pasta? Subpastas e notas dentro dela não são apagadas — só sobem pro nível de cima.')) return
+    await proLaboreApi.pastas.excluir(id)
+    carregarPastas()
   }
 
   return (
     <div>
-      <form onSubmit={criar} className="pl-card" style={{ marginBottom: 16 }}>
+      <div className="pl-breadcrumb-pastas">
+        <button type="button" onClick={() => setPastaAtualId(null)} className={pastaAtualId === null ? 'active' : ''}>Todas as notas</button>
+        {caminho.map(p => (
+          <span key={p.id}>
+            <span className="pl-breadcrumb-sep">/</span>
+            <button type="button" onClick={() => setPastaAtualId(p.id)} className={pastaAtualId === p.id ? 'active' : ''}>{p.nome}</button>
+          </span>
+        ))}
+      </div>
+
+      {subpastas.length > 0 && (
+        <div className="pl-pasta-grid" style={{ marginBottom: 16 }}>
+          {subpastas.map(p => (
+            <CartaoPasta
+              key={p.id}
+              pasta={p}
+              onAbrir={() => setPastaAtualId(p.id)}
+              onRenomear={nome => renomearPasta(p.id, nome)}
+              onExcluir={() => excluirPasta(p.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={criarPasta} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <input className="pl-input" placeholder="Nova pasta, departamento, módulo..." value={novaPastaNome} onChange={e => setNovaPastaNome(e.target.value)} style={{ maxWidth: 320 }} />
+        <button type="submit" className="pl-btn pl-btn-ghost" disabled={!novaPastaNome.trim()}>Criar pasta aqui</button>
+      </form>
+
+      <form onSubmit={criarNota} className="pl-card" style={{ marginBottom: 16 }}>
         <textarea className="pl-input pl-textarea" rows={3} placeholder="Escreva uma ideia, aprendizado, ou anotação de trabalho..." value={conteudo} onChange={e => setConteudo(e.target.value)} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -319,10 +434,10 @@ function AbaAnotacoes() {
       </div>
 
       {carregando && <div className="pl-hint">Carregando...</div>}
-      {!carregando && notas.length === 0 && (
+      {!carregando && notas.length === 0 && subpastas.length === 0 && (
         <div className="pl-empty pl-card">
           <div className="pl-emoji">📝</div>
-          Nenhuma anotação ainda.
+          Nenhuma anotação ainda {pastaAtualId ? 'nessa pasta' : ''}.
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -330,7 +445,7 @@ function AbaAnotacoes() {
           <div key={n.id} className="pl-card" style={{ padding: '14px 16px' }}>
             <div className="pl-card-head" style={{ marginBottom: 8 }}>
               <span className="pl-status-badge neutro">{CATEGORIA_LABEL[n.categoria]}</span>
-              <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={() => excluir(n.id)}>
+              <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={() => excluirNota(n.id)}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6" />
                 </svg>
