@@ -111,6 +111,17 @@ function IconeSecao() {
     </svg>
   )
 }
+function IconeTabela() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="3" y1="15" x2="21" y2="15" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+      <line x1="15" y1="3" x2="15" y2="21" />
+    </svg>
+  )
+}
 
 // Ícones da barra de seleção múltipla (alinhar/distribuir/agrupar/camadas/
 // travar) — mesmo estilo Feather do resto do arquivo.
@@ -434,7 +445,17 @@ interface DadosSecao extends Record<string, unknown> {
   cor: string
 }
 
-type DadosObjeto = DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao
+// Tabela (6.6 do mapeamento) — grade simples de células de texto, sem
+// fórmulas/cálculos (fora de escopo por decisão explícita da referência) e
+// sem conteúdo rico por célula (imagem/menção) nem reordenar linha/coluna
+// arrastando — v1 cobre inserir/adicionar/remover linha e coluna e ordenar
+// por coluna, que já é o essencial de "tabela num board".
+interface DadosTabela extends Record<string, unknown> {
+  tipoObjeto: 'tabela'
+  linhas: string[][]
+}
+
+type DadosObjeto = DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao | DadosTabela
 type NoFlow = Node<DadosObjeto>
 
 function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
@@ -480,6 +501,12 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
       data: { tipoObjeto: 'secao', grupoId, texto: (o.conteudo.texto as string) ?? '', cor: (o.estilo?.cor as string) ?? 'var(--pl-accent)' },
     }
   }
+  if (o.tipo === 'tabela') {
+    return {
+      ...base, type: 'tabela',
+      data: { tipoObjeto: 'tabela', grupoId, linhas: (o.conteudo.linhas as string[][]) ?? [['', '', ''], ['', '', '']] },
+    }
+  }
   return {
     ...base, type: 'noMapa',
     data: { tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
@@ -521,6 +548,9 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
       largura: n.width ?? 420, altura: n.height ?? 280,
       estilo: { cor: n.data.cor }, conteudo: comGrupo({ texto: n.data.texto }),
     }
+  }
+  if (n.data.tipoObjeto === 'tabela') {
+    return { id: n.id, tipo: 'tabela', x: n.position.x, y: n.position.y, ...comuns, conteudo: comGrupo({ linhas: n.data.linhas }) }
   }
   return {
     id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y, ...comuns,
@@ -621,6 +651,7 @@ const AcoesMapaContext = createContext<{
   onMudarEstiloConector: (id: string, patch: Partial<{ cor: string; tracejado: boolean; seta: boolean }>) => void
   onMudarLabelConector: (id: string, label: string) => void
   onExcluirConector: (id: string) => void
+  onMudarLinhasTabela: (id: string, linhas: string[][]) => void
 } | null>(null)
 
 function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
@@ -834,6 +865,73 @@ function SecaoNode({ id, data, selected }: NodeProps<NoFlow>) {
   )
 }
 
+function TabelaNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosTabela
+  const [ordenacao, setOrdenacao] = useState<{ coluna: number; direcao: 'asc' | 'desc' } | null>(null)
+  const numColunas = d.linhas[0]?.length ?? 1
+
+  function mudarCelula(li: number, ci: number, valor: string) {
+    const novasLinhas = d.linhas.map((linha, i) => (i === li ? linha.map((c, j) => (j === ci ? valor : c)) : linha))
+    acoes.onMudarLinhasTabela(id, novasLinhas)
+  }
+  function adicionarLinha() {
+    acoes.onMudarLinhasTabela(id, [...d.linhas, Array(numColunas).fill('')])
+  }
+  function removerLinha() {
+    if (d.linhas.length <= 1) return
+    acoes.onMudarLinhasTabela(id, d.linhas.slice(0, -1))
+  }
+  function adicionarColuna() {
+    acoes.onMudarLinhasTabela(id, d.linhas.map(linha => [...linha, '']))
+  }
+  function removerColuna() {
+    if (numColunas <= 1) return
+    acoes.onMudarLinhasTabela(id, d.linhas.map(linha => linha.slice(0, -1)))
+  }
+  // Ordena pelo conteúdo da coluna clicada no cabeçalho — sem fórmulas,
+  // só reordena as linhas de baixo (a de cabeçalho, índice 0, fica de fora).
+  function ordenarPorColuna(ci: number) {
+    const direcao: 'asc' | 'desc' = ordenacao?.coluna === ci && ordenacao.direcao === 'asc' ? 'desc' : 'asc'
+    const [cabecalho, ...resto] = d.linhas
+    resto.sort((a, b) => {
+      const cmp = (a[ci] ?? '').localeCompare(b[ci] ?? '', 'pt-BR', { numeric: true })
+      return direcao === 'asc' ? cmp : -cmp
+    })
+    setOrdenacao({ coluna: ci, direcao })
+    acoes.onMudarLinhasTabela(id, [cabecalho, ...resto])
+  }
+
+  return (
+    <div className="pl-tabela-no">
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Adicionar linha" onClick={adicionarLinha}>L+</button>
+        <button type="button" className="pl-mapa-toolbar-btn" title="Remover linha" onClick={removerLinha}>L−</button>
+        <button type="button" className="pl-mapa-toolbar-btn" title="Adicionar coluna" onClick={adicionarColuna}>C+</button>
+        <button type="button" className="pl-mapa-toolbar-btn" title="Remover coluna" onClick={removerColuna}>C−</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir tabela" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <div className="pl-tabela-alca" title="Arraste pra mover">Tabela</div>
+      <div className="pl-tabela-grade nodrag nopan">
+        {d.linhas.map((linha, li) => (
+          <div key={li} className="pl-tabela-linha" style={{ gridTemplateColumns: `repeat(${numColunas}, minmax(90px, 1fr))` }}>
+            {linha.map((celula, ci) => (
+              <div key={ci} className={`pl-tabela-celula ${li === 0 ? 'pl-tabela-cabecalho' : ''}`}>
+                {li === 0 && (
+                  <button type="button" className="pl-tabela-ordenar" title="Ordenar" onClick={() => ordenarPorColuna(ci)}>
+                    {ordenacao?.coluna === ci ? (ordenacao.direcao === 'asc' ? '↑' : '↓') : '↕'}
+                  </button>
+                )}
+                <input className="pl-tabela-input" value={celula} onChange={e => mudarCelula(li, ci, e.target.value)} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Aresta "flutuante": em vez de sair de um ponto fixo (esquerda/direita) do
 // nó, calcula onde a reta entre os dois centros cruza a borda de cada
 // caixa — assim a curva sempre aponta na direção real do outro nó, não
@@ -923,7 +1021,7 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
 }
 
 const nodeTypes = {
-  noMapa: NoMapaNode, forma: FormaNode, sticky: StickyNode, texto: TextoNode, icone: IconeNode, secao: SecaoNode,
+  noMapa: NoMapaNode, forma: FormaNode, sticky: StickyNode, texto: TextoNode, icone: IconeNode, secao: SecaoNode, tabela: TabelaNode,
 } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
@@ -1113,6 +1211,24 @@ function Canvas({ dadosIniciais, onChange }: {
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
 
+  const onAdicionarTabela = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'tabela',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'tabela', linhas: [['Coluna 1', 'Coluna 2', 'Coluna 3'], ['', '', ''], ['', '', '']] },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onMudarLinhasTabela = useCallback((id: string, linhas: string[][]) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'tabela' ? { ...n, data: { ...n.data, linhas } } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
   // Conectar dois objetos livremente arrastando de um Handle a outro (6.3
   // do mapeamento) — cor neutra padrão, sem tracejado/seta; o usuário ajusta
   // depois selecionando o conector (barrinha de estilo do EdgeFlutuante).
@@ -1259,7 +1375,7 @@ function Canvas({ dadosIniciais, onChange }: {
   const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
 
   return (
-    <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector }}>
+    <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela }}>
       <div className="pl-mapa-canvas">
         <ReactFlow
           nodes={grafo.nodes}
@@ -1341,6 +1457,9 @@ function Canvas({ dadosIniciais, onChange }: {
             </div>
             <button type="button" className="pl-mapa-tv-btn" title="Seção" onClick={onAdicionarSecao}>
               <IconeSecao />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Tabela" onClick={onAdicionarTabela}>
+              <IconeTabela />
             </button>
             <div className="pl-mapa-tv-divisor" />
             <button
