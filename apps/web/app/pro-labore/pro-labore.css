@@ -691,6 +691,7 @@
 .pl-kanban-icon-btn svg { width: 12px; height: 12px; }
 .pl-kanban-icon-btn:hover { color: var(--pl-ink-1); border-color: var(--pl-border-strong); }
 .pl-kanban-icon-btn.pl-danger:hover { color: var(--pl-critical); border-color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 10%, transparent); }
+.pl-kanban-icon-btn.ativo { color: #fff; background: var(--pl-accent); border-color: var(--pl-accent); }
 .pl-kanban-card-badge {
   display: block; text-align: center; font-size: 11.5px; font-weight: 700; margin-top: 8px;
   padding: 7px 10px; border-radius: 7px;
@@ -1038,11 +1039,30 @@
 .pl-board-topbar-titulo:focus { background: var(--pl-surface-2); }
 .pl-board-topbar-titulo::placeholder { color: var(--pl-ink-muted); }
 .pl-board-topbar-status { flex: 1; text-align: right; font-family: 'IBM Plex Mono'; font-size: 10.5px; color: var(--pl-ink-muted); }
-.pl-board-canvas-area { flex: 1; min-height: 0; }
+.pl-board-corpo { flex: 1; min-height: 0; display: flex; }
+.pl-board-canvas-area { flex: 1; min-width: 0; }
 .pl-board-canvas-area .pl-mapa-canvas { height: 100%; border: none; border-radius: 0; }
+
+/* Painel lateral de histórico de versões — lista simples (relativo + botão
+   Restaurar); sem diff/preview visual da versão (fora de escopo por ora). */
+.pl-board-historico {
+  flex: none; width: 260px; border-left: 1px solid var(--pl-border); background: var(--pl-surface);
+  display: flex; flex-direction: column;
+}
+.pl-board-historico-topo {
+  flex: none; display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
+  border-bottom: 1px solid var(--pl-border); font-family: 'IBM Plex Sans'; font-size: 12.5px; font-weight: 700; color: var(--pl-ink-1);
+}
+.pl-board-historico-lista { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.pl-board-historico-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px;
+  font-family: 'IBM Plex Sans'; font-size: 12.5px; color: var(--pl-ink-2);
+}
+.pl-board-historico-item:hover { background: var(--pl-surface-2); }
 
 @media (max-width: 700px) {
   .pl-board-topbar-titulo { flex-basis: 140px; }
+  .pl-board-historico { position: absolute; inset: 0 0 0 auto; z-index: 5; }
 }
 
 /* ============ MAPA MENTAL — canvas livre (MapaMental.tsx, @xyflow/react) ============ */

@@ -557,11 +557,21 @@ export const proLaboreApi = {
   mapasMentais: {
     // pastaId: undefined = sem filtro (lista tudo, uso da árvore); '' = raiz; string = dentro daquela pasta.
     listar: (pastaId?: string) => request<MapaMental[]>(`/pro-labore/mapas-mentais${pastaId !== undefined ? `?pastaId=${pastaId}` : ''}`),
+    lixeira: () => request<MapaMental[]>('/pro-labore/mapas-mentais/lixeira'),
     criar: (data: { titulo?: string; icone?: string | null; objetos?: BoardObjeto[]; conectores?: BoardConector[]; pastaId?: string | null }) =>
       request<MapaMental>('/pro-labore/mapas-mentais', { method: 'POST', body: JSON.stringify(data) }),
     atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; objetos: BoardObjeto[]; conectores: BoardConector[]; pastaId: string | null }>) =>
       request<MapaMental>(`/pro-labore/mapas-mentais/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    // "excluir" move pra lixeira (soft delete); restaurar tira de lá;
+    // excluirDefinitivo só funciona em algo que já está na lixeira.
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/mapas-mentais/${id}`, { method: 'DELETE' }),
+    restaurar: (id: string) => request<MapaMental>(`/pro-labore/mapas-mentais/${id}/restaurar`, { method: 'POST' }),
+    excluirDefinitivo: (id: string) => request<{ ok: boolean }>(`/pro-labore/mapas-mentais/${id}/definitivo`, { method: 'DELETE' }),
+    versoes: {
+      listar: (mapaId: string) => request<MapaMentalVersao[]>(`/pro-labore/mapas-mentais/${mapaId}/versoes`),
+      restaurar: (mapaId: string, versaoId: string) =>
+        request<MapaMental>(`/pro-labore/mapas-mentais/${mapaId}/versoes/${versaoId}/restaurar`, { method: 'POST' }),
+    },
   },
 }
 
@@ -946,6 +956,12 @@ export interface MapaMental {
   objetos?: BoardObjeto[] | null
   conectores?: BoardConector[] | null
   pastaId?: string | null
+  excluidoEm?: string | null
   criadoEm: string
   atualizadoEm: string
+}
+
+export interface MapaMentalVersao {
+  id: string
+  criadoEm: string
 }

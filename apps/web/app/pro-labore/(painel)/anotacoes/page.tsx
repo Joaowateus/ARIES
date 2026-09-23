@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  proLaboreApi, Bloco, CATEGORIAS_NOTA, CategoriaNota, MapaMental, Nota, Pasta,
+  proLaboreApi, Bloco, CATEGORIAS_NOTA, CategoriaNota, MapaMental, MapaMentalVersao, Nota, Pasta,
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
@@ -66,7 +66,7 @@ function IconeTileMapa() {
   )
 }
 
-type VisaoAnotacoes = { tipo: 'pasta'; id: string | null } | { tipo: 'nota'; id: string } | { tipo: 'mapa'; id: string }
+type VisaoAnotacoes = { tipo: 'pasta'; id: string | null } | { tipo: 'nota'; id: string } | { tipo: 'mapa'; id: string } | { tipo: 'lixeira' }
 
 function SeletorIcone({ valor, tamanhoClasse, onEscolher }: { valor: string; tamanhoClasse: string; onEscolher: (icone: string | null) => void }) {
   const [aberto, setAberto] = useState(false)
@@ -312,6 +312,75 @@ function VisaoPasta({
   )
 }
 
+function IconeRestaurar() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </svg>
+  )
+}
+
+// Lixeira do board (6.13/Fase 2) — só mapas mentais entram aqui (escopo do
+// item do mapeamento); nota/pasta continuam com exclusão direta como
+// sempre foram. Purga automática (30 dias) é preguiçosa, feita pelo
+// backend na hora de listar — ver DIAS_RETENCAO_LIXEIRA na rota.
+function VisaoLixeira({ mapas, onAbrirPasta, onRestaurar, onExcluirDefinitivo }: {
+  mapas: MapaMental[]
+  onAbrirPasta: (id: string | null) => void
+  onRestaurar: (id: string) => void
+  onExcluirDefinitivo: (id: string) => void
+}) {
+  return (
+    <div>
+      <div className="pl-breadcrumb-pastas">
+        <button type="button" onClick={() => onAbrirPasta(null)}>Todas as notas</button>
+        <span className="pl-breadcrumb-sep">/</span>
+        <button type="button" className="active">Lixeira</button>
+      </div>
+
+      <div className="pl-notion-header">
+        <span className="pl-notion-header-icone">🗑️</span>
+        <span className="pl-notion-titulo-input pl-notion-titulo-estatico">Lixeira</span>
+      </div>
+      <p className="pl-hint" style={{ marginTop: -8, marginBottom: 18 }}>
+        Mapas mentais excluídos ficam aqui por {30} dias antes de serem apagados em definitivo.
+      </p>
+
+      {mapas.length === 0 ? (
+        <div className="pl-empty pl-card">
+          <div className="pl-emoji">🗑️</div>
+          A lixeira está vazia.
+        </div>
+      ) : (
+        <div className="pl-fb-tabela">
+          <div className="pl-fb-tabela-head">
+            <span className="pl-fb-col-nome">Nome</span>
+            <span className="pl-fb-col-data">Excluído</span>
+            <span className="pl-fb-col-data" />
+            <span className="pl-fb-col-acao" />
+          </div>
+          {mapas.map(m => (
+            <div key={m.id} className="pl-fb-linha">
+              <span className="pl-fb-col-nome"><span className="pl-fb-linha-icone">{m.icone || '🧠'}</span>{m.titulo || 'Sem título'}</span>
+              <span className="pl-fb-col-data">{m.excluidoEm ? formatarRelativo(m.excluidoEm) : ''}</span>
+              <span className="pl-fb-col-data" />
+              <span className="pl-fb-col-acao" style={{ gap: 4 }}>
+                <button type="button" className="pl-kanban-icon-btn" title="Restaurar" onClick={() => onRestaurar(m.id)}>
+                  <IconeRestaurar />
+                </button>
+                <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir definitivamente" onClick={() => onExcluirDefinitivo(m.id)}>
+                  <IconeLixeira />
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAtualizada: (nota: Nota) => void; onExcluir: () => void }) {
   const [titulo, setTitulo] = useState(nota?.titulo ?? '')
   const [icone, setIcone] = useState(nota?.icone ?? '')
@@ -417,6 +486,15 @@ function IconeVoltar() {
   )
 }
 
+function IconeHistorico() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 16 14" />
+    </svg>
+  )
+}
+
 // Board em tela cheia (estilo Whimsical): sem a sidebar/topbar do resto do
 // app — só uma barra fina própria (voltar, ícone/título, status, excluir) e
 // o canvas ocupando o resto da tela. `position: fixed` cobrindo o app
@@ -431,6 +509,13 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
   const [icone, setIcone] = useState(mapa?.icone ?? '')
   const [dadosIniciais, setDadosIniciais] = useState(() => dadosIniciaisDoBoard(mapa))
   const [status, setStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo')
+  const [historicoAberto, setHistoricoAberto] = useState(false)
+  const [versoes, setVersoes] = useState<MapaMentalVersao[]>([])
+  const [carregandoVersoes, setCarregandoVersoes] = useState(false)
+  // Muda a cada restauração pra forçar o <MapaMentalCanvas> a remontar do
+  // zero com `dadosIniciais` novo — ele só lê esse prop na inicialização
+  // (useState preguiçoso), então só trocar o valor do prop não bastaria.
+  const [versaoRestaurada, setVersaoRestaurada] = useState(0)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   type CamposMapa = Partial<{ titulo: string; icone: string | null; objetos: NonNullable<MapaMental['objetos']>; conectores: NonNullable<MapaMental['conectores']> }>
   const pendenteRef = useRef<CamposMapa>({})
@@ -469,6 +554,35 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
 
   if (!mapa) return <div className="pl-card"><div className="pl-empty">Mapa mental não encontrado.</div></div>
 
+  async function alternarHistorico() {
+    const abrindo = !historicoAberto
+    setHistoricoAberto(abrindo)
+    if (abrindo && mapa) {
+      setCarregandoVersoes(true)
+      try {
+        setVersoes(await proLaboreApi.mapasMentais.versoes.listar(mapa.id))
+      } catch {
+        alert('Não foi possível carregar o histórico. Tente novamente.')
+      } finally {
+        setCarregandoVersoes(false)
+      }
+    }
+  }
+
+  async function restaurarVersao(versaoId: string) {
+    if (!mapa) return
+    if (!confirm('Restaurar essa versão? O estado atual do board vira uma versão nova, então nada se perde.')) return
+    try {
+      const atualizado = await proLaboreApi.mapasMentais.versoes.restaurar(mapa.id, versaoId)
+      onAtualizado(atualizado)
+      setDadosIniciais(dadosIniciaisDoBoard(atualizado))
+      setVersaoRestaurada(v => v + 1)
+      setHistoricoAberto(false)
+    } catch {
+      alert('Não foi possível restaurar essa versão. Tente novamente.')
+    }
+  }
+
   return (
     <div className="pl-board-fullscreen">
       <div className="pl-board-topbar">
@@ -487,16 +601,46 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
           onChange={e => { setTitulo(e.target.value); agendarSalvar({ titulo: e.target.value }) }}
         />
         <div className="pl-board-topbar-status">{status === 'salvando' ? 'Salvando...' : status === 'erro' ? 'Erro ao salvar' : 'Salvo'}</div>
+        <button type="button" className={`pl-kanban-icon-btn ${historicoAberto ? 'ativo' : ''}`} title="Histórico de versões" onClick={alternarHistorico}>
+          <IconeHistorico />
+        </button>
         <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={onExcluir}>
           <IconeLixeira />
         </button>
       </div>
 
-      <div className="pl-board-canvas-area">
-        <MapaMentalCanvas
-          dadosIniciais={dadosIniciais}
-          onChange={dados => agendarSalvar(dados)}
-        />
+      <div className="pl-board-corpo">
+        <div className="pl-board-canvas-area">
+          <MapaMentalCanvas
+            key={versaoRestaurada}
+            dadosIniciais={dadosIniciais}
+            onChange={dados => agendarSalvar(dados)}
+          />
+        </div>
+        {historicoAberto && (
+          <div className="pl-board-historico">
+            <div className="pl-board-historico-topo">
+              <span>Histórico de versões</span>
+              <button type="button" className="pl-mapa-toolbar-btn" title="Fechar" onClick={() => setHistoricoAberto(false)}>×</button>
+            </div>
+            {carregandoVersoes ? (
+              <div className="pl-hint" style={{ padding: 12 }}>Carregando...</div>
+            ) : versoes.length === 0 ? (
+              <div className="pl-hint" style={{ padding: 12 }}>
+                Sem versões salvas ainda — uma nova versão é criada automaticamente a cada intervalo de edição.
+              </div>
+            ) : (
+              <div className="pl-board-historico-lista">
+                {versoes.map(v => (
+                  <div key={v.id} className="pl-board-historico-item">
+                    <span>{formatarRelativo(v.criadoEm)}</span>
+                    <button type="button" className="pl-chip" onClick={() => restaurarVersao(v.id)}>Restaurar</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -506,6 +650,7 @@ export default function ProLaboreAnotacoesPage() {
   const [pastas, setPastas] = useState<Pasta[]>([])
   const [notas, setNotas] = useState<Nota[]>([])
   const [mapas, setMapas] = useState<MapaMental[]>([])
+  const [lixeira, setLixeira] = useState<MapaMental[]>([])
   const [visao, setVisao] = useState<VisaoAnotacoes>({ tipo: 'pasta', id: null })
   const [abertas, setAbertas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
@@ -592,11 +737,40 @@ export default function ProLaboreAnotacoesPage() {
   }
 
   async function excluirMapa(id: string) {
-    if (!confirm('Excluir esse mapa mental?')) return
+    if (!confirm('Mover esse mapa mental pra lixeira?')) return
     const mapa = mapas.find(m => m.id === id)
     await proLaboreApi.mapasMentais.excluir(id)
     setMapas(prev => prev.filter(m => m.id !== id))
     setVisao(atual => (atual.tipo === 'mapa' && atual.id === id ? { tipo: 'pasta', id: mapa?.pastaId ?? null } : atual))
+  }
+
+  async function abrirLixeira() {
+    setVisao({ tipo: 'lixeira' })
+    try {
+      setLixeira(await proLaboreApi.mapasMentais.lixeira())
+    } catch {
+      alert('Não foi possível carregar a lixeira. Tente novamente.')
+    }
+  }
+
+  async function restaurarMapa(id: string) {
+    try {
+      const mapa = await proLaboreApi.mapasMentais.restaurar(id)
+      setLixeira(prev => prev.filter(m => m.id !== id))
+      setMapas(prev => [mapa, ...prev])
+    } catch {
+      alert('Não foi possível restaurar. Tente novamente.')
+    }
+  }
+
+  async function excluirMapaDefinitivo(id: string) {
+    if (!confirm('Excluir esse mapa mental em definitivo? Não dá pra desfazer.')) return
+    try {
+      await proLaboreApi.mapasMentais.excluirDefinitivo(id)
+      setLixeira(prev => prev.filter(m => m.id !== id))
+    } catch {
+      alert('Não foi possível excluir. Tente novamente.')
+    }
   }
 
   function atualizarNotaLocal(nota: Nota) {
@@ -680,11 +854,25 @@ export default function ProLaboreAnotacoesPage() {
                 </div>
               ))}
               <button type="button" className="pl-arvore-nova-pasta" onClick={() => criarPasta(null)}>+ Nova pasta</button>
+              <div className={`pl-arvore-item ${visao.tipo === 'lixeira' ? 'active' : ''}`} style={{ marginTop: 10 }}>
+                <span className="pl-arvore-chevron invisivel" />
+                <button type="button" className="pl-arvore-label" onClick={abrirLixeira}>
+                  <span className="pl-arvore-icone">🗑️</span>
+                  <span className="pl-arvore-nome">Lixeira</span>
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="pl-notion-main">
-            {visao.tipo === 'pasta' ? (
+            {visao.tipo === 'lixeira' ? (
+              <VisaoLixeira
+                mapas={lixeira}
+                onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
+                onRestaurar={restaurarMapa}
+                onExcluirDefinitivo={excluirMapaDefinitivo}
+              />
+            ) : visao.tipo === 'pasta' ? (
               <VisaoPasta
                 pasta={visao.id ? pastas.find(p => p.id === visao.id) ?? null : null}
                 pastas={pastas}
