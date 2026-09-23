@@ -932,6 +932,8 @@ model ProLaboreUsuario {
   socialMediaConta SocialMediaConta?
   planoCrescimentoAcoes PlanoCrescimentoAcao[]
   planoCrescimentoSnapshots PlanoCrescimentoSnapshot[]
+  reunioes Reuniao[]
+  notas    Nota[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1556,4 +1558,55 @@ model PlanoCrescimentoSnapshot {
 
   @@unique([usuarioId, mesReferencia])
   @@map("pro_labore_plano_crescimento_snapshots")
+}
+
+// Reuniões, aulas e vídeos que o usuário quer manter registrados — a
+// transcrição automática por IA ainda não está integrada (exigiria uma API
+// paga de terceiro, tipo Whisper), então `transcricao` por enquanto é
+// digitada/colada manualmente; o campo já existe pronto pra receber o texto
+// gerado automaticamente quando essa integração for feita, sem migrar nada.
+// Estritamente pessoal: `vendedorId` (nulo pro dono) identifica o dono do
+// registro, e ninguém enxerga o de outra pessoa — mesmo o dono não vê as
+// reuniões de um vendedor, porque isso aqui é bloco pessoal, não dado de
+// operação (ver reuniaoWhereBase em routes/proLabore.ts).
+model Reuniao {
+  id                  String   @id @default(cuid())
+  usuarioId           String
+  vendedorId          String?
+  titulo              String
+  tipo                String   @default("REUNIAO") // REUNIAO | AULA | VIDEO | OUTRO
+  data                DateTime @default(now())
+  duracaoSegundos     Int?
+  nomeArquivoOriginal String?
+  transcricao         String?
+  criadoEm            DateTime @default(now())
+  atualizadoEm        DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  notas   Nota[]
+
+  @@index([usuarioId, vendedorId])
+  @@map("pro_labore_reunioes")
+}
+
+// Anotações livres (trabalho/ideia/aprendizado/outro) — soltas ou
+// vinculadas a uma Reuniao específica (`reuniaoId` opcional). Mesma
+// privacidade estrita de Reuniao.
+model Nota {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  vendedorId   String?
+  reuniaoId    String?
+  titulo       String?
+  conteudo     String
+  categoria    String   @default("TRABALHO") // TRABALHO | IDEIA | APRENDIZADO | OUTRO
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  reuniao Reuniao?         @relation(fields: [reuniaoId], references: [id])
+
+  @@index([usuarioId, vendedorId])
+  @@index([reuniaoId])
+  @@map("pro_labore_notas")
 }
