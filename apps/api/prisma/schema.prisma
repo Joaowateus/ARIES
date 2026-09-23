@@ -930,6 +930,8 @@ model ProLaboreUsuario {
   agendaItens    AgendaItem[]
   ocorrencias    Ocorrencia[]
   socialMediaConta SocialMediaConta?
+  planoCrescimentoAcoes PlanoCrescimentoAcao[]
+  planoCrescimentoSnapshots PlanoCrescimentoSnapshot[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1071,6 +1073,19 @@ model ParametroLiquidez {
   // coluna só (mesmo padrão de AgendaItem.diasSemana/vendedorIds), em vez
   // de uma tabela à parte, já que é só uma lista de rótulos por conta.
   motivosOcorrenciaCsv String @default("Atraso recorrente,Não cumprimento de meta,Não preenchimento do CRM,Postura com cliente,Quebra de processo comercial,Falta não justificada,Não cumprimento de protocolo")
+
+  // ===== Metas do Plano de Crescimento — limiares que o motor de regras
+  // (lib/planoCrescimento.ts) usa pra classificar cada pilar em estágio.
+  // Começaram hardcoded no motor; viraram parametrizáveis porque o que é
+  // "ROAS saudável" ou "conversão boa" varia demais de operação pra
+  // operação pra ficar fixo no código. =====
+  planoRoasMinimo Float @default(1)
+  planoRoasSaudavel Float @default(3)
+  planoConversaoMinimaPct Float @default(5)
+  planoConversaoConsolidadaPct Float @default(10)
+  planoEngajamentoMinimoPct Float @default(2)
+  planoLeadsOrganicosMinimo Int @default(5)
+  planoConcentracaoMaximaLiderPct Float @default(70)
 
   atualizadoEm DateTime @updatedAt
 
@@ -1488,4 +1503,57 @@ model AssistenteMensagem {
 
   @@index([conversaId])
   @@map("pro_labore_assistente_mensagens")
+}
+
+// Itens do "plano de ação" do Plano de Crescimento, por pilar. Duas origens:
+// SUGERIDA (nasce do motor de regras, ver lib/planoCrescimento.ts) e
+// CUSTOMIZADA (o dono escreveu). Uma sugestão persiste com uma `chave`
+// estável ("<pilar>:<estagio>:<índice>") pra poder ser marcada como
+// concluída e continuar reconhecida entre uma carga e outra, mesmo que o
+// texto mude (várias ações têm números ao vivo interpolados, tipo "ROAS
+// atual de 2.4x"). Se o dono editar o texto manualmente, `editadoManualmente`
+// trava esse texto — carregar a página de novo não sobrescreve o que ele
+// escreveu. Quando o pilar muda de estágio, a chave muda junto (estágio faz
+// parte dela), então sugestões de um estágio anterior somem da tela sozinhas
+// sem precisar apagar nada — ver o filtro em GET /plano-crescimento.
+model PlanoCrescimentoAcao {
+  id        String   @id @default(cuid())
+  usuarioId String
+  pilar     String // aquisicao | conversao | execucao | financeiro
+  chave     String? // só em origem SUGERIDA — nulo em CUSTOMIZADA
+  texto     String
+  concluida Boolean  @default(false)
+  origem    String   @default("CUSTOMIZADA") // SUGERIDA | CUSTOMIZADA
+  editadoManualmente Boolean @default(false)
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, chave])
+  @@index([usuarioId, pilar])
+  @@map("pro_labore_plano_crescimento_acoes")
+}
+
+// Uma linha por mês, com o estágio de cada pilar naquele momento — grava
+// (upsert) toda vez que GET /plano-crescimento roda, então o mês corrente
+// sempre reflete o dado mais recente; meses passados congelam assim que o
+// mês vira, porque o upsert seguinte já mira a chave de um mês novo. É o
+// que alimenta a grade de evolução mensal na tela.
+model PlanoCrescimentoSnapshot {
+  id                String   @id @default(cuid())
+  usuarioId         String
+  mesReferencia     DateTime
+  estagioGeral      String
+  estagioAquisicao  String
+  estagioConversao  String
+  estagioExecucao   String
+  estagioFinanceiro String
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, mesReferencia])
+  @@map("pro_labore_plano_crescimento_snapshots")
 }

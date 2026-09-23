@@ -5,6 +5,11 @@
 // (todos) já foram atingidos. Isso deixa o motor determinístico e fácil de
 // auditar: dá pra ver exatamente qual critério está faltando pra avançar.
 //
+// Os limiares usados nos critérios (`MetasCrescimento`) não são fixos aqui
+// de propósito — vêm de `ParametroLiquidez`, editáveis em Configurações,
+// porque o que é "ROAS saudável" ou "boa conversão" varia demais de
+// operação pra operação pra ficar hardcoded.
+//
 // É proposital manter isso separado da rota que busca os dados (ver
 // `/pro-labore/plano-crescimento` em `routes/proLabore.ts`): essa função só
 // enxerga números, nunca o Prisma — é o ponto de extensão caso um motor
@@ -51,6 +56,19 @@ export interface MetricasNegocio {
   receitaAnterior: number
 }
 
+// Limiares configuráveis (ParametroLiquidez.plano*) — ver comentário do
+// arquivo. Todos os percentuais aqui são 0..100, igual ao resto de
+// ParametroLiquidez (ex: agendaLimiarBomPct).
+export interface MetasCrescimento {
+  roasMinimo: number
+  roasSaudavel: number
+  conversaoMinimaPct: number
+  conversaoConsolidadaPct: number
+  engajamentoMinimoPct: number
+  leadsOrganicosMinimo: number
+  concentracaoMaximaLiderPct: number
+}
+
 export type Formato = 'moeda' | 'percentual' | 'numero'
 
 export interface MetricaPilar { label: string; valor: number; formato: Formato }
@@ -86,11 +104,11 @@ function calcularEstagio(gates: Gate[]): Estagio {
   return ESTAGIOS[indice]
 }
 
-function pilarAquisicao(m: MetricasNegocio): Pilar {
+function pilarAquisicao(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
   const gates: Gate[] = [
     { descricao: 'Conta conectada e postando com consistência', atingido: m.socialConectado && m.metaPostagensPeriodo > 0 && m.publicacoesPeriodo >= m.metaPostagensPeriodo },
-    { descricao: 'Engajamento saudável (≥ 2% do alcance)', atingido: m.taxaEngajamento >= 0.02 },
-    { descricao: 'Gerando leads de forma orgânica (≥ 5 no período)', atingido: m.leadsOrganicosPeriodo >= 5 },
+    { descricao: `Engajamento saudável (≥ ${metas.engajamentoMinimoPct}% do alcance)`, atingido: m.taxaEngajamento >= metas.engajamentoMinimoPct / 100 },
+    { descricao: `Gerando leads de forma orgânica (≥ ${metas.leadsOrganicosMinimo} no período)`, atingido: m.leadsOrganicosPeriodo >= metas.leadsOrganicosMinimo },
   ]
   const estagio = calcularEstagio(gates)
 
@@ -138,14 +156,14 @@ function pilarAquisicao(m: MetricasNegocio): Pilar {
   }
 }
 
-function pilarConversao(m: MetricasNegocio): Pilar {
+function pilarConversao(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
   const ticketEstavelOuCrescendo = m.ticketMedioAnterior === 0 || m.ticketMedioAtual >= m.ticketMedioAnterior
   const vendasEstaveisOuCrescendo = m.quantidadeVendasAnterior === 0 || m.quantidadeVendasAtual >= m.quantidadeVendasAnterior
 
   const gates: Gate[] = [
-    { descricao: 'Funil convertendo lead em venda (≥ 5%)', atingido: m.conversaoLeadVenda >= 5 },
+    { descricao: `Funil convertendo lead em venda (≥ ${metas.conversaoMinimaPct}%)`, atingido: m.conversaoLeadVenda >= metas.conversaoMinimaPct },
     { descricao: 'Ticket médio estável ou em alta', atingido: ticketEstavelOuCrescendo },
-    { descricao: 'Conversão consolidada (≥ 10%) e volume de vendas em alta', atingido: m.conversaoLeadVenda >= 10 && vendasEstaveisOuCrescendo },
+    { descricao: `Conversão consolidada (≥ ${metas.conversaoConsolidadaPct}%) e volume de vendas em alta`, atingido: m.conversaoLeadVenda >= metas.conversaoConsolidadaPct && vendasEstaveisOuCrescendo },
   ]
   const estagio = calcularEstagio(gates)
 
@@ -185,11 +203,11 @@ function pilarConversao(m: MetricasNegocio): Pilar {
   }
 }
 
-function pilarExecucao(m: MetricasNegocio): Pilar {
+function pilarExecucao(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
   const gates: Gate[] = [
     { descricao: 'Equipe vendendo (pelo menos 1 vendedor ativo com venda no mês)', atingido: m.quantidadeVendedoresComVenda >= 1 },
     { descricao: 'Mais de um vendedor contribuindo pro resultado', atingido: m.quantidadeVendedoresComVenda >= 2 },
-    { descricao: 'Resultado não concentrado num só vendedor (líder ≤ 70% da receita)', atingido: m.quantidadeVendedoresComVenda >= 2 && m.concentracaoMaiorVendedorPct <= 70 },
+    { descricao: `Resultado não concentrado num só vendedor (líder ≤ ${metas.concentracaoMaximaLiderPct}% da receita)`, atingido: m.quantidadeVendedoresComVenda >= 2 && m.concentracaoMaiorVendedorPct <= metas.concentracaoMaximaLiderPct },
   ]
   const estagio = calcularEstagio(gates)
 
@@ -230,13 +248,13 @@ function pilarExecucao(m: MetricasNegocio): Pilar {
   }
 }
 
-function pilarFinanceiro(m: MetricasNegocio): Pilar {
+function pilarFinanceiro(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
   const receitaCrescendo = m.receitaAnterior === 0 || m.receitaAtual >= m.receitaAnterior
 
   const gates: Gate[] = [
-    { descricao: 'Anúncio pelo menos se pagando (ROAS ≥ 1)', atingido: m.roas === 0 || m.roas >= 1 },
-    { descricao: 'ROAS saudável (≥ 3)', atingido: m.roas >= 3 },
-    { descricao: 'Receita em alta com ROAS saudável', atingido: m.roas >= 3 && receitaCrescendo },
+    { descricao: `Anúncio pelo menos se pagando (ROAS ≥ ${metas.roasMinimo})`, atingido: m.roas === 0 || m.roas >= metas.roasMinimo },
+    { descricao: `ROAS saudável (≥ ${metas.roasSaudavel})`, atingido: m.roas >= metas.roasSaudavel },
+    { descricao: 'Receita em alta com ROAS saudável', atingido: m.roas >= metas.roasSaudavel && receitaCrescendo },
   ]
   const estagio = calcularEstagio(gates)
 
@@ -280,8 +298,8 @@ function pilarFinanceiro(m: MetricasNegocio): Pilar {
 
 const ORDEM_ESTAGIO: Record<Estagio, number> = { INICIAR: 0, MANTER: 1, ESCALONAR: 2, ESCALAR: 3 }
 
-export function gerarPlanoDeCrescimento(m: MetricasNegocio): PlanoCrescimento {
-  const pilares = [pilarAquisicao(m), pilarConversao(m), pilarExecucao(m), pilarFinanceiro(m)]
+export function gerarPlanoDeCrescimento(m: MetricasNegocio, metas: MetasCrescimento): PlanoCrescimento {
+  const pilares = [pilarAquisicao(m, metas), pilarConversao(m, metas), pilarExecucao(m, metas), pilarFinanceiro(m, metas)]
 
   // O estágio geral do negócio é o do pilar mais atrasado — não adianta
   // aquisição em "Escalar" se o funil ainda não converte (Iniciar):

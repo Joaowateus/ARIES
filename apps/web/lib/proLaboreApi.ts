@@ -73,6 +73,16 @@ export interface ParametroLiquidez {
   // Lista de motivos de Ocorrência, editável em Configurações — CSV numa
   // coluna só (mesmo padrão de AgendaItem.diasSemana/vendedorIds).
   motivosOcorrenciaCsv: string
+  // Limiares do Plano de Crescimento (lib/planoCrescimento.ts na API) —
+  // também editáveis em Configurações, pelo mesmo motivo dos limiares da
+  // Agenda: o que é "ROAS saudável" varia demais de operação pra operação.
+  planoRoasMinimo: number
+  planoRoasSaudavel: number
+  planoConversaoMinimaPct: number
+  planoConversaoConsolidadaPct: number
+  planoEngajamentoMinimoPct: number
+  planoLeadsOrganicosMinimo: number
+  planoConcentracaoMaximaLiderPct: number
 }
 
 export type TipoMetaFunilPL = 'MINIMO' | 'MAXIMO_PERDA' | 'MAXIMO_CUSTO'
@@ -504,6 +514,12 @@ export const proLaboreApi = {
   },
   planoCrescimento: {
     obter: () => request<PlanoCrescimento>('/pro-labore/plano-crescimento'),
+    criarAcao: (data: { pilar: ChavePilarCrescimento; texto: string }) =>
+      request<ItemAcaoCrescimento>('/pro-labore/plano-crescimento/acoes', { method: 'POST', body: JSON.stringify(data) }),
+    atualizarAcao: (id: string, data: { concluida?: boolean; texto?: string }) =>
+      request<ItemAcaoCrescimento>(`/pro-labore/plano-crescimento/acoes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    excluirAcao: (id: string) => request<{ ok: boolean }>(`/pro-labore/plano-crescimento/acoes/${id}`, { method: 'DELETE' }),
+    historico: (meses = 6) => request<HistoricoCrescimentoMes[]>(`/pro-labore/plano-crescimento/historico?meses=${meses}`),
   },
 }
 
@@ -733,6 +749,15 @@ export interface GateCrescimento {
   atingido: boolean
 }
 
+export type OrigemAcaoCrescimento = 'SUGERIDA' | 'CUSTOMIZADA'
+
+export interface ItemAcaoCrescimento {
+  id: string
+  texto: string
+  concluida: boolean
+  origem: OrigemAcaoCrescimento
+}
+
 export interface PilarCrescimento {
   chave: ChavePilarCrescimento
   nome: string
@@ -740,7 +765,7 @@ export interface PilarCrescimento {
   resumo: string
   metricas: MetricaPilarCrescimento[]
   gates: GateCrescimento[]
-  acoes: string[]
+  itens: ItemAcaoCrescimento[]
   ritmo: string
 }
 
@@ -749,4 +774,15 @@ export interface PlanoCrescimento {
   resumoGeral: string
   gargalo: ChavePilarCrescimento
   pilares: PilarCrescimento[]
+}
+
+export interface HistoricoCrescimentoMes {
+  mes: number
+  ano: number
+  label: string
+  estagioGeral: EstagioCrescimento
+  estagioAquisicao: EstagioCrescimento
+  estagioConversao: EstagioCrescimento
+  estagioExecucao: EstagioCrescimento
+  estagioFinanceiro: EstagioCrescimento
 }
