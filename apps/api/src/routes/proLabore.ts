@@ -3029,6 +3029,7 @@ function criarNoMapaPadrao(texto: string): NoMapaInput {
 const TIPOS_OBJETO_BOARD = [
   'noMapa', 'forma', 'sticky', 'texto', 'icone', 'secao', 'tabela',
   'desenho', 'frame', 'botao', 'inputWireframe', 'avatar', 'pilha', 'tarefa',
+  'comentario',
 ] as const
 const boardObjetoSchema = z.object({
   id: z.string(),

@@ -915,6 +915,7 @@ export interface NoMapa {
 export type TipoObjetoBoard =
   | 'noMapa' | 'forma' | 'sticky' | 'texto' | 'icone' | 'secao' | 'tabela'
   | 'desenho' | 'frame' | 'botao' | 'inputWireframe' | 'avatar' | 'pilha' | 'tarefa'
+  | 'comentario'
 
 export interface BoardObjeto {
   id: string

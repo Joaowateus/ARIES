@@ -212,6 +212,20 @@ function IconeMarcaTexto() {
     </svg>
   )
 }
+function IconeComentario() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  )
+}
+function IconeResolver() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
 
 // Ícones da barra de seleção múltipla (alinhar/distribuir/agrupar/camadas/
 // travar) — mesmo estilo Feather do resto do arquivo.
@@ -602,9 +616,24 @@ interface DadosTarefa extends Record<string, unknown> {
   concluida: boolean
 }
 
+// Comentário fixado no board (6.9/colaboração) — decisão explícita: como
+// hoje cada board é privado (só quem é dono daquela conta/vendedor enxerga,
+// ver reuniaoWhereBase no backend), não existe "outra pessoa" pra @mencionar
+// nem pra notificar. Vira uma autoanotação em thread (várias mensagens,
+// sem autor — sempre é a mesma pessoa), fixada num ponto do canvas,
+// marcável como resolvida. Menção/notificação ficam pra quando existir
+// board de verdade compartilhado entre pessoas (Fase 2, item em aberto).
+interface MensagemComentario { id: string; texto: string; criadoEm: string }
+interface DadosComentario extends Record<string, unknown> {
+  tipoObjeto: 'comentario'
+  mensagens: MensagemComentario[]
+  resolvido: boolean
+}
+
 type DadosObjeto =
   | DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao | DadosTabela
   | DadosDesenho | DadosFrame | DadosBotao | DadosInputWireframe | DadosAvatar | DadosPilha | DadosTarefa
+  | DadosComentario
 type NoFlow = Node<DadosObjeto>
 
 function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
@@ -697,6 +726,16 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
       data: { tipoObjeto: 'tarefa', grupoId, texto: (o.conteudo.texto as string) ?? '', concluida: !!o.conteudo.concluida },
     }
   }
+  if (o.tipo === 'comentario') {
+    return {
+      ...base, type: 'comentario',
+      data: {
+        tipoObjeto: 'comentario', grupoId,
+        mensagens: (o.conteudo.mensagens as MensagemComentario[]) ?? [],
+        resolvido: !!o.conteudo.resolvido,
+      },
+    }
+  }
   return {
     ...base, type: 'noMapa',
     data: { tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
@@ -774,6 +813,12 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
     return {
       id: n.id, tipo: 'tarefa', x: n.position.x, y: n.position.y, ...comuns,
       conteudo: comGrupo({ texto: n.data.texto, concluida: n.data.concluida }),
+    }
+  }
+  if (n.data.tipoObjeto === 'comentario') {
+    return {
+      id: n.id, tipo: 'comentario', x: n.position.x, y: n.position.y, ...comuns,
+      conteudo: comGrupo({ mensagens: n.data.mensagens, resolvido: n.data.resolvido }),
     }
   }
   return {
@@ -877,6 +922,8 @@ const AcoesMapaContext = createContext<{
   onExcluirConector: (id: string) => void
   onMudarLinhasTabela: (id: string, linhas: string[][]) => void
   onAlternarTarefa: (id: string) => void
+  onAdicionarMensagemComentario: (id: string, texto: string) => void
+  onAlternarResolvidoComentario: (id: string) => void
 } | null>(null)
 
 function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
@@ -1370,6 +1417,56 @@ function TarefaNode({ id, data }: NodeProps<NoFlow>) {
   )
 }
 
+function ComentarioNode({ id, data, selected }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosComentario
+  const [rascunho, setRascunho] = useState('')
+
+  function enviar() {
+    const texto = rascunho.trim()
+    if (!texto) return
+    acoes.onAdicionarMensagemComentario(id, texto)
+    setRascunho('')
+  }
+
+  return (
+    <div className={`pl-comentario-pino ${d.resolvido ? 'pl-comentario-resolvido' : ''}`}>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <IconeComentario />
+      {d.mensagens.length > 0 && <span className="pl-comentario-contador">{d.mensagens.length}</span>}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      {selected && (
+        <NodeToolbar position={Position.Right} offset={12} className="pl-comentario-thread nodrag nopan" isVisible>
+          <div className="pl-comentario-thread-topo">
+            <button
+              type="button" className={`pl-mapa-toolbar-btn ${d.resolvido ? 'ativo' : ''}`}
+              title={d.resolvido ? 'Reabrir' : 'Marcar como resolvido'} onClick={() => acoes.onAlternarResolvidoComentario(id)}
+            >
+              <IconeResolver />
+            </button>
+            <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir comentário" onClick={() => acoes.onExcluir(id)}>×</button>
+          </div>
+          <div className="pl-comentario-thread-lista">
+            {d.mensagens.length === 0 && <div className="pl-comentario-vazio">Sem mensagens ainda.</div>}
+            {d.mensagens.map(m => (
+              <div key={m.id} className="pl-comentario-mensagem">{m.texto}</div>
+            ))}
+          </div>
+          <div className="pl-comentario-thread-input">
+            <input
+              value={rascunho}
+              placeholder="Escrever uma nota..."
+              onChange={e => setRascunho(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') enviar() }}
+            />
+            <button type="button" className="pl-mapa-toolbar-btn" title="Enviar" onClick={enviar}>↵</button>
+          </div>
+        </NodeToolbar>
+      )}
+    </div>
+  )
+}
+
 // Aresta "flutuante": em vez de sair de um ponto fixo (esquerda/direita) do
 // nó, calcula onde a reta entre os dois centros cruza a borda de cada
 // caixa — assim a curva sempre aponta na direção real do outro nó, não
@@ -1461,6 +1558,7 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
 const nodeTypes = {
   noMapa: NoMapaNode, forma: FormaNode, sticky: StickyNode, texto: TextoNode, icone: IconeNode, secao: SecaoNode, tabela: TabelaNode,
   desenho: DesenhoNode, frame: FrameNode, botao: BotaoNode, inputWireframe: InputWireframeNode, avatar: AvatarNode, pilha: PilhaNode, tarefa: TarefaNode,
+  comentario: ComentarioNode,
 } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
@@ -1764,6 +1862,34 @@ function Canvas({ dadosIniciais, onChange }: {
     commit({ ...atual, nodes })
   }, [])
 
+  const onAdicionarComentario = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'comentario',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'comentario', mensagens: [], resolvido: false },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarMensagemComentario = useCallback((id: string, texto: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => {
+      if (n.id !== id || n.data.tipoObjeto !== 'comentario') return n
+      const mensagem: MensagemComentario = { id: gerarIdNo(), texto, criadoEm: new Date().toISOString() }
+      return { ...n, data: { ...n.data, mensagens: [...n.data.mensagens, mensagem] } }
+    })
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onAlternarResolvidoComentario = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'comentario' ? { ...n, data: { ...n.data, resolvido: !n.data.resolvido } } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
   // Captura de desenho livre: o overlay abaixo só recebe eventos de mouse
   // quando `modoDesenho` está ativo (senão pointer-events: none, deixando o
   // React Flow tratar pan/drag normalmente). Pontos ficam em coordenadas de
@@ -1952,7 +2078,10 @@ function Canvas({ dadosIniciais, onChange }: {
   const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
 
   return (
-    <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa }}>
+    <AcoesMapaContext.Provider value={{
+      onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
+      onAdicionarMensagemComentario, onAlternarResolvidoComentario,
+    }}>
       <div className="pl-mapa-canvas" ref={containerRef}>
         <ReactFlow
           nodes={grafo.nodes}
@@ -2078,6 +2207,9 @@ function Canvas({ dadosIniciais, onChange }: {
               onClick={() => setModoDesenho(m => (m === 'marcaTexto' ? null : 'marcaTexto'))}
             >
               <IconeMarcaTexto />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Comentário" onClick={onAdicionarComentario}>
+              <IconeComentario />
             </button>
             <div className="pl-mapa-tv-divisor" />
             <button
