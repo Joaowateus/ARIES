@@ -1666,7 +1666,7 @@ model Pasta {
 // novo depois da migração, então não precisa ficar em sincronia com
 // objetos/conectores.
 model MapaMental {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   usuarioId    String
   vendedorId   String?
   pastaId      String?
@@ -1675,13 +1675,38 @@ model MapaMental {
   raiz         Json?
   objetos      Json?
   conectores   Json?
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  // Lixeira (soft delete): "excluir" move pra lixeira (seta excluidoEm),
+  // só um segundo "excluir definitivamente" (a partir da própria lixeira)
+  // realmente apaga a linha — evita apagar sem querer um mapa mental
+  // inteiro, mesmo erro custa mais caro aqui do que numa nota de texto.
+  excluidoEm   DateTime?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
 
-  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  pasta   Pasta?           @relation(fields: [pastaId], references: [id])
+  usuario ProLaboreUsuario   @relation(fields: [usuarioId], references: [id])
+  pasta   Pasta?             @relation(fields: [pastaId], references: [id])
+  versoes MapaMentalVersao[]
 
   @@index([usuarioId, vendedorId])
   @@index([pastaId])
+  @@index([excluidoEm])
   @@map("pro_labore_mapas_mentais")
+}
+
+// Histórico de versões (6.12 do mapeamento) — snapshot do board ANTES de
+// cada atualização relevante (não depois: assim sempre dá pra voltar pro
+// estado anterior ao que está salvo agora), com throttle de tempo mínimo
+// entre snapshots pra não criar uma linha nova a cada debounce de autosave
+// (ver THROTTLE_VERSAO_MS na rota) e um teto de quantidade retida por board.
+model MapaMentalVersao {
+  id           String   @id @default(cuid())
+  mapaMentalId String
+  objetos      Json?
+  conectores   Json?
+  criadoEm     DateTime @default(now())
+
+  mapaMental MapaMental @relation(fields: [mapaMentalId], references: [id], onDelete: Cascade)
+
+  @@index([mapaMentalId, criadoEm])
+  @@map("pro_labore_mapas_mentais_versoes")
 }

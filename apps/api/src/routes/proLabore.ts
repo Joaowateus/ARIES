@@ -3026,7 +3026,11 @@ function criarNoMapaPadrao(texto: string): NoMapaInput {
   return { id: 'raiz', texto, x: 0, y: 0, filhos: [] }
 }
 
-const TIPOS_OBJETO_BOARD = ['noMapa', 'forma', 'sticky', 'texto', 'icone', 'secao', 'tabela'] as const
+const TIPOS_OBJETO_BOARD = [
+  'noMapa', 'forma', 'sticky', 'texto', 'icone', 'secao', 'tabela',
+  'desenho', 'frame', 'botao', 'inputWireframe', 'avatar', 'pilha', 'tarefa',
+  'comentario',
+] as const
 const boardObjetoSchema = z.object({
   id: z.string(),
   tipo: z.enum(TIPOS_OBJETO_BOARD),
@@ -3038,7 +3042,10 @@ const boardObjetoSchema = z.object({
   zIndex: z.number().optional(),
   estilo: z.record(z.string(), z.unknown()).optional(),
   conteudo: z.record(z.string(), z.unknown()),
-}).refine(o => JSON.stringify(o).length <= 5000, 'Objeto do board muito grande')
+  // Limite bem mais alto que os outros tipos de objeto por causa do
+  // desenho à mão livre — um traço razoável já tem centenas de pontos
+  // {x,y}, cada um uns 20-30 caracteres de JSON.
+}).refine(o => JSON.stringify(o).length <= 40000, 'Objeto do board muito grande')
 
 const boardConectorSchema = z.object({
   id: z.string(),
@@ -3061,11 +3068,28 @@ router.get('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Res
   const mapas = await prisma.mapaMental.findMany({
     where: {
       ...reuniaoWhereBase(req),
+      excluidoEm: null,
       // Mesma convenção de /notas: sem o parâmetro = sem filtro (lista tudo,
       // uso da árvore da sidebar); com o parâmetro = filtra por aquela pasta.
       ...(typeof pastaId === 'string' ? { pastaId: pastaId || null } : {}),
     },
     orderBy: { criadoEm: 'desc' },
+  })
+  res.json(mapas)
+})
+
+// Purga preguiçosa: sem cron (a API roda em função serverless, sem processo
+// persistente pra agendar nada) — em vez disso, toda visita à lixeira já
+// aproveita e apaga em definitivo o que passou do prazo, antes de listar.
+const DIAS_RETENCAO_LIXEIRA = 30
+
+router.get('/mapas-mentais/lixeira', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const base = reuniaoWhereBase(req)
+  const limite = new Date(Date.now() - DIAS_RETENCAO_LIXEIRA * 24 * 60 * 60 * 1000)
+  await prisma.mapaMental.deleteMany({ where: { ...base, excluidoEm: { lt: limite } } })
+  const mapas = await prisma.mapaMental.findMany({
+    where: { ...base, excluidoEm: { not: null } },
+    orderBy: { excluidoEm: 'desc' },
   })
   res.json(mapas)
 })
@@ -3098,6 +3122,30 @@ router.post('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Re
   res.status(201).json(mapa)
 })
 
+// Throttle de snapshot: sem isso, cada autosave (debounce de 500ms lá no
+// front) criaria uma versão nova, enchendo o histórico de dezenas de
+// snapshots quase idênticos de uma única sessão de edição contínua. Um
+// snapshot por board a cada N minutos já é o suficiente pra "voltar pra
+// como estava antes" fazer sentido, sem virar ruído.
+const THROTTLE_VERSAO_MS = 3 * 60 * 1000
+const MAX_VERSOES_POR_BOARD = 50
+
+async function talvezSalvarVersao(mapaMentalId: string, objetosAtuais: unknown, conectoresAtuais: unknown) {
+  const ultima = await prisma.mapaMentalVersao.findFirst({ where: { mapaMentalId }, orderBy: { criadoEm: 'desc' } })
+  if (ultima && Date.now() - ultima.criadoEm.getTime() < THROTTLE_VERSAO_MS) return
+  await prisma.mapaMentalVersao.create({
+    data: {
+      mapaMentalId,
+      objetos: objetosAtuais as Prisma.InputJsonValue,
+      conectores: conectoresAtuais as Prisma.InputJsonValue,
+    },
+  })
+  const excedentes = await prisma.mapaMentalVersao.findMany({
+    where: { mapaMentalId }, orderBy: { criadoEm: 'desc' }, skip: MAX_VERSOES_POR_BOARD, select: { id: true },
+  })
+  if (excedentes.length > 0) await prisma.mapaMentalVersao.deleteMany({ where: { id: { in: excedentes.map(v => v.id) } } })
+}
+
 router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = mapaMentalSchema.partial().safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
@@ -3107,6 +3155,9 @@ router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, re
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
   const { raiz, objetos, conectores, ...resto } = parse.data
+  // Snapshot do estado ANTERIOR (não do que está chegando agora) — assim
+  // "restaurar a última versão" sempre volta pra antes da mudança em curso.
+  if (objetos || conectores) await talvezSalvarVersao(existente.id, existente.objetos, existente.conectores)
   const atualizado = await prisma.mapaMental.update({
     where: { id: existente.id },
     data: {
@@ -3119,9 +3170,52 @@ router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, re
   res.json(atualizado)
 })
 
-router.delete('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/mapas-mentais/:id/versoes', requireProLaboreAuth, async (req: Request, res: Response) => {
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
+  const versoes = await prisma.mapaMentalVersao.findMany({
+    where: { mapaMentalId: existente.id }, orderBy: { criadoEm: 'desc' }, select: { id: true, criadoEm: true },
+  })
+  res.json(versoes)
+})
+
+router.post('/mapas-mentais/:id/versoes/:versaoId/restaurar', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
+  if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
+  const versao = await prisma.mapaMentalVersao.findFirst({ where: { id: String(req.params.versaoId), mapaMentalId: existente.id } })
+  if (!versao) { res.status(404).json({ error: 'Versão não encontrada' }); return }
+  // Snapshot forçado (ignora o throttle) do estado atual antes de restaurar
+  // — sem isso, restaurar uma versão antiga jogaria fora sem chance de
+  // volta o que estava no board um segundo atrás.
+  await prisma.mapaMentalVersao.create({
+    data: { mapaMentalId: existente.id, objetos: existente.objetos as Prisma.InputJsonValue, conectores: existente.conectores as Prisma.InputJsonValue },
+  })
+  const atualizado = await prisma.mapaMental.update({
+    where: { id: existente.id },
+    data: { objetos: versao.objetos as Prisma.InputJsonValue, conectores: versao.conectores as Prisma.InputJsonValue },
+  })
+  res.json(atualizado)
+})
+
+router.delete('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req), excluidoEm: null } })
+  if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
+  await prisma.mapaMental.update({ where: { id: existente.id }, data: { excluidoEm: new Date() } })
+  res.json({ ok: true })
+})
+
+router.post('/mapas-mentais/:id/restaurar', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req), excluidoEm: { not: null } } })
+  if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado na lixeira' }); return }
+  const restaurado = await prisma.mapaMental.update({ where: { id: existente.id }, data: { excluidoEm: null } })
+  res.json(restaurado)
+})
+
+router.delete('/mapas-mentais/:id/definitivo', requireProLaboreAuth, async (req: Request, res: Response) => {
+  // Só apaga de vez o que já está na lixeira — proteção contra excluir um
+  // board inteiro sem passar pela confirmação em dois passos.
+  const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req), excluidoEm: { not: null } } })
+  if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado na lixeira' }); return }
   await prisma.mapaMental.delete({ where: { id: existente.id } })
   res.json({ ok: true })
 })

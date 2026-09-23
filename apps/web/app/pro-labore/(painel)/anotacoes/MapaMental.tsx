@@ -122,6 +122,110 @@ function IconeTabela() {
     </svg>
   )
 }
+function IconeModoDiagrama() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="18" cy="18" r="3" />
+      <path d="M8.5 8.5l7 7" />
+    </svg>
+  )
+}
+function IconeModoWireframe() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+    </svg>
+  )
+}
+function IconeModoTarefas() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="18" rx="1" />
+      <rect x="14" y="3" width="7" height="10" rx="1" />
+    </svg>
+  )
+}
+function IconeFrame() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="1" />
+      <line x1="3" y1="7" x2="21" y2="7" />
+    </svg>
+  )
+}
+function IconeBotaoWireframe() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="8" width="18" height="8" rx="4" />
+    </svg>
+  )
+}
+function IconeInputWireframe() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="8" width="18" height="8" rx="1" />
+      <line x1="6" y1="12" x2="12" y2="12" />
+    </svg>
+  )
+}
+function IconeAvatarWireframe() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.5-6 8-6s8 2 8 6" />
+    </svg>
+  )
+}
+function IconePilha() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="16" height="4" rx="1" />
+      <rect x="4" y="10" width="16" height="4" rx="1" />
+      <rect x="4" y="16" width="16" height="4" rx="1" />
+    </svg>
+  )
+}
+function IconeTarefaCard() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <polyline points="7 12 10 15 17 8" />
+    </svg>
+  )
+}
+function IconeMarcador() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 19l7-7 3 3-7 7-3-3z" />
+      <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+      <circle cx="11" cy="11" r="2" />
+    </svg>
+  )
+}
+function IconeMarcaTexto() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l6-6 4 4-6 6H9v-4z" />
+      <path d="M3 21l4-4" />
+    </svg>
+  )
+}
+function IconeComentario() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  )
+}
+function IconeResolver() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
 
 // Ícones da barra de seleção múltipla (alinhar/distribuir/agrupar/camadas/
 // travar) — mesmo estilo Feather do resto do arquivo.
@@ -455,7 +559,81 @@ interface DadosTabela extends Record<string, unknown> {
   linhas: string[][]
 }
 
-type DadosObjeto = DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao | DadosTabela
+// Desenho à mão livre (6.9) — traço único capturado por gesto de
+// arrastar; `pontos` são relativos ao canto superior-esquerdo do objeto
+// (já inclui a folga de `espessura`), não em coordenadas absolutas do
+// board, pra mover o objeto não exigir recalcular o traço inteiro.
+// Marcador vs. marca-texto (Shift+H) é só um preset de espessura/cor/
+// opacidade na criação, não um tipo separado. Sem borracha dedicada —
+// apagar um traço é excluir o objeto pela seleção normal, como qualquer
+// outro objeto do board.
+interface DadosDesenho extends Record<string, unknown> {
+  tipoObjeto: 'desenho'
+  pontos: { x: number; y: number }[]
+  cor: string
+  espessura: number
+  opacidade: number
+}
+
+// --- Modo Wireframe (6.10): frame (tela), botão, input, avatar. Retângulo/
+// círculo/linha do wireframe reaproveitam o catálogo de formas (6.2) em vez
+// de duplicar tipos; "Anotação" reaproveita o objeto de texto livre.
+// Overlays (modais sobre frames) ficam de fora — exigiriam um conceito de
+// camadas/contenção que o board ainda não tem. ---
+interface DadosFrame extends Record<string, unknown> {
+  tipoObjeto: 'frame'
+  texto: string
+}
+
+interface DadosBotao extends Record<string, unknown> {
+  tipoObjeto: 'botao'
+  texto: string
+}
+
+interface DadosInputWireframe extends Record<string, unknown> {
+  tipoObjeto: 'inputWireframe'
+  texto: string
+}
+
+interface DadosAvatar extends Record<string, unknown> {
+  tipoObjeto: 'avatar'
+}
+
+// --- Modo Tarefas (6.11): pilha (coluna) + tarefa (card, com toggle de
+// concluída — a diferença real entre um card de tarefa e um sticky note
+// qualquer). Sem mover cards entre pilhas automaticamente ao arrastar perto
+// (exigiria detecção espacial de "soltar dentro de") nem votação em cards
+// (é uma dinâmica de facilitação ao vivo, fica pra quando existir
+// colaboração em tempo real — Fase 2). ---
+interface DadosPilha extends Record<string, unknown> {
+  tipoObjeto: 'pilha'
+  texto: string
+}
+
+interface DadosTarefa extends Record<string, unknown> {
+  tipoObjeto: 'tarefa'
+  texto: string
+  concluida: boolean
+}
+
+// Comentário fixado no board (6.9/colaboração) — decisão explícita: como
+// hoje cada board é privado (só quem é dono daquela conta/vendedor enxerga,
+// ver reuniaoWhereBase no backend), não existe "outra pessoa" pra @mencionar
+// nem pra notificar. Vira uma autoanotação em thread (várias mensagens,
+// sem autor — sempre é a mesma pessoa), fixada num ponto do canvas,
+// marcável como resolvida. Menção/notificação ficam pra quando existir
+// board de verdade compartilhado entre pessoas (Fase 2, item em aberto).
+interface MensagemComentario { id: string; texto: string; criadoEm: string }
+interface DadosComentario extends Record<string, unknown> {
+  tipoObjeto: 'comentario'
+  mensagens: MensagemComentario[]
+  resolvido: boolean
+}
+
+type DadosObjeto =
+  | DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao | DadosTabela
+  | DadosDesenho | DadosFrame | DadosBotao | DadosInputWireframe | DadosAvatar | DadosPilha | DadosTarefa
+  | DadosComentario
 type NoFlow = Node<DadosObjeto>
 
 function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
@@ -507,6 +685,57 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
       data: { tipoObjeto: 'tabela', grupoId, linhas: (o.conteudo.linhas as string[][]) ?? [['', '', ''], ['', '', '']] },
     }
   }
+  if (o.tipo === 'desenho') {
+    return {
+      ...base, type: 'desenho',
+      data: {
+        tipoObjeto: 'desenho', grupoId,
+        pontos: (o.conteudo.pontos as { x: number; y: number }[]) ?? [],
+        cor: (o.estilo?.cor as string) ?? 'var(--pl-ink-1)',
+        espessura: (o.estilo?.espessura as number) ?? 3,
+        opacidade: (o.estilo?.opacidade as number) ?? 1,
+      },
+    }
+  }
+  if (o.tipo === 'frame') {
+    return {
+      ...base, type: 'frame', width: o.largura ?? 320, height: o.altura ?? 480,
+      zIndex: typeof o.zIndex === 'number' ? o.zIndex : -1,
+      data: { tipoObjeto: 'frame', grupoId, texto: (o.conteudo.texto as string) ?? '' },
+    }
+  }
+  if (o.tipo === 'botao') {
+    return { ...base, type: 'botao', data: { tipoObjeto: 'botao', grupoId, texto: (o.conteudo.texto as string) ?? '' } }
+  }
+  if (o.tipo === 'inputWireframe') {
+    return { ...base, type: 'inputWireframe', data: { tipoObjeto: 'inputWireframe', grupoId, texto: (o.conteudo.texto as string) ?? '' } }
+  }
+  if (o.tipo === 'avatar') {
+    return { ...base, type: 'avatar', data: { tipoObjeto: 'avatar', grupoId } }
+  }
+  if (o.tipo === 'pilha') {
+    return {
+      ...base, type: 'pilha', width: o.largura ?? 260, height: o.altura ?? 360,
+      zIndex: typeof o.zIndex === 'number' ? o.zIndex : -1,
+      data: { tipoObjeto: 'pilha', grupoId, texto: (o.conteudo.texto as string) ?? '' },
+    }
+  }
+  if (o.tipo === 'tarefa') {
+    return {
+      ...base, type: 'tarefa',
+      data: { tipoObjeto: 'tarefa', grupoId, texto: (o.conteudo.texto as string) ?? '', concluida: !!o.conteudo.concluida },
+    }
+  }
+  if (o.tipo === 'comentario') {
+    return {
+      ...base, type: 'comentario',
+      data: {
+        tipoObjeto: 'comentario', grupoId,
+        mensagens: (o.conteudo.mensagens as MensagemComentario[]) ?? [],
+        resolvido: !!o.conteudo.resolvido,
+      },
+    }
+  }
   return {
     ...base, type: 'noMapa',
     data: { tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
@@ -551,6 +780,46 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
   }
   if (n.data.tipoObjeto === 'tabela') {
     return { id: n.id, tipo: 'tabela', x: n.position.x, y: n.position.y, ...comuns, conteudo: comGrupo({ linhas: n.data.linhas }) }
+  }
+  if (n.data.tipoObjeto === 'desenho') {
+    return {
+      id: n.id, tipo: 'desenho', x: n.position.x, y: n.position.y, ...comuns,
+      estilo: { cor: n.data.cor, espessura: n.data.espessura, opacidade: n.data.opacidade },
+      conteudo: comGrupo({ pontos: n.data.pontos }),
+    }
+  }
+  if (n.data.tipoObjeto === 'frame') {
+    return {
+      id: n.id, tipo: 'frame', x: n.position.x, y: n.position.y, ...comuns,
+      largura: n.width ?? 320, altura: n.height ?? 480, conteudo: comGrupo({ texto: n.data.texto }),
+    }
+  }
+  if (n.data.tipoObjeto === 'botao') {
+    return { id: n.id, tipo: 'botao', x: n.position.x, y: n.position.y, ...comuns, conteudo: comGrupo({ texto: n.data.texto }) }
+  }
+  if (n.data.tipoObjeto === 'inputWireframe') {
+    return { id: n.id, tipo: 'inputWireframe', x: n.position.x, y: n.position.y, ...comuns, conteudo: comGrupo({ texto: n.data.texto }) }
+  }
+  if (n.data.tipoObjeto === 'avatar') {
+    return { id: n.id, tipo: 'avatar', x: n.position.x, y: n.position.y, ...comuns, conteudo: comGrupo({}) }
+  }
+  if (n.data.tipoObjeto === 'pilha') {
+    return {
+      id: n.id, tipo: 'pilha', x: n.position.x, y: n.position.y, ...comuns,
+      largura: n.width ?? 260, altura: n.height ?? 360, conteudo: comGrupo({ texto: n.data.texto }),
+    }
+  }
+  if (n.data.tipoObjeto === 'tarefa') {
+    return {
+      id: n.id, tipo: 'tarefa', x: n.position.x, y: n.position.y, ...comuns,
+      conteudo: comGrupo({ texto: n.data.texto, concluida: n.data.concluida }),
+    }
+  }
+  if (n.data.tipoObjeto === 'comentario') {
+    return {
+      id: n.id, tipo: 'comentario', x: n.position.x, y: n.position.y, ...comuns,
+      conteudo: comGrupo({ mensagens: n.data.mensagens, resolvido: n.data.resolvido }),
+    }
   }
   return {
     id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y, ...comuns,
@@ -652,6 +921,9 @@ const AcoesMapaContext = createContext<{
   onMudarLabelConector: (id: string, label: string) => void
   onExcluirConector: (id: string) => void
   onMudarLinhasTabela: (id: string, linhas: string[][]) => void
+  onAlternarTarefa: (id: string) => void
+  onAdicionarMensagemComentario: (id: string, texto: string) => void
+  onAlternarResolvidoComentario: (id: string) => void
 } | null>(null)
 
 function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
@@ -932,6 +1204,269 @@ function TabelaNode({ id, data }: NodeProps<NoFlow>) {
   )
 }
 
+function DesenhoNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosDesenho
+  const largura = Math.max(...d.pontos.map(p => p.x), d.espessura * 2, 1)
+  const altura = Math.max(...d.pontos.map(p => p.y), d.espessura * 2, 1)
+  const caminho = d.pontos.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
+
+  return (
+    <div className="pl-desenho-no" style={{ width: largura, height: altura }}>
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <svg className="pl-desenho-svg" width={largura} height={altura}>
+        <path d={caminho} stroke={d.cor} strokeWidth={d.espessura} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={d.opacidade} />
+      </svg>
+    </div>
+  )
+}
+
+function FrameNode({ id, data, selected }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosFrame
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(false)
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-frame-no">
+      <NodeResizer minWidth={200} minHeight={280} isVisible={!!selected} lineClassName="pl-secao-resize-linha" handleClassName="pl-secao-resize-alca" />
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Renomear" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <div className="pl-frame-barra">
+        {editando ? (
+          <input
+            className="nodrag nopan pl-frame-input"
+            autoFocus
+            value={valor}
+            placeholder="Tela"
+            onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+            onBlur={sairEdicao}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+          />
+        ) : (
+          <div className="pl-frame-titulo" onDoubleClick={entrarEdicao}>{valor || 'Tela'}</div>
+        )}
+      </div>
+      <div className="pl-frame-area" />
+    </div>
+  )
+}
+
+function BotaoNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosBotao
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(d.texto === '')
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-botao-no">
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      {editando ? (
+        <input
+          className="nodrag nopan pl-botao-input"
+          autoFocus
+          value={valor}
+          placeholder="Botão"
+          onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+          onBlur={sairEdicao}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+        />
+      ) : (
+        <div className="pl-botao-texto" onDoubleClick={entrarEdicao}>{valor || 'Botão'}</div>
+      )}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  )
+}
+
+function InputWireframeNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosInputWireframe
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(d.texto === '')
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-input-wireframe-no">
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Editar placeholder" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      {editando ? (
+        <input
+          className="nodrag nopan pl-input-wireframe-input"
+          autoFocus
+          value={valor}
+          placeholder="Campo de texto"
+          onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+          onBlur={sairEdicao}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+        />
+      ) : (
+        <div className="pl-input-wireframe-texto" onDoubleClick={entrarEdicao}>{valor || 'Campo de texto'}</div>
+      )}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  )
+}
+
+function AvatarNode({ id }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  return (
+    <div className="pl-avatar-no">
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 20c0-4 3.5-6 8-6s8 2 8 6" />
+      </svg>
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    </div>
+  )
+}
+
+function PilhaNode({ id, data, selected }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosPilha
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(false)
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className="pl-pilha-no">
+      <NodeResizer minWidth={200} minHeight={200} isVisible={!!selected} lineClassName="pl-secao-resize-linha" handleClassName="pl-secao-resize-alca" />
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Renomear" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      {editando ? (
+        <input
+          className="nodrag nopan pl-pilha-input"
+          autoFocus
+          value={valor}
+          placeholder="A fazer"
+          onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+          onBlur={sairEdicao}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+        />
+      ) : (
+        <div className="pl-pilha-titulo" onDoubleClick={entrarEdicao}>{valor || 'A fazer'}</div>
+      )}
+    </div>
+  )
+}
+
+function TarefaNode({ id, data }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosTarefa
+  const [valor, setValor] = useState(d.texto)
+  const [editando, setEditando] = useState(d.texto === '')
+  useEffect(() => { setValor(d.texto) }, [d.texto])
+
+  function entrarEdicao() { setEditando(true) }
+  function sairEdicao() { setEditando(false) }
+
+  return (
+    <div className={`pl-tarefa-no ${d.concluida ? 'pl-tarefa-concluida' : ''}`}>
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      <label className="pl-tarefa-check nodrag nopan">
+        <input type="checkbox" checked={d.concluida} onChange={() => acoes.onAlternarTarefa(id)} />
+      </label>
+      {editando ? (
+        <textarea
+          className="nodrag nopan pl-tarefa-textarea"
+          autoFocus
+          value={valor}
+          placeholder="Tarefa..."
+          onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
+          onBlur={sairEdicao}
+          onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.blur() }}
+        />
+      ) : (
+        <div className="pl-tarefa-texto" onDoubleClick={entrarEdicao}>{valor || 'Tarefa...'}</div>
+      )}
+    </div>
+  )
+}
+
+function ComentarioNode({ id, data, selected }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosComentario
+  const [rascunho, setRascunho] = useState('')
+
+  function enviar() {
+    const texto = rascunho.trim()
+    if (!texto) return
+    acoes.onAdicionarMensagemComentario(id, texto)
+    setRascunho('')
+  }
+
+  return (
+    <div className={`pl-comentario-pino ${d.resolvido ? 'pl-comentario-resolvido' : ''}`}>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <IconeComentario />
+      {d.mensagens.length > 0 && <span className="pl-comentario-contador">{d.mensagens.length}</span>}
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      {selected && (
+        <NodeToolbar position={Position.Right} offset={12} className="pl-comentario-thread nodrag nopan" isVisible>
+          <div className="pl-comentario-thread-topo">
+            <button
+              type="button" className={`pl-mapa-toolbar-btn ${d.resolvido ? 'ativo' : ''}`}
+              title={d.resolvido ? 'Reabrir' : 'Marcar como resolvido'} onClick={() => acoes.onAlternarResolvidoComentario(id)}
+            >
+              <IconeResolver />
+            </button>
+            <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir comentário" onClick={() => acoes.onExcluir(id)}>×</button>
+          </div>
+          <div className="pl-comentario-thread-lista">
+            {d.mensagens.length === 0 && <div className="pl-comentario-vazio">Sem mensagens ainda.</div>}
+            {d.mensagens.map(m => (
+              <div key={m.id} className="pl-comentario-mensagem">{m.texto}</div>
+            ))}
+          </div>
+          <div className="pl-comentario-thread-input">
+            <input
+              value={rascunho}
+              placeholder="Escrever uma nota..."
+              onChange={e => setRascunho(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') enviar() }}
+            />
+            <button type="button" className="pl-mapa-toolbar-btn" title="Enviar" onClick={enviar}>↵</button>
+          </div>
+        </NodeToolbar>
+      )}
+    </div>
+  )
+}
+
 // Aresta "flutuante": em vez de sair de um ponto fixo (esquerda/direita) do
 // nó, calcula onde a reta entre os dois centros cruza a borda de cada
 // caixa — assim a curva sempre aponta na direção real do outro nó, não
@@ -1022,6 +1557,8 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
 
 const nodeTypes = {
   noMapa: NoMapaNode, forma: FormaNode, sticky: StickyNode, texto: TextoNode, icone: IconeNode, secao: SecaoNode, tabela: TabelaNode,
+  desenho: DesenhoNode, frame: FrameNode, botao: BotaoNode, inputWireframe: InputWireframeNode, avatar: AvatarNode, pilha: PilhaNode, tarefa: TarefaNode,
+  comentario: ComentarioNode,
 } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
@@ -1029,7 +1566,7 @@ function Canvas({ dadosIniciais, onChange }: {
   dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
   onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
 }) {
-  const { fitView } = useReactFlow()
+  const { fitView, screenToFlowPosition } = useReactFlow()
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
     () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores),
   )
@@ -1039,6 +1576,20 @@ function Canvas({ dadosIniciais, onChange }: {
   const [modoMao, setModoMao] = useState(false)
   const [formasAbertas, setFormasAbertas] = useState(false)
   const [iconesAbertos, setIconesAbertos] = useState(false)
+  // Modo (Diagrama/Wireframe/Tarefas) é só um filtro de quais botões de
+  // criação aparecem na toolbar — nunca esconde objetos já existentes no
+  // board, que continuam visíveis e editáveis em qualquer modo (6.10/6.11).
+  const [modo, setModo] = useState<'diagrama' | 'wireframe' | 'tarefas'>('diagrama')
+  // Desenho livre (6.9): null = ferramenta de seleção normal; 'traco'/
+  // 'marcaTexto' = próximo drag no canvas captura um traço em vez de
+  // mover/selecionar nós. `tracoAoVivo` guarda os pontos em coordenadas de
+  // TELA (relativas ao container) só pra desenhar a prévia — a conversão
+  // pra coordenadas do board (screenToFlowPosition) só acontece uma vez,
+  // ao soltar o mouse, quando o traço vira um objeto de verdade.
+  const [modoDesenho, setModoDesenho] = useState<null | 'traco' | 'marcaTexto'>(null)
+  const [tracoAoVivo, setTracoAoVivo] = useState<{ x: number; y: number }[] | null>(null)
+  const desenhandoRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
   const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
   const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
@@ -1229,6 +1780,158 @@ function Canvas({ dadosIniciais, onChange }: {
     commit({ ...atual, nodes })
   }, [])
 
+  const onAdicionarFrame = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const passo = atual.nodes.length % 6
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'frame',
+      position: { x: (base?.position.x ?? 0) - 460 - passo * 18, y: (base?.position.y ?? 0) - 140 + passo * 20 },
+      width: 320, height: 480, zIndex: -1,
+      data: { tipoObjeto: 'frame', texto: 'Tela' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarBotao = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'botao',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'botao', texto: 'Botão' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarInputWireframe = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'inputWireframe',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'inputWireframe', texto: '' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarAvatar = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'avatar',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'avatar' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarPilha = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const passo = atual.nodes.length % 6
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'pilha',
+      position: { x: (base?.position.x ?? 0) - 460 - passo * 18, y: (base?.position.y ?? 0) - 140 + passo * 20 },
+      width: 260, height: 360, zIndex: -1,
+      data: { tipoObjeto: 'pilha', texto: 'A fazer' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarTarefa = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'tarefa',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'tarefa', texto: '', concluida: false },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAlternarTarefa = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'tarefa' ? { ...n, data: { ...n.data, concluida: !n.data.concluida } } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onAdicionarComentario = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'comentario',
+      position: posicaoEmCascata(base, atual.nodes.length),
+      data: { tipoObjeto: 'comentario', mensagens: [], resolvido: false },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onAdicionarMensagemComentario = useCallback((id: string, texto: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => {
+      if (n.id !== id || n.data.tipoObjeto !== 'comentario') return n
+      const mensagem: MensagemComentario = { id: gerarIdNo(), texto, criadoEm: new Date().toISOString() }
+      return { ...n, data: { ...n.data, mensagens: [...n.data.mensagens, mensagem] } }
+    })
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onAlternarResolvidoComentario = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'comentario' ? { ...n, data: { ...n.data, resolvido: !n.data.resolvido } } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
+  // Captura de desenho livre: o overlay abaixo só recebe eventos de mouse
+  // quando `modoDesenho` está ativo (senão pointer-events: none, deixando o
+  // React Flow tratar pan/drag normalmente). Pontos ficam em coordenadas de
+  // tela durante o gesto (prévia simples, sem se importar com pan/zoom);
+  // só na hora de soltar o mouse é que viram coordenadas do board.
+  function pontoRelativo(e: React.MouseEvent): { x: number; y: number } {
+    const rect = containerRef.current?.getBoundingClientRect()
+    return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) }
+  }
+  function iniciarDesenho(e: React.MouseEvent) {
+    if (!modoDesenho) return
+    desenhandoRef.current = true
+    setTracoAoVivo([pontoRelativo(e)])
+  }
+  function moverDesenho(e: React.MouseEvent) {
+    if (!desenhandoRef.current) return
+    setTracoAoVivo(atual => [...(atual ?? []), pontoRelativo(e)])
+  }
+  function finalizarDesenho() {
+    if (!desenhandoRef.current) return
+    desenhandoRef.current = false
+    if (tracoAoVivo && tracoAoVivo.length > 1 && modoDesenho) {
+      const rect = containerRef.current?.getBoundingClientRect()
+      const pontosFlow = tracoAoVivo.map(p => screenToFlowPosition({ x: p.x + (rect?.left ?? 0), y: p.y + (rect?.top ?? 0) }))
+      const espessura = modoDesenho === 'marcaTexto' ? 14 : 3
+      const cor = modoDesenho === 'marcaTexto' ? '#f5d76e' : 'var(--pl-ink-1)'
+      const opacidade = modoDesenho === 'marcaTexto' ? 0.45 : 1
+      const minX = Math.min(...pontosFlow.map(p => p.x)) - espessura
+      const minY = Math.min(...pontosFlow.map(p => p.y)) - espessura
+      const pontos = pontosFlow.map(p => ({ x: p.x - minX, y: p.y - minY }))
+      const novoId = gerarIdNo()
+      const novoNo: NoFlow = {
+        id: novoId, type: 'desenho',
+        position: { x: minX, y: minY },
+        data: { tipoObjeto: 'desenho', pontos, cor, espessura, opacidade },
+      }
+      const atual = grafoRef.current
+      commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+    }
+    setTracoAoVivo(null)
+  }
+
   // Conectar dois objetos livremente arrastando de um Handle a outro (6.3
   // do mapeamento) — cor neutra padrão, sem tracejado/seta; o usuário ajusta
   // depois selecionando o conector (barrinha de estilo do EdgeFlutuante).
@@ -1375,8 +2078,11 @@ function Canvas({ dadosIniciais, onChange }: {
   const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
 
   return (
-    <AcoesMapaContext.Provider value={{ onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela }}>
-      <div className="pl-mapa-canvas">
+    <AcoesMapaContext.Provider value={{
+      onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
+      onAdicionarMensagemComentario, onAlternarResolvidoComentario,
+    }}>
+      <div className="pl-mapa-canvas" ref={containerRef}>
         <ReactFlow
           nodes={grafo.nodes}
           edges={grafo.edges}
@@ -1399,6 +2105,18 @@ function Canvas({ dadosIniciais, onChange }: {
           <Background gap={22} size={1} color="var(--pl-border-strong)" />
           <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />
           <Panel position="top-left" className="pl-mapa-toolbar-vertical">
+            <div className="pl-mapa-tv-modos">
+              <button type="button" className={`pl-mapa-tv-btn ${modo === 'diagrama' ? 'ativo' : ''}`} title="Modo Diagrama" onClick={() => setModo('diagrama')}>
+                <IconeModoDiagrama />
+              </button>
+              <button type="button" className={`pl-mapa-tv-btn ${modo === 'wireframe' ? 'ativo' : ''}`} title="Modo Wireframe" onClick={() => setModo('wireframe')}>
+                <IconeModoWireframe />
+              </button>
+              <button type="button" className={`pl-mapa-tv-btn ${modo === 'tarefas' ? 'ativo' : ''}`} title="Modo Tarefas" onClick={() => setModo('tarefas')}>
+                <IconeModoTarefas />
+              </button>
+            </div>
+            <div className="pl-mapa-tv-divisor" />
             <button type="button" className={`pl-mapa-tv-btn ${!modoMao ? 'ativo' : ''}`} title="Selecionar" onClick={() => setModoMao(false)}>
               <IconeCursor />
             </button>
@@ -1461,6 +2179,38 @@ function Canvas({ dadosIniciais, onChange }: {
             <button type="button" className="pl-mapa-tv-btn" title="Tabela" onClick={onAdicionarTabela}>
               <IconeTabela />
             </button>
+            {modo === 'wireframe' && (
+              <>
+                <div className="pl-mapa-tv-divisor" />
+                <button type="button" className="pl-mapa-tv-btn" title="Frame (tela)" onClick={onAdicionarFrame}><IconeFrame /></button>
+                <button type="button" className="pl-mapa-tv-btn" title="Botão" onClick={onAdicionarBotao}><IconeBotaoWireframe /></button>
+                <button type="button" className="pl-mapa-tv-btn" title="Campo de texto" onClick={onAdicionarInputWireframe}><IconeInputWireframe /></button>
+                <button type="button" className="pl-mapa-tv-btn" title="Avatar" onClick={onAdicionarAvatar}><IconeAvatarWireframe /></button>
+              </>
+            )}
+            {modo === 'tarefas' && (
+              <>
+                <div className="pl-mapa-tv-divisor" />
+                <button type="button" className="pl-mapa-tv-btn" title="Pilha (coluna)" onClick={onAdicionarPilha}><IconePilha /></button>
+                <button type="button" className="pl-mapa-tv-btn" title="Cartão de tarefa" onClick={onAdicionarTarefa}><IconeTarefaCard /></button>
+              </>
+            )}
+            <div className="pl-mapa-tv-divisor" />
+            <button
+              type="button" className={`pl-mapa-tv-btn ${modoDesenho === 'traco' ? 'ativo' : ''}`} title="Desenho livre"
+              onClick={() => setModoDesenho(m => (m === 'traco' ? null : 'traco'))}
+            >
+              <IconeMarcador />
+            </button>
+            <button
+              type="button" className={`pl-mapa-tv-btn ${modoDesenho === 'marcaTexto' ? 'ativo' : ''}`} title="Marca-texto"
+              onClick={() => setModoDesenho(m => (m === 'marcaTexto' ? null : 'marcaTexto'))}
+            >
+              <IconeMarcaTexto />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Comentário" onClick={onAdicionarComentario}>
+              <IconeComentario />
+            </button>
             <div className="pl-mapa-tv-divisor" />
             <button
               type="button"
@@ -1509,6 +2259,38 @@ function Canvas({ dadosIniciais, onChange }: {
                   <button type="button" className="pl-mapa-tv-btn" title="Distribuir horizontalmente" onClick={() => onDistribuir('horizontal')}><IconeDistribuirH /></button>
                   <button type="button" className="pl-mapa-tv-btn" title="Distribuir verticalmente" onClick={() => onDistribuir('vertical')}><IconeDistribuirV /></button>
                 </>
+              )}
+            </Panel>
+          )}
+          {modoDesenho && (
+            // Panel (não uma <div> solta fora do <ReactFlow>) de propósito:
+            // o wrapper .react-flow tem position+z-index próprios (via
+            // estilo interno da lib), formando um stacking context isolado
+            // — uma div irmã por fora nunca consegue se intercalar entre o
+            // canvas e a toolbar vertical (outro Panel) por z-index, fica
+            // sempre inteiramente acima ou abaixo do bloco inteiro. Como
+            // Panel, o overlay entra no mesmo stacking context da toolbar,
+            // e aí sim dá pra ficar abaixo dela (z-index menor) sem deixar
+            // de cobrir o canvas pra capturar o gesto de desenho.
+            <Panel
+              position="top-left"
+              className="pl-desenho-overlay"
+              style={{ inset: 0, margin: 0, width: '100%', height: '100%', zIndex: 15 }}
+              onMouseDown={iniciarDesenho}
+              onMouseMove={moverDesenho}
+              onMouseUp={finalizarDesenho}
+              onMouseLeave={finalizarDesenho}
+            >
+              {tracoAoVivo && tracoAoVivo.length > 1 && (
+                <svg className="pl-desenho-overlay-svg">
+                  <path
+                    d={tracoAoVivo.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')}
+                    stroke={modoDesenho === 'marcaTexto' ? '#f5d76e' : 'var(--pl-ink-1)'}
+                    strokeWidth={modoDesenho === 'marcaTexto' ? 14 : 3}
+                    strokeLinecap="round" strokeLinejoin="round" fill="none"
+                    opacity={modoDesenho === 'marcaTexto' ? 0.45 : 1}
+                  />
+                </svg>
               )}
             </Panel>
           )}
