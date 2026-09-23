@@ -1,6 +1,6 @@
 // Ícones da navegação — mesmo estilo Feather (stroke, 24x24) já usado no
 // botão de hambúrguer/fechar da gaveta antiga, só que num só lugar agora.
-export type NavIconName = 'home' | 'kanban' | 'calendar' | 'cart' | 'users' | 'flag' | 'at' | 'chart' | 'gear' | 'chat' | 'compass' | 'mic'
+export type NavIconName = 'home' | 'kanban' | 'calendar' | 'cart' | 'users' | 'flag' | 'at' | 'chart' | 'gear' | 'chat' | 'compass' | 'mic' | 'notebook'
 
 const PATHS: Record<NavIconName, React.ReactNode> = {
   home: (
@@ -75,6 +75,14 @@ const PATHS: Record<NavIconName, React.ReactNode> = {
     <>
       <circle cx="12" cy="12" r="10" />
       <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+    </>
+  ),
+  notebook: (
+    <>
+      <path d="M4 4a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2z" />
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H18" />
+      <line x1="8" y1="7" x2="14" y2="7" />
+      <line x1="8" y1="11" x2="14" y2="11" />
     </>
   ),
   gear: (

@@ -21,6 +21,7 @@ const NAV_GROUPS: NavGroup[] = [
     // Sem donoOnly/hideFromVendedor: bloco pessoal de reuniões/anotações,
     // cada um só vê o próprio (escopo feito no backend).
     { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic' },
+    { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook' },
     { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', donoOnly: true },
     { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', donoOnly: true },
     // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o

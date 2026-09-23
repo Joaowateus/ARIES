@@ -10,7 +10,7 @@
 // esforço aqui.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, Handle, Position, BaseEdge,
+  ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, Handle, Position, BaseEdge, NodeToolbar,
   getBezierPath, useInternalNode, useReactFlow, applyNodeChanges,
   type Node, type Edge, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange,
 } from '@xyflow/react'
@@ -123,6 +123,13 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
 
   return (
     <div className={`pl-mapa-no ${data.ehCentral ? 'pl-mapa-no-central' : ''}`} style={{ borderColor: data.cor }}>
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <button type="button" className="pl-mapa-toolbar-btn" title="Adicionar ideia filha" onClick={() => acoes.onAdicionarFilho(id)}>+</button>
+        {!data.ehCentral && (
+          <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+        )}
+      </NodeToolbar>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       {editando ? (
         <input
@@ -140,13 +147,6 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
           {valor || (data.ehCentral ? 'Ideia central' : 'Nova ideia')}
         </div>
       )}
-      <div className="pl-mapa-no-acoes nodrag nopan">
-        <button type="button" className="pl-mapa-no-acao-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
-        <button type="button" className="pl-mapa-no-acao-btn" title="Adicionar ideia filha" onClick={() => acoes.onAdicionarFilho(id)}>+</button>
-        {!data.ehCentral && (
-          <button type="button" className="pl-mapa-no-acao-btn" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
-        )}
-      </div>
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </div>
   )
