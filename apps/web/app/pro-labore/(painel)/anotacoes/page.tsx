@@ -6,7 +6,7 @@ import {
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
-import MapaMentalCanvas, { criarNoMapa } from './MapaMental'
+import MapaMentalCanvas, { dadosIniciaisDoBoard } from './MapaMental'
 
 const EMOJIS_NOTA = ['📄', '📝', '💡', '🎯', '📌', '✅', '🔥', '📊', '🚀', '⭐', '🗂️', '📅', '💬', '🧠', '⚙️', '📈', '📚', '🧩']
 
@@ -411,16 +411,16 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
 function PaginaMapaMental({ mapa, onAtualizado, onExcluir }: { mapa: MapaMental | null; onAtualizado: (mapa: MapaMental) => void; onExcluir: () => void }) {
   const [titulo, setTitulo] = useState(mapa?.titulo ?? '')
   const [icone, setIcone] = useState(mapa?.icone ?? '')
-  const [raizInicial, setRaizInicial] = useState(mapa?.raiz ?? criarNoMapa('Ideia central'))
+  const [dadosIniciais, setDadosIniciais] = useState(() => dadosIniciaisDoBoard(mapa))
   const [status, setStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo')
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  type CamposMapa = Partial<{ titulo: string; icone: string | null; raiz: typeof raizInicial }>
+  type CamposMapa = Partial<{ titulo: string; icone: string | null; objetos: NonNullable<MapaMental['objetos']>; conectores: NonNullable<MapaMental['conectores']> }>
   const pendenteRef = useRef<CamposMapa>({})
 
   useEffect(() => {
     setTitulo(mapa?.titulo ?? '')
     setIcone(mapa?.icone ?? '')
-    setRaizInicial(mapa?.raiz ?? criarNoMapa('Ideia central'))
+    setDadosIniciais(dadosIniciaisDoBoard(mapa))
     pendenteRef.current = {}
     setStatus('salvo')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -474,8 +474,8 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir }: { mapa: MapaMental 
       />
 
       <MapaMentalCanvas
-        raizInicial={raizInicial}
-        onChange={novaRaiz => agendarSalvar({ raiz: novaRaiz })}
+        dadosIniciais={dadosIniciais}
+        onChange={dados => agendarSalvar(dados)}
       />
     </div>
   )

@@ -557,9 +557,9 @@ export const proLaboreApi = {
   mapasMentais: {
     // pastaId: undefined = sem filtro (lista tudo, uso da árvore); '' = raiz; string = dentro daquela pasta.
     listar: (pastaId?: string) => request<MapaMental[]>(`/pro-labore/mapas-mentais${pastaId !== undefined ? `?pastaId=${pastaId}` : ''}`),
-    criar: (data: { titulo?: string; icone?: string | null; raiz?: NoMapa; pastaId?: string | null }) =>
+    criar: (data: { titulo?: string; icone?: string | null; objetos?: BoardObjeto[]; conectores?: BoardConector[]; pastaId?: string | null }) =>
       request<MapaMental>('/pro-labore/mapas-mentais', { method: 'POST', body: JSON.stringify(data) }),
-    atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; raiz: NoMapa; pastaId: string | null }>) =>
+    atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; objetos: BoardObjeto[]; conectores: BoardConector[]; pastaId: string | null }>) =>
       request<MapaMental>(`/pro-labore/mapas-mentais/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/mapas-mentais/${id}`, { method: 'DELETE' }),
   },
@@ -896,9 +896,14 @@ export interface Pasta {
   atualizadoEm: string
 }
 
-// Mapa mental: outro "tipo de página" dentro da árvore de Anotações, ao
-// lado de Nota. A árvore de nós inteira mora em `raiz`, um nó recursivo.
-// x/y = posição livre no canvas (MapaMentalCanvas, via @xyflow/react).
+// Mapa mental / board: outro "tipo de página" dentro da árvore de
+// Anotações, ao lado de Nota. `raiz` é o formato legado (árvore de nós
+// recursiva, só mapa mental puro) — mapas antigos que nunca foram
+// reabertos no formato novo ainda vêm assim; o canvas converte pra
+// objetos/conectores na primeira abertura e passa a salvar só no formato
+// novo dali em diante (ver MapaMental.tsx). `objetos`/`conectores` é o
+// formato atual: board plano onde qualquer objeto pode se conectar a
+// qualquer outro, não só pai→filho.
 export interface NoMapa {
   id: string
   texto: string
@@ -907,11 +912,35 @@ export interface NoMapa {
   filhos: NoMapa[]
 }
 
+export type TipoObjetoBoard = 'noMapa' | 'forma'
+
+export interface BoardObjeto {
+  id: string
+  tipo: TipoObjetoBoard
+  x: number
+  y: number
+  largura?: number
+  altura?: number
+  travado?: boolean
+  estilo?: Record<string, unknown>
+  conteudo: Record<string, unknown>
+}
+
+export interface BoardConector {
+  id: string
+  origemId: string
+  destinoId: string
+  estilo?: Record<string, unknown>
+  label?: string
+}
+
 export interface MapaMental {
   id: string
   titulo?: string | null
   icone?: string | null
-  raiz: NoMapa
+  raiz?: NoMapa | null
+  objetos?: BoardObjeto[] | null
+  conectores?: BoardConector[] | null
   pastaId?: string | null
   criadoEm: string
   atualizadoEm: string
