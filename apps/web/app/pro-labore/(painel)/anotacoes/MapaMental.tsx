@@ -18,6 +18,7 @@ import {
   type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange, type EdgeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { toPng } from 'html-to-image'
 import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreApi'
 
 // Ícones da toolbar vertical flutuante (réplica da barra da referência) —
@@ -55,6 +56,31 @@ function IconeLixeiraToolbar() {
       <path d="M10 11v6" />
       <path d="M14 11v6" />
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  )
+}
+function IconeDesfazer() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 10h10a5 5 0 0 1 0 10h-2" />
+      <polyline points="8 5 3 10 8 15" />
+    </svg>
+  )
+}
+function IconeRefazer() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10H11a5 5 0 0 0 0 10h2" />
+      <polyline points="16 5 21 10 16 15" />
+    </svg>
+  )
+}
+function IconeExportar() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   )
 }
@@ -1650,6 +1676,8 @@ function Canvas({ dadosIniciais, onChange }: {
   }, [])
 
   function finalizarArraste() {
+    if (antesDoArrasteRef.current) registrarHistorico(antesDoArrasteRef.current, true)
+    antesDoArrasteRef.current = null
     onChange(flowParaBoard(grafoRef.current.nodes, grafoRef.current.edges))
   }
 
@@ -1659,10 +1687,57 @@ function Canvas({ dadosIniciais, onChange }: {
   // Por isso lê o estado atual via ref e computa o próximo valor antes,
   // fora do updater, e só então chama setGrafo (valor pronto) + onChange
   // como duas instruções comuns do handler.
+  //
+  // Desfazer/refazer (6.14/atalhos): pilha de estados ANTERIORES, empilhada
+  // antes de cada commit. Mudanças em rajada (digitar, segurar seta) dentro
+  // de uma janela de coalescência viram um único passo de desfazer — senão
+  // cada tecla digitada seria seu próprio Ctrl+Z, inutilizável na prática.
+  const historicoRef = useRef<{ nodes: NoFlow[]; edges: Edge[] }[]>([])
+  const futuroRef = useRef<{ nodes: NoFlow[]; edges: Edge[] }[]>([])
+  const ultimoPushHistoricoRef = useRef(0)
+  const LIMITE_HISTORICO = 100
+  const JANELA_COALESCENCIA_MS = 800
+
+  function registrarHistorico(estadoAnterior: { nodes: NoFlow[]; edges: Edge[] }, forcar = false) {
+    const agora = Date.now()
+    if (!forcar && agora - ultimoPushHistoricoRef.current < JANELA_COALESCENCIA_MS) return
+    historicoRef.current.push(estadoAnterior)
+    if (historicoRef.current.length > LIMITE_HISTORICO) historicoRef.current.shift()
+    futuroRef.current = []
+    ultimoPushHistoricoRef.current = agora
+  }
+
   function commit(novoGrafo: { nodes: NoFlow[]; edges: Edge[] }) {
+    registrarHistorico(grafoRef.current)
     grafoRef.current = novoGrafo
     setGrafo(novoGrafo)
     onChange(flowParaBoard(novoGrafo.nodes, novoGrafo.edges))
+  }
+
+  function desfazer() {
+    const anterior = historicoRef.current.pop()
+    if (!anterior) return
+    futuroRef.current.push(grafoRef.current)
+    grafoRef.current = anterior
+    setGrafo(anterior)
+    onChange(flowParaBoard(anterior.nodes, anterior.edges))
+  }
+
+  function refazer() {
+    const proximo = futuroRef.current.pop()
+    if (!proximo) return
+    historicoRef.current.push(grafoRef.current)
+    grafoRef.current = proximo
+    setGrafo(proximo)
+    onChange(flowParaBoard(proximo.nodes, proximo.edges))
+  }
+
+  // Snapshot tirado no INÍCIO do arraste (não dá pra usar grafoRef no fim,
+  // já chega com a posição final aplicada) — arrastar um nó também precisa
+  // virar um passo de desfazer, mesmo não passando por commit().
+  const antesDoArrasteRef = useRef<{ nodes: NoFlow[]; edges: Edge[] } | null>(null)
+  function iniciarArraste() {
+    antesDoArrasteRef.current = grafoRef.current
   }
 
   const onMudarTexto = useCallback((id: string, texto: string) => {
@@ -2073,6 +2148,127 @@ function Canvas({ dadosIniciais, onChange }: {
     commit({ ...atual, nodes })
   }, [])
 
+  // --- Atalhos de teclado (6.15 do mapeamento) ---
+  const onDuplicarSelecionados = useCallback(() => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    if (selecionados.length === 0) return
+    const idMap = new Map<string, string>()
+    const duplicados = selecionados.map(n => {
+      const novoId = gerarIdNo()
+      idMap.set(n.id, novoId)
+      return { ...n, id: novoId, position: { x: n.position.x + 24, y: n.position.y + 24 }, selected: true, data: { ...n.data } }
+    })
+    const originaisDeselecionados = atual.nodes.map(n => (n.selected ? { ...n, selected: false } : n))
+    // Só duplica o conector se as duas pontas também foram duplicadas —
+    // conector com uma ponta fora da seleção continua ligado ao original.
+    const edgesDuplicadas = atual.edges
+      .filter(e => idMap.has(e.source) && idMap.has(e.target))
+      .map(e => ({ ...e, id: `c${gerarIdNo()}`, source: idMap.get(e.source)!, target: idMap.get(e.target)! }))
+    commit({ nodes: [...originaisDeselecionados, ...duplicados], edges: [...atual.edges, ...edgesDuplicadas] })
+  }, [])
+
+  const onExcluirSelecionados = useCallback(() => {
+    const atual = grafoRef.current
+    // Nunca via Delete o nó central — só pelo botão dedicado da toolbar
+    // (que já trava isso), pra uma seleção-múltipla acidental não apagar
+    // a raiz do mapa mental.
+    const selecionados = atual.nodes.filter(n => n.selected && n.id !== centralId)
+    if (selecionados.length === 0) return
+    const idsRemover = new Set<string>()
+    selecionados.forEach(n => idsDaSubarvore(atual.edges, n.id).forEach(id => idsRemover.add(id)))
+    const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
+    const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
+    commit({ nodes, edges })
+  }, [centralId])
+
+  const onNudgeSelecionados = useCallback((dx: number, dy: number) => {
+    const atual = grafoRef.current
+    const selecionados = atual.nodes.filter(n => n.selected)
+    if (selecionados.length === 0) return
+    const idsSel = new Set(selecionados.map(n => n.id))
+    const nodes = atual.nodes.map(n => (idsSel.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
+  const onSelecionarTudo = useCallback(() => {
+    setGrafo(atual => {
+      const novo = { ...atual, nodes: atual.nodes.map(n => ({ ...n, selected: true })) }
+      grafoRef.current = novo
+      return novo
+    })
+  }, [])
+
+  const onDeselecionarTudo = useCallback(() => {
+    setGrafo(atual => {
+      if (!atual.nodes.some(n => n.selected) && !atual.edges.some(e => e.selected)) return atual
+      const novo = { nodes: atual.nodes.map(n => (n.selected ? { ...n, selected: false } : n)), edges: atual.edges.map(e => (e.selected ? { ...e, selected: false } : e)) }
+      grafoRef.current = novo
+      return novo
+    })
+  }, [])
+
+  // --- Exportação (6.15 do mapeamento) — JSON (board bruto, reimportável
+  // no futuro) e PNG (screenshot do canvas, sem a toolbar/controles: o
+  // `filter` exclui qualquer Panel do React Flow do que é capturado). ---
+  function onExportarJson() {
+    const dados = flowParaBoard(grafoRef.current.nodes, grafoRef.current.edges)
+    const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'board.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function onExportarPng() {
+    if (!containerRef.current) return
+    fitView({ padding: 0.15, duration: 0 })
+    await new Promise(r => setTimeout(r, 100))
+    const corFundo = getComputedStyle(containerRef.current).getPropertyValue('--pl-bg').trim() || '#0b0d14'
+    try {
+      const dataUrl = await toPng(containerRef.current, {
+        backgroundColor: corFundo,
+        pixelRatio: 2,
+        filter: no => !(no instanceof HTMLElement && no.classList?.contains('react-flow__panel')),
+      })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = 'board.png'
+      a.click()
+    } catch {
+      alert('Não foi possível exportar a imagem. Tente novamente.')
+    }
+  }
+
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      const alvo = e.target as HTMLElement
+      const editando = alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable
+      if (editando) {
+        if (e.key === 'Escape') alvo.blur()
+        return
+      }
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); return }
+      if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); refazer(); return }
+      if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); onSelecionarTudo(); return }
+      if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); onDuplicarSelecionados(); return }
+      if (mod && e.key.toLowerCase() === 'g') { e.preventDefault(); if (e.shiftKey) onDesagrupar(); else onAgrupar(); return }
+      if (e.key === 'Delete' || e.key === 'Backspace') { onExcluirSelecionados(); return }
+      if (e.key === 'Escape') { onDeselecionarTudo(); return }
+      if (e.key.startsWith('Arrow')) {
+        const passo = e.shiftKey ? 10 : 1
+        const dx = e.key === 'ArrowLeft' ? -passo : e.key === 'ArrowRight' ? passo : 0
+        const dy = e.key === 'ArrowUp' ? -passo : e.key === 'ArrowDown' ? passo : 0
+        if (dx || dy) { e.preventDefault(); onNudgeSelecionados(dx, dy) }
+      }
+    }
+    window.addEventListener('keydown', aoTeclar)
+    return () => window.removeEventListener('keydown', aoTeclar)
+  })
+
   const totalSelecionados = grafo.nodes.filter(n => n.selected).length
   const algumTravado = grafo.nodes.some(n => n.selected && n.draggable === false)
   const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
@@ -2090,6 +2286,7 @@ function Canvas({ dadosIniciais, onChange }: {
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChangeFlow}
           onEdgesChange={onEdgesChangeFlow}
+          onNodeDragStart={iniciarArraste}
           onNodeDragStop={finalizarArraste}
           onConnect={onConnect}
           nodesDraggable={!modoMao}
@@ -2212,6 +2409,13 @@ function Canvas({ dadosIniciais, onChange }: {
               <IconeComentario />
             </button>
             <div className="pl-mapa-tv-divisor" />
+            <button type="button" className="pl-mapa-tv-btn" title="Desfazer (Ctrl+Z)" onClick={desfazer}>
+              <IconeDesfazer />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Refazer (Ctrl+Shift+Z)" onClick={refazer}>
+              <IconeRefazer />
+            </button>
+            <div className="pl-mapa-tv-divisor" />
             <button
               type="button"
               className="pl-mapa-tv-btn pl-mapa-tv-btn-danger"
@@ -2224,6 +2428,12 @@ function Canvas({ dadosIniciais, onChange }: {
             <div className="pl-mapa-tv-divisor" />
             <button type="button" className="pl-mapa-tv-btn" title="Ajustar à tela" onClick={() => fitView({ padding: 0.3, duration: 300 })}>
               <IconeAjustarTela />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Exportar como PNG" onClick={onExportarPng}>
+              <IconeExportar />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Exportar como JSON" onClick={onExportarJson}>
+              <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 9, fontWeight: 700 }}>{'{ }'}</span>
             </button>
           </Panel>
           {totalSelecionados >= 1 && (
