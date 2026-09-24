@@ -6,7 +6,7 @@ import {
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
-import MapaMentalCanvas, { dadosIniciaisDoBoard, TEMAS_BOARD, TemaBoard } from './MapaMental'
+import MapaMentalCanvas, { dadosIniciaisDoBoard, gerarBoardDoTemplate, TEMAS_BOARD, TemaBoard, TEMPLATES_BOARD } from './MapaMental'
 
 const EMOJIS_NOTA = ['📄', '📝', '💡', '🎯', '📌', '✅', '🔥', '📊', '🚀', '⭐', '🗂️', '📅', '💬', '🧠', '⚙️', '📈', '📚', '🧩']
 
@@ -768,6 +768,38 @@ function ComandoBusca({
   )
 }
 
+// Escolha de template ao criar um mapa mental novo: em vez de sempre abrir
+// com "Ideia central" vazia, oferece alguns pontos de partida já populados
+// (ver TEMPLATES_BOARD/gerarBoardDoTemplate em MapaMental.tsx).
+function EscolhaTemplateModal({ aberta, onFechar, onEscolher }: {
+  aberta: boolean
+  onFechar: () => void
+  onEscolher: (templateId: string) => void
+}) {
+  if (!aberta) return null
+  return (
+    <div className="pl-modal-backdrop" onClick={onFechar}>
+      <div className="pl-card pl-modal-panel pl-template-painel" onClick={e => e.stopPropagation()}>
+        <div className="pl-card-head">
+          <div>
+            <div className="pl-card-title">Novo mapa mental</div>
+            <div className="pl-card-sub">Escolha um ponto de partida.</div>
+          </div>
+        </div>
+        <div className="pl-template-grade">
+          {TEMPLATES_BOARD.map(t => (
+            <button type="button" key={t.id} className="pl-template-opcao" onClick={() => onEscolher(t.id)}>
+              <span className="pl-template-icone">{t.icone}</span>
+              <span className="pl-template-label">{t.label}</span>
+              <span className="pl-template-descricao">{t.descricao}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProLaboreAnotacoesPage() {
   const [pastas, setPastas] = useState<Pasta[]>([])
   const [notas, setNotas] = useState<Nota[]>([])
@@ -807,6 +839,9 @@ export default function ProLaboreAnotacoesPage() {
     })
   }
 
+  // Escolha de template ao criar um mapa mental novo (null = fechada).
+  const [escolhaTemplate, setEscolhaTemplate] = useState<{ pastaId: string | null } | null>(null)
+
   // As três funções abaixo não tinham tratamento de erro nenhum — se a API
   // falhasse por qualquer motivo (rede, sessão expirada, erro do servidor),
   // o clique no botão simplesmente não fazia nada visível, sem mensagem
@@ -822,9 +857,10 @@ export default function ProLaboreAnotacoesPage() {
     }
   }
 
-  async function criarMapa(pastaId: string | null) {
+  async function criarMapa(pastaId: string | null, templateId: string = 'vazio') {
     try {
-      const mapa = await proLaboreApi.mapasMentais.criar({ pastaId })
+      const { objetos, conectores } = gerarBoardDoTemplate(templateId)
+      const mapa = await proLaboreApi.mapasMentais.criar({ pastaId, objetos, conectores })
       setMapas(prev => [mapa, ...prev])
       setVisao({ tipo: 'mapa', id: mapa.id })
       if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
@@ -982,7 +1018,7 @@ export default function ProLaboreAnotacoesPage() {
                   onAbrirNota={id => setVisao({ tipo: 'nota', id })}
                   onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
                   onNovaNota={criarNota}
-                  onNovoMapa={criarMapa}
+                  onNovoMapa={pastaId => setEscolhaTemplate({ pastaId })}
                 />
               ))}
               {notas.filter(n => (n.pastaId ?? null) === null).map(n => (
@@ -1034,7 +1070,7 @@ export default function ProLaboreAnotacoesPage() {
                 onAbrirNota={id => setVisao({ tipo: 'nota', id })}
                 onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
                 onNovaNota={() => criarNota(visao.id)}
-                onNovoMapa={() => criarMapa(visao.id)}
+                onNovoMapa={() => setEscolhaTemplate({ pastaId: visao.id })}
                 onNovaPasta={() => criarPasta(visao.id)}
                 onRenomearPasta={renomearPasta}
                 onIconePasta={definirIconePasta}
@@ -1063,6 +1099,15 @@ export default function ProLaboreAnotacoesPage() {
         onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
         onAbrirNota={id => setVisao({ tipo: 'nota', id })}
         onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
+      />
+
+      <EscolhaTemplateModal
+        aberta={escolhaTemplate !== null}
+        onFechar={() => setEscolhaTemplate(null)}
+        onEscolher={templateId => {
+          if (escolhaTemplate) criarMapa(escolhaTemplate.pastaId, templateId)
+          setEscolhaTemplate(null)
+        }}
       />
     </div>
   )

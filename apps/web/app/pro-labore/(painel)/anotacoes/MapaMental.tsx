@@ -24,12 +24,22 @@ import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreA
 // Temas visuais do canvas (fundo + padrão de pontilhado/grade) — catálogo
 // espelhado em TEMAS_BOARD no backend (proLabore.ts), que só valida o id.
 // Persistido em MapaMental.tema; ausente/null usa o primeiro ('claro').
-export interface TemaCatalogo { id: string; label: string; corFundo: string; corPontos: string; variante: BackgroundVariant; amostra: string }
+// A cor de fundo/pontilhado em si NÃO mora aqui: fica só em CSS, via
+// `[data-tema="..."]` em .pl-mapa-canvas (ver pro-labore.css). Motivo: nós
+// "sem fundo próprio" do board (texto de ramo do mapa mental, texto livre)
+// pintam a letra com var(--pl-ink-1), que já muda sozinho entre claro/escuro
+// pelo tema do ARIES — um fundo de canvas fixo em hex, independente disso,
+// deixaria o texto ilegível sempre que o tema do app não bater com o do
+// board. Cada tema não-'claro' redefine --pl-ink-1/--pl-surface/etc. só
+// dentro do canvas, virando um "escopo de tema" próprio nesse pedaço da
+// tela — 'claro' não redefine nada, é literalmente o comportamento padrão
+// de antes dessa feature existir (var(--pl-bg) do app, claro ou escuro).
+export interface TemaCatalogo { id: string; label: string; variante: BackgroundVariant; amostra: string }
 export const TEMAS_BOARD: TemaCatalogo[] = [
-  { id: 'claro', label: 'Claro', corFundo: '#f4f5f8', corPontos: 'rgba(14, 16, 30, 0.16)', variante: BackgroundVariant.Dots, amostra: '#f4f5f8' },
-  { id: 'escuro', label: 'Escuro', corFundo: '#191b22', corPontos: 'rgba(255, 255, 255, 0.14)', variante: BackgroundVariant.Dots, amostra: '#191b22' },
-  { id: 'quente', label: 'Quente', corFundo: '#fbf3e6', corPontos: 'rgba(154, 106, 43, 0.22)', variante: BackgroundVariant.Dots, amostra: '#fbf3e6' },
-  { id: 'quadriculado', label: 'Quadriculado', corFundo: '#eef2fb', corPontos: 'rgba(47, 74, 143, 0.16)', variante: BackgroundVariant.Lines, amostra: '#eef2fb' },
+  { id: 'claro', label: 'Claro', variante: BackgroundVariant.Dots, amostra: '#f4f5f8' },
+  { id: 'escuro', label: 'Escuro', variante: BackgroundVariant.Dots, amostra: '#191b22' },
+  { id: 'quente', label: 'Quente', variante: BackgroundVariant.Dots, amostra: '#fbf3e6' },
+  { id: 'quadriculado', label: 'Quadriculado', variante: BackgroundVariant.Lines, amostra: '#eef2fb' },
 ]
 export type TemaBoard = (typeof TEMAS_BOARD)[number]['id']
 
@@ -454,6 +464,72 @@ export function criarBoardPadrao(texto = 'Ideia central'): { objetos: BoardObjet
 export function dadosIniciaisDoBoard(mapa: MapaMental | null): { objetos: BoardObjeto[]; conectores: BoardConector[] } {
   if (mapa?.objetos && mapa.objetos.length > 0) return { objetos: mapa.objetos, conectores: mapa.conectores ?? [] }
   if (mapa?.raiz) return arvoreParaBoard(garantirPosicoes(mapa.raiz as NoMapaLegado, 0, 0))
+  return criarBoardPadrao()
+}
+
+// Templates prontos (6.13 do mapeamento): pontos de partida populados em vez
+// de sempre abrir um board vazio. Cada um monta objetos/conectores no MESMO
+// formato genérico do board (nenhum tipo de objeto novo) — 'brainstorm'
+// reaproveita a árvore de noMapa (cores calculadas automaticamente por
+// boardParaFlow via BFS a partir do central, igual "Adicionar filho"),
+// 'kanban' usa seção (coluna) + sticky (card de exemplo) e 'processo' usa
+// formas conectadas com seta, um fluxograma simples.
+export interface TemplateBoard { id: string; label: string; descricao: string; icone: string }
+export const TEMPLATES_BOARD: TemplateBoard[] = [
+  { id: 'vazio', label: 'Board em branco', descricao: 'Só a ideia central, pra começar do zero.', icone: '⬜' },
+  { id: 'brainstorm', label: 'Brainstorm', descricao: 'Ideia central com três ramos pra desenvolver.', icone: '🧠' },
+  { id: 'kanban', label: 'Kanban simples', descricao: 'Três colunas: A Fazer, Fazendo e Feito.', icone: '📋' },
+  { id: 'processo', label: 'Mapa de processo', descricao: 'Fluxo de etapas conectadas por setas.', icone: '➡️' },
+]
+
+export function gerarBoardDoTemplate(templateId: string): { objetos: BoardObjeto[]; conectores: BoardConector[] } {
+  if (templateId === 'brainstorm') {
+    const central = gerarIdNo()
+    const ramos = [gerarIdNo(), gerarIdNo(), gerarIdNo()]
+    return {
+      objetos: [
+        { id: central, tipo: 'noMapa', x: 0, y: 0, conteudo: { texto: 'Ideia central', ehCentral: true } },
+        { id: ramos[0], tipo: 'noMapa', x: 300, y: -160, conteudo: { texto: 'Ramo 1', ehCentral: false } },
+        { id: ramos[1], tipo: 'noMapa', x: 300, y: 0, conteudo: { texto: 'Ramo 2', ehCentral: false } },
+        { id: ramos[2], tipo: 'noMapa', x: 300, y: 160, conteudo: { texto: 'Ramo 3', ehCentral: false } },
+      ],
+      conectores: ramos.map(destinoId => ({ id: gerarIdNo(), origemId: central, destinoId })),
+    }
+  }
+  if (templateId === 'kanban') {
+    const colunas = [{ nome: 'A Fazer', x: 0 }, { nome: 'Fazendo', x: 460 }, { nome: 'Feito', x: 920 }]
+    const objetos: BoardObjeto[] = []
+    colunas.forEach((col, i) => {
+      objetos.push({
+        id: gerarIdNo(), tipo: 'secao', x: col.x, y: 0, largura: 420, altura: 480,
+        conteudo: { texto: col.nome }, estilo: { cor: PALETA_RAMOS[i % PALETA_RAMOS.length] },
+      })
+      objetos.push({
+        id: gerarIdNo(), tipo: 'sticky', x: col.x + 30, y: 80,
+        conteudo: { texto: 'Tarefa de exemplo' }, estilo: { cor: PALETA_STICKY[i % PALETA_STICKY.length] },
+      })
+    })
+    return { objetos, conectores: [] }
+  }
+  if (templateId === 'processo') {
+    const etapas: { texto: string; forma: TipoForma }[] = [
+      { texto: 'Início', forma: 'pilula' },
+      { texto: 'Etapa 1', forma: 'retangulo' },
+      { texto: 'Decisão?', forma: 'losango' },
+      { texto: 'Etapa 2', forma: 'retangulo' },
+      { texto: 'Fim', forma: 'pilula' },
+    ]
+    const ids = etapas.map(() => gerarIdNo())
+    return {
+      objetos: etapas.map((etapa, i) => ({
+        id: ids[i], tipo: 'forma', x: i * 240, y: 0,
+        conteudo: { forma: etapa.forma, texto: etapa.texto }, estilo: { cor: PALETA_RAMOS[0] },
+      })),
+      conectores: ids.slice(0, -1).map((origemId, i) => ({
+        id: gerarIdNo(), origemId, destinoId: ids[i + 1], estilo: { seta: true },
+      })),
+    }
+  }
   return criarBoardPadrao()
 }
 
@@ -2272,7 +2348,9 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     if (!containerRef.current) return
     fitView({ padding: 0.15, duration: 0 })
     await new Promise(r => setTimeout(r, 100))
-    const corFundo = getComputedStyle(containerRef.current).getPropertyValue('--pl-bg').trim() || '#0b0d14'
+    // backgroundColor (não --pl-bg) porque um tema de board não-padrão pinta
+    // o fundo direto, sem passar por essa variável (ver [data-tema] no CSS).
+    const corFundo = getComputedStyle(containerRef.current).backgroundColor || '#0b0d14'
     try {
       const dataUrl = await toPng(containerRef.current, {
         backgroundColor: corFundo,
@@ -2352,7 +2430,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
       onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
       onAdicionarMensagemComentario, onAlternarResolvidoComentario,
     }}>
-      <div className="pl-mapa-canvas" ref={containerRef} style={{ backgroundColor: temaAtual.corFundo }}>
+      <div className="pl-mapa-canvas" ref={containerRef} data-tema={temaAtual.id}>
         <ReactFlow
           nodes={grafo.nodes}
           edges={grafo.edges}
@@ -2374,7 +2452,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
         >
-          {!modoApresentacao && <Background gap={22} size={1} color={temaAtual.corPontos} variant={temaAtual.variante} />}
+          {!modoApresentacao && <Background gap={22} size={1} color="var(--pl-border-strong)" variant={temaAtual.variante} />}
           {!modoApresentacao && <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />}
           {modoApresentacao ? (
             <Panel position="bottom-center" className="pl-mapa-toolbar-apresentacao">
