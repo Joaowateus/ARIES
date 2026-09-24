@@ -1921,6 +1921,34 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
 
+  // "Colar como objetos" (6.16, importação/exportação avançada): colar
+  // texto com o canvas focado (não dentro de um input/textarea) vira um
+  // sticky note por linha, em vez de precisar criar um por um — replica o
+  // comportamento padrão de Whimsical/Miro/Figma pra colagem de texto
+  // multi-linha. Um limite de 30 evita popular o board inteiro sem querer
+  // com a colagem de um documento inteiro.
+  const LIMITE_COLAR = 30
+  const onColarComoObjetos = useCallback((texto: string) => {
+    const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean).slice(0, LIMITE_COLAR)
+    if (linhas.length === 0) return
+    const rect = containerRef.current?.getBoundingClientRect()
+    const centro = rect
+      ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+      : { x: 0, y: 0 }
+    const colunas = Math.min(4, linhas.length)
+    const atual = grafoRef.current
+    const coresJaUsadas = atual.nodes.filter(n => n.type === 'sticky').length
+    const novosNos: NoFlow[] = linhas.map((linha, i) => ({
+      id: gerarIdNo(), type: 'sticky',
+      position: {
+        x: centro.x - (colunas * 220) / 2 + (i % colunas) * 220,
+        y: centro.y - 60 + Math.floor(i / colunas) * 140,
+      },
+      data: { tipoObjeto: 'sticky', texto: linha, cor: PALETA_STICKY[(coresJaUsadas + i) % PALETA_STICKY.length] },
+    }))
+    commit({ nodes: [...atual.nodes, ...novosNos], edges: atual.edges })
+  }, [])
+
   const onAdicionarTexto = useCallback(() => {
     const atual = grafoRef.current
     const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
@@ -2344,6 +2372,47 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     URL.revokeObjectURL(url)
   }
 
+  // Exportação Mermaid (6.16, importação/exportação avançada): só objetos
+  // que já são "nó de fluxo" por natureza (noMapa, forma) viram nó do
+  // diagrama — sticky/texto/ícone/seção/etc. não têm equivalente razoável
+  // num flowchart e ficam de fora, não tem tentativa de forçar encaixe.
+  // Conectores que envolvem um objeto de fora desse conjunto também ficam
+  // de fora, senão o .mmd referenciaria um nó que não existe nele.
+  function onExportarMermaid() {
+    const { objetos, conectores } = flowParaBoard(grafoRef.current.nodes, grafoRef.current.edges)
+    const idMermaid = (id: string) => {
+      const limpo = id.replace(/[^a-zA-Z0-9_]/g, '')
+      return /^[a-zA-Z_]/.test(limpo) ? limpo : `n${limpo}`
+    }
+    const paraTexto = (t: unknown) => String(t ?? '').replace(/"/g, "'").replace(/\n/g, ' ').trim() || ' '
+    const parenteses: Partial<Record<TipoForma, [string, string]>> = {
+      losango: ['{', '}'], oval: ['(', ')'], pilula: ['(', ')'], cilindro: ['[(', ')]'],
+    }
+    const idsNoDiagrama = new Set(objetos.filter(o => o.tipo === 'noMapa' || o.tipo === 'forma').map(o => o.id))
+    const linhas = ['flowchart TD']
+    objetos.forEach(o => {
+      if (o.tipo === 'noMapa') {
+        linhas.push(`  ${idMermaid(o.id)}["${paraTexto(o.conteudo.texto)}"]`)
+      } else if (o.tipo === 'forma') {
+        const [abre, fecha] = parenteses[(o.conteudo.forma as TipoForma) ?? 'retangulo'] ?? ['[', ']']
+        linhas.push(`  ${idMermaid(o.id)}${abre}"${paraTexto(o.conteudo.texto)}"${fecha}`)
+      }
+    })
+    conectores.forEach(c => {
+      if (!idsNoDiagrama.has(c.origemId) || !idsNoDiagrama.has(c.destinoId)) return
+      const seta = c.estilo?.tracejado ? '-.->' : '-->'
+      const label = c.label ? `|${paraTexto(c.label)}|` : ''
+      linhas.push(`  ${idMermaid(c.origemId)} ${seta}${label} ${idMermaid(c.destinoId)}`)
+    })
+    const blob = new Blob([linhas.join('\n')], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'board.mmd'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function onExportarPng() {
     if (!containerRef.current) return
     fitView({ padding: 0.15, duration: 0 })
@@ -2419,6 +2488,20 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     }
     window.addEventListener('keydown', aoTeclar)
     return () => window.removeEventListener('keydown', aoTeclar)
+  })
+
+  useEffect(() => {
+    function aoColar(e: ClipboardEvent) {
+      const alvo = e.target as HTMLElement
+      const editando = alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable
+      if (editando || modoApresentacao) return
+      const texto = e.clipboardData?.getData('text/plain')
+      if (!texto?.trim()) return
+      e.preventDefault()
+      onColarComoObjetos(texto)
+    }
+    window.addEventListener('paste', aoColar)
+    return () => window.removeEventListener('paste', aoColar)
   })
 
   const totalSelecionados = grafo.nodes.filter(n => n.selected).length
@@ -2600,6 +2683,9 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             </button>
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como JSON" onClick={onExportarJson}>
               <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 9, fontWeight: 700 }}>{'{ }'}</span>
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Exportar como Mermaid (.mmd)" onClick={onExportarMermaid}>
+              <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 8, fontWeight: 700 }}>mmd</span>
             </button>
             <div className="pl-mapa-tv-divisor" />
             <button type="button" className="pl-mapa-tv-btn" title="Apresentar" onClick={iniciarApresentacao}>
