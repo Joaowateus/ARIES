@@ -1442,6 +1442,44 @@
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
 .pl-modal-panel { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
 
+/* ============ COMMAND PALETTE (Ctrl/Cmd+K) ============ */
+/* z-index acima do board em tela cheia (.pl-board-fullscreen = 100) — a
+   busca precisa abrir por cima mesmo com um mapa mental aberto. */
+.pl-cmdk-backdrop {
+  position: fixed; inset: 0; background: rgba(4, 6, 14, 0.45); z-index: 200;
+  display: flex; align-items: flex-start; justify-content: center; padding: 12vh 20px 20px;
+}
+.pl-cmdk-panel {
+  width: 100%; max-width: 560px; max-height: 70vh; display: flex; flex-direction: column;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: var(--pl-radius-lg);
+  overflow: hidden;
+}
+.pl-cmdk-input {
+  width: 100%; border: none; border-bottom: 1px solid var(--pl-border); background: transparent;
+  padding: 16px 18px; font-size: 15px; font-family: 'IBM Plex Sans'; color: var(--pl-ink-1);
+}
+.pl-cmdk-input:focus { outline: none; }
+.pl-cmdk-input::placeholder { color: var(--pl-ink-muted); }
+.pl-cmdk-lista { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
+.pl-cmdk-vazio { padding: 20px 12px; text-align: center; font-size: 13px; color: var(--pl-ink-muted); }
+.pl-cmdk-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: none;
+  background: transparent; border-radius: var(--pl-radius-sm); cursor: pointer; text-align: left;
+  font-family: 'IBM Plex Sans'; font-size: 13.5px; color: var(--pl-ink-1);
+}
+.pl-cmdk-item.ativo { background: var(--pl-accent-soft); }
+.pl-cmdk-item-icone { font-size: 16px; flex-shrink: 0; }
+.pl-cmdk-item-titulo { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-cmdk-item-tipo { font-size: 11px; color: var(--pl-ink-muted); flex-shrink: 0; }
+.pl-cmdk-rodape {
+  display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--pl-border);
+  font-size: 11px; color: var(--pl-ink-muted);
+}
+.pl-cmdk-rodape kbd {
+  font-family: 'IBM Plex Mono'; font-size: 10.5px; background: var(--pl-surface-2); border-radius: 4px;
+  padding: 1px 5px; margin-right: 3px;
+}
+
 .pl-footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--pl-border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: var(--pl-ink-muted); }
 
 .pl-status-pill {

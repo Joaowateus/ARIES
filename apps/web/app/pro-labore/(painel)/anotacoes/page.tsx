@@ -646,6 +646,105 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
   )
 }
 
+interface ResultadoBusca {
+  tipo: 'pasta' | 'nota' | 'mapa'
+  id: string
+  titulo: string
+  icone: string
+}
+
+const ROTULO_TIPO_BUSCA: Record<ResultadoBusca['tipo'], string> = { pasta: 'Pasta', nota: 'Nota', mapa: 'Mapa mental' }
+
+// Paleta de comando (Ctrl/Cmd+K): busca por substring em pastas/notas/mapas
+// de Anotações. Escopo deliberadamente limitado a este recurso — não é uma
+// busca global do ARIES, só um "quick-open" tipo Whimsical/Notion dentro da
+// própria aba.
+function ComandoBusca({
+  aberta, pastas, notas, mapas, onFechar, onAbrirPasta, onAbrirNota, onAbrirMapa,
+}: {
+  aberta: boolean
+  pastas: Pasta[]
+  notas: Nota[]
+  mapas: MapaMental[]
+  onFechar: () => void
+  onAbrirPasta: (id: string) => void
+  onAbrirNota: (id: string) => void
+  onAbrirMapa: (id: string) => void
+}) {
+  const [texto, setTexto] = useState('')
+  const [indice, setIndice] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!aberta) return
+    setTexto('')
+    setIndice(0)
+    const id = setTimeout(() => inputRef.current?.focus(), 10)
+    return () => clearTimeout(id)
+  }, [aberta])
+
+  if (!aberta) return null
+
+  const termo = texto.trim().toLowerCase()
+  const todos: ResultadoBusca[] = [
+    ...pastas.map(p => ({ tipo: 'pasta' as const, id: p.id, titulo: p.nome || 'Sem nome', icone: p.icone || '📁' })),
+    ...notas.map(n => ({ tipo: 'nota' as const, id: n.id, titulo: n.titulo || 'Sem título', icone: n.icone || '📄' })),
+    ...mapas.map(m => ({ tipo: 'mapa' as const, id: m.id, titulo: m.titulo || 'Sem título', icone: m.icone || '🧠' })),
+  ]
+  const resultados = termo ? todos.filter(r => r.titulo.toLowerCase().includes(termo)).slice(0, 20) : todos.slice(0, 8)
+
+  function selecionar(r: ResultadoBusca) {
+    if (r.tipo === 'pasta') onAbrirPasta(r.id)
+    else if (r.tipo === 'nota') onAbrirNota(r.id)
+    else onAbrirMapa(r.id)
+    onFechar()
+  }
+
+  function aoTeclar(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') { e.preventDefault(); onFechar() }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setIndice(i => Math.min(resultados.length - 1, i + 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setIndice(i => Math.max(0, i - 1)) }
+    else if (e.key === 'Enter') { e.preventDefault(); const r = resultados[indice]; if (r) selecionar(r) }
+  }
+
+  return (
+    <div className="pl-cmdk-backdrop" onClick={onFechar}>
+      <div className="pl-cmdk-panel" onClick={e => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          className="pl-cmdk-input"
+          placeholder="Buscar notas, mapas e pastas..."
+          value={texto}
+          onChange={e => { setTexto(e.target.value); setIndice(0) }}
+          onKeyDown={aoTeclar}
+        />
+        <div className="pl-cmdk-lista">
+          {resultados.length === 0 ? (
+            <div className="pl-cmdk-vazio">Nada encontrado.</div>
+          ) : resultados.map((r, i) => (
+            <button
+              type="button"
+              key={`${r.tipo}-${r.id}`}
+              className={`pl-cmdk-item ${i === indice ? 'ativo' : ''}`}
+              onMouseEnter={() => setIndice(i)}
+              onClick={() => selecionar(r)}
+            >
+              <span className="pl-cmdk-item-icone">{r.icone}</span>
+              <span className="pl-cmdk-item-titulo">{r.titulo}</span>
+              <span className="pl-cmdk-item-tipo">{ROTULO_TIPO_BUSCA[r.tipo]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="pl-cmdk-rodape">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
+          <span><kbd>Enter</kbd> abrir</span>
+          <span><kbd>Esc</kbd> fechar</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProLaboreAnotacoesPage() {
   const [pastas, setPastas] = useState<Pasta[]>([])
   const [notas, setNotas] = useState<Nota[]>([])
@@ -654,6 +753,7 @@ export default function ProLaboreAnotacoesPage() {
   const [visao, setVisao] = useState<VisaoAnotacoes>({ tipo: 'pasta', id: null })
   const [abertas, setAbertas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
+  const [buscaAberta, setBuscaAberta] = useState(false)
 
   const carregarTudo = useCallback(() => {
     Promise.all([proLaboreApi.pastas.listar(), proLaboreApi.notas.listar(), proLaboreApi.mapasMentais.listar()])
@@ -661,6 +761,20 @@ export default function ProLaboreAnotacoesPage() {
       .finally(() => setCarregando(false))
   }, [])
   useEffect(() => { carregarTudo() }, [carregarTudo])
+
+  // Ctrl/Cmd+K abre a paleta de comando de qualquer lugar dentro de
+  // Anotações — inclusive com um mapa mental aberto em tela cheia (por isso
+  // fica antes do early-return de PaginaMapaMental, nunca condicional).
+  useEffect(() => {
+    function aoTeclarGlobal(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setBuscaAberta(true)
+      }
+    }
+    window.addEventListener('keydown', aoTeclarGlobal)
+    return () => window.removeEventListener('keydown', aoTeclarGlobal)
+  }, [])
 
   function alternarAberta(id: string) {
     setAbertas(prev => {
@@ -787,13 +901,25 @@ export default function ProLaboreAnotacoesPage() {
   if (visao.tipo === 'mapa') {
     const mapa = mapas.find(m => m.id === visao.id) ?? null
     return (
-      <PaginaMapaMental
-        key={visao.id}
-        mapa={mapa}
-        onAtualizado={atualizarMapaLocal}
-        onExcluir={() => excluirMapa(visao.id)}
-        onVoltar={() => setVisao({ tipo: 'pasta', id: mapa?.pastaId ?? null })}
-      />
+      <>
+        <PaginaMapaMental
+          key={visao.id}
+          mapa={mapa}
+          onAtualizado={atualizarMapaLocal}
+          onExcluir={() => excluirMapa(visao.id)}
+          onVoltar={() => setVisao({ tipo: 'pasta', id: mapa?.pastaId ?? null })}
+        />
+        <ComandoBusca
+          aberta={buscaAberta}
+          pastas={pastas}
+          notas={notas}
+          mapas={mapas}
+          onFechar={() => setBuscaAberta(false)}
+          onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
+          onAbrirNota={id => setVisao({ tipo: 'nota', id })}
+          onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
+        />
+      </>
     )
   }
 
@@ -812,7 +938,10 @@ export default function ProLaboreAnotacoesPage() {
           <div className="pl-notion-sidebar">
             <div className="pl-notion-sidebar-head">
               <span>Anotações</span>
-              <button type="button" className="pl-arvore-acao" title="Nova página" onClick={() => criarNota(null)} style={{ opacity: 1 }}>+</button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button type="button" className="pl-arvore-acao" title="Buscar (Ctrl+K)" onClick={() => setBuscaAberta(true)} style={{ opacity: 1 }}>🔍</button>
+                <button type="button" className="pl-arvore-acao" title="Nova página" onClick={() => criarNota(null)} style={{ opacity: 1 }}>+</button>
+              </div>
             </div>
             <div className="pl-arvore-raiz">
               <div className={`pl-arvore-item ${visao.tipo === 'pasta' && visao.id === null ? 'active' : ''}`}>
@@ -901,6 +1030,17 @@ export default function ProLaboreAnotacoesPage() {
           </div>
         </div>
       )}
+
+      <ComandoBusca
+        aberta={buscaAberta}
+        pastas={pastas}
+        notas={notas}
+        mapas={mapas}
+        onFechar={() => setBuscaAberta(false)}
+        onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
+        onAbrirNota={id => setVisao({ tipo: 'nota', id })}
+        onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
+      />
     </div>
   )
 }
