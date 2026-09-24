@@ -12,7 +12,7 @@
 // primeira abertura, ver `dadosIniciaisDoBoard`.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
+  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
   EdgeLabelRenderer, MarkerType,
   getBezierPath, useInternalNode, useReactFlow, applyNodeChanges, applyEdgeChanges,
   type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange, type EdgeChange,
@@ -20,6 +20,18 @@ import {
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreApi'
+
+// Temas visuais do canvas (fundo + padrão de pontilhado/grade) — catálogo
+// espelhado em TEMAS_BOARD no backend (proLabore.ts), que só valida o id.
+// Persistido em MapaMental.tema; ausente/null usa o primeiro ('claro').
+export interface TemaCatalogo { id: string; label: string; corFundo: string; corPontos: string; variante: BackgroundVariant; amostra: string }
+export const TEMAS_BOARD: TemaCatalogo[] = [
+  { id: 'claro', label: 'Claro', corFundo: '#f4f5f8', corPontos: 'rgba(14, 16, 30, 0.16)', variante: BackgroundVariant.Dots, amostra: '#f4f5f8' },
+  { id: 'escuro', label: 'Escuro', corFundo: '#191b22', corPontos: 'rgba(255, 255, 255, 0.14)', variante: BackgroundVariant.Dots, amostra: '#191b22' },
+  { id: 'quente', label: 'Quente', corFundo: '#fbf3e6', corPontos: 'rgba(154, 106, 43, 0.22)', variante: BackgroundVariant.Dots, amostra: '#fbf3e6' },
+  { id: 'quadriculado', label: 'Quadriculado', corFundo: '#eef2fb', corPontos: 'rgba(47, 74, 143, 0.16)', variante: BackgroundVariant.Lines, amostra: '#eef2fb' },
+]
+export type TemaBoard = (typeof TEMAS_BOARD)[number]['id']
 
 // Ícones da toolbar vertical flutuante (réplica da barra da referência) —
 // mesmo estilo Feather (stroke, 24x24) do restante do app.
@@ -1612,10 +1624,12 @@ const nodeTypes = {
 } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
-function Canvas({ dadosIniciais, onChange }: {
+function Canvas({ dadosIniciais, onChange, tema }: {
   dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
   onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
+  tema?: TemaBoard | null
 }) {
+  const temaAtual = TEMAS_BOARD.find(t => t.id === tema) ?? TEMAS_BOARD[0]
   const { fitView, screenToFlowPosition } = useReactFlow()
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
     () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores),
@@ -2338,7 +2352,7 @@ function Canvas({ dadosIniciais, onChange }: {
       onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
       onAdicionarMensagemComentario, onAlternarResolvidoComentario,
     }}>
-      <div className="pl-mapa-canvas" ref={containerRef}>
+      <div className="pl-mapa-canvas" ref={containerRef} style={{ backgroundColor: temaAtual.corFundo }}>
         <ReactFlow
           nodes={grafo.nodes}
           edges={grafo.edges}
@@ -2360,7 +2374,7 @@ function Canvas({ dadosIniciais, onChange }: {
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
         >
-          {!modoApresentacao && <Background gap={22} size={1} color="var(--pl-border-strong)" />}
+          {!modoApresentacao && <Background gap={22} size={1} color={temaAtual.corPontos} variant={temaAtual.variante} />}
           {!modoApresentacao && <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />}
           {modoApresentacao ? (
             <Panel position="bottom-center" className="pl-mapa-toolbar-apresentacao">
@@ -2592,6 +2606,7 @@ function Canvas({ dadosIniciais, onChange }: {
 export default function MapaMentalCanvas(props: {
   dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
   onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
+  tema?: TemaBoard | null
 }) {
   return (
     <ReactFlowProvider>

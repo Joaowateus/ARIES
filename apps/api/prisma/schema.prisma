@@ -1672,6 +1672,7 @@ model MapaMental {
   pastaId      String?
   titulo       String?
   icone        String? // emoji, opcional — mapa sem ícone usa o ícone padrão
+  tema         String? // tema visual do canvas (fundo/pontilhado) — null = tema padrão ("claro")
   raiz         Json?
   objetos      Json?
   conectores   Json?

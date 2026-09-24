@@ -955,6 +955,10 @@ export interface MapaMental {
   id: string
   titulo?: string | null
   icone?: string | null
+  // Tema visual do canvas (fundo/pontilhado) — ver TEMAS_BOARD em MapaMental.tsx.
+  // Tipado solto aqui (não o union) pra não criar dependência circular entre
+  // este arquivo e o componente do canvas.
+  tema?: string | null
   raiz?: NoMapa | null
   objetos?: BoardObjeto[] | null
   conectores?: BoardConector[] | null

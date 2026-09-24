@@ -6,7 +6,7 @@ import {
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
-import MapaMentalCanvas, { dadosIniciaisDoBoard } from './MapaMental'
+import MapaMentalCanvas, { dadosIniciaisDoBoard, TEMAS_BOARD, TemaBoard } from './MapaMental'
 
 const EMOJIS_NOTA = ['📄', '📝', '💡', '🎯', '📌', '✅', '🔥', '📊', '🚀', '⭐', '🗂️', '📅', '💬', '🧠', '⚙️', '📈', '📚', '🧩']
 
@@ -507,6 +507,8 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
 }) {
   const [titulo, setTitulo] = useState(mapa?.titulo ?? '')
   const [icone, setIcone] = useState(mapa?.icone ?? '')
+  const [tema, setTema] = useState<TemaBoard>((mapa?.tema as TemaBoard) || TEMAS_BOARD[0].id)
+  const [temaMenuAberto, setTemaMenuAberto] = useState(false)
   const [dadosIniciais, setDadosIniciais] = useState(() => dadosIniciaisDoBoard(mapa))
   const [status, setStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo')
   const [historicoAberto, setHistoricoAberto] = useState(false)
@@ -517,12 +519,13 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
   // (useState preguiçoso), então só trocar o valor do prop não bastaria.
   const [versaoRestaurada, setVersaoRestaurada] = useState(0)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  type CamposMapa = Partial<{ titulo: string; icone: string | null; objetos: NonNullable<MapaMental['objetos']>; conectores: NonNullable<MapaMental['conectores']> }>
+  type CamposMapa = Partial<{ titulo: string; icone: string | null; tema: TemaBoard; objetos: NonNullable<MapaMental['objetos']>; conectores: NonNullable<MapaMental['conectores']> }>
   const pendenteRef = useRef<CamposMapa>({})
 
   useEffect(() => {
     setTitulo(mapa?.titulo ?? '')
     setIcone(mapa?.icone ?? '')
+    setTema((mapa?.tema as TemaBoard) || TEMAS_BOARD[0].id)
     setDadosIniciais(dadosIniciaisDoBoard(mapa))
     pendenteRef.current = {}
     setStatus('salvo')
@@ -601,6 +604,25 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
           onChange={e => { setTitulo(e.target.value); agendarSalvar({ titulo: e.target.value }) }}
         />
         <div className="pl-board-topbar-status">{status === 'salvando' ? 'Salvando...' : status === 'erro' ? 'Erro ao salvar' : 'Salvo'}</div>
+        <div className="pl-board-tema-wrap">
+          <button type="button" className={`pl-kanban-icon-btn ${temaMenuAberto ? 'ativo' : ''}`} title="Tema do board" onClick={() => setTemaMenuAberto(a => !a)}>
+            <span className="pl-board-tema-amostra" style={{ background: TEMAS_BOARD.find(t => t.id === tema)?.amostra }} />
+          </button>
+          {temaMenuAberto && (
+            <div className="pl-board-tema-menu" onMouseLeave={() => setTemaMenuAberto(false)}>
+              {TEMAS_BOARD.map(t => (
+                <button
+                  key={t.id} type="button"
+                  className={`pl-board-tema-opcao ${tema === t.id ? 'ativo' : ''}`}
+                  onClick={() => { setTema(t.id); agendarSalvar({ tema: t.id }); setTemaMenuAberto(false) }}
+                >
+                  <span className="pl-board-tema-amostra" style={{ background: t.amostra }} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button type="button" className={`pl-kanban-icon-btn ${historicoAberto ? 'ativo' : ''}`} title="Histórico de versões" onClick={alternarHistorico}>
           <IconeHistorico />
         </button>
@@ -615,6 +637,7 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
             key={versaoRestaurada}
             dadosIniciais={dadosIniciais}
             onChange={dados => agendarSalvar(dados)}
+            tema={tema}
           />
         </div>
         {historicoAberto && (
