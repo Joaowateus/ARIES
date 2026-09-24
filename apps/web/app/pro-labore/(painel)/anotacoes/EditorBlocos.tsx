@@ -1,12 +1,14 @@
 'use client'
 
 // Editor de blocos estilo Notion: cada linha é um bloco independente
-// (parágrafo, título, lista, checkbox, citação, código ou divisor).
-// Enter cria um bloco novo, Backspace no início junta com o anterior,
-// "/" abre um menu pra trocar o tipo do bloco atual, atalhos de markdown
-// (# , - , [] , > , ---, ```) convertem o bloco enquanto digita, e a alcinha
-// à esquerda arrasta pra reordenar. Sem formatação inline (negrito/itálico
-// dentro do texto) — a unidade de formatação aqui é o bloco inteiro.
+// (parágrafo, título, lista, checkbox, citação, código, destaque, imagem
+// ou divisor). Enter cria um bloco novo, Backspace no início junta com o
+// anterior, "/" abre um menu pra trocar o tipo do bloco atual, atalhos de
+// markdown (# , - , [] , > , ---, ```) convertem o bloco enquanto digita, e
+// a alcinha à esquerda arrasta pra reordenar. Sem formatação inline
+// (negrito/itálico dentro do texto) — a unidade de formatação aqui é o
+// bloco inteiro. Imagem não entra no fluxo de junção via Backspace (não
+// tem textarea/handleKeyDown) — remova-a pelo botão "×".
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Bloco, TipoBloco } from '@/lib/proLaboreApi'
 
@@ -14,8 +16,17 @@ function gerarId(): string {
   return `b${Date.now()}${Math.random().toString(36).slice(2, 8)}`
 }
 
+const EMOJI_CALLOUT_PADRAO = '💡'
+const EMOJIS_CALLOUT = ['💡', '⚠️', '✅', '📌', '🔥', 'ℹ️', '❗', '🎯']
+
 function novoBloco(tipo: TipoBloco = 'paragrafo', texto = ''): Bloco {
-  return { id: gerarId(), tipo, texto, marcado: tipo === 'checkbox' ? false : undefined }
+  return {
+    id: gerarId(),
+    tipo,
+    texto,
+    marcado: tipo === 'checkbox' ? false : undefined,
+    icone: tipo === 'callout' ? EMOJI_CALLOUT_PADRAO : undefined,
+  }
 }
 
 const OPCOES_MENU: { tipo: TipoBloco; label: string; icone: string }[] = [
@@ -28,6 +39,8 @@ const OPCOES_MENU: { tipo: TipoBloco; label: string; icone: string }[] = [
   { tipo: 'checkbox', label: 'Checklist', icone: '☑' },
   { tipo: 'citacao', label: 'Citação', icone: '❝' },
   { tipo: 'codigo', label: 'Código', icone: '</>' },
+  { tipo: 'callout', label: 'Destaque', icone: '💡' },
+  { tipo: 'imagem', label: 'Imagem', icone: '🖼' },
   { tipo: 'divisor', label: 'Divisor', icone: '—' },
 ]
 
@@ -41,6 +54,7 @@ const PLACEHOLDER_POR_TIPO: Partial<Record<TipoBloco, string>> = {
   checkbox: 'Item',
   citacao: 'Citação',
   codigo: 'Código',
+  callout: 'Escreva um destaque...',
 }
 
 function detectarAtalho(valor: string): { tipo: TipoBloco; restante: string } | null {
@@ -65,6 +79,7 @@ function autoResize(el: HTMLTextAreaElement | null) {
 export default function EditorBlocos({ blocosIniciais, onChange }: { blocosIniciais: Bloco[]; onChange: (blocos: Bloco[]) => void }) {
   const [blocos, setBlocos] = useState<Bloco[]>(blocosIniciais.length > 0 ? blocosIniciais : [novoBloco()])
   const [menuAbertoIndice, setMenuAbertoIndice] = useState<number | null>(null)
+  const [menuIconeAbertoIndice, setMenuIconeAbertoIndice] = useState<number | null>(null)
   const [arrastandoIndice, setArrastandoIndice] = useState<number | null>(null)
   const [sobreIndice, setSobreIndice] = useState<number | null>(null)
   const refs = useRef<(HTMLTextAreaElement | null)[]>([])
@@ -121,7 +136,13 @@ export default function EditorBlocos({ blocosIniciais, onChange }: { blocosInici
 
   function escolherTipoNoMenu(indice: number, tipo: TipoBloco) {
     const novos = [...blocos]
-    novos[indice] = { ...novos[indice], tipo, texto: '', marcado: tipo === 'checkbox' ? false : undefined }
+    novos[indice] = {
+      ...novos[indice],
+      tipo,
+      texto: '',
+      marcado: tipo === 'checkbox' ? false : undefined,
+      icone: tipo === 'callout' ? EMOJI_CALLOUT_PADRAO : undefined,
+    }
     setMenuAbertoIndice(null)
     if (tipo === 'divisor') {
       const paragrafo = novoBloco('paragrafo')
@@ -219,6 +240,26 @@ export default function EditorBlocos({ blocosIniciais, onChange }: { blocosInici
     commit(novos)
   }
 
+  function escolherIconeCallout(indice: number, icone: string) {
+    const novos = [...blocos]
+    novos[indice] = { ...novos[indice], icone }
+    commit(novos)
+    setMenuIconeAbertoIndice(null)
+  }
+
+  function definirUrlImagem(indice: number, url: string) {
+    if (!url.trim()) return
+    const novos = [...blocos]
+    novos[indice] = { ...novos[indice], texto: url.trim() }
+    commit(novos)
+  }
+
+  function limparImagem(indice: number) {
+    const novos = [...blocos]
+    novos[indice] = { ...novos[indice], texto: '' }
+    commit(novos)
+  }
+
   function soltar(indiceDestino: number) {
     if (arrastandoIndice === null || arrastandoIndice === indiceDestino) { setArrastandoIndice(null); setSobreIndice(null); return }
     const novos = [...blocos]
@@ -253,12 +294,49 @@ export default function EditorBlocos({ blocosIniciais, onChange }: { blocosInici
           <div className="pl-bloco-conteudo">
             {bloco.tipo === 'divisor' ? (
               <hr className="pl-bloco-divisor" />
+            ) : bloco.tipo === 'imagem' ? (
+              bloco.texto ? (
+                <div className="pl-bloco-imagem-wrap">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- URL arbitrária colada pelo usuário, sem otimização do Next */}
+                  <img src={bloco.texto} alt="" className="pl-bloco-imagem-img" />
+                  <button type="button" className="pl-bloco-imagem-trocar" onClick={() => limparImagem(indice)}>
+                    Trocar imagem
+                  </button>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="pl-bloco-imagem-input"
+                  placeholder="Cole o link de uma imagem e aperte Enter..."
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); definirUrlImagem(indice, e.currentTarget.value) }
+                  }}
+                />
+              )
             ) : (
               <div className={`pl-bloco-tipo-${bloco.tipo}`}>
                 {bloco.tipo === 'lista' && <span className="pl-bloco-marcador">•</span>}
                 {bloco.tipo === 'lista_numerada' && <span className="pl-bloco-marcador">{numeroDaLista(indice)}.</span>}
                 {bloco.tipo === 'checkbox' && (
                   <input type="checkbox" className="pl-bloco-checkbox" checked={!!bloco.marcado} onChange={() => alternarMarcado(indice)} />
+                )}
+                {bloco.tipo === 'callout' && (
+                  <div className="pl-notion-pagina-icone-wrap">
+                    <button
+                      type="button"
+                      className="pl-bloco-callout-icone"
+                      onClick={() => setMenuIconeAbertoIndice(atual => (atual === indice ? null : indice))}
+                    >
+                      {bloco.icone || EMOJI_CALLOUT_PADRAO}
+                    </button>
+                    {menuIconeAbertoIndice === indice && (
+                      <div className="pl-nota-icone-menu" onMouseLeave={() => setMenuIconeAbertoIndice(null)}>
+                        {EMOJIS_CALLOUT.map(emoji => (
+                          <button key={emoji} type="button" onClick={() => escolherIconeCallout(indice, emoji)}>{emoji}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <textarea
                   ref={el => { refs.current[indice] = el }}
