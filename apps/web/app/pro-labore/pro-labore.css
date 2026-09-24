@@ -1062,6 +1062,22 @@
 .pl-board-topbar-titulo:focus { background: var(--pl-surface-2); }
 .pl-board-topbar-titulo::placeholder { color: var(--pl-ink-muted); }
 .pl-board-topbar-status { flex: 1; text-align: right; font-family: 'IBM Plex Mono'; font-size: 10.5px; color: var(--pl-ink-muted); }
+
+.pl-board-tema-wrap { position: relative; }
+.pl-board-tema-amostra { display: block; width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--pl-border-strong); }
+.pl-board-tema-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; background: var(--pl-surface); border: 1px solid var(--pl-border-strong);
+  border-radius: var(--pl-radius-md); box-shadow: 0 8px 24px rgba(0,0,0,.16); padding: 6px; display: flex; flex-direction: column;
+  gap: 1px; z-index: 30; min-width: 160px;
+}
+.pl-board-tema-opcao {
+  display: flex; align-items: center; gap: 9px; background: none; border: none; cursor: pointer; text-align: left;
+  padding: 7px 8px; border-radius: 6px; font-size: 12.5px; color: var(--pl-ink-1); font-family: 'IBM Plex Sans';
+}
+.pl-board-tema-opcao:hover { background: var(--pl-surface-2); }
+.pl-board-tema-opcao.ativo { font-weight: 700; }
+.pl-board-tema-opcao .pl-board-tema-amostra { width: 16px; height: 16px; }
+
 .pl-board-corpo { flex: 1; min-height: 0; display: flex; }
 .pl-board-canvas-area { flex: 1; min-width: 0; }
 .pl-board-canvas-area .pl-mapa-canvas { height: 100%; border: none; border-radius: 0; }

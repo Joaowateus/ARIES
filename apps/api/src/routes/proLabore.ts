@@ -3095,9 +3095,14 @@ router.get('/mapas-mentais/lixeira', requireProLaboreAuth, async (req: Request, 
   res.json(mapas)
 })
 
+// Temas visuais do canvas (fundo + pontilhado) — catálogo espelhado em
+// TEMAS_BOARD no frontend (MapaMental.tsx). Null/ausente = tema padrão ('claro').
+const TEMAS_BOARD = ['claro', 'escuro', 'quente', 'quadriculado'] as const
+
 const mapaMentalSchema = z.object({
   titulo: z.string().trim().max(200, 'Título muito longo').optional(),
   icone: z.string().max(8, 'Ícone inválido').nullable().optional(),
+  tema: z.enum(TEMAS_BOARD).nullable().optional(),
   raiz: noMapaSchema.optional(),
   objetos: z.array(boardObjetoSchema).max(500, 'Board com objetos demais').optional(),
   conectores: z.array(boardConectorSchema).max(1000, 'Board com conectores demais').optional(),
