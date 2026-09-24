@@ -2900,13 +2900,14 @@ router.get('/notas', requireProLaboreAuth, async (req: Request, res: Response) =
 
 // Tipos de bloco do EditorBlocos (frontend) — ver comentário do campo
 // Nota.blocos no schema. Validado de forma solta (zod não força a coerência
-// tipo/marcado — quem faz isso é o editor), só protegendo tamanho.
-const TIPOS_BLOCO = ['paragrafo', 'titulo1', 'titulo2', 'titulo3', 'lista', 'lista_numerada', 'checkbox', 'citacao', 'codigo', 'divisor'] as const
+// tipo/marcado/icone — quem faz isso é o editor), só protegendo tamanho.
+const TIPOS_BLOCO = ['paragrafo', 'titulo1', 'titulo2', 'titulo3', 'lista', 'lista_numerada', 'checkbox', 'citacao', 'codigo', 'divisor', 'callout', 'imagem'] as const
 const blocoSchema = z.object({
   id: z.string(),
   tipo: z.enum(TIPOS_BLOCO),
   texto: z.string().max(5000, 'Bloco muito longo'),
   marcado: z.boolean().optional(),
+  icone: z.string().max(8, 'Ícone inválido').optional(),
 })
 
 const notaSchema = z.object({

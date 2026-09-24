@@ -869,8 +869,10 @@ export interface Reuniao {
 }
 
 // Tipos de bloco do editor estilo Notion (EditorBlocos.tsx). `marcado` só
-// tem sentido pra 'checkbox'; os demais tipos ignoram o campo.
-export const TIPOS_BLOCO = ['paragrafo', 'titulo1', 'titulo2', 'titulo3', 'lista', 'lista_numerada', 'checkbox', 'citacao', 'codigo', 'divisor'] as const
+// tem sentido pra 'checkbox'; `icone` só pra 'callout'; em 'imagem', `texto`
+// guarda a URL da imagem (não um texto visível). Os demais tipos ignoram
+// esses campos.
+export const TIPOS_BLOCO = ['paragrafo', 'titulo1', 'titulo2', 'titulo3', 'lista', 'lista_numerada', 'checkbox', 'citacao', 'codigo', 'divisor', 'callout', 'imagem'] as const
 export type TipoBloco = (typeof TIPOS_BLOCO)[number]
 
 export interface Bloco {
@@ -878,6 +880,7 @@ export interface Bloco {
   tipo: TipoBloco
   texto: string
   marcado?: boolean
+  icone?: string
 }
 
 export interface Nota {
