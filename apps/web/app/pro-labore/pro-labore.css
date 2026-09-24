@@ -1135,6 +1135,16 @@
 .pl-mapa-tv-divisor-h { width: 1px; height: 20px; background: var(--pl-border); margin: 0 3px; }
 .pl-mapa-tv-item { position: relative; }
 
+/* Barra de controle do modo apresentação (Panel bottom-center) — some
+   Background/Controls/toolbars normais enquanto ativo (ver `nodesDraggable`/
+   `elementsSelectable` no <ReactFlow>), só isso fica na tela. */
+.pl-mapa-toolbar-apresentacao {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 12px;
+  padding: 6px 10px; box-shadow: var(--pl-shadow-card);
+}
+.pl-apresentacao-contador { font-family: 'IBM Plex Mono'; font-size: 11.5px; color: var(--pl-ink-muted); min-width: 44px; text-align: center; }
+
 /* Flyout do botão "Formas" — grade de miniaturas do catálogo de formas de
    diagrama (retângulo, pílula, oval, losango, trapézio, triângulo,
    hexágono, cilindro, linha, colchete, estrela, nuvem). */

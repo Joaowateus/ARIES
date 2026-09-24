@@ -84,6 +84,30 @@ function IconeExportar() {
     </svg>
   )
 }
+function IconeApresentar() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="13" rx="2" />
+      <polygon points="10 8 15 10.5 10 13" fill="currentColor" stroke="none" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  )
+}
+function IconeSetaEsquerda() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  )
+}
+function IconeSetaDireita() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  )
+}
 function IconeAjustarTela() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1616,6 +1640,14 @@ function Canvas({ dadosIniciais, onChange }: {
   const [tracoAoVivo, setTracoAoVivo] = useState<{ x: number; y: number }[] | null>(null)
   const desenhandoRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Modo apresentação (6.14 do mapeamento): reaproveita os Frames (telas)
+  // do modo Wireframe como slides — dá pra fazer diagrama/wireframe/tarefas
+  // num board só e apresentar as partes que fazem sentido como "tela",
+  // sem precisar de um conceito de slide separado dos objetos do board.
+  // Ordem dos slides é da esquerda pra direita (posição x) — simples e
+  // previsível, sem precisar de um campo de "ordem" dedicado no objeto.
+  const [modoApresentacao, setModoApresentacao] = useState(false)
+  const [slideAtual, setSlideAtual] = useState(0)
   const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
   const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
@@ -2242,12 +2274,40 @@ function Canvas({ dadosIniciais, onChange }: {
     }
   }
 
+  const frames = grafo.nodes.filter(n => n.type === 'frame').sort((a, b) => a.position.x - b.position.x)
+
+  function iniciarApresentacao() {
+    if (frames.length === 0) { alert('Crie ao menos um Frame (botão do modo Wireframe) pra ter o que apresentar.'); return }
+    setSlideAtual(0)
+    setModoApresentacao(true)
+  }
+  function sairApresentacao() {
+    setModoApresentacao(false)
+    fitView({ padding: 0.3, duration: 300 })
+  }
+  function irParaSlide(indice: number) {
+    setSlideAtual(atual => Math.max(0, Math.min(frames.length - 1, indice)))
+  }
+
+  useEffect(() => {
+    if (!modoApresentacao) return
+    const frame = frames[slideAtual]
+    if (frame) fitView({ nodes: [{ id: frame.id }], padding: 0.05, duration: 400 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoApresentacao, slideAtual])
+
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent) {
       const alvo = e.target as HTMLElement
       const editando = alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable
       if (editando) {
         if (e.key === 'Escape') alvo.blur()
+        return
+      }
+      if (modoApresentacao) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); irParaSlide(slideAtual + 1) }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); irParaSlide(slideAtual - 1) }
+        else if (e.key === 'Escape') { sairApresentacao() }
         return
       }
       const mod = e.ctrlKey || e.metaKey
@@ -2289,7 +2349,8 @@ function Canvas({ dadosIniciais, onChange }: {
           onNodeDragStart={iniciarArraste}
           onNodeDragStop={finalizarArraste}
           onConnect={onConnect}
-          nodesDraggable={!modoMao}
+          nodesDraggable={!modoMao && !modoApresentacao}
+          elementsSelectable={!modoApresentacao}
           // Padrão da lib é só 'Meta' (Cmd) — sem isso, Ctrl+clique (o normal
           // em Windows/Linux) não adiciona à seleção, só troca o nó
           // selecionado. Aceita os dois, Ctrl e Cmd, conforme a plataforma.
@@ -2299,8 +2360,21 @@ function Canvas({ dadosIniciais, onChange }: {
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={22} size={1} color="var(--pl-border-strong)" />
-          <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />
+          {!modoApresentacao && <Background gap={22} size={1} color="var(--pl-border-strong)" />}
+          {!modoApresentacao && <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />}
+          {modoApresentacao ? (
+            <Panel position="bottom-center" className="pl-mapa-toolbar-apresentacao">
+              <button type="button" className="pl-mapa-tv-btn" title="Slide anterior" disabled={slideAtual === 0} onClick={() => irParaSlide(slideAtual - 1)}>
+                <IconeSetaEsquerda />
+              </button>
+              <span className="pl-apresentacao-contador">{slideAtual + 1} / {frames.length}</span>
+              <button type="button" className="pl-mapa-tv-btn" title="Próximo slide" disabled={slideAtual === frames.length - 1} onClick={() => irParaSlide(slideAtual + 1)}>
+                <IconeSetaDireita />
+              </button>
+              <div className="pl-mapa-tv-divisor-h" />
+              <button type="button" className="pl-mapa-tv-btn" title="Sair da apresentação (Esc)" onClick={sairApresentacao}>×</button>
+            </Panel>
+          ) : (
           <Panel position="top-left" className="pl-mapa-toolbar-vertical">
             <div className="pl-mapa-tv-modos">
               <button type="button" className={`pl-mapa-tv-btn ${modo === 'diagrama' ? 'ativo' : ''}`} title="Modo Diagrama" onClick={() => setModo('diagrama')}>
@@ -2435,8 +2509,13 @@ function Canvas({ dadosIniciais, onChange }: {
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como JSON" onClick={onExportarJson}>
               <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 9, fontWeight: 700 }}>{'{ }'}</span>
             </button>
+            <div className="pl-mapa-tv-divisor" />
+            <button type="button" className="pl-mapa-tv-btn" title="Apresentar" onClick={iniciarApresentacao}>
+              <IconeApresentar />
+            </button>
           </Panel>
-          {totalSelecionados >= 1 && (
+          )}
+          {!modoApresentacao && totalSelecionados >= 1 && (
             <Panel position="top-center" className="pl-mapa-toolbar-selecao">
               <button type="button" className={`pl-mapa-tv-btn ${algumTravado ? 'ativo' : ''}`} title={algumTravado ? 'Destravar' : 'Travar'} onClick={onAlternarTravado}>
                 <IconeCadeadoSelecao />
