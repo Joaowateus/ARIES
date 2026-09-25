@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "node --require ts-node/register src/index.ts",
     "build": "tsc && npx tsc --project tsconfig.seed.json",
+    "vercel-build": "prisma migrate deploy && tsc && npx tsc --project tsconfig.seed.json",
     "start": "node dist/index.js",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
