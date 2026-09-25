@@ -1521,6 +1521,13 @@
 .pl-mapa-canvas .react-flow__controls-button:last-child { border-right: none; }
 .pl-mapa-canvas .react-flow__controls-button:hover { background: var(--pl-surface-2); }
 
+.pl-mapa-zoom-indicador button {
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 8px;
+  padding: 4px 10px; font-size: 11.5px; font-family: 'IBM Plex Mono'; color: var(--pl-ink-2); cursor: pointer;
+  box-shadow: var(--pl-shadow-card);
+}
+.pl-mapa-zoom-indicador button:hover { color: var(--pl-ink-1); background: var(--pl-surface-2); }
+
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
 .pl-modal-panel { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }

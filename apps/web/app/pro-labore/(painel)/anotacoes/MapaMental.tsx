@@ -14,8 +14,9 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import {
   ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
   EdgeLabelRenderer, MarkerType,
-  getBezierPath, useInternalNode, useReactFlow, applyNodeChanges, applyEdgeChanges,
+  getBezierPath, useInternalNode, useReactFlow, useViewport, applyNodeChanges, applyEdgeChanges,
   type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange, type EdgeChange,
+  type FinalConnectionState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
@@ -1322,6 +1323,7 @@ function SecaoNode({ id, data, selected }: NodeProps<NoFlow>) {
       <NodeResizer minWidth={220} minHeight={160} isVisible={!!selected} lineClassName="pl-secao-resize-linha" handleClassName="pl-secao-resize-alca" />
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Renomear" onClick={entrarEdicao}>✎</button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       {editando ? (
@@ -1773,6 +1775,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
 }) {
   const temaAtual = TEMAS_BOARD.find(t => t.id === tema) ?? TEMAS_BOARD[0]
   const { fitView, screenToFlowPosition, zoomIn, zoomOut, zoomTo } = useReactFlow()
+  const { zoom } = useViewport()
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
     () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores),
   )
@@ -1941,7 +1944,10 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ ...atual, nodes })
   }, [])
 
-  const onAdicionarFilho = useCallback((paiId: string) => {
+  // `posicaoForcada` (opcional): usado pelo "arrastar do handle e soltar no
+  // vazio" (onConnectEnd) pra nascer o filho exatamente onde o usuário
+  // soltou o mouse, em vez da posição em cascata padrão à direita do pai.
+  const onAdicionarFilho = useCallback((paiId: string, posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const pai = atual.nodes.find(n => n.id === paiId)
     if (!pai) return
@@ -1954,12 +1960,25 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'noMapa',
-      position: { x: pai.position.x + 260, y: pai.position.y + filhosExistentes * 90 - (filhosExistentes > 0 ? 45 : 0) },
+      position: posicaoForcada ?? { x: pai.position.x + 260, y: pai.position.y + filhosExistentes * 90 - (filhosExistentes > 0 ? 45 : 0) },
       data: { tipoObjeto: 'noMapa', texto: '', ehCentral: false, cor },
     }
     const novaAresta: Edge = { id: `${paiId}-${novoId}`, source: paiId, target: novoId, type: 'flutuante', style: { stroke: cor, strokeWidth: 2.5 } }
     commit({ nodes: [...atual.nodes, novoNo], edges: [...atual.edges, novaAresta] })
   }, [])
+
+  // Arrastar de um handle e soltar em área vazia do canvas (não em cima de
+  // outro nó) cria direto uma ideia filha ali — réplica do gesto padrão de
+  // Whimsical/MindMeister/FigJam pra expandir um mapa mental sem precisar
+  // voltar no botão "+". Só se aplica quando a origem é um nó de mapa
+  // mental (`noMapa`): pra forma/sticky/etc. o gesto de arrastar do handle
+  // continua sendo só "conectar a um nó existente", sem criar nada novo.
+  const onConectarSoltarNoVazio = useCallback((_event: MouseEvent | TouchEvent, estadoConexao: FinalConnectionState) => {
+    const { fromNode, toNode, to } = estadoConexao
+    if (!fromNode || toNode || !to) return
+    if ((fromNode.data as Record<string, unknown>).tipoObjeto !== 'noMapa') return
+    onAdicionarFilho(fromNode.id, to)
+  }, [onAdicionarFilho])
 
   const onExcluir = useCallback((id: string) => {
     const atual = grafoRef.current
@@ -2689,6 +2708,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
           onNodeDragStart={iniciarArraste}
           onNodeDragStop={finalizarArraste}
           onConnect={onConnect}
+          onConnectEnd={onConectarSoltarNoVazio}
           nodesDraggable={!modoMao && !modoApresentacao}
           elementsSelectable={!modoApresentacao}
           // Padrão da lib é só 'Meta' (Cmd) — sem isso, Ctrl+clique (o normal
@@ -2702,6 +2722,13 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         >
           {!modoApresentacao && <Background gap={22} size={1} color="var(--pl-border-strong)" variant={temaAtual.variante} />}
           {!modoApresentacao && <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />}
+          {!modoApresentacao && (
+            <Panel position="bottom-center" className="pl-mapa-zoom-indicador">
+              <button type="button" title="Voltar pra 100% (Ctrl+0)" onClick={() => zoomTo(1, { duration: 150 })}>
+                {Math.round(zoom * 100)}%
+              </button>
+            </Panel>
+          )}
           {!modoApresentacao && (
             <Panel position="top-right" className="pl-mapa-toolbar">
               <button type="button" className="pl-mapa-toolbar-btn" title="Atalhos de teclado (?)" onClick={() => setAjudaAberta(v => !v)}>
