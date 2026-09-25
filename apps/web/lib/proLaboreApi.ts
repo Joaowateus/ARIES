@@ -560,7 +560,7 @@ export const proLaboreApi = {
     lixeira: () => request<MapaMental[]>('/pro-labore/mapas-mentais/lixeira'),
     criar: (data: { titulo?: string; icone?: string | null; objetos?: BoardObjeto[]; conectores?: BoardConector[]; pastaId?: string | null }) =>
       request<MapaMental>('/pro-labore/mapas-mentais', { method: 'POST', body: JSON.stringify(data) }),
-    atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; objetos: BoardObjeto[]; conectores: BoardConector[]; pastaId: string | null }>) =>
+    atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; objetos: BoardObjeto[]; conectores: BoardConector[]; pastaId: string | null; configuracao: Record<string, unknown> | null }>) =>
       request<MapaMental>(`/pro-labore/mapas-mentais/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     // "excluir" move pra lixeira (soft delete); restaurar tira de lá;
     // excluirDefinitivo só funciona em algo que já está na lixeira.
@@ -959,6 +959,10 @@ export interface MapaMental {
   // Tipado solto aqui (não o union) pra não criar dependência circular entre
   // este arquivo e o componente do canvas.
   tema?: string | null
+  // Painel "Aparência" (layout persistente + paleta de cor + alinhamento
+  // automático) — ver ConfiguracaoBoard em MapaMental.tsx. Tipado solto
+  // (Record) pelo mesmo motivo do `tema` acima.
+  configuracao?: Record<string, unknown> | null
   raiz?: NoMapa | null
   objetos?: BoardObjeto[] | null
   conectores?: BoardConector[] | null

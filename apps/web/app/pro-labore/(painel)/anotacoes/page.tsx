@@ -6,7 +6,9 @@ import {
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
-import MapaMentalCanvas, { dadosIniciaisDoBoard, gerarBoardDoTemplate, TEMAS_BOARD, TemaBoard, TEMPLATES_BOARD } from './MapaMental'
+import MapaMentalCanvas, {
+  dadosIniciaisDoBoard, gerarBoardDoTemplate, TEMAS_BOARD, TemaBoard, TEMPLATES_BOARD, CONFIGURACAO_PADRAO, ConfiguracaoBoard,
+} from './MapaMental'
 
 const EMOJIS_NOTA = ['📄', '📝', '💡', '🎯', '📌', '✅', '🔥', '📊', '🚀', '⭐', '🗂️', '📅', '💬', '🧠', '⚙️', '📈', '📚', '🧩']
 
@@ -509,6 +511,9 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
   const [icone, setIcone] = useState(mapa?.icone ?? '')
   const [tema, setTema] = useState<TemaBoard>((mapa?.tema as TemaBoard) || TEMAS_BOARD[0].id)
   const [temaMenuAberto, setTemaMenuAberto] = useState(false)
+  const [configuracao, setConfiguracao] = useState<ConfiguracaoBoard>(
+    () => ({ ...CONFIGURACAO_PADRAO, ...(mapa?.configuracao as Partial<ConfiguracaoBoard> | null | undefined) }),
+  )
   const [dadosIniciais, setDadosIniciais] = useState(() => dadosIniciaisDoBoard(mapa))
   const [status, setStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo')
   const [historicoAberto, setHistoricoAberto] = useState(false)
@@ -519,13 +524,18 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
   // (useState preguiçoso), então só trocar o valor do prop não bastaria.
   const [versaoRestaurada, setVersaoRestaurada] = useState(0)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  type CamposMapa = Partial<{ titulo: string; icone: string | null; tema: TemaBoard; objetos: NonNullable<MapaMental['objetos']>; conectores: NonNullable<MapaMental['conectores']> }>
+  type CamposMapa = Partial<{
+    titulo: string; icone: string | null; tema: TemaBoard
+    configuracao: Record<string, unknown> | null
+    objetos: NonNullable<MapaMental['objetos']>; conectores: NonNullable<MapaMental['conectores']>
+  }>
   const pendenteRef = useRef<CamposMapa>({})
 
   useEffect(() => {
     setTitulo(mapa?.titulo ?? '')
     setIcone(mapa?.icone ?? '')
     setTema((mapa?.tema as TemaBoard) || TEMAS_BOARD[0].id)
+    setConfiguracao({ ...CONFIGURACAO_PADRAO, ...(mapa?.configuracao as Partial<ConfiguracaoBoard> | null | undefined) })
     setDadosIniciais(dadosIniciaisDoBoard(mapa))
     pendenteRef.current = {}
     setStatus('salvo')
@@ -638,6 +648,8 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
             dadosIniciais={dadosIniciais}
             onChange={dados => agendarSalvar(dados)}
             tema={tema}
+            configuracao={configuracao}
+            onMudarConfiguracao={cfg => { setConfiguracao(cfg); agendarSalvar({ configuracao: cfg as unknown as Record<string, unknown> }) }}
           />
         </div>
         {historicoAberto && (

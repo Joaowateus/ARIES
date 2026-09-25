@@ -3099,10 +3099,21 @@ router.get('/mapas-mentais/lixeira', requireProLaboreAuth, async (req: Request, 
 // TEMAS_BOARD no frontend (MapaMental.tsx). Null/ausente = tema padrão ('claro').
 const TEMAS_BOARD = ['claro', 'escuro', 'quente', 'quadriculado'] as const
 
+// Painel "Aparência" (layout + paleta de cor + alinhamento automático) —
+// catálogos espelhados em LAYOUTS_BOARD/PALETAS_COR_BOARD no frontend.
+const LAYOUTS_BOARD = ['manual', 'mapaMental', 'organograma', 'lista'] as const
+const PALETAS_COR_BOARD = ['meister', 'ocean', 'sunset', 'pastel', 'vintage', 'bubbles'] as const
+const configuracaoBoardSchema = z.object({
+  layout: z.enum(LAYOUTS_BOARD).optional(),
+  alinhamentoAutomatico: z.boolean().optional(),
+  paleta: z.enum(PALETAS_COR_BOARD).optional(),
+}).nullable().optional()
+
 const mapaMentalSchema = z.object({
   titulo: z.string().trim().max(200, 'Título muito longo').optional(),
   icone: z.string().max(8, 'Ícone inválido').nullable().optional(),
   tema: z.enum(TEMAS_BOARD).nullable().optional(),
+  configuracao: configuracaoBoardSchema,
   raiz: noMapaSchema.optional(),
   objetos: z.array(boardObjetoSchema).max(500, 'Board com objetos demais').optional(),
   conectores: z.array(boardConectorSchema).max(1000, 'Board com conectores demais').optional(),
@@ -3115,7 +3126,7 @@ router.post('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Re
   if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
     res.status(404).json({ error: 'Pasta não encontrada' }); return
   }
-  const { raiz, objetos, conectores, ...resto } = parse.data
+  const { raiz, objetos, conectores, configuracao, ...resto } = parse.data
   const padrao = objetos ? null : criarBoardPadrao('Ideia central')
   const mapa = await prisma.mapaMental.create({
     data: {
@@ -3123,6 +3134,7 @@ router.post('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Re
       objetos: (objetos ?? padrao?.objetos) as unknown as Prisma.InputJsonValue,
       conectores: (conectores ?? padrao?.conectores) as unknown as Prisma.InputJsonValue,
       ...(raiz ? { raiz: raiz as unknown as Prisma.InputJsonValue } : {}),
+      ...(configuracao !== undefined ? { configuracao: (configuracao ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue } : {}),
     },
   })
   res.status(201).json(mapa)
@@ -3160,7 +3172,7 @@ router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, re
   }
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
-  const { raiz, objetos, conectores, ...resto } = parse.data
+  const { raiz, objetos, conectores, configuracao, ...resto } = parse.data
   // Snapshot do estado ANTERIOR (não do que está chegando agora) — assim
   // "restaurar a última versão" sempre volta pra antes da mudança em curso.
   if (objetos || conectores) await talvezSalvarVersao(existente.id, existente.objetos, existente.conectores)
@@ -3171,6 +3183,7 @@ router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, re
       ...(raiz ? { raiz: raiz as unknown as Prisma.InputJsonValue } : {}),
       ...(objetos ? { objetos: objetos as unknown as Prisma.InputJsonValue } : {}),
       ...(conectores ? { conectores: conectores as unknown as Prisma.InputJsonValue } : {}),
+      ...(configuracao !== undefined ? { configuracao: (configuracao ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue } : {}),
     },
   })
   res.json(atualizado)
