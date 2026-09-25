@@ -1842,19 +1842,52 @@ function Canvas({ dadosIniciais, onChange, tema }: {
       // membros do grupo — arrastar qualquer um move o grupo inteiro junto,
       // não só ele. Sem isso "Agrupar" seria só um rótulo sem efeito real.
       const porId = new Map(atual.nodes.map(n => [n.id, n]))
+      const idsJaNaMudanca = new Set(changes.filter(c => c.type === 'position').map(c => c.id))
       const extras: NodeChange<NoFlow>[] = []
+      // Saída por origem, só calculado se algum change for de posição —
+      // evita montar o mapa à toa em toda tecla/seleção que passa por aqui.
+      let saidaPorOrigem: Map<string, string[]> | null = null
       changes.forEach(c => {
         if (c.type !== 'position' || !c.position) return
         const no = porId.get(c.id)
-        const grupoId = (no?.data as Record<string, unknown> | undefined)?.grupoId as string | undefined
-        if (!grupoId || !no) return
+        if (!no) return
         const dx = c.position.x - no.position.x
         const dy = c.position.y - no.position.y
         if (dx === 0 && dy === 0) return
-        atual.nodes.forEach(n => {
-          if (n.id === c.id || (n.data as Record<string, unknown>).grupoId !== grupoId) return
-          extras.push({ id: n.id, type: 'position', position: { x: n.position.x + dx, y: n.position.y + dy }, dragging: c.dragging })
-        })
+        const grupoId = (no.data as Record<string, unknown>).grupoId as string | undefined
+        if (grupoId) {
+          atual.nodes.forEach(n => {
+            if (n.id === c.id || (n.data as Record<string, unknown>).grupoId !== grupoId) return
+            extras.push({ id: n.id, type: 'position', position: { x: n.position.x + dx, y: n.position.y + dy }, dragging: c.dragging })
+          })
+        }
+        // Ramo de mapa mental: arrastar um `noMapa` carrega a subárvore
+        // inteira junto (filhos, netos...) — senão qualquer ajuste de
+        // posição desmancharia a árvore que "Organizar automaticamente" (ou
+        // o próprio usuário) monta. Só pra `noMapa`: numa cadeia de formas
+        // (Mapa de processo) mover uma etapa não deveria arrastar as
+        // seguintes junto, cada etapa se ajusta independente ali.
+        if (no.data.tipoObjeto === 'noMapa') {
+          saidaPorOrigem ??= (() => {
+            const m = new Map<string, string[]>()
+            atual.edges.forEach(e => m.set(e.source, [...(m.get(e.source) ?? []), e.target]))
+            return m
+          })()
+          const visitados = new Set([c.id])
+          const pilha = [...(saidaPorOrigem.get(c.id) ?? [])]
+          while (pilha.length > 0) {
+            const idAtual = pilha.pop()!
+            if (visitados.has(idAtual)) continue
+            visitados.add(idAtual)
+            if (!idsJaNaMudanca.has(idAtual)) {
+              const descendente = porId.get(idAtual)
+              if (descendente) {
+                extras.push({ id: idAtual, type: 'position', position: { x: descendente.position.x + dx, y: descendente.position.y + dy }, dragging: c.dragging })
+              }
+            }
+            saidaPorOrigem.get(idAtual)?.forEach(f => pilha.push(f))
+          }
+        }
       })
       const novo = { ...atual, nodes: applyNodeChanges([...changes, ...extras], atual.nodes) }
       grafoRef.current = novo
