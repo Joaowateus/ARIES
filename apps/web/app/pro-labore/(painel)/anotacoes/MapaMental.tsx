@@ -1968,16 +1968,35 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   }, [])
 
   // Arrastar de um handle e soltar em área vazia do canvas (não em cima de
-  // outro nó) cria direto uma ideia filha ali — réplica do gesto padrão de
-  // Whimsical/MindMeister/FigJam pra expandir um mapa mental sem precisar
-  // voltar no botão "+". Só se aplica quando a origem é um nó de mapa
-  // mental (`noMapa`): pra forma/sticky/etc. o gesto de arrastar do handle
-  // continua sendo só "conectar a um nó existente", sem criar nada novo.
+  // outro nó) já cria um novo objeto conectado ali — réplica do gesto padrão
+  // de Whimsical/MindMeister/FigJam pra expandir um mapa/fluxo sem precisar
+  // voltar na toolbar. Dois casos com resultado natural: origem `noMapa`
+  // cria uma ideia filha (delega em onAdicionarFilho); origem `forma` cria
+  // outra forma do mesmo tipo/cor já ligada por seta (fluxograma tipo "Mapa
+  // de processo"). Qualquer outro tipo de origem (sticky, texto, ícone...)
+  // não tem um "próximo objeto" óbvio, então o gesto vira só um connect
+  // cancelado, sem efeito.
   const onConectarSoltarNoVazio = useCallback((_event: MouseEvent | TouchEvent, estadoConexao: FinalConnectionState) => {
     const { fromNode, toNode, to } = estadoConexao
     if (!fromNode || toNode || !to) return
-    if ((fromNode.data as Record<string, unknown>).tipoObjeto !== 'noMapa') return
-    onAdicionarFilho(fromNode.id, to)
+    const dadosOrigem = fromNode.data as DadosObjeto
+    if (dadosOrigem.tipoObjeto === 'noMapa') {
+      onAdicionarFilho(fromNode.id, to)
+      return
+    }
+    if (dadosOrigem.tipoObjeto === 'forma') {
+      const atual = grafoRef.current
+      const novoId = gerarIdNo()
+      const novoNo: NoFlow = {
+        id: novoId, type: 'forma', position: to,
+        data: { tipoObjeto: 'forma', forma: dadosOrigem.forma, texto: '', cor: dadosOrigem.cor },
+      }
+      const novaAresta: Edge = {
+        id: `c${gerarIdNo()}`, source: fromNode.id, target: novoId, type: 'flutuante',
+        style: { stroke: dadosOrigem.cor, strokeWidth: 2.5 }, markerEnd: { type: MarkerType.ArrowClosed, color: dadosOrigem.cor },
+      }
+      commit({ nodes: [...atual.nodes, novoNo], edges: [...atual.edges, novaAresta] })
+    }
   }, [onAdicionarFilho])
 
   const onExcluir = useCallback((id: string) => {
