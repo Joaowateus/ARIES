@@ -1093,6 +1093,10 @@ const AcoesMapaContext = createContext<{
   onCriarIrmao: (id: string) => void
   onExcluir: (id: string) => void
   onMudarCor: (id: string, cor: string) => void
+  // Ver comentário no useEffect que consome isso, dentro de cada node de
+  // texto: string `"<id>#<timestamp>"` do nó que deve entrar em edição
+  // agora, ou null quando nenhum pedido está pendente.
+  pedidoEdicaoId: string | null
   onMudarEstiloConector: (id: string, patch: Partial<{ cor: string; tracejado: boolean; seta: boolean }>) => void
   onMudarLabelConector: (id: string, label: string) => void
   onExcluirConector: (id: string) => void
@@ -1131,6 +1135,14 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
   // arrastar sempre cairia em cima do input e nunca iniciaria o arraste.
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1180,6 +1192,14 @@ function FormaNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
   const config = CONFIG_FORMA[d.forma]
 
   function entrarEdicao() { setEditando(true) }
@@ -1225,6 +1245,14 @@ function StickyNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1261,6 +1289,14 @@ function TextoNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1314,6 +1350,14 @@ function SecaoNode({ id, data, selected }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(false)
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1435,6 +1479,14 @@ function FrameNode({ id, data, selected }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(false)
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1472,6 +1524,14 @@ function BotaoNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1507,6 +1567,14 @@ function InputWireframeNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1559,6 +1627,14 @@ function PilhaNode({ id, data, selected }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(false)
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1593,6 +1669,14 @@ function TarefaNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1814,6 +1898,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   // dedicado — sem isso, atalhos como as letras de forma ou Enter/Tab no
   // mapa mental ficam invisíveis pra quem não leu a documentação.
   const [ajudaAberta, setAjudaAberta] = useState(false)
+  const [pedidoEdicaoId, setPedidoEdicaoId] = useState<string | null>(null)
   const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
   const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
@@ -2696,6 +2781,14 @@ function Canvas({ dadosIniciais, onChange, tema }: {
       }
       if (e.key === '?') { e.preventDefault(); setAjudaAberta(v => !v); return }
       if (ajudaAberta && e.key === 'Escape') { setAjudaAberta(false); return }
+      // Enter com exatamente um objeto selecionado (e nada em edição, já
+      // garantido pelo `if (editando)` lá em cima) abre a edição dele — ver
+      // o useEffect que consome `pedidoEdicaoId` em cada tipo de nó.
+      if (e.key === 'Enter') {
+        const selecionados = grafoRef.current.nodes.filter(n => n.selected)
+        if (selecionados.length === 1) { e.preventDefault(); setPedidoEdicaoId(`${selecionados[0].id}#${Date.now()}`) }
+        return
+      }
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); return }
       if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); refazer(); return }
@@ -2746,7 +2839,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
 
   return (
     <AcoesMapaContext.Provider value={{
-      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
+      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, pedidoEdicaoId, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
       onAdicionarMensagemComentario, onAlternarResolvidoComentario,
     }}>
       <div className="pl-mapa-canvas" ref={containerRef} data-tema={temaAtual.id}>
@@ -3072,6 +3165,7 @@ function PainelAtalhos({ onFechar }: { onFechar: () => void }) {
           </div>
           <div className="pl-ajuda-secao">
             <div className="pl-ajuda-titulo-secao">Objetos selecionados</div>
+            <LinhaAtalho label="Editar (com 1 selecionado)" teclas={['Enter']} />
             <LinhaAtalho label="Duplicar" teclas={['Ctrl', 'D']} />
             <LinhaAtalho label="Excluir" teclas={['Delete']} />
             <LinhaAtalho label="Agrupar" teclas={['Ctrl', 'G']} />
