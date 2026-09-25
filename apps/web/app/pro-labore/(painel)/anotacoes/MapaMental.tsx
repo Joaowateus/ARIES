@@ -2036,6 +2036,16 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   // mapa mental ficam invisíveis pra quem não leu a documentação.
   const [ajudaAberta, setAjudaAberta] = useState(false)
   const [pedidoEdicaoId, setPedidoEdicaoId] = useState<string | null>(null)
+  // Menu de contexto (botão direito): 'pane' guarda a posição em coordenadas
+  // do board (screenToFlowPosition), pra "adicionar aqui" nascer exatamente
+  // sob o cursor; 'node' guarda só o id, já que as ações de nó (duplicar,
+  // camada, travar) operam sobre a SELEÇÃO — right-click seleciona o nó
+  // primeiro, então os botões do menu reaproveitam as ações já existentes.
+  const [menuContexto, setMenuContexto] = useState<
+    | { screenX: number; screenY: number; tipo: 'pane'; posicaoFlow: { x: number; y: number } }
+    | { screenX: number; screenY: number; tipo: 'node'; nodeId: string }
+    | null
+  >(null)
   const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
   const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
@@ -2323,14 +2333,14 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
 
-  const onAdicionarSticky = useCallback(() => {
+  const onAdicionarSticky = useCallback((posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
     const cor = PALETA_STICKY[atual.nodes.filter(n => n.type === 'sticky').length % PALETA_STICKY.length]
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'sticky',
-      position: posicaoEmCascata(base, atual.nodes.length),
+      position: posicaoForcada ?? posicaoEmCascata(base, atual.nodes.length),
       data: { tipoObjeto: 'sticky', texto: '', cor },
     }
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
@@ -2364,36 +2374,73 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ nodes: [...atual.nodes, ...novosNos], edges: atual.edges })
   }, [])
 
-  const onAdicionarTexto = useCallback(() => {
+  const onAdicionarTexto = useCallback((posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'texto',
-      position: posicaoEmCascata(base, atual.nodes.length),
+      position: posicaoForcada ?? posicaoEmCascata(base, atual.nodes.length),
       data: { tipoObjeto: 'texto', texto: '' },
     }
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
 
-  const onAdicionarImagem = useCallback(() => {
+  const onAdicionarImagem = useCallback((posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
     const passo = atual.nodes.length % 6
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'imagem',
-      position: { x: (base?.position.x ?? 0) - 460 - passo * 18, y: (base?.position.y ?? 0) - 140 + passo * 20 },
+      position: posicaoForcada ?? { x: (base?.position.x ?? 0) - 460 - passo * 18, y: (base?.position.y ?? 0) - 140 + passo * 20 },
       width: 280, height: 200, zIndex: -1,
       data: { tipoObjeto: 'imagem', url: '' },
     }
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
 
+  // Ideia "solta" (sem pai) — só usada pelo menu de contexto do canvas
+  // vazio: cria uma ideia de mapa mental sem conector nenhum, exatamente no
+  // ponto clicado. O usuário conecta depois arrastando de/pra ela, se quiser
+  // (ou deixa solta — o modelo de board plano não exige conectividade).
+  const onAdicionarIdeiaLivre = useCallback((posicao: { x: number; y: number }) => {
+    const atual = grafoRef.current
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'noMapa', position: posicao,
+      data: { tipoObjeto: 'noMapa', texto: '', ehCentral: false, cor: 'var(--pl-ink-2)' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [])
+
   const onMudarUrlImagem = useCallback((id: string, url: string) => {
     const atual = grafoRef.current
     const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'imagem' ? { ...n, data: { ...n.data, url } } : n))
     commit({ ...atual, nodes })
+  }, [])
+
+  // Menu de contexto (item 2 do pedido) — botão direito no canvas vazio abre
+  // "adicionar aqui" pra qualquer um dos objetos mais comuns, exatamente sob
+  // o cursor; botão direito num objeto já o seleciona (substituindo a
+  // seleção atual) e abre um menu com as ações mais usadas daquele objeto,
+  // reaproveitando toda a lógica de ações-sobre-seleção que já existia.
+  const onPaneContextMenuHandler = useCallback((event: React.MouseEvent | MouseEvent) => {
+    event.preventDefault()
+    const posicaoFlow = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    setMenuContexto({ screenX: event.clientX, screenY: event.clientY, tipo: 'pane', posicaoFlow })
+  }, [screenToFlowPosition])
+
+  const onNodeContextMenuHandler = useCallback((event: React.MouseEvent, node: NoFlow) => {
+    event.preventDefault()
+    setGrafo(atual => {
+      const jaEraUnicoSelecionado = atual.nodes.filter(n => n.selected).length === 1 && node.selected
+      if (jaEraUnicoSelecionado) return atual
+      const novo = { ...atual, nodes: atual.nodes.map(n => ({ ...n, selected: n.id === node.id })) }
+      grafoRef.current = novo
+      return novo
+    })
+    setMenuContexto({ screenX: event.clientX, screenY: event.clientY, tipo: 'node', nodeId: node.id })
   }, [])
 
   const onAdicionarIcone = useCallback((icone: TipoIcone) => {
@@ -2994,6 +3041,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
       }
       if (e.key === '?') { e.preventDefault(); setAjudaAberta(v => !v); return }
       if (ajudaAberta && e.key === 'Escape') { setAjudaAberta(false); return }
+      if (menuContexto && e.key === 'Escape') { setMenuContexto(null); return }
       // Enter com exatamente um objeto selecionado (e nada em edição, já
       // garantido pelo `if (editando)` lá em cima) abre a edição dele — ver
       // o useEffect que consome `pedidoEdicaoId` em cada tipo de nó.
@@ -3049,6 +3097,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   const totalSelecionados = grafo.nodes.filter(n => n.selected).length
   const algumTravado = grafo.nodes.some(n => n.selected && n.draggable === false)
   const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
+  const noDoMenuContexto = menuContexto?.tipo === 'node' ? grafo.nodes.find(n => n.id === menuContexto.nodeId) : undefined
 
   return (
     <AcoesMapaContext.Provider value={{
@@ -3067,6 +3116,8 @@ function Canvas({ dadosIniciais, onChange, tema }: {
           onNodeDragStop={finalizarArraste}
           onConnect={onConnect}
           onConnectEnd={onConectarSoltarNoVazio}
+          onPaneContextMenu={modoApresentacao ? undefined : onPaneContextMenuHandler}
+          onNodeContextMenu={modoApresentacao ? undefined : onNodeContextMenuHandler}
           nodesDraggable={!modoMao && !modoApresentacao}
           elementsSelectable={!modoApresentacao}
           // Padrão da lib é só 'Meta' (Cmd) — sem isso, Ctrl+clique (o normal
@@ -3161,10 +3212,10 @@ function Canvas({ dadosIniciais, onChange, tema }: {
                 </div>
               )}
             </div>
-            <button type="button" className="pl-mapa-tv-btn" title="Sticky note" onClick={onAdicionarSticky}>
+            <button type="button" className="pl-mapa-tv-btn" title="Sticky note" onClick={() => onAdicionarSticky()}>
               <IconeSticky />
             </button>
-            <button type="button" className="pl-mapa-tv-btn" title="Texto" onClick={onAdicionarTexto}>
+            <button type="button" className="pl-mapa-tv-btn" title="Texto" onClick={() => onAdicionarTexto()}>
               <IconeTexto />
             </button>
             <div className="pl-mapa-tv-item">
@@ -3190,7 +3241,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             <button type="button" className="pl-mapa-tv-btn" title="Tabela" onClick={onAdicionarTabela}>
               <IconeTabela />
             </button>
-            <button type="button" className="pl-mapa-tv-btn" title="Imagem (cole um link)" onClick={onAdicionarImagem}>
+            <button type="button" className="pl-mapa-tv-btn" title="Imagem (cole um link)" onClick={() => onAdicionarImagem()}>
               <IconeImagem />
             </button>
             {modo === 'wireframe' && (
@@ -3362,6 +3413,45 @@ function Canvas({ dadosIniciais, onChange, tema }: {
           )}
         </ReactFlow>
         {ajudaAberta && <PainelAtalhos onFechar={() => setAjudaAberta(false)} />}
+        {menuContexto && (
+          <>
+            <div className="pl-ctxmenu-backdrop" onClick={() => setMenuContexto(null)} onContextMenu={e => { e.preventDefault(); setMenuContexto(null) }} />
+            <div className="pl-ctxmenu" style={{ left: menuContexto.screenX, top: menuContexto.screenY }}>
+              {menuContexto.tipo === 'pane' ? (
+                <>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarIdeiaLivre(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar ideia aqui</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarSticky(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar sticky aqui</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarTexto(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar texto aqui</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarImagem(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar imagem aqui</button>
+                  <div className="pl-ctxmenu-divisor" />
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onSelecionarTudo(); setMenuContexto(null) }}>Selecionar tudo</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onOrganizarLayout('horizontal'); setMenuContexto(null) }}>Organizar automaticamente</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { fitView({ padding: 0.3, duration: 300 }); setMenuContexto(null) }}>Ajustar à tela</button>
+                </>
+              ) : noDoMenuContexto ? (
+                <>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { setPedidoEdicaoId(`${noDoMenuContexto.id}#${Date.now()}`); setMenuContexto(null) }}>Editar</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onDuplicarSelecionados(); setMenuContexto(null) }}>Duplicar</button>
+                  {noDoMenuContexto.data.tipoObjeto === 'noMapa' && (
+                    <button type="button" className="pl-ctxmenu-item" onClick={() => { onSelecionarRamo(noDoMenuContexto.id); setMenuContexto(null) }}>Selecionar ideia + ramo</button>
+                  )}
+                  <div className="pl-ctxmenu-divisor" />
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onCamada('frente'); setMenuContexto(null) }}>Trazer pra frente</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onCamada('tras'); setMenuContexto(null) }}>Enviar pra trás</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAlternarTravado(); setMenuContexto(null) }}>
+                    {noDoMenuContexto.draggable === false ? 'Destravar' : 'Travar'}
+                  </button>
+                  {noDoMenuContexto.id !== centralId && (
+                    <>
+                      <div className="pl-ctxmenu-divisor" />
+                      <button type="button" className="pl-ctxmenu-item pl-ctxmenu-item-perigo" onClick={() => { onExcluir(noDoMenuContexto.id); setMenuContexto(null) }}>Excluir</button>
+                    </>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
     </AcoesMapaContext.Provider>
   )
