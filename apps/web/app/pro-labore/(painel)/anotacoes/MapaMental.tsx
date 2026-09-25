@@ -12,7 +12,7 @@
 // primeira abertura, ver `dadosIniciaisDoBoard`.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
+  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
   EdgeLabelRenderer, MarkerType,
   getBezierPath, useInternalNode, useReactFlow, applyNodeChanges, applyEdgeChanges,
   type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange, type EdgeChange,
@@ -137,6 +137,25 @@ function IconeAjustarTela() {
       <polyline points="9 21 3 21 3 15" />
       <line x1="21" y1="3" x2="14" y2="10" />
       <line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  )
+}
+function IconeOrganizarLayout() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="4" cy="12" r="2" />
+      <circle cx="18" cy="5" r="2" />
+      <circle cx="18" cy="12" r="2" />
+      <circle cx="18" cy="19" r="2" />
+      <path d="M6 12h4M12 12l4-7M12 12l4 7" />
+    </svg>
+  )
+}
+function IconeMinimapa() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <rect x="14" y="12" width="6" height="6" rx="1" fill="currentColor" stroke="none" opacity="0.5" />
     </svg>
   )
 }
@@ -295,6 +314,15 @@ function IconeResolver() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+function IconeAjuda() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   )
 }
@@ -563,6 +591,13 @@ const CONFIG_FORMA: Record<TipoForma, ConfigForma> = {
 }
 
 const ORDEM_FORMAS: TipoForma[] = ['retangulo', 'pilula', 'oval', 'losango', 'trapezio', 'triangulo', 'hexagono', 'cilindro', 'linha', 'colchete', 'estrela', 'nuvem']
+
+// Letra solta (sem modificador) → cria a forma direto na posição em
+// cascata, igual clicar no botão do flyout — fecha o loop do que a própria
+// toolbar já promete no tooltip "(R)", "(U)" etc. desde sempre.
+const ATALHO_PARA_FORMA: Record<string, TipoForma> = Object.fromEntries(
+  ORDEM_FORMAS.map(tipo => [CONFIG_FORMA[tipo].atalho.toUpperCase(), tipo]),
+) as Record<string, TipoForma>
 
 // Cores pastel pra sticky notes — paleta separada da PALETA_RAMOS (que é
 // pra linhas/ramos, cores mais saturadas): sticky note de verdade tem
@@ -1054,7 +1089,9 @@ function idsDaSubarvore(edges: Edge[], raizId: string): Set<string> {
 const AcoesMapaContext = createContext<{
   onMudarTexto: (id: string, texto: string) => void
   onAdicionarFilho: (id: string) => void
+  onCriarIrmao: (id: string) => void
   onExcluir: (id: string) => void
+  onMudarCor: (id: string, cor: string) => void
   onMudarEstiloConector: (id: string, patch: Partial<{ cor: string; tracejado: boolean; seta: boolean }>) => void
   onMudarLabelConector: (id: string, label: string) => void
   onExcluirConector: (id: string) => void
@@ -1063,6 +1100,24 @@ const AcoesMapaContext = createContext<{
   onAdicionarMensagemComentario: (id: string, texto: string) => void
   onAlternarResolvidoComentario: (id: string) => void
 } | null>(null)
+
+// Paleta usada nos seletores de cor "pós-criação" de forma/sticky/ícone —
+// mesma PALETA_RAMOS de sempre, mais as cores de sticky (pra forma/ícone
+// também poderem usar tons pastel se fizer sentido no board).
+const PALETA_COR_OBJETO = [...PALETA_RAMOS, ...PALETA_STICKY]
+
+function SeletorCorObjeto({ corAtual, onEscolher, cores = PALETA_COR_OBJETO }: { corAtual: string; onEscolher: (cor: string) => void; cores?: string[] }) {
+  return (
+    <>
+      {cores.map(cor => (
+        <button
+          key={cor} type="button" className={`pl-conector-cor-swatch ${corAtual === cor ? 'ativo' : ''}`} style={{ background: cor }}
+          title="Cor" onClick={() => onEscolher(cor)}
+        />
+      ))}
+    </>
+  )
+}
 
 function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
   const acoes = useContext(AcoesMapaContext)!
@@ -1098,10 +1153,18 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
           style={{ width: `${Math.max(valor.length, 4) + 2}ch` }}
           onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
           onBlur={sairEdicao}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+          // Enter/Tab replicam o fluxo padrão de mapa mental (MindMeister/
+          // Whimsical): Enter fecha a ideia atual e já abre uma nova ideia
+          // IRMÃ (mesmo pai), Tab abre uma nova ideia FILHA — dá pra
+          // despejar um mapa inteiro só de teclado, sem tocar no mouse.
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.currentTarget.blur(); acoes.onCriarIrmao(id) }
+            else if (e.key === 'Tab') { e.preventDefault(); e.currentTarget.blur(); acoes.onAdicionarFilho(id) }
+            else if (e.key === 'Escape') { e.currentTarget.blur() }
+          }}
         />
       ) : (
-        <div className="pl-mapa-no-texto" onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover">
+        <div className="pl-mapa-no-texto" onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover · Enter (dentro da edição) cria ideia irmã, Tab cria filha">
           {valor || (d.ehCentral ? 'Ideia central' : 'Nova ideia')}
         </div>
       )}
@@ -1131,6 +1194,7 @@ function FormaNode({ id, data }: NodeProps<NoFlow>) {
       />
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -1168,6 +1232,7 @@ function StickyNode({ id, data }: NodeProps<NoFlow>) {
     <div className="pl-sticky-no" style={{ background: d.cor }}>
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} cores={PALETA_STICKY} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -1232,6 +1297,7 @@ function IconeNode({ id, data }: NodeProps<NoFlow>) {
   return (
     <div className="pl-icone-no" style={{ color: d.cor }}>
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -1706,7 +1772,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   tema?: TemaBoard | null
 }) {
   const temaAtual = TEMAS_BOARD.find(t => t.id === tema) ?? TEMAS_BOARD[0]
-  const { fitView, screenToFlowPosition } = useReactFlow()
+  const { fitView, screenToFlowPosition, zoomIn, zoomOut, zoomTo } = useReactFlow()
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
     () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores),
   )
@@ -1738,6 +1804,13 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   // previsível, sem precisar de um campo de "ordem" dedicado no objeto.
   const [modoApresentacao, setModoApresentacao] = useState(false)
   const [slideAtual, setSlideAtual] = useState(0)
+  // Minimapa (visão geral do board): útil só quando o mapa cresce muito;
+  // começa desligado pra não poluir board pequeno/recém-criado.
+  const [minimapaAberto, setMinimapaAberto] = useState(false)
+  // Painel de atalhos (6.15): descobrível pela tecla "?" ou pelo botão
+  // dedicado — sem isso, atalhos como as letras de forma ou Enter/Tab no
+  // mapa mental ficam invisíveis pra quem não leu a documentação.
+  const [ajudaAberta, setAjudaAberta] = useState(false)
   const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
   const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
@@ -1894,6 +1967,23 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
     const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
     commit({ nodes, edges })
+  }, [])
+
+  // Ideia "irmã" (Enter dentro da edição de um noMapa): mesmo pai de `id`,
+  // não um filho dele — acha o pai pelo conector de entrada e delega pra
+  // onAdicionarFilho. Sem pai (é o próprio nó central) não tem irmão
+  // possível, então cai pra criar um filho mesmo, resultado equivalente ao
+  // "+" da toolbar.
+  const onCriarIrmao = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const arestaPai = atual.edges.find(e => e.target === id)
+    onAdicionarFilho(arestaPai ? arestaPai.source : id)
+  }, [onAdicionarFilho])
+
+  const onMudarCor = useCallback((id: string, cor: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id ? { ...n, data: { ...n.data, cor } } : n))
+    commit({ ...atual, nodes })
   }, [])
 
   const onAdicionarForma = useCallback((forma: TipoForma) => {
@@ -2287,6 +2377,68 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ ...atual, nodes })
   }, [])
 
+  // "Organizar automaticamente" (Layout do mapa): reflui só a parte do board
+  // que É uma árvore/fluxo (objetos ligados por conector, ex.: ramos do mapa
+  // mental ou etapas de um "Mapa de processo") pra um layout em camadas
+  // horizontal — raiz na coluna 0, cada aresta desce uma coluna, altura de
+  // cada subárvore soma a dos filhos (com margem), pai centralizado no meio
+  // vertical do bloco dos filhos. Objeto solto (sticky, seção, forma sem
+  // conector) nunca é tocado — mover algo que o usuário posicionou de
+  // propósito (ex.: um card dentro de uma coluna do Kanban) seria pior do
+  // que não ter o botão.
+  const onOrganizarLayout = useCallback(() => {
+    const atual = grafoRef.current
+    const saidaPorOrigem = new Map<string, string[]>()
+    const temEntrada = new Set<string>()
+    const participaDeAresta = new Set<string>()
+    atual.edges.forEach(e => {
+      saidaPorOrigem.set(e.source, [...(saidaPorOrigem.get(e.source) ?? []), e.target])
+      temEntrada.add(e.target)
+      participaDeAresta.add(e.source)
+      participaDeAresta.add(e.target)
+    })
+    const porId = new Map(atual.nodes.map(n => [n.id, n]))
+    const raizes = atual.nodes.filter(n => participaDeAresta.has(n.id) && !temEntrada.has(n.id))
+    if (raizes.length === 0) return
+
+    const PASSO_X = 260
+    const MARGEM_Y = 36
+    const novasPosicoes = new Map<string, { x: number; y: number }>()
+    const visitados = new Set<string>()
+    let cursorY = 0
+
+    function layoutSubarvore(id: string, profundidade: number): number {
+      if (visitados.has(id)) return 0
+      visitados.add(id)
+      const no = porId.get(id)
+      const altura = no ? medidas(no).h : 60
+      const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
+      if (filhos.length === 0) {
+        novasPosicoes.set(id, { x: profundidade * PASSO_X, y: cursorY })
+        const ocupado = altura + MARGEM_Y
+        cursorY += ocupado
+        return ocupado
+      }
+      const yAntesDosFilhos = cursorY
+      const ocupadoPelosFilhos = filhos.reduce((soma, f) => soma + layoutSubarvore(f, profundidade + 1), 0)
+      const centroDosFilhos = yAntesDosFilhos + ocupadoPelosFilhos / 2 - MARGEM_Y / 2
+      novasPosicoes.set(id, { x: profundidade * PASSO_X, y: centroDosFilhos })
+      return Math.max(ocupadoPelosFilhos, altura + MARGEM_Y)
+    }
+
+    raizes.forEach(raiz => {
+      layoutSubarvore(raiz.id, 0)
+      cursorY += 50 // respiro entre árvores/componentes desconectados
+    })
+
+    const nodes = atual.nodes.map(n => {
+      const pos = novasPosicoes.get(n.id)
+      return pos ? { ...n, position: pos } : n
+    })
+    commit({ ...atual, nodes })
+    requestAnimationFrame(() => fitView({ padding: 0.3, duration: 300 }))
+  }, [])
+
   const onCamada = useCallback((direcao: 'frente' | 'tras') => {
     const atual = grafoRef.current
     const selecionados = atual.nodes.filter(n => n.selected)
@@ -2471,14 +2623,27 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         else if (e.key === 'Escape') { sairApresentacao() }
         return
       }
+      if (e.key === '?') { e.preventDefault(); setAjudaAberta(v => !v); return }
+      if (ajudaAberta && e.key === 'Escape') { setAjudaAberta(false); return }
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); return }
       if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); refazer(); return }
       if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); onSelecionarTudo(); return }
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); onDuplicarSelecionados(); return }
       if (mod && e.key.toLowerCase() === 'g') { e.preventDefault(); if (e.shiftKey) onDesagrupar(); else onAgrupar(); return }
+      // Zoom (Ctrl/Cmd +/-/0, Shift+1 ajustar à tela) — mesmos atalhos de
+      // Figma/Whimsical; precisa de preventDefault senão o navegador
+      // aplicaria o próprio zoom de página em vez do zoom do canvas.
+      if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomIn({ duration: 150 }); return }
+      if (mod && e.key === '-') { e.preventDefault(); zoomOut({ duration: 150 }); return }
+      if (mod && e.key === '0') { e.preventDefault(); zoomTo(1, { duration: 150 }); return }
+      if (e.shiftKey && e.key === '!') { fitView({ padding: 0.3, duration: 300 }); return }
       if (e.key === 'Delete' || e.key === 'Backspace') { onExcluirSelecionados(); return }
       if (e.key === 'Escape') { onDeselecionarTudo(); return }
+      if (!mod && !e.shiftKey && !e.altKey) {
+        const forma = ATALHO_PARA_FORMA[e.key.toUpperCase()]
+        if (forma) { e.preventDefault(); onAdicionarForma(forma); return }
+      }
       if (e.key.startsWith('Arrow')) {
         const passo = e.shiftKey ? 10 : 1
         const dx = e.key === 'ArrowLeft' ? -passo : e.key === 'ArrowRight' ? passo : 0
@@ -2510,7 +2675,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
 
   return (
     <AcoesMapaContext.Provider value={{
-      onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
+      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
       onAdicionarMensagemComentario, onAlternarResolvidoComentario,
     }}>
       <div className="pl-mapa-canvas" ref={containerRef} data-tema={temaAtual.id}>
@@ -2537,6 +2702,21 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         >
           {!modoApresentacao && <Background gap={22} size={1} color="var(--pl-border-strong)" variant={temaAtual.variante} />}
           {!modoApresentacao && <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />}
+          {!modoApresentacao && (
+            <Panel position="top-right" className="pl-mapa-toolbar">
+              <button type="button" className="pl-mapa-toolbar-btn" title="Atalhos de teclado (?)" onClick={() => setAjudaAberta(v => !v)}>
+                <IconeAjuda />
+              </button>
+            </Panel>
+          )}
+          {!modoApresentacao && minimapaAberto && (
+            <MiniMap
+              position="bottom-left" pannable zoomable
+              maskColor="color-mix(in srgb, var(--pl-bg) 70%, transparent)"
+              style={{ background: 'var(--pl-surface)', border: '1px solid var(--pl-border-strong)', borderRadius: 10 }}
+              nodeColor={n => (typeof (n.data as Record<string, unknown>)?.cor === 'string' ? ((n.data as Record<string, unknown>).cor as string) : 'var(--pl-ink-2)')}
+            />
+          )}
           {modoApresentacao ? (
             <Panel position="bottom-center" className="pl-mapa-toolbar-apresentacao">
               <button type="button" className="pl-mapa-tv-btn" title="Slide anterior" disabled={slideAtual === 0} onClick={() => irParaSlide(slideAtual - 1)}>
@@ -2675,8 +2855,14 @@ function Canvas({ dadosIniciais, onChange, tema }: {
               <IconeLixeiraToolbar />
             </button>
             <div className="pl-mapa-tv-divisor" />
-            <button type="button" className="pl-mapa-tv-btn" title="Ajustar à tela" onClick={() => fitView({ padding: 0.3, duration: 300 })}>
+            <button type="button" className="pl-mapa-tv-btn" title="Ajustar à tela (Shift+1)" onClick={() => fitView({ padding: 0.3, duration: 300 })}>
               <IconeAjustarTela />
+            </button>
+            <button type="button" className={`pl-mapa-tv-btn ${minimapaAberto ? 'ativo' : ''}`} title="Minimapa" onClick={() => setMinimapaAberto(v => !v)}>
+              <IconeMinimapa />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Organizar automaticamente (reorganiza ramos ligados por conector)" onClick={onOrganizarLayout}>
+              <IconeOrganizarLayout />
             </button>
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como PNG" onClick={onExportarPng}>
               <IconeExportar />
@@ -2762,8 +2948,75 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             </Panel>
           )}
         </ReactFlow>
+        {ajudaAberta && <PainelAtalhos onFechar={() => setAjudaAberta(false)} />}
       </div>
     </AcoesMapaContext.Provider>
+  )
+}
+
+function LinhaAtalho({ label, teclas }: { label: string; teclas: string[] }) {
+  return (
+    <div className="pl-ajuda-linha">
+      <span>{label}</span>
+      <span className="pl-ajuda-teclas">{teclas.map(t => <kbd key={t}>{t}</kbd>)}</span>
+    </div>
+  )
+}
+
+// Painel de atalhos (6.15): só documentação, sem estado próprio além de
+// abrir/fechar — motivo de não estar dentro do fluxo de commit/histórico.
+function PainelAtalhos({ onFechar }: { onFechar: () => void }) {
+  return (
+    <div className="pl-modal-backdrop" onClick={onFechar}>
+      <div className="pl-card pl-modal-panel pl-ajuda-painel" onClick={e => e.stopPropagation()}>
+        <div className="pl-card-head">
+          <div>
+            <div className="pl-card-title">Atalhos de teclado</div>
+            <div className="pl-card-sub">Tecla <kbd>?</kbd> abre/fecha este painel a qualquer momento.</div>
+          </div>
+          <button type="button" className="pl-mapa-toolbar-btn" title="Fechar" onClick={onFechar}>×</button>
+        </div>
+        <div className="pl-ajuda-grade">
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Geral</div>
+            <LinhaAtalho label="Desfazer" teclas={['Ctrl', 'Z']} />
+            <LinhaAtalho label="Refazer" teclas={['Ctrl', 'Shift', 'Z']} />
+            <LinhaAtalho label="Selecionar tudo" teclas={['Ctrl', 'A']} />
+            <LinhaAtalho label="Desmarcar / fechar" teclas={['Esc']} />
+            <LinhaAtalho label="Colar texto como stickies" teclas={['Ctrl', 'V']} />
+          </div>
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Objetos selecionados</div>
+            <LinhaAtalho label="Duplicar" teclas={['Ctrl', 'D']} />
+            <LinhaAtalho label="Excluir" teclas={['Delete']} />
+            <LinhaAtalho label="Agrupar" teclas={['Ctrl', 'G']} />
+            <LinhaAtalho label="Desagrupar" teclas={['Ctrl', 'Shift', 'G']} />
+            <LinhaAtalho label="Mover 1px" teclas={['↑', '↓', '←', '→']} />
+            <LinhaAtalho label="Mover 10px" teclas={['Shift', '↑↓←→']} />
+          </div>
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Mapa mental (editando uma ideia)</div>
+            <LinhaAtalho label="Nova ideia irmã" teclas={['Enter']} />
+            <LinhaAtalho label="Nova ideia filha" teclas={['Tab']} />
+          </div>
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Zoom</div>
+            <LinhaAtalho label="Aumentar" teclas={['Ctrl', '+']} />
+            <LinhaAtalho label="Diminuir" teclas={['Ctrl', '-']} />
+            <LinhaAtalho label="Zoom 100%" teclas={['Ctrl', '0']} />
+            <LinhaAtalho label="Ajustar à tela" teclas={['Shift', '1']} />
+          </div>
+          <div className="pl-ajuda-secao pl-ajuda-secao-larga">
+            <div className="pl-ajuda-titulo-secao">Criar forma (com o canvas em foco, sem nada selecionado pra editar)</div>
+            <div className="pl-ajuda-formas-grade">
+              {ORDEM_FORMAS.map(tipo => (
+                <LinhaAtalho key={tipo} label={CONFIG_FORMA[tipo].rotulo} teclas={[CONFIG_FORMA[tipo].atalho]} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

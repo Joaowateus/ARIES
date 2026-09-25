@@ -1492,6 +1492,23 @@
 }
 .pl-conector-cor-swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); cursor: pointer; padding: 0; }
 .pl-conector-cor-swatch:hover { transform: scale(1.15); }
+.pl-conector-cor-swatch.ativo { box-shadow: 0 0 0 2px var(--pl-surface), 0 0 0 4px var(--pl-accent); }
+
+/* ============ PAINEL DE ATALHOS DE TECLADO ============ */
+.pl-ajuda-painel { max-width: 620px; }
+.pl-ajuda-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 24px; }
+.pl-ajuda-secao-larga { grid-column: 1 / -1; }
+.pl-ajuda-titulo-secao { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pl-ink-muted); margin-bottom: 8px; }
+.pl-ajuda-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; color: var(--pl-ink-1); }
+.pl-ajuda-teclas { display: flex; gap: 3px; flex-shrink: 0; }
+.pl-ajuda-linha kbd, .pl-ajuda-teclas kbd {
+  font-family: 'IBM Plex Mono'; font-size: 10.5px; background: var(--pl-surface-2); border: 1px solid var(--pl-border);
+  border-radius: 5px; padding: 2px 6px; color: var(--pl-ink-1);
+}
+.pl-ajuda-formas-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 16px; }
+@container (max-width: 480px) {
+  .pl-ajuda-grade, .pl-ajuda-formas-grade { grid-template-columns: 1fr; }
+}
 
 /* Chrome do React Flow (fundo, controles) combinando com o tema escuro/claro do app */
 .pl-mapa-canvas .react-flow__controls {
