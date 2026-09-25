@@ -12,10 +12,11 @@
 // primeira abertura, ver `dadosIniciaisDoBoard`.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
-  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
+  ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
   EdgeLabelRenderer, MarkerType,
-  getBezierPath, useInternalNode, useReactFlow, applyNodeChanges, applyEdgeChanges,
+  getBezierPath, useInternalNode, useReactFlow, useViewport, applyNodeChanges, applyEdgeChanges,
   type Node, type Edge, type Connection, type NodeProps, type EdgeProps, type NodeTypes, type EdgeTypes, type NodeChange, type EdgeChange,
+  type FinalConnectionState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
@@ -140,6 +141,65 @@ function IconeAjustarTela() {
     </svg>
   )
 }
+function IconeOrganizarLayout() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="4" cy="12" r="2" />
+      <circle cx="18" cy="5" r="2" />
+      <circle cx="18" cy="12" r="2" />
+      <circle cx="18" cy="19" r="2" />
+      <path d="M6 12h4M12 12l4-7M12 12l4 7" />
+    </svg>
+  )
+}
+function IconeSelecionarRamo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5" cy="12" r="2.2" />
+      <circle cx="18" cy="6" r="2.2" />
+      <circle cx="18" cy="18" r="2.2" />
+      <path d="M7 12h3.5M10.5 12l4-4.5M10.5 12l4 4.5" />
+      <rect x="1.5" y="2" width="21" height="20" rx="3" strokeDasharray="3 2.5" />
+    </svg>
+  )
+}
+function IconeCorAutomatica() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 1 1-3.5-7.1" />
+      <polyline points="21 3 21 9 15 9" />
+    </svg>
+  )
+}
+function IconeLayoutVertical() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="4" r="2.2" />
+      <circle cx="6" cy="18" r="2.2" />
+      <circle cx="18" cy="18" r="2.2" />
+      <path d="M12 6v3.5M12 9.5L7.5 15.8M12 9.5l4.5 6.3" />
+    </svg>
+  )
+}
+function IconeLayoutRadial() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="2.2" />
+      <circle cx="12" cy="3" r="1.8" />
+      <circle cx="20" cy="15" r="1.8" />
+      <circle cx="4" cy="15" r="1.8" />
+      <path d="M12 5v5M13.5 11.5l5 3M10.5 11.5l-5 3" />
+    </svg>
+  )
+}
+function IconeMinimapa() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <rect x="14" y="12" width="6" height="6" rx="1" fill="currentColor" stroke="none" opacity="0.5" />
+    </svg>
+  )
+}
 function IconeFormas() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -162,6 +222,15 @@ function IconeTexto() {
       <polyline points="4 7 4 4 20 4 20 7" />
       <line x1="9" y1="20" x2="15" y2="20" />
       <line x1="12" y1="4" x2="12" y2="20" />
+    </svg>
+  )
+}
+function IconeImagem() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
     </svg>
   )
 }
@@ -295,6 +364,15 @@ function IconeResolver() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+function IconeAjuda() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   )
 }
@@ -564,6 +642,13 @@ const CONFIG_FORMA: Record<TipoForma, ConfigForma> = {
 
 const ORDEM_FORMAS: TipoForma[] = ['retangulo', 'pilula', 'oval', 'losango', 'trapezio', 'triangulo', 'hexagono', 'cilindro', 'linha', 'colchete', 'estrela', 'nuvem']
 
+// Letra solta (sem modificador) → cria a forma direto na posição em
+// cascata, igual clicar no botão do flyout — fecha o loop do que a própria
+// toolbar já promete no tooltip "(R)", "(U)" etc. desde sempre.
+const ATALHO_PARA_FORMA: Record<string, TipoForma> = Object.fromEntries(
+  ORDEM_FORMAS.map(tipo => [CONFIG_FORMA[tipo].atalho.toUpperCase(), tipo]),
+) as Record<string, TipoForma>
+
 // Cores pastel pra sticky notes — paleta separada da PALETA_RAMOS (que é
 // pra linhas/ramos, cores mais saturadas): sticky note de verdade tem
 // fundo claro com texto escuro por cima, não o contrário.
@@ -655,6 +740,12 @@ interface DadosNoMapa extends Record<string, unknown> {
   texto: string
   ehCentral: boolean
   cor: string
+  // true quando o usuário escolheu essa cor manualmente (pelo seletor da
+  // barra flutuante) — só então `cor` é persistida em `estilo.cor` e
+  // sobrevive a um recálculo de layout/BFS. Sem override, a cor é sempre
+  // recalculada a partir da posição na árvore (ver boardParaFlow), inclusive
+  // pros filhos: reconectar um ramo em outro pai muda a cor sozinho.
+  corManual?: boolean
 }
 
 interface DadosForma extends Record<string, unknown> {
@@ -768,10 +859,19 @@ interface DadosComentario extends Record<string, unknown> {
   resolvido: boolean
 }
 
+// Imagem solta no board (item 4 do pedido) — mesmo padrão do bloco de
+// imagem do Editor de Blocos: sem upload/armazenamento próprio, só cola um
+// link e pronto (`url`). Redimensionável feito NodeResizer, igual
+// seção/frame/pilha.
+interface DadosImagem extends Record<string, unknown> {
+  tipoObjeto: 'imagem'
+  url: string
+}
+
 type DadosObjeto =
   | DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao | DadosTabela
   | DadosDesenho | DadosFrame | DadosBotao | DadosInputWireframe | DadosAvatar | DadosPilha | DadosTarefa
-  | DadosComentario
+  | DadosComentario | DadosImagem
 type NoFlow = Node<DadosObjeto>
 
 function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
@@ -874,9 +974,18 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
       },
     }
   }
+  if (o.tipo === 'imagem') {
+    return {
+      ...base, type: 'imagem', width: o.largura ?? 280, height: o.altura ?? 200,
+      data: { tipoObjeto: 'imagem', grupoId, url: (o.conteudo.url as string) ?? '' },
+    }
+  }
   return {
     ...base, type: 'noMapa',
-    data: { tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
+    data: {
+      tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral,
+      cor: corHerdada, corManual: typeof o.estilo?.cor === 'string',
+    },
   }
 }
 
@@ -959,8 +1068,15 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
       conteudo: comGrupo({ mensagens: n.data.mensagens, resolvido: n.data.resolvido }),
     }
   }
+  if (n.data.tipoObjeto === 'imagem') {
+    return {
+      id: n.id, tipo: 'imagem', x: n.position.x, y: n.position.y, ...comuns,
+      largura: n.width ?? 280, altura: n.height ?? 200, conteudo: comGrupo({ url: n.data.url }),
+    }
+  }
   return {
     id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y, ...comuns,
+    ...(n.data.corManual ? { estilo: { cor: n.data.cor } } : {}),
     conteudo: comGrupo({ texto: n.data.texto, ehCentral: n.data.ehCentral }),
   }
 }
@@ -969,11 +1085,17 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
 // de cada ramo do mapa mental por BFS a partir do nó central (mesma lógica
 // visual de antes, só que operando sobre conectores livres em vez de uma
 // árvore fixa — formas soltas sem caminho até o central ficam com a cor
-// neutra padrão).
+// neutra padrão). Um `noMapa` com `estilo.cor` explícito (recolorido à mão
+// pelo usuário) tem sua cor pré-semeada aqui, então o BFS abaixo nunca a
+// sobrescreve — e ainda assim ela vira a base pra colorir os FILHOS desse
+// nó, exatamente como a cor automática do central faz pros ramos.
 function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { nodes: NoFlow[]; edges: Edge[] } {
   const central = objetos.find(o => o.tipo === 'noMapa' && o.conteudo.ehCentral)
   const corPorObjeto = new Map<string, string>()
-  if (central) corPorObjeto.set(central.id, 'var(--pl-accent)')
+  objetos.forEach(o => {
+    if (o.tipo === 'noMapa' && typeof o.estilo?.cor === 'string') corPorObjeto.set(o.id, o.estilo.cor as string)
+  })
+  if (central && !corPorObjeto.has(central.id)) corPorObjeto.set(central.id, 'var(--pl-accent)')
 
   const saidaPorOrigem = new Map<string, BoardConector[]>()
   conectores.forEach(c => saidaPorOrigem.set(c.origemId, [...(saidaPorOrigem.get(c.origemId) ?? []), c]))
@@ -988,7 +1110,9 @@ function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { n
       saidas.forEach((c, i) => {
         if (visitados.has(c.destinoId)) return
         visitados.add(c.destinoId)
-        corPorObjeto.set(c.destinoId, atualId === central.id ? PALETA_RAMOS[i % PALETA_RAMOS.length] : corAtual)
+        if (!corPorObjeto.has(c.destinoId)) {
+          corPorObjeto.set(c.destinoId, atualId === central.id ? PALETA_RAMOS[i % PALETA_RAMOS.length] : corAtual)
+        }
         fila.push(c.destinoId)
       })
     }
@@ -1054,7 +1178,16 @@ function idsDaSubarvore(edges: Edge[], raizId: string): Set<string> {
 const AcoesMapaContext = createContext<{
   onMudarTexto: (id: string, texto: string) => void
   onAdicionarFilho: (id: string) => void
+  onCriarIrmao: (id: string) => void
   onExcluir: (id: string) => void
+  onMudarCor: (id: string, cor: string) => void
+  onLimparCorManual: (id: string) => void
+  onSelecionarRamo: (id: string) => void
+  onMudarUrlImagem: (id: string, url: string) => void
+  // Ver comentário no useEffect que consome isso, dentro de cada node de
+  // texto: string `"<id>#<timestamp>"` do nó que deve entrar em edição
+  // agora, ou null quando nenhum pedido está pendente.
+  pedidoEdicaoId: string | null
   onMudarEstiloConector: (id: string, patch: Partial<{ cor: string; tracejado: boolean; seta: boolean }>) => void
   onMudarLabelConector: (id: string, label: string) => void
   onExcluirConector: (id: string) => void
@@ -1063,6 +1196,24 @@ const AcoesMapaContext = createContext<{
   onAdicionarMensagemComentario: (id: string, texto: string) => void
   onAlternarResolvidoComentario: (id: string) => void
 } | null>(null)
+
+// Paleta usada nos seletores de cor "pós-criação" de forma/sticky/ícone —
+// mesma PALETA_RAMOS de sempre, mais as cores de sticky (pra forma/ícone
+// também poderem usar tons pastel se fizer sentido no board).
+const PALETA_COR_OBJETO = [...PALETA_RAMOS, ...PALETA_STICKY]
+
+function SeletorCorObjeto({ corAtual, onEscolher, cores = PALETA_COR_OBJETO }: { corAtual: string; onEscolher: (cor: string) => void; cores?: string[] }) {
+  return (
+    <>
+      {cores.map(cor => (
+        <button
+          key={cor} type="button" className={`pl-conector-cor-swatch ${corAtual === cor ? 'ativo' : ''}`} style={{ background: cor }}
+          title="Cor" onClick={() => onEscolher(cor)}
+        />
+      ))}
+    </>
+  )
+}
 
 function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
   const acoes = useContext(AcoesMapaContext)!
@@ -1075,6 +1226,14 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
   // arrastar sempre cairia em cima do input e nunca iniciaria o arraste.
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1084,6 +1243,15 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
         <button type="button" className="pl-mapa-toolbar-btn" title="Adicionar ideia filha" onClick={() => acoes.onAdicionarFilho(id)}>+</button>
+        <button type="button" className="pl-mapa-toolbar-btn" title="Selecionar esta ideia + tudo que pende dela" onClick={() => acoes.onSelecionarRamo(id)}>
+          <IconeSelecionarRamo />
+        </button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
+        {d.corManual && (
+          <button type="button" className="pl-mapa-toolbar-btn" title="Voltar à cor automática" onClick={() => acoes.onLimparCorManual(id)}>
+            <IconeCorAutomatica />
+          </button>
+        )}
         {!d.ehCentral && (
           <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
         )}
@@ -1098,10 +1266,18 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
           style={{ width: `${Math.max(valor.length, 4) + 2}ch` }}
           onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
           onBlur={sairEdicao}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+          // Enter/Tab replicam o fluxo padrão de mapa mental (MindMeister/
+          // Whimsical): Enter fecha a ideia atual e já abre uma nova ideia
+          // IRMÃ (mesmo pai), Tab abre uma nova ideia FILHA — dá pra
+          // despejar um mapa inteiro só de teclado, sem tocar no mouse.
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.currentTarget.blur(); acoes.onCriarIrmao(id) }
+            else if (e.key === 'Tab') { e.preventDefault(); e.currentTarget.blur(); acoes.onAdicionarFilho(id) }
+            else if (e.key === 'Escape') { e.currentTarget.blur() }
+          }}
         />
       ) : (
-        <div className="pl-mapa-no-texto" onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover">
+        <div className="pl-mapa-no-texto" onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover · Enter (dentro da edição) cria ideia irmã, Tab cria filha">
           {valor || (d.ehCentral ? 'Ideia central' : 'Nova ideia')}
         </div>
       )}
@@ -1116,6 +1292,14 @@ function FormaNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
   const config = CONFIG_FORMA[d.forma]
 
   function entrarEdicao() { setEditando(true) }
@@ -1131,6 +1315,7 @@ function FormaNode({ id, data }: NodeProps<NoFlow>) {
       />
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -1160,6 +1345,14 @@ function StickyNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1168,6 +1361,7 @@ function StickyNode({ id, data }: NodeProps<NoFlow>) {
     <div className="pl-sticky-no" style={{ background: d.cor }}>
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} cores={PALETA_STICKY} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -1195,6 +1389,14 @@ function TextoNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1232,6 +1434,7 @@ function IconeNode({ id, data }: NodeProps<NoFlow>) {
   return (
     <div className="pl-icone-no" style={{ color: d.cor }}>
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -1247,6 +1450,14 @@ function SecaoNode({ id, data, selected }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(false)
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1256,6 +1467,7 @@ function SecaoNode({ id, data, selected }: NodeProps<NoFlow>) {
       <NodeResizer minWidth={220} minHeight={160} isVisible={!!selected} lineClassName="pl-secao-resize-linha" handleClassName="pl-secao-resize-alca" />
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Renomear" onClick={entrarEdicao}>✎</button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
         <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
       </NodeToolbar>
       {editando ? (
@@ -1367,6 +1579,14 @@ function FrameNode({ id, data, selected }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(false)
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1404,6 +1624,14 @@ function BotaoNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1439,6 +1667,14 @@ function InputWireframeNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1491,6 +1727,14 @@ function PilhaNode({ id, data, selected }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(false)
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1525,6 +1769,14 @@ function TarefaNode({ id, data }: NodeProps<NoFlow>) {
   const [valor, setValor] = useState(d.texto)
   const [editando, setEditando] = useState(d.texto === '')
   useEffect(() => { setValor(d.texto) }, [d.texto])
+  // Enter com o nó selecionado, mas ainda sem editar, já abre a edição —
+  // atalho tipo "F2"/Finder, sem precisar de duplo clique ou do botão ✎.
+  // `pedidoEdicaoId` vem do handler global de teclado (`aoTeclar`); o sufixo
+  // "#timestamp" garante que pedir de novo pro MESMO nó ainda dispare o
+  // efeito (senão a 2ª vez seguida não mudaria de valor e o efeito não rodaria).
+  useEffect(() => {
+    if (acoes.pedidoEdicaoId?.startsWith(`${id}#`)) setEditando(true)
+  }, [acoes.pedidoEdicaoId, id])
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
@@ -1693,10 +1945,46 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
   )
 }
 
+function ImagemNode({ id, data, selected }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosImagem
+  const [rascunho, setRascunho] = useState('')
+
+  function confirmarUrl() {
+    const url = rascunho.trim()
+    if (url) acoes.onMudarUrlImagem(id, url)
+  }
+
+  return (
+    <div className="pl-imagem-no">
+      <NodeResizer minWidth={120} minHeight={90} isVisible={!!selected} lineClassName="pl-secao-resize-linha" handleClassName="pl-secao-resize-alca" />
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        {!!d.url && <button type="button" className="pl-mapa-toolbar-btn" title="Trocar imagem" onClick={() => acoes.onMudarUrlImagem(id, '')}>✎</button>}
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      {d.url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- URL arbitrária colada pelo usuário, sem otimização do Next
+        <img src={d.url} alt="" className="pl-imagem-img nodrag" draggable={false} />
+      ) : (
+        <div className="nodrag nopan pl-imagem-vazia">
+          <input
+            className="pl-imagem-input"
+            autoFocus
+            value={rascunho}
+            placeholder="Cole o link de uma imagem e aperte Enter..."
+            onChange={e => setRascunho(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') confirmarUrl() }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 const nodeTypes = {
   noMapa: NoMapaNode, forma: FormaNode, sticky: StickyNode, texto: TextoNode, icone: IconeNode, secao: SecaoNode, tabela: TabelaNode,
   desenho: DesenhoNode, frame: FrameNode, botao: BotaoNode, inputWireframe: InputWireframeNode, avatar: AvatarNode, pilha: PilhaNode, tarefa: TarefaNode,
-  comentario: ComentarioNode,
+  comentario: ComentarioNode, imagem: ImagemNode,
 } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
@@ -1706,7 +1994,8 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   tema?: TemaBoard | null
 }) {
   const temaAtual = TEMAS_BOARD.find(t => t.id === tema) ?? TEMAS_BOARD[0]
-  const { fitView, screenToFlowPosition } = useReactFlow()
+  const { fitView, screenToFlowPosition, zoomIn, zoomOut, zoomTo } = useReactFlow()
+  const { zoom } = useViewport()
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
     () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores),
   )
@@ -1715,6 +2004,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   // par cursor/mão da barra da referência.
   const [modoMao, setModoMao] = useState(false)
   const [formasAbertas, setFormasAbertas] = useState(false)
+  const [layoutFlyoutAberto, setLayoutFlyoutAberto] = useState(false)
   const [iconesAbertos, setIconesAbertos] = useState(false)
   // Modo (Diagrama/Wireframe/Tarefas) é só um filtro de quais botões de
   // criação aparecem na toolbar — nunca esconde objetos já existentes no
@@ -1738,6 +2028,24 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   // previsível, sem precisar de um campo de "ordem" dedicado no objeto.
   const [modoApresentacao, setModoApresentacao] = useState(false)
   const [slideAtual, setSlideAtual] = useState(0)
+  // Minimapa (visão geral do board): útil só quando o mapa cresce muito;
+  // começa desligado pra não poluir board pequeno/recém-criado.
+  const [minimapaAberto, setMinimapaAberto] = useState(false)
+  // Painel de atalhos (6.15): descobrível pela tecla "?" ou pelo botão
+  // dedicado — sem isso, atalhos como as letras de forma ou Enter/Tab no
+  // mapa mental ficam invisíveis pra quem não leu a documentação.
+  const [ajudaAberta, setAjudaAberta] = useState(false)
+  const [pedidoEdicaoId, setPedidoEdicaoId] = useState<string | null>(null)
+  // Menu de contexto (botão direito): 'pane' guarda a posição em coordenadas
+  // do board (screenToFlowPosition), pra "adicionar aqui" nascer exatamente
+  // sob o cursor; 'node' guarda só o id, já que as ações de nó (duplicar,
+  // camada, travar) operam sobre a SELEÇÃO — right-click seleciona o nó
+  // primeiro, então os botões do menu reaproveitam as ações já existentes.
+  const [menuContexto, setMenuContexto] = useState<
+    | { screenX: number; screenY: number; tipo: 'pane'; posicaoFlow: { x: number; y: number } }
+    | { screenX: number; screenY: number; tipo: 'node'; nodeId: string }
+    | null
+  >(null)
   const centralId = grafo.nodes.find(n => n.data.tipoObjeto === 'noMapa' && n.data.ehCentral)?.id
   const noSelecionadoId = grafo.nodes.find(n => n.selected)?.id ?? centralId ?? grafo.nodes[0]?.id
   // grafoRef precisa ficar em dia de forma síncrona (não via useEffect): o
@@ -1766,19 +2074,52 @@ function Canvas({ dadosIniciais, onChange, tema }: {
       // membros do grupo — arrastar qualquer um move o grupo inteiro junto,
       // não só ele. Sem isso "Agrupar" seria só um rótulo sem efeito real.
       const porId = new Map(atual.nodes.map(n => [n.id, n]))
+      const idsJaNaMudanca = new Set(changes.filter(c => c.type === 'position').map(c => c.id))
       const extras: NodeChange<NoFlow>[] = []
+      // Saída por origem, só calculado se algum change for de posição —
+      // evita montar o mapa à toa em toda tecla/seleção que passa por aqui.
+      let saidaPorOrigem: Map<string, string[]> | null = null
       changes.forEach(c => {
         if (c.type !== 'position' || !c.position) return
         const no = porId.get(c.id)
-        const grupoId = (no?.data as Record<string, unknown> | undefined)?.grupoId as string | undefined
-        if (!grupoId || !no) return
+        if (!no) return
         const dx = c.position.x - no.position.x
         const dy = c.position.y - no.position.y
         if (dx === 0 && dy === 0) return
-        atual.nodes.forEach(n => {
-          if (n.id === c.id || (n.data as Record<string, unknown>).grupoId !== grupoId) return
-          extras.push({ id: n.id, type: 'position', position: { x: n.position.x + dx, y: n.position.y + dy }, dragging: c.dragging })
-        })
+        const grupoId = (no.data as Record<string, unknown>).grupoId as string | undefined
+        if (grupoId) {
+          atual.nodes.forEach(n => {
+            if (n.id === c.id || (n.data as Record<string, unknown>).grupoId !== grupoId) return
+            extras.push({ id: n.id, type: 'position', position: { x: n.position.x + dx, y: n.position.y + dy }, dragging: c.dragging })
+          })
+        }
+        // Ramo de mapa mental: arrastar um `noMapa` carrega a subárvore
+        // inteira junto (filhos, netos...) — senão qualquer ajuste de
+        // posição desmancharia a árvore que "Organizar automaticamente" (ou
+        // o próprio usuário) monta. Só pra `noMapa`: numa cadeia de formas
+        // (Mapa de processo) mover uma etapa não deveria arrastar as
+        // seguintes junto, cada etapa se ajusta independente ali.
+        if (no.data.tipoObjeto === 'noMapa') {
+          saidaPorOrigem ??= (() => {
+            const m = new Map<string, string[]>()
+            atual.edges.forEach(e => m.set(e.source, [...(m.get(e.source) ?? []), e.target]))
+            return m
+          })()
+          const visitados = new Set([c.id])
+          const pilha = [...(saidaPorOrigem.get(c.id) ?? [])]
+          while (pilha.length > 0) {
+            const idAtual = pilha.pop()!
+            if (visitados.has(idAtual)) continue
+            visitados.add(idAtual)
+            if (!idsJaNaMudanca.has(idAtual)) {
+              const descendente = porId.get(idAtual)
+              if (descendente) {
+                extras.push({ id: idAtual, type: 'position', position: { x: descendente.position.x + dx, y: descendente.position.y + dy }, dragging: c.dragging })
+              }
+            }
+            saidaPorOrigem.get(idAtual)?.forEach(f => pilha.push(f))
+          }
+        }
       })
       const novo = { ...atual, nodes: applyNodeChanges([...changes, ...extras], atual.nodes) }
       grafoRef.current = novo
@@ -1868,7 +2209,10 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ ...atual, nodes })
   }, [])
 
-  const onAdicionarFilho = useCallback((paiId: string) => {
+  // `posicaoForcada` (opcional): usado pelo "arrastar do handle e soltar no
+  // vazio" (onConnectEnd) pra nascer o filho exatamente onde o usuário
+  // soltou o mouse, em vez da posição em cascata padrão à direita do pai.
+  const onAdicionarFilho = useCallback((paiId: string, posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const pai = atual.nodes.find(n => n.id === paiId)
     if (!pai) return
@@ -1881,12 +2225,44 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'noMapa',
-      position: { x: pai.position.x + 260, y: pai.position.y + filhosExistentes * 90 - (filhosExistentes > 0 ? 45 : 0) },
+      position: posicaoForcada ?? { x: pai.position.x + 260, y: pai.position.y + filhosExistentes * 90 - (filhosExistentes > 0 ? 45 : 0) },
       data: { tipoObjeto: 'noMapa', texto: '', ehCentral: false, cor },
     }
     const novaAresta: Edge = { id: `${paiId}-${novoId}`, source: paiId, target: novoId, type: 'flutuante', style: { stroke: cor, strokeWidth: 2.5 } }
     commit({ nodes: [...atual.nodes, novoNo], edges: [...atual.edges, novaAresta] })
   }, [])
+
+  // Arrastar de um handle e soltar em área vazia do canvas (não em cima de
+  // outro nó) já cria um novo objeto conectado ali — réplica do gesto padrão
+  // de Whimsical/MindMeister/FigJam pra expandir um mapa/fluxo sem precisar
+  // voltar na toolbar. Dois casos com resultado natural: origem `noMapa`
+  // cria uma ideia filha (delega em onAdicionarFilho); origem `forma` cria
+  // outra forma do mesmo tipo/cor já ligada por seta (fluxograma tipo "Mapa
+  // de processo"). Qualquer outro tipo de origem (sticky, texto, ícone...)
+  // não tem um "próximo objeto" óbvio, então o gesto vira só um connect
+  // cancelado, sem efeito.
+  const onConectarSoltarNoVazio = useCallback((_event: MouseEvent | TouchEvent, estadoConexao: FinalConnectionState) => {
+    const { fromNode, toNode, to } = estadoConexao
+    if (!fromNode || toNode || !to) return
+    const dadosOrigem = fromNode.data as DadosObjeto
+    if (dadosOrigem.tipoObjeto === 'noMapa') {
+      onAdicionarFilho(fromNode.id, to)
+      return
+    }
+    if (dadosOrigem.tipoObjeto === 'forma') {
+      const atual = grafoRef.current
+      const novoId = gerarIdNo()
+      const novoNo: NoFlow = {
+        id: novoId, type: 'forma', position: to,
+        data: { tipoObjeto: 'forma', forma: dadosOrigem.forma, texto: '', cor: dadosOrigem.cor },
+      }
+      const novaAresta: Edge = {
+        id: `c${gerarIdNo()}`, source: fromNode.id, target: novoId, type: 'flutuante',
+        style: { stroke: dadosOrigem.cor, strokeWidth: 2.5 }, markerEnd: { type: MarkerType.ArrowClosed, color: dadosOrigem.cor },
+      }
+      commit({ nodes: [...atual.nodes, novoNo], edges: [...atual.edges, novaAresta] })
+    }
+  }, [onAdicionarFilho])
 
   const onExcluir = useCallback((id: string) => {
     const atual = grafoRef.current
@@ -1894,6 +2270,55 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
     const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
     commit({ nodes, edges })
+  }, [])
+
+  // Ideia "irmã" (Enter dentro da edição de um noMapa): mesmo pai de `id`,
+  // não um filho dele — acha o pai pelo conector de entrada e delega pra
+  // onAdicionarFilho. Sem pai (é o próprio nó central) não tem irmão
+  // possível, então cai pra criar um filho mesmo, resultado equivalente ao
+  // "+" da toolbar.
+  const onCriarIrmao = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const arestaPai = atual.edges.find(e => e.target === id)
+    onAdicionarFilho(arestaPai ? arestaPai.source : id)
+  }, [onAdicionarFilho])
+
+  const onMudarCor = useCallback((id: string, cor: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => {
+      if (n.id !== id) return n
+      // Em noMapa, escolher uma cor manualmente marca `corManual` — é essa
+      // marca que decide se a cor sobrevive a um recálculo de árvore (ver
+      // nodeParaObjeto/boardParaFlow). Nos outros tipos a cor já era sempre
+      // "manual" (nunca teve componente automático), então nada muda.
+      const extra = n.data.tipoObjeto === 'noMapa' ? { corManual: true } : {}
+      return { ...n, data: { ...n.data, cor, ...extra } }
+    })
+    commit({ ...atual, nodes })
+  }, [])
+
+  // "Cor automática" (só noMapa): tira o override e reprocessa objetos→flow
+  // do zero, pra essa ideia (e quem pende dela, se também não tiver override
+  // próprio) voltar a herdar a cor calculada pela posição na árvore.
+  const onLimparCorManual = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'noMapa' ? { ...n, data: { ...n.data, corManual: false } } : n))
+    const { objetos, conectores } = flowParaBoard(nodes, atual.edges)
+    commit(boardParaFlow(objetos, conectores))
+  }, [])
+
+  // "Selecionar ramo" (6.x, item 5 do pedido): substitui a seleção atual
+  // pelo próprio nó + toda a subárvore que pende dele (idsDaSubarvore já
+  // existe pra excluir/duplicar). Depois disso, arrastar qualquer um dos
+  // selecionados já move o grupo inteiro — comportamento nativo de
+  // multi-seleção do React Flow, sem precisar de lógica extra aqui.
+  const onSelecionarRamo = useCallback((id: string) => {
+    setGrafo(atual => {
+      const idsRamo = idsDaSubarvore(atual.edges, id)
+      const novo = { ...atual, nodes: atual.nodes.map(n => ({ ...n, selected: idsRamo.has(n.id) })) }
+      grafoRef.current = novo
+      return novo
+    })
   }, [])
 
   const onAdicionarForma = useCallback((forma: TipoForma) => {
@@ -1908,14 +2333,14 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
 
-  const onAdicionarSticky = useCallback(() => {
+  const onAdicionarSticky = useCallback((posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
     const cor = PALETA_STICKY[atual.nodes.filter(n => n.type === 'sticky').length % PALETA_STICKY.length]
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'sticky',
-      position: posicaoEmCascata(base, atual.nodes.length),
+      position: posicaoForcada ?? posicaoEmCascata(base, atual.nodes.length),
       data: { tipoObjeto: 'sticky', texto: '', cor },
     }
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
@@ -1949,17 +2374,74 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ nodes: [...atual.nodes, ...novosNos], edges: atual.edges })
   }, [])
 
-  const onAdicionarTexto = useCallback(() => {
+  const onAdicionarTexto = useCallback((posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
     const novoId = gerarIdNo()
     const novoNo: NoFlow = {
       id: novoId, type: 'texto',
-      position: posicaoEmCascata(base, atual.nodes.length),
+      position: posicaoForcada ?? posicaoEmCascata(base, atual.nodes.length),
       data: { tipoObjeto: 'texto', texto: '' },
     }
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
+
+  const onAdicionarImagem = useCallback((posicaoForcada?: { x: number; y: number }) => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const passo = atual.nodes.length % 6
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'imagem',
+      position: posicaoForcada ?? { x: (base?.position.x ?? 0) - 460 - passo * 18, y: (base?.position.y ?? 0) - 140 + passo * 20 },
+      width: 280, height: 200, zIndex: -1,
+      data: { tipoObjeto: 'imagem', url: '' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  // Ideia "solta" (sem pai) — só usada pelo menu de contexto do canvas
+  // vazio: cria uma ideia de mapa mental sem conector nenhum, exatamente no
+  // ponto clicado. O usuário conecta depois arrastando de/pra ela, se quiser
+  // (ou deixa solta — o modelo de board plano não exige conectividade).
+  const onAdicionarIdeiaLivre = useCallback((posicao: { x: number; y: number }) => {
+    const atual = grafoRef.current
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'noMapa', position: posicao,
+      data: { tipoObjeto: 'noMapa', texto: '', ehCentral: false, cor: 'var(--pl-ink-2)' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [])
+
+  const onMudarUrlImagem = useCallback((id: string, url: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'imagem' ? { ...n, data: { ...n.data, url } } : n))
+    commit({ ...atual, nodes })
+  }, [])
+
+  // Menu de contexto (item 2 do pedido) — botão direito no canvas vazio abre
+  // "adicionar aqui" pra qualquer um dos objetos mais comuns, exatamente sob
+  // o cursor; botão direito num objeto já o seleciona (substituindo a
+  // seleção atual) e abre um menu com as ações mais usadas daquele objeto,
+  // reaproveitando toda a lógica de ações-sobre-seleção que já existia.
+  const onPaneContextMenuHandler = useCallback((event: React.MouseEvent | MouseEvent) => {
+    event.preventDefault()
+    const posicaoFlow = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    setMenuContexto({ screenX: event.clientX, screenY: event.clientY, tipo: 'pane', posicaoFlow })
+  }, [screenToFlowPosition])
+
+  const onNodeContextMenuHandler = useCallback((event: React.MouseEvent, node: NoFlow) => {
+    event.preventDefault()
+    setGrafo(atual => {
+      const jaEraUnicoSelecionado = atual.nodes.filter(n => n.selected).length === 1 && node.selected
+      if (jaEraUnicoSelecionado) return atual
+      const novo = { ...atual, nodes: atual.nodes.map(n => ({ ...n, selected: n.id === node.id })) }
+      grafoRef.current = novo
+      return novo
+    })
+    setMenuContexto({ screenX: event.clientX, screenY: event.clientY, tipo: 'node', nodeId: node.id })
+  }, [])
 
   const onAdicionarIcone = useCallback((icone: TipoIcone) => {
     const atual = grafoRef.current
@@ -2287,6 +2769,92 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ ...atual, nodes })
   }, [])
 
+  // "Organizar automaticamente" (Layout do mapa): reflui só a parte do board
+  // que É uma árvore/fluxo (objetos ligados por conector, ex.: ramos do mapa
+  // mental ou etapas de um "Mapa de processo") — objeto solto (sticky,
+  // seção, forma sem conector) nunca é tocado, mover algo que o usuário
+  // posicionou de propósito (ex.: um card dentro de uma coluna do Kanban)
+  // seria pior do que não ter o botão. Três direções: horizontal/vertical
+  // são a mesma árvore em camadas (só troca qual eixo é "profundidade" e
+  // qual é "onde as subárvores se espalham pra não colidir"); radial parte
+  // do central e distribui cada subárvore numa fatia de ângulo proporcional
+  // ao nº de folhas, bem mais perto do desenho clássico de mapa mental.
+  type LayoutDirecao = 'horizontal' | 'vertical' | 'radial'
+  const onOrganizarLayout = useCallback((direcao: LayoutDirecao) => {
+    const atual = grafoRef.current
+    const saidaPorOrigem = new Map<string, string[]>()
+    const temEntrada = new Set<string>()
+    const participaDeAresta = new Set<string>()
+    atual.edges.forEach(e => {
+      saidaPorOrigem.set(e.source, [...(saidaPorOrigem.get(e.source) ?? []), e.target])
+      temEntrada.add(e.target)
+      participaDeAresta.add(e.source)
+      participaDeAresta.add(e.target)
+    })
+    const porId = new Map(atual.nodes.map(n => [n.id, n]))
+    const raizes = atual.nodes.filter(n => participaDeAresta.has(n.id) && !temEntrada.has(n.id))
+    if (raizes.length === 0) return
+
+    const novasPosicoes = new Map<string, { x: number; y: number }>()
+    const visitados = new Set<string>()
+
+    if (direcao === 'radial') {
+      const PASSO_RADIAL = 230
+      function layoutRadial(id: string, profundidade: number, anguloIni: number, anguloFim: number) {
+        if (visitados.has(id)) return
+        visitados.add(id)
+        const anguloMeio = (anguloIni + anguloFim) / 2
+        const raio = profundidade * PASSO_RADIAL
+        novasPosicoes.set(id, { x: raio * Math.cos(anguloMeio), y: raio * Math.sin(anguloMeio) })
+        const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
+        if (filhos.length === 0) return
+        const fatia = (anguloFim - anguloIni) / filhos.length
+        filhos.forEach((f, i) => layoutRadial(f, profundidade + 1, anguloIni + i * fatia, anguloIni + (i + 1) * fatia))
+      }
+      let anguloCursor = 0
+      raizes.forEach(raiz => {
+        const fatiaRaiz = (2 * Math.PI) / raizes.length
+        layoutRadial(raiz.id, 0, anguloCursor, anguloCursor + fatiaRaiz)
+        anguloCursor += fatiaRaiz
+      })
+    } else {
+      const horizontal = direcao === 'horizontal'
+      const PASSO_PRINCIPAL = 260
+      const MARGEM_CRUZADA = 36
+      let cursorCruzado = 0
+      function layoutEmArvore(id: string, profundidade: number): number {
+        if (visitados.has(id)) return 0
+        visitados.add(id)
+        const no = porId.get(id)
+        const tamanhoCruzado = no ? (horizontal ? medidas(no).h : medidas(no).w) : 60
+        const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
+        const principal = profundidade * PASSO_PRINCIPAL
+        if (filhos.length === 0) {
+          novasPosicoes.set(id, horizontal ? { x: principal, y: cursorCruzado } : { x: cursorCruzado, y: principal })
+          const ocupado = tamanhoCruzado + MARGEM_CRUZADA
+          cursorCruzado += ocupado
+          return ocupado
+        }
+        const cruzadoAntes = cursorCruzado
+        const ocupadoPelosFilhos = filhos.reduce((soma, f) => soma + layoutEmArvore(f, profundidade + 1), 0)
+        const centroFilhos = cruzadoAntes + ocupadoPelosFilhos / 2 - MARGEM_CRUZADA / 2
+        novasPosicoes.set(id, horizontal ? { x: principal, y: centroFilhos } : { x: centroFilhos, y: principal })
+        return Math.max(ocupadoPelosFilhos, tamanhoCruzado + MARGEM_CRUZADA)
+      }
+      raizes.forEach(raiz => {
+        layoutEmArvore(raiz.id, 0)
+        cursorCruzado += 50 // respiro entre árvores/componentes desconectados
+      })
+    }
+
+    const nodes = atual.nodes.map(n => {
+      const pos = novasPosicoes.get(n.id)
+      return pos ? { ...n, position: pos } : n
+    })
+    commit({ ...atual, nodes })
+    requestAnimationFrame(() => fitView({ padding: 0.3, duration: 300 }))
+  }, [])
+
   const onCamada = useCallback((direcao: 'frente' | 'tras') => {
     const atual = grafoRef.current
     const selecionados = atual.nodes.filter(n => n.selected)
@@ -2471,14 +3039,36 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         else if (e.key === 'Escape') { sairApresentacao() }
         return
       }
+      if (e.key === '?') { e.preventDefault(); setAjudaAberta(v => !v); return }
+      if (ajudaAberta && e.key === 'Escape') { setAjudaAberta(false); return }
+      if (menuContexto && e.key === 'Escape') { setMenuContexto(null); return }
+      // Enter com exatamente um objeto selecionado (e nada em edição, já
+      // garantido pelo `if (editando)` lá em cima) abre a edição dele — ver
+      // o useEffect que consome `pedidoEdicaoId` em cada tipo de nó.
+      if (e.key === 'Enter') {
+        const selecionados = grafoRef.current.nodes.filter(n => n.selected)
+        if (selecionados.length === 1) { e.preventDefault(); setPedidoEdicaoId(`${selecionados[0].id}#${Date.now()}`) }
+        return
+      }
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); return }
       if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); refazer(); return }
       if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); onSelecionarTudo(); return }
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); onDuplicarSelecionados(); return }
       if (mod && e.key.toLowerCase() === 'g') { e.preventDefault(); if (e.shiftKey) onDesagrupar(); else onAgrupar(); return }
+      // Zoom (Ctrl/Cmd +/-/0, Shift+1 ajustar à tela) — mesmos atalhos de
+      // Figma/Whimsical; precisa de preventDefault senão o navegador
+      // aplicaria o próprio zoom de página em vez do zoom do canvas.
+      if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomIn({ duration: 150 }); return }
+      if (mod && e.key === '-') { e.preventDefault(); zoomOut({ duration: 150 }); return }
+      if (mod && e.key === '0') { e.preventDefault(); zoomTo(1, { duration: 150 }); return }
+      if (e.shiftKey && e.key === '!') { fitView({ padding: 0.3, duration: 300 }); return }
       if (e.key === 'Delete' || e.key === 'Backspace') { onExcluirSelecionados(); return }
       if (e.key === 'Escape') { onDeselecionarTudo(); return }
+      if (!mod && !e.shiftKey && !e.altKey) {
+        const forma = ATALHO_PARA_FORMA[e.key.toUpperCase()]
+        if (forma) { e.preventDefault(); onAdicionarForma(forma); return }
+      }
       if (e.key.startsWith('Arrow')) {
         const passo = e.shiftKey ? 10 : 1
         const dx = e.key === 'ArrowLeft' ? -passo : e.key === 'ArrowRight' ? passo : 0
@@ -2507,10 +3097,11 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   const totalSelecionados = grafo.nodes.filter(n => n.selected).length
   const algumTravado = grafo.nodes.some(n => n.selected && n.draggable === false)
   const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
+  const noDoMenuContexto = menuContexto?.tipo === 'node' ? grafo.nodes.find(n => n.id === menuContexto.nodeId) : undefined
 
   return (
     <AcoesMapaContext.Provider value={{
-      onMudarTexto, onAdicionarFilho, onExcluir, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
+      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, onLimparCorManual, onSelecionarRamo, onMudarUrlImagem, pedidoEdicaoId, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
       onAdicionarMensagemComentario, onAlternarResolvidoComentario,
     }}>
       <div className="pl-mapa-canvas" ref={containerRef} data-tema={temaAtual.id}>
@@ -2524,6 +3115,9 @@ function Canvas({ dadosIniciais, onChange, tema }: {
           onNodeDragStart={iniciarArraste}
           onNodeDragStop={finalizarArraste}
           onConnect={onConnect}
+          onConnectEnd={onConectarSoltarNoVazio}
+          onPaneContextMenu={modoApresentacao ? undefined : onPaneContextMenuHandler}
+          onNodeContextMenu={modoApresentacao ? undefined : onNodeContextMenuHandler}
           nodesDraggable={!modoMao && !modoApresentacao}
           elementsSelectable={!modoApresentacao}
           // Padrão da lib é só 'Meta' (Cmd) — sem isso, Ctrl+clique (o normal
@@ -2537,6 +3131,28 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         >
           {!modoApresentacao && <Background gap={22} size={1} color="var(--pl-border-strong)" variant={temaAtual.variante} />}
           {!modoApresentacao && <Controls showInteractive={false} position="bottom-right" orientation="horizontal" />}
+          {!modoApresentacao && (
+            <Panel position="bottom-center" className="pl-mapa-zoom-indicador">
+              <button type="button" title="Voltar pra 100% (Ctrl+0)" onClick={() => zoomTo(1, { duration: 150 })}>
+                {Math.round(zoom * 100)}%
+              </button>
+            </Panel>
+          )}
+          {!modoApresentacao && (
+            <Panel position="top-right" className="pl-mapa-toolbar">
+              <button type="button" className="pl-mapa-toolbar-btn" title="Atalhos de teclado (?)" onClick={() => setAjudaAberta(v => !v)}>
+                <IconeAjuda />
+              </button>
+            </Panel>
+          )}
+          {!modoApresentacao && minimapaAberto && (
+            <MiniMap
+              position="bottom-left" pannable zoomable
+              maskColor="color-mix(in srgb, var(--pl-bg) 70%, transparent)"
+              style={{ background: 'var(--pl-surface)', border: '1px solid var(--pl-border-strong)', borderRadius: 10 }}
+              nodeColor={n => (typeof (n.data as Record<string, unknown>)?.cor === 'string' ? ((n.data as Record<string, unknown>).cor as string) : 'var(--pl-ink-2)')}
+            />
+          )}
           {modoApresentacao ? (
             <Panel position="bottom-center" className="pl-mapa-toolbar-apresentacao">
               <button type="button" className="pl-mapa-tv-btn" title="Slide anterior" disabled={slideAtual === 0} onClick={() => irParaSlide(slideAtual - 1)}>
@@ -2596,10 +3212,10 @@ function Canvas({ dadosIniciais, onChange, tema }: {
                 </div>
               )}
             </div>
-            <button type="button" className="pl-mapa-tv-btn" title="Sticky note" onClick={onAdicionarSticky}>
+            <button type="button" className="pl-mapa-tv-btn" title="Sticky note" onClick={() => onAdicionarSticky()}>
               <IconeSticky />
             </button>
-            <button type="button" className="pl-mapa-tv-btn" title="Texto" onClick={onAdicionarTexto}>
+            <button type="button" className="pl-mapa-tv-btn" title="Texto" onClick={() => onAdicionarTexto()}>
               <IconeTexto />
             </button>
             <div className="pl-mapa-tv-item">
@@ -2624,6 +3240,9 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             </button>
             <button type="button" className="pl-mapa-tv-btn" title="Tabela" onClick={onAdicionarTabela}>
               <IconeTabela />
+            </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Imagem (cole um link)" onClick={() => onAdicionarImagem()}>
+              <IconeImagem />
             </button>
             {modo === 'wireframe' && (
               <>
@@ -2675,9 +3294,34 @@ function Canvas({ dadosIniciais, onChange, tema }: {
               <IconeLixeiraToolbar />
             </button>
             <div className="pl-mapa-tv-divisor" />
-            <button type="button" className="pl-mapa-tv-btn" title="Ajustar à tela" onClick={() => fitView({ padding: 0.3, duration: 300 })}>
+            <button type="button" className="pl-mapa-tv-btn" title="Ajustar à tela (Shift+1)" onClick={() => fitView({ padding: 0.3, duration: 300 })}>
               <IconeAjustarTela />
             </button>
+            <button type="button" className={`pl-mapa-tv-btn ${minimapaAberto ? 'ativo' : ''}`} title="Minimapa" onClick={() => setMinimapaAberto(v => !v)}>
+              <IconeMinimapa />
+            </button>
+            <div className="pl-mapa-tv-item">
+              <button
+                type="button" className={`pl-mapa-tv-btn ${layoutFlyoutAberto ? 'ativo' : ''}`}
+                title="Organizar automaticamente (reorganiza ramos ligados por conector)"
+                onClick={() => setLayoutFlyoutAberto(v => !v)}
+              >
+                <IconeOrganizarLayout />
+              </button>
+              {layoutFlyoutAberto && (
+                <div className="pl-mapa-layout-flyout">
+                  <button type="button" className="pl-mapa-layout-opcao" title="Árvore horizontal" onClick={() => { onOrganizarLayout('horizontal'); setLayoutFlyoutAberto(false) }}>
+                    <IconeOrganizarLayout /><span>Horizontal</span>
+                  </button>
+                  <button type="button" className="pl-mapa-layout-opcao" title="Árvore vertical" onClick={() => { onOrganizarLayout('vertical'); setLayoutFlyoutAberto(false) }}>
+                    <IconeLayoutVertical /><span>Vertical</span>
+                  </button>
+                  <button type="button" className="pl-mapa-layout-opcao" title="Radial (a partir do central)" onClick={() => { onOrganizarLayout('radial'); setLayoutFlyoutAberto(false) }}>
+                    <IconeLayoutRadial /><span>Radial</span>
+                  </button>
+                </div>
+              )}
+            </div>
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como PNG" onClick={onExportarPng}>
               <IconeExportar />
             </button>
@@ -2703,6 +3347,12 @@ function Canvas({ dadosIniciais, onChange, tema }: {
               </button>
               <button type="button" className="pl-mapa-tv-btn" title="Enviar pra trás" onClick={() => onCamada('tras')}>
                 <IconeEnviarTras />
+              </button>
+              <button
+                type="button" className="pl-mapa-tv-btn" title="Ajustar tela à seleção"
+                onClick={() => fitView({ nodes: grafo.nodes.filter(n => n.selected).map(n => ({ id: n.id })), padding: 0.35, duration: 300 })}
+              >
+                <IconeAjustarTela />
               </button>
               {totalSelecionados >= 2 && (
                 <>
@@ -2762,8 +3412,115 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             </Panel>
           )}
         </ReactFlow>
+        {ajudaAberta && <PainelAtalhos onFechar={() => setAjudaAberta(false)} />}
+        {menuContexto && (
+          <>
+            <div className="pl-ctxmenu-backdrop" onClick={() => setMenuContexto(null)} onContextMenu={e => { e.preventDefault(); setMenuContexto(null) }} />
+            <div className="pl-ctxmenu" style={{ left: menuContexto.screenX, top: menuContexto.screenY }}>
+              {menuContexto.tipo === 'pane' ? (
+                <>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarIdeiaLivre(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar ideia aqui</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarSticky(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar sticky aqui</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarTexto(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar texto aqui</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarImagem(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar imagem aqui</button>
+                  <div className="pl-ctxmenu-divisor" />
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onSelecionarTudo(); setMenuContexto(null) }}>Selecionar tudo</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onOrganizarLayout('horizontal'); setMenuContexto(null) }}>Organizar automaticamente</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { fitView({ padding: 0.3, duration: 300 }); setMenuContexto(null) }}>Ajustar à tela</button>
+                </>
+              ) : noDoMenuContexto ? (
+                <>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { setPedidoEdicaoId(`${noDoMenuContexto.id}#${Date.now()}`); setMenuContexto(null) }}>Editar</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onDuplicarSelecionados(); setMenuContexto(null) }}>Duplicar</button>
+                  {noDoMenuContexto.data.tipoObjeto === 'noMapa' && (
+                    <button type="button" className="pl-ctxmenu-item" onClick={() => { onSelecionarRamo(noDoMenuContexto.id); setMenuContexto(null) }}>Selecionar ideia + ramo</button>
+                  )}
+                  <div className="pl-ctxmenu-divisor" />
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onCamada('frente'); setMenuContexto(null) }}>Trazer pra frente</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onCamada('tras'); setMenuContexto(null) }}>Enviar pra trás</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onAlternarTravado(); setMenuContexto(null) }}>
+                    {noDoMenuContexto.draggable === false ? 'Destravar' : 'Travar'}
+                  </button>
+                  {noDoMenuContexto.id !== centralId && (
+                    <>
+                      <div className="pl-ctxmenu-divisor" />
+                      <button type="button" className="pl-ctxmenu-item pl-ctxmenu-item-perigo" onClick={() => { onExcluir(noDoMenuContexto.id); setMenuContexto(null) }}>Excluir</button>
+                    </>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
     </AcoesMapaContext.Provider>
+  )
+}
+
+function LinhaAtalho({ label, teclas }: { label: string; teclas: string[] }) {
+  return (
+    <div className="pl-ajuda-linha">
+      <span>{label}</span>
+      <span className="pl-ajuda-teclas">{teclas.map(t => <kbd key={t}>{t}</kbd>)}</span>
+    </div>
+  )
+}
+
+// Painel de atalhos (6.15): só documentação, sem estado próprio além de
+// abrir/fechar — motivo de não estar dentro do fluxo de commit/histórico.
+function PainelAtalhos({ onFechar }: { onFechar: () => void }) {
+  return (
+    <div className="pl-modal-backdrop" onClick={onFechar}>
+      <div className="pl-card pl-modal-panel pl-ajuda-painel" onClick={e => e.stopPropagation()}>
+        <div className="pl-card-head">
+          <div>
+            <div className="pl-card-title">Atalhos de teclado</div>
+            <div className="pl-card-sub">Tecla <kbd>?</kbd> abre/fecha este painel a qualquer momento.</div>
+          </div>
+          <button type="button" className="pl-mapa-toolbar-btn" title="Fechar" onClick={onFechar}>×</button>
+        </div>
+        <div className="pl-ajuda-grade">
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Geral</div>
+            <LinhaAtalho label="Desfazer" teclas={['Ctrl', 'Z']} />
+            <LinhaAtalho label="Refazer" teclas={['Ctrl', 'Shift', 'Z']} />
+            <LinhaAtalho label="Selecionar tudo" teclas={['Ctrl', 'A']} />
+            <LinhaAtalho label="Desmarcar / fechar" teclas={['Esc']} />
+            <LinhaAtalho label="Colar texto como stickies" teclas={['Ctrl', 'V']} />
+          </div>
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Objetos selecionados</div>
+            <LinhaAtalho label="Editar (com 1 selecionado)" teclas={['Enter']} />
+            <LinhaAtalho label="Duplicar" teclas={['Ctrl', 'D']} />
+            <LinhaAtalho label="Excluir" teclas={['Delete']} />
+            <LinhaAtalho label="Agrupar" teclas={['Ctrl', 'G']} />
+            <LinhaAtalho label="Desagrupar" teclas={['Ctrl', 'Shift', 'G']} />
+            <LinhaAtalho label="Mover 1px" teclas={['↑', '↓', '←', '→']} />
+            <LinhaAtalho label="Mover 10px" teclas={['Shift', '↑↓←→']} />
+          </div>
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Mapa mental (editando uma ideia)</div>
+            <LinhaAtalho label="Nova ideia irmã" teclas={['Enter']} />
+            <LinhaAtalho label="Nova ideia filha" teclas={['Tab']} />
+          </div>
+          <div className="pl-ajuda-secao">
+            <div className="pl-ajuda-titulo-secao">Zoom</div>
+            <LinhaAtalho label="Aumentar" teclas={['Ctrl', '+']} />
+            <LinhaAtalho label="Diminuir" teclas={['Ctrl', '-']} />
+            <LinhaAtalho label="Zoom 100%" teclas={['Ctrl', '0']} />
+            <LinhaAtalho label="Ajustar à tela" teclas={['Shift', '1']} />
+          </div>
+          <div className="pl-ajuda-secao pl-ajuda-secao-larga">
+            <div className="pl-ajuda-titulo-secao">Criar forma (com o canvas em foco, sem nada selecionado pra editar)</div>
+            <div className="pl-ajuda-formas-grade">
+              {ORDEM_FORMAS.map(tipo => (
+                <LinhaAtalho key={tipo} label={CONFIG_FORMA[tipo].rotulo} teclas={[CONFIG_FORMA[tipo].atalho]} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

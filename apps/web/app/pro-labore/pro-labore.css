@@ -1228,6 +1228,20 @@
 .pl-mapa-forma-preview { display: block; width: 18px; height: 14px; }
 .pl-mapa-forma-opcao svg { width: 18px; height: 18px; color: var(--pl-ink-2); }
 
+/* Flyout do botão "Organizar automaticamente" — 3 direções de layout. */
+.pl-mapa-layout-flyout {
+  position: absolute; left: calc(100% + 8px); top: 0; z-index: 5;
+  display: flex; flex-direction: column; gap: 2px; width: 150px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 12px;
+  padding: 6px; box-shadow: var(--pl-shadow-card);
+}
+.pl-mapa-layout-opcao {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px;
+  background: none; border: none; cursor: pointer; color: var(--pl-ink-1); font-size: 12.5px; text-align: left;
+}
+.pl-mapa-layout-opcao:hover { background: var(--pl-surface-2); }
+.pl-mapa-layout-opcao svg { width: 16px; height: 16px; color: var(--pl-ink-2); flex-shrink: 0; }
+
 /* Objeto de forma de diagrama (FormaNode) — preenchimento numa camada com
    clip-path/border-radius (por trás), texto numa camada separada por cima
    pra formas pontudas (losango/triângulo/estrela) não cortarem o texto. */
@@ -1370,6 +1384,39 @@
 }
 .pl-frame-area { flex: 1; background: repeating-linear-gradient(45deg, transparent, transparent 10px, color-mix(in srgb, var(--pl-border) 40%, transparent) 10px, color-mix(in srgb, var(--pl-border) 40%, transparent) 11px); }
 
+/* Imagem solta no board (ImagemNode) — mesmo padrão do bloco de imagem do
+   Editor de Blocos: sem imagem ainda, só um input pra colar o link. */
+.pl-imagem-no { width: 100%; height: 100%; border-radius: 10px; overflow: hidden; }
+.pl-imagem-img { width: 100%; height: 100%; object-fit: contain; background: var(--pl-surface-2); display: block; cursor: grab; }
+.pl-imagem-vazia {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 12px;
+  background: var(--pl-surface); border: 1.5px dashed var(--pl-border-strong); border-radius: 10px;
+}
+.pl-imagem-input {
+  width: 100%; border: none; background: none; outline: none; text-align: center;
+  font-family: 'IBM Plex Sans'; font-size: 12px; color: var(--pl-ink-1);
+}
+.pl-imagem-input::placeholder { color: var(--pl-ink-muted); }
+
+/* Menu de contexto (botão direito no canvas vazio ou num objeto) — backdrop
+   invisível só pra capturar o clique de fora e fechar; o menu em si é
+   posicionado em `fixed` na coordenada de TELA do clique (clientX/clientY),
+   não precisa de nenhum cálculo de viewport do React Flow. */
+.pl-ctxmenu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.pl-ctxmenu {
+  position: fixed; z-index: 41; min-width: 190px; display: flex; flex-direction: column; gap: 1px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 10px;
+  padding: 5px; box-shadow: var(--pl-shadow-card);
+}
+.pl-ctxmenu-item {
+  text-align: left; padding: 7px 10px; border-radius: 6px; background: none; border: none; cursor: pointer;
+  font-family: 'IBM Plex Sans'; font-size: 12.5px; color: var(--pl-ink-1);
+}
+.pl-ctxmenu-item:hover { background: var(--pl-surface-2); }
+.pl-ctxmenu-item-perigo { color: var(--pl-critical); }
+.pl-ctxmenu-item-perigo:hover { background: color-mix(in srgb, var(--pl-critical) 14%, transparent); }
+.pl-ctxmenu-divisor { height: 1px; background: var(--pl-border); margin: 4px 2px; }
+
 /* Botão de wireframe (BotaoNode) — pílula sólida, réplica de um botão de UI
    genérico, sem estado/variante (fora de escopo — é só a forma). */
 .pl-botao-no {
@@ -1492,6 +1539,23 @@
 }
 .pl-conector-cor-swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); cursor: pointer; padding: 0; }
 .pl-conector-cor-swatch:hover { transform: scale(1.15); }
+.pl-conector-cor-swatch.ativo { box-shadow: 0 0 0 2px var(--pl-surface), 0 0 0 4px var(--pl-accent); }
+
+/* ============ PAINEL DE ATALHOS DE TECLADO ============ */
+.pl-ajuda-painel { max-width: 620px; }
+.pl-ajuda-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 24px; }
+.pl-ajuda-secao-larga { grid-column: 1 / -1; }
+.pl-ajuda-titulo-secao { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pl-ink-muted); margin-bottom: 8px; }
+.pl-ajuda-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; color: var(--pl-ink-1); }
+.pl-ajuda-teclas { display: flex; gap: 3px; flex-shrink: 0; }
+.pl-ajuda-linha kbd, .pl-ajuda-teclas kbd {
+  font-family: 'IBM Plex Mono'; font-size: 10.5px; background: var(--pl-surface-2); border: 1px solid var(--pl-border);
+  border-radius: 5px; padding: 2px 6px; color: var(--pl-ink-1);
+}
+.pl-ajuda-formas-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 16px; }
+@container (max-width: 480px) {
+  .pl-ajuda-grade, .pl-ajuda-formas-grade { grid-template-columns: 1fr; }
+}
 
 /* Chrome do React Flow (fundo, controles) combinando com o tema escuro/claro do app */
 .pl-mapa-canvas .react-flow__controls {
@@ -1503,6 +1567,13 @@
 }
 .pl-mapa-canvas .react-flow__controls-button:last-child { border-right: none; }
 .pl-mapa-canvas .react-flow__controls-button:hover { background: var(--pl-surface-2); }
+
+.pl-mapa-zoom-indicador button {
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 8px;
+  padding: 4px 10px; font-size: 11.5px; font-family: 'IBM Plex Mono'; color: var(--pl-ink-2); cursor: pointer;
+  box-shadow: var(--pl-shadow-card);
+}
+.pl-mapa-zoom-indicador button:hover { color: var(--pl-ink-1); background: var(--pl-surface-2); }
 
 /* ============ MODAL ============ */
 .pl-modal-backdrop { position: fixed; inset: 0; background: rgba(4, 6, 14, 0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
