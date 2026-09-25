@@ -2969,6 +2969,12 @@ function Canvas({ dadosIniciais, onChange, tema }: {
               <button type="button" className="pl-mapa-tv-btn" title="Enviar pra trás" onClick={() => onCamada('tras')}>
                 <IconeEnviarTras />
               </button>
+              <button
+                type="button" className="pl-mapa-tv-btn" title="Ajustar tela à seleção"
+                onClick={() => fitView({ nodes: grafo.nodes.filter(n => n.selected).map(n => ({ id: n.id })), padding: 0.35, duration: 300 })}
+              >
+                <IconeAjustarTela />
+              </button>
               {totalSelecionados >= 2 && (
                 <>
                   <div className="pl-mapa-tv-divisor-h" />
