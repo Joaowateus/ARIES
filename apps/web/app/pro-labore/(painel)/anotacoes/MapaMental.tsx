@@ -152,6 +152,46 @@ function IconeOrganizarLayout() {
     </svg>
   )
 }
+function IconeSelecionarRamo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5" cy="12" r="2.2" />
+      <circle cx="18" cy="6" r="2.2" />
+      <circle cx="18" cy="18" r="2.2" />
+      <path d="M7 12h3.5M10.5 12l4-4.5M10.5 12l4 4.5" />
+      <rect x="1.5" y="2" width="21" height="20" rx="3" strokeDasharray="3 2.5" />
+    </svg>
+  )
+}
+function IconeCorAutomatica() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 1 1-3.5-7.1" />
+      <polyline points="21 3 21 9 15 9" />
+    </svg>
+  )
+}
+function IconeLayoutVertical() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="4" r="2.2" />
+      <circle cx="6" cy="18" r="2.2" />
+      <circle cx="18" cy="18" r="2.2" />
+      <path d="M12 6v3.5M12 9.5L7.5 15.8M12 9.5l4.5 6.3" />
+    </svg>
+  )
+}
+function IconeLayoutRadial() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="2.2" />
+      <circle cx="12" cy="3" r="1.8" />
+      <circle cx="20" cy="15" r="1.8" />
+      <circle cx="4" cy="15" r="1.8" />
+      <path d="M12 5v5M13.5 11.5l5 3M10.5 11.5l-5 3" />
+    </svg>
+  )
+}
 function IconeMinimapa() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -182,6 +222,15 @@ function IconeTexto() {
       <polyline points="4 7 4 4 20 4 20 7" />
       <line x1="9" y1="20" x2="15" y2="20" />
       <line x1="12" y1="4" x2="12" y2="20" />
+    </svg>
+  )
+}
+function IconeImagem() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
     </svg>
   )
 }
@@ -691,6 +740,12 @@ interface DadosNoMapa extends Record<string, unknown> {
   texto: string
   ehCentral: boolean
   cor: string
+  // true quando o usuário escolheu essa cor manualmente (pelo seletor da
+  // barra flutuante) — só então `cor` é persistida em `estilo.cor` e
+  // sobrevive a um recálculo de layout/BFS. Sem override, a cor é sempre
+  // recalculada a partir da posição na árvore (ver boardParaFlow), inclusive
+  // pros filhos: reconectar um ramo em outro pai muda a cor sozinho.
+  corManual?: boolean
 }
 
 interface DadosForma extends Record<string, unknown> {
@@ -804,10 +859,19 @@ interface DadosComentario extends Record<string, unknown> {
   resolvido: boolean
 }
 
+// Imagem solta no board (item 4 do pedido) — mesmo padrão do bloco de
+// imagem do Editor de Blocos: sem upload/armazenamento próprio, só cola um
+// link e pronto (`url`). Redimensionável feito NodeResizer, igual
+// seção/frame/pilha.
+interface DadosImagem extends Record<string, unknown> {
+  tipoObjeto: 'imagem'
+  url: string
+}
+
 type DadosObjeto =
   | DadosNoMapa | DadosForma | DadosSticky | DadosTexto | DadosIcone | DadosSecao | DadosTabela
   | DadosDesenho | DadosFrame | DadosBotao | DadosInputWireframe | DadosAvatar | DadosPilha | DadosTarefa
-  | DadosComentario
+  | DadosComentario | DadosImagem
 type NoFlow = Node<DadosObjeto>
 
 function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
@@ -910,9 +974,18 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
       },
     }
   }
+  if (o.tipo === 'imagem') {
+    return {
+      ...base, type: 'imagem', width: o.largura ?? 280, height: o.altura ?? 200,
+      data: { tipoObjeto: 'imagem', grupoId, url: (o.conteudo.url as string) ?? '' },
+    }
+  }
   return {
     ...base, type: 'noMapa',
-    data: { tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral, cor: corHerdada },
+    data: {
+      tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral,
+      cor: corHerdada, corManual: typeof o.estilo?.cor === 'string',
+    },
   }
 }
 
@@ -995,8 +1068,15 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
       conteudo: comGrupo({ mensagens: n.data.mensagens, resolvido: n.data.resolvido }),
     }
   }
+  if (n.data.tipoObjeto === 'imagem') {
+    return {
+      id: n.id, tipo: 'imagem', x: n.position.x, y: n.position.y, ...comuns,
+      largura: n.width ?? 280, altura: n.height ?? 200, conteudo: comGrupo({ url: n.data.url }),
+    }
+  }
   return {
     id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y, ...comuns,
+    ...(n.data.corManual ? { estilo: { cor: n.data.cor } } : {}),
     conteudo: comGrupo({ texto: n.data.texto, ehCentral: n.data.ehCentral }),
   }
 }
@@ -1005,11 +1085,17 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
 // de cada ramo do mapa mental por BFS a partir do nó central (mesma lógica
 // visual de antes, só que operando sobre conectores livres em vez de uma
 // árvore fixa — formas soltas sem caminho até o central ficam com a cor
-// neutra padrão).
+// neutra padrão). Um `noMapa` com `estilo.cor` explícito (recolorido à mão
+// pelo usuário) tem sua cor pré-semeada aqui, então o BFS abaixo nunca a
+// sobrescreve — e ainda assim ela vira a base pra colorir os FILHOS desse
+// nó, exatamente como a cor automática do central faz pros ramos.
 function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { nodes: NoFlow[]; edges: Edge[] } {
   const central = objetos.find(o => o.tipo === 'noMapa' && o.conteudo.ehCentral)
   const corPorObjeto = new Map<string, string>()
-  if (central) corPorObjeto.set(central.id, 'var(--pl-accent)')
+  objetos.forEach(o => {
+    if (o.tipo === 'noMapa' && typeof o.estilo?.cor === 'string') corPorObjeto.set(o.id, o.estilo.cor as string)
+  })
+  if (central && !corPorObjeto.has(central.id)) corPorObjeto.set(central.id, 'var(--pl-accent)')
 
   const saidaPorOrigem = new Map<string, BoardConector[]>()
   conectores.forEach(c => saidaPorOrigem.set(c.origemId, [...(saidaPorOrigem.get(c.origemId) ?? []), c]))
@@ -1024,7 +1110,9 @@ function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { n
       saidas.forEach((c, i) => {
         if (visitados.has(c.destinoId)) return
         visitados.add(c.destinoId)
-        corPorObjeto.set(c.destinoId, atualId === central.id ? PALETA_RAMOS[i % PALETA_RAMOS.length] : corAtual)
+        if (!corPorObjeto.has(c.destinoId)) {
+          corPorObjeto.set(c.destinoId, atualId === central.id ? PALETA_RAMOS[i % PALETA_RAMOS.length] : corAtual)
+        }
         fila.push(c.destinoId)
       })
     }
@@ -1093,6 +1181,9 @@ const AcoesMapaContext = createContext<{
   onCriarIrmao: (id: string) => void
   onExcluir: (id: string) => void
   onMudarCor: (id: string, cor: string) => void
+  onLimparCorManual: (id: string) => void
+  onSelecionarRamo: (id: string) => void
+  onMudarUrlImagem: (id: string, url: string) => void
   // Ver comentário no useEffect que consome isso, dentro de cada node de
   // texto: string `"<id>#<timestamp>"` do nó que deve entrar em edição
   // agora, ou null quando nenhum pedido está pendente.
@@ -1152,6 +1243,15 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
       <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
         <button type="button" className="pl-mapa-toolbar-btn" title="Editar texto" onClick={entrarEdicao}>✎</button>
         <button type="button" className="pl-mapa-toolbar-btn" title="Adicionar ideia filha" onClick={() => acoes.onAdicionarFilho(id)}>+</button>
+        <button type="button" className="pl-mapa-toolbar-btn" title="Selecionar esta ideia + tudo que pende dela" onClick={() => acoes.onSelecionarRamo(id)}>
+          <IconeSelecionarRamo />
+        </button>
+        <SeletorCorObjeto corAtual={d.cor} onEscolher={cor => acoes.onMudarCor(id, cor)} />
+        {d.corManual && (
+          <button type="button" className="pl-mapa-toolbar-btn" title="Voltar à cor automática" onClick={() => acoes.onLimparCorManual(id)}>
+            <IconeCorAutomatica />
+          </button>
+        )}
         {!d.ehCentral && (
           <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
         )}
@@ -1845,10 +1945,46 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
   )
 }
 
+function ImagemNode({ id, data, selected }: NodeProps<NoFlow>) {
+  const acoes = useContext(AcoesMapaContext)!
+  const d = data as DadosImagem
+  const [rascunho, setRascunho] = useState('')
+
+  function confirmarUrl() {
+    const url = rascunho.trim()
+    if (url) acoes.onMudarUrlImagem(id, url)
+  }
+
+  return (
+    <div className="pl-imagem-no">
+      <NodeResizer minWidth={120} minHeight={90} isVisible={!!selected} lineClassName="pl-secao-resize-linha" handleClassName="pl-secao-resize-alca" />
+      <NodeToolbar position={Position.Top} offset={10} className="pl-mapa-toolbar nodrag nopan">
+        {!!d.url && <button type="button" className="pl-mapa-toolbar-btn" title="Trocar imagem" onClick={() => acoes.onMudarUrlImagem(id, '')}>✎</button>}
+        <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
+      </NodeToolbar>
+      {d.url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- URL arbitrária colada pelo usuário, sem otimização do Next
+        <img src={d.url} alt="" className="pl-imagem-img nodrag" draggable={false} />
+      ) : (
+        <div className="nodrag nopan pl-imagem-vazia">
+          <input
+            className="pl-imagem-input"
+            autoFocus
+            value={rascunho}
+            placeholder="Cole o link de uma imagem e aperte Enter..."
+            onChange={e => setRascunho(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') confirmarUrl() }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 const nodeTypes = {
   noMapa: NoMapaNode, forma: FormaNode, sticky: StickyNode, texto: TextoNode, icone: IconeNode, secao: SecaoNode, tabela: TabelaNode,
   desenho: DesenhoNode, frame: FrameNode, botao: BotaoNode, inputWireframe: InputWireframeNode, avatar: AvatarNode, pilha: PilhaNode, tarefa: TarefaNode,
-  comentario: ComentarioNode,
+  comentario: ComentarioNode, imagem: ImagemNode,
 } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
@@ -1868,6 +2004,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
   // par cursor/mão da barra da referência.
   const [modoMao, setModoMao] = useState(false)
   const [formasAbertas, setFormasAbertas] = useState(false)
+  const [layoutFlyoutAberto, setLayoutFlyoutAberto] = useState(false)
   const [iconesAbertos, setIconesAbertos] = useState(false)
   // Modo (Diagrama/Wireframe/Tarefas) é só um filtro de quais botões de
   // criação aparecem na toolbar — nunca esconde objetos já existentes no
@@ -2138,8 +2275,40 @@ function Canvas({ dadosIniciais, onChange, tema }: {
 
   const onMudarCor = useCallback((id: string, cor: string) => {
     const atual = grafoRef.current
-    const nodes = atual.nodes.map(n => (n.id === id ? { ...n, data: { ...n.data, cor } } : n))
+    const nodes = atual.nodes.map(n => {
+      if (n.id !== id) return n
+      // Em noMapa, escolher uma cor manualmente marca `corManual` — é essa
+      // marca que decide se a cor sobrevive a um recálculo de árvore (ver
+      // nodeParaObjeto/boardParaFlow). Nos outros tipos a cor já era sempre
+      // "manual" (nunca teve componente automático), então nada muda.
+      const extra = n.data.tipoObjeto === 'noMapa' ? { corManual: true } : {}
+      return { ...n, data: { ...n.data, cor, ...extra } }
+    })
     commit({ ...atual, nodes })
+  }, [])
+
+  // "Cor automática" (só noMapa): tira o override e reprocessa objetos→flow
+  // do zero, pra essa ideia (e quem pende dela, se também não tiver override
+  // próprio) voltar a herdar a cor calculada pela posição na árvore.
+  const onLimparCorManual = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'noMapa' ? { ...n, data: { ...n.data, corManual: false } } : n))
+    const { objetos, conectores } = flowParaBoard(nodes, atual.edges)
+    commit(boardParaFlow(objetos, conectores))
+  }, [])
+
+  // "Selecionar ramo" (6.x, item 5 do pedido): substitui a seleção atual
+  // pelo próprio nó + toda a subárvore que pende dele (idsDaSubarvore já
+  // existe pra excluir/duplicar). Depois disso, arrastar qualquer um dos
+  // selecionados já move o grupo inteiro — comportamento nativo de
+  // multi-seleção do React Flow, sem precisar de lógica extra aqui.
+  const onSelecionarRamo = useCallback((id: string) => {
+    setGrafo(atual => {
+      const idsRamo = idsDaSubarvore(atual.edges, id)
+      const novo = { ...atual, nodes: atual.nodes.map(n => ({ ...n, selected: idsRamo.has(n.id) })) }
+      grafoRef.current = novo
+      return novo
+    })
   }, [])
 
   const onAdicionarForma = useCallback((forma: TipoForma) => {
@@ -2206,6 +2375,26 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     }
     commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
   }, [noSelecionadoId])
+
+  const onAdicionarImagem = useCallback(() => {
+    const atual = grafoRef.current
+    const base = atual.nodes.find(n => n.id === noSelecionadoId) ?? atual.nodes[0]
+    const passo = atual.nodes.length % 6
+    const novoId = gerarIdNo()
+    const novoNo: NoFlow = {
+      id: novoId, type: 'imagem',
+      position: { x: (base?.position.x ?? 0) - 460 - passo * 18, y: (base?.position.y ?? 0) - 140 + passo * 20 },
+      width: 280, height: 200, zIndex: -1,
+      data: { tipoObjeto: 'imagem', url: '' },
+    }
+    commit({ nodes: [...atual.nodes, novoNo], edges: atual.edges })
+  }, [noSelecionadoId])
+
+  const onMudarUrlImagem = useCallback((id: string, url: string) => {
+    const atual = grafoRef.current
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'imagem' ? { ...n, data: { ...n.data, url } } : n))
+    commit({ ...atual, nodes })
+  }, [])
 
   const onAdicionarIcone = useCallback((icone: TipoIcone) => {
     const atual = grafoRef.current
@@ -2535,14 +2724,16 @@ function Canvas({ dadosIniciais, onChange, tema }: {
 
   // "Organizar automaticamente" (Layout do mapa): reflui só a parte do board
   // que É uma árvore/fluxo (objetos ligados por conector, ex.: ramos do mapa
-  // mental ou etapas de um "Mapa de processo") pra um layout em camadas
-  // horizontal — raiz na coluna 0, cada aresta desce uma coluna, altura de
-  // cada subárvore soma a dos filhos (com margem), pai centralizado no meio
-  // vertical do bloco dos filhos. Objeto solto (sticky, seção, forma sem
-  // conector) nunca é tocado — mover algo que o usuário posicionou de
-  // propósito (ex.: um card dentro de uma coluna do Kanban) seria pior do
-  // que não ter o botão.
-  const onOrganizarLayout = useCallback(() => {
+  // mental ou etapas de um "Mapa de processo") — objeto solto (sticky,
+  // seção, forma sem conector) nunca é tocado, mover algo que o usuário
+  // posicionou de propósito (ex.: um card dentro de uma coluna do Kanban)
+  // seria pior do que não ter o botão. Três direções: horizontal/vertical
+  // são a mesma árvore em camadas (só troca qual eixo é "profundidade" e
+  // qual é "onde as subárvores se espalham pra não colidir"); radial parte
+  // do central e distribui cada subárvore numa fatia de ângulo proporcional
+  // ao nº de folhas, bem mais perto do desenho clássico de mapa mental.
+  type LayoutDirecao = 'horizontal' | 'vertical' | 'radial'
+  const onOrganizarLayout = useCallback((direcao: LayoutDirecao) => {
     const atual = grafoRef.current
     const saidaPorOrigem = new Map<string, string[]>()
     const temEntrada = new Set<string>()
@@ -2557,35 +2748,57 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const raizes = atual.nodes.filter(n => participaDeAresta.has(n.id) && !temEntrada.has(n.id))
     if (raizes.length === 0) return
 
-    const PASSO_X = 260
-    const MARGEM_Y = 36
     const novasPosicoes = new Map<string, { x: number; y: number }>()
     const visitados = new Set<string>()
-    let cursorY = 0
 
-    function layoutSubarvore(id: string, profundidade: number): number {
-      if (visitados.has(id)) return 0
-      visitados.add(id)
-      const no = porId.get(id)
-      const altura = no ? medidas(no).h : 60
-      const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
-      if (filhos.length === 0) {
-        novasPosicoes.set(id, { x: profundidade * PASSO_X, y: cursorY })
-        const ocupado = altura + MARGEM_Y
-        cursorY += ocupado
-        return ocupado
+    if (direcao === 'radial') {
+      const PASSO_RADIAL = 230
+      function layoutRadial(id: string, profundidade: number, anguloIni: number, anguloFim: number) {
+        if (visitados.has(id)) return
+        visitados.add(id)
+        const anguloMeio = (anguloIni + anguloFim) / 2
+        const raio = profundidade * PASSO_RADIAL
+        novasPosicoes.set(id, { x: raio * Math.cos(anguloMeio), y: raio * Math.sin(anguloMeio) })
+        const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
+        if (filhos.length === 0) return
+        const fatia = (anguloFim - anguloIni) / filhos.length
+        filhos.forEach((f, i) => layoutRadial(f, profundidade + 1, anguloIni + i * fatia, anguloIni + (i + 1) * fatia))
       }
-      const yAntesDosFilhos = cursorY
-      const ocupadoPelosFilhos = filhos.reduce((soma, f) => soma + layoutSubarvore(f, profundidade + 1), 0)
-      const centroDosFilhos = yAntesDosFilhos + ocupadoPelosFilhos / 2 - MARGEM_Y / 2
-      novasPosicoes.set(id, { x: profundidade * PASSO_X, y: centroDosFilhos })
-      return Math.max(ocupadoPelosFilhos, altura + MARGEM_Y)
+      let anguloCursor = 0
+      raizes.forEach(raiz => {
+        const fatiaRaiz = (2 * Math.PI) / raizes.length
+        layoutRadial(raiz.id, 0, anguloCursor, anguloCursor + fatiaRaiz)
+        anguloCursor += fatiaRaiz
+      })
+    } else {
+      const horizontal = direcao === 'horizontal'
+      const PASSO_PRINCIPAL = 260
+      const MARGEM_CRUZADA = 36
+      let cursorCruzado = 0
+      function layoutEmArvore(id: string, profundidade: number): number {
+        if (visitados.has(id)) return 0
+        visitados.add(id)
+        const no = porId.get(id)
+        const tamanhoCruzado = no ? (horizontal ? medidas(no).h : medidas(no).w) : 60
+        const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
+        const principal = profundidade * PASSO_PRINCIPAL
+        if (filhos.length === 0) {
+          novasPosicoes.set(id, horizontal ? { x: principal, y: cursorCruzado } : { x: cursorCruzado, y: principal })
+          const ocupado = tamanhoCruzado + MARGEM_CRUZADA
+          cursorCruzado += ocupado
+          return ocupado
+        }
+        const cruzadoAntes = cursorCruzado
+        const ocupadoPelosFilhos = filhos.reduce((soma, f) => soma + layoutEmArvore(f, profundidade + 1), 0)
+        const centroFilhos = cruzadoAntes + ocupadoPelosFilhos / 2 - MARGEM_CRUZADA / 2
+        novasPosicoes.set(id, horizontal ? { x: principal, y: centroFilhos } : { x: centroFilhos, y: principal })
+        return Math.max(ocupadoPelosFilhos, tamanhoCruzado + MARGEM_CRUZADA)
+      }
+      raizes.forEach(raiz => {
+        layoutEmArvore(raiz.id, 0)
+        cursorCruzado += 50 // respiro entre árvores/componentes desconectados
+      })
     }
-
-    raizes.forEach(raiz => {
-      layoutSubarvore(raiz.id, 0)
-      cursorY += 50 // respiro entre árvores/componentes desconectados
-    })
 
     const nodes = atual.nodes.map(n => {
       const pos = novasPosicoes.get(n.id)
@@ -2839,7 +3052,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
 
   return (
     <AcoesMapaContext.Provider value={{
-      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, pedidoEdicaoId, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
+      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, onLimparCorManual, onSelecionarRamo, onMudarUrlImagem, pedidoEdicaoId, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
       onAdicionarMensagemComentario, onAlternarResolvidoComentario,
     }}>
       <div className="pl-mapa-canvas" ref={containerRef} data-tema={temaAtual.id}>
@@ -2977,6 +3190,9 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             <button type="button" className="pl-mapa-tv-btn" title="Tabela" onClick={onAdicionarTabela}>
               <IconeTabela />
             </button>
+            <button type="button" className="pl-mapa-tv-btn" title="Imagem (cole um link)" onClick={onAdicionarImagem}>
+              <IconeImagem />
+            </button>
             {modo === 'wireframe' && (
               <>
                 <div className="pl-mapa-tv-divisor" />
@@ -3033,9 +3249,28 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             <button type="button" className={`pl-mapa-tv-btn ${minimapaAberto ? 'ativo' : ''}`} title="Minimapa" onClick={() => setMinimapaAberto(v => !v)}>
               <IconeMinimapa />
             </button>
-            <button type="button" className="pl-mapa-tv-btn" title="Organizar automaticamente (reorganiza ramos ligados por conector)" onClick={onOrganizarLayout}>
-              <IconeOrganizarLayout />
-            </button>
+            <div className="pl-mapa-tv-item">
+              <button
+                type="button" className={`pl-mapa-tv-btn ${layoutFlyoutAberto ? 'ativo' : ''}`}
+                title="Organizar automaticamente (reorganiza ramos ligados por conector)"
+                onClick={() => setLayoutFlyoutAberto(v => !v)}
+              >
+                <IconeOrganizarLayout />
+              </button>
+              {layoutFlyoutAberto && (
+                <div className="pl-mapa-layout-flyout">
+                  <button type="button" className="pl-mapa-layout-opcao" title="Árvore horizontal" onClick={() => { onOrganizarLayout('horizontal'); setLayoutFlyoutAberto(false) }}>
+                    <IconeOrganizarLayout /><span>Horizontal</span>
+                  </button>
+                  <button type="button" className="pl-mapa-layout-opcao" title="Árvore vertical" onClick={() => { onOrganizarLayout('vertical'); setLayoutFlyoutAberto(false) }}>
+                    <IconeLayoutVertical /><span>Vertical</span>
+                  </button>
+                  <button type="button" className="pl-mapa-layout-opcao" title="Radial (a partir do central)" onClick={() => { onOrganizarLayout('radial'); setLayoutFlyoutAberto(false) }}>
+                    <IconeLayoutRadial /><span>Radial</span>
+                  </button>
+                </div>
+              )}
+            </div>
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como PNG" onClick={onExportarPng}>
               <IconeExportar />
             </button>

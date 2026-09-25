@@ -1228,6 +1228,20 @@
 .pl-mapa-forma-preview { display: block; width: 18px; height: 14px; }
 .pl-mapa-forma-opcao svg { width: 18px; height: 18px; color: var(--pl-ink-2); }
 
+/* Flyout do botão "Organizar automaticamente" — 3 direções de layout. */
+.pl-mapa-layout-flyout {
+  position: absolute; left: calc(100% + 8px); top: 0; z-index: 5;
+  display: flex; flex-direction: column; gap: 2px; width: 150px;
+  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 12px;
+  padding: 6px; box-shadow: var(--pl-shadow-card);
+}
+.pl-mapa-layout-opcao {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px;
+  background: none; border: none; cursor: pointer; color: var(--pl-ink-1); font-size: 12.5px; text-align: left;
+}
+.pl-mapa-layout-opcao:hover { background: var(--pl-surface-2); }
+.pl-mapa-layout-opcao svg { width: 16px; height: 16px; color: var(--pl-ink-2); flex-shrink: 0; }
+
 /* Objeto de forma de diagrama (FormaNode) — preenchimento numa camada com
    clip-path/border-radius (por trás), texto numa camada separada por cima
    pra formas pontudas (losango/triângulo/estrela) não cortarem o texto. */
@@ -1369,6 +1383,20 @@
   font-family: 'IBM Plex Sans'; font-size: 12.5px; font-weight: 700; color: var(--pl-ink-1);
 }
 .pl-frame-area { flex: 1; background: repeating-linear-gradient(45deg, transparent, transparent 10px, color-mix(in srgb, var(--pl-border) 40%, transparent) 10px, color-mix(in srgb, var(--pl-border) 40%, transparent) 11px); }
+
+/* Imagem solta no board (ImagemNode) — mesmo padrão do bloco de imagem do
+   Editor de Blocos: sem imagem ainda, só um input pra colar o link. */
+.pl-imagem-no { width: 100%; height: 100%; border-radius: 10px; overflow: hidden; }
+.pl-imagem-img { width: 100%; height: 100%; object-fit: contain; background: var(--pl-surface-2); display: block; cursor: grab; }
+.pl-imagem-vazia {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 12px;
+  background: var(--pl-surface); border: 1.5px dashed var(--pl-border-strong); border-radius: 10px;
+}
+.pl-imagem-input {
+  width: 100%; border: none; background: none; outline: none; text-align: center;
+  font-family: 'IBM Plex Sans'; font-size: 12px; color: var(--pl-ink-1);
+}
+.pl-imagem-input::placeholder { color: var(--pl-ink-muted); }
 
 /* Botão de wireframe (BotaoNode) — pílula sólida, réplica de um botão de UI
    genérico, sem estado/variante (fora de escopo — é só a forma). */
