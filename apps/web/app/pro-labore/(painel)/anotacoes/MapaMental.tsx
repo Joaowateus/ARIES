@@ -10,7 +10,7 @@
 // não uma limitação estrutural do modelo. Mapas antigos (formato legado
 // `raiz`, árvore recursiva) são convertidos pra essa estrutura plana na
 // primeira abertura, ver `dadosIniciaisDoBoard`.
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, ReactElement, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow, ReactFlowProvider, Background, BackgroundVariant, Controls, MiniMap, Panel, Handle, Position, BaseEdge, NodeToolbar, NodeResizer,
   EdgeLabelRenderer, MarkerType,
@@ -141,17 +141,6 @@ function IconeAjustarTela() {
     </svg>
   )
 }
-function IconeOrganizarLayout() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="4" cy="12" r="2" />
-      <circle cx="18" cy="5" r="2" />
-      <circle cx="18" cy="12" r="2" />
-      <circle cx="18" cy="19" r="2" />
-      <path d="M6 12h4M12 12l4-7M12 12l4 7" />
-    </svg>
-  )
-}
 function IconeSelecionarRamo() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -189,6 +178,29 @@ function IconeLayoutRadial() {
       <circle cx="20" cy="15" r="1.8" />
       <circle cx="4" cy="15" r="1.8" />
       <path d="M12 5v5M13.5 11.5l5 3M10.5 11.5l-5 3" />
+    </svg>
+  )
+}
+function IconeLayoutLista() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="3.5" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <line x1="8" y1="5" x2="21" y2="5" />
+      <circle cx="6.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <line x1="11" y1="12" x2="21" y2="12" />
+      <circle cx="6.5" cy="19" r="1.4" fill="currentColor" stroke="none" />
+      <line x1="11" y1="19" x2="21" y2="19" />
+    </svg>
+  )
+}
+function IconeAparencia() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a9 9 0 0 0 0 18 3.5 3.5 0 0 0 0-7h-.3a2 2 0 0 1 0-4H12a2 2 0 0 0 0-4 2 2 0 0 1 0-3z" fill="currentColor" stroke="none" opacity="0.35" />
+      <circle cx="8" cy="9" r="1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="9" r="1" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="15" r="1" fill="currentColor" stroke="none" />
     </svg>
   )
 }
@@ -612,6 +624,40 @@ export function gerarBoardDoTemplate(templateId: string): { objetos: BoardObjeto
 }
 
 const PALETA_RAMOS = ['#5b8def', '#e0a83e', '#e0687a', '#57c785', '#a679e0', '#4fc3d9', '#e08d4f', '#8d9de0']
+
+// --- Painel "Aparência" (estilo MindMeister): layout persistente do board +
+// paleta de cor dos ramos + alinhamento automático. Catálogos espelhados em
+// LAYOUTS_BOARD/PALETAS_COR_BOARD no backend (proLabore.ts), que só valida
+// os ids — a cor/rótulo/ícone de cada opção mora só aqui. ---
+export type LayoutBoard = 'manual' | 'mapaMental' | 'organograma' | 'lista'
+export interface LayoutCatalogo { id: Exclude<LayoutBoard, 'manual'>; label: string }
+export const LAYOUTS_BOARD: LayoutCatalogo[] = [
+  { id: 'mapaMental', label: 'Mapa mental' },
+  { id: 'organograma', label: 'Organograma' },
+  { id: 'lista', label: 'Lista' },
+]
+
+export type PaletaCorBoard = 'meister' | 'ocean' | 'sunset' | 'pastel' | 'vintage' | 'bubbles'
+export interface PaletaCorCatalogo { id: PaletaCorBoard; label: string; cores: string[] }
+export const PALETAS_COR_BOARD: PaletaCorCatalogo[] = [
+  { id: 'meister', label: 'Meister', cores: PALETA_RAMOS },
+  { id: 'ocean', label: 'Ocean', cores: ['#0f7ea8', '#1fa2b0', '#2ec4b6', '#5390d9', '#64b6e8', '#8ecae6', '#3f88c5', '#0a9396'] },
+  { id: 'sunset', label: 'Sunset', cores: ['#f4845f', '#f25c54', '#e01a4f', '#f78764', '#f7b267', '#c74b50', '#e26d5c', '#ef6461'] },
+  { id: 'pastel', label: 'Pastel', cores: ['#a8dadc', '#f4a6a0', '#ffd6a5', '#caffbf', '#bdb2ff', '#ffc6ff', '#9bf6ff', '#fdffb6'] },
+  { id: 'vintage', label: 'Vintage', cores: ['#a44a3f', '#c08552', '#8a9a5b', '#6f7a8a', '#b08968', '#7d6167', '#4a5859', '#9d8189'] },
+  { id: 'bubbles', label: 'Bubbles', cores: ['#ff6b9d', '#ffa62b', '#6bcb77', '#4d96ff', '#c56bff', '#ff5e78', '#00d4ff', '#ffd93d'] },
+]
+
+export interface ConfiguracaoBoard {
+  layout: LayoutBoard
+  alinhamentoAutomatico: boolean
+  paleta: PaletaCorBoard
+}
+export const CONFIGURACAO_PADRAO: ConfiguracaoBoard = { layout: 'manual', alinhamentoAutomatico: false, paleta: 'meister' }
+
+function paletaCores(id: PaletaCorBoard | undefined): string[] {
+  return PALETAS_COR_BOARD.find(p => p.id === id)?.cores ?? PALETA_RAMOS
+}
 
 // --- Catálogo de formas de diagrama (6.2 do mapeamento) — cada forma é só
 // uma combinação de largura/altura/clip-path (ou borda, pras sem
@@ -1089,7 +1135,7 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
 // pelo usuário) tem sua cor pré-semeada aqui, então o BFS abaixo nunca a
 // sobrescreve — e ainda assim ela vira a base pra colorir os FILHOS desse
 // nó, exatamente como a cor automática do central faz pros ramos.
-function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { nodes: NoFlow[]; edges: Edge[] } {
+function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[], paleta: string[] = PALETA_RAMOS): { nodes: NoFlow[]; edges: Edge[] } {
   const central = objetos.find(o => o.tipo === 'noMapa' && o.conteudo.ehCentral)
   const corPorObjeto = new Map<string, string>()
   objetos.forEach(o => {
@@ -1105,13 +1151,13 @@ function boardParaFlow(objetos: BoardObjeto[], conectores: BoardConector[]): { n
     const visitados = new Set([central.id])
     while (fila.length > 0) {
       const atualId = fila.shift()!
-      const corAtual = corPorObjeto.get(atualId) ?? PALETA_RAMOS[0]
+      const corAtual = corPorObjeto.get(atualId) ?? paleta[0]
       const saidas = saidaPorOrigem.get(atualId) ?? []
       saidas.forEach((c, i) => {
         if (visitados.has(c.destinoId)) return
         visitados.add(c.destinoId)
         if (!corPorObjeto.has(c.destinoId)) {
-          corPorObjeto.set(c.destinoId, atualId === central.id ? PALETA_RAMOS[i % PALETA_RAMOS.length] : corAtual)
+          corPorObjeto.set(c.destinoId, atualId === central.id ? paleta[i % paleta.length] : corAtual)
         }
         fila.push(c.destinoId)
       })
@@ -1256,6 +1302,12 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
           <button type="button" className="pl-mapa-toolbar-btn pl-mapa-toolbar-btn-danger" title="Excluir" onClick={() => acoes.onExcluir(id)}>×</button>
         )}
       </NodeToolbar>
+      {!editando && (
+        <NodeToolbar position={Position.Bottom} offset={6} className="pl-mapa-atalho-hint nodrag nopan">
+          <span><kbd>Tab</kbd> tópico filho</span>
+          {!d.ehCentral && <span><kbd>Enter</kbd> tópico irmão</span>}
+        </NodeToolbar>
+      )}
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       {editando ? (
         <input
@@ -1988,23 +2040,33 @@ const nodeTypes = {
 } as unknown as NodeTypes
 const edgeTypes = { flutuante: EdgeFlutuante } as unknown as EdgeTypes
 
-function Canvas({ dadosIniciais, onChange, tema }: {
+function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfiguracao }: {
   dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
   onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
   tema?: TemaBoard | null
+  configuracao?: ConfiguracaoBoard | null
+  onMudarConfiguracao: (config: ConfiguracaoBoard) => void
 }) {
   const temaAtual = TEMAS_BOARD.find(t => t.id === tema) ?? TEMAS_BOARD[0]
+  const config = configuracao ?? CONFIGURACAO_PADRAO
+  // Callbacks de ação (onAdicionarFilho, onExcluir etc.) são criados com
+  // deps `[]` — só existem uma vez, igual grafoRef — então precisam ler a
+  // config por uma ref sincronizada a cada render, senão qualquer um deles
+  // fica preso pra sempre na config do primeiro render (ex.: ligar
+  // alinhamento automático depois não faria efeito nenhum).
+  const configRef = useRef(config)
+  useEffect(() => { configRef.current = config }, [config])
   const { fitView, screenToFlowPosition, zoomIn, zoomOut, zoomTo } = useReactFlow()
   const { zoom } = useViewport()
   const [grafo, setGrafo] = useState<{ nodes: NoFlow[]; edges: Edge[] }>(
-    () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores),
+    () => boardParaFlow(dadosIniciais.objetos, dadosIniciais.conectores, paletaCores(config.paleta)),
   )
   // Modo "mão" (pan): desliga o arraste de nó, então segurar e arrastar em
   // qualquer ponto do canvas move a tela em vez de mover o nó — réplica do
   // par cursor/mão da barra da referência.
   const [modoMao, setModoMao] = useState(false)
   const [formasAbertas, setFormasAbertas] = useState(false)
-  const [layoutFlyoutAberto, setLayoutFlyoutAberto] = useState(false)
+  const [aparenciaAberta, setAparenciaAberta] = useState(false)
   const [iconesAbertos, setIconesAbertos] = useState(false)
   // Modo (Diagrama/Wireframe/Tarefas) é só um filtro de quais botões de
   // criação aparecem na toolbar — nunca esconde objetos já existentes no
@@ -2209,6 +2271,29 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ ...atual, nodes })
   }, [])
 
+  // Alinhamento automático (painel Aparência): quando ligado e o board tem
+  // um layout escolhido (não "manual"), qualquer ação que muda o FORMATO da
+  // árvore (novo filho/irmão, exclusão, criar conectando) já reorganiza
+  // sozinho em seguida — vira um segundo passo de undo próprio, não some no
+  // mesmo Ctrl+Z da ação que disparou. Arrastar/recolorir/editar texto NUNCA
+  // dispara isso: alinhamento automático é sobre a FORMA da árvore, não uma
+  // trava que briga com reposicionamento manual durante a edição.
+  // (Precisa vir antes de onAdicionarFilho/onExcluir/onExcluirSelecionados,
+  // que a chamam — calcularNovasPosicoes é function declaration, hoisted,
+  // então pode continuar declarada mais abaixo sem problema.)
+  const reorganizarSeAutomatico = useCallback(() => {
+    const config = configRef.current
+    if (!config.alinhamentoAutomatico || config.layout === 'manual') return
+    const atual = grafoRef.current
+    const novasPosicoes = calcularNovasPosicoes(atual, config.layout)
+    if (!novasPosicoes) return
+    const nodes = atual.nodes.map(n => {
+      const pos = novasPosicoes.get(n.id)
+      return pos ? { ...n, position: pos } : n
+    })
+    commit({ ...atual, nodes })
+  }, [])
+
   // `posicaoForcada` (opcional): usado pelo "arrastar do handle e soltar no
   // vazio" (onConnectEnd) pra nascer o filho exatamente onde o usuário
   // soltou o mouse, em vez da posição em cascata padrão à direita do pai.
@@ -2230,6 +2315,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     }
     const novaAresta: Edge = { id: `${paiId}-${novoId}`, source: paiId, target: novoId, type: 'flutuante', style: { stroke: cor, strokeWidth: 2.5 } }
     commit({ nodes: [...atual.nodes, novoNo], edges: [...atual.edges, novaAresta] })
+    reorganizarSeAutomatico()
   }, [])
 
   // Arrastar de um handle e soltar em área vazia do canvas (não em cima de
@@ -2270,6 +2356,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
     const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
     commit({ nodes, edges })
+    reorganizarSeAutomatico()
   }, [])
 
   // Ideia "irmã" (Enter dentro da edição de um noMapa): mesmo pai de `id`,
@@ -2304,7 +2391,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const atual = grafoRef.current
     const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'noMapa' ? { ...n, data: { ...n.data, corManual: false } } : n))
     const { objetos, conectores } = flowParaBoard(nodes, atual.edges)
-    commit(boardParaFlow(objetos, conectores))
+    commit(boardParaFlow(objetos, conectores, paletaCores(configRef.current.paleta)))
   }, [])
 
   // "Selecionar ramo" (6.x, item 5 do pedido): substitui a seleção atual
@@ -2769,19 +2856,20 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     commit({ ...atual, nodes })
   }, [])
 
-  // "Organizar automaticamente" (Layout do mapa): reflui só a parte do board
-  // que É uma árvore/fluxo (objetos ligados por conector, ex.: ramos do mapa
-  // mental ou etapas de um "Mapa de processo") — objeto solto (sticky,
-  // seção, forma sem conector) nunca é tocado, mover algo que o usuário
-  // posicionou de propósito (ex.: um card dentro de uma coluna do Kanban)
-  // seria pior do que não ter o botão. Três direções: horizontal/vertical
-  // são a mesma árvore em camadas (só troca qual eixo é "profundidade" e
-  // qual é "onde as subárvores se espalham pra não colidir"); radial parte
-  // do central e distribui cada subárvore numa fatia de ângulo proporcional
-  // ao nº de folhas, bem mais perto do desenho clássico de mapa mental.
-  type LayoutDirecao = 'horizontal' | 'vertical' | 'radial'
-  const onOrganizarLayout = useCallback((direcao: LayoutDirecao) => {
-    const atual = grafoRef.current
+  // "Organizar automaticamente" (Layout do mapa, painel Aparência): reflui só
+  // a parte do board que É uma árvore/fluxo (objetos ligados por conector,
+  // ex.: ramos do mapa mental ou etapas de um "Mapa de processo") — objeto
+  // solto (sticky, seção, forma sem conector) nunca é tocado, mover algo que
+  // o usuário posicionou de propósito (ex.: um card dentro de uma coluna do
+  // Kanban) seria pior do que não ter o botão. Três layouts, mesmo
+  // vocabulário do MindMeister: "Mapa mental" é radial a partir do central,
+  // cada subárvore numa fatia de ângulo proporcional ao nº de folhas;
+  // "Organograma" é a árvore clássica em camadas de cima pra baixo; "Lista"
+  // é um sumário indentado (sem espalhar em largura, só desce uma linha por
+  // item, indentado pela profundidade) — os três nomes/ids batem com
+  // LAYOUTS_BOARD (usado pelo painel Aparência) e com o enum validado no
+  // back (LAYOUTS_BOARD em proLabore.ts).
+  function calcularNovasPosicoes(atual: { nodes: NoFlow[]; edges: Edge[] }, layout: Exclude<LayoutBoard, 'manual'>): Map<string, { x: number; y: number }> | null {
     const saidaPorOrigem = new Map<string, string[]>()
     const temEntrada = new Set<string>()
     const participaDeAresta = new Set<string>()
@@ -2793,12 +2881,12 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     })
     const porId = new Map(atual.nodes.map(n => [n.id, n]))
     const raizes = atual.nodes.filter(n => participaDeAresta.has(n.id) && !temEntrada.has(n.id))
-    if (raizes.length === 0) return
+    if (raizes.length === 0) return null
 
     const novasPosicoes = new Map<string, { x: number; y: number }>()
     const visitados = new Set<string>()
 
-    if (direcao === 'radial') {
+    if (layout === 'mapaMental') {
       const PASSO_RADIAL = 230
       function layoutRadial(id: string, profundidade: number, anguloIni: number, anguloFim: number) {
         if (visitados.has(id)) return
@@ -2817,8 +2905,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         layoutRadial(raiz.id, 0, anguloCursor, anguloCursor + fatiaRaiz)
         anguloCursor += fatiaRaiz
       })
-    } else {
-      const horizontal = direcao === 'horizontal'
+    } else if (layout === 'organograma') {
       const PASSO_PRINCIPAL = 260
       const MARGEM_CRUZADA = 36
       let cursorCruzado = 0
@@ -2826,11 +2913,11 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         if (visitados.has(id)) return 0
         visitados.add(id)
         const no = porId.get(id)
-        const tamanhoCruzado = no ? (horizontal ? medidas(no).h : medidas(no).w) : 60
+        const tamanhoCruzado = no ? medidas(no).w : 150
         const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
         const principal = profundidade * PASSO_PRINCIPAL
         if (filhos.length === 0) {
-          novasPosicoes.set(id, horizontal ? { x: principal, y: cursorCruzado } : { x: cursorCruzado, y: principal })
+          novasPosicoes.set(id, { x: cursorCruzado, y: principal })
           const ocupado = tamanhoCruzado + MARGEM_CRUZADA
           cursorCruzado += ocupado
           return ocupado
@@ -2838,22 +2925,70 @@ function Canvas({ dadosIniciais, onChange, tema }: {
         const cruzadoAntes = cursorCruzado
         const ocupadoPelosFilhos = filhos.reduce((soma, f) => soma + layoutEmArvore(f, profundidade + 1), 0)
         const centroFilhos = cruzadoAntes + ocupadoPelosFilhos / 2 - MARGEM_CRUZADA / 2
-        novasPosicoes.set(id, horizontal ? { x: principal, y: centroFilhos } : { x: centroFilhos, y: principal })
+        novasPosicoes.set(id, { x: centroFilhos, y: principal })
         return Math.max(ocupadoPelosFilhos, tamanhoCruzado + MARGEM_CRUZADA)
       }
       raizes.forEach(raiz => {
         layoutEmArvore(raiz.id, 0)
         cursorCruzado += 50 // respiro entre árvores/componentes desconectados
       })
+    } else {
+      // Lista: sumário indentado — cada item ocupa a próxima linha (ordem de
+      // visita em profundidade), indentado só pela profundidade na árvore,
+      // sem espalhar filhos lado a lado como os outros dois layouts fazem.
+      const INDENT_LISTA = 220
+      const ALTURA_LINHA_LISTA = 46
+      let cursorY = 0
+      function layoutLista(id: string, profundidade: number) {
+        if (visitados.has(id)) return
+        visitados.add(id)
+        novasPosicoes.set(id, { x: profundidade * INDENT_LISTA, y: cursorY })
+        cursorY += ALTURA_LINHA_LISTA
+        const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
+        filhos.forEach(f => layoutLista(f, profundidade + 1))
+      }
+      raizes.forEach(raiz => { layoutLista(raiz.id, 0); cursorY += 20 })
     }
 
+    return novasPosicoes
+  }
+
+  const onOrganizarLayout = useCallback((layout: Exclude<LayoutBoard, 'manual'>) => {
+    const atual = grafoRef.current
+    const novasPosicoes = calcularNovasPosicoes(atual, layout)
+    if (!novasPosicoes) return
     const nodes = atual.nodes.map(n => {
       const pos = novasPosicoes.get(n.id)
       return pos ? { ...n, position: pos } : n
     })
     commit({ ...atual, nodes })
     requestAnimationFrame(() => fitView({ padding: 0.3, duration: 300 }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // --- Painel "Aparência": escolher um layout já aplica na hora (igual o
+  // clique num card muda o board inteiro nas referências do MindMeister);
+  // escolher paleta recolore os ramos sem mexer em posição; ligar
+  // alinhamento automático já reorganiza uma vez, pra não ficar "ligado mas
+  // sem efeito visível" até a próxima edição estrutural. ---
+  function aplicarConfiguracao(patch: Partial<ConfiguracaoBoard>) {
+    onMudarConfiguracao({ ...configRef.current, ...patch })
+  }
+  function onEscolherLayout(layout: LayoutBoard) {
+    aplicarConfiguracao({ layout })
+    if (layout !== 'manual') onOrganizarLayout(layout)
+  }
+  function onEscolherPaleta(paleta: PaletaCorBoard) {
+    aplicarConfiguracao({ paleta })
+    const atual = grafoRef.current
+    const { objetos, conectores } = flowParaBoard(atual.nodes, atual.edges)
+    commit(boardParaFlow(objetos, conectores, paletaCores(paleta)))
+  }
+  function onAlternarAlinhamentoAutomatico() {
+    const ligar = !configRef.current.alinhamentoAutomatico
+    aplicarConfiguracao({ alinhamentoAutomatico: ligar })
+    if (ligar && configRef.current.layout !== 'manual') onOrganizarLayout(configRef.current.layout)
+  }
 
   const onCamada = useCallback((direcao: 'frente' | 'tras') => {
     const atual = grafoRef.current
@@ -2898,6 +3033,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
     const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
     const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
     commit({ nodes, edges })
+    reorganizarSeAutomatico()
   }, [centralId])
 
   const onNudgeSelecionados = useCallback((dx: number, dy: number) => {
@@ -3042,12 +3178,27 @@ function Canvas({ dadosIniciais, onChange, tema }: {
       if (e.key === '?') { e.preventDefault(); setAjudaAberta(v => !v); return }
       if (ajudaAberta && e.key === 'Escape') { setAjudaAberta(false); return }
       if (menuContexto && e.key === 'Escape') { setMenuContexto(null); return }
-      // Enter com exatamente um objeto selecionado (e nada em edição, já
-      // garantido pelo `if (editando)` lá em cima) abre a edição dele — ver
-      // o useEffect que consome `pedidoEdicaoId` em cada tipo de nó.
+      // Numa ideia de mapa mental selecionada (mas não em edição), Tab/Enter
+      // já criam filha/irmã na hora — igual MindMeister, sem precisar abrir
+      // a edição primeiro (ver o hint embaixo do nó, NoMapaNode). Pra
+      // qualquer outro tipo de objeto (sticky, forma, texto...) Enter com
+      // exatamente um selecionado continua abrindo a edição dele, como
+      // sempre foi — ver o useEffect que consome `pedidoEdicaoId`.
+      if (e.key === 'Tab') {
+        const selecionados = grafoRef.current.nodes.filter(n => n.selected)
+        if (selecionados.length === 1 && selecionados[0].data.tipoObjeto === 'noMapa') {
+          e.preventDefault()
+          onAdicionarFilho(selecionados[0].id)
+          return
+        }
+      }
       if (e.key === 'Enter') {
         const selecionados = grafoRef.current.nodes.filter(n => n.selected)
-        if (selecionados.length === 1) { e.preventDefault(); setPedidoEdicaoId(`${selecionados[0].id}#${Date.now()}`) }
+        if (selecionados.length === 1) {
+          e.preventDefault()
+          if (selecionados[0].data.tipoObjeto === 'noMapa') onCriarIrmao(selecionados[0].id)
+          else setPedidoEdicaoId(`${selecionados[0].id}#${Date.now()}`)
+        }
         return
       }
       const mod = e.ctrlKey || e.metaKey
@@ -3300,28 +3451,12 @@ function Canvas({ dadosIniciais, onChange, tema }: {
             <button type="button" className={`pl-mapa-tv-btn ${minimapaAberto ? 'ativo' : ''}`} title="Minimapa" onClick={() => setMinimapaAberto(v => !v)}>
               <IconeMinimapa />
             </button>
-            <div className="pl-mapa-tv-item">
-              <button
-                type="button" className={`pl-mapa-tv-btn ${layoutFlyoutAberto ? 'ativo' : ''}`}
-                title="Organizar automaticamente (reorganiza ramos ligados por conector)"
-                onClick={() => setLayoutFlyoutAberto(v => !v)}
-              >
-                <IconeOrganizarLayout />
-              </button>
-              {layoutFlyoutAberto && (
-                <div className="pl-mapa-layout-flyout">
-                  <button type="button" className="pl-mapa-layout-opcao" title="Árvore horizontal" onClick={() => { onOrganizarLayout('horizontal'); setLayoutFlyoutAberto(false) }}>
-                    <IconeOrganizarLayout /><span>Horizontal</span>
-                  </button>
-                  <button type="button" className="pl-mapa-layout-opcao" title="Árvore vertical" onClick={() => { onOrganizarLayout('vertical'); setLayoutFlyoutAberto(false) }}>
-                    <IconeLayoutVertical /><span>Vertical</span>
-                  </button>
-                  <button type="button" className="pl-mapa-layout-opcao" title="Radial (a partir do central)" onClick={() => { onOrganizarLayout('radial'); setLayoutFlyoutAberto(false) }}>
-                    <IconeLayoutRadial /><span>Radial</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button" className={`pl-mapa-tv-btn ${aparenciaAberta ? 'ativo' : ''}`}
+              title="Aparência (layout e paleta de cor)" onClick={() => setAparenciaAberta(v => !v)}
+            >
+              <IconeAparencia />
+            </button>
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como PNG" onClick={onExportarPng}>
               <IconeExportar />
             </button>
@@ -3413,6 +3548,15 @@ function Canvas({ dadosIniciais, onChange, tema }: {
           )}
         </ReactFlow>
         {ajudaAberta && <PainelAtalhos onFechar={() => setAjudaAberta(false)} />}
+        {aparenciaAberta && (
+          <PainelAparencia
+            config={config}
+            onFechar={() => setAparenciaAberta(false)}
+            onEscolherLayout={onEscolherLayout}
+            onEscolherPaleta={onEscolherPaleta}
+            onAlternarAlinhamentoAutomatico={onAlternarAlinhamentoAutomatico}
+          />
+        )}
         {menuContexto && (
           <>
             <div className="pl-ctxmenu-backdrop" onClick={() => setMenuContexto(null)} onContextMenu={e => { e.preventDefault(); setMenuContexto(null) }} />
@@ -3425,7 +3569,7 @@ function Canvas({ dadosIniciais, onChange, tema }: {
                   <button type="button" className="pl-ctxmenu-item" onClick={() => { onAdicionarImagem(menuContexto.posicaoFlow); setMenuContexto(null) }}>Adicionar imagem aqui</button>
                   <div className="pl-ctxmenu-divisor" />
                   <button type="button" className="pl-ctxmenu-item" onClick={() => { onSelecionarTudo(); setMenuContexto(null) }}>Selecionar tudo</button>
-                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onOrganizarLayout('horizontal'); setMenuContexto(null) }}>Organizar automaticamente</button>
+                  <button type="button" className="pl-ctxmenu-item" onClick={() => { onOrganizarLayout(configRef.current.layout === 'manual' ? 'mapaMental' : configRef.current.layout); setMenuContexto(null) }}>Organizar automaticamente</button>
                   <button type="button" className="pl-ctxmenu-item" onClick={() => { fitView({ padding: 0.3, duration: 300 }); setMenuContexto(null) }}>Ajustar à tela</button>
                 </>
               ) : noDoMenuContexto ? (
@@ -3490,7 +3634,7 @@ function PainelAtalhos({ onFechar }: { onFechar: () => void }) {
           </div>
           <div className="pl-ajuda-secao">
             <div className="pl-ajuda-titulo-secao">Objetos selecionados</div>
-            <LinhaAtalho label="Editar (com 1 selecionado)" teclas={['Enter']} />
+            <LinhaAtalho label="Editar (com 1 selecionado, exceto ideia de mapa)" teclas={['Enter']} />
             <LinhaAtalho label="Duplicar" teclas={['Ctrl', 'D']} />
             <LinhaAtalho label="Excluir" teclas={['Delete']} />
             <LinhaAtalho label="Agrupar" teclas={['Ctrl', 'G']} />
@@ -3499,7 +3643,7 @@ function PainelAtalhos({ onFechar }: { onFechar: () => void }) {
             <LinhaAtalho label="Mover 10px" teclas={['Shift', '↑↓←→']} />
           </div>
           <div className="pl-ajuda-secao">
-            <div className="pl-ajuda-titulo-secao">Mapa mental (editando uma ideia)</div>
+            <div className="pl-ajuda-titulo-secao">Mapa mental (ideia selecionada ou em edição)</div>
             <LinhaAtalho label="Nova ideia irmã" teclas={['Enter']} />
             <LinhaAtalho label="Nova ideia filha" teclas={['Tab']} />
           </div>
@@ -3524,10 +3668,95 @@ function PainelAtalhos({ onFechar }: { onFechar: () => void }) {
   )
 }
 
+const ICONE_POR_LAYOUT: Record<Exclude<LayoutBoard, 'manual'>, () => ReactElement> = {
+  mapaMental: IconeLayoutRadial,
+  organograma: IconeLayoutVertical,
+  lista: IconeLayoutLista,
+}
+
+// Painel de aparência (estilo MindMeister): layout do board, paleta de cor dos
+// ramos e alinhamento automático — tudo persistido em ConfiguracaoBoard.
+function PainelAparencia({
+  config,
+  onFechar,
+  onEscolherLayout,
+  onEscolherPaleta,
+  onAlternarAlinhamentoAutomatico,
+}: {
+  config: ConfiguracaoBoard
+  onFechar: () => void
+  onEscolherLayout: (layout: LayoutBoard) => void
+  onEscolherPaleta: (paleta: PaletaCorBoard) => void
+  onAlternarAlinhamentoAutomatico: () => void
+}) {
+  return (
+    <div className="pl-modal-backdrop" onClick={onFechar}>
+      <div className="pl-card pl-modal-panel pl-aparencia-painel" onClick={e => e.stopPropagation()}>
+        <div className="pl-card-head">
+          <div>
+            <div className="pl-card-title">Aparência</div>
+            <div className="pl-card-sub">Layout do mapa e paleta de cor dos ramos.</div>
+          </div>
+          <button type="button" className="pl-mapa-toolbar-btn" title="Fechar" onClick={onFechar}>×</button>
+        </div>
+        <div className="pl-aparencia-secao">
+          <div className="pl-aparencia-titulo-secao">Layout</div>
+          <div className="pl-aparencia-layouts-grade">
+            {LAYOUTS_BOARD.map(item => {
+              const Icone = ICONE_POR_LAYOUT[item.id]
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`pl-aparencia-layout-card ${config.layout === item.id ? 'ativo' : ''}`}
+                  onClick={() => onEscolherLayout(item.id)}
+                >
+                  <span className="pl-aparencia-layout-icone"><Icone /></span>
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            className={`pl-aparencia-toggle ${config.alinhamentoAutomatico ? 'ativo' : ''}`}
+            onClick={onAlternarAlinhamentoAutomatico}
+          >
+            <span className="pl-aparencia-toggle-trilho"><span className="pl-aparencia-toggle-bola" /></span>
+            Alinhamento automático
+          </button>
+        </div>
+        <div className="pl-aparencia-secao">
+          <div className="pl-aparencia-titulo-secao">Temas</div>
+          <div className="pl-aparencia-paletas-grade">
+            {PALETAS_COR_BOARD.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                className={`pl-aparencia-paleta-card ${config.paleta === item.id ? 'ativo' : ''}`}
+                onClick={() => onEscolherPaleta(item.id)}
+              >
+                <span className="pl-aparencia-paleta-dots">
+                  {item.cores.slice(0, 5).map((cor, i) => (
+                    <span key={i} className="pl-aparencia-paleta-dot" style={{ background: cor }} />
+                  ))}
+                </span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function MapaMentalCanvas(props: {
   dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
   onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
   tema?: TemaBoard | null
+  configuracao?: ConfiguracaoBoard | null
+  onMudarConfiguracao: (config: ConfiguracaoBoard) => void
 }) {
   return (
     <ReactFlowProvider>

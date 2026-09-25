@@ -1170,6 +1170,20 @@
 .pl-mapa-toolbar-btn:hover { background: var(--pl-surface-2); color: var(--pl-ink-1); }
 .pl-mapa-toolbar-btn-danger:hover { background: color-mix(in srgb, var(--pl-critical) 16%, transparent); color: var(--pl-critical); }
 
+/* Dica de atalho embaixo de uma ideia selecionada (Tab/Enter), estilo
+   MindMeister — só texto discreto, sem fundo de cartão como a toolbar de cima. */
+.pl-mapa-atalho-hint {
+  display: flex; gap: 10px; white-space: nowrap;
+}
+.pl-mapa-atalho-hint span {
+  display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--pl-ink-2);
+  background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 6px; padding: 2px 6px 2px 4px;
+}
+.pl-mapa-atalho-hint kbd {
+  font-family: inherit; font-size: 10px; font-weight: 600; color: var(--pl-ink-1);
+  background: var(--pl-surface-2); border-radius: 4px; padding: 1px 4px;
+}
+
 /* Toolbar vertical flutuante (Panel top-left do @xyflow/react) — réplica da
    barra de ferramentas da referência: cursor/mão pra alternar seleção vs.
    pan da tela, adicionar/excluir nó selecionado, ajustar zoom. */
@@ -1228,19 +1242,47 @@
 .pl-mapa-forma-preview { display: block; width: 18px; height: 14px; }
 .pl-mapa-forma-opcao svg { width: 18px; height: 18px; color: var(--pl-ink-2); }
 
-/* Flyout do botão "Organizar automaticamente" — 3 direções de layout. */
-.pl-mapa-layout-flyout {
-  position: absolute; left: calc(100% + 8px); top: 0; z-index: 5;
-  display: flex; flex-direction: column; gap: 2px; width: 150px;
-  background: var(--pl-surface); border: 1px solid var(--pl-border-strong); border-radius: 12px;
-  padding: 6px; box-shadow: var(--pl-shadow-card);
+/* Painel "Aparência" (estilo MindMeister): layout do board + paleta de cor. */
+.pl-aparencia-painel { max-width: 480px; }
+.pl-aparencia-secao + .pl-aparencia-secao { margin-top: 20px; }
+.pl-aparencia-titulo-secao {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--pl-ink-2); margin-bottom: 10px;
 }
-.pl-mapa-layout-opcao {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px;
-  background: none; border: none; cursor: pointer; color: var(--pl-ink-1); font-size: 12.5px; text-align: left;
+.pl-aparencia-layouts-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pl-aparencia-layout-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px;
+  border-radius: 12px; border: 1px solid var(--pl-border-strong); background: var(--pl-surface);
+  cursor: pointer; color: var(--pl-ink-1); font-size: 12.5px; font-weight: 600;
 }
-.pl-mapa-layout-opcao:hover { background: var(--pl-surface-2); }
-.pl-mapa-layout-opcao svg { width: 16px; height: 16px; color: var(--pl-ink-2); flex-shrink: 0; }
+.pl-aparencia-layout-card:hover { background: var(--pl-surface-2); }
+.pl-aparencia-layout-card.ativo { border-color: var(--pl-accent); background: color-mix(in srgb, var(--pl-accent) 12%, var(--pl-surface)); color: var(--pl-accent); }
+.pl-aparencia-layout-icone { display: flex; }
+.pl-aparencia-layout-icone svg { width: 26px; height: 26px; }
+.pl-aparencia-toggle {
+  display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 0;
+  background: none; border: none; cursor: pointer; color: var(--pl-ink-1); font-size: 13px; font-weight: 500;
+}
+.pl-aparencia-toggle-trilho {
+  position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--pl-border-strong);
+  transition: background .15s ease; flex-shrink: 0;
+}
+.pl-aparencia-toggle-bola {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; transition: transform .15s ease;
+}
+.pl-aparencia-toggle.ativo .pl-aparencia-toggle-trilho { background: var(--pl-accent); }
+.pl-aparencia-toggle.ativo .pl-aparencia-toggle-bola { transform: translateX(14px); }
+.pl-aparencia-paletas-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pl-aparencia-paleta-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 8px;
+  border-radius: 12px; border: 1px solid var(--pl-border-strong); background: var(--pl-surface);
+  cursor: pointer; color: var(--pl-ink-1); font-size: 12.5px; font-weight: 600;
+}
+.pl-aparencia-paleta-card:hover { background: var(--pl-surface-2); }
+.pl-aparencia-paleta-card.ativo { border-color: var(--pl-accent); background: color-mix(in srgb, var(--pl-accent) 12%, var(--pl-surface)); }
+.pl-aparencia-paleta-dots { display: flex; gap: 3px; }
+.pl-aparencia-paleta-dot { width: 12px; height: 12px; border-radius: 50%; }
 
 /* Objeto de forma de diagrama (FormaNode) — preenchimento numa camada com
    clip-path/border-radius (por trás), texto numa camada separada por cima
@@ -1555,6 +1597,7 @@
 .pl-ajuda-formas-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 16px; }
 @container (max-width: 480px) {
   .pl-ajuda-grade, .pl-ajuda-formas-grade { grid-template-columns: 1fr; }
+  .pl-aparencia-layouts-grade, .pl-aparencia-paletas-grade { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* Chrome do React Flow (fundo, controles) combinando com o tema escuro/claro do app */

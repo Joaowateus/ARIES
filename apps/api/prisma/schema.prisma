@@ -1673,6 +1673,10 @@ model MapaMental {
   titulo       String?
   icone        String? // emoji, opcional — mapa sem ícone usa o ícone padrão
   tema         String? // tema visual do canvas (fundo/pontilhado) — null = tema padrão ("claro")
+  // Layout persistente + paleta de cor dos ramos + alinhamento automático
+  // (painel "Aparência", estilo MindMeister): { layout, alinhamentoAutomatico, paleta }.
+  // Null = tudo no padrão de sempre (layout manual, paleta "meister").
+  configuracao Json?
   raiz         Json?
   objetos      Json?
   conectores   Json?
