@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { TipoLead, Vendedor } from './proLaboreApi'
+import { Lead, TipoLead, Vendedor } from './proLaboreApi'
 
 // Mesma ordem/lógica do backend (estagioAtingiu em proLabore.ts) — usada
 // pra recalcular contagens "alcançou a etapa X" no cliente a partir de
@@ -11,6 +11,55 @@ export const ORDEM_ESTAGIO_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA',
 export function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[number]): boolean {
   if (estagioAtual === 'PERDIDO') return false
   return ORDEM_ESTAGIO_LEAD.indexOf(estagioAtual as (typeof ORDEM_ESTAGIO_LEAD)[number]) >= ORDEM_ESTAGIO_LEAD.indexOf(alvo)
+}
+
+// Data em que o lead de fato ALCANÇOU a etapa (não quando foi criado) — pra
+// LEAD é sempre `criadoEm` (a própria definição de "virou lead"); pras
+// demais, é a transição mais antiga no histórico que já satisfaz essa etapa
+// ou uma posterior (um lead que pulou direto de LEAD pra NEGOCIACAO também
+// "alcançou" ABORDADO nesse mesmo instante). `null` quando o lead nunca
+// alcançou essa etapa. Essencial pra filtrar o funil por período: usar
+// `criadoEm` pra todas as etapas (como o código fazia antes) sub-conta
+// qualquer lead que avançou de estágio depois de ter sido criado fora do
+// período — inclusive fazendo uma venda fechada na semana "sumir" do
+// filtro "essa semana" se o lead tinha sido criado antes.
+export function dataAlcancouEtapa(lead: Lead, etapa: (typeof ORDEM_ESTAGIO_LEAD)[number]): Date | null {
+  if (etapa === 'LEAD') return new Date(lead.criadoEm)
+  const alvoIdx = ORDEM_ESTAGIO_LEAD.indexOf(etapa)
+  const candidatos = (lead.historico ?? [])
+    .filter(h => (ORDEM_ESTAGIO_LEAD as readonly string[]).includes(h.estagioNovo) && ORDEM_ESTAGIO_LEAD.indexOf(h.estagioNovo as (typeof ORDEM_ESTAGIO_LEAD)[number]) >= alvoIdx)
+    .map(h => new Date(h.criadoEm).getTime())
+  return candidatos.length > 0 ? new Date(Math.min(...candidatos)) : null
+}
+
+// Funil completo (contagem + população de leads por etapa) recortado por um
+// predicado de período — mesma lógica compartilhada entre o Painel (Jornada
+// de compra) e o CRM (Kanban de Leads), cada etapa usando a data em que
+// realmente foi alcançada (dataAlcancouEtapa), não `criadoEm` uniforme.
+// "Leads" (topo do funil) inclui perdidos (não é um "estágio alcançado",
+// é população que entrou); as demais etapas excluem quem está PERDIDO hoje,
+// mesmo raciocínio de `estagioAtingiu`.
+export function popularFunilNoPeriodo(
+  leads: Lead[],
+  dentroPeriodo: (data: Date) => boolean,
+  filtros: { vendedorId?: string | null; canal?: '' | TipoLead } = {},
+): Record<(typeof ORDEM_ESTAGIO_LEAD)[number], Lead[]> {
+  const passaFiltros = (l: Lead) =>
+    (!filtros.vendedorId || l.vendedorId === filtros.vendedorId) && (!filtros.canal || l.tipoLead === filtros.canal)
+  function popular(etapa: (typeof ORDEM_ESTAGIO_LEAD)[number]): Lead[] {
+    const base = etapa === 'LEAD' ? leads.filter(passaFiltros) : leads.filter(l => passaFiltros(l) && l.estagio !== 'PERDIDO')
+    return base.filter(l => {
+      const d = dataAlcancouEtapa(l, etapa)
+      return d != null && dentroPeriodo(d)
+    })
+  }
+  return {
+    LEAD: popular('LEAD'),
+    ABORDADO: popular('ABORDADO'),
+    NEGOCIACAO: popular('NEGOCIACAO'),
+    PROPOSTA: popular('PROPOSTA'),
+    FECHADO: popular('FECHADO'),
+  }
 }
 
 // Mesma semântica do preset "hoje" de /receitas-periodo — só o dia atual.

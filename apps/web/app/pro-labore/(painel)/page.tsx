@@ -6,7 +6,7 @@ import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiq
 import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { useCountUp } from '@/lib/useCountUp'
-import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/lib/proLaboreFunilFiltro'
+import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
 import { PageHeader } from '../PageHeader'
 
 // --pl-accent fica de fora da rotação: ele inverte de claro pra escuro (e
@@ -242,82 +242,47 @@ export default function ProLaboreDashboardPage() {
   // carregados; sem canal, usa a resposta do /painel já buscada pra chave
   // de vendedor do funil (isolada do funil, ou seguindo o filtro geral).
   const filtroFunilAtivo = chaveFunilVendedor !== '' || filtroCanal !== '' || filtroFunilPeriodo !== null
-  const passaFiltrosFunilComuns = (l: Lead) =>
-    (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor) && (!filtroCanal || l.tipoLead === filtroCanal)
-  // Fechamento é sobre QUANDO A VENDA FECHOU (`fechadoEm`), nunca sobre
-  // quando o lead nasceu (`criadoEm`) — um lead criado antes do período mas
-  // fechado dentro dele precisa contar aqui, senão uma venda real "some" do
-  // filtro (ex.: filtrar "essa semana" e a venda não aparecer porque o lead
-  // tinha sido criado na semana anterior). Mesmo raciocínio do `/painel`
-  // (mensal), que já usa a data da própria Venda pra contar `fechamento`.
-  const leadsFechadosNoIntervalo = (inicio: Date, fim: Date) =>
-    leads.filter(l => passaFiltrosFunilComuns(l) && l.estagio === 'FECHADO' && l.fechadoEm)
-      .filter(l => { const d = new Date(l.fechadoEm!); return d >= inicio && d <= fim })
+
+  // População de cada etapa do funil, já recortada por vendedor/canal/
+  // período — cada etapa contada pela data em que foi REALMENTE alcançada
+  // (dataAlcancouEtapa), não por `criadoEm` uniforme. Sem isso, um lead
+  // criado antes do período mas que avançou (ou fechou venda) dentro dele
+  // sumia do recorte inteiro — inclusive fazendo uma venda fechada na
+  // semana "sumir" do filtro "essa semana" só porque o lead foi criado
+  // antes. Usado tanto pras contagens (Jornada de compra) quanto pros
+  // indicadores em R$ (Oportunidade/Pró-labore/Comissão) abaixo.
+  const populacaoFunilPorEtapa = useMemo(() => {
+    const filtros = { vendedorId: chaveFunilVendedor || null, canal: filtroCanal }
+    if (filtroFunilPeriodo) {
+      const inicioData = new Date(`${filtroFunilPeriodo.inicio}T00:00:00`)
+      const fimData = new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`)
+      return popularFunilNoPeriodo(leads, d => d >= inicioData && d <= fimData, filtros)
+    }
+    if (!atual) return null
+    const inicioMes = new Date(Date.UTC(atual.ano, atual.mes, 1))
+    const fimMes = new Date(Date.UTC(atual.ano, atual.mes + 1, 0, 23, 59, 59, 999))
+    return popularFunilNoPeriodo(leads, d => d >= inicioMes && d <= fimMes, filtros)
+  }, [atual, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor])
 
   const funilFiltrado = useMemo(() => {
     if (!filtroFunilAtivo) return null
-    if (filtroFunilPeriodo) {
-      const inicioData = new Date(`${filtroFunilPeriodo.inicio}T00:00:00`)
-      const fimData = new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`)
-      const leadsNoPeriodo = leads.filter(l => passaFiltrosFunilComuns(l) && new Date(l.criadoEm) >= inicioData && new Date(l.criadoEm) <= fimData)
+    if (filtroFunilPeriodo || filtroCanal !== '') {
+      if (!populacaoFunilPorEtapa) return null
       return {
-        leads: leadsNoPeriodo.length,
-        abordados: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
-        negociacao: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
-        proposta: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
-        fechamento: leadsFechadosNoIntervalo(inicioData, fimData).length,
-      }
-    }
-    if (!atual) return null
-    if (filtroCanal !== '') {
-      const inicioMes = new Date(Date.UTC(atual.ano, atual.mes, 1))
-      const fimMes = new Date(Date.UTC(atual.ano, atual.mes + 1, 0, 23, 59, 59, 999))
-      const leadsDoMes = leads.filter(l => {
-        const d = new Date(l.criadoEm)
-        return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes && passaFiltrosFunilComuns(l)
-      })
-      return {
-        leads: leadsDoMes.length,
-        abordados: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
-        negociacao: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
-        proposta: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
-        fechamento: leadsFechadosNoIntervalo(inicioMes, fimMes).length,
+        leads: populacaoFunilPorEtapa.LEAD.length,
+        abordados: populacaoFunilPorEtapa.ABORDADO.length,
+        negociacao: populacaoFunilPorEtapa.NEGOCIACAO.length,
+        proposta: populacaoFunilPorEtapa.PROPOSTA.length,
+        fechamento: populacaoFunilPorEtapa.FECHADO.length,
       }
     }
     return painelPorVendedor[chaveFunilVendedor]?.meses[selectedIdx]?.funil ?? null
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atual, filtroFunilAtivo, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor, painelPorVendedor, selectedIdx])
+  }, [filtroFunilAtivo, filtroFunilPeriodo, filtroCanal, populacaoFunilPorEtapa, painelPorVendedor, chaveFunilVendedor, selectedIdx])
 
-  // População de leads por trás dos indicadores em R$ da Jornada de compra
-  // (Oportunidade/Pró-labore/Comissão) — sempre recalculada a partir dos
-  // Leads já carregados (não dá pra usar o /painel agregado aqui porque ele
-  // não carrega valorNegociacao/tipoNegociacao por lead), respeitando o
-  // mesmo recorte de vendedor/canal/período do funil de contagem acima.
-  const leadsFunilFinanceiro = useMemo(() => {
-    if (filtroFunilPeriodo) {
-      const inicioData = new Date(`${filtroFunilPeriodo.inicio}T00:00:00`)
-      const fimData = new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`)
-      return leads.filter(l => passaFiltrosFunilComuns(l) && new Date(l.criadoEm) >= inicioData && new Date(l.criadoEm) <= fimData)
-    }
-    if (!atual) return []
-    return leads.filter(l => {
-      const d = new Date(l.criadoEm)
-      return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes && passaFiltrosFunilComuns(l)
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atual, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor])
-
-  // Mesmo recorte acima, só que a data-base do bucket de Fechamento é
-  // `fechadoEm` (ver comentário de `leadsFechadosNoIntervalo`) — usado só
-  // pra popular a linha "Fechamento" de `populacaoPorEtapaFin` abaixo.
-  const leadsFechadosFunilFinanceiro = useMemo(() => {
-    if (filtroFunilPeriodo) {
-      return leadsFechadosNoIntervalo(new Date(`${filtroFunilPeriodo.inicio}T00:00:00`), new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`))
-    }
-    if (!atual) return []
-    return leadsFechadosNoIntervalo(new Date(Date.UTC(atual.ano, atual.mes, 1)), new Date(Date.UTC(atual.ano, atual.mes + 1, 0, 23, 59, 59, 999)))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atual, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor])
+  // Indicadores em R$ por etapa da Jornada de compra (Oportunidade e sua
+  // conversão/perda entre etapas) — mesma população acima, recortada pelo
+  // mês/período selecionado aqui no Dashboard, em vez do pipeline vivo.
+  const populacaoPorEtapaFin: Lead[][] = ETAPAS_FUNIL_PL.map(etapa => populacaoFunilPorEtapa?.[etapa] ?? [])
 
   if (loading) return <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
 
@@ -361,17 +326,6 @@ export default function ProLaboreDashboardPage() {
     ? `${filtroFunilPeriodo.inicio.split('-').reverse().join('/')} – ${filtroFunilPeriodo.fim.split('-').reverse().join('/')}`
     : `${atual.label} ${atual.ano}`
 
-  // Indicadores em R$ por etapa da Jornada de compra (Oportunidade e sua
-  // conversão/perda entre etapas) — mesma lógica de oportunidade já usada
-  // no CRM (Funil de vendas), aplicada à população de leads recortada pelo
-  // mês/período selecionado aqui no Dashboard, em vez do pipeline vivo.
-  const populacaoPorEtapaFin: Lead[][] = ETAPAS_FUNIL_PL.map(etapa =>
-    etapa === 'LEAD'
-      ? leadsFunilFinanceiro
-      : etapa === 'FECHADO'
-        ? leadsFechadosFunilFinanceiro
-        : leadsFunilFinanceiro.filter(l => estagioAtingiu(l.estagio, etapa)),
-  )
   const oportunidadePorEtapaRS = populacaoPorEtapaFin.map(pop => pop.reduce((s, l) => s + l.valorNegociacao, 0))
 
   const dadosFin = ETAPAS_FUNIL_PL.map((etapa, i) => {
