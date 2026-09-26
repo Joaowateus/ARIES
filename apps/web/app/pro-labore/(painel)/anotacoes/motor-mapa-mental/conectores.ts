@@ -4,8 +4,8 @@
 // elipse, na direção de cada filho — não num ponto de junção compartilhado
 // como os nós não-raiz).
 import { G, RED } from './constantes'
-import type { MapaLayout, NoLayout } from './layout'
-import type { Layout } from './layout'
+import type { MapaLayout, NoLayout } from './layoutMotor'
+import type { Layout } from './layoutMotor'
 import type { Tema } from './temas'
 
 export const f = (n: number): number => Math.round(n * 10) / 10

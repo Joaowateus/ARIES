@@ -23,7 +23,7 @@ import { toPng } from 'html-to-image'
 import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreApi'
 import MotorMapaMentalView from './motor-mapa-mental/MotorMapaMentalView'
 import { arvoreParaObjetosBoard, boardParaArvore } from './motor-mapa-mental/conversao'
-import type { Layout as MotorLayout } from './motor-mapa-mental/layout'
+import type { Layout as MotorLayout } from './motor-mapa-mental/layoutMotor'
 
 // Temas visuais do canvas (fundo + padrão de pontilhado/grade) — catálogo
 // espelhado em TEMAS_BOARD no backend (proLabore.ts), que só valida o id.

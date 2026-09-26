@@ -9,7 +9,7 @@
 // stage (svg/editor/ações/zoom) continua sendo criado e atualizado pelo
 // próprio motor, do jeito que estava na referência.
 import { useEffect, useRef, useState } from 'react'
-import type { Layout } from './layout'
+import type { Layout } from './layoutMotor'
 import { EstadoMotor, MotorMapaMental } from './motor'
 import { NoArvore } from './dados'
 import { THEMES } from './temas'

@@ -12,7 +12,7 @@ import {
   maxId as maxIdArvore, type NoArvore, reindexar, removeNode as removeNodeArvore, reparent as reparentArvore,
   toggleCollapse,
 } from './dados'
-import { buildLayout, type Layout, type MapaLayout } from './layout'
+import { buildLayout, type Layout, type MapaLayout } from './layoutMotor'
 import { bandSvg, col, connectorsFor, esc, junctionSvg, lum, nodeSvg } from './conectores'
 import { FONT } from './constantes'
 import { THEMES, type Tema } from './temas'
