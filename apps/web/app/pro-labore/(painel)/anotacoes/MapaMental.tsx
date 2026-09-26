@@ -21,6 +21,9 @@ import {
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
 import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreApi'
+import MotorMapaMentalView from './motor-mapa-mental/MotorMapaMentalView'
+import { arvoreParaObjetosBoard, boardParaArvore } from './motor-mapa-mental/conversao'
+import type { Layout as MotorLayout } from './motor-mapa-mental/layout'
 
 // Temas visuais do canvas (fundo + padrão de pontilhado/grade) — catálogo
 // espelhado em TEMAS_BOARD no backend (proLabore.ts), que só valida o id.
@@ -648,11 +651,18 @@ export const PALETAS_COR_BOARD: PaletaCorCatalogo[] = [
   { id: 'bubbles', label: 'Bubbles', cores: ['#ff6b9d', '#ffa62b', '#6bcb77', '#4d96ff', '#c56bff', '#ff5e78', '#00d4ff', '#ffd93d'] },
 ]
 
+// Tema/"Dois lados" do motor de mapa mental fiel (referencia/motor-mapa-mental.html)
+// — só usados quando layout !== 'manual'. Independentes de PaletaCorBoard
+// (essa segue valendo só pro board livre/manual).
+export type TemaMotorMapa = 'meister' | 'prism' | 'ocean' | 'sunset' | 'noite'
+
 export interface ConfiguracaoBoard {
   layout: LayoutBoard
   paleta: PaletaCorBoard
+  temaMotor?: TemaMotorMapa
+  doisLados?: boolean
 }
-export const CONFIGURACAO_PADRAO: ConfiguracaoBoard = { layout: 'manual', paleta: 'meister' }
+export const CONFIGURACAO_PADRAO: ConfiguracaoBoard = { layout: 'manual', paleta: 'meister', temaMotor: 'meister', doisLados: false }
 
 function paletaCores(id: PaletaCorBoard | undefined): string[] {
   return PALETAS_COR_BOARD.find(p => p.id === id)?.cores ?? PALETA_RAMOS
@@ -4100,6 +4110,13 @@ function PainelAparencia({
   )
 }
 
+const LAYOUT_BOARD_PARA_MOTOR: Record<Exclude<LayoutBoard, 'manual'>, MotorLayout> = {
+  mapaMental: 'mind', organograma: 'org', lista: 'list',
+}
+const MOTOR_PARA_LAYOUT_BOARD: Record<MotorLayout, Exclude<LayoutBoard, 'manual'>> = {
+  mind: 'mapaMental', org: 'organograma', list: 'lista',
+}
+
 export default function MapaMentalCanvas(props: {
   dadosIniciais: { objetos: BoardObjeto[]; conectores: BoardConector[] }
   onChange: (dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => void
@@ -4107,9 +4124,56 @@ export default function MapaMentalCanvas(props: {
   configuracao?: ConfiguracaoBoard | null
   onMudarConfiguracao: (config: ConfiguracaoBoard) => void
 }) {
+  const { dadosIniciais, onChange, configuracao, onMudarConfiguracao } = props
+  const config = configuracao ?? CONFIGURACAO_PADRAO
+  // Guarda o board mais recente também quando quem está desenhando é o board
+  // livre (`Canvas`, layout 'manual') — `dadosIniciais` só reflete o estado
+  // de quando o mapa foi aberto (não é atualizado depois da montagem, só via
+  // `key` de restauração de histórico). Sem isso, trocar pra mapa
+  // mental/organograma/lista pela primeira vez perderia qualquer edição
+  // feita no modo manual antes da troca. É estado (não ref) de propósito:
+  // ler `.current` durante o render é o padrão que o projeto proíbe (ver
+  // AGENTS.md/regra react-hooks/refs).
+  const [latestBoard, setLatestBoard] = useState(dadosIniciais)
+  const onChangeInterno = useCallback((dados: { objetos: BoardObjeto[]; conectores: BoardConector[] }) => {
+    setLatestBoard(dados)
+    onChange(dados)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (config.layout === 'manual') {
+    return (
+      <ReactFlowProvider>
+        <Canvas
+          dadosIniciais={dadosIniciais} onChange={onChangeInterno}
+          tema={props.tema} configuracao={configuracao} onMudarConfiguracao={onMudarConfiguracao}
+        />
+      </ReactFlowProvider>
+    )
+  }
+
+  // Layout mapaMental/organograma/lista: renderização passa a ser 100% do
+  // motor fiel à referência (referencia/motor-mapa-mental.html) — SVG único,
+  // pan/zoom/edição/atalhos próprios — em vez do board livre via react-flow.
+  // A árvore é derivada em memória do formato plano já salvo (`conversao.ts`)
+  // pra não precisar mudar o schema/backend nem o histórico de versões.
+  const { tree, counter } = boardParaArvore(latestBoard.objetos, latestBoard.conectores)
   return (
-    <ReactFlowProvider>
-      <Canvas {...props} />
-    </ReactFlowProvider>
+    <MotorMapaMentalView
+      key="motor-fiel"
+      treeInicial={tree}
+      counterInicial={counter}
+      layoutInicial={LAYOUT_BOARD_PARA_MOTOR[config.layout]}
+      temaInicial={config.temaMotor ?? 'meister'}
+      doisLadosInicial={!!config.doisLados}
+      onMudancaArvore={(novaTree, _novoCounter, posicoes) => {
+        const dados = arvoreParaObjetosBoard(novaTree, posicoes)
+        setLatestBoard(dados)
+        onChange(dados)
+      }}
+      onMudarLayout={layoutMotor => onMudarConfiguracao({ ...config, layout: MOTOR_PARA_LAYOUT_BOARD[layoutMotor] })}
+      onMudarTema={tema => onMudarConfiguracao({ ...config, temaMotor: tema as TemaMotorMapa })}
+      onMudarDoisLados={doisLados => onMudarConfiguracao({ ...config, doisLados })}
+    />
   )
 }

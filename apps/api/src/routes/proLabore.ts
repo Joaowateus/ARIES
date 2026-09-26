@@ -3103,9 +3103,15 @@ const TEMAS_BOARD = ['claro', 'escuro', 'quente', 'quadriculado'] as const
 // LAYOUTS_BOARD/PALETAS_COR_BOARD no frontend.
 const LAYOUTS_BOARD = ['manual', 'mapaMental', 'organograma', 'lista'] as const
 const PALETAS_COR_BOARD = ['meister', 'ocean', 'sunset', 'pastel', 'vintage', 'bubbles'] as const
+// Temas do motor de mapa mental fiel (referencia/motor-mapa-mental.html) —
+// só usados quando layout !== 'manual'; independentes de PALETAS_COR_BOARD,
+// que segue valendo pro board livre.
+const TEMAS_MOTOR_MAPA = ['meister', 'prism', 'ocean', 'sunset', 'noite'] as const
 const configuracaoBoardSchema = z.object({
   layout: z.enum(LAYOUTS_BOARD).optional(),
   paleta: z.enum(PALETAS_COR_BOARD).optional(),
+  temaMotor: z.enum(TEMAS_MOTOR_MAPA).optional(),
+  doisLados: z.boolean().optional(),
 }).nullable().optional()
 
 const mapaMentalSchema = z.object({
