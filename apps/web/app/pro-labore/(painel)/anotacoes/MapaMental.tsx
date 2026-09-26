@@ -791,6 +791,15 @@ interface DadosNoMapa extends Record<string, unknown> {
   // recalculada a partir da posição na árvore (ver boardParaFlow), inclusive
   // pros filhos: reconectar um ramo em outro pai muda a cor sozinho.
   corManual?: boolean
+  // Galho recolhido (estilo MindMeister): os FILHOS continuam existindo nos
+  // dados, só saem da árvore visível (não renderizam, não entram no layout)
+  // até expandir de novo — ver a bolinha de junção em NoMapaNode.
+  colapsado?: boolean
+  // Derivado (nunca persistido — ver nodeParaObjeto), recalculado a cada
+  // render em nosEArestasVisiveis: diz se esse nó tem filho na árvore
+  // COMPLETA (mesmo escondido por um ancestral colapsado), pra NoMapaNode
+  // saber se mostra a bolinha de junção sem precisar ler edges direto.
+  temFilhos?: boolean
 }
 
 interface DadosForma extends Record<string, unknown> {
@@ -1029,7 +1038,7 @@ function objetoParaNode(o: BoardObjeto, corHerdada: string): NoFlow {
     ...base, type: 'noMapa',
     data: {
       tipoObjeto: 'noMapa', grupoId, texto: (o.conteudo.texto as string) ?? '', ehCentral: !!o.conteudo.ehCentral,
-      cor: corHerdada, corManual: typeof o.estilo?.cor === 'string',
+      cor: corHerdada, corManual: typeof o.estilo?.cor === 'string', colapsado: !!o.conteudo.colapsado,
     },
   }
 }
@@ -1122,7 +1131,7 @@ function nodeParaObjeto(n: NoFlow): BoardObjeto {
   return {
     id: n.id, tipo: 'noMapa', x: n.position.x, y: n.position.y, ...comuns,
     ...(n.data.corManual ? { estilo: { cor: n.data.cor } } : {}),
-    conteudo: comGrupo({ texto: n.data.texto, ehCentral: n.data.ehCentral }),
+    conteudo: comGrupo({ texto: n.data.texto, ehCentral: n.data.ehCentral, colapsado: n.data.colapsado }),
   }
 }
 
@@ -1218,6 +1227,43 @@ function idsDaSubarvore(edges: Edge[], raizId: string): Set<string> {
   return ids
 }
 
+// Filtra os descendentes de um galho `colapsado` (estilo MindMeister) pra
+// fora do que o ReactFlow efetivamente desenha — eles continuam intactos em
+// `grafo` (o board completo), só saem da árvore VISÍVEL. `onNodesChange`/
+// `onEdgesChange` seguem operando sobre o `grafo` inteiro (não filtrado),
+// então nada se perde: expandir de novo só volta a passar por aqui sem
+// filtrar mais nada.
+function nosEArestasVisiveis(nodes: NoFlow[], edges: Edge[]): { nodes: NoFlow[]; edges: Edge[] } {
+  const porId = new Map(nodes.map(n => [n.id, n]))
+  const filhosPorId = new Map<string, string[]>()
+  edges.forEach(e => {
+    const origem = porId.get(e.source)
+    const destino = porId.get(e.target)
+    if (origem?.data.tipoObjeto === 'noMapa' && destino?.data.tipoObjeto === 'noMapa') {
+      filhosPorId.set(e.source, [...(filhosPorId.get(e.source) ?? []), e.target])
+    }
+  })
+  const escondidos = new Set<string>()
+  function esconderDescendentes(id: string) {
+    (filhosPorId.get(id) ?? []).forEach(f => {
+      if (escondidos.has(f)) return
+      escondidos.add(f)
+      esconderDescendentes(f)
+    })
+  }
+  nodes.forEach(n => {
+    if (n.data.tipoObjeto === 'noMapa' && (n.data as DadosNoMapa).colapsado) esconderDescendentes(n.id)
+  })
+  const comFlagDeFilhos = nodes.map(n => (
+    n.data.tipoObjeto === 'noMapa' ? { ...n, data: { ...n.data, temFilhos: filhosPorId.has(n.id) } } : n
+  ))
+  if (escondidos.size === 0) return { nodes: comFlagDeFilhos, edges }
+  return {
+    nodes: comFlagDeFilhos.filter(n => !escondidos.has(n.id)),
+    edges: edges.filter(e => !escondidos.has(e.source) && !escondidos.has(e.target)),
+  }
+}
+
 // --- Contexto com as ações dos botões do nó, pra não precisar embutir
 // funções dentro de `data` (que precisa ficar serializável/simples). ---
 const AcoesMapaContext = createContext<{
@@ -1227,6 +1273,8 @@ const AcoesMapaContext = createContext<{
   onExcluir: (id: string) => void
   onMudarCor: (id: string, cor: string) => void
   onLimparCorManual: (id: string) => void
+  onAlternarColapso: (id: string) => void
+  layoutAtual: LayoutBoard
   onSelecionarRamo: (id: string) => void
   onMudarUrlImagem: (id: string, url: string) => void
   // Ver comentário no useEffect que consome isso, dentro de cada node de
@@ -1354,6 +1402,20 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
       ) : (
         <div className="pl-mapa-no-texto" style={estiloSublinhado} onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover · Enter (dentro da edição) cria ideia irmã, Tab cria filha">
           {valor || placeholderTexto}
+          {/* Bolinha de junção (estilo MindMeister): só aparece quando o nó
+              TEM filho (na árvore completa, mesmo escondido por um
+              ancestral colapsado — ver `temFilhos` em nosEArestasVisiveis).
+              Vazada = expandido; com ponto no meio = colapsado (filhos
+              escondidos). Folha sem filho nenhum não mostra nada. */}
+          {d.temFilhos && !d.ehCentral && (
+            <button
+              type="button"
+              className={`pl-mapa-no-juncao nodrag nopan ${d.colapsado ? 'colapsado' : ''}`}
+              style={{ color: corRamo ?? 'var(--pl-ink-1)' }}
+              title={d.colapsado ? 'Expandir galho' : 'Recolher galho'}
+              onClick={e => { e.stopPropagation(); acoes.onAlternarColapso(id) }}
+            />
+          )}
         </div>
       )}
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
@@ -1996,6 +2058,29 @@ function ancoraTroncoNoMapa(no: ReturnType<typeof useInternalNode>, ladoDireita:
   return { x: ladoDireita ? pos.x + largura : pos.x, y: pos.y + altura / 2 }
 }
 
+// Âncora do organograma: sempre topo/base do nó (a árvore só cresce pra
+// baixo, sem dois lados) — `topo=true` pro alvo (filho), `topo=false` pra
+// origem (pai), igual ancoraTroncoNoMapa mas no eixo vertical.
+function ancoraTroncoOrganograma(no: ReturnType<typeof useInternalNode>, topo: boolean): { x: number; y: number } {
+  const pos = no!.internals.positionAbsolute
+  const largura = no!.measured.width ?? 150
+  const altura = no!.measured.height ?? 40
+  return { x: pos.x + largura / 2, y: topo ? pos.y : pos.y + altura }
+}
+
+// Conector em cotovelo (ortogonal, cantos arredondados) — estilo real do
+// organograma do MindMeister: desce da bolinha, corre na horizontal, desce
+// até o filho. Bem diferente da curva em S do mapa mental de propósito,
+// pra reforçar visualmente que é outro layout (camadas fixas por nível).
+function caminhoCotovelo(x1: number, y1: number, x2: number, y2: number, r = 8): string {
+  const my = (y1 + y2) / 2
+  const dir = Math.sign(x2 - x1)
+  const rr = Math.min(r, Math.abs(x2 - x1) / 2, Math.abs(y2 - y1) / 2)
+  if (!dir) return `M${x1} ${y1} V${y2}`
+  return `M${x1} ${y1} V${my - rr} Q${x1} ${my} ${x1 + dir * rr} ${my}`
+    + ` H${x2 - dir * rr} Q${x2} ${my} ${x2} ${my + rr} V${y2}`
+}
+
 // Cores disponíveis no seletor rápido do conector (paleta separada e mais
 // enxuta que PALETA_RAMOS/PALETA_STICKY — só as cores mais úteis pra linha).
 const PALETA_CONECTOR = ['#8d9de0', '#e0687a', '#57c785', '#e0a83e', '#a679e0', '#8b93a6']
@@ -2007,26 +2092,38 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
   if (!noOrigem || !noAlvo) return null
 
   const ambosNoMapa = noOrigem.data.tipoObjeto === 'noMapa' && noAlvo.data.tipoObjeto === 'noMapa'
-  let pontoOrigem: { x: number; y: number }
-  let pontoAlvo: { x: number; y: number }
-  let posOrigem: Position
-  let posAlvo: Position
-  if (ambosNoMapa) {
-    const alvoADireita = noAlvo.internals.positionAbsolute.x >= noOrigem.internals.positionAbsolute.x
-    pontoOrigem = ancoraTroncoNoMapa(noOrigem, alvoADireita)
-    pontoAlvo = ancoraTroncoNoMapa(noAlvo, !alvoADireita)
-    posOrigem = alvoADireita ? Position.Right : Position.Left
-    posAlvo = alvoADireita ? Position.Left : Position.Right
+  let caminho: string
+  let labelX: number
+  let labelY: number
+  if (ambosNoMapa && acoes.layoutAtual === 'organograma') {
+    const pontoOrigem = ancoraTroncoOrganograma(noOrigem, false)
+    const pontoAlvo = ancoraTroncoOrganograma(noAlvo, true)
+    caminho = caminhoCotovelo(pontoOrigem.x, pontoOrigem.y, pontoAlvo.x, pontoAlvo.y)
+    labelX = (pontoOrigem.x + pontoAlvo.x) / 2
+    labelY = (pontoOrigem.y + pontoAlvo.y) / 2
   } else {
-    pontoOrigem = interseccaoComNo(noOrigem, noAlvo)
-    pontoAlvo = interseccaoComNo(noAlvo, noOrigem)
-    posOrigem = ladoDaInterseccao(noOrigem, pontoOrigem)
-    posAlvo = ladoDaInterseccao(noAlvo, pontoAlvo)
+    let pontoOrigem: { x: number; y: number }
+    let pontoAlvo: { x: number; y: number }
+    let posOrigem: Position
+    let posAlvo: Position
+    if (ambosNoMapa) {
+      const alvoADireita = noAlvo.internals.positionAbsolute.x >= noOrigem.internals.positionAbsolute.x
+      pontoOrigem = ancoraTroncoNoMapa(noOrigem, alvoADireita)
+      pontoAlvo = ancoraTroncoNoMapa(noAlvo, !alvoADireita)
+      posOrigem = alvoADireita ? Position.Right : Position.Left
+      posAlvo = alvoADireita ? Position.Left : Position.Right
+    } else {
+      pontoOrigem = interseccaoComNo(noOrigem, noAlvo)
+      pontoAlvo = interseccaoComNo(noAlvo, noOrigem)
+      posOrigem = ladoDaInterseccao(noOrigem, pontoOrigem)
+      posAlvo = ladoDaInterseccao(noAlvo, pontoAlvo)
+    }
+    const resultado = getBezierPath({
+      sourceX: pontoOrigem.x, sourceY: pontoOrigem.y, sourcePosition: posOrigem,
+      targetX: pontoAlvo.x, targetY: pontoAlvo.y, targetPosition: posAlvo,
+    })
+    caminho = resultado[0]; labelX = resultado[1]; labelY = resultado[2]
   }
-  const [caminho, labelX, labelY] = getBezierPath({
-    sourceX: pontoOrigem.x, sourceY: pontoOrigem.y, sourcePosition: posOrigem,
-    targetX: pontoAlvo.x, targetY: pontoAlvo.y, targetPosition: posAlvo,
-  })
 
   const tracejadoAtivo = !!(style as Record<string, unknown> | undefined)?.strokeDasharray
   const setaAtiva = !!markerEnd
@@ -2389,23 +2486,44 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     return atualId
   }
 
-  // Layout em árvore pros ramos de mapa mental — mesma técnica de "measure
-  // then layout" de qualquer ferramenta de mapa mental de verdade
-  // (MindMeister/Whimsical): a altura que um galho ocupa é a soma recursiva
-  // da altura dos FILHOS (nunca um espaçamento fixo), e cada nó fica
-  // centralizado no meio do bloco dos próprios filhos — por isso os ramos
-  // nunca se sobrepõem, não importa quanto texto cada ideia tenha. Roda
-  // depois de QUALQUER adição/remoção num galho — ninguém guarda x/y
-  // manualmente, a árvore inteira é recalculada a cada mudança.
-  // Os filhos DIRETOS da raiz (só eles — netos em diante continuam pro
-  // mesmo lado do galho) se dividem em dois lados intercalados, igual o
-  // MindMeister faz com o tópico central: sem isso, 4+ ideias direto na
-  // central iam todas pra um span vertical enorme só à direita, um leque
-  // apertadíssimo saindo de uma caixa pequena — visualmente poluído mesmo
-  // sem sobrepor de verdade. Com dois lados, cada um cobre metade do span.
-  const ARVORE_GAP_VERTICAL = 24
-  const ARVORE_GAP_HORIZONTAL = 90
-  function calcularLayoutArvoreMental(nodes: NoFlow[], edges: Edge[], raizId: string): Map<string, { x: number; y: number }> {
+  // Motor de layout único pra mapa mental E organograma — a mesma árvore
+  // calculada do mesmo jeito, só com os eixos trocados (breadth/depth). É
+  // isso que faz os dois "combinarem": o pai sempre centraliza no meio do
+  // GALHO INTEIRO (soma recursiva do span dos filhos), nunca só no ponto
+  // médio dos filhos diretos — por isso nenhum ramo fica torto quando um
+  // lado é mais fundo que o outro. `eixoLargura` diz em que eixo os irmãos
+  // se espalham ('y' no mapa mental, 'x' no organograma); o eixo de
+  // profundidade é sempre o outro. `passoProfundidade` fixo (organograma:
+  // todo nível numa linha reta) ou null (mapa mental: avança pelo tamanho
+  // real do texto, não uma coluna fixa). Nó recolhido (`colapsado`) não put
+  // os próprios filhos na árvore visível — eles continuam nos dados, só
+  // saem do layout até expandir de novo.
+  const GAP_IRMAO_MAPA_MENTAL = 24
+  const GAP_GALHO_MAPA_MENTAL = 36
+  const GAP_PROFUNDIDADE_VARIAVEL = 64
+  // "Corrente": quando um nó tem um filho só (sem ramificar de verdade), o
+  // espaço de profundidade encolhe bastante — é isso que dá aquela linha
+  // reta e compacta do MindMeister pra sequências, em vez da curva grande
+  // de um leque de verdade.
+  const GAP_PROFUNDIDADE_CADEIA = 26
+  const GAP_IRMAO_ORGANOGRAMA = 30
+  const PASSO_PROFUNDIDADE_ORGANOGRAMA = 110
+
+  interface ConfigLayoutArvore {
+    eixoLargura: 'x' | 'y'
+    passoProfundidade: number | null
+    gapIrmao: number
+    gapGalho: number
+    doisLados: boolean
+  }
+
+  function filhoUnicoNaCadeia(porId: Map<string, NoFlow>, filhosPorId: Map<string, string[]>, id: string): string[] {
+    const no = porId.get(id)
+    if ((no?.data as DadosNoMapa | undefined)?.colapsado) return []
+    return filhosPorId.get(id) ?? []
+  }
+
+  function layoutArvoreGenerico(nodes: NoFlow[], edges: Edge[], raizId: string, cfg: ConfigLayoutArvore): Map<string, { x: number; y: number }> {
     const porId = new Map(nodes.map(n => [n.id, n]))
     const filhosPorId = new Map<string, string[]>()
     edges.forEach(e => {
@@ -2415,51 +2533,62 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
         filhosPorId.set(e.source, [...(filhosPorId.get(e.source) ?? []), e.target])
       }
     })
+    const filhosVisiveis = (id: string) => filhoUnicoNaCadeia(porId, filhosPorId, id)
 
-    const alturaSubarvore = new Map<string, number>()
-    // `visitadosMedir`/`visitadosPosicionar` (abaixo) evitam recursão
-    // infinita se um ciclo aparecer no grafo (ex.: usuário arrasta um
-    // conector manual de um neto de volta pro avô) — mesma guarda que
-    // `calcularNovasPosicoes` já usa pro layout 'organograma'.
+    function larguraDe(no: NoFlow | undefined): number {
+      if (!no) return cfg.eixoLargura === 'y' ? 60 : 150
+      return cfg.eixoLargura === 'y' ? (no.measured?.height ?? 60) : (no.measured?.width ?? 150)
+    }
+    function profundidadeDe(no: NoFlow | undefined): number {
+      if (!no) return cfg.eixoLargura === 'y' ? 150 : 60
+      return cfg.eixoLargura === 'y' ? (no.measured?.width ?? 150) : (no.measured?.height ?? 60)
+    }
+
+    const span = new Map<string, number>()
+    // `visitadosMedir`/`visitadosPosicionar` evitam recursão infinita se um
+    // ciclo aparecer no grafo (ex.: usuário arrasta um conector manual de
+    // um neto de volta pro avô).
     const visitadosMedir = new Set<string>()
     function medir(id: string): number {
       if (visitadosMedir.has(id)) return 0
       visitadosMedir.add(id)
-      const altura = porId.get(id)?.measured?.height ?? 60
-      const filhos = filhosPorId.get(id) ?? []
-      if (filhos.length === 0) {
-        alturaSubarvore.set(id, altura)
-        return altura
-      }
-      const totalFilhos = filhos.reduce((soma, f) => soma + medir(f), 0) + ARVORE_GAP_VERTICAL * (filhos.length - 1)
-      const total = Math.max(altura, totalFilhos)
-      alturaSubarvore.set(id, total)
-      return total
+      const tam = larguraDe(porId.get(id))
+      const filhos = filhosVisiveis(id)
+      if (filhos.length === 0) { span.set(id, tam); return tam }
+      const total = filhos.reduce((soma, f) => soma + medir(f), 0) + cfg.gapIrmao * (filhos.length - 1)
+      const val = Math.max(tam, total)
+      span.set(id, val)
+      return val
     }
     medir(raizId)
 
     const posicoes = new Map<string, { x: number; y: number }>()
     const visitadosPosicionar = new Set<string>()
-    // `direcao`: 1 = ramo estende pra direita, -1 = estende pra esquerda.
-    // Um nó não-raiz sempre propaga a MESMA direção que herdou do galho.
-    function posicionar(id: string, x: number, yTopo: number, direcao: 1 | -1) {
+    function proximaProfundidade(no: NoFlow | undefined, profundidadeAtual: number, direcao: 1 | -1): number {
+      if (cfg.passoProfundidade != null) return profundidadeAtual + cfg.passoProfundidade * direcao
+      const filhos = no ? filhosVisiveis(no.id) : []
+      const gap = filhos.length === 1 ? GAP_PROFUNDIDADE_CADEIA : GAP_PROFUNDIDADE_VARIAVEL
+      return profundidadeAtual + (profundidadeDe(no) + gap) * direcao
+    }
+    // `direcao`: 1 = ramo estende num sentido (direita/baixo), -1 = sentido
+    // oposto (esquerda). Um nó não-raiz sempre propaga a MESMA direção que
+    // herdou do galho.
+    function posicionar(id: string, largStart: number, profundidade: number, direcao: 1 | -1) {
       if (visitadosPosicionar.has(id)) return
       visitadosPosicionar.add(id)
       const no = porId.get(id)
-      const largura = no?.measured?.width ?? 150
-      const altura = no?.measured?.height ?? 60
-      const alturaTotal = alturaSubarvore.get(id) ?? altura
-      posicoes.set(id, { x, y: yTopo + alturaTotal / 2 - altura / 2 })
-      const filhos = filhosPorId.get(id) ?? []
+      const tam = larguraDe(no)
+      const total = span.get(id) ?? tam
+      const largura = largStart + total / 2
+      posicoes.set(id, cfg.eixoLargura === 'y' ? { x: profundidade, y: largura } : { x: largura, y: profundidade })
+      const filhos = filhosVisiveis(id)
       if (filhos.length === 0) return
-      const totalFilhos = filhos.reduce((soma, f) => soma + (alturaSubarvore.get(f) ?? 60), 0) + ARVORE_GAP_VERTICAL * (filhos.length - 1)
-      let cursorY = yTopo + alturaTotal / 2 - totalFilhos / 2
+      const totalFilhos = filhos.reduce((soma, f) => soma + (span.get(f) ?? 60), 0) + cfg.gapIrmao * (filhos.length - 1)
+      let cursor = largStart + total / 2 - totalFilhos / 2
+      const proxProfundidade = proximaProfundidade(no, profundidade, direcao)
       filhos.forEach(f => {
-        const alturaFilho = alturaSubarvore.get(f) ?? 60
-        const larguraFilho = porId.get(f)?.measured?.width ?? 150
-        const xFilho = direcao === 1 ? x + largura + ARVORE_GAP_HORIZONTAL : x - ARVORE_GAP_HORIZONTAL - larguraFilho
-        posicionar(f, xFilho, cursorY, direcao)
-        cursorY += alturaFilho + ARVORE_GAP_VERTICAL
+        posicionar(f, cursor, proxProfundidade, direcao)
+        cursor += (span.get(f) ?? 60) + cfg.gapIrmao
       })
     }
 
@@ -2468,29 +2597,46 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     // Mantém a raiz na posição atual dela (não fica pulando de lugar a cada
     // filho novo) — só os DESCENDENTES se reorganizam ao redor dela.
     posicoes.set(raizId, { x: raiz.position.x, y: raiz.position.y })
-    const larguraRaiz = raiz.measured?.width ?? 150
-    const filhosDaRaiz = filhosPorId.get(raizId) ?? []
-    const direita = filhosDaRaiz.filter((_, i) => i % 2 === 0)
-    const esquerda = filhosDaRaiz.filter((_, i) => i % 2 === 1)
-    ;([[direita, 1], [esquerda, -1]] as const).forEach(([filhosDoLado, direcao]) => {
-      if (filhosDoLado.length === 0) return
-      const totalLado = filhosDoLado.reduce((soma, f) => soma + (alturaSubarvore.get(f) ?? 60), 0)
-        + ARVORE_GAP_VERTICAL * (filhosDoLado.length - 1)
-      let cursorY = raiz.position.y - totalLado / 2
-      filhosDoLado.forEach(f => {
-        const alturaFilho = alturaSubarvore.get(f) ?? 60
-        const larguraFilho = porId.get(f)?.measured?.width ?? 150
-        const xFilho = direcao === 1 ? raiz.position.x + larguraRaiz + ARVORE_GAP_HORIZONTAL : raiz.position.x - ARVORE_GAP_HORIZONTAL - larguraFilho
-        posicionar(f, xFilho, cursorY, direcao)
-        cursorY += alturaFilho + ARVORE_GAP_VERTICAL
+    const raizLargura = cfg.eixoLargura === 'y' ? raiz.position.y : raiz.position.x
+    const raizProfundidade = cfg.eixoLargura === 'y' ? raiz.position.x : raiz.position.y
+    const filhosDaRaiz = filhosVisiveis(raizId)
+
+    function posicionarLado(filhos: string[], direcao: 1 | -1) {
+      if (filhos.length === 0) return
+      const total = filhos.reduce((soma, f) => soma + (span.get(f) ?? 60), 0) + cfg.gapGalho * (filhos.length - 1)
+      let cursor = raizLargura - total / 2
+      const proxProfundidade = proximaProfundidade(raiz, raizProfundidade, direcao)
+      filhos.forEach(f => {
+        posicionar(f, cursor, proxProfundidade, direcao)
+        cursor += (span.get(f) ?? 60) + cfg.gapGalho
       })
-    })
+    }
+
+    // Só os filhos DIRETOS da raiz (netos em diante continuam pro mesmo
+    // lado do galho onde nasceram) se dividem em dois lados intercalados,
+    // igual o MindMeister faz com o tópico central — sem isso, 4+ ideias
+    // direto na central iam todas pra um span vertical enorme só de um
+    // lado, um leque apertadíssimo saindo de uma caixa pequena.
+    if (cfg.doisLados) {
+      const direita = filhosDaRaiz.filter((_, i) => i % 2 === 0)
+      const esquerda = filhosDaRaiz.filter((_, i) => i % 2 === 1)
+      posicionarLado(direita, 1)
+      posicionarLado(esquerda, -1)
+    } else {
+      posicionarLado(filhosDaRaiz, 1)
+    }
     return posicoes
   }
 
+  function calcularLayoutArvoreMental(nodes: NoFlow[], edges: Edge[], raizId: string): Map<string, { x: number; y: number }> {
+    return layoutArvoreGenerico(nodes, edges, raizId, {
+      eixoLargura: 'y', passoProfundidade: null, gapIrmao: GAP_IRMAO_MAPA_MENTAL, gapGalho: GAP_GALHO_MAPA_MENTAL, doisLados: true,
+    })
+  }
+
   // Só reposiciona em layout "manual" (o padrão) — nos outros três
-  // (organograma/lista/mapa mental radial) quem manda é a escolha explícita
-  // do usuário no painel Aparência, via reorganizarSeAutomatico logo acima.
+  // (mapa mental/organograma/lista escolhidos explicitamente) quem manda é
+  // a escolha do usuário no painel Aparência, via reorganizarSeAutomatico.
   function relayoutArvoreSeManual(nodes: NoFlow[], edges: Edge[], raizId: string): NoFlow[] {
     if (configRef.current.layout !== 'manual') return nodes
     if (!nodes.some(n => n.id === raizId)) return nodes
@@ -2610,6 +2756,28 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'noMapa' ? { ...n, data: { ...n.data, corManual: false } } : n))
     const { objetos, conectores } = flowParaBoard(nodes, atual.edges)
     commit(boardParaFlow(objetos, conectores, paletaCores(configRef.current.paleta)))
+  }, [])
+
+  // Recolher/expandir um galho (bolinha de junção depois do texto, estilo
+  // MindMeister): os filhos continuam intactos nos dados, só saem da árvore
+  // VISÍVEL — layoutArvoreGenerico já ignora filhos de um nó `colapsado` (a
+  // subárvore vira só o tamanho do próprio nó), e o ReactFlow renderizado só
+  // recebe os nodes/edges alcançáveis sem cruzar um nó recolhido (ver
+  // `nodesVisiveis`/`edgesVisiveis`, calculados a partir de `grafo`). Sem
+  // filhos, não tem o que recolher — a bolinha nem aparece nesse caso.
+  const onAlternarColapso = useCallback((id: string) => {
+    const atual = grafoRef.current
+    const no = atual.nodes.find(n => n.id === id)
+    if (no?.data.tipoObjeto === 'noMapa' && no.data.ehCentral) return
+    const temFilho = atual.edges.some(e => e.source === id)
+    if (!temFilho) return
+    const nodes = atual.nodes.map(n => (n.id === id && n.data.tipoObjeto === 'noMapa' ? { ...n, data: { ...n.data, colapsado: !n.data.colapsado } } : n))
+    let nodesFinal = nodes
+    if (configRef.current.layout === 'manual') {
+      nodesFinal = relayoutArvoreSeManual(nodes, atual.edges, raizDaArvoreMental({ nodes, edges: atual.edges }, id))
+    }
+    commit({ nodes: nodesFinal, edges: atual.edges })
+    reorganizarSeAutomatico()
   }, [])
 
   // "Selecionar ramo" (6.x, item 5 do pedido): substitui a seleção atual
@@ -3079,14 +3247,13 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
   // ex.: ramos do mapa mental ou etapas de um "Mapa de processo") — objeto
   // solto (sticky, seção, forma sem conector) nunca é tocado, mover algo que
   // o usuário posicionou de propósito (ex.: um card dentro de uma coluna do
-  // Kanban) seria pior do que não ter o botão. Três layouts, mesmo
-  // vocabulário do MindMeister: "Mapa mental" é radial a partir do central,
-  // cada subárvore numa fatia de ângulo proporcional ao nº de folhas;
-  // "Organograma" é a árvore clássica em camadas de cima pra baixo; "Lista"
-  // é um sumário indentado (sem espalhar em largura, só desce uma linha por
-  // item, indentado pela profundidade) — os três nomes/ids batem com
-  // LAYOUTS_BOARD (usado pelo painel Aparência) e com o enum validado no
-  // back (LAYOUTS_BOARD em proLabore.ts).
+  // Kanban) seria pior do que não ter o botão. "Mapa mental" e "Organograma"
+  // usam o MESMO motor (layoutArvoreGenerico, ver acima) só com os eixos
+  // trocados — é a mesma árvore calculada do mesmo jeito, por isso os dois
+  // "combinam" (e ganham a regra do pai centralizar no galho inteiro de
+  // graça). "Lista" continua um algoritmo à parte (sumário indentado, sem
+  // espalhar em largura, só desce uma linha por item) — os três nomes/ids
+  // batem com LAYOUTS_BOARD (painel Aparência) e o enum validado no back.
   function calcularNovasPosicoes(atual: { nodes: NoFlow[]; edges: Edge[] }, layout: Exclude<LayoutBoard, 'manual'>): Map<string, { x: number; y: number }> | null {
     const saidaPorOrigem = new Map<string, string[]>()
     const temEntrada = new Set<string>()
@@ -3105,50 +3272,16 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     const visitados = new Set<string>()
 
     if (layout === 'mapaMental') {
-      const PASSO_RADIAL = 230
-      function layoutRadial(id: string, profundidade: number, anguloIni: number, anguloFim: number) {
-        if (visitados.has(id)) return
-        visitados.add(id)
-        const anguloMeio = (anguloIni + anguloFim) / 2
-        const raio = profundidade * PASSO_RADIAL
-        novasPosicoes.set(id, { x: raio * Math.cos(anguloMeio), y: raio * Math.sin(anguloMeio) })
-        const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
-        if (filhos.length === 0) return
-        const fatia = (anguloFim - anguloIni) / filhos.length
-        filhos.forEach((f, i) => layoutRadial(f, profundidade + 1, anguloIni + i * fatia, anguloIni + (i + 1) * fatia))
-      }
-      let anguloCursor = 0
       raizes.forEach(raiz => {
-        const fatiaRaiz = (2 * Math.PI) / raizes.length
-        layoutRadial(raiz.id, 0, anguloCursor, anguloCursor + fatiaRaiz)
-        anguloCursor += fatiaRaiz
+        layoutArvoreGenerico(atual.nodes, atual.edges, raiz.id, {
+          eixoLargura: 'y', passoProfundidade: null, gapIrmao: GAP_IRMAO_MAPA_MENTAL, gapGalho: GAP_GALHO_MAPA_MENTAL, doisLados: true,
+        }).forEach((v, k) => novasPosicoes.set(k, v))
       })
     } else if (layout === 'organograma') {
-      const PASSO_PRINCIPAL = 260
-      const MARGEM_CRUZADA = 36
-      let cursorCruzado = 0
-      function layoutEmArvore(id: string, profundidade: number): number {
-        if (visitados.has(id)) return 0
-        visitados.add(id)
-        const no = porId.get(id)
-        const tamanhoCruzado = no ? medidas(no).w : 150
-        const filhos = (saidaPorOrigem.get(id) ?? []).filter(f => !visitados.has(f) && porId.has(f))
-        const principal = profundidade * PASSO_PRINCIPAL
-        if (filhos.length === 0) {
-          novasPosicoes.set(id, { x: cursorCruzado, y: principal })
-          const ocupado = tamanhoCruzado + MARGEM_CRUZADA
-          cursorCruzado += ocupado
-          return ocupado
-        }
-        const cruzadoAntes = cursorCruzado
-        const ocupadoPelosFilhos = filhos.reduce((soma, f) => soma + layoutEmArvore(f, profundidade + 1), 0)
-        const centroFilhos = cruzadoAntes + ocupadoPelosFilhos / 2 - MARGEM_CRUZADA / 2
-        novasPosicoes.set(id, { x: centroFilhos, y: principal })
-        return Math.max(ocupadoPelosFilhos, tamanhoCruzado + MARGEM_CRUZADA)
-      }
       raizes.forEach(raiz => {
-        layoutEmArvore(raiz.id, 0)
-        cursorCruzado += 50 // respiro entre árvores/componentes desconectados
+        layoutArvoreGenerico(atual.nodes, atual.edges, raiz.id, {
+          eixoLargura: 'x', passoProfundidade: PASSO_PROFUNDIDADE_ORGANOGRAMA, gapIrmao: GAP_IRMAO_ORGANOGRAMA, gapGalho: GAP_IRMAO_ORGANOGRAMA, doisLados: false,
+        }).forEach((v, k) => novasPosicoes.set(k, v))
       })
     } else {
       // Lista: sumário indentado — cada item ocupa a próxima linha (ordem de
@@ -3474,16 +3607,17 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
   const algumTravado = grafo.nodes.some(n => n.selected && n.draggable === false)
   const algumAgrupado = grafo.nodes.some(n => n.selected && !!(n.data as Record<string, unknown>).grupoId)
   const noDoMenuContexto = menuContexto?.tipo === 'node' ? grafo.nodes.find(n => n.id === menuContexto.nodeId) : undefined
+  const { nodes: nodesVisiveis, edges: edgesVisiveis } = nosEArestasVisiveis(grafo.nodes, grafo.edges)
 
   return (
     <AcoesMapaContext.Provider value={{
-      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, onLimparCorManual, onSelecionarRamo, onMudarUrlImagem, pedidoEdicaoId, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
+      onMudarTexto, onAdicionarFilho, onCriarIrmao, onExcluir, onMudarCor, onLimparCorManual, onAlternarColapso, layoutAtual: config.layout, onSelecionarRamo, onMudarUrlImagem, pedidoEdicaoId, onMudarEstiloConector, onMudarLabelConector, onExcluirConector, onMudarLinhasTabela, onAlternarTarefa,
       onAdicionarMensagemComentario, onAlternarResolvidoComentario,
     }}>
       <div className="pl-mapa-canvas" ref={containerRef} data-tema={temaAtual.id}>
         <ReactFlow
-          nodes={grafo.nodes}
-          edges={grafo.edges}
+          nodes={nodesVisiveis}
+          edges={edgesVisiveis}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChangeFlow}
