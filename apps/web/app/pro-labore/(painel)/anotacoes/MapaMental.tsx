@@ -1283,6 +1283,15 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
 
   function entrarEdicao() { setEditando(true) }
   function sairEdicao() { setEditando(false) }
+  // Sublinhado colorido do próprio ramo (estilo MindMeister/Whimsical): sem
+  // isso, a única pista visual de "essa ideia é do ramo azul" era a linha do
+  // conector passando perto — agora o traço nasce grudado no texto (largura
+  // igual ao texto, não ao espaço entre nós), e a curva do conector emenda
+  // nele em vez de sumir solta atrás da palavra. Central fica de fora: já
+  // tem o cartão/pill inteiro como destaque, não precisa de sublinhado.
+  const corRamo = !d.ehCentral && typeof d.cor === 'string' ? d.cor : undefined
+  const estiloSublinhado = corRamo ? { borderBottom: `2.5px solid ${corRamo}`, paddingBottom: 3 } : undefined
+  const placeholderTexto = d.ehCentral ? 'Ideia central' : 'Nova ideia'
 
   return (
     <div className={`pl-mapa-no ${d.ehCentral ? 'pl-mapa-no-central' : ''}`}>
@@ -1314,8 +1323,11 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
           className="nodrag nopan pl-mapa-no-input"
           autoFocus
           value={valor}
-          placeholder={d.ehCentral ? 'Ideia central' : 'Nova ideia'}
-          style={{ width: `${Math.max(valor.length, 4) + 2}ch` }}
+          placeholder={placeholderTexto}
+          // Sem `valor`, a largura precisa caber o PLACEHOLDER inteiro, senão
+          // ele fica cortado (input nasce com 6ch mas "Nova ideia" tem 10) —
+          // era exatamente o "Nova id" cortado que aparecia nos nós recém-criados.
+          style={{ width: `${Math.max(valor.length || placeholderTexto.length, 4) + 2}ch`, ...estiloSublinhado }}
           onChange={e => { setValor(e.target.value); acoes.onMudarTexto(id, e.target.value) }}
           onBlur={sairEdicao}
           // Enter/Tab replicam o fluxo padrão de mapa mental (MindMeister/
@@ -1329,8 +1341,8 @@ function NoMapaNode({ id, data }: NodeProps<NoFlow>) {
           }}
         />
       ) : (
-        <div className="pl-mapa-no-texto" onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover · Enter (dentro da edição) cria ideia irmã, Tab cria filha">
-          {valor || (d.ehCentral ? 'Ideia central' : 'Nova ideia')}
+        <div className="pl-mapa-no-texto" style={estiloSublinhado} onDoubleClick={entrarEdicao} title="Duplo clique pra editar · arraste pra mover · Enter (dentro da edição) cria ideia irmã, Tab cria filha">
+          {valor || placeholderTexto}
         </div>
       )}
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
@@ -1936,6 +1948,27 @@ function interseccaoComNo(noOrigem: ReturnType<typeof useInternalNode>, noAlvo: 
   return { x: w * (a * xx1 + 1) + x2, y: h * (a * yy1 + 1) + y2 }
 }
 
+// Qual lado da caixa o ponto de interseção caiu — sem isso, `getBezierPath`
+// assume Bottom/Top por padrão e desenha a curva saindo/entrando do lado
+// errado, criando aquele laço/gancho estranho perto do nó (visível
+// sobretudo quando o alvo está na diagonal, não reto acima/abaixo/ao lado).
+// Mesmo algoritmo do exemplo oficial de "floating edges" do React Flow.
+function ladoDaInterseccao(no: ReturnType<typeof useInternalNode>, ponto: { x: number; y: number }): Position {
+  if (!no) return Position.Left
+  const pos = no.internals.positionAbsolute
+  const largura = no.measured.width ?? 150
+  const altura = no.measured.height ?? 40
+  const nx = Math.round(pos.x)
+  const ny = Math.round(pos.y)
+  const px = Math.round(ponto.x)
+  const py = Math.round(ponto.y)
+  if (px <= nx + 1) return Position.Left
+  if (px >= nx + largura - 1) return Position.Right
+  if (py <= ny + 1) return Position.Top
+  if (py >= ny + altura - 1) return Position.Bottom
+  return Position.Top
+}
+
 // Cores disponíveis no seletor rápido do conector (paleta separada e mais
 // enxuta que PALETA_RAMOS/PALETA_STICKY — só as cores mais úteis pra linha).
 const PALETA_CONECTOR = ['#8d9de0', '#e0687a', '#57c785', '#e0a83e', '#a679e0', '#8b93a6']
@@ -1949,7 +1982,8 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
   const pontoOrigem = interseccaoComNo(noOrigem, noAlvo)
   const pontoAlvo = interseccaoComNo(noAlvo, noOrigem)
   const [caminho, labelX, labelY] = getBezierPath({
-    sourceX: pontoOrigem.x, sourceY: pontoOrigem.y, targetX: pontoAlvo.x, targetY: pontoAlvo.y,
+    sourceX: pontoOrigem.x, sourceY: pontoOrigem.y, sourcePosition: ladoDaInterseccao(noOrigem, pontoOrigem),
+    targetX: pontoAlvo.x, targetY: pontoAlvo.y, targetPosition: ladoDaInterseccao(noAlvo, pontoAlvo),
   })
 
   const tracejadoAtivo = !!(style as Record<string, unknown> | undefined)?.strokeDasharray
