@@ -2328,9 +2328,139 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     commit({ ...atual, nodes })
   }, [])
 
+  // Acha a raiz da árvore de mapa mental que `id` pertence: sobe pelos
+  // conectores de entrada enquanto a origem também for noMapa. Precisa disso
+  // porque um filho novo pode mudar a altura que TODOS os ancestrais
+  // precisam reservar (a subárvore dele cresceu) — reposicionar só o galho
+  // local não bastaria pra evitar sobreposição mais acima.
+  function raizDaArvoreMental(atual: { nodes: NoFlow[]; edges: Edge[] }, id: string): string {
+    let atualId = id
+    for (let i = 0; i < 200; i++) {
+      const aresta = atual.edges.find(e => e.target === atualId)
+      if (!aresta) return atualId
+      const origem = atual.nodes.find(n => n.id === aresta.source)
+      if (!origem || origem.data.tipoObjeto !== 'noMapa') return atualId
+      atualId = aresta.source
+    }
+    return atualId
+  }
+
+  // Layout em árvore pros ramos de mapa mental — mesma técnica de "measure
+  // then layout" de qualquer ferramenta de mapa mental de verdade
+  // (MindMeister/Whimsical): a altura que um galho ocupa é a soma recursiva
+  // da altura dos FILHOS (nunca um espaçamento fixo), e cada nó fica
+  // centralizado no meio do bloco dos próprios filhos — por isso os ramos
+  // nunca se sobrepõem, não importa quanto texto cada ideia tenha. Roda
+  // depois de QUALQUER adição/remoção num galho — ninguém guarda x/y
+  // manualmente, a árvore inteira é recalculada a cada mudança.
+  // Os filhos DIRETOS da raiz (só eles — netos em diante continuam pro
+  // mesmo lado do galho) se dividem em dois lados intercalados, igual o
+  // MindMeister faz com o tópico central: sem isso, 4+ ideias direto na
+  // central iam todas pra um span vertical enorme só à direita, um leque
+  // apertadíssimo saindo de uma caixa pequena — visualmente poluído mesmo
+  // sem sobrepor de verdade. Com dois lados, cada um cobre metade do span.
+  const ARVORE_GAP_VERTICAL = 24
+  const ARVORE_GAP_HORIZONTAL = 90
+  function calcularLayoutArvoreMental(nodes: NoFlow[], edges: Edge[], raizId: string): Map<string, { x: number; y: number }> {
+    const porId = new Map(nodes.map(n => [n.id, n]))
+    const filhosPorId = new Map<string, string[]>()
+    edges.forEach(e => {
+      const origem = porId.get(e.source)
+      const destino = porId.get(e.target)
+      if (origem?.data.tipoObjeto === 'noMapa' && destino?.data.tipoObjeto === 'noMapa') {
+        filhosPorId.set(e.source, [...(filhosPorId.get(e.source) ?? []), e.target])
+      }
+    })
+
+    const alturaSubarvore = new Map<string, number>()
+    // `visitadosMedir`/`visitadosPosicionar` (abaixo) evitam recursão
+    // infinita se um ciclo aparecer no grafo (ex.: usuário arrasta um
+    // conector manual de um neto de volta pro avô) — mesma guarda que
+    // `calcularNovasPosicoes` já usa pro layout 'organograma'.
+    const visitadosMedir = new Set<string>()
+    function medir(id: string): number {
+      if (visitadosMedir.has(id)) return 0
+      visitadosMedir.add(id)
+      const altura = porId.get(id)?.measured?.height ?? 60
+      const filhos = filhosPorId.get(id) ?? []
+      if (filhos.length === 0) {
+        alturaSubarvore.set(id, altura)
+        return altura
+      }
+      const totalFilhos = filhos.reduce((soma, f) => soma + medir(f), 0) + ARVORE_GAP_VERTICAL * (filhos.length - 1)
+      const total = Math.max(altura, totalFilhos)
+      alturaSubarvore.set(id, total)
+      return total
+    }
+    medir(raizId)
+
+    const posicoes = new Map<string, { x: number; y: number }>()
+    const visitadosPosicionar = new Set<string>()
+    // `direcao`: 1 = ramo estende pra direita, -1 = estende pra esquerda.
+    // Um nó não-raiz sempre propaga a MESMA direção que herdou do galho.
+    function posicionar(id: string, x: number, yTopo: number, direcao: 1 | -1) {
+      if (visitadosPosicionar.has(id)) return
+      visitadosPosicionar.add(id)
+      const no = porId.get(id)
+      const largura = no?.measured?.width ?? 150
+      const altura = no?.measured?.height ?? 60
+      const alturaTotal = alturaSubarvore.get(id) ?? altura
+      posicoes.set(id, { x, y: yTopo + alturaTotal / 2 - altura / 2 })
+      const filhos = filhosPorId.get(id) ?? []
+      if (filhos.length === 0) return
+      const totalFilhos = filhos.reduce((soma, f) => soma + (alturaSubarvore.get(f) ?? 60), 0) + ARVORE_GAP_VERTICAL * (filhos.length - 1)
+      let cursorY = yTopo + alturaTotal / 2 - totalFilhos / 2
+      filhos.forEach(f => {
+        const alturaFilho = alturaSubarvore.get(f) ?? 60
+        const larguraFilho = porId.get(f)?.measured?.width ?? 150
+        const xFilho = direcao === 1 ? x + largura + ARVORE_GAP_HORIZONTAL : x - ARVORE_GAP_HORIZONTAL - larguraFilho
+        posicionar(f, xFilho, cursorY, direcao)
+        cursorY += alturaFilho + ARVORE_GAP_VERTICAL
+      })
+    }
+
+    const raiz = porId.get(raizId)
+    if (!raiz) return posicoes
+    // Mantém a raiz na posição atual dela (não fica pulando de lugar a cada
+    // filho novo) — só os DESCENDENTES se reorganizam ao redor dela.
+    posicoes.set(raizId, { x: raiz.position.x, y: raiz.position.y })
+    const larguraRaiz = raiz.measured?.width ?? 150
+    const filhosDaRaiz = filhosPorId.get(raizId) ?? []
+    const direita = filhosDaRaiz.filter((_, i) => i % 2 === 0)
+    const esquerda = filhosDaRaiz.filter((_, i) => i % 2 === 1)
+    ;([[direita, 1], [esquerda, -1]] as const).forEach(([filhosDoLado, direcao]) => {
+      if (filhosDoLado.length === 0) return
+      const totalLado = filhosDoLado.reduce((soma, f) => soma + (alturaSubarvore.get(f) ?? 60), 0)
+        + ARVORE_GAP_VERTICAL * (filhosDoLado.length - 1)
+      let cursorY = raiz.position.y - totalLado / 2
+      filhosDoLado.forEach(f => {
+        const alturaFilho = alturaSubarvore.get(f) ?? 60
+        const larguraFilho = porId.get(f)?.measured?.width ?? 150
+        const xFilho = direcao === 1 ? raiz.position.x + larguraRaiz + ARVORE_GAP_HORIZONTAL : raiz.position.x - ARVORE_GAP_HORIZONTAL - larguraFilho
+        posicionar(f, xFilho, cursorY, direcao)
+        cursorY += alturaFilho + ARVORE_GAP_VERTICAL
+      })
+    })
+    return posicoes
+  }
+
+  // Só reposiciona em layout "manual" (o padrão) — nos outros três
+  // (organograma/lista/mapa mental radial) quem manda é a escolha explícita
+  // do usuário no painel Aparência, via reorganizarSeAutomatico logo acima.
+  function relayoutArvoreSeManual(nodes: NoFlow[], edges: Edge[], raizId: string): NoFlow[] {
+    if (configRef.current.layout !== 'manual') return nodes
+    if (!nodes.some(n => n.id === raizId)) return nodes
+    const novasPosicoes = calcularLayoutArvoreMental(nodes, edges, raizId)
+    return nodes.map(n => {
+      const pos = novasPosicoes.get(n.id)
+      return pos ? { ...n, position: pos } : n
+    })
+  }
+
   // `posicaoForcada` (opcional): usado pelo "arrastar do handle e soltar no
   // vazio" (onConnectEnd) pra nascer o filho exatamente onde o usuário
-  // soltou o mouse, em vez da posição em cascata padrão à direita do pai.
+  // soltou o mouse — nesse caso específico o layout automático em árvore não
+  // mexe (respeita a posição escolhida na hora).
   const onAdicionarFilho = useCallback((paiId: string, posicaoForcada?: { x: number; y: number }) => {
     const atual = grafoRef.current
     const pai = atual.nodes.find(n => n.id === paiId)
@@ -2348,7 +2478,12 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
       data: { tipoObjeto: 'noMapa', texto: '', ehCentral: false, cor },
     }
     const novaAresta: Edge = { id: `${paiId}-${novoId}`, source: paiId, target: novoId, type: 'flutuante', style: { stroke: cor, strokeWidth: 2.5 } }
-    commit({ nodes: [...atual.nodes, novoNo], edges: [...atual.edges, novaAresta] })
+    let nodes = [...atual.nodes, novoNo]
+    const edges = [...atual.edges, novaAresta]
+    if (!posicaoForcada) {
+      nodes = relayoutArvoreSeManual(nodes, edges, raizDaArvoreMental({ nodes, edges }, paiId))
+    }
+    commit({ nodes, edges })
     reorganizarSeAutomatico()
   }, [])
 
@@ -2386,9 +2521,14 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
 
   const onExcluir = useCallback((id: string) => {
     const atual = grafoRef.current
+    const arestaPai = atual.edges.find(e => e.target === id)
     const idsRemover = idsDaSubarvore(atual.edges, id)
-    const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
+    let nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
     const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
+    // Fecha o buraco que sobrou no galho do pai (mesmo layout em árvore do
+    // onAdicionarFilho) — senão excluir um meio de galho deixa os irmãos
+    // remanescentes espalhados na altura de antes, com espaço vazio no meio.
+    if (arestaPai) nodes = relayoutArvoreSeManual(nodes, edges, raizDaArvoreMental({ nodes, edges }, arestaPai.source))
     commit({ nodes, edges })
     reorganizarSeAutomatico()
   }, [])
@@ -3063,9 +3203,19 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     const selecionados = atual.nodes.filter(n => n.selected && n.id !== centralId)
     if (selecionados.length === 0) return
     const idsRemover = new Set<string>()
-    selecionados.forEach(n => idsDaSubarvore(atual.edges, n.id).forEach(id => idsRemover.add(id)))
-    const nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
+    const paisAfetados = new Set<string>()
+    selecionados.forEach(n => {
+      idsDaSubarvore(atual.edges, n.id).forEach(id => idsRemover.add(id))
+      const arestaPai = atual.edges.find(e => e.target === n.id)
+      if (arestaPai) paisAfetados.add(arestaPai.source)
+    })
+    let nodes = atual.nodes.filter(n => !idsRemover.has(n.id))
     const edges = atual.edges.filter(e => !idsRemover.has(e.source) && !idsRemover.has(e.target))
+    const raizesAfetadas = new Set<string>()
+    paisAfetados.forEach(paiId => {
+      if (nodes.some(n => n.id === paiId)) raizesAfetadas.add(raizDaArvoreMental({ nodes, edges }, paiId))
+    })
+    raizesAfetadas.forEach(raizId => { nodes = relayoutArvoreSeManual(nodes, edges, raizId) })
     commit({ nodes, edges })
     reorganizarSeAutomatico()
   }, [centralId])
