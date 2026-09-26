@@ -3099,13 +3099,12 @@ router.get('/mapas-mentais/lixeira', requireProLaboreAuth, async (req: Request, 
 // TEMAS_BOARD no frontend (MapaMental.tsx). Null/ausente = tema padrão ('claro').
 const TEMAS_BOARD = ['claro', 'escuro', 'quente', 'quadriculado'] as const
 
-// Painel "Aparência" (layout + paleta de cor + alinhamento automático) —
-// catálogos espelhados em LAYOUTS_BOARD/PALETAS_COR_BOARD no frontend.
+// Painel "Aparência" (layout + paleta de cor) — catálogos espelhados em
+// LAYOUTS_BOARD/PALETAS_COR_BOARD no frontend.
 const LAYOUTS_BOARD = ['manual', 'mapaMental', 'organograma', 'lista'] as const
 const PALETAS_COR_BOARD = ['meister', 'ocean', 'sunset', 'pastel', 'vintage', 'bubbles'] as const
 const configuracaoBoardSchema = z.object({
   layout: z.enum(LAYOUTS_BOARD).optional(),
-  alinhamentoAutomatico: z.boolean().optional(),
   paleta: z.enum(PALETAS_COR_BOARD).optional(),
 }).nullable().optional()
 

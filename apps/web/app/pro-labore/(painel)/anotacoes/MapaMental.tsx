@@ -650,10 +650,9 @@ export const PALETAS_COR_BOARD: PaletaCorCatalogo[] = [
 
 export interface ConfiguracaoBoard {
   layout: LayoutBoard
-  alinhamentoAutomatico: boolean
   paleta: PaletaCorBoard
 }
-export const CONFIGURACAO_PADRAO: ConfiguracaoBoard = { layout: 'manual', alinhamentoAutomatico: false, paleta: 'meister' }
+export const CONFIGURACAO_PADRAO: ConfiguracaoBoard = { layout: 'manual', paleta: 'meister' }
 
 function paletaCores(id: PaletaCorBoard | undefined): string[] {
   return PALETAS_COR_BOARD.find(p => p.id === id)?.cores ?? PALETA_RAMOS
@@ -1248,16 +1247,28 @@ const AcoesMapaContext = createContext<{
 // também poderem usar tons pastel se fizer sentido no board).
 const PALETA_COR_OBJETO = [...PALETA_RAMOS, ...PALETA_STICKY]
 
+// Botão único com amostra da cor atual, abrindo a paleta completa num
+// popover — antes toda a paleta (12+ cores) ficava inline na barra
+// flutuante do nó, deixando ela enorme (bem diferente do MindMeister/
+// Whimsical, que usam um ícone único de "estilo" pra isso).
 function SeletorCorObjeto({ corAtual, onEscolher, cores = PALETA_COR_OBJETO }: { corAtual: string; onEscolher: (cor: string) => void; cores?: string[] }) {
+  const [aberto, setAberto] = useState(false)
   return (
-    <>
-      {cores.map(cor => (
-        <button
-          key={cor} type="button" className={`pl-conector-cor-swatch ${corAtual === cor ? 'ativo' : ''}`} style={{ background: cor }}
-          title="Cor" onClick={() => onEscolher(cor)}
-        />
-      ))}
-    </>
+    <div className="pl-cor-objeto-wrap">
+      <button type="button" className="pl-mapa-toolbar-btn" title="Cor" onClick={() => setAberto(v => !v)}>
+        <span className="pl-cor-objeto-amostra" style={{ background: corAtual }} />
+      </button>
+      {aberto && (
+        <div className="pl-cor-objeto-menu" onMouseLeave={() => setAberto(false)}>
+          {cores.map(cor => (
+            <button
+              key={cor} type="button" className={`pl-conector-cor-swatch ${corAtual === cor ? 'ativo' : ''}`} style={{ background: cor }}
+              title="Cor" onClick={() => { onEscolher(cor); setAberto(false) }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -2336,19 +2347,21 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     commit({ ...atual, nodes })
   }, [])
 
-  // Alinhamento automático (painel Aparência): quando ligado e o board tem
-  // um layout escolhido (não "manual"), qualquer ação que muda o FORMATO da
-  // árvore (novo filho/irmão, exclusão, criar conectando) já reorganiza
-  // sozinho em seguida — vira um segundo passo de undo próprio, não some no
-  // mesmo Ctrl+Z da ação que disparou. Arrastar/recolorir/editar texto NUNCA
-  // dispara isso: alinhamento automático é sobre a FORMA da árvore, não uma
-  // trava que briga com reposicionamento manual durante a edição.
+  // Quando o board tem um layout explícito escolhido (não "manual"), qualquer
+  // ação que muda o FORMATO da árvore (novo filho/irmão, exclusão, criar
+  // conectando) já reorganiza sozinho em seguida — sem isso, trocar pra
+  // "Organograma" no painel Aparência só reorganizava UMA vez (o clique em
+  // si) e a próxima ideia criada voltava pra cascata crua, dando a
+  // impressão de que a troca de layout "não pegava". O layout "manual" tem
+  // seu próprio mecanismo equivalente (relayoutArvoreSeManual, chamado nos
+  // mesmos pontos) — arrastar/recolorir/editar texto NUNCA dispara isso, só
+  // ações que mudam a FORMA da árvore.
   // (Precisa vir antes de onAdicionarFilho/onExcluir/onExcluirSelecionados,
   // que a chamam — calcularNovasPosicoes é function declaration, hoisted,
   // então pode continuar declarada mais abaixo sem problema.)
   const reorganizarSeAutomatico = useCallback(() => {
     const config = configRef.current
-    if (!config.alinhamentoAutomatico || config.layout === 'manual') return
+    if (config.layout === 'manual') return
     const atual = grafoRef.current
     const novasPosicoes = calcularNovasPosicoes(atual, config.layout)
     if (!novasPosicoes) return
@@ -3172,10 +3185,12 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
   }, [])
 
   // --- Painel "Aparência": escolher um layout já aplica na hora (igual o
-  // clique num card muda o board inteiro nas referências do MindMeister);
-  // escolher paleta recolore os ramos sem mexer em posição; ligar
-  // alinhamento automático já reorganiza uma vez, pra não ficar "ligado mas
-  // sem efeito visível" até a próxima edição estrutural. ---
+  // clique num card muda o board inteiro nas referências do MindMeister) e
+  // continua valendo pras próximas edições (reorganizarSeAutomatico/
+  // relayoutArvoreSeManual, chamados em onAdicionarFilho/onExcluir/
+  // onExcluirSelecionados, não dependem de nenhum toggle separado — troca
+  // de layout aqui é permanente até trocar de novo, igual MindMeister);
+  // escolher paleta recolore os ramos sem mexer em posição. ---
   function aplicarConfiguracao(patch: Partial<ConfiguracaoBoard>) {
     onMudarConfiguracao({ ...configRef.current, ...patch })
   }
@@ -3188,11 +3203,6 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
     const atual = grafoRef.current
     const { objetos, conectores } = flowParaBoard(atual.nodes, atual.edges)
     commit(boardParaFlow(objetos, conectores, paletaCores(paleta)))
-  }
-  function onAlternarAlinhamentoAutomatico() {
-    const ligar = !configRef.current.alinhamentoAutomatico
-    aplicarConfiguracao({ alinhamentoAutomatico: ligar })
-    if (ligar && configRef.current.layout !== 'manual') onOrganizarLayout(configRef.current.layout)
   }
 
   const onCamada = useCallback((direcao: 'frente' | 'tras') => {
@@ -3769,7 +3779,6 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
             onFechar={() => setAparenciaAberta(false)}
             onEscolherLayout={onEscolherLayout}
             onEscolherPaleta={onEscolherPaleta}
-            onAlternarAlinhamentoAutomatico={onAlternarAlinhamentoAutomatico}
           />
         )}
         {menuContexto && (
@@ -3889,20 +3898,19 @@ const ICONE_POR_LAYOUT: Record<Exclude<LayoutBoard, 'manual'>, () => ReactElemen
   lista: IconeLayoutLista,
 }
 
-// Painel de aparência (estilo MindMeister): layout do board, paleta de cor dos
-// ramos e alinhamento automático — tudo persistido em ConfiguracaoBoard.
+// Painel de aparência (estilo MindMeister): layout do board e paleta de cor
+// dos ramos — tudo persistido em ConfiguracaoBoard. Trocar de layout aqui já
+// vale pras próximas edições, sem toggle separado (ver reorganizarSeAutomatico).
 function PainelAparencia({
   config,
   onFechar,
   onEscolherLayout,
   onEscolherPaleta,
-  onAlternarAlinhamentoAutomatico,
 }: {
   config: ConfiguracaoBoard
   onFechar: () => void
   onEscolherLayout: (layout: LayoutBoard) => void
   onEscolherPaleta: (paleta: PaletaCorBoard) => void
-  onAlternarAlinhamentoAutomatico: () => void
 }) {
   return (
     <div className="pl-modal-backdrop" onClick={onFechar}>
@@ -3932,14 +3940,6 @@ function PainelAparencia({
               )
             })}
           </div>
-          <button
-            type="button"
-            className={`pl-aparencia-toggle ${config.alinhamentoAutomatico ? 'ativo' : ''}`}
-            onClick={onAlternarAlinhamentoAutomatico}
-          >
-            <span className="pl-aparencia-toggle-trilho"><span className="pl-aparencia-toggle-bola" /></span>
-            Alinhamento automático
-          </button>
         </div>
         <div className="pl-aparencia-secao">
           <div className="pl-aparencia-titulo-secao">Temas</div>
