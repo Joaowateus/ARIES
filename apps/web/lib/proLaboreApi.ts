@@ -195,6 +195,11 @@ export interface Lead {
   criadoEm: string
   atualizadoEm: string
   fechadoEm?: string | null
+  // Transições de estágio em ordem cronológica — usado pra saber QUANDO o
+  // lead alcançou cada etapa (não só em que etapa está agora), necessário
+  // pra filtrar o funil por período corretamente (ver dataAlcancouEtapa em
+  // proLaboreFunilFiltro.tsx).
+  historico?: { estagioNovo: EstagioLead; criadoEm: string }[]
 }
 
 export interface Venda {

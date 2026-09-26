@@ -662,7 +662,16 @@ function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[
   return ORDEM_ESTAGIO_LEAD.indexOf(estagioAtual as (typeof ORDEM_ESTAGIO_LEAD)[number]) >= ORDEM_ESTAGIO_LEAD.indexOf(alvo)
 }
 
-const LEAD_INCLUDE = { vendedor: { select: { id: true, nome: true } } } as const
+// `historico` vai junto pro cliente poder saber QUANDO um lead alcançou
+// cada etapa (não só em que etapa ele está agora) — necessário pra filtrar
+// o funil por período corretamente (ver dataAlcancouEtapa no frontend):
+// sem isso, "abordados essa semana" só dava pra aproximar por `criadoEm`
+// do lead, o que sub-contava qualquer lead que avançou de etapa depois de
+// ter sido criado fora do período filtrado.
+const LEAD_INCLUDE = {
+  vendedor: { select: { id: true, nome: true } },
+  historico: { select: { estagioNovo: true, criadoEm: true }, orderBy: { criadoEm: 'asc' } },
+} as const
 
 function leadWhereBase(req: Request, vendedorIdFiltro?: string): { usuarioId: string; vendedorId?: string } {
   const usuarioId = req.proLaboreUser!.sub

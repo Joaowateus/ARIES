@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
-import { FunilFiltro, estagioAtingiu, periodoHoje, periodoSemanaAtual } from '@/lib/proLaboreFunilFiltro'
+import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
 import { PageHeader } from '../../PageHeader'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
@@ -545,21 +545,39 @@ export default function ProLaboreLeadsPage() {
     window.addEventListener('pointercancel', onPointerCancelWin, { signal: abort.signal })
   }
 
+  const dentroDoPeriodo = (dataIso: string, periodo: { inicio: string; fim: string }) => {
+    const d = new Date(dataIso)
+    return d >= new Date(`${periodo.inicio}T00:00:00`) && d <= new Date(`${periodo.fim}T23:59:59.999`)
+  }
+  const passaFiltrosBase = (l: Lead) =>
+    (!filtroCanal || l.tipoLead === filtroCanal) && (!filtroVendedorId || l.vendedorId === filtroVendedorId) && correspondeBusca(l, busca)
+
   const leadsFiltrados = leads
-    .filter(l => !filtroCanal || l.tipoLead === filtroCanal)
-    .filter(l => !filtroVendedorId || l.vendedorId === filtroVendedorId)
-    .filter(l => correspondeBusca(l, busca))
-    .filter(l => {
-      if (!filtroPeriodo) return true
-      const d = new Date(l.criadoEm)
-      return d >= new Date(`${filtroPeriodo.inicio}T00:00:00`) && d <= new Date(`${filtroPeriodo.fim}T23:59:59.999`)
-    })
+    .filter(passaFiltrosBase)
+    .filter(l => !filtroPeriodo || dentroDoPeriodo(l.criadoEm, filtroPeriodo))
   const leadsAtivos = leadsFiltrados.filter(l => l.estagio !== 'PERDIDO')
   const leadsPerdidos = leadsFiltrados.filter(l => l.estagio === 'PERDIDO')
   const leadsAtivosOrdenados = [...leadsAtivos].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
+  // População de cada etapa do funil (pros indicadores de conversão/perda/R$
+  // abaixo, NÃO pros cards do Kanban acima) — cada etapa contada pela data
+  // em que foi REALMENTE alcançada (dataAlcancouEtapa: quando o lead virou
+  // ABORDADO/NEGOCIACAO/PROPOSTA/FECHADO de verdade), não por `criadoEm`
+  // uniforme. Sem isso, um lead criado antes do período mas que avançou (ou
+  // fechou venda) dentro dele sumia do recorte inteiro — inclusive fazendo
+  // uma venda fechada na semana "sumir" do filtro "essa semana" só porque o
+  // lead tinha sido criado antes.
+  const populacaoFunilPorEtapa = (() => {
+    const base = leads.filter(l => correspondeBusca(l, busca))
+    const filtros = { vendedorId: filtroVendedorId, canal: filtroCanal }
+    if (!filtroPeriodo) return popularFunilNoPeriodo(base, () => true, filtros)
+    const inicioData = new Date(`${filtroPeriodo.inicio}T00:00:00`)
+    const fimData = new Date(`${filtroPeriodo.fim}T23:59:59.999`)
+    return popularFunilNoPeriodo(base, d => d >= inicioData && d <= fimData, filtros)
+  })()
+
   const totalFiltrado = leadsFiltrados.length
-  const fechadosFiltrado = leadsFiltrados.filter(l => l.vendaId).length
+  const fechadosFiltrado = populacaoFunilPorEtapa.FECHADO.length
   const conversaoFiltrado = totalFiltrado > 0 ? (fechadosFiltrado / totalFiltrado) * 100 : 0
   const filtroTextualAtivo = busca !== '' || filtroCanal !== '' || filtroVendedorId !== null || filtroPeriodo !== null
 
@@ -576,16 +594,7 @@ export default function ProLaboreLeadsPage() {
   // os filtros de canal/vendedor/período/busca já aplicados acima).
   const custoPorLeadTopo = parametro?.custoPorLeadTopo ?? 0
   const metaPorEtapa = new Map<EstagioLead, MetaFunilProLabore>(metasFunil.map(m => [m.etapa, m]))
-  // População de cada etapa pra fins de conversão/perda: "alcançou essa etapa
-  // ou foi além" (cumulativo, mesmo conceito do FunilJourney) — não é o
-  // mesmo grupo que está literalmente parado nessa coluna do Kanban agora.
-  const populacaoPorEtapa: Lead[][] = COLUNAS.map(col =>
-    col.estagio === 'LEAD'
-      ? leadsFiltrados
-      : col.estagio === 'FECHADO'
-        ? leadsFiltrados.filter(l => l.estagio === 'FECHADO')
-        : leadsFiltrados.filter(l => estagioAtingiu(l.estagio, col.estagio)),
-  )
+  const populacaoPorEtapa: Lead[][] = COLUNAS.map(col => populacaoFunilPorEtapa[col.estagio])
   const valoresPorEtapa = populacaoPorEtapa.map(pop => pop.length)
   const totalTopoFunil = valoresPorEtapa[0]
   // Valor de negociação usado nos cálculos em R$: o valor ATUAL salvo no
