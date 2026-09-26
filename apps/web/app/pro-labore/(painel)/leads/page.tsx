@@ -545,21 +545,32 @@ export default function ProLaboreLeadsPage() {
     window.addEventListener('pointercancel', onPointerCancelWin, { signal: abort.signal })
   }
 
+  const dentroDoPeriodo = (dataIso: string, periodo: { inicio: string; fim: string }) => {
+    const d = new Date(dataIso)
+    return d >= new Date(`${periodo.inicio}T00:00:00`) && d <= new Date(`${periodo.fim}T23:59:59.999`)
+  }
+  const passaFiltrosBase = (l: Lead) =>
+    (!filtroCanal || l.tipoLead === filtroCanal) && (!filtroVendedorId || l.vendedorId === filtroVendedorId) && correspondeBusca(l, busca)
+
   const leadsFiltrados = leads
-    .filter(l => !filtroCanal || l.tipoLead === filtroCanal)
-    .filter(l => !filtroVendedorId || l.vendedorId === filtroVendedorId)
-    .filter(l => correspondeBusca(l, busca))
-    .filter(l => {
-      if (!filtroPeriodo) return true
-      const d = new Date(l.criadoEm)
-      return d >= new Date(`${filtroPeriodo.inicio}T00:00:00`) && d <= new Date(`${filtroPeriodo.fim}T23:59:59.999`)
-    })
+    .filter(passaFiltrosBase)
+    .filter(l => !filtroPeriodo || dentroDoPeriodo(l.criadoEm, filtroPeriodo))
   const leadsAtivos = leadsFiltrados.filter(l => l.estagio !== 'PERDIDO')
   const leadsPerdidos = leadsFiltrados.filter(l => l.estagio === 'PERDIDO')
   const leadsAtivosOrdenados = [...leadsAtivos].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
+  // Fechamentos dentro do período filtrado: usa `fechadoEm` (quando a VENDA
+  // fechou), não `criadoEm` (quando o LEAD nasceu) — um lead criado antes do
+  // período mas fechado dentro dele precisa contar aqui, senão uma venda
+  // real "some" do filtro (ex.: filtrar "essa semana" e a venda não aparecer
+  // porque o lead tinha sido criado na semana anterior).
+  const leadsFechadosNoPeriodo = leads
+    .filter(passaFiltrosBase)
+    .filter(l => l.estagio === 'FECHADO' && !!l.fechadoEm)
+    .filter(l => !filtroPeriodo || dentroDoPeriodo(l.fechadoEm!, filtroPeriodo))
+
   const totalFiltrado = leadsFiltrados.length
-  const fechadosFiltrado = leadsFiltrados.filter(l => l.vendaId).length
+  const fechadosFiltrado = filtroPeriodo ? leadsFechadosNoPeriodo.length : leadsFiltrados.filter(l => l.vendaId).length
   const conversaoFiltrado = totalFiltrado > 0 ? (fechadosFiltrado / totalFiltrado) * 100 : 0
   const filtroTextualAtivo = busca !== '' || filtroCanal !== '' || filtroVendedorId !== null || filtroPeriodo !== null
 
@@ -583,7 +594,7 @@ export default function ProLaboreLeadsPage() {
     col.estagio === 'LEAD'
       ? leadsFiltrados
       : col.estagio === 'FECHADO'
-        ? leadsFiltrados.filter(l => l.estagio === 'FECHADO')
+        ? (filtroPeriodo ? leadsFechadosNoPeriodo : leadsFiltrados.filter(l => l.estagio === 'FECHADO'))
         : leadsFiltrados.filter(l => estagioAtingiu(l.estagio, col.estagio)),
   )
   const valoresPorEtapa = populacaoPorEtapa.map(pop => pop.length)

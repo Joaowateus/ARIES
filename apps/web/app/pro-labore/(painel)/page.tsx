@@ -242,42 +242,50 @@ export default function ProLaboreDashboardPage() {
   // carregados; sem canal, usa a resposta do /painel já buscada pra chave
   // de vendedor do funil (isolada do funil, ou seguindo o filtro geral).
   const filtroFunilAtivo = chaveFunilVendedor !== '' || filtroCanal !== '' || filtroFunilPeriodo !== null
+  const passaFiltrosFunilComuns = (l: Lead) =>
+    (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor) && (!filtroCanal || l.tipoLead === filtroCanal)
+  // Fechamento é sobre QUANDO A VENDA FECHOU (`fechadoEm`), nunca sobre
+  // quando o lead nasceu (`criadoEm`) — um lead criado antes do período mas
+  // fechado dentro dele precisa contar aqui, senão uma venda real "some" do
+  // filtro (ex.: filtrar "essa semana" e a venda não aparecer porque o lead
+  // tinha sido criado na semana anterior). Mesmo raciocínio do `/painel`
+  // (mensal), que já usa a data da própria Venda pra contar `fechamento`.
+  const leadsFechadosNoIntervalo = (inicio: Date, fim: Date) =>
+    leads.filter(l => passaFiltrosFunilComuns(l) && l.estagio === 'FECHADO' && l.fechadoEm)
+      .filter(l => { const d = new Date(l.fechadoEm!); return d >= inicio && d <= fim })
+
   const funilFiltrado = useMemo(() => {
     if (!filtroFunilAtivo) return null
     if (filtroFunilPeriodo) {
       const inicioData = new Date(`${filtroFunilPeriodo.inicio}T00:00:00`)
       const fimData = new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`)
-      const leadsNoPeriodo = leads.filter(l => {
-        const d = new Date(l.criadoEm)
-        return d >= inicioData && d <= fimData
-          && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
-          && (!filtroCanal || l.tipoLead === filtroCanal)
-      })
+      const leadsNoPeriodo = leads.filter(l => passaFiltrosFunilComuns(l) && new Date(l.criadoEm) >= inicioData && new Date(l.criadoEm) <= fimData)
       return {
         leads: leadsNoPeriodo.length,
         abordados: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
         negociacao: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
         proposta: leadsNoPeriodo.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
-        fechamento: leadsNoPeriodo.filter(l => l.estagio === 'FECHADO').length,
+        fechamento: leadsFechadosNoIntervalo(inicioData, fimData).length,
       }
     }
     if (!atual) return null
     if (filtroCanal !== '') {
+      const inicioMes = new Date(Date.UTC(atual.ano, atual.mes, 1))
+      const fimMes = new Date(Date.UTC(atual.ano, atual.mes + 1, 0, 23, 59, 59, 999))
       const leadsDoMes = leads.filter(l => {
         const d = new Date(l.criadoEm)
-        return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes
-          && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
-          && (!filtroCanal || l.tipoLead === filtroCanal)
+        return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes && passaFiltrosFunilComuns(l)
       })
       return {
         leads: leadsDoMes.length,
         abordados: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
         negociacao: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
         proposta: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
-        fechamento: leadsDoMes.filter(l => l.estagio === 'FECHADO').length,
+        fechamento: leadsFechadosNoIntervalo(inicioMes, fimMes).length,
       }
     }
     return painelPorVendedor[chaveFunilVendedor]?.meses[selectedIdx]?.funil ?? null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atual, filtroFunilAtivo, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor, painelPorVendedor, selectedIdx])
 
   // População de leads por trás dos indicadores em R$ da Jornada de compra
@@ -289,20 +297,26 @@ export default function ProLaboreDashboardPage() {
     if (filtroFunilPeriodo) {
       const inicioData = new Date(`${filtroFunilPeriodo.inicio}T00:00:00`)
       const fimData = new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`)
-      return leads.filter(l => {
-        const d = new Date(l.criadoEm)
-        return d >= inicioData && d <= fimData
-          && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
-          && (!filtroCanal || l.tipoLead === filtroCanal)
-      })
+      return leads.filter(l => passaFiltrosFunilComuns(l) && new Date(l.criadoEm) >= inicioData && new Date(l.criadoEm) <= fimData)
     }
     if (!atual) return []
     return leads.filter(l => {
       const d = new Date(l.criadoEm)
-      return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes
-        && (!chaveFunilVendedor || l.vendedorId === chaveFunilVendedor)
-        && (!filtroCanal || l.tipoLead === filtroCanal)
+      return d.getUTCFullYear() === atual.ano && d.getUTCMonth() === atual.mes && passaFiltrosFunilComuns(l)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atual, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor])
+
+  // Mesmo recorte acima, só que a data-base do bucket de Fechamento é
+  // `fechadoEm` (ver comentário de `leadsFechadosNoIntervalo`) — usado só
+  // pra popular a linha "Fechamento" de `populacaoPorEtapaFin` abaixo.
+  const leadsFechadosFunilFinanceiro = useMemo(() => {
+    if (filtroFunilPeriodo) {
+      return leadsFechadosNoIntervalo(new Date(`${filtroFunilPeriodo.inicio}T00:00:00`), new Date(`${filtroFunilPeriodo.fim}T23:59:59.999`))
+    }
+    if (!atual) return []
+    return leadsFechadosNoIntervalo(new Date(Date.UTC(atual.ano, atual.mes, 1)), new Date(Date.UTC(atual.ano, atual.mes + 1, 0, 23, 59, 59, 999)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atual, filtroFunilPeriodo, filtroCanal, leads, chaveFunilVendedor])
 
   if (loading) return <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
@@ -355,7 +369,7 @@ export default function ProLaboreDashboardPage() {
     etapa === 'LEAD'
       ? leadsFunilFinanceiro
       : etapa === 'FECHADO'
-        ? leadsFunilFinanceiro.filter(l => l.estagio === 'FECHADO')
+        ? leadsFechadosFunilFinanceiro
         : leadsFunilFinanceiro.filter(l => estagioAtingiu(l.estagio, etapa)),
   )
   const oportunidadePorEtapaRS = populacaoPorEtapaFin.map(pop => pop.reduce((s, l) => s + l.valorNegociacao, 0))
