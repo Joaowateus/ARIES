@@ -1969,6 +1969,22 @@ function ladoDaInterseccao(no: ReturnType<typeof useInternalNode>, ponto: { x: n
   return Position.Top
 }
 
+// Âncora de ideia de mapa mental: sempre o meio vertical da borda direita OU
+// esquerda do nó (nunca um ponto variável tipo elipse) — é assim que
+// MindMeister/Whimsical desenham: TODOS os filhos de um mesmo pai saem
+// exatamente do mesmo ponto (o "tronco"), e só a curva de cada um diverge
+// dali pro alvo. Com a interseção-por-elipse antiga, cada filho puxava o
+// ponto de saída pra um lugar ligeiramente diferente na caixinha do pai —
+// com vários filhos de uma vez (a central com 4+ ramos, por exemplo) isso
+// espremia todos os pontos de saída numa faixa minúscula, deixando o leque
+// apertado e poluído logo na saída, mesmo sem sobrepor de verdade.
+function ancoraTroncoNoMapa(no: ReturnType<typeof useInternalNode>, ladoDireita: boolean): { x: number; y: number } {
+  const pos = no!.internals.positionAbsolute
+  const largura = no!.measured.width ?? 150
+  const altura = no!.measured.height ?? 40
+  return { x: ladoDireita ? pos.x + largura : pos.x, y: pos.y + altura / 2 }
+}
+
 // Cores disponíveis no seletor rápido do conector (paleta separada e mais
 // enxuta que PALETA_RAMOS/PALETA_STICKY — só as cores mais úteis pra linha).
 const PALETA_CONECTOR = ['#8d9de0', '#e0687a', '#57c785', '#e0a83e', '#a679e0', '#8b93a6']
@@ -1979,11 +1995,26 @@ function EdgeFlutuante({ id, source, target, style, markerEnd, selected, label }
   const noAlvo = useInternalNode(target)
   if (!noOrigem || !noAlvo) return null
 
-  const pontoOrigem = interseccaoComNo(noOrigem, noAlvo)
-  const pontoAlvo = interseccaoComNo(noAlvo, noOrigem)
+  const ambosNoMapa = noOrigem.data.tipoObjeto === 'noMapa' && noAlvo.data.tipoObjeto === 'noMapa'
+  let pontoOrigem: { x: number; y: number }
+  let pontoAlvo: { x: number; y: number }
+  let posOrigem: Position
+  let posAlvo: Position
+  if (ambosNoMapa) {
+    const alvoADireita = noAlvo.internals.positionAbsolute.x >= noOrigem.internals.positionAbsolute.x
+    pontoOrigem = ancoraTroncoNoMapa(noOrigem, alvoADireita)
+    pontoAlvo = ancoraTroncoNoMapa(noAlvo, !alvoADireita)
+    posOrigem = alvoADireita ? Position.Right : Position.Left
+    posAlvo = alvoADireita ? Position.Left : Position.Right
+  } else {
+    pontoOrigem = interseccaoComNo(noOrigem, noAlvo)
+    pontoAlvo = interseccaoComNo(noAlvo, noOrigem)
+    posOrigem = ladoDaInterseccao(noOrigem, pontoOrigem)
+    posAlvo = ladoDaInterseccao(noAlvo, pontoAlvo)
+  }
   const [caminho, labelX, labelY] = getBezierPath({
-    sourceX: pontoOrigem.x, sourceY: pontoOrigem.y, sourcePosition: ladoDaInterseccao(noOrigem, pontoOrigem),
-    targetX: pontoAlvo.x, targetY: pontoAlvo.y, targetPosition: ladoDaInterseccao(noAlvo, pontoAlvo),
+    sourceX: pontoOrigem.x, sourceY: pontoOrigem.y, sourcePosition: posOrigem,
+    targetX: pontoAlvo.x, targetY: pontoAlvo.y, targetPosition: posAlvo,
   })
 
   const tracejadoAtivo = !!(style as Record<string, unknown> | undefined)?.strokeDasharray
