@@ -558,7 +558,7 @@ export const proLaboreApi = {
     // pastaId: undefined = sem filtro (lista tudo, uso da árvore); '' = raiz; string = dentro daquela pasta.
     listar: (pastaId?: string) => request<MapaMental[]>(`/pro-labore/mapas-mentais${pastaId !== undefined ? `?pastaId=${pastaId}` : ''}`),
     lixeira: () => request<MapaMental[]>('/pro-labore/mapas-mentais/lixeira'),
-    criar: (data: { titulo?: string; icone?: string | null; objetos?: BoardObjeto[]; conectores?: BoardConector[]; pastaId?: string | null }) =>
+    criar: (data: { titulo?: string; icone?: string | null; objetos?: BoardObjeto[]; conectores?: BoardConector[]; pastaId?: string | null; configuracao?: Record<string, unknown> | null }) =>
       request<MapaMental>('/pro-labore/mapas-mentais', { method: 'POST', body: JSON.stringify(data) }),
     atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; objetos: BoardObjeto[]; conectores: BoardConector[]; pastaId: string | null; configuracao: Record<string, unknown> | null }>) =>
       request<MapaMental>(`/pro-labore/mapas-mentais/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

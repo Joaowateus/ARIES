@@ -4125,7 +4125,13 @@ export default function MapaMentalCanvas(props: {
   onMudarConfiguracao: (config: ConfiguracaoBoard) => void
 }) {
   const { dadosIniciais, onChange, configuracao, onMudarConfiguracao } = props
-  const config = configuracao ?? CONFIGURACAO_PADRAO
+  // Mapa sem `configuracao` salva (nunca passou pelo painel Aparência) e só
+  // com nós de mapa mental (nenhum sticky/forma/tabela) — provavelmente um
+  // mapa criado antes dessa opção existir. Nesse caso abre direto no motor
+  // fiel à referência em vez do board livre: é conteúdo puro de árvore, não
+  // tem por que continuar no formato antigo só por falta de config salva.
+  const soTemNoMapa = dadosIniciais.objetos.length > 0 && dadosIniciais.objetos.every(o => o.tipo === 'noMapa')
+  const config = configuracao ?? (soTemNoMapa ? { ...CONFIGURACAO_PADRAO, layout: 'mapaMental' as const } : CONFIGURACAO_PADRAO)
   // Guarda o board mais recente também quando quem está desenhando é o board
   // livre (`Canvas`, layout 'manual') — `dadosIniciais` só reflete o estado
   // de quando o mapa foi aberto (não é atualizado depois da montagem, só via

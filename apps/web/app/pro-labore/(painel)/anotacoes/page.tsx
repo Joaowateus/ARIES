@@ -872,7 +872,14 @@ export default function ProLaboreAnotacoesPage() {
   async function criarMapa(pastaId: string | null, templateId: string = 'vazio') {
     try {
       const { objetos, conectores } = gerarBoardDoTemplate(templateId)
-      const mapa = await proLaboreApi.mapasMentais.criar({ pastaId, objetos, conectores })
+      // 'vazio'/'brainstorm' começam só com nós de mapa mental (noMapa) — já
+      // abrem no motor fiel à referência. 'kanban'/'processo' usam seção/
+      // sticky/forma, que esse motor não sabe desenhar, então ficam no board
+      // livre ('manual', o padrão) igual antes.
+      const configuracao = templateId === 'vazio' || templateId === 'brainstorm'
+        ? { ...CONFIGURACAO_PADRAO, layout: 'mapaMental' as const }
+        : undefined
+      const mapa = await proLaboreApi.mapasMentais.criar({ pastaId, objetos, conectores, configuracao })
       setMapas(prev => [mapa, ...prev])
       setVisao({ tipo: 'mapa', id: mapa.id })
       if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
