@@ -1111,6 +1111,15 @@
 }
 .pl-mapa-canvas .react-flow__attribution { display: none; }
 
+/* Anima a troca de posição (~200ms) quando o layout recalcula tudo (trocar
+   de Mapa mental/Organograma/Lista, recolher/expandir um galho, adicionar
+   ou excluir uma ideia) — sem isso a árvore "pula" de um estado pro outro
+   em vez de fluir. Desligado durante o arraste (`.dragging`, classe que o
+   próprio ReactFlow aplica), senão o nó ficaria correndo atrás do cursor
+   com atraso em vez de seguir o mouse na hora. */
+.pl-mapa-canvas .react-flow__node { transition: transform 200ms ease; }
+.pl-mapa-canvas .react-flow__node.dragging { transition: none; }
+
 /* Temas do board (Ctrl+clique no seletor "Tema" do topbar) — 'claro' não
    aparece aqui de propósito: é o próprio padrão do app (var(--pl-bg) etc.),
    que já se adapta sozinho a claro/escuro. Os outros três redefinem os
@@ -1156,6 +1165,19 @@
 }
 .pl-mapa-no-texto:active { cursor: grabbing; }
 .pl-mapa-no-central .pl-mapa-no-texto { font-size: 16px; font-weight: 800; }
+
+/* Bolinha de junção depois do texto (estilo MindMeister) — vazada quando o
+   galho está expandido, com um pontinho dentro quando está recolhido. */
+.pl-mapa-no-juncao {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-left: 7px;
+  border: 1.5px solid currentColor; background: none; padding: 0; cursor: pointer;
+  vertical-align: middle; position: relative; top: -1px; flex-shrink: 0;
+}
+.pl-mapa-no-juncao:hover { opacity: .7; }
+.pl-mapa-no-juncao.colapsado::after {
+  content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; border-radius: 50%;
+  background: currentColor; transform: translate(-50%, -50%);
+}
 
 /* Toolbar flutuante (NodeToolbar do @xyflow/react) — some acima do nó
    selecionado, mesma ideia da barra de contexto da referência. */
