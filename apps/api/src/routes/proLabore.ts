@@ -7,6 +7,7 @@ import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import {
   trocarOuRenovarTokenLongo,
+  trocarCodigoPorTokenCurto,
   buscarContaInstagram,
   buscarMidiasRecentes,
   buscarInsightsMidia,
@@ -2139,6 +2140,49 @@ router.get('/social-media/conta', requireProLaboreAuth, requireDono, async (req:
   res.json(conta)
 })
 
+// Troca um token (curto OU longo — a Graph API não distingue) pela conta do
+// Instagram vinculada e grava/atualiza o SocialMediaConta do dono — usado
+// tanto pelo login OAuth (`/conectar-oauth`) quanto pelo caminho manual de
+// colar um token do Graph API Explorer (`/conectar`).
+async function conectarContaInstagram(usuarioId: string, tokenInicial: string, appId: string, appSecret: string) {
+  const tokenLongo = await trocarOuRenovarTokenLongo(appId, appSecret, tokenInicial)
+  const infoConta = await buscarContaInstagram(tokenLongo.accessToken)
+  return prisma.socialMediaConta.upsert({
+    where: { usuarioId },
+    update: { ...infoConta, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
+    create: { ...infoConta, usuarioId, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
+    select: SOCIAL_MEDIA_SELECT,
+  })
+}
+
+// URL de redirect do login OAuth — precisa ser EXATAMENTE a mesma usada pra
+// montar o link de autorização (no frontend) e cadastrada nas configurações
+// do app na Meta, senão a troca do código por token é recusada.
+function redirectUriSocialMediaOAuth(): string {
+  return `${process.env.FRONTEND_URL}/pro-labore/social-media/callback`
+}
+
+router.post('/social-media/conectar-oauth', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({ code: z.string().min(1, 'Código de autorização inválido') }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const appId = process.env.META_APP_ID
+  const appSecret = process.env.META_APP_SECRET
+  if (!appId || !appSecret) {
+    res.status(500).json({ error: 'Integração do Instagram não configurada no servidor.' })
+    return
+  }
+  try {
+    const tokenCurto = await trocarCodigoPorTokenCurto(appId, appSecret, parse.data.code, redirectUriSocialMediaOAuth())
+    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, tokenCurto, appId, appSecret)
+    res.status(201).json(conta)
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Falha ao conectar com o Instagram' })
+  }
+})
+
 const conectarSocialMediaSchema = z.object({ accessToken: z.string().min(20, 'Token inválido') })
 
 router.post('/social-media/conectar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -2155,14 +2199,7 @@ router.post('/social-media/conectar', requireProLaboreAuth, requireDono, async (
   }
 
   try {
-    const tokenLongo = await trocarOuRenovarTokenLongo(appId, appSecret, parse.data.accessToken)
-    const infoConta = await buscarContaInstagram(tokenLongo.accessToken)
-    const conta = await prisma.socialMediaConta.upsert({
-      where: { usuarioId: req.proLaboreUser!.sub },
-      update: { ...infoConta, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
-      create: { ...infoConta, usuarioId: req.proLaboreUser!.sub, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
-      select: SOCIAL_MEDIA_SELECT,
-    })
+    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, parse.data.accessToken, appId, appSecret)
     res.status(201).json(conta)
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Falha ao conectar com o Instagram' })

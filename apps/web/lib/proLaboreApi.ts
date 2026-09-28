@@ -492,6 +492,8 @@ export const proLaboreApi = {
     conta: () => request<SocialMediaConta | null>('/pro-labore/social-media/conta'),
     conectar: (accessToken: string) =>
       request<SocialMediaConta>('/pro-labore/social-media/conectar', { method: 'POST', body: JSON.stringify({ accessToken }) }),
+    conectarOAuth: (code: string) =>
+      request<SocialMediaConta>('/pro-labore/social-media/conectar-oauth', { method: 'POST', body: JSON.stringify({ code }) }),
     desconectar: () => request<void>('/pro-labore/social-media/conta', { method: 'DELETE' }),
     sincronizar: () => request<SocialMediaConta>('/pro-labore/social-media/sincronizar', { method: 'POST' }),
     resumo: (periodo?: { inicio: string; fim: string }) => {
