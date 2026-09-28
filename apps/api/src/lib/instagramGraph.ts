@@ -16,6 +16,20 @@ async function chamarGraphApi<T>(caminho: string, params: Record<string, string>
   return body as T
 }
 
+// Primeiro passo do login OAuth: troca o `code` que a Meta devolveu no
+// redirect (depois do dono autorizar no diálogo do Facebook) por um token de
+// curta duração (~1-2h). Precisa do MESMO `redirectUri` usado ao montar a URL
+// de autorização, senão a Graph API recusa a troca.
+export async function trocarCodigoPorTokenCurto(appId: string, appSecret: string, code: string, redirectUri: string): Promise<string> {
+  const body = await chamarGraphApi<{ access_token: string }>('/oauth/access_token', {
+    client_id: appId,
+    client_secret: appSecret,
+    redirect_uri: redirectUri,
+    code,
+  })
+  return body.access_token
+}
+
 export interface TokenLongoDuracao {
   accessToken: string
   expiraEm: Date

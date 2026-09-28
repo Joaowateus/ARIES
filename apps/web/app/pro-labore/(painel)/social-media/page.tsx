@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, SocialMediaConta, ResumoSocialMedia } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { iniciarLoginInstagram, metaAppIdConfigurado } from '@/lib/socialMediaOAuth'
 import { SocialJourneyCircular } from './SocialJourneyCircular'
 import { PageHeader } from '../../PageHeader'
 
@@ -28,6 +29,13 @@ export default function ProLaboreSocialMediaPage() {
   const [tokenInput, setTokenInput] = useState('')
   const [conectando, setConectando] = useState(false)
   const [erroConexao, setErroConexao] = useState('')
+  // Login OAuth de verdade (botão "Conectar com Instagram") só aparece
+  // quando o app da Meta está configurado (NEXT_PUBLIC_META_APP_ID); o
+  // caminho manual (colar token do Graph API Explorer) fica sempre
+  // disponível como alternativa — atrás de um "mostrar opção avançada"
+  // quando o OAuth já está configurado, e aberto direto quando não está.
+  const oauthConfigurado = metaAppIdConfigurado() != null
+  const [mostrarManual, setMostrarManual] = useState(!oauthConfigurado)
 
   const [sincronizando, setSincronizando] = useState(false)
   const [erroSync, setErroSync] = useState('')
@@ -117,33 +125,57 @@ export default function ProLaboreSocialMediaPage() {
               <div className="pl-card-sub">Precisa ser uma conta comercial/criador de conteúdo vinculada a uma Página do Facebook</div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '0 0 14px' }}>
-            {[
-              <>Acesse o <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer">Graph API Explorer</a> da Meta, logado com a conta que administra a Página.</>,
-              <>Selecione o seu aplicativo no topo, e em &quot;Permissions&quot; adicione: <code>instagram_basic</code>, <code>instagram_manage_insights</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>.</>,
-              <>Clique em &quot;Generate Access Token&quot;, autorize, e copie o token gerado.</>,
-              <>Cole o token abaixo — a gente troca ele automaticamente por um de longa duração.</>,
-            ].map((texto, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, color: 'var(--pl-ink-2)', lineHeight: 1.5 }}>
-                <span style={{ flexShrink: 0, fontWeight: 700, color: 'var(--pl-ink-muted)' }}>{i + 1}.</span>
-                <span>{texto}</span>
-              </div>
-            ))}
-          </div>
-          <form onSubmit={conectar}>
-            <textarea
-              className="pl-input"
-              style={{ width: '100%', minHeight: 80, fontFamily: 'monospace', fontSize: 12 }}
-              placeholder="Cole aqui o token gerado no Graph API Explorer"
-              value={tokenInput}
-              onChange={e => setTokenInput(e.target.value)}
-              required
-            />
-            {erroConexao && <div style={{ color: 'var(--pl-critical)', fontSize: 12.5, marginTop: 8 }}>{erroConexao}</div>}
-            <button type="submit" className="pl-btn pl-btn-primary" style={{ marginTop: 10 }} disabled={conectando}>
-              {conectando ? 'Conectando…' : 'Conectar'}
+
+          {oauthConfigurado && (
+            <button type="button" className="pl-btn pl-btn-primary" style={{ width: '100%', marginBottom: 14 }} onClick={iniciarLoginInstagram}>
+              Conectar com Instagram
             </button>
-          </form>
+          )}
+
+          {!oauthConfigurado && (
+            <div style={{ fontSize: 12.5, color: 'var(--pl-ink-muted)', marginBottom: 14 }}>
+              O login com um clique ainda não está disponível nesse ambiente (falta configurar o app da Meta) — use o caminho manual abaixo por enquanto.
+            </div>
+          )}
+
+          {oauthConfigurado && !mostrarManual && (
+            <button type="button" className="pl-link-action" style={{ fontSize: 12.5 }} onClick={() => setMostrarManual(true)}>
+              Prefiro colar um token manualmente
+            </button>
+          )}
+
+          {mostrarManual && (
+            <>
+              {oauthConfigurado && <div className="pl-card-sub" style={{ margin: '4px 0 10px' }}>Caminho manual (avançado)</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '0 0 14px' }}>
+                {[
+                  <>Acesse o <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer">Graph API Explorer</a> da Meta, logado com a conta que administra a Página.</>,
+                  <>Selecione o seu aplicativo no topo, e em &quot;Permissions&quot; adicione: <code>instagram_basic</code>, <code>instagram_manage_insights</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>.</>,
+                  <>Clique em &quot;Generate Access Token&quot;, autorize, e copie o token gerado.</>,
+                  <>Cole o token abaixo — a gente troca ele automaticamente por um de longa duração.</>,
+                ].map((texto, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, color: 'var(--pl-ink-2)', lineHeight: 1.5 }}>
+                    <span style={{ flexShrink: 0, fontWeight: 700, color: 'var(--pl-ink-muted)' }}>{i + 1}.</span>
+                    <span>{texto}</span>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={conectar}>
+                <textarea
+                  className="pl-input"
+                  style={{ width: '100%', minHeight: 80, fontFamily: 'monospace', fontSize: 12 }}
+                  placeholder="Cole aqui o token gerado no Graph API Explorer"
+                  value={tokenInput}
+                  onChange={e => setTokenInput(e.target.value)}
+                  required
+                />
+                {erroConexao && <div style={{ color: 'var(--pl-critical)', fontSize: 12.5, marginTop: 8 }}>{erroConexao}</div>}
+                <button type="submit" className="pl-btn pl-btn-primary" style={{ marginTop: 10 }} disabled={conectando}>
+                  {conectando ? 'Conectando…' : 'Conectar'}
+                </button>
+              </form>
+            </>
+          )}
         </div>
       )}
 
