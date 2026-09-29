@@ -9,6 +9,19 @@ import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram } 
 import { sincronizarContaSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
 import { montarAnaliseSocialMedia } from '../lib/socialMediaAnalytics'
 import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
+import { randomBytes } from 'crypto'
+import { logger } from '../lib/logger'
+import {
+  ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
+  configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
+} from '../lib/whatsappEvolution'
+import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente } from '../lib/assistenteMotor'
+import {
+  CAMPOS_LEAD as CAMPOS_LEAD_ASSISTENTE, CONFIG_PADRAO as CONFIG_ASSISTENTE_PADRAO, lerConfig as lerConfigAssistente,
+  linhasResumo as linhasResumoAssistente, iniciarRoteiro as iniciarRoteiroAssistente, avancarRoteiro as avancarRoteiroAssistente,
+  casaGatilho as casaGatilhoAssistente,
+} from '../lib/assistenteRoteiro'
+import { montarResumoAssistente } from '../lib/assistenteResumo'
 
 const router = Router()
 
@@ -2549,202 +2562,469 @@ router.get('/plano-crescimento/historico', requireProLaboreAuth, requireDono, as
 })
 
 // ============ ASSISTENTE COMERCIAL (WhatsApp) ============
-// Um assistente por vendedor, ligado ao número que ele já usa — o mesmo
-// número atende dois papéis (SUPORTE quando é o próprio vendedor falando,
-// LEAD quando é um contato de campanha sendo pré-qualificado). A conexão de
-// verdade com o WhatsApp Business API ainda depende da mesma conta Meta
-// usada no Social Media; até lá, "Conectar" aqui simula a conexão e povoa a
-// tela com conversas de exemplo, pra já dar pra desenhar e validar o fluxo.
+// Um assistente por vendedor, ligado ao número que ele já usa através de
+// uma sessão "aparelho conectado" num servidor Evolution API (QR Code ou
+// código de pareamento — ver lib/whatsappEvolution.ts). O motor que
+// responde os leads fica em lib/assistenteMotor.ts; o roteiro, em
+// lib/assistenteRoteiro.ts (funções puras, também usadas pelo simulador).
 
 const ASSISTENTE_SELECT = {
   id: true, vendedorId: true, numeroWhatsapp: true, nomeExibicao: true, status: true, criadoEm: true,
+  fotoPerfilUrl: true, conectadoEm: true, ultimoEventoEm: true, atendimentoAutomatico: true, configuracao: true,
+} as const
+
+function assistenteParaResposta<T extends { configuracao: Prisma.JsonValue }>(a: T | null) {
+  if (!a) return null
+  return { ...a, configuracao: lerConfigAssistente(a.configuracao) }
 }
 
 // VENDEDOR/SUPERVISOR só enxergam o próprio assistente (é pessoal, ligado
 // ao número que ele mesmo usa) — só o DONO escolhe de quem quer ver via
-// ?vendedorId=, parecido com o filtro de vendedor usado no resto do painel.
-function assistenteVendedorIdAlvo(req: Request, vendedorIdQuery?: string): string | null {
+// vendedorId, parecido com o filtro de vendedor usado no resto do painel.
+function assistenteVendedorIdAlvo(req: Request, vendedorIdInformado?: unknown): string | null {
   const { papel, vendedorId } = req.proLaboreUser!
   if (papel === 'VENDEDOR' || papel === 'SUPERVISOR') return vendedorId!
-  return typeof vendedorIdQuery === 'string' && vendedorIdQuery ? vendedorIdQuery : null
+  return typeof vendedorIdInformado === 'string' && vendedorIdInformado ? vendedorIdInformado : null
+}
+
+async function resolverVendedorDoAssistente(req: Request, res: Response, vendedorIdInformado?: unknown) {
+  const vendedorIdAlvo = assistenteVendedorIdAlvo(req, vendedorIdInformado)
+  if (!vendedorIdAlvo) {
+    res.status(400).json({ error: 'Informe de qual vendedor é esse assistente' })
+    return null
+  }
+  const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorIdAlvo, usuarioId: req.proLaboreUser!.sub }, select: { id: true, nome: true } })
+  if (!vendedor) {
+    res.status(404).json({ error: 'Vendedor não encontrado' })
+    return null
+  }
+  return vendedor
+}
+
+function urlWebhookAssistente(req: Request, segredo: string): string {
+  const base = (process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '')
+  return `${base}/pro-labore/assistente/webhook/${segredo}`
+}
+
+function mensagemErroWhatsapp(e: unknown): string {
+  return e instanceof ErroWhatsapp ? e.message : 'Falha inesperada ao falar com o servidor do WhatsApp'
 }
 
 router.get('/assistente/config', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const usuarioId = req.proLaboreUser!.sub
-  const vendedorIdAlvo = assistenteVendedorIdAlvo(req, req.query.vendedorId as string | undefined)
+  const vendedorIdAlvo = assistenteVendedorIdAlvo(req, req.query.vendedorId)
   if (!vendedorIdAlvo) {
-    res.json({ assistente: null, vendedor: null })
+    res.json({ assistente: null, vendedor: null, servidorConfigurado: evolutionConfigurada(), configuracaoPadrao: CONFIG_ASSISTENTE_PADRAO })
     return
   }
-  const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorIdAlvo, usuarioId }, select: { id: true, nome: true } })
-  if (!vendedor) {
-    res.status(404).json({ error: 'Vendedor não encontrado' })
+  const vendedor = await resolverVendedorDoAssistente(req, res, vendedorIdAlvo)
+  if (!vendedor) return
+  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { ...ASSISTENTE_SELECT, _count: { select: { ignorados: true } } } })
+  res.json({ assistente: assistenteParaResposta(assistente), vendedor, servidorConfigurado: evolutionConfigurada(), configuracaoPadrao: CONFIG_ASSISTENTE_PADRAO })
+})
+
+const perguntaRoteiroSchema = z.object({
+  id: z.string().min(1).max(40),
+  rotulo: z.string().min(1, 'Dê um nome curto pra cada pergunta').max(60),
+  texto: z.string().min(3, 'Pergunta vazia').max(700),
+  campo: z.enum(CAMPOS_LEAD_ASSISTENTE),
+  opcoes: z.array(z.string().max(60)).max(9).optional(),
+})
+
+const configAssistenteSchema = z.object({
+  nomeEmpresa: z.string().max(80),
+  responderContatosNovos: z.boolean(),
+  gatilhos: z.array(z.string().max(120)).max(30),
+  mensagemBoasVindas: z.string().min(3).max(1000),
+  perguntas: z.array(perguntaRoteiroSchema).max(10, 'No máximo 10 perguntas — roteiro longo faz o lead desistir'),
+  mensagemEncerramento: z.string().min(3).max(1000),
+  mensagemAtendente: z.string().min(3).max(1000),
+  mensagemDespedida: z.string().min(3).max(1000),
+  avisarVendedor: z.boolean(),
+  criarLeadNoCrm: z.boolean(),
+  atrasoSegundos: z.number().min(0).max(15),
+})
+
+const salvarAssistenteSchema = z.object({
+  vendedorId: z.string().optional(),
+  atendimentoAutomatico: z.boolean().optional(),
+  configuracao: configAssistenteSchema.optional(),
+})
+
+router.put('/assistente/config', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = salvarAssistenteSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
-  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedorIdAlvo }, select: ASSISTENTE_SELECT })
-  res.json({ assistente, vendedor })
+  const vendedor = await resolverVendedorDoAssistente(req, res, parse.data.vendedorId)
+  if (!vendedor) return
+  const dados = {
+    ...(parse.data.atendimentoAutomatico !== undefined && { atendimentoAutomatico: parse.data.atendimentoAutomatico }),
+    ...(parse.data.configuracao && { configuracao: parse.data.configuracao as Prisma.InputJsonValue }),
+  }
+  const assistente = await prisma.assistenteComercial.upsert({
+    where: { vendedorId: vendedor.id },
+    update: dados,
+    create: { vendedorId: vendedor.id, ...dados },
+    select: ASSISTENTE_SELECT,
+  })
+  res.json(assistenteParaResposta(assistente))
 })
 
 const conectarAssistenteSchema = z.object({
-  numeroWhatsapp: z.string().min(8, 'Número inválido'),
-  nomeExibicao: z.string().optional(),
-  vendedorId: z.string().optional(), // só considerado quando quem chama é DONO
+  vendedorId: z.string().optional(),
+  // Com número: devolve também um código de pareamento (pra quem está no
+  // próprio celular e não tem como escanear o QR da tela).
+  numeroPareamento: z.string().optional(),
 })
 
-router.post('/assistente/config', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const usuarioId = req.proLaboreUser!.sub
+router.post('/assistente/conectar', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = conectarAssistenteSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
-  const { papel, vendedorId } = req.proLaboreUser!
-  const vendedorIdAlvo = papel === 'DONO' ? parse.data.vendedorId : vendedorId
-  if (!vendedorIdAlvo) {
-    res.status(400).json({ error: 'Informe de qual vendedor é esse número' })
+  if (!evolutionConfigurada()) {
+    res.status(503).json({ error: 'O servidor do WhatsApp ainda não foi configurado (EVOLUTION_API_URL / EVOLUTION_API_KEY na Vercel).' })
     return
   }
-  const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorIdAlvo, usuarioId } })
-  if (!vendedor) {
-    res.status(404).json({ error: 'Vendedor não encontrado' })
+  const vendedor = await resolverVendedorDoAssistente(req, res, parse.data.vendedorId)
+  if (!vendedor) return
+  const numeroPareamento = parse.data.numeroPareamento?.replace(/\D/g, '')
+  if (numeroPareamento && (numeroPareamento.length < 10 || numeroPareamento.length > 15)) {
+    res.status(400).json({ error: 'Número inválido — use DDI + DDD + número, ex.: 55 91 98888-7777' })
     return
   }
 
+  const existente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id } })
+  const instancia = existente?.instancia ?? `aries-${vendedor.id}`
+  const webhookSegredo = existente?.webhookSegredo ?? randomBytes(24).toString('hex')
   const assistente = await prisma.assistenteComercial.upsert({
-    where: { vendedorId: vendedorIdAlvo },
-    update: { numeroWhatsapp: parse.data.numeroWhatsapp, nomeExibicao: parse.data.nomeExibicao, status: 'CONECTADO' },
-    create: { vendedorId: vendedorIdAlvo, numeroWhatsapp: parse.data.numeroWhatsapp, nomeExibicao: parse.data.nomeExibicao, status: 'CONECTADO' },
-    select: ASSISTENTE_SELECT,
+    where: { vendedorId: vendedor.id },
+    update: { instancia, webhookSegredo },
+    create: { vendedorId: vendedor.id, instancia, webhookSegredo },
   })
 
-  const jaTemConversas = await prisma.assistenteConversa.count({ where: { assistenteId: assistente.id } })
-  if (jaTemConversas === 0) {
-    await semearConversasExemplo(assistente.id, vendedor.nome)
+  try {
+    const estado = await estadoInstanciaWhatsapp(instancia)
+    if (estado === 'open') {
+      await configurarWebhookWhatsapp(instancia, urlWebhookAssistente(req, webhookSegredo))
+      await marcarAssistenteConectado(assistente)
+      res.json({ status: 'CONECTADO', qrBase64: null, pairingCode: null })
+      return
+    }
+    const codigo = await prepararConexaoWhatsapp(instancia, urlWebhookAssistente(req, webhookSegredo), numeroPareamento)
+    await prisma.assistenteComercial.update({ where: { id: assistente.id }, data: { status: 'AGUARDANDO_QR' } })
+    res.json({ status: 'AGUARDANDO_QR', ...codigo })
+  } catch (e) {
+    res.status(502).json({ error: mensagemErroWhatsapp(e) })
   }
+})
 
-  res.json(assistente)
+// Consultado a cada poucos segundos enquanto o QR está na tela — é o que
+// confirma a conexão mesmo se o webhook de conexão não chegar.
+router.get('/assistente/conexao', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
+  if (!vendedor) return
+  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id } })
+  if (!assistente?.instancia || !evolutionConfigurada()) {
+    res.json({ status: assistente?.status ?? 'NAO_CONECTADO' })
+    return
+  }
+  try {
+    const estado = await estadoInstanciaWhatsapp(assistente.instancia)
+    if (estado === 'open') {
+      if (assistente.status !== 'CONECTADO' || !assistente.numeroWhatsapp) await marcarAssistenteConectado(assistente)
+      res.json({ status: 'CONECTADO' })
+      return
+    }
+    if (assistente.status === 'CONECTADO') {
+      await prisma.assistenteComercial.update({ where: { id: assistente.id }, data: { status: 'DESCONECTADO' } })
+      res.json({ status: 'DESCONECTADO' })
+      return
+    }
+    res.json({ status: assistente.status })
+  } catch (e) {
+    res.json({ status: assistente.status, aviso: mensagemErroWhatsapp(e) })
+  }
 })
 
 router.delete('/assistente/config', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const usuarioId = req.proLaboreUser!.sub
-  const vendedorIdAlvo = assistenteVendedorIdAlvo(req, req.query.vendedorId as string | undefined)
-  if (!vendedorIdAlvo) {
-    res.status(400).json({ error: 'Informe de qual vendedor é esse assistente' })
+  const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
+  if (!vendedor) return
+  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id } })
+  if (!assistente) {
+    res.json({ ok: true })
     return
   }
-  const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorIdAlvo, usuarioId } })
-  if (!vendedor) {
-    res.status(404).json({ error: 'Vendedor não encontrado' })
-    return
+  if (assistente.instancia && evolutionConfigurada()) {
+    try {
+      await removerInstanciaWhatsapp(assistente.instancia)
+    } catch (e) {
+      res.status(502).json({ error: mensagemErroWhatsapp(e) })
+      return
+    }
   }
-  // Só desconecta (reseta status/número) — não apaga o histórico de
-  // conversas, igual um desligar de WhatsApp de verdade não apaga suas
-  // conversas antigas.
-  await prisma.assistenteComercial.updateMany({ where: { vendedorId: vendedorIdAlvo }, data: { status: 'NAO_CONECTADO', numeroWhatsapp: null } })
+  // Desconecta sem apagar o histórico de conversas nem o roteiro. O segredo
+  // do webhook é trocado — evento atrasado da sessão antiga cai no vazio.
+  await prisma.assistenteComercial.update({
+    where: { id: assistente.id },
+    data: { status: 'NAO_CONECTADO', numeroWhatsapp: null, fotoPerfilUrl: null, conectadoEm: null, webhookSegredo: randomBytes(24).toString('hex') },
+  })
   res.json({ ok: true })
 })
 
+// Webhook público chamado pelo servidor Evolution. O segredo na URL é a
+// autenticação (gerado por assistente, trocado a cada desconexão).
+router.post('/assistente/webhook/:segredo', async (req: Request, res: Response) => {
+  try {
+    const status = await processarWebhookAssistente(String(req.params.segredo), req.body)
+    res.status(status).json({ ok: status === 200 })
+  } catch (e) {
+    logger.error({ err: e }, 'assistente: erro no webhook')
+    // 200 mesmo assim: reenvio em massa do mesmo evento não ajuda.
+    res.json({ ok: false })
+  }
+})
+
+async function carregarConversaAutorizada(req: Request, res: Response) {
+  const conversa = await prisma.assistenteConversa.findUnique({
+    where: { id: String(req.params.id) },
+    include: { assistente: { include: { vendedor: { select: { id: true, nome: true, usuarioId: true } } } } },
+  })
+  const { sub: usuarioId, papel, vendedorId } = req.proLaboreUser!
+  if (!conversa || conversa.assistente.vendedor.usuarioId !== usuarioId) {
+    res.status(404).json({ error: 'Conversa não encontrada' })
+    return null
+  }
+  if ((papel === 'VENDEDOR' || papel === 'SUPERVISOR') && conversa.assistente.vendedorId !== vendedorId) {
+    res.status(403).json({ error: 'Acesso restrito' })
+    return null
+  }
+  return conversa
+}
+
+const CONVERSA_LISTA_INCLUDE = {
+  lead: { select: { id: true, nomeCliente: true, estagio: true } },
+  mensagens: { orderBy: { criadoEm: 'desc' as const }, take: 1 },
+  _count: { select: { mensagens: true } },
+}
+
 router.get('/assistente/conversas', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const usuarioId = req.proLaboreUser!.sub
-  const vendedorIdAlvo = assistenteVendedorIdAlvo(req, req.query.vendedorId as string | undefined)
-  if (!vendedorIdAlvo) {
-    res.json([])
-    return
-  }
-  const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorIdAlvo, usuarioId } })
-  if (!vendedor) {
-    res.status(404).json({ error: 'Vendedor não encontrado' })
-    return
-  }
-  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedorIdAlvo } })
+  const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
+  if (!vendedor) return
+  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id } })
   if (!assistente) {
     res.json([])
     return
   }
-
-  const { tipo } = req.query
-  const where: { assistenteId: string; tipo?: string } = { assistenteId: assistente.id }
+  const { tipo, status, busca } = req.query
+  const where: Prisma.AssistenteConversaWhereInput = { assistenteId: assistente.id }
   if (typeof tipo === 'string' && ['SUPORTE', 'LEAD'].includes(tipo)) where.tipo = tipo
-
+  if (typeof status === 'string' && ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA', 'ENCERRADA'].includes(status)) where.status = status
+  if (typeof busca === 'string' && busca.trim()) {
+    const termo = busca.trim()
+    const digitos = termo.replace(/\D/g, '')
+    where.OR = [
+      { nomeContato: { contains: termo, mode: 'insensitive' } },
+      ...(digitos.length >= 3 ? [{ numeroContato: { contains: digitos } }] : []),
+    ]
+  }
   const conversas = await prisma.assistenteConversa.findMany({
     where,
-    include: {
-      lead: { select: { id: true, nomeCliente: true, estagio: true } },
-      mensagens: { orderBy: { criadoEm: 'desc' }, take: 1 },
-    },
+    include: CONVERSA_LISTA_INCLUDE,
     orderBy: { ultimaMensagemEm: 'desc' },
+    take: 200,
   })
   res.json(conversas)
 })
 
 router.get('/assistente/conversas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const conversa = await prisma.assistenteConversa.findUnique({
-    where: { id: String(req.params.id) },
+  const conversa = await carregarConversaAutorizada(req, res)
+  if (!conversa) return
+  const completa = await prisma.assistenteConversa.findUnique({
+    where: { id: conversa.id },
     include: {
-      assistente: { include: { vendedor: { select: { id: true, nome: true, usuarioId: true } } } },
       mensagens: { orderBy: { criadoEm: 'asc' } },
       lead: { select: { id: true, nomeCliente: true, estagio: true } },
     },
   })
-  const { sub: usuarioId, papel, vendedorId } = req.proLaboreUser!
-  if (!conversa || conversa.assistente.vendedor.usuarioId !== usuarioId) {
-    res.status(404).json({ error: 'Conversa não encontrada' })
-    return
-  }
-  if ((papel === 'VENDEDOR' || papel === 'SUPERVISOR') && conversa.assistente.vendedorId !== vendedorId) {
-    res.status(403).json({ error: 'Acesso restrito' })
-    return
-  }
-  res.json(conversa)
+  const cfg = lerConfigAssistente(conversa.assistente.configuracao)
+  const respostas = (completa?.respostas ?? {}) as Record<string, string>
+  res.json({
+    ...completa,
+    resumo: linhasResumoAssistente(cfg, respostas),
+    totalPerguntas: cfg.perguntas.length,
+  })
 })
 
-// Conversas de exemplo (contexto de venda de motos, igual ao resto dos
-// dados de demonstração do CRM) — só usadas pra popular a tela na primeira
-// conexão, nunca criam Lead de verdade no CRM (isso é o que a integração
-// real faria depois, quando a IA identificasse um lead qualificado).
-async function semearConversasExemplo(assistenteId: string, nomeVendedor: string) {
-  const agora = Date.now()
-  const minutosAtras = (m: number) => new Date(agora - m * 60_000)
+const enviarMensagemAssistenteSchema = z.object({ texto: z.string().trim().min(1, 'Mensagem vazia').max(4000) })
 
-  await prisma.assistenteConversa.create({
+// Vendedor/dono responde pela própria tela — sai pelo WhatsApp do vendedor
+// e conta como "assumiu a conversa" (o assistente para de responder).
+router.post('/assistente/conversas/:id/mensagens', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = enviarMensagemAssistenteSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const conversa = await carregarConversaAutorizada(req, res)
+  if (!conversa) return
+  const { assistente } = conversa
+  if (!assistente.instancia || assistente.status !== 'CONECTADO') {
+    res.status(409).json({ error: 'O WhatsApp desse vendedor não está conectado agora' })
+    return
+  }
+  const destino = conversa.jid ?? conversa.numeroContato
+  const registro = await prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: conversa.tipo === 'SUPORTE' ? 'ASSISTENTE' : 'VENDEDOR', texto: parse.data.texto } })
+  try {
+    const providerId = await enviarTextoWhatsapp(assistente.instancia, destino, parse.data.texto)
+    if (providerId) await prisma.assistenteMensagem.update({ where: { id: registro.id }, data: { providerId } }).catch(() => undefined)
+  } catch (e) {
+    await prisma.assistenteMensagem.delete({ where: { id: registro.id } })
+    res.status(502).json({ error: mensagemErroWhatsapp(e) })
+    return
+  }
+  const agora = new Date()
+  await prisma.assistenteConversa.update({
+    where: { id: conversa.id },
     data: {
-      assistenteId, tipo: 'SUPORTE', nomeContato: nomeVendedor, numeroContato: 'Você',
-      status: 'ENCERRADA', ultimaMensagemEm: minutosAtras(40),
-      mensagens: { create: [
-        { remetente: 'CONTATO', texto: 'Como eu classifico uma negociação como renegociação (R)?', criadoEm: minutosAtras(42) },
-        { remetente: 'ASSISTENTE', texto: 'No card do lead, dentro do CRM, tem dois botões "P" e "R" logo acima do "Avançar". Clique em "R" — isso já ajusta o teto de pró-labore e comissão dessa negociação, sem mexer no padrão da conta.', criadoEm: minutosAtras(41) },
-        { remetente: 'CONTATO', texto: 'Boa, obrigado!', criadoEm: minutosAtras(40) },
-      ] },
+      ultimaMensagemEm: agora,
+      ...(conversa.tipo === 'LEAD' && (conversa.status === 'ATIVA' || conversa.status === 'AGUARDANDO_VENDEDOR') && { status: 'ASSUMIDA', assumidaEm: agora }),
     },
   })
+  res.status(201).json(await prisma.assistenteMensagem.findUnique({ where: { id: registro.id } }))
+})
 
-  await prisma.assistenteConversa.create({
-    data: {
-      assistenteId, tipo: 'LEAD', nomeContato: 'Marcos Vinícius', numeroContato: '+55 91 98212-4471',
-      status: 'QUALIFICADO', ultimaMensagemEm: minutosAtras(18),
-      mensagens: { create: [
-        { remetente: 'CONTATO', texto: 'Oi, vi o anúncio da Pop 110 0km, ainda tem disponível?', criadoEm: minutosAtras(25) },
-        { remetente: 'ASSISTENTE', texto: 'Oi, Marcos! Tudo bem? Temos sim 👍 Pra eu já te passar as condições certas: você pretende dar entrada ou parcelar o valor cheio?', criadoEm: minutosAtras(24) },
-        { remetente: 'CONTATO', texto: 'Consigo dar uns 3 mil de entrada', criadoEm: minutosAtras(22) },
-        { remetente: 'ASSISTENTE', texto: 'Perfeito, com 3 mil de entrada as parcelas ficam bem mais em conta. Você já tem CPF aprovado em alguma financeira ou prefere que a gente já consulte por aqui mesmo?', criadoEm: minutosAtras(21) },
-        { remetente: 'CONTATO', texto: 'Pode consultar sim', criadoEm: minutosAtras(19) },
-        { remetente: 'ASSISTENTE', texto: 'Show! Já te encaminhei pro vendedor com todos esses detalhes — ele deve te chamar em instantes pra fechar e agendar a retirada. 🏍️', criadoEm: minutosAtras(18) },
-      ] },
-    },
-  })
+const acaoConversaSchema = z.object({ acao: z.enum(['ASSUMIR', 'DEVOLVER', 'ENCERRAR', 'NAO_E_LEAD', 'CRIAR_LEAD']) })
 
-  await prisma.assistenteConversa.create({
-    data: {
-      assistenteId, tipo: 'LEAD', nomeContato: 'Fernanda Rocha', numeroContato: '+55 91 99187-0325',
-      status: 'ATIVA', ultimaMensagemEm: minutosAtras(6),
-      mensagens: { create: [
-        { remetente: 'CONTATO', texto: 'Boa tarde, gostaria de saber sobre a CB 300', criadoEm: minutosAtras(9) },
-        { remetente: 'ASSISTENTE', texto: 'Boa tarde, Fernanda! Com certeza te ajudo. Essa moto seria pra uso no dia a dia ou você já trabalha com ela (app, entregas etc.)?', criadoEm: minutosAtras(8) },
-        { remetente: 'CONTATO', texto: 'É mais pro dia a dia mesmo, trabalho e lazer', criadoEm: minutosAtras(6) },
-      ] },
-    },
+router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = acaoConversaSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'Ação inválida' })
+    return
+  }
+  const conversa = await carregarConversaAutorizada(req, res)
+  if (!conversa) return
+  if (conversa.tipo !== 'LEAD') {
+    res.status(400).json({ error: 'Só conversas de lead têm essas ações' })
+    return
+  }
+  const agora = new Date()
+  const { acao } = parse.data
+  if (acao === 'ASSUMIR') {
+    await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ASSUMIDA', assumidaEm: conversa.assumidaEm ?? agora } })
+  } else if (acao === 'DEVOLVER') {
+    // Só dá pra devolver quem ainda não terminou o roteiro — o assistente
+    // continua da pergunta em que parou.
+    if (conversa.resultado) {
+      res.status(400).json({ error: 'Esse contato já terminou o roteiro — a conversa agora é com o vendedor' })
+      return
+    }
+    await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ATIVA' } })
+  } else if (acao === 'ENCERRAR') {
+    await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', encerradaEm: agora } })
+  } else if (acao === 'NAO_E_LEAD') {
+    await prisma.$transaction([
+      prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', resultado: 'NAO_E_LEAD', encerradaEm: agora } }),
+      prisma.assistenteContatoIgnorado.upsert({
+        where: { assistenteId_numero: { assistenteId: conversa.assistenteId, numero: conversa.numeroContato } },
+        update: { motivo: 'MARCADO_PELO_VENDEDOR' },
+        create: { assistenteId: conversa.assistenteId, numero: conversa.numeroContato, motivo: 'MARCADO_PELO_VENDEDOR' },
+      }),
+    ])
+  } else if (acao === 'CRIAR_LEAD') {
+    if (!conversa.leadId) {
+      const cfg = lerConfigAssistente(conversa.assistente.configuracao)
+      const leadId = await vincularOuCriarLeadAssistente(conversa.assistente.vendedor.usuarioId, conversa.assistente.vendedorId, cfg, conversa)
+      await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { leadId } })
+    }
+  }
+  const atualizada = await prisma.assistenteConversa.findUnique({ where: { id: conversa.id }, include: CONVERSA_LISTA_INCLUDE })
+  res.json(atualizada)
+})
+
+router.get('/assistente/ignorados', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
+  if (!vendedor) return
+  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { id: true } })
+  if (!assistente) {
+    res.json([])
+    return
+  }
+  res.json(await prisma.assistenteContatoIgnorado.findMany({ where: { assistenteId: assistente.id }, orderBy: { criadoEm: 'desc' }, take: 500 }))
+})
+
+router.delete('/assistente/ignorados/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const item = await prisma.assistenteContatoIgnorado.findUnique({
+    where: { id: String(req.params.id) },
+    include: { assistente: { include: { vendedor: { select: { usuarioId: true } } } } },
   })
-}
+  const { sub: usuarioId, papel, vendedorId } = req.proLaboreUser!
+  if (!item || item.assistente.vendedor.usuarioId !== usuarioId || ((papel === 'VENDEDOR' || papel === 'SUPERVISOR') && item.assistente.vendedorId !== vendedorId)) {
+    res.status(404).json({ error: 'Contato não encontrado' })
+    return
+  }
+  await prisma.assistenteContatoIgnorado.delete({ where: { id: item.id } })
+  res.json({ ok: true })
+})
+
+// Simulador: roda o mesmo roteiro da conversa real, sem WhatsApp e sem
+// gravar nada — usa a configuração que está na tela (mesmo sem salvar).
+const simularAssistenteSchema = z.object({
+  vendedorId: z.string().optional(),
+  configuracao: configAssistenteSchema.optional(),
+  estado: z.object({ etapa: z.number().int().min(0), respostas: z.record(z.string(), z.string()) }).nullable(),
+  texto: z.string().trim().min(1).max(2000),
+  nomeContato: z.string().max(80).optional(),
+})
+
+router.post('/assistente/simular', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = simularAssistenteSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const vendedor = await resolverVendedorDoAssistente(req, res, parse.data.vendedorId)
+  if (!vendedor) return
+  let salva: unknown = parse.data.configuracao
+  if (!salva) salva = (await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { configuracao: true } }))?.configuracao
+  const cfg = lerConfigAssistente(salva)
+  const ctx = { nomeContato: parse.data.nomeContato ?? 'Cliente Teste', vendedor: vendedor.nome, empresa: cfg.nomeEmpresa }
+  const passo = parse.data.estado
+    ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx)
+    : iniciarRoteiroAssistente(cfg, ctx, parse.data.texto)
+  res.json({
+    ...passo,
+    resumo: passo.desfecho ? linhasResumoAssistente(cfg, passo.estado.respostas) : [],
+    gatilho: parse.data.estado ? null : casaGatilhoAssistente(parse.data.texto, cfg.gatilhos),
+  })
+})
+
+// Painel de desempenho do assistente num período (dias corridos no horário
+// de Brasília, terminando hoje).
+router.get('/assistente/resumo', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
+  if (!vendedor) return
+  const dias = Math.min(365, Math.max(1, Number(req.query.dias) || 30))
+  const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { id: true, configuracao: true } })
+  const hoje = diaBrasilia(new Date())
+  const inicioDia = new Date(hoje.getTime() - (dias - 1) * 86_400_000)
+  const inicio = inicioDoDiaBrasilia(inicioDia)
+  const [conversas, aguardandoAgora] = assistente
+    ? await Promise.all([
+      prisma.assistenteConversa.findMany({
+        where: { assistenteId: assistente.id, tipo: 'LEAD', criadoEm: { gte: inicio } },
+        select: {
+          criadoEm: true, status: true, resultado: true, origem: true, etapaRoteiro: true, ultimaMensagemEm: true,
+          aguardandoVendedorEm: true, assumidaEm: true, leadId: true, lead: { select: { estagio: true } },
+        },
+      }),
+      prisma.assistenteConversa.count({ where: { assistenteId: assistente.id, tipo: 'LEAD', status: 'AGUARDANDO_VENDEDOR' } }),
+    ])
+    : [[], 0]
+  res.json(montarResumoAssistente({ conversas, aguardandoAgora, dias, inicioDia, cfg: lerConfigAssistente(assistente?.configuracao) }))
+})
 
 // ============ REUNIÕES E ANOTAÇÕES ============
 // Bloco pessoal do usuário logado — reuniões/aulas/vídeos que ele quer

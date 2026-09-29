@@ -1,260 +1,200 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { proLaboreApi, AssistenteComercial, AssistenteConversa, AssistenteConversaDetalhe, Vendedor } from '@/lib/proLaboreApi'
+import { useEffect, useState } from 'react'
+import { proLaboreApi, type ConfigAssistenteResposta, type ResumoAssistente, type Vendedor } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
+import { Conexao } from './_componentes/Conexao'
+import { AtendimentosPorDia, DesfechoEOrigem, FunilCrm, FunilRoteiro, HorarioChegada, KpisAssistente } from './_componentes/Desempenho'
+import { Conversas } from './_componentes/Conversas'
+import { Roteiro } from './_componentes/Roteiro'
+import { nomeProprio } from './_componentes/util'
 
-const ABAS = [
-  { valor: 'LEAD' as const, rotulo: 'Leads' },
-  { valor: 'SUPORTE' as const, rotulo: 'Suporte' },
+type Aba = 'visao' | 'conversas' | 'roteiro'
+const ABAS: Array<{ valor: Aba; rotulo: string }> = [
+  { valor: 'visao', rotulo: 'Desempenho' },
+  { valor: 'conversas', rotulo: 'Conversas' },
+  { valor: 'roteiro', rotulo: 'Roteiro e teste' },
 ]
+const PERIODOS = [7, 30, 90] as const
 
-const STATUS_CONVERSA_LABEL: Record<string, string> = {
-  ATIVA: 'Em andamento',
-  QUALIFICADO: 'Qualificado',
-  ENCERRADA: 'Encerrada',
-}
-const STATUS_CONVERSA_CLASSE: Record<string, string> = {
-  ATIVA: 'atencao',
-  QUALIFICADO: 'bom',
-  ENCERRADA: 'neutro',
-}
-
-function iniciais(nome: string) {
-  return nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
-}
-
-function formatarTempoRelativo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const min = Math.floor(diffMs / 60_000)
-  if (min < 1) return 'agora'
-  if (min < 60) return `há ${min}min`
-  const horas = Math.floor(min / 60)
-  if (horas < 24) return `há ${horas}h`
-  const dias = Math.floor(horas / 24)
-  return `há ${dias}d`
-}
+const COMO_FUNCIONA = [
+  { titulo: 'Lead novo chama', texto: 'Veio de anúncio, mandou a frase da campanha ou é a primeira conversa com o vendedor.' },
+  { titulo: 'Assistente qualifica', texto: 'Se apresenta como assistente e faz as perguntas do roteiro, uma por vez.' },
+  { titulo: 'Vai pro CRM + aviso', texto: 'O lead é criado com as respostas e o vendedor recebe o resumo no próprio WhatsApp.' },
+  { titulo: 'Vendedor assume', texto: 'Assim que o vendedor responde, o assistente sai de cena naquela conversa.' },
+]
 
 export default function ProLaboreAssistentePage() {
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel === 'DONO'
 
-  // Só o dono escolhe de quem quer ver o assistente — vendedor/supervisor
-  // só têm acesso ao próprio (o backend já restringe isso; aqui é só pra
-  // saber se mostra o seletor ou não).
-  const [vendedores, setVendedores] = useState<Vendedor[]>([])
-  const [vendedorSelecionadoId, setVendedorSelecionadoId] = useState('')
-
-  const [carregando, setCarregando] = useState(true)
-  const [assistente, setAssistente] = useState<AssistenteComercial | null>(null)
-  const [vendedorAtual, setVendedorAtual] = useState<{ id: string; nome: string } | null>(null)
-
-  const [numeroInput, setNumeroInput] = useState('')
-  const [nomeInput, setNomeInput] = useState('')
-  const [conectando, setConectando] = useState(false)
+  const [vendedores, setVendedores] = useState<Vendedor[] | null>(null)
+  const [vendedorEscolhido, setVendedorEscolhido] = useState('')
+  const [aba, setAba] = useState<Aba>('visao')
+  const [dias, setDias] = useState<(typeof PERIODOS)[number]>(30)
+  const [versao, setVersao] = useState(0)
+  const [config, setConfig] = useState<{ chave: string; dados: ConfigAssistenteResposta } | null>(null)
+  const [resumo, setResumo] = useState<{ chave: string; dados: ResumoAssistente } | null>(null)
   const [erro, setErro] = useState('')
-
-  const [abaAtiva, setAbaAtiva] = useState<'LEAD' | 'SUPORTE'>('LEAD')
-  const [conversas, setConversas] = useState<AssistenteConversa[]>([])
-  const [conversaSelecionadaId, setConversaSelecionadaId] = useState<string | null>(null)
-  const [conversaDetalhe, setConversaDetalhe] = useState<AssistenteConversaDetalhe | null>(null)
 
   useEffect(() => {
     if (!isDono) return
-    proLaboreApi.vendedores.listar().then(vs => {
-      setVendedores(vs)
-      setVendedorSelecionadoId(atual => atual || vs[0]?.id || '')
-    })
+    proLaboreApi.vendedores.listar().then(vs => setVendedores(vs.filter(v => v.ativo))).catch(() => setVendedores([]))
   }, [isDono])
 
-  const vendedorIdConsulta = isDono ? (vendedorSelecionadoId || undefined) : undefined
-
-  const carregar = useCallback(() => {
-    if (isDono && !vendedorSelecionadoId) { setCarregando(false); return }
-    setCarregando(true)
-    proLaboreApi.assistente.config(vendedorIdConsulta)
-      .then(({ assistente, vendedor }) => { setAssistente(assistente); setVendedorAtual(vendedor) })
-      .finally(() => setCarregando(false))
-  }, [isDono, vendedorSelecionadoId, vendedorIdConsulta])
-
-  useEffect(() => { carregar() }, [carregar])
+  const vendedorId = isDono ? (vendedorEscolhido || vendedores?.[0]?.id) : undefined
+  const pronto = !isDono || !!vendedorId
+  const chaveConfig = `${vendedorId ?? 'eu'}|${versao}`
 
   useEffect(() => {
-    setConversaSelecionadaId(null)
-    if (!assistente || assistente.status !== 'CONECTADO') { setConversas([]); return }
-    proLaboreApi.assistente.conversas({ vendedorId: vendedorIdConsulta, tipo: abaAtiva }).then(cs => {
-      setConversas(cs)
-      if (cs.length > 0) setConversaSelecionadaId(cs[0].id)
-    })
-  }, [assistente, abaAtiva, vendedorIdConsulta])
+    if (!pronto) return
+    let cancelado = false
+    proLaboreApi.assistente.config(vendedorId)
+      .then(dados => { if (!cancelado) { setConfig({ chave: chaveConfig, dados }); setErro('') } })
+      .catch(e => { if (!cancelado) setErro((e as Error).message) })
+    return () => { cancelado = true }
+  }, [pronto, vendedorId, chaveConfig])
 
+  const chaveResumo = `${vendedorId ?? 'eu'}|${dias}|${versao}`
   useEffect(() => {
-    if (!conversaSelecionadaId) { setConversaDetalhe(null); return }
-    proLaboreApi.assistente.conversa(conversaSelecionadaId).then(setConversaDetalhe)
-  }, [conversaSelecionadaId])
+    if (!pronto || aba !== 'visao') return
+    let cancelado = false
+    proLaboreApi.assistente.resumo({ vendedorId, dias })
+      .then(dados => { if (!cancelado) setResumo({ chave: chaveResumo, dados }) })
+      .catch(() => undefined)
+    return () => { cancelado = true }
+  }, [pronto, aba, vendedorId, dias, chaveResumo])
 
-  async function conectar(e: React.FormEvent) {
-    e.preventDefault()
-    setErro('')
-    if (!numeroInput.trim()) return
-    setConectando(true)
-    try {
-      await proLaboreApi.assistente.conectar({ numeroWhatsapp: numeroInput.trim(), nomeExibicao: nomeInput.trim() || undefined, vendedorId: vendedorIdConsulta })
-      setNumeroInput('')
-      setNomeInput('')
-      carregar()
-    } catch (err) {
-      setErro(err instanceof Error ? err.message : 'Erro ao conectar o número')
-    } finally {
-      setConectando(false)
-    }
-  }
+  // Mantém os números da fila ("esperando você") atualizados enquanto a
+  // aba está aberta.
+  useEffect(() => {
+    const id = setInterval(() => setVersao(v => v + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
-  async function desconectar() {
-    if (!confirm('Desconectar esse número do assistente? O histórico de conversas fica guardado — só a conexão é desfeita.')) return
-    await proLaboreApi.assistente.desconectar(vendedorIdConsulta)
-    carregar()
-  }
-
+  const dados = config?.dados
+  const doVendedorAtual = !!config && config.chave.startsWith(`${vendedorId ?? 'eu'}|`)
+  const assistente = doVendedorAtual ? dados?.assistente ?? null : null
+  const nomeVendedor = nomeProprio((doVendedorAtual && dados?.vendedor?.nome) || vendedores?.find(v => v.id === vendedorId)?.nome || usuario?.nome || 'vendedor')
   const conectado = assistente?.status === 'CONECTADO'
+  const resumoAtual = resumo && resumo.chave.startsWith(`${vendedorId ?? 'eu'}|`) ? resumo.dados : null
+  const recarregandoResumo = !!resumo && resumo.chave !== chaveResumo
+  const atualizar = () => setVersao(v => v + 1)
 
   return (
-    <div>
+    <div className="pl-as">
       <PageHeader
         eyebrow="Operação"
         title="Assistente Comercial"
-        subtitle="Um assistente de WhatsApp por vendedor — dá suporte pra quem já é da equipe e pré-atende os leads que chegam de campanha"
-        actions={conectado && (
-          <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar}>Desconectar</button>
-        )}
+        subtitle="Um assistente no WhatsApp de cada vendedor: pré-atende os leads novos, qualifica com o seu roteiro, joga no CRM e avisa o vendedor na hora certa"
       />
 
-      {isDono && vendedores.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+      {isDono && vendedores && vendedores.length > 0 && (
+        <div className="pl-as-seletor">
           <span className="pl-hint">Vendedor</span>
-          <select className="pl-select-chip active" value={vendedorSelecionadoId} onChange={e => setVendedorSelecionadoId(e.target.value)}>
+          <select className="pl-select-chip active" value={vendedorId} onChange={e => setVendedorEscolhido(e.target.value)} aria-label="Escolher vendedor">
             {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
           </select>
         </div>
       )}
 
-      {carregando && <div className="pl-hint" style={{ marginTop: 16 }}>Carregando...</div>}
-
-      {!carregando && isDono && vendedores.length === 0 && (
+      {isDono && vendedores && vendedores.length === 0 ? (
         <div className="pl-empty pl-card" style={{ marginTop: 16 }}>
           <div className="pl-emoji">🧑‍💼</div>
           <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Cadastre um vendedor primeiro</h3>
-          <p style={{ marginTop: 6 }}>O Assistente Comercial é pessoal — cada vendedor conecta o próprio número.</p>
+          <p style={{ margin: '6px 0 0' }}>Cada vendedor tem o próprio assistente, ligado ao WhatsApp dele.</p>
         </div>
-      )}
-
-      {!carregando && (!isDono || vendedorSelecionadoId) && !conectado && (
-        <div className="pl-card" style={{ maxWidth: 560, marginTop: 16 }}>
-          <div className="pl-card-head">
-            <div>
-              <div className="pl-card-title">Conectar {isDono ? `o número de ${vendedorAtual?.nome ?? 'vendedor'}` : 'seu WhatsApp'}</div>
-              <div className="pl-card-sub">O mesmo número atende dois papéis: dá suporte quando {isDono ? 'o próprio vendedor' : 'você'} escreve, e pré-qualifica quem chega de campanha.</div>
-            </div>
-          </div>
-          <form onSubmit={conectar} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div className="pl-field">
-              <label>Número de WhatsApp</label>
-              <input className="pl-input" placeholder="+55 91 9XXXX-XXXX" value={numeroInput} onChange={e => setNumeroInput(e.target.value)} />
-            </div>
-            <div className="pl-field">
-              <label>Nome de exibição (opcional)</label>
-              <input className="pl-input" placeholder="Ex: Ana — Vendas" value={nomeInput} onChange={e => setNomeInput(e.target.value)} />
-            </div>
-            {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
-            <div>
-              <button type="submit" className="pl-btn pl-btn-primary" disabled={conectando}>{conectando ? 'Conectando...' : 'Conectar'}</button>
-            </div>
-          </form>
-          <div className="pl-hint" style={{ marginTop: 14, lineHeight: 1.5 }}>
-            A conexão real com o WhatsApp Business API ainda depende da mesma conta Meta usada no Social Media. Por enquanto, conectar aqui simula a ligação e povoa a tela com conversas de exemplo, pra já dar pra testar o fluxo.
-          </div>
-        </div>
-      )}
-
-      {!carregando && conectado && assistente && (
+      ) : erro ? (
+        <div className="pl-alert pl-alert-error" style={{ marginTop: 16 }}>{erro}</div>
+      ) : !dados || !doVendedorAtual ? (
+        <div className="pl-hint" style={{ marginTop: 16 }}>Carregando…</div>
+      ) : (
         <>
-          <div className="pl-card" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div className="pl-chat-item-avatar" style={{ width: 40, height: 40, fontSize: 14 }}>
-              {iniciais(assistente.nomeExibicao || vendedorAtual?.nome || '?')}
+          <Conexao
+            key={`conexao-${vendedorId ?? 'eu'}`}
+            assistente={assistente}
+            vendedorId={vendedorId}
+            nomeVendedor={nomeVendedor}
+            servidorConfigurado={dados.servidorConfigurado}
+            isDono={isDono}
+            onAtualizar={atualizar}
+          />
+
+          {!conectado && (
+            <ol className="pl-as-como">
+              {COMO_FUNCIONA.map((p, i) => (
+                <li key={p.titulo}>
+                  <span className="pl-sv-num">{String(i + 1).padStart(2, '0')}</span>
+                  <b>{p.titulo}</b>
+                  <span>{p.texto}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <div className="pl-as-abas">
+            <div className="pl-sv-tabs" role="tablist" aria-label="Seções do assistente">
+              {ABAS.map(a => (
+                <button key={a.valor} type="button" role="tab" aria-selected={aba === a.valor} className={aba === a.valor ? 'ativo' : ''} onClick={() => setAba(a.valor)}>
+                  {a.rotulo}
+                  {a.valor === 'conversas' && (resumoAtual?.totais.aguardandoAgora ?? 0) > 0 && <span className="pl-as-badge">{resumoAtual!.totais.aguardandoAgora}</span>}
+                </button>
+              ))}
             </div>
-            <div style={{ flex: 1 }}>
-              <div className="pl-card-title">{assistente.nomeExibicao || vendedorAtual?.nome}</div>
-              <div className="pl-card-sub pl-mono">{assistente.numeroWhatsapp}</div>
-            </div>
-            <span className="pl-status-badge bom">Conectado (simulado)</span>
+            {aba === 'visao' && (
+              <div className="pl-as-periodos" role="group" aria-label="Período">
+                {PERIODOS.map(p => (
+                  <button key={p} type="button" className={`pl-chip ${dias === p ? 'active' : ''}`} onClick={() => setDias(p)}>{p} dias</button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="pl-period-row" style={{ marginTop: 24, marginBottom: 16 }}>
-            {ABAS.map(a => (
-              <button key={a.valor} type="button" className={`pl-chip ${abaAtiva === a.valor ? 'active' : ''}`} onClick={() => setAbaAtiva(a.valor)}>
-                {a.rotulo}
-              </button>
-            ))}
-          </div>
-
-          <div className="pl-grid-2">
-            <div className="pl-card" style={{ padding: '14px 10px' }}>
-              {conversas.length === 0 ? (
-                <div className="pl-empty">
-                  <div className="pl-emoji">💬</div>
-                  Nenhuma conversa de {abaAtiva === 'LEAD' ? 'lead' : 'suporte'} ainda.
+          {aba === 'visao' && (
+            !resumoAtual ? <div className="pl-hint">Carregando…</div> : (
+              <div className="pl-as-visao">
+                <KpisAssistente resumo={resumoAtual} />
+                {resumoAtual.totais.aguardandoAgora > 0 && (
+                  <button type="button" className="pl-as-fila" onClick={() => setAba('conversas')}>
+                    <b>{resumoAtual.totais.aguardandoAgora} lead{resumoAtual.totais.aguardandoAgora > 1 ? 's' : ''} esperando resposta</b>
+                    <span>Quanto antes o vendedor responder, maior a chance de venda — abrir conversas →</span>
+                  </button>
+                )}
+                <div className="pl-sv-grid pl-sv-grid-2">
+                  <AtendimentosPorDia resumo={resumoAtual} recarregando={recarregandoResumo} />
+                  <FunilRoteiro resumo={resumoAtual} recarregando={recarregandoResumo} />
                 </div>
-              ) : (
-                <div className="pl-chat-list">
-                  {conversas.map(c => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className={`pl-chat-item ${conversaSelecionadaId === c.id ? 'active' : ''}`}
-                      onClick={() => setConversaSelecionadaId(c.id)}
-                    >
-                      <div className="pl-chat-item-avatar">{iniciais(c.nomeContato)}</div>
-                      <div className="pl-chat-item-body">
-                        <div className="pl-chat-item-top">
-                          <span className="pl-chat-item-name">{c.nomeContato}</span>
-                          <span className="pl-chat-item-time">{formatarTempoRelativo(c.ultimaMensagemEm)}</span>
-                        </div>
-                        <div className="pl-chat-item-snippet">{c.mensagens[0]?.texto ?? '—'}</div>
-                        <span className={`pl-status-badge ${STATUS_CONVERSA_CLASSE[c.status]}`} style={{ marginTop: 6 }}>{STATUS_CONVERSA_LABEL[c.status]}</span>
-                      </div>
-                    </button>
-                  ))}
+                <DesfechoEOrigem resumo={resumoAtual} recarregando={recarregandoResumo} />
+                <div className="pl-sv-grid pl-sv-grid-2-eq">
+                  <HorarioChegada resumo={resumoAtual} recarregando={recarregandoResumo} />
+                  <FunilCrm resumo={resumoAtual} recarregando={recarregandoResumo} />
                 </div>
-              )}
-            </div>
+              </div>
+            )
+          )}
 
-            <div className="pl-card">
-              {!conversaDetalhe ? (
-                <div className="pl-empty">Selecione uma conversa pra ver o histórico.</div>
-              ) : (
-                <>
-                  <div className="pl-card-head">
-                    <div>
-                      <div className="pl-card-title">{conversaDetalhe.nomeContato}</div>
-                      <div className="pl-card-sub pl-mono">{conversaDetalhe.numeroContato}</div>
-                    </div>
-                    <span className={`pl-status-badge ${STATUS_CONVERSA_CLASSE[conversaDetalhe.status]}`}>{STATUS_CONVERSA_LABEL[conversaDetalhe.status]}</span>
-                  </div>
-                  <div className="pl-chat-thread">
-                    {conversaDetalhe.mensagens.map(m => (
-                      <div key={m.id} className={`pl-chat-bubble-row ${m.remetente === 'ASSISTENTE' ? 'assistente' : 'contato'}`}>
-                        <div className="pl-chat-bubble">
-                          {m.texto}
-                          <span className="pl-chat-bubble-time">{new Date(m.criadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          {aba === 'conversas' && (
+            <Conversas
+              key={`conversas-${vendedorId ?? 'eu'}`}
+              vendedorId={vendedorId}
+              conectado={conectado}
+              nomeVendedor={nomeVendedor}
+              focoInicial={(resumoAtual?.totais.aguardandoAgora ?? 0) > 0 ? 'AGUARDANDO_VENDEDOR' : ''}
+              onMudou={atualizar}
+            />
+          )}
+
+          {aba === 'roteiro' && (
+            <Roteiro
+              key={`roteiro-${vendedorId ?? 'eu'}`}
+              vendedorId={vendedorId}
+              salva={assistente?.configuracao ?? dados.configuracaoPadrao}
+              padrao={dados.configuracaoPadrao}
+              nomeVendedor={nomeVendedor}
+              onSalvo={atualizar}
+            />
+          )}
         </>
       )}
     </div>

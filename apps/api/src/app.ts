@@ -86,6 +86,10 @@ app.use(rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, code: 'RATE_LIMIT', message: 'Muitas requisições. Tente novamente em breve.' },
+  // Webhook do WhatsApp chega sempre do mesmo IP (o servidor Evolution) e
+  // em rajada quando vários leads escrevem juntos — é autenticado pelo
+  // segredo na URL, não pelo limite.
+  skip: req => req.path.startsWith('/pro-labore/assistente/webhook/'),
 }))
 
 // Stricter rate limit for auth endpoints

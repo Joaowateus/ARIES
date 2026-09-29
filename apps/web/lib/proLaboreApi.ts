@@ -505,19 +505,36 @@ export const proLaboreApi = {
   },
   assistente: {
     config: (vendedorId?: string) =>
-      request<{ assistente: AssistenteComercial | null; vendedor: { id: string; nome: string } | null }>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
-    conectar: (data: { numeroWhatsapp: string; nomeExibicao?: string; vendedorId?: string }) =>
-      request<AssistenteComercial>('/pro-labore/assistente/config', { method: 'POST', body: JSON.stringify(data) }),
+      request<ConfigAssistenteResposta>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
+    salvar: (data: { vendedorId?: string; atendimentoAutomatico?: boolean; configuracao?: ConfigRoteiroAssistente }) =>
+      request<AssistenteComercial>('/pro-labore/assistente/config', { method: 'PUT', body: JSON.stringify(data) }),
+    conectar: (data: { vendedorId?: string; numeroPareamento?: string }) =>
+      request<ConexaoAssistente>('/pro-labore/assistente/conectar', { method: 'POST', body: JSON.stringify(data) }),
+    conexao: (vendedorId?: string) =>
+      request<{ status: StatusAssistente; aviso?: string }>(`/pro-labore/assistente/conexao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     desconectar: (vendedorId?: string) =>
       request<{ ok: boolean }>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`, { method: 'DELETE' }),
-    conversas: (params?: { vendedorId?: string; tipo?: 'SUPORTE' | 'LEAD' }) => {
+    conversas: (params?: { vendedorId?: string; tipo?: TipoConversaAssistente; status?: StatusConversaAssistente; busca?: string }) => {
       const qs = new URLSearchParams()
       if (params?.vendedorId) qs.set('vendedorId', params.vendedorId)
       if (params?.tipo) qs.set('tipo', params.tipo)
+      if (params?.status) qs.set('status', params.status)
+      if (params?.busca) qs.set('busca', params.busca)
       const s = qs.toString()
       return request<AssistenteConversa[]>(`/pro-labore/assistente/conversas${s ? `?${s}` : ''}`)
     },
     conversa: (id: string) => request<AssistenteConversaDetalhe>(`/pro-labore/assistente/conversas/${id}`),
+    enviar: (id: string, texto: string) =>
+      request<AssistenteMensagem>(`/pro-labore/assistente/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto }) }),
+    acao: (id: string, acao: AcaoConversaAssistente) =>
+      request<AssistenteConversa>(`/pro-labore/assistente/conversas/${id}/acao`, { method: 'POST', body: JSON.stringify({ acao }) }),
+    resumo: (params: { vendedorId?: string; dias: number }) =>
+      request<ResumoAssistente>(`/pro-labore/assistente/resumo?dias=${params.dias}${params.vendedorId ? `&vendedorId=${params.vendedorId}` : ''}`),
+    simular: (data: { vendedorId?: string; configuracao?: ConfigRoteiroAssistente; estado: EstadoRoteiroAssistente | null; texto: string; nomeContato?: string }) =>
+      request<SimulacaoAssistente>('/pro-labore/assistente/simular', { method: 'POST', body: JSON.stringify(data) }),
+    ignorados: (vendedorId?: string) =>
+      request<ContatoIgnoradoAssistente[]>(`/pro-labore/assistente/ignorados${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
+    removerIgnorado: (id: string) => request<{ ok: boolean }>(`/pro-labore/assistente/ignorados/${id}`, { method: 'DELETE' }),
   },
   planoCrescimento: {
     obter: () => request<PlanoCrescimento>('/pro-labore/plano-crescimento'),
@@ -856,10 +873,36 @@ export type AnaliseSocialMedia =
 
 // --- Assistente Comercial (WhatsApp) ---
 
-export type StatusAssistente = 'NAO_CONECTADO' | 'PENDENTE' | 'CONECTADO'
+export type StatusAssistente = 'NAO_CONECTADO' | 'AGUARDANDO_QR' | 'CONECTADO' | 'DESCONECTADO'
 export type TipoConversaAssistente = 'SUPORTE' | 'LEAD'
-export type StatusConversaAssistente = 'ATIVA' | 'QUALIFICADO' | 'ENCERRADA'
-export type RemetenteMensagemAssistente = 'CONTATO' | 'ASSISTENTE'
+export type StatusConversaAssistente = 'ATIVA' | 'AGUARDANDO_VENDEDOR' | 'ASSUMIDA' | 'ENCERRADA'
+export type ResultadoConversaAssistente = 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU' | 'NAO_E_LEAD'
+export type OrigemConversaAssistente = 'ANUNCIO' | 'GATILHO' | 'CONTATO_NOVO'
+export type RemetenteMensagemAssistente = 'CONTATO' | 'ASSISTENTE' | 'VENDEDOR'
+export type AcaoConversaAssistente = 'ASSUMIR' | 'DEVOLVER' | 'ENCERRAR' | 'NAO_E_LEAD' | 'CRIAR_LEAD'
+export type CampoLeadAssistente = 'modeloInteresse' | 'formaPagamento' | 'valorEntrada' | 'veiculoTroca' | 'cidade' | 'melhorHorario' | 'nomeCompleto' | 'outro'
+
+export interface PerguntaRoteiroAssistente {
+  id: string
+  rotulo: string
+  texto: string
+  campo: CampoLeadAssistente
+  opcoes?: string[]
+}
+
+export interface ConfigRoteiroAssistente {
+  nomeEmpresa: string
+  responderContatosNovos: boolean
+  gatilhos: string[]
+  mensagemBoasVindas: string
+  perguntas: PerguntaRoteiroAssistente[]
+  mensagemEncerramento: string
+  mensagemAtendente: string
+  mensagemDespedida: string
+  avisarVendedor: boolean
+  criarLeadNoCrm: boolean
+  atrasoSegundos: number
+}
 
 export interface AssistenteComercial {
   id: string
@@ -867,8 +910,23 @@ export interface AssistenteComercial {
   numeroWhatsapp?: string | null
   nomeExibicao?: string | null
   status: StatusAssistente
+  fotoPerfilUrl?: string | null
+  conectadoEm?: string | null
+  ultimoEventoEm?: string | null
+  atendimentoAutomatico: boolean
+  configuracao: ConfigRoteiroAssistente
   criadoEm: string
+  _count?: { ignorados: number }
 }
+
+export interface ConfigAssistenteResposta {
+  assistente: AssistenteComercial | null
+  vendedor: { id: string; nome: string } | null
+  servidorConfigurado: boolean
+  configuracaoPadrao: ConfigRoteiroAssistente
+}
+
+export interface ConexaoAssistente { status: StatusAssistente; qrBase64: string | null; pairingCode: string | null }
 
 export interface AssistenteMensagem {
   id: string
@@ -885,15 +943,51 @@ export interface AssistenteConversa {
   nomeContato: string
   numeroContato: string
   status: StatusConversaAssistente
+  resultado: ResultadoConversaAssistente | null
+  origem: OrigemConversaAssistente | null
+  etapaRoteiro: number
   leadId?: string | null
   lead?: { id: string; nomeCliente: string; estagio: EstagioLead } | null
   ultimaMensagemEm: string
+  aguardandoVendedorEm?: string | null
+  assumidaEm?: string | null
   criadoEm: string
   mensagens: AssistenteMensagem[] // só o último item na listagem
+  _count?: { mensagens: number }
 }
 
 export interface AssistenteConversaDetalhe extends Omit<AssistenteConversa, 'mensagens'> {
   mensagens: AssistenteMensagem[] // histórico completo, em ordem cronológica
+  resumo: Array<{ rotulo: string; valor: string }>
+  totalPerguntas: number
+}
+
+export interface EstadoRoteiroAssistente { etapa: number; respostas: Record<string, string> }
+
+export interface SimulacaoAssistente {
+  mensagens: string[]
+  estado: EstadoRoteiroAssistente
+  desfecho: 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU' | null
+  resumo: Array<{ rotulo: string; valor: string }>
+  gatilho: string | null
+}
+
+export interface ContatoIgnoradoAssistente { id: string; numero: string; motivo: 'CONVERSA_PESSOAL' | 'MARCADO_PELO_VENDEDOR'; criadoEm: string }
+
+export interface ResumoAssistente {
+  periodo: { dias: number; inicio: string | null; fim: string | null }
+  totais: {
+    atendidos: number; concluidos: number; qualificados: number; pediramAtendente: number; desistiram: number; naoEraLead: number
+    emAndamento: number; pararamDeResponder: number; assumidas: number; leadsNoCrm: number; vendas: number; aguardandoAgora: number
+  }
+  taxaConclusao: number | null
+  tempoResposta: { medianaMin: number | null; ate15MinPct: number | null; amostras: number }
+  porOrigem: Array<{ origem: OrigemConversaAssistente; total: number; concluidos: number }>
+  funilRoteiro: Array<{ rotulo: string; total: number }>
+  funilCrm: Array<{ estagio: EstagioLead; total: number }>
+  serie: Array<{ data: string; atendidos: number; concluidos: number }>
+  porHora: Array<{ hora: number; total: number }>
+  porDiaSemana: Array<{ dia: number; total: number }>
 }
 
 export type EstagioCrescimento = 'INICIAR' | 'MANTER' | 'ESCALONAR' | 'ESCALAR'
