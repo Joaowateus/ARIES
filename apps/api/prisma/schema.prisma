@@ -19,35 +19,35 @@ model Empresa {
   criadaEm     DateTime @default(now())
   atualizadaEm DateTime @updatedAt
 
-  usuarios              Usuario[]
-  unidades              Unidade[]
-  metas                 Meta[]
-  oportunidades         Oportunidade[]
-  contratos             Contrato[]
-  contasReceber         ContaReceber[]
-  parametroPrecificacao ParametroPrecificacao?
-  historicoPrecificacao HistoricoPrecificacao[]
-  protocolos            Protocolo[]
-  estagioHistorico      EstagioHistorico[]
+  usuarios               Usuario[]
+  unidades               Unidade[]
+  metas                  Meta[]
+  oportunidades          Oportunidade[]
+  contratos              Contrato[]
+  contasReceber          ContaReceber[]
+  parametroPrecificacao  ParametroPrecificacao?
+  historicoPrecificacao  HistoricoPrecificacao[]
+  protocolos             Protocolo[]
+  estagioHistorico       EstagioHistorico[]
   atividadesOportunidade AtividadeOportunidade[]
-  metasFunilEtapa       MetaFunilEtapa[]
-  contasAnuncio         ContaAnuncio[]
-  anunciosProducao      AnuncioProducao[]
-  conteudosSocialMedia  ConteudoSocialMedia[]
-  rotinas               Rotina[]
-  rotinaExecucoes       RotinaExecucao[]
-  tarefas               Tarefa[]
-  processos             Processo[]
-  treinamentos          Treinamento[]
-  treinamentoProgresso  TreinamentoProgresso[]
-  auditorias            Auditoria[]
-  planosAcao            PlanoAcao[]
-  notificacoes          Notificacao[]
-  scoreConfig           ScoreConfig?
-  logAuditoria          LogAuditoria[]
-  metaComercialPadrao   MetaComercialPadrao?
-  leadsRegistrados      LeadRegistrado[]
-  custoLeadConfig       CustoLeadConfig?
+  metasFunilEtapa        MetaFunilEtapa[]
+  contasAnuncio          ContaAnuncio[]
+  anunciosProducao       AnuncioProducao[]
+  conteudosSocialMedia   ConteudoSocialMedia[]
+  rotinas                Rotina[]
+  rotinaExecucoes        RotinaExecucao[]
+  tarefas                Tarefa[]
+  processos              Processo[]
+  treinamentos           Treinamento[]
+  treinamentoProgresso   TreinamentoProgresso[]
+  auditorias             Auditoria[]
+  planosAcao             PlanoAcao[]
+  notificacoes           Notificacao[]
+  scoreConfig            ScoreConfig?
+  logAuditoria           LogAuditoria[]
+  metaComercialPadrao    MetaComercialPadrao?
+  leadsRegistrados       LeadRegistrado[]
+  custoLeadConfig        CustoLeadConfig?
 
   @@map("empresas")
 }
@@ -161,12 +161,12 @@ model Meta {
 // de vendas + meta de anúncios orgânicos) — mesmo padrão de "config de linha
 // única por empresa, com default, editável por gestão" do ParametroPrecificacao.
 model MetaComercialPadrao {
-  id                     String   @id @default(cuid())
-  empresaId              String   @unique
-  supermetaVendasMes     Int      @default(10)
-  supermetaFaturamentoMes Float   @default(150000) // base pro painel de produção — trimestre/ano derivam daqui (×3 / ×12)
-  metaAnunciosMes        Int      @default(2000)
-  atualizadoEm           DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  empresaId               String   @unique
+  supermetaVendasMes      Int      @default(10)
+  supermetaFaturamentoMes Float    @default(150000) // base pro painel de produção — trimestre/ano derivam daqui (×3 / ×12)
+  metaAnunciosMes         Int      @default(2000)
+  atualizadoEm            DateTime @updatedAt
 
   empresa Empresa @relation(fields: [empresaId], references: [id])
 
@@ -174,25 +174,25 @@ model MetaComercialPadrao {
 }
 
 model Oportunidade {
-  id                    String    @id @default(cuid())
-  empresaId             String
-  responsavelId         String?
-  unidadeId             String?
-  nomeCliente           String
-  telefone              String?
-  email                 String?
-  estagio               String    @default("NOVO_LEAD")
-  origem                String    @default("MANUAL")
-  tipoLead              String? // TRAFEGO | ORGANICO — pra separar produção de lead pago vs orgânico no Funil
-  valor                 Float?
-  observacoes           String?
-  ultimaInteracaoEm     DateTime?
-  proximaAcaoEm         DateTime?
-  proximaAcaoDescricao  String?
-  criadaEm              DateTime  @default(now())
-  atualizadaEm          DateTime  @updatedAt
-  fechadaEm             DateTime?
-  statusFinal           String?
+  id                   String    @id @default(cuid())
+  empresaId            String
+  responsavelId        String?
+  unidadeId            String?
+  nomeCliente          String
+  telefone             String?
+  email                String?
+  estagio              String    @default("NOVO_LEAD")
+  origem               String    @default("MANUAL")
+  tipoLead             String? // TRAFEGO | ORGANICO — pra separar produção de lead pago vs orgânico no Funil
+  valor                Float?
+  observacoes          String?
+  ultimaInteracaoEm    DateTime?
+  proximaAcaoEm        DateTime?
+  proximaAcaoDescricao String?
+  criadaEm             DateTime  @default(now())
+  atualizadaEm         DateTime  @updatedAt
+  fechadaEm            DateTime?
+  statusFinal          String?
 
   empresa          Empresa                 @relation(fields: [empresaId], references: [id])
   responsavel      Usuario?                @relation(fields: [responsavelId], references: [id])
@@ -269,22 +269,22 @@ model LeadRegistrado {
 }
 
 model Contrato {
-  id              String   @id @default(cuid())
-  empresaId       String
-  oportunidadeId  String   @unique
-  unidadeId       String?
-  vendedorId      String?
-  nomeCliente     String
-  cpfCliente      String?
-  telefoneCliente String?
-  valorTotal      Float
-  entrada         Float?   @default(0)
-  parcelas        Int?     @default(1)
-  observacoes     String?
-  status          String   @default("ATIVO") // ATIVO | CANCELADO | ENCERRADO
-  processoAdministrativoStatus String @default("PENDENTE") // PENDENTE | CONCLUIDO — etapa final do funil (transferência/documentação), meta 100% sem erro
-  criadoEm        DateTime @default(now())
-  atualizadoEm    DateTime @updatedAt
+  id                           String   @id @default(cuid())
+  empresaId                    String
+  oportunidadeId               String   @unique
+  unidadeId                    String?
+  vendedorId                   String?
+  nomeCliente                  String
+  cpfCliente                   String?
+  telefoneCliente              String?
+  valorTotal                   Float
+  entrada                      Float?   @default(0)
+  parcelas                     Int?     @default(1)
+  observacoes                  String?
+  status                       String   @default("ATIVO") // ATIVO | CANCELADO | ENCERRADO
+  processoAdministrativoStatus String   @default("PENDENTE") // PENDENTE | CONCLUIDO — etapa final do funil (transferência/documentação), meta 100% sem erro
+  criadoEm                     DateTime @default(now())
+  atualizadoEm                 DateTime @updatedAt
 
   empresa       Empresa        @relation(fields: [empresaId], references: [id])
   oportunidade  Oportunidade   @relation(fields: [oportunidadeId], references: [id])
@@ -547,17 +547,17 @@ model MelhoriaProtocolo {
 
 // Meta de conversão configurável por etapa do funil de 8 estágios.
 model MetaFunilEtapa {
-  id             String   @id @default(cuid())
-  empresaId      String
-  etapa          String
-  metaPct        Float // 0-1 — usado quando tipoMeta é MINIMO ou MAXIMO_PERDA
+  id              String   @id @default(cuid())
+  empresaId       String
+  etapa           String
+  metaPct         Float // 0-1 — usado quando tipoMeta é MINIMO ou MAXIMO_PERDA
   // Meta de custo máximo por lead nesta etapa, em R$ — usado só quando
   // tipoMeta é MAXIMO_CUSTO. Campo separado de metaPct porque a unidade é
   // outra (moeda, não fração 0-1).
-  metaCusto      Float?
-  tipoMeta       String   @default("MINIMO") // MINIMO | MAXIMO_PERDA | MAXIMO_CUSTO
-  tempoMaximoDias Int?    // SLA em dias — lead parado além disso vira alerta pro gestor
-  atualizadoEm   DateTime @updatedAt
+  metaCusto       Float?
+  tipoMeta        String   @default("MINIMO") // MINIMO | MAXIMO_PERDA | MAXIMO_CUSTO
+  tempoMaximoDias Int? // SLA em dias — lead parado além disso vira alerta pro gestor
+  atualizadoEm    DateTime @updatedAt
 
   empresa Empresa @relation(fields: [empresaId], references: [id])
 
@@ -773,7 +773,7 @@ model Treinamento {
   status               String   @default("ativo")
   criadoEm             DateTime @default(now())
 
-  empresa   Empresa                 @relation(fields: [empresaId], references: [id])
+  empresa   Empresa                @relation(fields: [empresaId], references: [id])
   progresso TreinamentoProgresso[]
 
   @@index([empresaId])
@@ -920,22 +920,22 @@ model ProLaboreUsuario {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  parametro      ParametroLiquidez?
-  vendas         Venda[]
-  vendedores     Vendedor[]
-  funilMensal    FunilMensal[]
-  gastosAnuncios GastoAnuncioMensal[]
-  leads          Lead[]
-  metasFunil     MetaFunilProLabore[]
-  agendaItens    AgendaItem[]
-  ocorrencias    Ocorrencia[]
-  socialMediaConta SocialMediaConta?
-  planoCrescimentoAcoes PlanoCrescimentoAcao[]
+  parametro                 ParametroLiquidez?
+  vendas                    Venda[]
+  vendedores                Vendedor[]
+  funilMensal               FunilMensal[]
+  gastosAnuncios            GastoAnuncioMensal[]
+  leads                     Lead[]
+  metasFunil                MetaFunilProLabore[]
+  agendaItens               AgendaItem[]
+  ocorrencias               Ocorrencia[]
+  socialMediaConta          SocialMediaConta?
+  planoCrescimentoAcoes     PlanoCrescimentoAcao[]
   planoCrescimentoSnapshots PlanoCrescimentoSnapshot[]
-  reunioes Reuniao[]
-  notas    Nota[]
-  pastas   Pasta[]
-  mapasMentais MapaMental[]
+  reunioes                  Reuniao[]
+  notas                     Nota[]
+  pastas                    Pasta[]
+  mapasMentais              MapaMental[]
 
   @@map("pro_labore_usuarios")
 }
@@ -944,19 +944,19 @@ model ProLaboreUsuario {
 // são preenchidos quando o DONO concede acesso individual — até lá é só um
 // registro pra atribuir vendas e montar o ranking de produção por pessoa.
 model Vendedor {
-  id           String   @id @default(cuid())
-  usuarioId    String
-  nome         String
-  ativo        Boolean  @default(true)
-  email        String?  @unique
-  senhaHash    String?
+  id                   String   @id @default(cuid())
+  usuarioId            String
+  nome                 String
+  ativo                Boolean  @default(true)
+  email                String?  @unique
+  senhaHash            String?
   // VENDEDOR (padrão) só vê/mexe na própria produção. SUPERVISOR vê o
   // painel e o CRM com o escopo da equipe inteira (igual ao dono), mas sem
   // acesso a Vendas/Vendedores/Indicadores/Configurações nem às cifras
   // pessoais do dono (pró-labore, comissões agregadas, gasto com anúncios)
   // — essas rotas continuam exclusivas de requireDono. Só entra em vigor no
   // próximo login, porque o papel vai dentro do JWT.
-  papel        String   @default("VENDEDOR")
+  papel                String   @default("VENDEDOR")
   // Teto de comissão por venda individual deste vendedor — sobrepõe o
   // ParametroLiquidez.tetoComissaoPadrao da conta quando definido. Só o
   // dono edita (a rota é requireDono); nulo = usa o padrão da conta.
@@ -965,14 +965,14 @@ model Vendedor {
   // ParametroLiquidez.metaMensalPadrao da conta quando definida. Vendedor
   // não vê a meta anual da operação (isso é visão de dono/supervisor); no
   // lugar, o dashboard dele mostra essa meta mensal própria.
-  metaMensal   Float?
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  metaMensal           Float?
+  criadoEm             DateTime @default(now())
+  atualizadoEm         DateTime @updatedAt
 
-  usuario     ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  vendas      Venda[]
-  leads       Lead[]
-  ocorrencias Ocorrencia[]
+  usuario             ProLaboreUsuario     @relation(fields: [usuarioId], references: [id])
+  vendas              Venda[]
+  leads               Lead[]
+  ocorrencias         Ocorrencia[]
   assistenteComercial AssistenteComercial?
 
   @@index([usuarioId])
@@ -1017,53 +1017,53 @@ model GastoAnuncioMensal {
 // Teto de pró-labore que pode ser sacado por venda — linha única por
 // usuário, editável a qualquer momento.
 model ParametroLiquidez {
-  id                    String   @id @default(cuid())
-  usuarioId             String   @unique
+  id                        String  @id @default(cuid())
+  usuarioId                 String  @unique
   // Teto de pró-labore por venda — é sempre o dono, sacado de toda venda
   // registrada na operação, independente de quem vendeu.
-  tetoProLaborePorVenda Float    @default(900)
+  tetoProLaborePorVenda     Float   @default(900)
   // Teto padrão de comissão por venda, usado quando o vendedor daquela
   // venda não tem um Vendedor.tetoComissaoPorVenda próprio definido.
-  tetoComissaoPadrao    Float    @default(900)
+  tetoComissaoPadrao        Float   @default(900)
   // Tetos usados só quando o Lead está classificado como "R" (renegociação)
   // — substituem tetoProLaborePorVenda/tetoComissaoPadrao (e qualquer teto
   // individual do vendedor) na conversão em venda. Lead sem classificação
   // ou classificado como "P" continua usando os tetos normais acima.
-  tetoProLaboreRenegociacao Float @default(600)
-  tetoComissaoRenegociacao  Float @default(0)
-  metaFaturamentoAnual  Float    @default(5000000)
+  tetoProLaboreRenegociacao Float   @default(600)
+  tetoComissaoRenegociacao  Float   @default(0)
+  metaFaturamentoAnual      Float   @default(5000000)
   // Meta mensal padrão, usada por vendedores sem Vendedor.metaMensal
   // próprio definido. Substitui a meta anual no dashboard de quem loga
   // como VENDEDOR (dono e supervisor continuam vendo a meta anual).
-  metaMensalPadrao      Float    @default(0)
+  metaMensalPadrao          Float   @default(0)
   // Custo por lead no topo da jornada de compra (ex: gasto com anúncios ÷
   // leads gerados) — única cifra que o Pró-Labore não deriva sozinho,
   // cadastrada manualmente. Alimenta o custo por lead calculado em cada
   // etapa mais funda da jornada (ver FunilJourney no dashboard).
-  custoPorLeadTopo      Float    @default(0)
-  fraseMotivacional     String?
+  custoPorLeadTopo          Float   @default(0)
+  fraseMotivacional         String?
   // Meta de volume de produção de conteúdo (posts/reels/stories por
   // semana) usada pra auditar a equipe de Social Media — comparação
   // simples de "quanto devia vs quanto saiu".
-  metaPostagensSemanais Int      @default(3)
+  metaPostagensSemanais     Int     @default(3)
 
   // ===== Limiares da Auditoria comercial da Agenda (todos parametrizáveis —
   // nada disso pode ficar hardcoded no front, pra permitir calibrar por
   // operação sem precisar de deploy) =====
   // Aderência (% de itens da Agenda cumpridos no prazo) acima disso = "Em
   // dia"/perfil de aderência alta; abaixo de agendaLimiarAtencaoPct = "Crítico".
-  agendaLimiarBomPct Float @default(80)
-  agendaLimiarAtencaoPct Float @default(50)
+  agendaLimiarBomPct              Float @default(80)
+  agendaLimiarAtencaoPct          Float @default(50)
   // Conversão do funil de Leads (abordado → fechado) no período, acima
   // disso é considerada "efetividade alta" pra fins da matriz 2x2.
-  agendaLimiarEfetividadeAltaPct Float @default(30)
+  agendaLimiarEfetividadeAltaPct  Float @default(30)
   // Coeficiente de variação (desvio padrão ÷ média) da aderência diária no
   // período — acima disso o consultor é classificado como "Oscilante".
-  agendaLimiarOscilacaoPct Float @default(35)
+  agendaLimiarOscilacaoPct        Float @default(35)
   // Regra de alerta: aderência abaixo desse % por N dias seguidos dispara o
   // card "Em alerta".
-  agendaAlertaAderenciaPct Float @default(50)
-  agendaAlertaDiasConsecutivos Int @default(3)
+  agendaAlertaAderenciaPct        Float @default(50)
+  agendaAlertaDiasConsecutivos    Int   @default(3)
   // Regra de alerta: queda de efetividade acima desse % em relação à média
   // móvel do próprio consultor (não é limiar absoluto — é comparação com o
   // histórico da pessoa).
@@ -1071,7 +1071,7 @@ model ParametroLiquidez {
   // Reconhecimento automático: quantas semanas seguidas no perfil
   // "Referência" pra disparar um destaque positivo (em vez de só sinalizar
   // problema, como a Agenda faz hoje).
-  agendaReconhecimentoSemanas Int @default(4)
+  agendaReconhecimentoSemanas     Int   @default(4)
 
   // Lista de motivos de Ocorrência, editável em Configurações — CSV numa
   // coluna só (mesmo padrão de AgendaItem.diasSemana/vendedorIds), em vez
@@ -1083,12 +1083,12 @@ model ParametroLiquidez {
   // Começaram hardcoded no motor; viraram parametrizáveis porque o que é
   // "ROAS saudável" ou "conversão boa" varia demais de operação pra
   // operação pra ficar fixo no código. =====
-  planoRoasMinimo Float @default(1)
-  planoRoasSaudavel Float @default(3)
-  planoConversaoMinimaPct Float @default(5)
-  planoConversaoConsolidadaPct Float @default(10)
-  planoEngajamentoMinimoPct Float @default(2)
-  planoLeadsOrganicosMinimo Int @default(5)
+  planoRoasMinimo                 Float @default(1)
+  planoRoasSaudavel               Float @default(3)
+  planoConversaoMinimaPct         Float @default(5)
+  planoConversaoConsolidadaPct    Float @default(10)
+  planoEngajamentoMinimoPct       Float @default(2)
+  planoLeadsOrganicosMinimo       Int   @default(5)
   planoConcentracaoMaximaLiderPct Float @default(70)
 
   atualizadoEm DateTime @updatedAt
@@ -1105,9 +1105,9 @@ model ParametroLiquidez {
 model MetaFunilProLabore {
   id           String   @id @default(cuid())
   usuarioId    String
-  etapa        String   // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO
+  etapa        String // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO
   metaPct      Float    @default(0) // 0-1 — usado quando tipoMeta é MINIMO ou MAXIMO_PERDA
-  metaCusto    Float?   // R$ — usado só quando tipoMeta é MAXIMO_CUSTO
+  metaCusto    Float? // R$ — usado só quando tipoMeta é MAXIMO_CUSTO
   tipoMeta     String   @default("MINIMO") // MINIMO | MAXIMO_PERDA | MAXIMO_CUSTO
   atualizadoEm DateTime @updatedAt
 
@@ -1147,38 +1147,38 @@ model Venda {
 // os números computados daqui e só cai pro FunilMensal em meses sem Lead
 // nenhum (histórico anterior à funcionalidade).
 model Lead {
-  id           String    @id @default(cuid())
-  usuarioId    String
-  vendedorId   String?
-  nomeCliente  String
-  telefone     String?
-  email        String?
-  cpf          String?
-  endereco     String?
+  id              String    @id @default(cuid())
+  usuarioId       String
+  vendedorId      String?
+  nomeCliente     String
+  telefone        String?
+  email           String?
+  cpf             String?
+  endereco        String?
   modeloInteresse String? // moto que o cliente tem interesse — separado de observacao pra facilitar relatório
-  observacao   String?
-  tipoLead     String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
+  observacao      String?
+  tipoLead        String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
   // Quanto o cliente teria capacidade de gerar de faturamento — base pro
   // indicador de "oportunidade de faturamento" que passou pelo funil.
   // Default 0 só pra não quebrar leads já cadastrados antes deste campo
   // existir; obrigatório em todo lead novo (exigido na validação da rota).
-  valorNegociacao Float @default(0)
+  valorNegociacao Float     @default(0)
   // P | R — como a negociação vai ser paga, e não como o lead entrou
   // (isso é tipoLead/canal). Muda o teto de pró-labore/comissão usado na
   // conversão em venda (ver tetoProLaboreRenegociacao/tetoComissaoRenegociacao
   // em ParametroLiquidez) — null se ainda não classificada, o que a
   // conversão trata igual a P (pagamento integral, tetos normais da conta).
-  tipoNegociacao String?
-  estagio      String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
-  vendaId      String?   @unique
-  criadoEm     DateTime  @default(now())
-  atualizadoEm DateTime  @updatedAt
-  fechadoEm    DateTime?
+  tipoNegociacao  String?
+  estagio         String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
+  vendaId         String?   @unique
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+  fechadoEm       DateTime?
 
-  usuario   ProLaboreUsuario        @relation(fields: [usuarioId], references: [id])
-  vendedor  Vendedor?               @relation(fields: [vendedorId], references: [id])
-  venda     Venda?                  @relation(fields: [vendaId], references: [id])
-  historico LeadEstagioHistorico[]
+  usuario             ProLaboreUsuario       @relation(fields: [usuarioId], references: [id])
+  vendedor            Vendedor?              @relation(fields: [vendedorId], references: [id])
+  venda               Venda?                 @relation(fields: [vendaId], references: [id])
+  historico           LeadEstagioHistorico[]
   assistenteConversas AssistenteConversa[]
 
   @@index([usuarioId])
@@ -1209,32 +1209,32 @@ model LeadEstagioHistorico {
 // no cliente a partir dessas regras, sem precisar materializar uma linha
 // por dia por pessoa.
 model AgendaItem {
-  id           String    @id @default(cuid())
-  usuarioId    String
-  titulo       String
-  descricao    String?
-  categoria    String // META | PROCESSO | AUDITORIA | PROTOCOLO | OUTRO | REUNIAO
-  tipo         String // UNICO | RECORRENTE
-  data         DateTime? // usado quando tipo = UNICO
-  diasSemana   String? // usado quando tipo = RECORRENTE — CSV de 0(dom) a 6(sáb), ex "1,2,3,4,5"
-  dataInicio   DateTime? // opcional, só pra RECORRENTE — a partir de quando vale
-  dataFim      DateTime? // opcional, só pra RECORRENTE — até quando vale
-  horario      String? // horário previsto no dia, "HH:mm" (opcional — nem toda rotina tem hora fixa)
+  id               String    @id @default(cuid())
+  usuarioId        String
+  titulo           String
+  descricao        String?
+  categoria        String // META | PROCESSO | AUDITORIA | PROTOCOLO | OUTRO | REUNIAO
+  tipo             String // UNICO | RECORRENTE
+  data             DateTime? // usado quando tipo = UNICO
+  diasSemana       String? // usado quando tipo = RECORRENTE — CSV de 0(dom) a 6(sáb), ex "1,2,3,4,5"
+  dataInicio       DateTime? // opcional, só pra RECORRENTE — a partir de quando vale
+  dataFim          DateTime? // opcional, só pra RECORRENTE — até quando vale
+  horario          String? // horário previsto no dia, "HH:mm" (opcional — nem toda rotina tem hora fixa)
   // Sem alvo específico nenhum (vendedorIds vazio E incluiDono false) =
   // toda a equipe (cada pessoa segue e marca a própria conclusão,
   // independente das outras). Com alvo(s), só essas pessoas — pode ser
   // várias ao mesmo tempo: um ou mais vendedores (CSV de ids em
   // vendedorIds) e/ou o dono ("Head Comercial", incluiDono).
-  vendedorIds  String? // CSV de ids de Vendedor — sem FK porque é multivalorado
-  incluiDono   Boolean   @default(false)
+  vendedorIds      String? // CSV de ids de Vendedor — sem FK porque é multivalorado
+  incluiDono       Boolean   @default(false)
   // Pra atividades externas (visita, entrega, test-drive) — exige um selo
   // pontual de localização no momento em que a pessoa marca "feito"
   // (coordenadas na própria AgendaConclusao). Não é rastreamento contínuo:
   // só a posição naquele instante, uma vez, igual a um check-in.
-  exigeLocalizacao Boolean @default(false)
-  ativo        Boolean   @default(true)
-  criadoEm     DateTime  @default(now())
-  atualizadoEm DateTime  @updatedAt
+  exigeLocalizacao Boolean   @default(false)
+  ativo            Boolean   @default(true)
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
 
   usuario    ProLaboreUsuario  @relation(fields: [usuarioId], references: [id])
   conclusoes AgendaConclusao[]
@@ -1324,27 +1324,27 @@ model Ocorrencia {
   planoDeCorrecao String?
   prazoCorrecao   DateTime?
 
-  status         String  @default("ABERTA") // ABERTA | EM_PRAZO | EM_VERIFICACAO | RESOLVIDA | REINCIDENTE | ESCALONADA | ENCERRADA
-  medidaAplicada String  @default("NENHUMA") // NENHUMA | ADVERTENCIA_VERBAL | ADVERTENCIA_ESCRITA | SUSPENSAO | DESLIGAMENTO
+  status         String @default("ABERTA") // ABERTA | EM_PRAZO | EM_VERIFICACAO | RESOLVIDA | REINCIDENTE | ESCALONADA | ENCERRADA
+  medidaAplicada String @default("NENHUMA") // NENHUMA | ADVERTENCIA_VERBAL | ADVERTENCIA_ESCRITA | SUSPENSAO | DESLIGAMENTO
 
   // Auto-relação: aponta pra ocorrência anterior do mesmo vendedor/motivo
   // quando esta é uma reincidência.
   ocorrenciaAnteriorId String?
 
-  documentoGeradoUrl String?
-  documentoGeradoEm  DateTime?
+  documentoGeradoUrl     String?
+  documentoGeradoEm      DateTime?
   assinaturaVendedorOk   Boolean   @default(false)
   assinaturaVendedorData DateTime?
   assinaturaGestorOk     Boolean   @default(false)
   assinaturaGestorData   DateTime?
 
-  criadoEm    DateTime @default(now())
+  criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  usuario            ProLaboreUsuario       @relation(fields: [usuarioId], references: [id])
-  vendedor           Vendedor               @relation(fields: [vendedorId], references: [id])
-  ocorrenciaAnterior Ocorrencia?            @relation("Reincidencia", fields: [ocorrenciaAnteriorId], references: [id])
-  reincidencias      Ocorrencia[]           @relation("Reincidencia")
+  usuario            ProLaboreUsuario      @relation(fields: [usuarioId], references: [id])
+  vendedor           Vendedor              @relation(fields: [vendedorId], references: [id])
+  ocorrenciaAnterior Ocorrencia?           @relation("Reincidencia", fields: [ocorrenciaAnteriorId], references: [id])
+  reincidencias      Ocorrencia[]          @relation("Reincidencia")
   historico          OcorrenciaHistorico[]
 
   @@index([usuarioId])
@@ -1375,43 +1375,43 @@ model OcorrenciaHistorico {
 // só conecta uma conta — o accessToken é de longa duração (~60 dias) e
 // precisa ser renovado antes de expirar (ver rota de refresh).
 model SocialMediaConta {
-  id                String   @id @default(cuid())
-  usuarioId         String   @unique
-  instagramUserId   String
-  nomeUsuario       String
-  nomeExibicao      String?
-  fotoUrl           String?
-  seguidores        Int      @default(0)
-  seguindo          Int      @default(0)
-  publicacoesTotal  Int      @default(0)
-  biografia         String?
-  site              String?
-  tipoConta         String? // BUSINESS | MEDIA_CREATOR
+  id                    String    @id @default(cuid())
+  usuarioId             String    @unique
+  instagramUserId       String
+  nomeUsuario           String
+  nomeExibicao          String?
+  fotoUrl               String?
+  seguidores            Int       @default(0)
+  seguindo              Int       @default(0)
+  publicacoesTotal      Int       @default(0)
+  biografia             String?
+  site                  String?
+  tipoConta             String? // BUSINESS | MEDIA_CREATOR
   // Demografia da audiência (seguidores + contas engajadas no mês), no
   // formato { seguidores: { idade, genero, cidade, pais }, engajados: {...} }
   // — cada dimensão é uma lista { chave, valor }. É um retrato "de hoje":
   // a API não devolve histórico de demografia, então só o último fica.
-  demografia        Json?
+  demografia            Json?
   // Média de seguidores online por hora do dia (24 posições, 0h..23h, no
   // fuso da conta). Null quando a API não devolve (conta pequena ou métrica
   // indisponível).
-  seguidoresOnline  Json?
+  seguidoresOnline      Json?
   // Origem do alcance dos últimos 30 dias (seguidores x não seguidores, e
   // por formato) — ver buscarDistribuicaoAlcance.
-  distribuicaoAlcance Json?
+  distribuicaoAlcance   Json?
   // Nunca exposto pro frontend — só usado nas chamadas server-to-server
   // pra Graph API.
-  accessToken       String
-  tokenExpiraEm     DateTime
-  conectadoEm       DateTime @default(now())
-  atualizadoEm      DateTime @updatedAt
+  accessToken           String
+  tokenExpiraEm         DateTime
+  conectadoEm           DateTime  @default(now())
+  atualizadoEm          DateTime  @updatedAt
   ultimaSincronizacaoEm DateTime?
   // Última falha de sincronização (mensagem da API) — mostrada na tela pra
   // não deixar o dono achando que os números estão atualizados quando não
   // estão. Limpa a cada sync bem-sucedido.
-  ultimoErroSync    String?
+  ultimoErroSync        String?
 
-  usuario   ProLaboreUsuario           @relation(fields: [usuarioId], references: [id])
+  usuario   ProLaboreUsuario            @relation(fields: [usuarioId], references: [id])
   midias    SocialMediaMidia[]
   snapshots SocialMediaSnapshotDiario[]
 
@@ -1422,35 +1422,35 @@ model SocialMediaConta {
 // API enquanto estão no ar (24h) — o sync periódico grava cada uma nesse
 // intervalo e ela continua aqui depois que some do Instagram.
 model SocialMediaMidia {
-  id               String   @id @default(cuid())
-  contaId          String
-  instagramMediaId String   @unique
-  tipo             String // IMAGE | VIDEO | CAROUSEL_ALBUM
-  formato          String? // FEED | REELS | STORY | AD (media_product_type)
-  legenda          String?
-  urlMidia         String?
-  thumbnailUrl     String?
-  urlPermalink     String?
-  publicadoEm      DateTime
-  curtidas         Int      @default(0)
-  comentarios      Int      @default(0)
-  salvamentos      Int      @default(0)
-  compartilhamentos Int     @default(0)
-  alcance          Int      @default(0)
+  id                     String    @id @default(cuid())
+  contaId                String
+  instagramMediaId       String    @unique
+  tipo                   String // IMAGE | VIDEO | CAROUSEL_ALBUM
+  formato                String? // FEED | REELS | STORY | AD (media_product_type)
+  legenda                String?
+  urlMidia               String?
+  thumbnailUrl           String?
+  urlPermalink           String?
+  publicadoEm            DateTime
+  curtidas               Int       @default(0)
+  comentarios            Int       @default(0)
+  salvamentos            Int       @default(0)
+  compartilhamentos      Int       @default(0)
+  alcance                Int       @default(0)
   // Legado: "impressions" foi descontinuada pela Meta em abr/2025 — o
   // substituto é `visualizacoes` (views). Mantida só pro histórico antigo.
-  impressoes       Int      @default(0)
-  visualizacoes    Int      @default(0)
-  interacoesTotais Int      @default(0)
-  visitasPerfil    Int      @default(0)
-  seguidoresGerados Int     @default(0)
-  respostas        Int      @default(0) // só stories
+  impressoes             Int       @default(0)
+  visualizacoes          Int       @default(0)
+  interacoesTotais       Int       @default(0)
+  visitasPerfil          Int       @default(0)
+  seguidoresGerados      Int       @default(0)
+  respostas              Int       @default(0) // só stories
   tempoMedioAssistidoSeg Float? // só reels
   tempoTotalAssistidoSeg Float? // só reels
   // Navegação de story: { avancos, retornos, saidas, proximoStory }
-  navegacaoStory   Json?
-  insightsAtualizadoEm DateTime?
-  atualizadoEm     DateTime @updatedAt
+  navegacaoStory         Json?
+  insightsAtualizadoEm   DateTime?
+  atualizadoEm           DateTime  @updatedAt
 
   conta SocialMediaConta @relation(fields: [contaId], references: [id])
 
@@ -1463,35 +1463,35 @@ model SocialMediaMidia {
 // única forma de montar um gráfico de evolução ao longo do tempo. Gerado
 // pelo job de sincronização periódica (cron), não por ação do usuário.
 model SocialMediaSnapshotDiario {
-  id                 String   @id @default(cuid())
-  contaId            String
-  data               DateTime // meia-noite (UTC) do dia do snapshot
+  id                    String   @id @default(cuid())
+  contaId               String
+  data                  DateTime // meia-noite (UTC) do dia do snapshot
   // Total de seguidores no fim do dia — só existe pros dias em que o sync
   // rodou de verdade: a API não devolve o total histórico, então dias
   // reconstruídos pelo backfill (métricas diárias dos últimos 30 dias)
   // ficam sem esse número em vez de ganhar uma estimativa inventada.
-  seguidores         Int?
+  seguidores            Int?
   // Saldo do dia (ganhos - perdidos). Vem da API quando disponível; senão,
   // da diferença entre dois snapshots com `seguidores` preenchido.
-  novosSeguidoresDia Int      @default(0)
-  seguidoresGanhosDia  Int    @default(0)
-  seguidoresPerdidosDia Int   @default(0)
-  alcanceContaDia    Int      @default(0)
-  impressoesContaDia Int      @default(0) // legado — ver SocialMediaMidia.impressoes
-  visualizacoesDia   Int      @default(0)
-  contasEngajadasDia Int      @default(0)
-  interacoesDia      Int      @default(0)
-  curtidasDia        Int      @default(0)
-  comentariosDia     Int      @default(0)
-  compartilhamentosDia Int    @default(0)
-  salvamentosDia     Int      @default(0)
-  respostasDia       Int      @default(0)
-  visitasPerfilDia   Int      @default(0)
-  toquesLinksDia     Int      @default(0)
-  cliquesSiteDia     Int      @default(0)
-  publicacoesNoDia   Int      @default(0)
-  criadoEm           DateTime @default(now())
-  atualizadoEm       DateTime @default(now()) @updatedAt
+  novosSeguidoresDia    Int      @default(0)
+  seguidoresGanhosDia   Int      @default(0)
+  seguidoresPerdidosDia Int      @default(0)
+  alcanceContaDia       Int      @default(0)
+  impressoesContaDia    Int      @default(0) // legado — ver SocialMediaMidia.impressoes
+  visualizacoesDia      Int      @default(0)
+  contasEngajadasDia    Int      @default(0)
+  interacoesDia         Int      @default(0)
+  curtidasDia           Int      @default(0)
+  comentariosDia        Int      @default(0)
+  compartilhamentosDia  Int      @default(0)
+  salvamentosDia        Int      @default(0)
+  respostasDia          Int      @default(0)
+  visitasPerfilDia      Int      @default(0)
+  toquesLinksDia        Int      @default(0)
+  cliquesSiteDia        Int      @default(0)
+  publicacoesNoDia      Int      @default(0)
+  criadoEm              DateTime @default(now())
+  atualizadoEm          DateTime @default(now()) @updatedAt
 
   conta SocialMediaConta @relation(fields: [contaId], references: [id])
 
@@ -1500,66 +1500,112 @@ model SocialMediaSnapshotDiario {
 }
 
 // Assistente comercial de WhatsApp — um por vendedor, ligado ao número que
-// ele já usa. O mesmo número atende dois papéis diferentes dependendo de
-// quem manda mensagem: o próprio vendedor (suporte — dúvidas de uso,
-// perguntas sobre os próprios dados, sugestão de próximas ações) ou um lead
-// de campanha (pré-atendimento e qualificação, que pode virar um Lead no
-// CRM). A conexão de verdade com o WhatsApp Business API depende da mesma
-// conta Meta usada no Social Media — até lá, este modelo só guarda a
-// configuração e o histórico (populado com dados simulados na tela).
+// ele já usa através de uma sessão "aparelho conectado" (igual ao WhatsApp
+// Web), aberta por QR Code ou código de pareamento num servidor Evolution
+// API. O número continua funcionando normalmente no celular do vendedor.
+// Dois papéis: pré-atendimento de leads novos (roteiro de perguntas → Lead
+// no CRM → aviso pro vendedor) e suporte ao próprio vendedor pelo chat
+// "Você" (comandos tipo "resumo", "pendentes").
 model AssistenteComercial {
-  id             String   @id @default(cuid())
-  vendedorId     String   @unique
-  numeroWhatsapp String?
-  nomeExibicao   String?
-  // NAO_CONECTADO | PENDENTE | CONECTADO — hoje sempre NAO_CONECTADO na
-  // prática (a conexão real ainda depende do desbloqueio da conta Meta).
-  status         String   @default("NAO_CONECTADO")
-  criadoEm       DateTime @default(now())
-  atualizadoEm   DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  vendedorId            String    @unique
+  // Número conectado (só dígitos, com DDI) — preenchido quando a sessão abre.
+  numeroWhatsapp        String?
+  nomeExibicao          String?
+  // NAO_CONECTADO | AGUARDANDO_QR | CONECTADO | DESCONECTADO (sessão caiu
+  // ou foi removida pelo celular — precisa ler o QR de novo)
+  status                String    @default("NAO_CONECTADO")
+  // Nome da instância no servidor Evolution e segredo que vai na URL do
+  // webhook (é o que autentica os eventos que chegam de lá).
+  instancia             String?   @unique
+  webhookSegredo        String?   @unique
+  fotoPerfilUrl         String?
+  conectadoEm           DateTime?
+  ultimoEventoEm        DateTime?
+  // Liga/desliga as respostas automáticas sem derrubar a conexão.
+  atendimentoAutomatico Boolean   @default(true)
+  // Roteiro e regras (ver ConfigAssistente em lib/assistenteRoteiro.ts).
+  configuracao          Json?
+  criadoEm              DateTime  @default(now())
+  atualizadoEm          DateTime  @updatedAt
 
-  vendedor  Vendedor              @relation(fields: [vendedorId], references: [id])
+  vendedor  Vendedor                    @relation(fields: [vendedorId], references: [id])
   conversas AssistenteConversa[]
+  ignorados AssistenteContatoIgnorado[]
 
   @@map("pro_labore_assistente_comercial")
 }
 
-// Uma conversa = um número de contato falando com o assistente de um
-// vendedor. `tipo` decide a lógica: SUPORTE quando o número é do próprio
-// vendedor (ou de alguém da equipe), LEAD quando é um contato de campanha
-// sendo pré-qualificado. `leadId` só é preenchido quando a conversa já
-// resultou (ou está ligada) num Lead real do CRM.
+// Uma conversa = um contato falando com o assistente de um vendedor.
+// LEAD: contato novo sendo pré-qualificado. SUPORTE: o próprio vendedor
+// falando com o assistente pelo chat "Você". Conversas pessoais do vendedor
+// nunca viram registro aqui — o conteúdo delas não é guardado.
 model AssistenteConversa {
-  id               String    @id @default(cuid())
-  assistenteId     String
-  tipo             String // SUPORTE | LEAD
-  nomeContato      String
-  numeroContato    String
-  leadId           String?
-  status           String    @default("ATIVA") // ATIVA | QUALIFICADO | ENCERRADA
-  ultimaMensagemEm DateTime  @default(now())
-  criadoEm         DateTime  @default(now())
+  id                   String    @id @default(cuid())
+  assistenteId         String
+  tipo                 String // SUPORTE | LEAD
+  nomeContato          String
+  numeroContato        String // só dígitos, com DDI
+  jid                  String? // endereço do chat no WhatsApp (pra responder)
+  leadId               String?
+  // ATIVA (assistente conduzindo o roteiro) | AGUARDANDO_VENDEDOR (roteiro
+  // concluído ou contato pediu atendente) | ASSUMIDA (vendedor respondeu)
+  // | ENCERRADA
+  status               String    @default("ATIVA")
+  // QUALIFICADO | PEDIU_ATENDENTE | DESISTIU | NAO_E_LEAD
+  resultado            String?
+  // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
+  // | CONTATO_NOVO
+  origem               String?
+  etapaRoteiro         Int       @default(0)
+  respostas            Json?
+  ultimaMensagemEm     DateTime  @default(now())
+  aguardandoVendedorEm DateTime?
+  assumidaEm           DateTime?
+  encerradaEm          DateTime?
+  criadoEm             DateTime  @default(now())
 
-  assistente AssistenteComercial   @relation(fields: [assistenteId], references: [id])
-  lead       Lead?                 @relation(fields: [leadId], references: [id])
+  assistente AssistenteComercial  @relation(fields: [assistenteId], references: [id])
+  lead       Lead?                @relation(fields: [leadId], references: [id])
   mensagens  AssistenteMensagem[]
 
   @@index([assistenteId])
   @@index([assistenteId, tipo])
+  @@index([assistenteId, numeroContato])
   @@map("pro_labore_assistente_conversas")
 }
 
 model AssistenteMensagem {
   id         String   @id @default(cuid())
   conversaId String
-  remetente  String // CONTATO | ASSISTENTE
+  remetente  String // CONTATO | ASSISTENTE | VENDEDOR
   texto      String
+  // ID da mensagem no WhatsApp — deduplica webhook repetido e separa o que
+  // o assistente mandou do que o vendedor digitou no celular.
+  providerId String?  @unique
   criadoEm   DateTime @default(now())
 
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
 
   @@index([conversaId])
   @@map("pro_labore_assistente_mensagens")
+}
+
+// Números que o assistente nunca deve responder: contatos com quem o
+// vendedor já conversa (detectado quando ele manda mensagem pra um chat que
+// não é de lead) ou marcados como "não é lead" no painel. Só o número é
+// guardado, nunca o conteúdo da conversa pessoal.
+model AssistenteContatoIgnorado {
+  id           String   @id @default(cuid())
+  assistenteId String
+  numero       String
+  motivo       String // CONVERSA_PESSOAL | MARCADO_PELO_VENDEDOR
+  criadoEm     DateTime @default(now())
+
+  assistente AssistenteComercial @relation(fields: [assistenteId], references: [id])
+
+  @@unique([assistenteId, numero])
+  @@map("pro_labore_assistente_contatos_ignorados")
 }
 
 // Itens do "plano de ação" do Plano de Crescimento, por pilar. Duas origens:
@@ -1574,16 +1620,16 @@ model AssistenteMensagem {
 // parte dela), então sugestões de um estágio anterior somem da tela sozinhas
 // sem precisar apagar nada — ver o filtro em GET /plano-crescimento.
 model PlanoCrescimentoAcao {
-  id        String   @id @default(cuid())
-  usuarioId String
-  pilar     String // aquisicao | conversao | execucao | financeiro
-  chave     String? // só em origem SUGERIDA — nulo em CUSTOMIZADA
-  texto     String
-  concluida Boolean  @default(false)
-  origem    String   @default("CUSTOMIZADA") // SUGERIDA | CUSTOMIZADA
-  editadoManualmente Boolean @default(false)
-  criadoEm    DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  usuarioId          String
+  pilar              String // aquisicao | conversao | execucao | financeiro
+  chave              String? // só em origem SUGERIDA — nulo em CUSTOMIZADA
+  texto              String
+  concluida          Boolean  @default(false)
+  origem             String   @default("CUSTOMIZADA") // SUGERIDA | CUSTOMIZADA
+  editadoManualmente Boolean  @default(false)
+  criadoEm           DateTime @default(now())
+  atualizadoEm       DateTime @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
 
@@ -1695,10 +1741,10 @@ model Pasta {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  usuario   ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  pai       Pasta?           @relation("PastaFilhas", fields: [paiId], references: [id])
-  subpastas Pasta[]          @relation("PastaFilhas")
-  notas     Nota[]
+  usuario      ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  pai          Pasta?           @relation("PastaFilhas", fields: [paiId], references: [id])
+  subpastas    Pasta[]          @relation("PastaFilhas")
+  notas        Nota[]
   mapasMentais MapaMental[]
 
   @@index([usuarioId, vendedorId])
