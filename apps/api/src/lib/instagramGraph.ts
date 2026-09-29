@@ -1,9 +1,9 @@
-// Cliente fino pra Instagram Graph API — usa fetch nativo (Node 18+), sem
-// dependência externa. Toda função aqui recebe o accessToken já resolvido
-// (troca/renovação fica a cargo do chamador) e lança Error com mensagem
-// legível quando a Graph API retorna erro.
+// Cliente fino pra API do Instagram (Login do Instagram / Business Login) —
+// usa fetch nativo (Node 18+), sem dependência externa. Toda função aqui
+// recebe o accessToken já resolvido (troca/renovação fica a cargo do
+// chamador) e lança Error com mensagem legível quando a API retorna erro.
 
-const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
+const GRAPH_BASE = 'https://graph.instagram.com'
 
 async function chamarGraphApi<T>(caminho: string, params: Record<string, string>): Promise<T> {
   const query = new URLSearchParams(params).toString()
@@ -16,18 +16,26 @@ async function chamarGraphApi<T>(caminho: string, params: Record<string, string>
   return body as T
 }
 
-// Primeiro passo do login OAuth: troca o `code` que a Meta devolveu no
-// redirect (depois do dono autorizar no diálogo do Facebook) por um token de
-// curta duração (~1-2h). Precisa do MESMO `redirectUri` usado ao montar a URL
-// de autorização, senão a Graph API recusa a troca.
+// Primeiro passo do login OAuth (Login do Instagram: o usuário autoriza com
+// a própria conta do Instagram, sem passar pelo Facebook): troca o `code`
+// devolvido no redirect por um token de curta duração (~1h). Precisa do
+// MESMO `redirectUri` usado ao montar a URL de autorização. Diferente da
+// Graph API do Facebook, esse endpoint espera um POST form-urlencoded.
 export async function trocarCodigoPorTokenCurto(appId: string, appSecret: string, code: string, redirectUri: string): Promise<string> {
-  const body = await chamarGraphApi<{ access_token: string }>('/oauth/access_token', {
+  const corpo = new URLSearchParams({
     client_id: appId,
     client_secret: appSecret,
+    grant_type: 'authorization_code',
     redirect_uri: redirectUri,
     code,
   })
-  return body.access_token
+  const res = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: corpo })
+  const body: unknown = await res.json()
+  if (!res.ok) {
+    const mensagem = (body as { error_message?: string })?.error_message
+    throw new Error(mensagem ?? 'Falha ao trocar o código de autorização por um token')
+  }
+  return (body as { access_token: string }).access_token
 }
 
 export interface TokenLongoDuracao {
@@ -35,20 +43,26 @@ export interface TokenLongoDuracao {
   expiraEm: Date
 }
 
-// O mesmo endpoint serve tanto pra trocar um token curto (1h) por um longo
-// (~60 dias) quanto pra renovar um token longo ainda válido — a Graph API
-// não distingue os dois casos.
-export async function trocarOuRenovarTokenLongo(appId: string, appSecret: string, tokenAtual: string): Promise<TokenLongoDuracao> {
-  const body = await chamarGraphApi<{ access_token: string; expires_in: number }>('/oauth/access_token', {
-    grant_type: 'fb_exchange_token',
-    client_id: appId,
+// Troca um token de curta duração (ou um já válido colado manualmente) por
+// um de longa duração (~60 dias) — usado só na conexão inicial da conta.
+export async function trocarPorTokenLongo(appSecret: string, tokenCurto: string): Promise<TokenLongoDuracao> {
+  const body = await chamarGraphApi<{ access_token: string; expires_in: number }>('/access_token', {
+    grant_type: 'ig_exchange_token',
     client_secret: appSecret,
-    fb_exchange_token: tokenAtual,
+    access_token: tokenCurto,
   })
-  return {
-    accessToken: body.access_token,
-    expiraEm: new Date(Date.now() + body.expires_in * 1000),
-  }
+  return { accessToken: body.access_token, expiraEm: new Date(Date.now() + body.expires_in * 1000) }
+}
+
+// Renova um token de longa duração ainda válido (precisa ter sido emitido
+// há pelo menos 24h) — usado pela sincronização periódica. Não precisa do
+// App Secret, só do próprio token.
+export async function renovarTokenLongo(tokenLongo: string): Promise<TokenLongoDuracao> {
+  const body = await chamarGraphApi<{ access_token: string; expires_in: number }>('/refresh_access_token', {
+    grant_type: 'ig_refresh_token',
+    access_token: tokenLongo,
+  })
+  return { accessToken: body.access_token, expiraEm: new Date(Date.now() + body.expires_in * 1000) }
 }
 
 export interface ContaInstagram {
@@ -61,29 +75,19 @@ export interface ContaInstagram {
   publicacoesTotal: number
 }
 
-// A Graph API não deixa acessar uma conta do Instagram diretamente — o
-// caminho é sempre via a Página do Facebook que ela está vinculada.
+// Com o Login do Instagram, a conta já vem direto no `/me` — sem precisar
+// passar por uma Página do Facebook, como no fluxo antigo.
 export async function buscarContaInstagram(accessToken: string): Promise<ContaInstagram> {
-  const paginas = await chamarGraphApi<{ data: Array<{ id: string; name: string; instagram_business_account?: { id: string } }> }>('/me/accounts', {
-    fields: 'id,name,instagram_business_account',
-    access_token: accessToken,
-  })
-  const pagina = paginas.data.find(p => p.instagram_business_account)
-  if (!pagina?.instagram_business_account) {
-    throw new Error('Nenhuma Página do Facebook com uma conta comercial/criador do Instagram vinculada foi encontrada nesse login.')
-  }
-
-  const igId = pagina.instagram_business_account.id
   const info = await chamarGraphApi<{
-    username: string; name?: string; profile_picture_url?: string
+    id: string; username: string; name?: string; profile_picture_url?: string
     followers_count?: number; follows_count?: number; media_count?: number
-  }>(`/${igId}`, {
-    fields: 'username,name,profile_picture_url,followers_count,follows_count,media_count',
+  }>('/me', {
+    fields: 'id,username,name,profile_picture_url,followers_count,follows_count,media_count',
     access_token: accessToken,
   })
 
   return {
-    instagramUserId: igId,
+    instagramUserId: info.id,
     nomeUsuario: info.username,
     nomeExibicao: info.name,
     fotoUrl: info.profile_picture_url,
@@ -135,10 +139,10 @@ export interface InsightsMidia {
   compartilhamentos: number
 }
 
-// Métricas de insight variam por tipo de mídia na Graph API (REELS tem
-// "plays" em vez de "impressions", por exemplo) — pede tudo que existir e
-// ignora silenciosamente o que a API recusar pra não derrubar o sync
-// inteiro por causa de uma mídia com métrica indisponível.
+// Métricas de insight variam por tipo de mídia (REELS tem "plays" em vez de
+// "impressions", por exemplo) — pede tudo que existir e ignora
+// silenciosamente o que a API recusar pra não derrubar o sync inteiro por
+// causa de uma mídia com métrica indisponível.
 export async function buscarInsightsMidia(mediaId: string, accessToken: string): Promise<InsightsMidia> {
   const metricasPossiveis = ['reach', 'impressions', 'saved', 'shares']
   const resultado: InsightsMidia = { alcance: 0, impressoes: 0, salvamentos: 0, compartilhamentos: 0 }

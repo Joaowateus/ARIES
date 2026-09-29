@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, SocialMediaConta, ResumoSocialMedia } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
-import { iniciarLoginInstagram, metaAppIdConfigurado } from '@/lib/socialMediaOAuth'
+import { iniciarLoginInstagram, instagramAppIdConfigurado } from '@/lib/socialMediaOAuth'
 import { SocialJourneyCircular } from './SocialJourneyCircular'
 import { PageHeader } from '../../PageHeader'
 
@@ -30,11 +30,11 @@ export default function ProLaboreSocialMediaPage() {
   const [conectando, setConectando] = useState(false)
   const [erroConexao, setErroConexao] = useState('')
   // Login OAuth de verdade (botão "Conectar com Instagram") só aparece
-  // quando o app da Meta está configurado (NEXT_PUBLIC_META_APP_ID); o
-  // caminho manual (colar token do Graph API Explorer) fica sempre
+  // quando o app da Meta está configurado (NEXT_PUBLIC_INSTAGRAM_APP_ID); o
+  // caminho manual (colar token gerado no painel da Meta) fica sempre
   // disponível como alternativa — atrás de um "mostrar opção avançada"
   // quando o OAuth já está configurado, e aberto direto quando não está.
-  const oauthConfigurado = metaAppIdConfigurado() != null
+  const oauthConfigurado = instagramAppIdConfigurado() != null
   const [mostrarManual, setMostrarManual] = useState(!oauthConfigurado)
 
   const [sincronizando, setSincronizando] = useState(false)
