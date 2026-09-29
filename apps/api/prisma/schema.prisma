@@ -1384,12 +1384,32 @@ model SocialMediaConta {
   seguidores        Int      @default(0)
   seguindo          Int      @default(0)
   publicacoesTotal  Int      @default(0)
+  biografia         String?
+  site              String?
+  tipoConta         String? // BUSINESS | MEDIA_CREATOR
+  // Demografia da audiência (seguidores + contas engajadas no mês), no
+  // formato { seguidores: { idade, genero, cidade, pais }, engajados: {...} }
+  // — cada dimensão é uma lista { chave, valor }. É um retrato "de hoje":
+  // a API não devolve histórico de demografia, então só o último fica.
+  demografia        Json?
+  // Média de seguidores online por hora do dia (24 posições, 0h..23h, no
+  // fuso da conta). Null quando a API não devolve (conta pequena ou métrica
+  // indisponível).
+  seguidoresOnline  Json?
+  // Origem do alcance dos últimos 30 dias (seguidores x não seguidores, e
+  // por formato) — ver buscarDistribuicaoAlcance.
+  distribuicaoAlcance Json?
   // Nunca exposto pro frontend — só usado nas chamadas server-to-server
   // pra Graph API.
   accessToken       String
   tokenExpiraEm     DateTime
   conectadoEm       DateTime @default(now())
   atualizadoEm      DateTime @updatedAt
+  ultimaSincronizacaoEm DateTime?
+  // Última falha de sincronização (mensagem da API) — mostrada na tela pra
+  // não deixar o dono achando que os números estão atualizados quando não
+  // estão. Limpa a cada sync bem-sucedido.
+  ultimoErroSync    String?
 
   usuario   ProLaboreUsuario           @relation(fields: [usuarioId], references: [id])
   midias    SocialMediaMidia[]
@@ -1398,16 +1418,18 @@ model SocialMediaConta {
   @@map("pro_labore_social_media_contas")
 }
 
-// Post/reels/carrossel sincronizado da conta. Stories não ficam disponíveis
-// na Graph API depois de 24h, então não são sincronizadas individualmente
-// — só entram no snapshot diário agregado.
+// Post/reels/carrossel/story sincronizado da conta. Stories só aparecem na
+// API enquanto estão no ar (24h) — o sync periódico grava cada uma nesse
+// intervalo e ela continua aqui depois que some do Instagram.
 model SocialMediaMidia {
   id               String   @id @default(cuid())
   contaId          String
   instagramMediaId String   @unique
   tipo             String // IMAGE | VIDEO | CAROUSEL_ALBUM
+  formato          String? // FEED | REELS | STORY | AD (media_product_type)
   legenda          String?
   urlMidia         String?
+  thumbnailUrl     String?
   urlPermalink     String?
   publicadoEm      DateTime
   curtidas         Int      @default(0)
@@ -1415,7 +1437,19 @@ model SocialMediaMidia {
   salvamentos      Int      @default(0)
   compartilhamentos Int     @default(0)
   alcance          Int      @default(0)
+  // Legado: "impressions" foi descontinuada pela Meta em abr/2025 — o
+  // substituto é `visualizacoes` (views). Mantida só pro histórico antigo.
   impressoes       Int      @default(0)
+  visualizacoes    Int      @default(0)
+  interacoesTotais Int      @default(0)
+  visitasPerfil    Int      @default(0)
+  seguidoresGerados Int     @default(0)
+  respostas        Int      @default(0) // só stories
+  tempoMedioAssistidoSeg Float? // só reels
+  tempoTotalAssistidoSeg Float? // só reels
+  // Navegação de story: { avancos, retornos, saidas, proximoStory }
+  navegacaoStory   Json?
+  insightsAtualizadoEm DateTime?
   atualizadoEm     DateTime @updatedAt
 
   conta SocialMediaConta @relation(fields: [contaId], references: [id])
@@ -1432,13 +1466,32 @@ model SocialMediaSnapshotDiario {
   id                 String   @id @default(cuid())
   contaId            String
   data               DateTime // meia-noite (UTC) do dia do snapshot
-  seguidores         Int
+  // Total de seguidores no fim do dia — só existe pros dias em que o sync
+  // rodou de verdade: a API não devolve o total histórico, então dias
+  // reconstruídos pelo backfill (métricas diárias dos últimos 30 dias)
+  // ficam sem esse número em vez de ganhar uma estimativa inventada.
+  seguidores         Int?
+  // Saldo do dia (ganhos - perdidos). Vem da API quando disponível; senão,
+  // da diferença entre dois snapshots com `seguidores` preenchido.
   novosSeguidoresDia Int      @default(0)
+  seguidoresGanhosDia  Int    @default(0)
+  seguidoresPerdidosDia Int   @default(0)
   alcanceContaDia    Int      @default(0)
-  impressoesContaDia Int      @default(0)
+  impressoesContaDia Int      @default(0) // legado — ver SocialMediaMidia.impressoes
+  visualizacoesDia   Int      @default(0)
+  contasEngajadasDia Int      @default(0)
+  interacoesDia      Int      @default(0)
+  curtidasDia        Int      @default(0)
+  comentariosDia     Int      @default(0)
+  compartilhamentosDia Int    @default(0)
+  salvamentosDia     Int      @default(0)
+  respostasDia       Int      @default(0)
   visitasPerfilDia   Int      @default(0)
+  toquesLinksDia     Int      @default(0)
+  cliquesSiteDia     Int      @default(0)
   publicacoesNoDia   Int      @default(0)
   criadoEm           DateTime @default(now())
+  atualizadoEm       DateTime @default(now()) @updatedAt
 
   conta SocialMediaConta @relation(fields: [contaId], references: [id])
 

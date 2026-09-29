@@ -5,15 +5,9 @@ import { prisma } from '../lib/prisma'
 import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
-import {
-  trocarPorTokenLongo,
-  renovarTokenLongo,
-  trocarCodigoPorTokenCurto,
-  buscarContaInstagram,
-  buscarMidiasRecentes,
-  buscarInsightsMidia,
-  buscarInsightsContaHoje,
-} from '../lib/instagramGraph'
+import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram } from '../lib/instagramGraph'
+import { sincronizarContaSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
+import { montarAnaliseSocialMedia } from '../lib/socialMediaAnalytics'
 import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
 
 const router = Router()
@@ -2129,8 +2123,9 @@ router.post('/ocorrencias/:id/assinatura', requireProLaboreAuth, requireDonoOuSu
 
 const SOCIAL_MEDIA_SELECT = {
   id: true, instagramUserId: true, nomeUsuario: true, nomeExibicao: true, fotoUrl: true,
+  biografia: true, site: true, tipoConta: true,
   seguidores: true, seguindo: true, publicacoesTotal: true, conectadoEm: true, atualizadoEm: true,
-  tokenExpiraEm: true,
+  tokenExpiraEm: true, ultimaSincronizacaoEm: true, ultimoErroSync: true,
 } as const
 
 router.get('/social-media/conta', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -2218,68 +2213,11 @@ router.delete('/social-media/conta', requireProLaboreAuth, requireDono, async (r
   res.status(204).end()
 })
 
-// Sincroniza mídias recentes + grava o snapshot diário de hoje. Renova o
-// token automaticamente quando faltam menos de 10 dias pra expirar (dura
-// ~60 dias) — sem isso, a conta ficaria desconectada sozinha com o tempo.
-async function sincronizarContaSocialMedia(conta: { id: string; instagramUserId: string; accessToken: string; tokenExpiraEm: Date }) {
-  let accessToken = conta.accessToken
-  const diasParaExpirar = (conta.tokenExpiraEm.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  if (diasParaExpirar < 10) {
-    const renovado = await renovarTokenLongo(accessToken)
-    accessToken = renovado.accessToken
-    await prisma.socialMediaConta.update({ where: { id: conta.id }, data: { accessToken: renovado.accessToken, tokenExpiraEm: renovado.expiraEm } })
-  }
-
-  const infoConta = await buscarContaInstagram(accessToken)
-  const midias = await buscarMidiasRecentes(conta.instagramUserId, accessToken)
-
-  for (const midia of midias) {
-    const insights = await buscarInsightsMidia(midia.instagramMediaId, accessToken)
-    await prisma.socialMediaMidia.upsert({
-      where: { instagramMediaId: midia.instagramMediaId },
-      update: { ...midia, ...insights },
-      create: { ...midia, ...insights, contaId: conta.id },
-    })
-  }
-
-  const insightsHoje = await buscarInsightsContaHoje(conta.instagramUserId, accessToken)
-  const hoje = inicioDoDiaUTC(new Date())
-  const publicacoesNoDia = midias.filter(m => inicioDoDiaUTC(m.publicadoEm).getTime() === hoje.getTime()).length
-
-  const ultimoSnapshot = await prisma.socialMediaSnapshotDiario.findFirst({
-    where: { contaId: conta.id, data: { lt: hoje } },
-    orderBy: { data: 'desc' },
-  })
-  const novosSeguidoresDia = ultimoSnapshot ? Math.max(0, infoConta.seguidores - ultimoSnapshot.seguidores) : 0
-
-  await prisma.socialMediaSnapshotDiario.upsert({
-    where: { contaId_data: { contaId: conta.id, data: hoje } },
-    update: {
-      seguidores: infoConta.seguidores,
-      novosSeguidoresDia,
-      alcanceContaDia: insightsHoje.alcance,
-      impressoesContaDia: insightsHoje.impressoes,
-      visitasPerfilDia: insightsHoje.visitasPerfil,
-      publicacoesNoDia,
-    },
-    create: {
-      contaId: conta.id,
-      data: hoje,
-      seguidores: infoConta.seguidores,
-      novosSeguidoresDia,
-      alcanceContaDia: insightsHoje.alcance,
-      impressoesContaDia: insightsHoje.impressoes,
-      visitasPerfilDia: insightsHoje.visitasPerfil,
-      publicacoesNoDia,
-    },
-  })
-
-  await prisma.socialMediaConta.update({
-    where: { id: conta.id },
-    data: { seguidores: infoConta.seguidores, seguindo: infoConta.seguindo, publicacoesTotal: infoConta.publicacoesTotal },
-  })
-}
-
+// Sincronização completa (posts, reels, stories, insights, métricas diárias
+// da conta e demografia) — ver lib/socialMediaSync.ts. Devolve a conta
+// atualizada + um resumo do que foi sincronizado, pra tela avisar quando
+// ainda ficaram posts sem insight (o sync tem um teto de tempo e completa
+// o resto na próxima rodada).
 router.post('/social-media/sincronizar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
   if (!conta) {
@@ -2287,9 +2225,9 @@ router.post('/social-media/sincronizar', requireProLaboreAuth, requireDono, asyn
     return
   }
   try {
-    await sincronizarContaSocialMedia(conta)
+    const resultado = await sincronizarContaSocialMedia(conta)
     const atualizado = await prisma.socialMediaConta.findUnique({ where: { id: conta.id }, select: SOCIAL_MEDIA_SELECT })
-    res.json(atualizado)
+    res.json({ conta: atualizado, resultado })
   } catch (e) {
     res.status(502).json({ error: e instanceof Error ? e.message : 'Falha ao sincronizar com o Instagram' })
   }
@@ -2313,6 +2251,13 @@ router.post('/social-media/sincronizar-cron', async (req: Request, res: Response
   })
 })
 
+// Análise completa da conta num período (padrão: últimos 30 dias), já com
+// o período anterior de mesma duração pra comparação — ver
+// lib/socialMediaAnalytics.ts. Datas em 'YYYY-MM-DD' do calendário de
+// Brasília. Só lê do banco: trocar de período não gasta cota da API da Meta.
+const MAX_DIAS_ANALISE_SOCIAL = 366
+const DIAS_JANELA_IMPACTO = 90
+
 router.get('/social-media/resumo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId } })
@@ -2321,82 +2266,35 @@ router.get('/social-media/resumo', requireProLaboreAuth, requireDono, async (req
     return
   }
 
-  const { inicio, fim } = req.query
-  const fimData = (typeof fim === 'string' ? parseDataDiaUTC(fim) : null) ?? inicioDoDiaUTC(new Date())
-  const fimExclusivo = new Date(fimData.getTime() + 24 * 60 * 60 * 1000)
-  const inicioData = (typeof inicio === 'string' ? parseDataDiaUTC(inicio) : null) ?? inicioDoDiaUTC(new Date(fimData.getTime() - 29 * 24 * 60 * 60 * 1000))
+  const DIA = 24 * 60 * 60 * 1000
+  const hoje = diaBrasilia(new Date())
+  const fim = (typeof req.query.fim === 'string' ? parseDataDiaUTC(req.query.fim) : null) ?? hoje
+  let inicio = (typeof req.query.inicio === 'string' ? parseDataDiaUTC(req.query.inicio) : null) ?? new Date(fim.getTime() - 29 * DIA)
+  if (inicio.getTime() > fim.getTime()) inicio = fim
+  if ((fim.getTime() - inicio.getTime()) / DIA >= MAX_DIAS_ANALISE_SOCIAL) inicio = new Date(fim.getTime() - (MAX_DIAS_ANALISE_SOCIAL - 1) * DIA)
+  const dias = Math.round((fim.getTime() - inicio.getTime()) / DIA) + 1
+  const anteriorInicio = new Date(inicio.getTime() - dias * DIA)
+  const inicioBuscaMidias = new Date(Math.min(anteriorInicio.getTime(), fim.getTime() - (DIAS_JANELA_IMPACTO - 1) * DIA))
+  const fimExclusivo = inicioDoDiaBrasilia(new Date(fim.getTime() + DIA))
 
-  const [midias, snapshots, parametro, leadsPeriodo] = await Promise.all([
-    prisma.socialMediaMidia.findMany({
-      where: { contaId: conta.id, publicadoEm: { gte: inicioData, lt: fimExclusivo } },
-      orderBy: { publicadoEm: 'desc' },
-    }),
-    prisma.socialMediaSnapshotDiario.findMany({
-      where: { contaId: conta.id, data: { gte: inicioData, lt: fimExclusivo } },
-      orderBy: { data: 'asc' },
-    }),
+  const [midias, snapshots, parametro, leadsOrganicos] = await Promise.all([
+    prisma.socialMediaMidia.findMany({ where: { contaId: conta.id, publicadoEm: { gte: inicioDoDiaBrasilia(inicioBuscaMidias), lt: fimExclusivo } } }),
+    prisma.socialMediaSnapshotDiario.findMany({ where: { contaId: conta.id, data: { gte: anteriorInicio, lte: fim } }, orderBy: { data: 'asc' } }),
     prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
     prisma.lead.findMany({
-      where: { usuarioId, tipoLead: 'ORGANICO', criadoEm: { gte: inicioData, lt: fimExclusivo } },
-      select: { id: true, criadoEm: true, valorNegociacao: true, estagio: true },
+      where: { usuarioId, tipoLead: 'ORGANICO', criadoEm: { gte: inicioDoDiaBrasilia(inicio), lt: fimExclusivo } },
+      select: { criadoEm: true, valorNegociacao: true, estagio: true },
     }),
   ])
 
-  const semanasNoPeriodo = Math.max(1, Math.ceil((fimExclusivo.getTime() - inicioData.getTime()) / (7 * 24 * 60 * 60 * 1000)))
-  const volume = {
-    totalPublicacoes: midias.length,
+  res.json(montarAnaliseSocialMedia({
+    conta,
+    periodo: { inicio, fim },
+    midias,
+    snapshots,
     metaPostagensSemanais: parametro.metaPostagensSemanais,
-    metaPeriodo: parametro.metaPostagensSemanais * semanasNoPeriodo,
-    porTipo: ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM'].map(tipo => ({ tipo, quantidade: midias.filter(m => m.tipo === tipo).length })),
-  }
-
-  const somaAlcance = midias.reduce((s, m) => s + m.alcance, 0)
-  const engajamentoTotal = midias.reduce((s, m) => s + m.curtidas + m.comentarios + m.salvamentos + m.compartilhamentos, 0)
-  const desempenho = {
-    alcanceTotal: somaAlcance,
-    engajamentoTotal,
-    taxaEngajamento: somaAlcance > 0 ? engajamentoTotal / somaAlcance : 0,
-    topPublicacoes: [...midias]
-      .sort((a, b) => (b.alcance + b.curtidas) - (a.alcance + a.curtidas))
-      .slice(0, 5)
-      .map(m => ({
-        id: m.id, tipo: m.tipo, urlPermalink: m.urlPermalink, urlMidia: m.urlMidia, publicadoEm: m.publicadoEm,
-        alcance: m.alcance, curtidas: m.curtidas, comentarios: m.comentarios, salvamentos: m.salvamentos,
-      })),
-  }
-
-  const novosSeguidoresPeriodo = snapshots.reduce((s, sn) => s + sn.novosSeguidoresDia, 0)
-  const crescimento = {
-    seguidoresAtual: conta.seguidores,
-    novosSeguidoresPeriodo,
-    serie: snapshots.map(sn => ({ data: sn.data, seguidores: sn.seguidores, novosSeguidoresDia: sn.novosSeguidoresDia })),
-  }
-
-  const leadsGanhos = leadsPeriodo.filter(l => l.estagio === 'FECHADO')
-  const relacaoVendas = {
-    leadsGerados: leadsPeriodo.length,
-    leadsGanhos: leadsGanhos.length,
-    valorNegociadoTotal: leadsGanhos.reduce((s, l) => s + l.valorNegociacao, 0),
-  }
-
-  const visitasPerfilPeriodo = snapshots.reduce((s, sn) => s + sn.visitasPerfilDia, 0)
-  const jornada = {
-    alcance: somaAlcance,
-    visitasPerfil: visitasPerfilPeriodo,
-    novosSeguidores: novosSeguidoresPeriodo,
-    leadsGerados: leadsPeriodo.length,
-  }
-
-  res.json({
-    conectado: true,
-    conta: { nomeUsuario: conta.nomeUsuario, nomeExibicao: conta.nomeExibicao, fotoUrl: conta.fotoUrl, seguidores: conta.seguidores },
-    periodo: { inicio: inicioData, fim: fimData },
-    volume,
-    desempenho,
-    crescimento,
-    relacaoVendas,
-    jornada,
-  })
+    leadsOrganicos,
+  }))
 })
 
 // --- Plano de Crescimento: diagnóstico + plano de ação por regras, cruzando

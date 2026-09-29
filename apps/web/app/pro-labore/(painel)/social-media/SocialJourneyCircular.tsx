@@ -22,10 +22,12 @@ export function SocialJourneyCircular({ alcance, visitasPerfil, novosSeguidores,
   leadsGerados: number
 }) {
   const etapas: EtapaJornada[] = [
-    { titulo: 'Alcance', valor: alcance, cor: 'var(--pl-accent-5)' },
-    { titulo: 'Visitas ao perfil', valor: visitasPerfil, cor: 'var(--pl-accent-2)' },
-    { titulo: 'Novos seguidores', valor: novosSeguidores, cor: 'var(--pl-accent-4)' },
-    { titulo: 'Leads gerados', valor: leadsGerados, cor: 'var(--pl-accent-3)' },
+    // Etapas em sequência = escala ordinal de um único azul (a etapa final
+    // é a de maior contraste com o fundo, nos dois modos).
+    { titulo: 'Contas alcançadas (soma diária)', valor: alcance, cor: 'var(--sv-seq-2)' },
+    { titulo: 'Visitas ao perfil', valor: visitasPerfil, cor: 'var(--sv-seq-3)' },
+    { titulo: 'Novos seguidores', valor: novosSeguidores, cor: 'var(--sv-seq-4)' },
+    { titulo: 'Leads orgânicos no CRM', valor: leadsGerados, cor: 'var(--sv-seq-5)' },
   ]
   const base = alcance > 0 ? alcance : 1
   const raios = [86, 66, 46, 26]
@@ -66,7 +68,7 @@ export function SocialJourneyCircular({ alcance, visitasPerfil, novosSeguidores,
           const conversao = anterior > 0 ? (etapa.valor / anterior) * 100 : 0
           return (
             <div className="pl-journey-circular-step" key={etapa.titulo}>
-              <div className="pl-journey-circular-step-dot" style={{ borderColor: etapa.cor, color: etapa.cor }}>{i + 1}</div>
+              <div className="pl-journey-circular-step-dot" style={{ borderColor: etapa.cor, color: 'var(--pl-ink-1)' }}>{i + 1}</div>
               <div className="pl-journey-circular-step-titulo">{etapa.titulo}</div>
               <div className="pl-journey-circular-step-valor">{formatarNumero(etapa.valor)}</div>
               {i > 0 && <div className="pl-journey-circular-step-conv">{conversao.toFixed(1)}% da etapa anterior</div>}

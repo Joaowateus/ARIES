@@ -495,12 +495,12 @@ export const proLaboreApi = {
     conectarOAuth: (code: string) =>
       request<SocialMediaConta>('/pro-labore/social-media/conectar-oauth', { method: 'POST', body: JSON.stringify({ code }) }),
     desconectar: () => request<void>('/pro-labore/social-media/conta', { method: 'DELETE' }),
-    sincronizar: () => request<SocialMediaConta>('/pro-labore/social-media/sincronizar', { method: 'POST' }),
+    sincronizar: () => request<{ conta: SocialMediaConta; resultado: ResultadoSyncSocialMedia }>('/pro-labore/social-media/sincronizar', { method: 'POST' }),
     resumo: (periodo?: { inicio: string; fim: string }) => {
       const params = new URLSearchParams()
       if (periodo) { params.set('inicio', periodo.inicio); params.set('fim', periodo.fim) }
       const qs = params.toString()
-      return request<ResumoSocialMedia>(`/pro-labore/social-media/resumo${qs ? `?${qs}` : ''}`)
+      return request<AnaliseSocialMedia>(`/pro-labore/social-media/resumo${qs ? `?${qs}` : ''}`)
     },
   },
   assistente: {
@@ -695,60 +695,163 @@ export interface SocialMediaConta {
   nomeUsuario: string
   nomeExibicao?: string | null
   fotoUrl?: string | null
+  biografia?: string | null
+  site?: string | null
+  tipoConta?: string | null
   seguidores: number
   seguindo: number
   publicacoesTotal: number
   conectadoEm: string
   atualizadoEm: string
   tokenExpiraEm: string
+  ultimaSincronizacaoEm?: string | null
+  ultimoErroSync?: string | null
 }
 
-export interface PublicacaoSocialMedia {
+export interface ResultadoSyncSocialMedia {
+  midiasListadas: number
+  insightsAtualizados: number
+  insightsPendentes: number
+  diasAtualizados: number
+}
+
+export type FormatoPostSocial = 'REELS' | 'CARROSSEL' | 'FOTO'
+export type FaixaImpactoSocial = 'BAIXO' | 'MEDIO' | 'ALTO' | 'EXCEPCIONAL'
+
+export interface PostSocial {
   id: string
-  tipo: string
-  urlPermalink?: string | null
-  urlMidia?: string | null
+  formato: FormatoPostSocial
+  legenda: string | null
+  thumbnail: string | null
+  permalink: string | null
   publicadoEm: string
+  dia: string // 'YYYY-MM-DD' (Brasília)
+  diaSemana: number // 0 = domingo
+  hora: number // 0..23 (Brasília)
   alcance: number
+  visualizacoes: number
   curtidas: number
   comentarios: number
+  compartilhamentos: number
   salvamentos: number
+  interacoes: number
+  visitasPerfil: number
+  seguidoresGerados: number
+  tempoMedioAssistidoSeg: number | null
+  taxaEngajamento: number
+  taxaSalvamento: number
+  taxaCompartilhamento: number
+  indiceImpacto: number | null
+  faixaImpacto: FaixaImpactoSocial | null
+  hashtags: string[]
+  tamanhoLegenda: number
+  semInsights: boolean
 }
 
-export type ResumoSocialMedia =
+export interface AgregadoPostsSocial {
+  quantidade: number
+  alcanceMedio: number
+  visualizacoesMedias: number
+  interacoesMedias: number
+  taxaEngajamento: number
+  salvamentosMedios: number
+  compartilhamentosMedios: number
+  seguidoresGerados: number
+}
+
+export interface PontoSerieSocial {
+  data: string
+  temDados: boolean
+  alcance: number
+  visualizacoes: number
+  interacoes: number
+  contasEngajadas: number
+  visitasPerfil: number
+  toquesLinks: number
+  seguidoresGanhos: number
+  seguidoresPerdidos: number
+  saldoSeguidores: number
+  seguidores: number | null
+  seguidoresEstimado: boolean
+  publicacoes: number
+}
+
+export interface KpiComparadoSocial { atual: number | null; anterior: number | null }
+export interface FatiaSocial { chave: string; valor: number }
+export interface DemografiaPublicoSocial { idade: FatiaSocial[]; genero: FatiaSocial[]; cidade: FatiaSocial[]; pais: FatiaSocial[] }
+
+export interface RecomendacaoSocial {
+  id: string
+  tipo: 'destaque' | 'oportunidade' | 'alerta' | 'info'
+  titulo: string
+  detalhe: string
+}
+
+export type AnaliseSocialMedia =
   | { conectado: false }
   | {
       conectado: true
-      conta: { nomeUsuario: string; nomeExibicao?: string | null; fotoUrl?: string | null; seguidores: number }
-      periodo: { inicio: string; fim: string }
-      volume: {
-        totalPublicacoes: number
-        metaPostagensSemanais: number
-        metaPeriodo: number
-        porTipo: { tipo: string; quantidade: number }[]
+      conta: {
+        nomeUsuario: string
+        nomeExibicao: string | null
+        fotoUrl: string | null
+        biografia: string | null
+        site: string | null
+        tipoConta: string | null
+        seguidores: number
+        seguindo: number
+        publicacoesTotal: number
+        ultimaSincronizacaoEm: string | null
+        ultimoErroSync: string | null
       }
-      desempenho: {
-        alcanceTotal: number
-        engajamentoTotal: number
-        taxaEngajamento: number
-        topPublicacoes: PublicacaoSocialMedia[]
+      periodo: { inicio: string; fim: string; dias: number; anteriorInicio: string; anteriorFim: string; diasComDadosConta: number }
+      kpis: {
+        seguidores: {
+          atual: number; variacao: number | null; ganhos: number; perdidos: number
+          ganhosAnterior: number | null; perdidosAnterior: number | null; taxaCrescimento: number | null
+        }
+        alcanceMedioDia: KpiComparadoSocial
+        visualizacoes: KpiComparadoSocial
+        interacoes: KpiComparadoSocial
+        contasEngajadasMediaDia: KpiComparadoSocial
+        visitasPerfil: KpiComparadoSocial & { fonte: 'conta' | 'posts' }
+        toquesLinks: KpiComparadoSocial
+        taxaEngajamento: KpiComparadoSocial
+        alcanceMedioPost: KpiComparadoSocial
+        publicacoes: { atual: number; anterior: number; meta: number; metaSemanal: number }
+        stories: { atual: number }
       }
-      crescimento: {
-        seguidoresAtual: number
-        novosSeguidoresPeriodo: number
-        serie: { data: string; seguidores: number; novosSeguidoresDia: number }[]
+      serie: PontoSerieSocial[]
+      serieAnterior: PontoSerieSocial[]
+      composicaoInteracoes: {
+        fonte: 'conta' | 'posts'
+        curtidas: number; comentarios: number; compartilhamentos: number; salvamentos: number; respostas: number
       }
-      relacaoVendas: {
-        leadsGerados: number
-        leadsGanhos: number
-        valorNegociadoTotal: number
+      porFormato: Array<{ formato: FormatoPostSocial } & AgregadoPostsSocial>
+      porDiaSemana: Array<{ dia: number } & AgregadoPostsSocial>
+      porHora: Array<{ hora: number } & AgregadoPostsSocial>
+      heatmap: Array<{ dia: number; bloco: number; quantidade: number; alcanceMedio: number; taxaEngajamento: number }>
+      radar: { medianaReferencia: number; diasReferencia: number }
+      publicacoes: PostSocial[]
+      postsSemInsights: number
+      hashtags: Array<{ tag: string } & AgregadoPostsSocial>
+      hashtagsComparativo: { com: AgregadoPostsSocial; sem: AgregadoPostsSocial }
+      legendas: Array<{ faixa: string; taxaSalvamento: number } & AgregadoPostsSocial>
+      reels: AgregadoPostsSocial & { tempoMedioAssistidoSeg: number; taxaCompartilhamento: number }
+      stories: {
+        quantidade: number; alcanceMedio: number; visualizacoesMedias: number; respostas: number
+        compartilhamentos: number; visitasPerfil: number; seguidoresGerados: number
+        avancos: number; retornos: number; saidas: number; proximoStory: number; visualizacoesTotais: number
       }
-      jornada: {
-        alcance: number
-        visitasPerfil: number
-        novosSeguidores: number
-        leadsGerados: number
-      }
+      demografia: { seguidores: DemografiaPublicoSocial | null; engajados: DemografiaPublicoSocial | null; atualizadoEm?: string } | null
+      distribuicaoAlcance: {
+        periodoDias: number; alcanceTotal: number; atualizadoEm?: string
+        porTipoSeguidor: FatiaSocial[]; porFormato: FatiaSocial[]; shareDescoberta: number | null
+      } | null
+      seguidoresOnline: number[] | null
+      relacaoVendas: { leadsGerados: number; leadsGanhos: number; valorNegociadoTotal: number }
+      jornada: { alcance: number; visitasPerfil: number; novosSeguidores: number; leadsGerados: number }
+      recomendacoes: RecomendacaoSocial[]
     }
 
 // --- Assistente Comercial (WhatsApp) ---
