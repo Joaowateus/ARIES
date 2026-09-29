@@ -2,7 +2,11 @@
 // público por natureza, então dá pra montar a URL de autorização inteira no
 // navegador, sem round-trip com o backend. O App Secret nunca aparece aqui:
 // a troca do `code` por token acontece no servidor (POST /social-media/conectar-oauth).
-export const META_OAUTH_SCOPES = 'instagram_basic,instagram_business_manage_insights,pages_show_list,pages_read_engagement'
+// instagram_manage_insights/instagram_business_manage_insights não são aceitos
+// nesse diálogo de OAuth (rejeitados como "Invalid Scopes") — o acesso a
+// insights vem junto do token de Página derivado de pages_read_engagement,
+// sem precisar pedir escopo próprio aqui.
+export const META_OAUTH_SCOPES = 'instagram_basic,pages_show_list,pages_read_engagement'
 
 // Guarda um valor aleatório antes de sair pro diálogo da Meta e confere na
 // volta (callback) — proteção padrão contra CSRF em fluxos OAuth: sem isso,
