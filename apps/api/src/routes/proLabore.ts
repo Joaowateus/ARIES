@@ -6,7 +6,8 @@ import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import {
-  trocarOuRenovarTokenLongo,
+  trocarPorTokenLongo,
+  renovarTokenLongo,
   trocarCodigoPorTokenCurto,
   buscarContaInstagram,
   buscarMidiasRecentes,
@@ -2140,12 +2141,12 @@ router.get('/social-media/conta', requireProLaboreAuth, requireDono, async (req:
   res.json(conta)
 })
 
-// Troca um token (curto OU longo — a Graph API não distingue) pela conta do
+// Troca um token (curto OU longo — a API não distingue) pela conta do
 // Instagram vinculada e grava/atualiza o SocialMediaConta do dono — usado
 // tanto pelo login OAuth (`/conectar-oauth`) quanto pelo caminho manual de
-// colar um token do Graph API Explorer (`/conectar`).
-async function conectarContaInstagram(usuarioId: string, tokenInicial: string, appId: string, appSecret: string) {
-  const tokenLongo = await trocarOuRenovarTokenLongo(appId, appSecret, tokenInicial)
+// colar um token gerado direto no painel da Meta (`/conectar`).
+async function conectarContaInstagram(usuarioId: string, tokenInicial: string, appSecret: string) {
+  const tokenLongo = await trocarPorTokenLongo(appSecret, tokenInicial)
   const infoConta = await buscarContaInstagram(tokenLongo.accessToken)
   return prisma.socialMediaConta.upsert({
     where: { usuarioId },
@@ -2168,15 +2169,15 @@ router.post('/social-media/conectar-oauth', requireProLaboreAuth, requireDono, a
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
-  const appId = process.env.META_APP_ID
-  const appSecret = process.env.META_APP_SECRET
+  const appId = process.env.INSTAGRAM_APP_ID
+  const appSecret = process.env.INSTAGRAM_APP_SECRET
   if (!appId || !appSecret) {
     res.status(500).json({ error: 'Integração do Instagram não configurada no servidor.' })
     return
   }
   try {
     const tokenCurto = await trocarCodigoPorTokenCurto(appId, appSecret, parse.data.code, redirectUriSocialMediaOAuth())
-    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, tokenCurto, appId, appSecret)
+    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, tokenCurto, appSecret)
     res.status(201).json(conta)
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Falha ao conectar com o Instagram' })
@@ -2191,15 +2192,14 @@ router.post('/social-media/conectar', requireProLaboreAuth, requireDono, async (
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
-  const appId = process.env.META_APP_ID
-  const appSecret = process.env.META_APP_SECRET
-  if (!appId || !appSecret) {
+  const appSecret = process.env.INSTAGRAM_APP_SECRET
+  if (!appSecret) {
     res.status(500).json({ error: 'Integração do Instagram não configurada no servidor.' })
     return
   }
 
   try {
-    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, parse.data.accessToken, appId, appSecret)
+    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, parse.data.accessToken, appSecret)
     res.status(201).json(conta)
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Falha ao conectar com o Instagram' })
@@ -2224,10 +2224,8 @@ router.delete('/social-media/conta', requireProLaboreAuth, requireDono, async (r
 async function sincronizarContaSocialMedia(conta: { id: string; instagramUserId: string; accessToken: string; tokenExpiraEm: Date }) {
   let accessToken = conta.accessToken
   const diasParaExpirar = (conta.tokenExpiraEm.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  const appId = process.env.META_APP_ID
-  const appSecret = process.env.META_APP_SECRET
-  if (diasParaExpirar < 10 && appId && appSecret) {
-    const renovado = await trocarOuRenovarTokenLongo(appId, appSecret, accessToken)
+  if (diasParaExpirar < 10) {
+    const renovado = await renovarTokenLongo(accessToken)
     accessToken = renovado.accessToken
     await prisma.socialMediaConta.update({ where: { id: conta.id }, data: { accessToken: renovado.accessToken, tokenExpiraEm: renovado.expiraEm } })
   }
