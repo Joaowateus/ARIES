@@ -1853,6 +1853,15 @@ model Apresentacao {
   // [{ id, texto, feito, data? }] — visíveis pra equipe.
   lembretes           Json?
   visivelEquipe       Boolean   @default(true)
+  // Quem montou: null = dono da conta; "vendedor:<id>" = alguém da equipe
+  // (só apresenta com autorização — ver ReuniaoPermissao).
+  autorPessoa         String?
+  autorNome           String?
+  // RASCUNHO | PENDENTE | APROVADA | RECUSADA. Só APROVADA aparece pra
+  // equipe e pode ir ao vivo; as do dono já nascem APROVADA.
+  aprovacao           String    @default("APROVADA")
+  aprovacaoMotivo     String?
+  pedidoEm            DateTime?
   // Organização: departamento (protegido por senha) e pasta. Os dois nulos
   // = "Geral", aberto pra equipe toda.
   departamentoId      String?
@@ -1874,6 +1883,7 @@ model Apresentacao {
 
   @@index([usuarioId])
   @@index([departamentoId])
+  @@index([usuarioId, aprovacao])
   @@map("pro_labore_apresentacoes")
 }
 
@@ -1948,6 +1958,21 @@ model ApresentacaoEspectador {
 
   @@unique([apresentacaoId, pessoa])
   @@map("pro_labore_apresentacoes_espectadores")
+}
+
+// Quem da equipe pode apresentar na aba Reuniões. Sem linha = APROVACAO
+// (monta à vontade, mas cada apresentação passa pelo dono antes de a
+// equipe ver). LIVRE = apresenta sem pedir. BLOQUEADO = nem monta.
+model ReuniaoPermissao {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  // "vendedor:<id>"
+  pessoa       String
+  modo         String
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([usuarioId, pessoa])
+  @@map("pro_labore_reunioes_permissoes")
 }
 
 // "Só pra mim" de quem assiste: cada pessoa da equipe tem a sua nota,

@@ -23,6 +23,32 @@ function pessoaDe(req: Request): string {
   return papel === 'DONO' || !vendedorId ? `dono:${sub}` : `vendedor:${vendedorId}`
 }
 const ehDono = (req: Request) => req.proLaboreUser!.papel === 'DONO'
+// Autor de uma apresentação: null = dono da conta; senão a pessoa da equipe.
+const autorDe = (req: Request): string | null => (ehDono(req) ? null : pessoaDe(req))
+const souAutor = (req: Request, a: { autorPessoa: string | null }) => (a.autorPessoa ?? null) === autorDe(req)
+
+// ---------- Quem da equipe pode apresentar ----------
+
+const MODOS_PERMISSAO = ['APROVACAO', 'LIVRE', 'BLOQUEADO'] as const
+type ModoPermissao = (typeof MODOS_PERMISSAO)[number]
+
+async function modoDe(req: Request): Promise<ModoPermissao | 'DONO'> {
+  if (ehDono(req)) return 'DONO'
+  const p = await prisma.reuniaoPermissao.findUnique({
+    where: { usuarioId_pessoa: { usuarioId: req.proLaboreUser!.sub, pessoa: pessoaDe(req) } },
+    select: { modo: true },
+  })
+  return (p?.modo as ModoPermissao | undefined) ?? 'APROVACAO'
+}
+
+// Quem vê o quê: o autor vê sempre o que é dele; o resto da equipe só o
+// que foi aprovado (e está visível ou ao vivo); o dono vê também os
+// pedidos esperando resposta — rascunho da equipe é só de quem montou.
+function visivelPara(req: Request, a: { autorPessoa: string | null; aprovacao: string; visivelEquipe: boolean; aoVivo: boolean; apresentadorSinalEm: Date | null }): boolean {
+  if (souAutor(req, a)) return true
+  if (a.aprovacao !== 'APROVADA') return ehDono(req) && a.aprovacao === 'PENDENTE'
+  return ehDono(req) || a.visivelEquipe || aoVivoEfetivo(a)
+}
 
 // ---------- Validação do conteúdo ----------
 
@@ -91,8 +117,7 @@ async function carregar(req: Request, res: Response) {
     res.status(404).json({ error: 'Apresentação não encontrada' })
     return null
   }
-  // Equipe vê o que está marcado como visível ou o que está ao vivo agora.
-  if (!ehDono(req) && !a.visivelEquipe && !aoVivoEfetivo(a)) {
+  if (!visivelPara(req, a)) {
     res.status(404).json({ error: 'Apresentação não encontrada' })
     return null
   }
@@ -124,13 +149,21 @@ async function destinoInvalido(usuarioId: string, departamentoId: string | null,
   return null
 }
 
+// Quem é da equipe só cria/move pra departamento que já destrancou.
+async function semAcessoAoDestino(req: Request, departamentoId: string | null): Promise<string | null> {
+  if (!departamentoId || ehDono(req)) return null
+  return liberado(await departamentosLiberados(req), departamentoId) ? null : 'Entre no departamento (com a senha) antes de colocar uma apresentação nele'
+}
+
 type ApresentacaoRow = NonNullable<Awaited<ReturnType<typeof prisma.apresentacao.findUnique>>>
 
-function resumo(a: ApresentacaoRow) {
+function resumo(a: ApresentacaoRow, req: Request) {
   const lembretes = Array.isArray(a.lembretes) ? (a.lembretes as Array<{ feito?: boolean }>) : []
   return {
     id: a.id, titulo: a.titulo, descricao: a.descricao, icone: a.icone, visivelEquipe: a.visivelEquipe,
     departamentoId: a.departamentoId, pastaId: a.pastaId,
+    autorNome: a.autorPessoa ? a.autorNome : null, souAutor: souAutor(req, a),
+    aprovacao: a.aprovacao, aprovacaoMotivo: a.aprovacaoMotivo, pedidoEm: a.pedidoEm,
     aoVivo: aoVivoEfetivo(a), aoVivoDesde: aoVivoEfetivo(a) ? a.aoVivoDesde : null,
     criadoEm: a.criadoEm, atualizadoEm: a.atualizadoEm,
     totalIdeias: contarNos(a.arvore),
@@ -140,11 +173,11 @@ function resumo(a: ApresentacaoRow) {
 
 function detalhe(a: ApresentacaoRow, req: Request) {
   return {
-    ...resumo(a),
+    ...resumo(a, req),
     arvore: a.arvore, configuracao: a.configuracao, notas: a.notas, lembretes: a.lembretes,
     versao: a.versao, palco: a.palco, palcoVersao: a.palcoVersao,
-    podeEditar: ehDono(req),
-    ...(ehDono(req) && { notasPrivadas: a.notasPrivadas }),
+    podeEditar: souAutor(req, a),
+    ...(souAutor(req, a) && { notasPrivadas: a.notasPrivadas }),
   }
 }
 
@@ -156,13 +189,13 @@ router.get('/apresentacoes', requireProLaboreAuth, async (req: Request, res: Res
     orderBy: { atualizadoEm: 'desc' },
   })
   const lib = await departamentosLiberados(req)
-  res.json(lista.filter(a => (ehDono(req) || a.visivelEquipe || aoVivoEfetivo(a)) && liberado(lib, a.departamentoId)).map(resumo))
+  res.json(lista.filter(a => visivelPara(req, a) && liberado(lib, a.departamentoId)).map(a => resumo(a, req)))
 })
 
 // Usado pelo menu lateral pra mostrar o selo "AO VIVO" pra equipe.
 router.get('/apresentacoes/ao-vivo', requireProLaboreAuth, async (req: Request, res: Response) => {
   const lista = await prisma.apresentacao.findMany({
-    where: { usuarioId: req.proLaboreUser!.sub, aoVivo: true, apresentadorSinalEm: { gte: new Date(Date.now() - SINAL_APRESENTADOR_MS) } },
+    where: { usuarioId: req.proLaboreUser!.sub, aoVivo: true, aprovacao: 'APROVADA', apresentadorSinalEm: { gte: new Date(Date.now() - SINAL_APRESENTADOR_MS) } },
     select: { id: true, titulo: true, aoVivoDesde: true, departamentoId: true, departamento: { select: { nome: true, cor: true } } },
   })
   const lib = await departamentosLiberados(req)
@@ -178,6 +211,16 @@ router.get('/apresentacoes/ao-vivo', requireProLaboreAuth, async (req: Request, 
   }))
 })
 
+// Pedidos esperando o dono (selo no menu lateral).
+router.get('/apresentacoes/pendencias', requireProLaboreAuth, async (req: Request, res: Response) => {
+  if (!ehDono(req)) {
+    res.json({ pedidos: 0 })
+    return
+  }
+  const pedidos = await prisma.apresentacao.count({ where: { usuarioId: req.proLaboreUser!.sub, aprovacao: 'PENDENTE' } })
+  res.json({ pedidos })
+})
+
 const criarSchema = z.object({
   titulo: z.string().trim().min(1, 'Dê um título').max(120),
   descricao: z.string().max(500).optional(),
@@ -188,14 +231,19 @@ const criarSchema = z.object({
   pastaId: z.string().nullable().optional(),
 })
 
-router.post('/apresentacoes', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/apresentacoes', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = criarSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
+  const modo = await modoDe(req)
+  if (modo === 'BLOQUEADO') {
+    res.status(403).json({ error: 'O responsável ainda não liberou você pra apresentar nas reuniões' })
+    return
+  }
   const { arvore, configuracao, departamentoId = null, pastaId = null, ...resto } = parse.data
-  const invalido = await destinoInvalido(req.proLaboreUser!.sub, departamentoId, pastaId)
+  const invalido = await destinoInvalido(req.proLaboreUser!.sub, departamentoId, pastaId) ?? await semAcessoAoDestino(req, departamentoId)
   if (invalido) {
     res.status(400).json({ error: invalido })
     return
@@ -207,6 +255,11 @@ router.post('/apresentacoes', requireProLaboreAuth, requireDono, async (req: Req
       departamentoId,
       pastaId,
       usuarioId: req.proLaboreUser!.sub,
+      autorPessoa: autorDe(req),
+      autorNome: ehDono(req) ? null : req.proLaboreUser!.nome,
+      // Da equipe: nasce rascunho (só quem montou vê) até o dono aprovar —
+      // a não ser que a pessoa esteja liberada pra apresentar sem pedir.
+      aprovacao: modo === 'DONO' || modo === 'LIVRE' ? 'APROVADA' : 'RASCUNHO',
       arvore: raiz as unknown as Prisma.InputJsonValue,
       configuracao: (configuracao ?? { layout: 'mind', tema: 'meister', doisLados: true }) as Prisma.InputJsonValue,
       notas: [] as Prisma.InputJsonValue,
@@ -219,7 +272,7 @@ router.post('/apresentacoes', requireProLaboreAuth, requireDono, async (req: Req
 router.get('/apresentacoes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const a = await carregar(req, res)
   if (!a) return
-  if (ehDono(req)) {
+  if (souAutor(req, a)) {
     res.json(detalhe(a, req))
     return
   }
@@ -247,7 +300,7 @@ const atualizarSchema = z.object({
 // Salvamento contínuo da tela do apresentador (a cada ~250ms enquanto
 // edita). Só o que a equipe vê sobe a `versao` — nota privada não dispara
 // nada pros espectadores.
-router.put('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.put('/apresentacoes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = atualizarSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -256,18 +309,23 @@ router.put('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (req: 
   const d = parse.data
   if (d.destino) {
     const invalido = await destinoInvalido(req.proLaboreUser!.sub, d.destino.departamentoId, d.destino.pastaId)
+      ?? await semAcessoAoDestino(req, d.destino.departamentoId)
     if (invalido) {
       res.status(400).json({ error: invalido })
       return
     }
   }
+  // Só quem montou edita. O dono pode, além disso, reorganizar (mover) as
+  // apresentações da equipe.
+  const soMover = Object.keys(d).every(k => k === 'destino')
+  const filtroAutor = ehDono(req) && soMover ? {} : { autorPessoa: autorDe(req) }
   const compartilhado = ['titulo', 'descricao', 'icone', 'arvore', 'configuracao', 'notas', 'lembretes'].some(k => d[k as keyof typeof d] !== undefined)
   // Uma consulta só (sem ler antes): é a rota mais chamada durante a
   // apresentação, e cada ida ao banco atrasa o que a equipe vê.
   let atualizada: { versao: number; atualizadoEm: Date }
   try {
     atualizada = await prisma.apresentacao.update({
-    where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub },
+    where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub, ...filtroAutor },
     data: {
       ...(d.destino && { departamentoId: d.destino.departamentoId, pastaId: d.destino.pastaId }),
       ...(d.titulo !== undefined && { titulo: d.titulo }),
@@ -294,9 +352,13 @@ router.put('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (req: 
   res.json(atualizada)
 })
 
-router.delete('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.delete('/apresentacoes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const a = await carregar(req, res)
   if (!a) return
+  if (!ehDono(req) && !souAutor(req, a)) {
+    res.status(403).json({ error: 'Só quem montou a apresentação pode excluir' })
+    return
+  }
   await prisma.apresentacao.delete({ where: { id: a.id } })
   res.status(204).end()
 })
@@ -306,10 +368,6 @@ router.delete('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (re
 const notaPessoalSchema = z.object({ texto: z.string().max(50_000) })
 
 router.put('/apresentacoes/:id/minha-nota', requireProLaboreAuth, async (req: Request, res: Response) => {
-  if (ehDono(req)) {
-    res.status(400).json({ error: 'Quem apresenta usa as notas privadas da própria apresentação' })
-    return
-  }
   const parse = notaPessoalSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'Nota grande demais' })
@@ -317,6 +375,10 @@ router.put('/apresentacoes/:id/minha-nota', requireProLaboreAuth, async (req: Re
   }
   const a = await carregar(req, res)
   if (!a) return
+  if (souAutor(req, a)) {
+    res.status(400).json({ error: 'Quem apresenta usa as notas privadas da própria apresentação' })
+    return
+  }
   const chave = { apresentacaoId: a.id, pessoa: pessoaDe(req) }
   const { texto } = parse.data
   if (!texto.trim()) {
@@ -332,9 +394,108 @@ router.put('/apresentacoes/:id/minha-nota', requireProLaboreAuth, async (req: Re
   res.json({ ok: true })
 })
 
+// ---------- Autorização pra equipe apresentar ----------
+
+// Quem montou pede pra apresentar (ou cancela o pedido). Liberado sem
+// pedir = aprova na hora.
+router.post('/apresentacoes/:id/pedir', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const cancelar = req.body?.cancelar === true
+  const a = await carregar(req, res)
+  if (!a) return
+  if (!souAutor(req, a) || !a.autorPessoa) {
+    res.status(400).json({ error: 'Só quem é da equipe pede autorização pra apresentar' })
+    return
+  }
+  if (cancelar) {
+    if (a.aprovacao !== 'PENDENTE') {
+      res.status(409).json({ error: 'Não há pedido esperando resposta' })
+      return
+    }
+    const r = await prisma.apresentacao.update({ where: { id: a.id }, data: { aprovacao: 'RASCUNHO', pedidoEm: null } })
+    res.json(detalhe(r, req))
+    return
+  }
+  if (a.aprovacao === 'APROVADA' || a.aprovacao === 'PENDENTE') {
+    res.json(detalhe(a, req))
+    return
+  }
+  const modo = await modoDe(req)
+  if (modo === 'BLOQUEADO') {
+    res.status(403).json({ error: 'O responsável ainda não liberou você pra apresentar nas reuniões' })
+    return
+  }
+  const r = await prisma.apresentacao.update({
+    where: { id: a.id },
+    data: modo === 'LIVRE'
+      ? { aprovacao: 'APROVADA', aprovacaoMotivo: null, pedidoEm: new Date() }
+      : { aprovacao: 'PENDENTE', aprovacaoMotivo: null, pedidoEm: new Date() },
+  })
+  res.json(detalhe(r, req))
+})
+
+// Resposta do dono: aprovar, recusar (com motivo opcional) ou tirar a
+// aprovação de uma que já estava liberada.
+router.post('/apresentacoes/:id/decisao', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({
+    decisao: z.enum(['APROVAR', 'RECUSAR']),
+    motivo: z.string().trim().max(300).optional(),
+  }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'Decisão inválida' })
+    return
+  }
+  const a = await prisma.apresentacao.findFirst({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub } })
+  if (!a || !a.autorPessoa || a.aprovacao === 'RASCUNHO') {
+    res.status(404).json({ error: 'Pedido não encontrado' })
+    return
+  }
+  const { decisao, motivo } = parse.data
+  const r = await prisma.apresentacao.update({
+    where: { id: a.id },
+    data: decisao === 'APROVAR'
+      ? { aprovacao: 'APROVADA', aprovacaoMotivo: null }
+      // Recusar/retirar derruba a transmissão, se estiver no ar.
+      : { aprovacao: 'RECUSADA', aprovacaoMotivo: motivo || null, aoVivo: false, palco: Prisma.DbNull, palcoVersao: { increment: 1 } },
+  })
+  sinalizarMudanca(a.id)
+  res.json(detalhe(r, req))
+})
+
+// Lista da equipe com o modo de cada um (só o dono).
+router.get('/reunioes-permissoes', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const [equipe, permissoes] = await Promise.all([
+    prisma.vendedor.findMany({ where: { usuarioId, ativo: true, email: { not: null } }, select: { id: true, nome: true, papel: true }, orderBy: { nome: 'asc' } }),
+    prisma.reuniaoPermissao.findMany({ where: { usuarioId } }),
+  ])
+  const porPessoa = new Map(permissoes.map(p => [p.pessoa, p.modo]))
+  res.json(equipe.map(v => ({ vendedorId: v.id, nome: v.nome, papel: v.papel, modo: porPessoa.get(`vendedor:${v.id}`) ?? 'APROVACAO' })))
+})
+
+router.put('/reunioes-permissoes/:vendedorId', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({ modo: z.enum(MODOS_PERMISSAO) }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'Modo inválido' })
+    return
+  }
+  const usuarioId = req.proLaboreUser!.sub
+  const v = await prisma.vendedor.findFirst({ where: { id: String(req.params.vendedorId), usuarioId }, select: { id: true } })
+  if (!v) {
+    res.status(404).json({ error: 'Pessoa não encontrada na equipe' })
+    return
+  }
+  const pessoa = `vendedor:${v.id}`
+  await prisma.reuniaoPermissao.upsert({
+    where: { usuarioId_pessoa: { usuarioId, pessoa } },
+    create: { usuarioId, pessoa, modo: parse.data.modo },
+    update: { modo: parse.data.modo },
+  })
+  res.json({ ok: true })
+})
+
 // ---------- Ao vivo: lado do apresentador ----------
 
-router.post('/apresentacoes/:id/ao-vivo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/apresentacoes/:id/ao-vivo', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = z.object({ ativo: z.boolean() }).safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'Informe se a transmissão começa ou termina' })
@@ -342,6 +503,19 @@ router.post('/apresentacoes/:id/ao-vivo', requireProLaboreAuth, requireDono, asy
   }
   const a = await carregar(req, res)
   if (!a) return
+  // Quem montou começa e termina; o dono pode encerrar a de qualquer um.
+  if (!souAutor(req, a) && !(ehDono(req) && !parse.data.ativo)) {
+    res.status(403).json({ error: 'Só quem montou a apresentação pode transmitir' })
+    return
+  }
+  if (parse.data.ativo && a.aprovacao !== 'APROVADA') {
+    res.status(403).json({ error: 'Essa apresentação ainda precisa da autorização do responsável', codigo: 'PRECISA_APROVACAO' })
+    return
+  }
+  if (parse.data.ativo && (await modoDe(req)) === 'BLOQUEADO') {
+    res.status(403).json({ error: 'O responsável não liberou você pra apresentar' })
+    return
+  }
   const agora = new Date()
   const atualizada = await prisma.apresentacao.update({
     where: { id: a.id },
@@ -365,23 +539,27 @@ const palcoSchema = z.object({
 // Estado efêmero da transmissão + sinal de vida do apresentador. Chega
 // várias vezes por segundo enquanto ele mexe; a tela manda também um sinal
 // a cada ~15s parada, pra transmissão não ser dada como encerrada.
-router.put('/apresentacoes/:id/palco', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.put('/apresentacoes/:id/palco', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = palcoSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'Palco inválido' })
     return
   }
   const r = await prisma.apresentacao.updateMany({
-    where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub, aoVivo: true },
+    where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub, autorPessoa: autorDe(req), aoVivo: true },
     data: { palco: parse.data as Prisma.InputJsonValue, palcoVersao: { increment: 1 }, apresentadorSinalEm: new Date() },
   })
   if (r.count > 0) sinalizarMudanca(String(req.params.id))
   res.json({ ok: r.count > 0 })
 })
 
-router.get('/apresentacoes/:id/espectadores', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/apresentacoes/:id/espectadores', requireProLaboreAuth, async (req: Request, res: Response) => {
   const a = await carregar(req, res)
   if (!a) return
+  if (!souAutor(req, a)) {
+    res.status(403).json({ error: 'Só quem apresenta vê quem está assistindo' })
+    return
+  }
   const lista = await prisma.apresentacaoEspectador.findMany({ where: { apresentacaoId: a.id }, orderBy: { ultimoSinalEm: 'desc' } })
   const limite = Date.now() - ASSISTINDO_MS
   res.json(lista.map(e => ({ nome: e.nome, entrouEm: e.entrouEm, ultimoSinalEm: e.ultimoSinalEm, assistindo: e.ultimoSinalEm.getTime() >= limite })))
@@ -404,7 +582,7 @@ function estadoCompleto(a: ApresentacaoRow) {
 router.get('/apresentacoes/:id/transmissao', requireProLaboreAuth, async (req: Request, res: Response) => {
   const a = await carregar(req, res)
   if (!a) return
-  if (!ehDono(req)) void registrarPresenca(a.id, pessoaDe(req), req.proLaboreUser!.nome)
+  if (!souAutor(req, a)) void registrarPresenca(a.id, pessoaDe(req), req.proLaboreUser!.nome)
 
   res.status(200)
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
@@ -449,7 +627,7 @@ router.get('/apresentacoes/:id/transmissao', requireProLaboreAuth, async (req: R
 router.get('/apresentacoes/:id/estado', requireProLaboreAuth, async (req: Request, res: Response) => {
   const a = await carregar(req, res)
   if (!a) return
-  if (!ehDono(req)) void registrarPresenca(a.id, pessoaDe(req), req.proLaboreUser!.nome)
+  if (!souAutor(req, a)) void registrarPresenca(a.id, pessoaDe(req), req.proLaboreUser!.nome)
   const versao = Number(req.query.versao ?? -1)
   const palcoVersao = Number(req.query.palcoVersao ?? -1)
   let completo = estadoCompleto(a)
@@ -494,13 +672,15 @@ router.get('/reunioes-departamentos', requireProLaboreAuth, async (req: Request,
   const [deps, pastas, apresentacoes, lib] = await Promise.all([
     prisma.reuniaoDepartamento.findMany({ where: { usuarioId }, orderBy: { nome: 'asc' } }),
     prisma.reuniaoPasta.findMany({ where: { usuarioId }, orderBy: { nome: 'asc' } }),
-    prisma.apresentacao.findMany({ where: { usuarioId }, select: { departamentoId: true, pastaId: true, visivelEquipe: true, aoVivo: true, apresentadorSinalEm: true } }),
+    prisma.apresentacao.findMany({ where: { usuarioId }, select: { departamentoId: true, pastaId: true, visivelEquipe: true, aoVivo: true, apresentadorSinalEm: true, autorPessoa: true, aprovacao: true } }),
     departamentosLiberados(req),
   ])
-  const visiveis = apresentacoes.filter(a => ehDono(req) || a.visivelEquipe || aoVivoEfetivo(a))
+  const visiveis = apresentacoes.filter(a => visivelPara(req, a))
   const contar = (dep: string | null, pasta?: string) => visiveis.filter(a => a.departamentoId === dep && (pasta === undefined || a.pastaId === pasta)).length
   const pastasDe = (dep: string | null) => pastas.filter(p => (p.departamentoId ?? null) === dep).map(p => ({ id: p.id, nome: p.nome, total: contar(dep, p.id) }))
   res.json({
+    permissao: await modoDe(req),
+    pedidosPendentes: ehDono(req) ? apresentacoes.filter(a => a.aprovacao === 'PENDENTE').length : 0,
     geral: { total: contar(null), pastas: pastasDe(null), aoVivo: visiveis.some(a => !a.departamentoId && aoVivoEfetivo(a)) },
     departamentos: deps.map(d => {
       const aberto = liberado(lib, d.id)

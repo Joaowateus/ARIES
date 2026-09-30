@@ -64,3 +64,6 @@ export function IconeTelaCheia({ cheia }: { cheia: boolean }) {
 export function IconeEnquadrar() {
   return <svg {...svg}><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" /></svg>
 }
+export function IconeCopiarAnotacoes() {
+  return <svg {...svg}><rect x="8" y="8" width="12" height="13" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2" /><path d="M11 13h6M11 17h4" /></svg>
+}

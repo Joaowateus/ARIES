@@ -17,7 +17,8 @@ import { THEMES } from '../../anotacoes/motor-mapa-mental/temas'
 import QuadroMotor from './QuadroMotor'
 import Laser, { criarFonteLaser, type FonteLaser } from './Laser'
 import PainelLateral from './PainelLateral'
-import { IconeTelaCheia, IconeLaser, IconePainel, IconeLink, IconeVoltar, duracaoDesde, linkBiblioteca, useTelaCheia } from './comum'
+import CopiarParaAnotacoes from './CopiarParaAnotacoes'
+import { IconeCopiarAnotacoes, IconeTelaCheia, IconeLaser, IconePainel, IconeLink, IconeVoltar, duracaoDesde, linkBiblioteca, useTelaCheia } from './comum'
 
 type Salvamento = 'salvo' | 'pendente' | 'salvando' | 'erro'
 type Campos = Partial<{
@@ -55,6 +56,11 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
   const [salvamento, setSalvamento] = useState<Salvamento>('salvo')
   const [erro, setErro] = useState('')
   const [copiado, setCopiado] = useState(false)
+  const [copiandoAnotacoes, setCopiandoAnotacoes] = useState(false)
+  // Quem é da equipe só vai ao vivo depois que o dono autoriza.
+  const [aprovacao, setAprovacao] = useState(inicial.aprovacao)
+  const [motivoRecusa, setMotivoRecusa] = useState(inicial.aprovacaoMotivo)
+  const [pedindo, setPedindo] = useState(false)
   const [, forcarRelogio] = useState(0)
   const { ref: telaRef, cheia, alternar: alternarTelaCheia } = useTelaCheia<HTMLDivElement>()
 
@@ -186,6 +192,20 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
     }
   }
 
+  async function pedirAutorizacao(cancelar = false) {
+    setPedindo(true)
+    try {
+      if (timerRef.current) { clearTimeout(timerRef.current); await enviar() }
+      const d = await proLaboreApi.apresentacoes.pedir(id, cancelar)
+      setAprovacao(d.aprovacao)
+      setMotivoRecusa(d.aprovacaoMotivo)
+    } catch (e) {
+      alert((e as Error).message)
+    } finally {
+      setPedindo(false)
+    }
+  }
+
   function mudarConfig(parcial: Partial<ConfiguracaoApresentacao>) {
     const nova = { ...configRef.current, ...parcial }
     configRef.current = nova
@@ -257,10 +277,21 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
           <button type="button" className={`pl-ap-icone-btn ${painelAberto ? 'ligado' : ''}`} onClick={() => setPainelAberto(p => !p)} aria-pressed={painelAberto} title="Anotações e lembretes">
             <IconePainel />
           </button>
-          <button type="button" className="pl-ap-icone-btn" onClick={alternarTelaCheia} title={cheia ? 'Sair da tela cheia' : 'Tela cheia'}><IconeTelaCheia cheia={cheia} /></button>
-          <button type="button" className={`pl-btn ${aoVivo ? 'pl-btn-ghost pl-ap-encerrar' : 'pl-btn-primary pl-ap-iniciar'}`} disabled={alternandoAoVivo} onClick={alternarAoVivo}>
-            {alternandoAoVivo ? '…' : aoVivo ? 'Encerrar' : 'Iniciar ao vivo'}
+          <button type="button" className="pl-ap-icone-btn" onClick={() => setCopiandoAnotacoes(true)} title="Salvar cópia nas Anotações">
+            <IconeCopiarAnotacoes />
           </button>
+          <button type="button" className="pl-ap-icone-btn" onClick={alternarTelaCheia} title={cheia ? 'Sair da tela cheia' : 'Tela cheia'}><IconeTelaCheia cheia={cheia} /></button>
+          {aprovacao === 'APROVADA' || aoVivo ? (
+            <button type="button" className={`pl-btn ${aoVivo ? 'pl-btn-ghost pl-ap-encerrar' : 'pl-btn-primary pl-ap-iniciar'}`} disabled={alternandoAoVivo} onClick={alternarAoVivo}>
+              {alternandoAoVivo ? '…' : aoVivo ? 'Encerrar' : 'Iniciar ao vivo'}
+            </button>
+          ) : aprovacao === 'PENDENTE' ? (
+            <button type="button" className="pl-btn pl-btn-ghost pl-ap-aguardando" disabled>Aguardando autorização</button>
+          ) : (
+            <button type="button" className="pl-btn pl-btn-primary" disabled={pedindo} onClick={() => pedirAutorizacao()}>
+              {pedindo ? 'Enviando…' : aprovacao === 'RECUSADA' ? 'Pedir de novo' : 'Pedir pra apresentar'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -308,9 +339,21 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
           >
             <Laser motorRef={motorRef} fonteRef={fonteLaserRef} />
           </QuadroMotor>
-          {!aoVivo && (
+          {!aoVivo && aprovacao === 'APROVADA' && (
             <div className="pl-ap-dica-flutuante">
               Monte o mapa à vontade — quando for apresentar, clique em <b>Iniciar ao vivo</b> e mande o link pra equipe.
+            </div>
+          )}
+          {!aoVivo && aprovacao !== 'APROVADA' && (
+            <div className={`pl-ap-aprovacao ${aprovacao.toLowerCase()}`} role="status">
+              {aprovacao === 'RASCUNHO' && <>Rascunho — só você vê. Monte à vontade e, quando estiver pronto, clique em <b>Pedir pra apresentar</b>: o responsável recebe o pedido e libera.</>}
+              {aprovacao === 'PENDENTE' && (
+                <>
+                  Pedido enviado — assim que o responsável autorizar, o botão <b>Iniciar ao vivo</b> aparece aqui. Dá pra continuar editando enquanto isso.
+                  <button type="button" disabled={pedindo} onClick={() => pedirAutorizacao(true)}>Cancelar pedido</button>
+                </>
+              )}
+              {aprovacao === 'RECUSADA' && <>Não autorizada{motivoRecusa ? <>: <i>“{motivoRecusa}”</i></> : ''}. Ajuste o que precisar e peça de novo.</>}
             </div>
           )}
         </div>
@@ -323,7 +366,7 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
             onNotas={b => { setNotas(b); agendar({ notas: b }, 500) }}
             onLembretes={l => { setLembretes(l); agendar({ lembretes: l }, 200) }}
             onNotasPrivadas={t => { setNotasPrivadas(t); agendar({ notasPrivadas: t }, 800) }}
-            extra={
+            extra={aprovacao !== 'APROVADA' ? undefined :
               <label className="pl-ap-visivel">
                 <input type="checkbox" checked={visivelEquipe} onChange={e => { setVisivelEquipe(e.target.checked); agendar({ visivelEquipe: e.target.checked }, 0) }} />
                 <span><b>Equipe pode rever depois</b><small>Desmarcado, a equipe só vê enquanto estiver ao vivo.</small></span>
@@ -332,6 +375,15 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
           />
         )}
       </div>
+      {copiandoAnotacoes && (
+        <CopiarParaAnotacoes
+          onFechar={() => setCopiandoAnotacoes(false)}
+          obter={() => ({
+            titulo: titulo.trim() || inicial.titulo, icone: inicial.icone, arvore: JSON.parse(arvoreSalvaRef.current),
+            configuracao: configRef.current, notas, textoPessoal: notasPrivadas,
+          })}
+        />
+      )}
     </div>
   )
 }

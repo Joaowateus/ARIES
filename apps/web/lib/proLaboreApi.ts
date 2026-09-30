@@ -570,6 +570,11 @@ export const proLaboreApi = {
       destino: { departamentoId: string | null; pastaId: string | null }
     }>) => request<{ versao: number; atualizadoEm: string }>(`/pro-labore/apresentacoes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     excluir: (id: string) => request<null>(`/pro-labore/apresentacoes/${id}`, { method: 'DELETE' }),
+    pedir: (id: string, cancelar = false) =>
+      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/pedir`, { method: 'POST', body: JSON.stringify({ cancelar }) }),
+    decidir: (id: string, decisao: 'APROVAR' | 'RECUSAR', motivo?: string) =>
+      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/decisao`, { method: 'POST', body: JSON.stringify({ decisao, motivo }) }),
+    pendencias: () => request<{ pedidos: number }>('/pro-labore/apresentacoes/pendencias'),
     salvarMinhaNota: (id: string, texto: string) =>
       request<{ ok: boolean }>(`/pro-labore/apresentacoes/${id}/minha-nota`, { method: 'PUT', body: JSON.stringify({ texto }) }),
     definirAoVivo: (id: string, ativo: boolean) =>
@@ -598,6 +603,9 @@ export const proLaboreApi = {
       request<{ id: string; nome: string }>('/pro-labore/reunioes-pastas', { method: 'POST', body: JSON.stringify(data) }),
     renomearPasta: (id: string, nome: string) => request<{ ok: boolean }>(`/pro-labore/reunioes-pastas/${id}`, { method: 'PUT', body: JSON.stringify({ nome }) }),
     excluirPasta: (id: string) => request<null>(`/pro-labore/reunioes-pastas/${id}`, { method: 'DELETE' }),
+    permissoes: () => request<PermissaoApresentador[]>('/pro-labore/reunioes-permissoes'),
+    definirPermissao: (vendedorId: string, modo: ModoApresentador) =>
+      request<{ ok: boolean }>(`/pro-labore/reunioes-permissoes/${vendedorId}`, { method: 'PUT', body: JSON.stringify({ modo }) }),
   },
   reunioes: {
     listar: (tipo?: TipoReuniao) => request<ReuniaoResumo[]>(`/pro-labore/reunioes${tipo ? `?tipo=${tipo}` : ''}`),
@@ -624,6 +632,13 @@ export const proLaboreApi = {
       request<Nota>(`/pro-labore/notas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/notas/${id}`, { method: 'DELETE' }),
   },
+  // Ações em lote da tela de Anotações (vários itens selecionados).
+  anotacoes: {
+    mover: (lote: LoteAnotacoes, destinoPastaId: string | null) =>
+      request<{ movidos: number }>('/pro-labore/anotacoes/mover', { method: 'POST', body: JSON.stringify({ ...lote, destinoPastaId }) }),
+    excluir: (lote: LoteAnotacoes) =>
+      request<{ excluidos: number }>('/pro-labore/anotacoes/excluir', { method: 'POST', body: JSON.stringify(lote) }),
+  },
   pastas: {
     listar: () => request<Pasta[]>('/pro-labore/pastas'),
     criar: (data: { nome: string; icone?: string | null; paiId?: string | null }) =>
@@ -636,7 +651,7 @@ export const proLaboreApi = {
     // pastaId: undefined = sem filtro (lista tudo, uso da árvore); '' = raiz; string = dentro daquela pasta.
     listar: (pastaId?: string) => request<MapaMental[]>(`/pro-labore/mapas-mentais${pastaId !== undefined ? `?pastaId=${pastaId}` : ''}`),
     lixeira: () => request<MapaMental[]>('/pro-labore/mapas-mentais/lixeira'),
-    criar: (data: { titulo?: string; icone?: string | null; objetos?: BoardObjeto[]; conectores?: BoardConector[]; pastaId?: string | null; configuracao?: Record<string, unknown> | null }) =>
+    criar: (data: { titulo?: string; icone?: string | null; tema?: string | null; objetos?: BoardObjeto[]; conectores?: BoardConector[]; pastaId?: string | null; configuracao?: Record<string, unknown> | null }) =>
       request<MapaMental>('/pro-labore/mapas-mentais', { method: 'POST', body: JSON.stringify(data) }),
     atualizar: (id: string, data: Partial<{ titulo: string; icone: string | null; objetos: BoardObjeto[]; conectores: BoardConector[]; pastaId: string | null; configuracao: Record<string, unknown> | null }>) =>
       request<MapaMental>(`/pro-labore/mapas-mentais/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -1259,6 +1274,9 @@ export interface DepartamentoReuniao {
   pastas: PastaReuniao[]
 }
 export interface EstruturaReunioes {
+  // O que a pessoa logada pode fazer na aba: dono, ou o modo de quem é da equipe.
+  permissao: 'DONO' | ModoApresentador
+  pedidosPendentes: number
   geral: { total: number; pastas: PastaReuniao[]; aoVivo: boolean }
   departamentos: DepartamentoReuniao[]
 }
@@ -1277,7 +1295,18 @@ export interface ApresentacaoResumo {
   atualizadoEm: string
   totalIdeias: number
   lembretesPendentes: number
+  // Autoria/autorização: autorNome só vem quando quem montou é da equipe.
+  autorNome: string | null
+  souAutor: boolean
+  aprovacao: AprovacaoApresentacao
+  aprovacaoMotivo: string | null
+  pedidoEm: string | null
 }
+
+export type AprovacaoApresentacao = 'RASCUNHO' | 'PENDENTE' | 'APROVADA' | 'RECUSADA'
+export type ModoApresentador = 'APROVACAO' | 'LIVRE' | 'BLOQUEADO'
+export interface PermissaoApresentador { vendedorId: string; nome: string; papel: string; modo: ModoApresentador }
+export interface LoteAnotacoes { pastas?: string[]; notas?: string[]; mapas?: string[] }
 
 export interface ConteudoApresentacao {
   titulo: string

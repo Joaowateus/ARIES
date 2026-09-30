@@ -6,13 +6,15 @@
 // traz de volta pro que o apresentador está mostrando.
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { proLaboreApi, type ApresentacaoDetalhe, type Bloco, type ConfiguracaoApresentacao, type LembreteApresentacao, type PalcoApresentacao } from '@/lib/proLaboreApi'
+import { proLaboreApi, type ApresentacaoDetalhe, type ArvoreApresentacao, type Bloco, type ConfiguracaoApresentacao, type LembreteApresentacao, type PalcoApresentacao } from '@/lib/proLaboreApi'
+import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import type { MotorMapaMental } from '../../anotacoes/motor-mapa-mental/motor'
 import QuadroMotor from './QuadroMotor'
 import Laser, { criarFonteLaser, type FonteLaser } from './Laser'
 import PainelLateral from './PainelLateral'
+import CopiarParaAnotacoes from './CopiarParaAnotacoes'
 import { useTransmissao } from './useTransmissao'
-import { IconeEnquadrar, IconePainel, IconeTelaCheia, IconeVoltar, duracaoDesde, linkBiblioteca, tempoRelativo, useTelaCheia } from './comum'
+import { IconeCopiarAnotacoes, IconeEnquadrar, IconePainel, IconeTelaCheia, IconeVoltar, duracaoDesde, linkBiblioteca, tempoRelativo, useTelaCheia } from './comum'
 
 export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }) {
   const cfgInicial: ConfiguracaoApresentacao = inicial.configuracao ?? { layout: 'mind', tema: 'meister', doisLados: true }
@@ -26,6 +28,14 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
   const [painelAberto, setPainelAberto] = useState(false)
   const [novidadeNotas, setNovidadeNotas] = useState(false)
   const { ref: telaRef, cheia, alternar: alternarTelaCheia } = useTelaCheia<HTMLDivElement>()
+  const { usuario } = useProLaboreAuth()
+  const isDono = usuario?.papel === 'DONO'
+  const [copiandoAnotacoes, setCopiandoAnotacoes] = useState(false)
+  // Pedido de alguém da equipe (o dono abre pra conferir antes de liberar).
+  const [aprovacao, setAprovacao] = useState(inicial.aprovacao)
+  const [decidindo, setDecidindo] = useState(false)
+  const arvoreRef = useRef<ArvoreApresentacao>(inicial.arvore)
+  const configRef = useRef<ConfiguracaoApresentacao | null>(inicial.configuracao)
 
   const motorRef = useRef<MotorMapaMental | null>(null)
   const seguindoRef = useRef(true)
@@ -96,6 +106,8 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
       const json = JSON.stringify(novas)
       if (json !== notasJsonRef.current) { notasJsonRef.current = json; setNotas(novas); setNovidadeNotas(true) }
       const cfg = c.configuracao ?? cfgInicial
+      arvoreRef.current = c.arvore
+      configRef.current = cfg
       motorRef.current?.aplicarRemoto(JSON.parse(JSON.stringify(c.arvore)), { layout: cfg.layout, theme: cfg.tema, balanced: cfg.doisLados })
     },
     onPalco: p => { ultimoPalcoRef.current = p; aplicarPalco(p) },
@@ -108,13 +120,36 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
 
   const pendentes = lembretes.filter(l => !l.feito).length
 
+  async function decidir(decisao: 'APROVAR' | 'RECUSAR') {
+    let motivo: string | undefined
+    if (decisao === 'RECUSAR') {
+      const r = prompt(`Recusar a apresentação de ${inicial.autorNome ?? 'quem montou'}? Se quiser, diga o motivo (a pessoa vê):`, '')
+      if (r === null) return
+      motivo = r.trim() || undefined
+    }
+    setDecidindo(true)
+    try {
+      const d = await proLaboreApi.apresentacoes.decidir(inicial.id, decisao, motivo)
+      setAprovacao(d.aprovacao)
+    } catch (e) {
+      alert((e as Error).message)
+    } finally {
+      setDecidindo(false)
+    }
+  }
+
+  async function encerrarDeOutro() {
+    if (!confirm(`Encerrar a transmissão de ${inicial.autorNome ?? 'quem está apresentando'}?`)) return
+    try { await proLaboreApi.apresentacoes.definirAoVivo(inicial.id, false) } catch (e) { alert((e as Error).message) }
+  }
+
   return (
     <div ref={telaRef} className={`pl-ap-tela ${cheia ? 'cheia' : ''}`}>
       <header className="pl-ap-barra">
         <Link href={linkBiblioteca(inicial)} className="pl-ap-icone-btn" aria-label="Voltar pra biblioteca"><IconeVoltar /></Link>
         <div className="pl-ap-titulo-leitura">
           <b>{titulo}</b>
-          {descricao && <small>{descricao}</small>}
+          {(descricao || inicial.autorNome) && <small>{[inicial.autorNome && `por ${inicial.autorNome}`, descricao].filter(Boolean).join(' · ')}</small>}
         </div>
         <div className="pl-ap-barra-meio">
           {aoVivo ? (
@@ -132,7 +167,11 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
               <span className="pl-as-switch-trilho" aria-hidden="true"><span /></span>Seguir apresentador
             </button>
           )}
+          {isDono && aoVivo && inicial.autorNome && (
+            <button type="button" className="pl-btn pl-btn-ghost pl-ap-encerrar" onClick={encerrarDeOutro}>Encerrar</button>
+          )}
           <button type="button" className="pl-ap-icone-btn" onClick={() => motorRef.current?.enquadrar()} title="Ver o mapa inteiro"><IconeEnquadrar /></button>
+          <button type="button" className="pl-ap-icone-btn" onClick={() => setCopiandoAnotacoes(true)} title="Salvar cópia nas minhas Anotações"><IconeCopiarAnotacoes /></button>
           <button type="button" className={`pl-ap-icone-btn ${painelAberto ? 'ligado' : ''}`} onClick={() => { setPainelAberto(p => !p); setNovidadeNotas(false) }} aria-pressed={painelAberto} title="Anotações e lembretes">
             <IconePainel />
             {!painelAberto && (novidadeNotas || pendentes > 0) && <span className="pl-ap-bolinha" aria-label="Novidades" />}
@@ -140,6 +179,18 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
           <button type="button" className="pl-ap-icone-btn" onClick={alternarTelaCheia} title={cheia ? 'Sair da tela cheia' : 'Tela cheia'}><IconeTelaCheia cheia={cheia} /></button>
         </div>
       </header>
+
+      {isDono && inicial.autorNome && aprovacao !== 'APROVADA' && (
+        <div className={`pl-ap-pedido ${aprovacao.toLowerCase()}`} role="region" aria-label="Pedido pra apresentar">
+          <span>
+            {aprovacao === 'PENDENTE'
+              ? <><b>{inicial.autorNome}</b> pediu pra apresentar isso pra equipe. Confira o conteúdo e responda.</>
+              : <>Você recusou essa apresentação de <b>{inicial.autorNome}</b>. Ainda dá pra liberar.</>}
+          </span>
+          {aprovacao === 'PENDENTE' && <button type="button" className="pl-btn pl-btn-ghost" disabled={decidindo} onClick={() => decidir('RECUSAR')}>Recusar</button>}
+          <button type="button" className="pl-btn pl-btn-primary" disabled={decidindo} onClick={() => decidir('APROVAR')}>{decidindo ? '…' : 'Autorizar'}</button>
+        </div>
+      )}
 
       <div className={`pl-ap-corpo ${painelAberto ? 'com-painel' : ''}`}>
         <div className="pl-ap-palco">
@@ -165,6 +216,12 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
             </div>
           )}
         </div>
+        {copiandoAnotacoes && (
+          <CopiarParaAnotacoes
+            onFechar={() => setCopiandoAnotacoes(false)}
+            obter={() => ({ titulo, icone: inicial.icone, arvore: arvoreRef.current, configuracao: configRef.current, notas, textoPessoal: minhaNota })}
+          />
+        )}
         {painelAberto && (
           <PainelLateral
             editavel={false} notas={notas} lembretes={lembretes}

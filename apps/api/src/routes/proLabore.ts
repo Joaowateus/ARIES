@@ -3244,8 +3244,11 @@ router.patch('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Resp
   const existente = await prisma.pasta.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Pasta não encontrada' }); return }
   if (parse.data.paiId) {
-    if (parse.data.paiId === existente.id) { res.status(400).json({ error: 'Uma pasta não pode ser pai dela mesma' }); return }
     if (!(await validarPastaDoUsuario(req, parse.data.paiId))) { res.status(404).json({ error: 'Pasta pai não encontrada' }); return }
+    const todas = await prisma.pasta.findMany({ where: reuniaoWhereBase(req), select: { id: true, paiId: true } })
+    if (descendentesDe(todas, [existente.id]).has(parse.data.paiId)) {
+      res.status(400).json({ error: 'Uma pasta não pode ir pra dentro dela mesma' }); return
+    }
   }
   const atualizada = await prisma.pasta.update({ where: { id: existente.id }, data: parse.data })
   res.json(atualizada)
@@ -3254,10 +3257,91 @@ router.patch('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Resp
 router.delete('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const existente = await prisma.pasta.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Pasta não encontrada' }); return }
-  // Subpastas e notas soltam pro nível de cima (paiId/pastaId -> null),
-  // nunca são apagadas junto — ver comentário do modelo Pasta.
-  await prisma.pasta.delete({ where: { id: existente.id } })
+  await excluirPastasSubindoConteudo(req, [existente.id])
   res.json({ ok: true })
+})
+
+// Ids da pasta (ou pastas) e de tudo que está dentro dela, em qualquer nível.
+function descendentesDe(todas: Array<{ id: string; paiId: string | null }>, raizes: string[]): Set<string> {
+  const resultado = new Set(raizes)
+  let mudou = true
+  while (mudou) {
+    mudou = false
+    for (const p of todas) {
+      if (p.paiId && resultado.has(p.paiId) && !resultado.has(p.id)) { resultado.add(p.id); mudou = true }
+    }
+  }
+  return resultado
+}
+
+// Excluir pasta nunca apaga o que está dentro: subpastas, páginas e mapas
+// sobem pro nível de cima (a pasta mãe da que foi excluída). Com várias
+// pastas aninhadas excluídas juntas, sobe até a primeira que sobrou.
+async function excluirPastasSubindoConteudo(req: Request, ids: string[]) {
+  const base = reuniaoWhereBase(req)
+  const todas = await prisma.pasta.findMany({ where: base, select: { id: true, paiId: true } })
+  const porId = new Map(todas.map(p => [p.id, p]))
+  const apagar = new Set(ids.filter(id => porId.has(id)))
+  const destinoDe = (id: string): string | null => {
+    let atual = porId.get(id)?.paiId ?? null
+    while (atual && apagar.has(atual)) atual = porId.get(atual)?.paiId ?? null
+    return atual
+  }
+  await prisma.$transaction(async tx => {
+    for (const id of apagar) {
+      const destino = destinoDe(id)
+      await tx.pasta.updateMany({ where: { ...base, paiId: id, id: { notIn: [...apagar] } }, data: { paiId: destino } })
+      await tx.nota.updateMany({ where: { ...base, pastaId: id }, data: { pastaId: destino } })
+      await tx.mapaMental.updateMany({ where: { ...base, pastaId: id }, data: { pastaId: destino } })
+    }
+    // Filhas antes das mães (a relação pai→filha não tem cascata).
+    await tx.pasta.updateMany({ where: { ...base, id: { in: [...apagar] } }, data: { paiId: null } })
+    await tx.pasta.deleteMany({ where: { ...base, id: { in: [...apagar] } } })
+  })
+}
+
+// --- Ações em lote na tela de Anotações (seleção de vários itens) ---
+const loteAnotacoesSchema = z.object({
+  pastas: z.array(z.string()).max(500).default([]),
+  notas: z.array(z.string()).max(500).default([]),
+  mapas: z.array(z.string()).max(500).default([]),
+})
+
+router.post('/anotacoes/mover', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = loteAnotacoesSchema.extend({ destinoPastaId: z.string().nullable() }).safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: 'Seleção inválida' }); return }
+  const { pastas, notas, mapas, destinoPastaId } = parse.data
+  const base = reuniaoWhereBase(req)
+  if (destinoPastaId) {
+    if (!(await validarPastaDoUsuario(req, destinoPastaId))) { res.status(404).json({ error: 'Pasta de destino não encontrada' }); return }
+    if (pastas.length) {
+      const todas = await prisma.pasta.findMany({ where: base, select: { id: true, paiId: true } })
+      if (descendentesDe(todas, pastas).has(destinoPastaId)) {
+        res.status(400).json({ error: 'Não dá pra mover uma pasta pra dentro dela mesma' }); return
+      }
+    }
+  }
+  const [p, n, m] = await prisma.$transaction([
+    prisma.pasta.updateMany({ where: { ...base, id: { in: pastas } }, data: { paiId: destinoPastaId } }),
+    prisma.nota.updateMany({ where: { ...base, id: { in: notas } }, data: { pastaId: destinoPastaId } }),
+    prisma.mapaMental.updateMany({ where: { ...base, id: { in: mapas } }, data: { pastaId: destinoPastaId } }),
+  ])
+  res.json({ movidos: p.count + n.count + m.count })
+})
+
+// Páginas são apagadas, mapas mentais vão pra lixeira e pastas somem
+// soltando o conteúdo pro nível de cima (mesmas regras das exclusões uma a uma).
+router.post('/anotacoes/excluir', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = loteAnotacoesSchema.safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: 'Seleção inválida' }); return }
+  const { pastas, notas, mapas } = parse.data
+  const base = reuniaoWhereBase(req)
+  const [n, m] = await prisma.$transaction([
+    prisma.nota.deleteMany({ where: { ...base, id: { in: notas } } }),
+    prisma.mapaMental.updateMany({ where: { ...base, id: { in: mapas }, excluidoEm: null }, data: { excluidoEm: new Date() } }),
+  ])
+  if (pastas.length) await excluirPastasSubindoConteudo(req, pastas)
+  res.json({ excluidos: n.count + m.count + pastas.length })
 })
 
 // --- Mapas mentais / board: outro "tipo de página" dentro da mesma árvore

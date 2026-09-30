@@ -2,8 +2,8 @@
 
 // Peças da organização da aba Reuniões: senha do departamento, formulário
 // de departamento e "mover apresentação".
-import { useState } from 'react'
-import { proLaboreApi, type DepartamentoReuniao, type EstruturaReunioes } from '@/lib/proLaboreApi'
+import { useEffect, useState } from 'react'
+import { proLaboreApi, type DepartamentoReuniao, type EstruturaReunioes, type ModoApresentador, type PermissaoApresentador } from '@/lib/proLaboreApi'
 
 export const CORES_DEPARTAMENTO = ['#5b8def', '#e0687a', '#57c785', '#e0a83e', '#a679e0', '#4fc3d9', '#e08d4f', '#8b93a6']
 
@@ -153,7 +153,9 @@ export function MoverApresentacao({ titulo, atual, estrutura, onMover, onCancela
         <label className="pl-field" style={{ marginTop: 14 }}><span>Departamento</span>
           <select className="pl-input" value={dep} onChange={e => { setDep(e.target.value); setPasta('') }}>
             <option value="">Geral (sem senha)</option>
-            {estrutura.departamentos.map(d => <option key={d.id} value={d.id}>{d.nome} (com senha)</option>)}
+            {estrutura.departamentos.map(d => (
+              <option key={d.id} value={d.id} disabled={!d.liberado}>{d.nome} {d.liberado ? '(com senha)' : '(entre com a senha antes)'}</option>
+            ))}
           </select>
         </label>
         <label className="pl-field" style={{ marginTop: 10 }}><span>Pasta</span>
@@ -166,6 +168,74 @@ export function MoverApresentacao({ titulo, atual, estrutura, onMover, onCancela
         <div className="pl-ap-nova-botoes">
           <button type="button" className="pl-btn pl-btn-ghost" onClick={onCancelar}>Cancelar</button>
           <button type="button" className="pl-btn pl-btn-primary" disabled={movendo} onClick={mover}>{movendo ? 'Movendo…' : 'Mover'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const MODOS: Array<{ valor: ModoApresentador; rotulo: string; descricao: string }> = [
+  { valor: 'APROVACAO', rotulo: 'Com autorização', descricao: 'Monta à vontade; cada apresentação passa por você antes da equipe ver' },
+  { valor: 'LIVRE', rotulo: 'Livre', descricao: 'Apresenta sem pedir' },
+  { valor: 'BLOQUEADO', rotulo: 'Não apresenta', descricao: 'Só assiste' },
+]
+
+// Quem da equipe pode apresentar na aba Reuniões (só o dono vê).
+export function PermissoesEquipe({ onFechar }: { onFechar: () => void }) {
+  const [lista, setLista] = useState<PermissaoApresentador[] | null>(null)
+  const [erro, setErro] = useState('')
+  const [salvando, setSalvando] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelado = false
+    proLaboreApi.reunioesOrg.permissoes().then(l => { if (!cancelado) setLista(l) }).catch(e => { if (!cancelado) setErro((e as Error).message) })
+    return () => { cancelado = true }
+  }, [])
+  async function mudar(p: PermissaoApresentador, modo: ModoApresentador) {
+    setSalvando(p.vendedorId)
+    setErro('')
+    try {
+      await proLaboreApi.reunioesOrg.definirPermissao(p.vendedorId, modo)
+      setLista(l => l?.map(x => (x.vendedorId === p.vendedorId ? { ...x, modo } : x)) ?? l)
+    } catch (e) {
+      setErro((e as Error).message)
+    } finally {
+      setSalvando(null)
+    }
+  }
+  return (
+    <div className="pl-rn-modal" role="dialog" aria-modal="true" aria-label="Quem pode apresentar" onClick={e => { if (e.target === e.currentTarget) onFechar() }}>
+      <div className="pl-card pl-rn-modal-caixa pl-rn-perm-caixa">
+        <div className="pl-card-title">Quem pode apresentar</div>
+        <p className="pl-card-sub" style={{ margin: '4px 0 14px' }}>
+          Por padrão, todo mundo da equipe pode montar uma apresentação, mas ela só vai pra equipe (e ao vivo) depois que você autorizar.
+          Os pedidos aparecem no topo da aba Reuniões.
+        </p>
+        {erro && <div className="pl-alert pl-alert-error" style={{ marginBottom: 10 }}>{erro}</div>}
+        {lista === null ? <div className="pl-hint">Carregando…</div> : lista.length === 0 ? (
+          <div className="pl-hint">Ninguém da equipe tem login ainda. Dê acesso em Vendedores.</div>
+        ) : (
+          <ul className="pl-rn-perm-lista">
+            {lista.map(p => (
+              <li key={p.vendedorId}>
+                <div className="pl-rn-perm-nome"><b>{p.nome}</b><small>{p.papel === 'SUPERVISOR' ? 'Supervisor' : 'Vendedor'}</small></div>
+                <div className="pl-rn-perm-modos" role="radiogroup" aria-label={`Permissão de ${p.nome}`}>
+                  {MODOS.map(m => (
+                    <button
+                      key={m.valor} type="button" role="radio" aria-checked={p.modo === m.valor} title={m.descricao}
+                      className={`${p.modo === m.valor ? 'ativo' : ''} ${m.valor.toLowerCase()}`}
+                      disabled={salvando === p.vendedorId} onClick={() => mudar(p, m.valor)}
+                    >{m.rotulo}</button>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <ul className="pl-rn-perm-legenda">
+          {MODOS.map(m => <li key={m.valor}><b>{m.rotulo}:</b> {m.descricao.toLowerCase()}.</li>)}
+        </ul>
+        <div className="pl-ap-nova-botoes">
+          <button type="button" className="pl-btn pl-btn-primary" onClick={onFechar}>Pronto</button>
         </div>
       </div>
     </div>
