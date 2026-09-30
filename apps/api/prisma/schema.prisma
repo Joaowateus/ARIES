@@ -929,7 +929,7 @@ model ProLaboreUsuario {
   metasFunil                MetaFunilProLabore[]
   agendaItens               AgendaItem[]
   ocorrencias               Ocorrencia[]
-  socialMediaConta          SocialMediaConta?
+  socialMediaContas         SocialMediaConta[]
   planoCrescimentoAcoes     PlanoCrescimentoAcao[]
   planoCrescimentoSnapshots PlanoCrescimentoSnapshot[]
   reunioes                  Reuniao[]
@@ -974,6 +974,7 @@ model Vendedor {
   leads               Lead[]
   ocorrencias         Ocorrencia[]
   assistenteComercial AssistenteComercial?
+  socialMediaContas   SocialMediaConta[]
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -1374,10 +1375,18 @@ model OcorrenciaHistorico {
 // Conta do Instagram conectada via Instagram Graph API. Um usuarioId (dono)
 // só conecta uma conta — o accessToken é de longa duração (~60 dias) e
 // precisa ser renovado antes de expirar (ver rota de refresh).
+// Uma conta do Instagram por PESSOA: o dono conecta a dele e cada
+// vendedor/supervisor pode conectar a própria — ninguém vê a de outro.
+// `titular` é a chave única da pessoa ("dono:<usuarioId>" ou
+// "vendedor:<vendedorId>"); um mesmo Instagram não pode ser ligado por duas
+// pessoas (instagramUserId único), o que impede alguém da equipe de
+// conectar a conta de outra pessoa pra ver os dados dela.
 model SocialMediaConta {
   id                    String    @id @default(cuid())
-  usuarioId             String    @unique
-  instagramUserId       String
+  usuarioId             String
+  titular               String    @unique
+  vendedorId            String?
+  instagramUserId       String    @unique
   nomeUsuario           String
   nomeExibicao          String?
   fotoUrl               String?
@@ -1412,9 +1421,11 @@ model SocialMediaConta {
   ultimoErroSync        String?
 
   usuario   ProLaboreUsuario            @relation(fields: [usuarioId], references: [id])
+  vendedor  Vendedor?                   @relation(fields: [vendedorId], references: [id])
   midias    SocialMediaMidia[]
   snapshots SocialMediaSnapshotDiario[]
 
+  @@index([usuarioId])
   @@map("pro_labore_social_media_contas")
 }
 

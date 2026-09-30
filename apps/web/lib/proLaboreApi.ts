@@ -286,8 +286,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...(options.headers ?? {}),
     },
   })
-  const body = await res.json()
-  if (!res.ok) throw new Error(body.error ?? 'Erro inesperado')
+  // Resposta sem corpo (204, ex.: desconectar) não é JSON — antes quebrava
+  // aqui e a tela ficava parada mesmo com a ação feita no servidor.
+  const texto = res.status === 204 ? '' : await res.text()
+  const body = texto ? JSON.parse(texto) : null
+  if (!res.ok) throw new Error(body?.error ?? 'Erro inesperado')
   return body as T
 }
 

@@ -2141,25 +2141,56 @@ const SOCIAL_MEDIA_SELECT = {
   tokenExpiraEm: true, ultimaSincronizacaoEm: true, ultimoErroSync: true,
 } as const
 
-router.get('/social-media/conta', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+// Cada pessoa tem a própria conta: o dono e cada vendedor/supervisor
+// conectam o próprio Instagram e só enxergam o que é deles.
+function titularSocialMedia(req: Request): { titular: string; vendedorId: string | null } {
+  const { papel, sub, vendedorId } = req.proLaboreUser!
+  if (papel === 'DONO' || !vendedorId) return { titular: `dono:${sub}`, vendedorId: null }
+  return { titular: `vendedor:${vendedorId}`, vendedorId }
+}
+
+router.get('/social-media/conta', requireProLaboreAuth, async (req: Request, res: Response) => {
   const conta = await prisma.socialMediaConta.findUnique({
-    where: { usuarioId: req.proLaboreUser!.sub },
+    where: { titular: titularSocialMedia(req).titular },
     select: SOCIAL_MEDIA_SELECT,
   })
   res.json(conta)
 })
 
 // Troca um token (curto OU longo — a API não distingue) pela conta do
-// Instagram vinculada e grava/atualiza o SocialMediaConta do dono — usado
+// Instagram vinculada e grava/atualiza o SocialMediaConta de quem está
+// logado (dono ou vendedor/supervisor) — usado
 // tanto pelo login OAuth (`/conectar-oauth`) quanto pelo caminho manual de
 // colar um token gerado direto no painel da Meta (`/conectar`).
-async function conectarContaInstagram(usuarioId: string, tokenInicial: string, appSecret: string) {
+async function conectarContaInstagram(req: Request, tokenInicial: string, appSecret: string) {
+  const usuarioId = req.proLaboreUser!.sub
+  const { titular, vendedorId } = titularSocialMedia(req)
   const tokenLongo = await trocarPorTokenLongo(appSecret, tokenInicial)
   const infoConta = await buscarContaInstagram(tokenLongo.accessToken)
+
+  // Um Instagram só pode estar ligado a uma pessoa — impede alguém da
+  // equipe de conectar a conta do dono (ou de um colega) e ver os dados.
+  const jaLigada = await prisma.socialMediaConta.findUnique({ where: { instagramUserId: infoConta.instagramUserId }, select: { titular: true } })
+  if (jaLigada && jaLigada.titular !== titular) {
+    throw new Error(`O Instagram @${infoConta.nomeUsuario} já está conectado por outra pessoa da equipe. Entre com o seu próprio Instagram (se o navegador abriu logado em outra conta, saia dela no instagram.com e tente de novo).`)
+  }
+
+  // Trocou de Instagram: o histórico sincronizado era da conta anterior.
+  const atual = await prisma.socialMediaConta.findUnique({ where: { titular } })
+  if (atual && atual.instagramUserId !== infoConta.instagramUserId) {
+    await prisma.$transaction([
+      prisma.socialMediaMidia.deleteMany({ where: { contaId: atual.id } }),
+      prisma.socialMediaSnapshotDiario.deleteMany({ where: { contaId: atual.id } }),
+      prisma.socialMediaConta.update({
+        where: { id: atual.id },
+        data: { ultimaSincronizacaoEm: null, ultimoErroSync: null, demografia: Prisma.DbNull, seguidoresOnline: Prisma.DbNull, distribuicaoAlcance: Prisma.DbNull, conectadoEm: new Date() },
+      }),
+    ])
+  }
   return prisma.socialMediaConta.upsert({
-    where: { usuarioId },
+    where: { titular },
     update: { ...infoConta, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
-    create: { ...infoConta, usuarioId, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
+    create: { ...infoConta, usuarioId, titular, vendedorId, accessToken: tokenLongo.accessToken, tokenExpiraEm: tokenLongo.expiraEm },
     select: SOCIAL_MEDIA_SELECT,
   })
 }
@@ -2171,7 +2202,7 @@ function redirectUriSocialMediaOAuth(): string {
   return `${process.env.FRONTEND_URL}/pro-labore/social-media/callback`
 }
 
-router.post('/social-media/conectar-oauth', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/social-media/conectar-oauth', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = z.object({ code: z.string().min(1, 'Código de autorização inválido') }).safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2185,7 +2216,7 @@ router.post('/social-media/conectar-oauth', requireProLaboreAuth, requireDono, a
   }
   try {
     const tokenCurto = await trocarCodigoPorTokenCurto(appId, appSecret, parse.data.code, redirectUriSocialMediaOAuth())
-    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, tokenCurto, appSecret)
+    const conta = await conectarContaInstagram(req, tokenCurto, appSecret)
     res.status(201).json(conta)
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Falha ao conectar com o Instagram' })
@@ -2194,7 +2225,7 @@ router.post('/social-media/conectar-oauth', requireProLaboreAuth, requireDono, a
 
 const conectarSocialMediaSchema = z.object({ accessToken: z.string().min(20, 'Token inválido') })
 
-router.post('/social-media/conectar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/social-media/conectar', requireProLaboreAuth, async (req: Request, res: Response) => {
   const parse = conectarSocialMediaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2207,15 +2238,15 @@ router.post('/social-media/conectar', requireProLaboreAuth, requireDono, async (
   }
 
   try {
-    const conta = await conectarContaInstagram(req.proLaboreUser!.sub, parse.data.accessToken, appSecret)
+    const conta = await conectarContaInstagram(req, parse.data.accessToken, appSecret)
     res.status(201).json(conta)
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Falha ao conectar com o Instagram' })
   }
 })
 
-router.delete('/social-media/conta', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
+router.delete('/social-media/conta', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const conta = await prisma.socialMediaConta.findUnique({ where: { titular: titularSocialMedia(req).titular } })
   if (!conta) {
     res.status(404).json({ error: 'Nenhuma conta conectada' })
     return
@@ -2231,8 +2262,8 @@ router.delete('/social-media/conta', requireProLaboreAuth, requireDono, async (r
 // atualizada + um resumo do que foi sincronizado, pra tela avisar quando
 // ainda ficaram posts sem insight (o sync tem um teto de tempo e completa
 // o resto na próxima rodada).
-router.post('/social-media/sincronizar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
+router.post('/social-media/sincronizar', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const conta = await prisma.socialMediaConta.findUnique({ where: { titular: titularSocialMedia(req).titular } })
   if (!conta) {
     res.status(404).json({ error: 'Nenhuma conta do Instagram conectada' })
     return
@@ -2271,9 +2302,10 @@ router.post('/social-media/sincronizar-cron', async (req: Request, res: Response
 const MAX_DIAS_ANALISE_SOCIAL = 366
 const DIAS_JANELA_IMPACTO = 90
 
-router.get('/social-media/resumo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
-  const conta = await prisma.socialMediaConta.findUnique({ where: { usuarioId } })
+  const { titular, vendedorId: vendedorTitular } = titularSocialMedia(req)
+  const conta = await prisma.socialMediaConta.findUnique({ where: { titular } })
   if (!conta) {
     res.json({ conectado: false })
     return
@@ -2295,7 +2327,8 @@ router.get('/social-media/resumo', requireProLaboreAuth, requireDono, async (req
     prisma.socialMediaSnapshotDiario.findMany({ where: { contaId: conta.id, data: { gte: anteriorInicio, lte: fim } }, orderBy: { data: 'asc' } }),
     prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
     prisma.lead.findMany({
-      where: { usuarioId, tipoLead: 'ORGANICO', criadoEm: { gte: inicioDoDiaBrasilia(inicio), lt: fimExclusivo } },
+      // Instagram de vendedor: cruza só com os leads orgânicos dele.
+      where: { usuarioId, ...(vendedorTitular && { vendedorId: vendedorTitular }), tipoLead: 'ORGANICO', criadoEm: { gte: inicioDoDiaBrasilia(inicio), lt: fimExclusivo } },
       select: { criadoEm: true, valorNegociacao: true, estagio: true },
     }),
   ])
@@ -2326,7 +2359,7 @@ router.get('/plano-crescimento', requireProLaboreAuth, requireDono, async (req: 
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioMesAtual } } }),
     prisma.vendedor.findMany({ where: { usuarioId } }),
     prisma.gastoAnuncioMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioMesAnterior } } }),
-    prisma.socialMediaConta.findUnique({ where: { usuarioId } }),
+    prisma.socialMediaConta.findUnique({ where: { titular: `dono:${usuarioId}` } }),
     prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
   ])
 
