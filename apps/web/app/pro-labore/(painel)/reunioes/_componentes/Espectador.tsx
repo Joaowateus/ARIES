@@ -181,7 +181,7 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
       </header>
 
       {isDono && inicial.autorNome && aprovacao !== 'APROVADA' && (
-        <div className={`pl-ap-pedido ${aprovacao.toLowerCase()}`} role="region" aria-label="Pedido pra apresentar">
+        <div className={`pl-ap-pedido ${(aprovacao ?? "").toLowerCase()}`} role="region" aria-label="Pedido pra apresentar">
           <span>
             {aprovacao === 'PENDENTE'
               ? <><b>{inicial.autorNome}</b> pediu pra apresentar isso pra equipe. Confira o conteúdo e responda.</>

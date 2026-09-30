@@ -345,7 +345,7 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
             </div>
           )}
           {!aoVivo && aprovacao !== 'APROVADA' && (
-            <div className={`pl-ap-aprovacao ${aprovacao.toLowerCase()}`} role="status">
+            <div className={`pl-ap-aprovacao ${(aprovacao ?? "").toLowerCase()}`} role="status">
               {aprovacao === 'RASCUNHO' && <>Rascunho — só você vê. Monte à vontade e, quando estiver pronto, clique em <b>Pedir pra apresentar</b>: o responsável recebe o pedido e libera.</>}
               {aprovacao === 'PENDENTE' && (
                 <>
