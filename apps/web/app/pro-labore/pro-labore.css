@@ -2614,3 +2614,92 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .pl-an-selbar-dica { display: none; }
   .pl-board-topbar-btn span { display: none; }
 }
+
+/* ---------- Tráfego (Gerenciador de Anúncios) ---------- */
+.pl-tf-conectar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .pl-tf-conectar { grid-template-columns: 1fr; } }
+.pl-tf-conectar-caixa .pl-input.pl-mono { font-size: 12.5px; }
+.pl-tf-contas { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.pl-tf-contas label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--pl-border); border-radius: 10px; cursor: pointer; }
+.pl-tf-contas label.ativo { border-color: var(--pl-border-strong); background: var(--pl-surface-2); }
+.pl-tf-contas span { display: flex; flex-direction: column; }
+.pl-tf-contas b { font-size: 13.5px; color: var(--pl-ink-1); }
+.pl-tf-contas small { font-size: 11.5px; color: var(--pl-ink-muted); }
+.pl-tf-guia summary { cursor: pointer; font-weight: 700; color: var(--pl-ink-1); font-size: 14px; }
+.pl-tf-guia p, .pl-tf-guia li { font-size: 13px; line-height: 1.6; color: var(--pl-ink-2); }
+.pl-tf-guia ol { padding-left: 20px; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.pl-tf-guia b { color: var(--pl-ink-1); }
+
+.pl-tf-conta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 14px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); background: var(--pl-surface); }
+.pl-tf-conta-nome { display: inline-flex; align-items: center; gap: 8px; }
+.pl-tf-conta-nome b { color: var(--pl-ink-1); font-size: 14px; }
+.pl-tf-conta-nome small { color: var(--pl-ink-muted); font-size: 11.5px; }
+.pl-tf-conta-sync { flex: 1; font-size: 12.5px; color: var(--pl-ink-muted); min-width: 180px; }
+.pl-tf-ponto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.pl-tf-ponto.ok { background: var(--pl-good); }
+.pl-tf-ponto.erro { background: var(--pl-critical); }
+.pl-tf-btn-peq { padding: 6px 11px; font-size: 12.5px; }
+.pl-tf-filtro { max-width: 240px; padding: 6px 10px; font-size: 12.5px; }
+.pl-tf-filtro-ativo { font-size: 12.5px; color: var(--pl-ink-2); margin: -4px 0 10px; display: flex; gap: 8px; align-items: center; }
+.pl-tf-recarregando { opacity: .6; transition: opacity .2s; }
+
+.pl-tf-funil-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.pl-tf-resumo { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 13.5px; color: var(--pl-ink-2); }
+.pl-tf-resumo b { color: var(--pl-ink-1); font-family: 'IBM Plex Mono', monospace; }
+.pl-tf-ajustes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; padding: 12px; margin-bottom: 14px; border-radius: 10px; background: var(--pl-surface-2); }
+.pl-tf-ajustes label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--pl-ink-2); }
+.pl-tf-na-faixa { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.pl-tf-na-faixa b { font-family: 'IBM Plex Mono', monospace; font-weight: 800; font-size: 16px; }
+.pl-tf-na-faixa small { font-size: 10.5px; font-weight: 700; opacity: .95; }
+.pl-tf-var { display: block; font-size: 10.5px; color: var(--pl-ink-muted); margin-top: 2px; }
+.pl-tf-detalhe { font-size: 10.5px; }
+.pl-tf-cr { font-weight: 700; color: var(--pl-ink-1); border-bottom: 1px dashed var(--pl-border-strong); }
+.pl-tf-meta-edit { margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pl-tf-meta-edit .pl-select { font-size: 11px; padding: 2px 4px; max-width: 150px; }
+.pl-tf-meta-edit div { display: flex; align-items: center; gap: 4px; }
+.pl-tf-meta-edit .pl-input { width: 70px; padding: 2px 6px; font-size: 11.5px; text-align: center; }
+.pl-tf-ponte { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding: 12px 14px; border-radius: 10px; background: var(--pl-surface-2); }
+.pl-tf-ponte > div { display: flex; flex-direction: column; gap: 3px; min-width: 240px; flex: 1; }
+.pl-tf-ponte b { color: var(--pl-ink-1); font-size: 14px; }
+.pl-tf-ponte small { font-size: 12.5px; color: var(--pl-ink-2); line-height: 1.5; }
+.pl-tf-kpi-destaque { border-color: var(--pl-border-strong); box-shadow: inset 3px 0 0 var(--sv-1); }
+
+.pl-tf-diag { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .pl-tf-diag { grid-template-columns: 1fr; } }
+.pl-tf-diag-lista { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pl-tf-diag-lista li { display: flex; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid var(--pl-border); }
+.pl-tf-diag-lista li b { display: block; font-size: 13.5px; color: var(--pl-ink-1); }
+.pl-tf-diag-lista li p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--pl-ink-2); }
+.pl-tf-diag-icone { flex: none; width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; }
+.pl-tf-diag-nivel { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; margin-right: 8px; padding: 1px 6px; border-radius: 5px; border: 1px solid currentColor; vertical-align: 1px; }
+.pl-tf-diag-lista li.critico { border-color: color-mix(in srgb, var(--pl-critical) 40%, var(--pl-border)); }
+.pl-tf-diag-lista li.critico .pl-tf-diag-icone { background: var(--pl-critical); }
+.pl-tf-diag-lista li.critico .pl-tf-diag-nivel { color: var(--pl-critical); }
+.pl-tf-diag-lista li.atencao .pl-tf-diag-icone { background: #c98500; }
+.pl-tf-diag-lista li.atencao .pl-tf-diag-nivel { color: #b7791f; }
+.pl-tf-diag-lista li.info .pl-tf-diag-icone { background: var(--pl-info); }
+.pl-tf-diag-lista li.info .pl-tf-diag-nivel { color: var(--pl-info); }
+.pl-tf-diag-lista li.positivo .pl-tf-diag-icone { background: var(--pl-good); }
+.pl-tf-diag-lista li.positivo .pl-tf-diag-nivel { color: var(--pl-good); }
+.pl-tf-sim { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pl-tf-sim li { padding: 12px; border-radius: 10px; background: var(--pl-surface-2); }
+.pl-tf-sim-de { font-size: 13px; color: var(--pl-ink-2); }
+.pl-tf-sim-de b { color: var(--pl-ink-1); }
+.pl-tf-sim-ganho { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; font-size: 13px; color: var(--pl-ink-2); }
+.pl-tf-sim-ganho b { color: var(--pl-ink-1); font-family: 'IBM Plex Mono', monospace; }
+.pl-tf-sim-ganho small { color: var(--pl-ink-muted); }
+
+.pl-tf-tabela-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.pl-tf-tabela-scroll { overflow-x: auto; }
+.pl-tf-tabela { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pl-tf-tabela th { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--pl-border); white-space: nowrap; }
+.pl-tf-tabela th button { background: none; border: 0; padding: 0; font: inherit; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--pl-ink-muted); cursor: pointer; }
+.pl-tf-tabela th[aria-sort="descending"] button, .pl-tf-tabela th[aria-sort="ascending"] button { color: var(--pl-ink-1); }
+.pl-tf-tabela th.nome { text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--pl-ink-muted); }
+.pl-tf-tabela td { text-align: right; padding: 10px; border-bottom: 1px solid var(--pl-border); white-space: nowrap; color: var(--pl-ink-1); }
+.pl-tf-tabela td.nome { text-align: left; white-space: normal; min-width: 180px; }
+.pl-tf-tabela td.nome b { display: block; font-size: 13px; }
+.pl-tf-tabela td.nome small { display: block; font-size: 11px; color: var(--pl-ink-muted); margin-top: 2px; }
+.pl-tf-tabela tr.clicavel { cursor: pointer; }
+.pl-tf-tabela tr.clicavel:hover td { background: var(--pl-surface-2); }
+@media (max-width: 520px) { .pl-sv-kpis.pl-tf-kpis { grid-template-columns: repeat(2, 1fr); gap: 10px; } }

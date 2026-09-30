@@ -632,6 +632,24 @@ export const proLaboreApi = {
       request<Nota>(`/pro-labore/notas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/notas/${id}`, { method: 'DELETE' }),
   },
+  // Aba Tráfego (Gerenciador de Anúncios da Meta) — só o dono.
+  trafego: {
+    conta: () => request<{ conectada: false } | { conectada: true; conta: ContaTrafego }>('/pro-labore/trafego/conta'),
+    contasDisponiveis: (token: string) =>
+      request<ContaDeAnuncioMeta[]>('/pro-labore/trafego/contas-disponiveis', { method: 'POST', body: JSON.stringify({ token }) }),
+    conectar: (token: string, adAccountId: string) =>
+      request<{ conta: ContaTrafego; aviso: string | null }>('/pro-labore/trafego/conectar', { method: 'POST', body: JSON.stringify({ token, adAccountId }) }),
+    desconectar: () => request<null>('/pro-labore/trafego/conta', { method: 'DELETE' }),
+    sincronizar: () => request<{ conta: ContaTrafego }>('/pro-labore/trafego/sincronizar', { method: 'POST' }),
+    analise: (p: { inicio: string; fim: string; campanhaId?: string; adsetId?: string }) => {
+      const q = new URLSearchParams({ inicio: p.inicio, fim: p.fim })
+      if (p.campanhaId) q.set('campanhaId', p.campanhaId)
+      if (p.adsetId) q.set('adsetId', p.adsetId)
+      return request<AnaliseTrafego>(`/pro-labore/trafego/analise?${q}`)
+    },
+    configurar: (c: Partial<{ etapas: Partial<Record<EtapaTrafego, ModoEtapaTrafego>>; metas: Partial<Record<EtapaTrafego, MetaEtapaTrafego | null>>; crmSomenteTrafego: boolean }>) =>
+      request<ContaTrafego>('/pro-labore/trafego/configuracao', { method: 'PUT', body: JSON.stringify(c) }),
+  },
   // Ações em lote da tela de Anotações (vários itens selecionados).
   anotacoes: {
     mover: (lote: LoteAnotacoes, destinoPastaId: string | null) =>
@@ -1354,4 +1372,54 @@ export interface EstadoPollApresentacao {
   aoVivo: boolean
   conteudo?: ConteudoApresentacao
   palco?: PalcoApresentacao | null
+}
+
+// ---------- Tráfego ----------
+export type EtapaTrafego = 'impressoes' | 'cliquesLink' | 'destino' | 'contatos' | 'leadsCrm'
+export type ModoEtapaTrafego = 'auto' | 'sim' | 'nao'
+export interface MetaEtapaTrafego { tipo: 'CONV_MIN' | 'CUSTO_MAX'; valor: number }
+export interface ContaDeAnuncioMeta { id: string; nome: string; moeda: string; fuso: string | null; ativa: boolean }
+export interface ContaTrafego {
+  adAccountId: string; nome: string; moeda: string; fuso: string | null
+  conectadoEm: string; ultimaSincronizacaoEm: string | null; ultimoErroSync: string | null
+  historicoDesde: string | null; historicoCompleto: boolean; hoje: string
+  configuracao: { etapas?: Partial<Record<EtapaTrafego, ModoEtapaTrafego>>; metas?: Partial<Record<EtapaTrafego, MetaEtapaTrafego | null>>; crmSomenteTrafego?: boolean }
+}
+export interface MetricasTrafego {
+  gasto: number; impressoes: number; alcance: number; cliques: number; cliquesLink: number
+  lpv: number; conversas: number; leads: number
+  videoViews: number; thruplays: number; videoP25: number; videoP50: number; videoP75: number; videoP100: number
+}
+export interface DerivadasTrafego {
+  cpm: number | null; ctr: number | null; ctrTodos: number | null; cpc: number | null
+  connectRateLpv: number | null; connectRateConversa: number | null
+  custoLpv: number | null; custoConversa: number | null; cpl: number | null
+  hookRate: number | null; holdRate: number | null; frequencia: number | null
+}
+export interface EtapaFunilTrafego {
+  chave: EtapaTrafego; nome: string; detalhe: string | null; valor: number; valorAnterior: number
+  convAnterior: number | null; rotuloConv: string | null; connectRate: boolean
+  perda: number | null; perdaPct: number | null; conversaoTotal: number | null
+  custo: number | null; rotuloCusto: string
+  meta: MetaEtapaTrafego | null; metaPadrao: boolean; status: boolean | null; modo: ModoEtapaTrafego
+}
+export interface LinhaTabelaTrafego {
+  id: string; nome: string; campanhaId: string; campanhaNome: string; adsetId: string; adsetNome: string
+  objetivo: string | null; metricas: MetricasTrafego; derivadas: DerivadasTrafego
+  resultado: 'conversas' | 'leads' | 'lpv' | 'cliquesLink'; custoResultado: number | null; alcanceExato: boolean
+}
+export interface AnaliseTrafego {
+  conta: ContaTrafego
+  periodo: { inicio: string; fim: string; dias: number; anteriorInicio: string; anteriorFim: string }
+  filtro: { campanhaId?: string; adsetId?: string }
+  totais: MetricasTrafego; totaisAnterior: MetricasTrafego
+  derivadas: DerivadasTrafego; derivadasAnterior: DerivadasTrafego
+  alcanceExato: boolean
+  crm: { leads: number | null; leadsAnterior: number | null; somenteTrafego: boolean; custoPorLeadTopo: number; custoReal: number | null }
+  funil: EtapaFunilTrafego[]
+  tipoDestino: 'pagina' | 'whatsapp' | 'ambos'
+  simulacoes: Array<{ etapa: EtapaTrafego; rotulo: string; de: number; para: number; finalAtual: number; finalNovo: number; etapaFinal: string; custoAtual: number; custoNovo: number | null }>
+  diario: Array<{ data: string; gasto: number; impressoes: number; cliquesLink: number; lpv: number; conversas: number; leads: number; leadsCrm: number | null }>
+  campanhas: LinhaTabelaTrafego[]; conjuntos: LinhaTabelaTrafego[]; anuncios: LinhaTabelaTrafego[]
+  diagnostico: Array<{ nivel: 'critico' | 'atencao' | 'positivo' | 'info'; titulo: string; texto: string }>
 }
