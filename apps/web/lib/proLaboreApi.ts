@@ -276,6 +276,8 @@ export interface ReceitaDetalhada {
   pontos: PontoReceita[]
 }
 
+export interface ErroApi extends Error { status?: number; codigo?: string; dados?: unknown }
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
@@ -290,7 +292,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   // aqui e a tela ficava parada mesmo com a ação feita no servidor.
   const texto = res.status === 204 ? '' : await res.text()
   const body = texto ? JSON.parse(texto) : null
-  if (!res.ok) throw new Error(body?.error ?? 'Erro inesperado')
+  if (!res.ok) {
+    // `codigo`/`dados` deixam a tela reagir a erros específicos (ex.: pedir
+    // a senha do departamento em vez de só mostrar a mensagem).
+    const erro = new Error(body?.error ?? 'Erro inesperado') as ErroApi
+    erro.status = res.status
+    erro.codigo = body?.codigo
+    erro.dados = body
+    throw erro
+  }
   return body as T
 }
 
@@ -550,13 +560,14 @@ export const proLaboreApi = {
   },
   apresentacoes: {
     listar: () => request<ApresentacaoResumo[]>('/pro-labore/apresentacoes'),
-    aoVivo: () => request<Array<{ id: string; titulo: string; aoVivoDesde: string | null }>>('/pro-labore/apresentacoes/ao-vivo'),
+    aoVivo: () => request<Array<{ id: string; titulo: string; aoVivoDesde: string | null; bloqueado: boolean; departamento: { id: string; nome: string; cor: string } | null }>>('/pro-labore/apresentacoes/ao-vivo'),
     obter: (id: string) => request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}`),
-    criar: (data: { titulo: string; descricao?: string; icone?: string; arvore?: ArvoreApresentacao; configuracao?: ConfiguracaoApresentacao }) =>
+    criar: (data: { titulo: string; descricao?: string; icone?: string; arvore?: ArvoreApresentacao; configuracao?: ConfiguracaoApresentacao; departamentoId?: string | null; pastaId?: string | null }) =>
       request<ApresentacaoDetalhe>('/pro-labore/apresentacoes', { method: 'POST', body: JSON.stringify(data) }),
     atualizar: (id: string, data: Partial<{
       titulo: string; descricao: string | null; icone: string | null; arvore: ArvoreApresentacao; configuracao: ConfiguracaoApresentacao
       notas: Bloco[]; lembretes: LembreteApresentacao[]; notasPrivadas: string | null; visivelEquipe: boolean
+      destino: { departamentoId: string | null; pastaId: string | null }
     }>) => request<{ versao: number; atualizadoEm: string }>(`/pro-labore/apresentacoes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     excluir: (id: string) => request<null>(`/pro-labore/apresentacoes/${id}`, { method: 'DELETE' }),
     definirAoVivo: (id: string, ativo: boolean) =>
@@ -564,12 +575,27 @@ export const proLaboreApi = {
     enviarPalco: (id: string, palco: PalcoApresentacao) =>
       request<{ ok: boolean }>(`/pro-labore/apresentacoes/${id}/palco`, { method: 'PUT', body: JSON.stringify(palco) }),
     espectadores: (id: string) => request<EspectadorApresentacao[]>(`/pro-labore/apresentacoes/${id}/espectadores`),
-    estado: (id: string, versao: number, palcoVersao: number) =>
-      request<EstadoPollApresentacao>(`/pro-labore/apresentacoes/${id}/estado?versao=${versao}&palcoVersao=${palcoVersao}`),
+    // Espera segurada: o servidor só responde quando algo mudar (ou em ~8s).
+    estado: (id: string, versao: number, palcoVersao: number, aoVivo: boolean) =>
+      request<EstadoPollApresentacao>(`/pro-labore/apresentacoes/${id}/estado?versao=${versao}&palcoVersao=${palcoVersao}&aoVivo=${aoVivo ? 1 : 0}&espera=1`),
     // A transmissão (SSE) é lida com fetch + stream no hook da tela, porque
     // EventSource não deixa mandar o cabeçalho de autorização.
     urlTransmissao: (id: string) => `${BASE}/pro-labore/apresentacoes/${id}/transmissao`,
     token: () => getToken(),
+  },
+  reunioesOrg: {
+    estrutura: () => request<EstruturaReunioes>('/pro-labore/reunioes-departamentos'),
+    criarDepartamento: (data: { nome: string; descricao?: string; cor?: string; senha: string }) =>
+      request<{ id: string; nome: string }>('/pro-labore/reunioes-departamentos', { method: 'POST', body: JSON.stringify(data) }),
+    atualizarDepartamento: (id: string, data: Partial<{ nome: string; descricao: string | null; cor: string; senha: string }>) =>
+      request<{ ok: boolean }>(`/pro-labore/reunioes-departamentos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    excluirDepartamento: (id: string) => request<null>(`/pro-labore/reunioes-departamentos/${id}`, { method: 'DELETE' }),
+    entrar: (id: string, senha: string) =>
+      request<{ ok: boolean }>(`/pro-labore/reunioes-departamentos/${id}/entrar`, { method: 'POST', body: JSON.stringify({ senha }) }),
+    criarPasta: (data: { nome: string; departamentoId: string | null }) =>
+      request<{ id: string; nome: string }>('/pro-labore/reunioes-pastas', { method: 'POST', body: JSON.stringify(data) }),
+    renomearPasta: (id: string, nome: string) => request<{ ok: boolean }>(`/pro-labore/reunioes-pastas/${id}`, { method: 'PUT', body: JSON.stringify({ nome }) }),
+    excluirPasta: (id: string) => request<null>(`/pro-labore/reunioes-pastas/${id}`, { method: 'DELETE' }),
   },
   reunioes: {
     listar: (tipo?: TipoReuniao) => request<ReuniaoResumo[]>(`/pro-labore/reunioes${tipo ? `?tipo=${tipo}` : ''}`),
@@ -1219,8 +1245,26 @@ export interface PalcoApresentacao {
   laser: { ativo: boolean; pontos: Array<{ x: number; y: number }> }
 }
 
+export interface PastaReuniao { id: string; nome: string; total: number }
+export interface DepartamentoReuniao {
+  id: string
+  nome: string
+  descricao: string | null
+  cor: string
+  liberado: boolean
+  aoVivo: boolean
+  total: number | null
+  pastas: PastaReuniao[]
+}
+export interface EstruturaReunioes {
+  geral: { total: number; pastas: PastaReuniao[]; aoVivo: boolean }
+  departamentos: DepartamentoReuniao[]
+}
+
 export interface ApresentacaoResumo {
   id: string
+  departamentoId: string | null
+  pastaId: string | null
   titulo: string
   descricao: string | null
   icone: string | null

@@ -12,7 +12,7 @@ import QuadroMotor from './QuadroMotor'
 import Laser, { criarFonteLaser, type FonteLaser } from './Laser'
 import PainelLateral from './PainelLateral'
 import { useTransmissao } from './useTransmissao'
-import { IconeEnquadrar, IconePainel, IconeTelaCheia, IconeVoltar, duracaoDesde, tempoRelativo, useTelaCheia } from './comum'
+import { IconeEnquadrar, IconePainel, IconeTelaCheia, IconeVoltar, duracaoDesde, linkBiblioteca, tempoRelativo, useTelaCheia } from './comum'
 
 export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }) {
   const cfgInicial: ConfiguracaoApresentacao = inicial.configuracao ?? { layout: 'mind', tema: 'meister', doisLados: true }
@@ -76,7 +76,7 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
   return (
     <div ref={telaRef} className={`pl-ap-tela ${cheia ? 'cheia' : ''}`}>
       <header className="pl-ap-barra">
-        <Link href="/pro-labore/reunioes" className="pl-ap-icone-btn" aria-label="Voltar pra biblioteca"><IconeVoltar /></Link>
+        <Link href={linkBiblioteca(inicial)} className="pl-ap-icone-btn" aria-label="Voltar pra biblioteca"><IconeVoltar /></Link>
         <div className="pl-ap-titulo-leitura">
           <b>{titulo}</b>
           {descricao && <small>{descricao}</small>}

@@ -2,12 +2,13 @@
 // equipe inteira assiste em tempo real, sem poder editar. Ver
 // lib/apresentacaoTransmissao.ts pra como o "ao vivo" funciona sem WebSocket.
 import { Router, Request, Response } from 'express'
+import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import {
-  EventoTransmissao, SINAL_APRESENTADOR_MS, aoVivoEfetivo, inscreverEspectador, registrarPresenca,
+  EventoTransmissao, SINAL_APRESENTADOR_MS, aoVivoEfetivo, inscreverEspectador, registrarPresenca, sinalizarMudanca,
 } from '../lib/apresentacaoTransmissao'
 
 const router = Router()
@@ -15,6 +16,7 @@ const router = Router()
 const DURACAO_CONEXAO_MS = 24_000
 const PULSO_MS = 10_000
 const ASSISTINDO_MS = 45_000
+const ESPERA_MAXIMA_ESTADO_MS = 8_000
 
 function pessoaDe(req: Request): string {
   const { papel, sub, vendedorId } = req.proLaboreUser!
@@ -71,6 +73,18 @@ function contarNos(n: unknown): number {
 
 // ---------- Acesso ----------
 
+// Departamentos que essa pessoa pode abrir: o dono abre todos; a equipe,
+// os que ela já destrancou com a senha atual (trocar a senha invalida).
+async function departamentosLiberados(req: Request): Promise<'todos' | Set<string>> {
+  if (ehDono(req)) return 'todos'
+  const acessos = await prisma.reuniaoDepartamentoAcesso.findMany({
+    where: { pessoa: pessoaDe(req), departamento: { usuarioId: req.proLaboreUser!.sub } },
+    select: { departamentoId: true, senhaVersao: true, departamento: { select: { senhaVersao: true } } },
+  })
+  return new Set(acessos.filter(a => a.senhaVersao === a.departamento.senhaVersao).map(a => a.departamentoId))
+}
+const liberado = (lib: 'todos' | Set<string>, departamentoId: string | null) => !departamentoId || lib === 'todos' || lib.has(departamentoId)
+
 async function carregar(req: Request, res: Response) {
   const a = await prisma.apresentacao.findUnique({ where: { id: String(req.params.id) } })
   if (!a || a.usuarioId !== req.proLaboreUser!.sub) {
@@ -82,7 +96,32 @@ async function carregar(req: Request, res: Response) {
     res.status(404).json({ error: 'Apresentação não encontrada' })
     return null
   }
+  if (a.departamentoId && !ehDono(req)) {
+    const [dep, acesso] = await Promise.all([
+      prisma.reuniaoDepartamento.findUnique({ where: { id: a.departamentoId }, select: { id: true, nome: true, cor: true, senhaVersao: true } }),
+      prisma.reuniaoDepartamentoAcesso.findUnique({ where: { departamentoId_pessoa: { departamentoId: a.departamentoId, pessoa: pessoaDe(req) } } }),
+    ])
+    if (!dep || !acesso || acesso.senhaVersao !== dep.senhaVersao) {
+      res.status(403).json({ error: 'Esse departamento pede senha', codigo: 'SENHA_DEPARTAMENTO', departamento: dep && { id: dep.id, nome: dep.nome, cor: dep.cor } })
+      return null
+    }
+  }
   return a
+}
+
+// Confere se o destino (departamento/pasta) existe, é da conta e a pasta
+// pertence mesmo àquele departamento.
+async function destinoInvalido(usuarioId: string, departamentoId: string | null, pastaId: string | null): Promise<string | null> {
+  if (departamentoId) {
+    const dep = await prisma.reuniaoDepartamento.findFirst({ where: { id: departamentoId, usuarioId }, select: { id: true } })
+    if (!dep) return 'Departamento não encontrado'
+  }
+  if (pastaId) {
+    const pasta = await prisma.reuniaoPasta.findFirst({ where: { id: pastaId, usuarioId }, select: { departamentoId: true } })
+    if (!pasta) return 'Pasta não encontrada'
+    if ((pasta.departamentoId ?? null) !== departamentoId) return 'Essa pasta é de outro departamento'
+  }
+  return null
 }
 
 type ApresentacaoRow = NonNullable<Awaited<ReturnType<typeof prisma.apresentacao.findUnique>>>
@@ -91,6 +130,7 @@ function resumo(a: ApresentacaoRow) {
   const lembretes = Array.isArray(a.lembretes) ? (a.lembretes as Array<{ feito?: boolean }>) : []
   return {
     id: a.id, titulo: a.titulo, descricao: a.descricao, icone: a.icone, visivelEquipe: a.visivelEquipe,
+    departamentoId: a.departamentoId, pastaId: a.pastaId,
     aoVivo: aoVivoEfetivo(a), aoVivoDesde: aoVivoEfetivo(a) ? a.aoVivoDesde : null,
     criadoEm: a.criadoEm, atualizadoEm: a.atualizadoEm,
     totalIdeias: contarNos(a.arvore),
@@ -115,16 +155,27 @@ router.get('/apresentacoes', requireProLaboreAuth, async (req: Request, res: Res
     where: { usuarioId: req.proLaboreUser!.sub },
     orderBy: { atualizadoEm: 'desc' },
   })
-  res.json(lista.filter(a => ehDono(req) || a.visivelEquipe || aoVivoEfetivo(a)).map(resumo))
+  const lib = await departamentosLiberados(req)
+  res.json(lista.filter(a => (ehDono(req) || a.visivelEquipe || aoVivoEfetivo(a)) && liberado(lib, a.departamentoId)).map(resumo))
 })
 
 // Usado pelo menu lateral pra mostrar o selo "AO VIVO" pra equipe.
 router.get('/apresentacoes/ao-vivo', requireProLaboreAuth, async (req: Request, res: Response) => {
   const lista = await prisma.apresentacao.findMany({
     where: { usuarioId: req.proLaboreUser!.sub, aoVivo: true, apresentadorSinalEm: { gte: new Date(Date.now() - SINAL_APRESENTADOR_MS) } },
-    select: { id: true, titulo: true, aoVivoDesde: true },
+    select: { id: true, titulo: true, aoVivoDesde: true, departamentoId: true, departamento: { select: { nome: true, cor: true } } },
   })
-  res.json(lista)
+  const lib = await departamentosLiberados(req)
+  // Departamento trancado: a equipe fica sabendo que tem reunião ao vivo,
+  // mas o título só aparece depois da senha.
+  res.json(lista.map(a => {
+    const bloqueado = !liberado(lib, a.departamentoId)
+    return {
+      id: a.id, aoVivoDesde: a.aoVivoDesde, bloqueado,
+      titulo: bloqueado ? 'Reunião protegida' : a.titulo,
+      departamento: a.departamento ? { id: a.departamentoId, nome: a.departamento.nome, cor: a.departamento.cor } : null,
+    }
+  }))
 })
 
 const criarSchema = z.object({
@@ -133,6 +184,8 @@ const criarSchema = z.object({
   icone: z.string().max(20).optional(),
   arvore: arvoreSchema.optional(),
   configuracao: configuracaoSchema.optional(),
+  departamentoId: z.string().nullable().optional(),
+  pastaId: z.string().nullable().optional(),
 })
 
 router.post('/apresentacoes', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -141,11 +194,18 @@ router.post('/apresentacoes', requireProLaboreAuth, requireDono, async (req: Req
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
-  const { arvore, configuracao, ...resto } = parse.data
+  const { arvore, configuracao, departamentoId = null, pastaId = null, ...resto } = parse.data
+  const invalido = await destinoInvalido(req.proLaboreUser!.sub, departamentoId, pastaId)
+  if (invalido) {
+    res.status(400).json({ error: invalido })
+    return
+  }
   const raiz = (arvore as NoArvore | undefined) ?? { ...ARVORE_PADRAO, text: parse.data.titulo }
   const a = await prisma.apresentacao.create({
     data: {
       ...resto,
+      departamentoId,
+      pastaId,
       usuarioId: req.proLaboreUser!.sub,
       arvore: raiz as unknown as Prisma.InputJsonValue,
       configuracao: (configuracao ?? { layout: 'mind', tema: 'meister', doisLados: true }) as Prisma.InputJsonValue,
@@ -172,6 +232,8 @@ const atualizarSchema = z.object({
   lembretes: z.array(lembreteSchema).max(100).optional(),
   notasPrivadas: z.string().max(50_000).nullable().optional(),
   visivelEquipe: z.boolean().optional(),
+  // Mover pra outro departamento/pasta (os dois juntos).
+  destino: z.object({ departamentoId: z.string().nullable(), pastaId: z.string().nullable() }).optional(),
 })
 
 // Salvamento contínuo da tela do apresentador (a cada ~250ms enquanto
@@ -183,13 +245,23 @@ router.put('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (req: 
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
-  const a = await carregar(req, res)
-  if (!a) return
   const d = parse.data
+  if (d.destino) {
+    const invalido = await destinoInvalido(req.proLaboreUser!.sub, d.destino.departamentoId, d.destino.pastaId)
+    if (invalido) {
+      res.status(400).json({ error: invalido })
+      return
+    }
+  }
   const compartilhado = ['titulo', 'descricao', 'icone', 'arvore', 'configuracao', 'notas', 'lembretes'].some(k => d[k as keyof typeof d] !== undefined)
-  const atualizada = await prisma.apresentacao.update({
-    where: { id: a.id },
+  // Uma consulta só (sem ler antes): é a rota mais chamada durante a
+  // apresentação, e cada ida ao banco atrasa o que a equipe vê.
+  let atualizada: { versao: number; atualizadoEm: Date }
+  try {
+    atualizada = await prisma.apresentacao.update({
+    where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub },
     data: {
+      ...(d.destino && { departamentoId: d.destino.departamentoId, pastaId: d.destino.pastaId }),
       ...(d.titulo !== undefined && { titulo: d.titulo }),
       ...(d.descricao !== undefined && { descricao: d.descricao }),
       ...(d.icone !== undefined && { icone: d.icone }),
@@ -203,6 +275,14 @@ router.put('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (req: 
     },
     select: { versao: true, atualizadoEm: true },
   })
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      res.status(404).json({ error: 'Apresentação não encontrada' })
+      return
+    }
+    throw e
+  }
+  if (compartilhado) sinalizarMudanca(String(req.params.id))
   res.json(atualizada)
 })
 
@@ -230,6 +310,7 @@ router.post('/apresentacoes/:id/ao-vivo', requireProLaboreAuth, requireDono, asy
       ? { aoVivo: true, aoVivoDesde: aoVivoEfetivo(a) ? a.aoVivoDesde : agora, apresentadorSinalEm: agora }
       : { aoVivo: false, palco: Prisma.DbNull, palcoVersao: { increment: 1 } },
   })
+  sinalizarMudanca(a.id)
   res.json(detalhe(atualizada, req))
 })
 
@@ -255,6 +336,7 @@ router.put('/apresentacoes/:id/palco', requireProLaboreAuth, requireDono, async 
     where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub, aoVivo: true },
     data: { palco: parse.data as Prisma.InputJsonValue, palcoVersao: { increment: 1 }, apresentadorSinalEm: new Date() },
   })
+  if (r.count > 0) sinalizarMudanca(String(req.params.id))
   res.json({ ok: r.count > 0 })
 })
 
@@ -331,7 +413,26 @@ router.get('/apresentacoes/:id/estado', requireProLaboreAuth, async (req: Reques
   if (!ehDono(req)) void registrarPresenca(a.id, pessoaDe(req), req.proLaboreUser!.nome)
   const versao = Number(req.query.versao ?? -1)
   const palcoVersao = Number(req.query.palcoVersao ?? -1)
-  const completo = estadoCompleto(a)
+  let completo = estadoCompleto(a)
+  // Espera segurada: se nada mudou ainda, a resposta fica aberta (até ~8s)
+  // e sai no instante em que o observador vê uma mudança — atualiza quase
+  // tão rápido quanto a conexão contínua, com poucas requisições.
+  const aoVivoCliente = req.query.aoVivo === '1'
+  if (req.query.espera === '1' && completo.versao <= versao && completo.palcoVersao <= palcoVersao && completo.aoVivo === aoVivoCliente) {
+    await new Promise<void>(resolve => {
+      let feito = false
+      const terminar = () => { if (feito) return; feito = true; clearTimeout(limite); sair(); resolve() }
+      const sair = inscreverEspectador(a.id, { versao, palcoVersao, aoVivo: aoVivoCliente }, () => terminar())
+      const limite = setTimeout(terminar, ESPERA_MAXIMA_ESTADO_MS)
+      req.on('close', terminar)
+    })
+    const nova = await prisma.apresentacao.findUnique({ where: { id: a.id } })
+    if (!nova) {
+      res.status(404).json({ error: 'Apresentação não encontrada' })
+      return
+    }
+    completo = estadoCompleto(nova)
+  }
   res.json({
     versao: completo.versao,
     palcoVersao: completo.palcoVersao,
@@ -339,6 +440,177 @@ router.get('/apresentacoes/:id/estado', requireProLaboreAuth, async (req: Reques
     ...(completo.versao > versao && { conteudo: completo.conteudo }),
     ...(completo.palcoVersao > palcoVersao && { palco: completo.palco }),
   })
+})
+
+
+// ---------- Departamentos (com senha) e pastas ----------
+
+const corSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Cor inválida')
+const senhaSchema = z.string().min(4, 'A senha precisa ter pelo menos 4 caracteres').max(64)
+
+// Lista pra montar a barra lateral da aba: todo mundo vê os nomes (pra saber
+// que existem), mas pastas e contagens só de quem já destrancou.
+router.get('/reunioes-departamentos', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const usuarioId = req.proLaboreUser!.sub
+  const [deps, pastas, apresentacoes, lib] = await Promise.all([
+    prisma.reuniaoDepartamento.findMany({ where: { usuarioId }, orderBy: { nome: 'asc' } }),
+    prisma.reuniaoPasta.findMany({ where: { usuarioId }, orderBy: { nome: 'asc' } }),
+    prisma.apresentacao.findMany({ where: { usuarioId }, select: { departamentoId: true, pastaId: true, visivelEquipe: true, aoVivo: true, apresentadorSinalEm: true } }),
+    departamentosLiberados(req),
+  ])
+  const visiveis = apresentacoes.filter(a => ehDono(req) || a.visivelEquipe || aoVivoEfetivo(a))
+  const contar = (dep: string | null, pasta?: string) => visiveis.filter(a => a.departamentoId === dep && (pasta === undefined || a.pastaId === pasta)).length
+  const pastasDe = (dep: string | null) => pastas.filter(p => (p.departamentoId ?? null) === dep).map(p => ({ id: p.id, nome: p.nome, total: contar(dep, p.id) }))
+  res.json({
+    geral: { total: contar(null), pastas: pastasDe(null), aoVivo: visiveis.some(a => !a.departamentoId && aoVivoEfetivo(a)) },
+    departamentos: deps.map(d => {
+      const aberto = liberado(lib, d.id)
+      return {
+        id: d.id, nome: d.nome, descricao: d.descricao, cor: d.cor, liberado: aberto,
+        aoVivo: visiveis.some(a => a.departamentoId === d.id && aoVivoEfetivo(a)),
+        total: aberto ? contar(d.id) : null,
+        pastas: aberto ? pastasDe(d.id) : [],
+      }
+    }),
+  })
+})
+
+router.post('/reunioes-departamentos', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({
+    nome: z.string().trim().min(1, 'Dê um nome ao departamento').max(60),
+    descricao: z.string().trim().max(200).optional(),
+    cor: corSchema.optional(),
+    senha: senhaSchema,
+  }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const { senha, ...dados } = parse.data
+  const d = await prisma.reuniaoDepartamento.create({
+    data: { ...dados, usuarioId: req.proLaboreUser!.sub, senhaHash: await bcrypt.hash(senha, 10) },
+  })
+  res.status(201).json({ id: d.id, nome: d.nome, descricao: d.descricao, cor: d.cor })
+})
+
+router.put('/reunioes-departamentos/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({
+    nome: z.string().trim().min(1).max(60).optional(),
+    descricao: z.string().trim().max(200).nullable().optional(),
+    cor: corSchema.optional(),
+    // Trocar a senha tira o acesso de todo mundo que já tinha entrado.
+    senha: senhaSchema.optional(),
+  }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const { senha, ...dados } = parse.data
+  const r = await prisma.reuniaoDepartamento.updateMany({
+    where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub },
+    data: { ...dados, ...(senha && { senhaHash: await bcrypt.hash(senha, 10), senhaVersao: { increment: 1 } }) },
+  })
+  if (r.count === 0) {
+    res.status(404).json({ error: 'Departamento não encontrado' })
+    return
+  }
+  res.json({ ok: true })
+})
+
+router.delete('/reunioes-departamentos/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const dep = await prisma.reuniaoDepartamento.findFirst({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub }, include: { _count: { select: { apresentacoes: true } } } })
+  if (!dep) {
+    res.status(404).json({ error: 'Departamento não encontrado' })
+    return
+  }
+  // Nunca solta conteúdo protegido no "Geral" por engano.
+  if (dep._count.apresentacoes > 0) {
+    res.status(409).json({ error: `Esse departamento ainda tem ${dep._count.apresentacoes} apresentação(ões). Mova ou exclua antes de apagar o departamento.` })
+    return
+  }
+  await prisma.reuniaoDepartamento.delete({ where: { id: dep.id } })
+  res.status(204).end()
+})
+
+// Tentativas de senha erradas por pessoa+departamento (por instância):
+// segura quem tenta adivinhar sem atrapalhar quem só digitou errado.
+const tentativasSenha = new Map<string, { erros: number; desde: number }>()
+const MAX_TENTATIVAS = 6
+const JANELA_TENTATIVAS_MS = 10 * 60_000
+
+router.post('/reunioes-departamentos/:id/entrar', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const parse = z.object({ senha: z.string().min(1, 'Digite a senha').max(64) }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const dep = await prisma.reuniaoDepartamento.findFirst({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub } })
+  if (!dep) {
+    res.status(404).json({ error: 'Departamento não encontrado' })
+    return
+  }
+  const pessoa = pessoaDe(req)
+  const chave = `${dep.id}|${pessoa}`
+  const agora = Date.now()
+  const t = tentativasSenha.get(chave)
+  if (t && agora - t.desde < JANELA_TENTATIVAS_MS && t.erros >= MAX_TENTATIVAS) {
+    const min = Math.ceil((JANELA_TENTATIVAS_MS - (agora - t.desde)) / 60_000)
+    res.status(429).json({ error: `Muitas tentativas erradas. Tente de novo em ${min} min ou peça a senha ao responsável.` })
+    return
+  }
+  if (!(await bcrypt.compare(parse.data.senha, dep.senhaHash))) {
+    const atual = t && agora - t.desde < JANELA_TENTATIVAS_MS ? t : { erros: 0, desde: agora }
+    tentativasSenha.set(chave, { ...atual, erros: atual.erros + 1 })
+    res.status(401).json({ error: 'Senha incorreta' })
+    return
+  }
+  tentativasSenha.delete(chave)
+  await prisma.reuniaoDepartamentoAcesso.upsert({
+    where: { departamentoId_pessoa: { departamentoId: dep.id, pessoa } },
+    update: { senhaVersao: dep.senhaVersao, liberadoEm: new Date() },
+    create: { departamentoId: dep.id, pessoa, senhaVersao: dep.senhaVersao },
+  })
+  res.json({ ok: true })
+})
+
+router.post('/reunioes-pastas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({ nome: z.string().trim().min(1, 'Dê um nome à pasta').max(60), departamentoId: z.string().nullable() }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: parse.error.issues[0].message })
+    return
+  }
+  const invalido = await destinoInvalido(req.proLaboreUser!.sub, parse.data.departamentoId, null)
+  if (invalido) {
+    res.status(400).json({ error: invalido })
+    return
+  }
+  const pasta = await prisma.reuniaoPasta.create({ data: { ...parse.data, usuarioId: req.proLaboreUser!.sub } })
+  res.status(201).json({ id: pasta.id, nome: pasta.nome, departamentoId: pasta.departamentoId })
+})
+
+router.put('/reunioes-pastas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({ nome: z.string().trim().min(1).max(60) }).safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'Nome inválido' })
+    return
+  }
+  const r = await prisma.reuniaoPasta.updateMany({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub }, data: parse.data })
+  if (r.count === 0) {
+    res.status(404).json({ error: 'Pasta não encontrada' })
+    return
+  }
+  res.json({ ok: true })
+})
+
+// Excluir a pasta não apaga as apresentações — elas voltam pra raiz do
+// departamento (ou do Geral).
+router.delete('/reunioes-pastas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const r = await prisma.reuniaoPasta.deleteMany({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub } })
+  if (r.count === 0) {
+    res.status(404).json({ error: 'Pasta não encontrada' })
+    return
+  }
+  res.status(204).end()
 })
 
 export default router

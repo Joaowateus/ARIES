@@ -937,6 +937,8 @@ model ProLaboreUsuario {
   pastas                    Pasta[]
   mapasMentais              MapaMental[]
   apresentacoes             Apresentacao[]
+  reunioesDepartamentos     ReuniaoDepartamento[]
+  reunioesPastas            ReuniaoPasta[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1851,6 +1853,10 @@ model Apresentacao {
   // [{ id, texto, feito, data? }] — visíveis pra equipe.
   lembretes           Json?
   visivelEquipe       Boolean   @default(true)
+  // Organização: departamento (protegido por senha) e pasta. Os dois nulos
+  // = "Geral", aberto pra equipe toda.
+  departamentoId      String?
+  pastaId             String?
   versao              Int       @default(0)
   palco               Json?
   palcoVersao         Int       @default(0)
@@ -1861,10 +1867,69 @@ model Apresentacao {
   atualizadoEm        DateTime  @updatedAt
 
   usuario      ProLaboreUsuario         @relation(fields: [usuarioId], references: [id])
+  departamento ReuniaoDepartamento?     @relation(fields: [departamentoId], references: [id], onDelete: Restrict)
+  pasta        ReuniaoPasta?            @relation(fields: [pastaId], references: [id], onDelete: SetNull)
   espectadores ApresentacaoEspectador[]
 
   @@index([usuarioId])
+  @@index([departamentoId])
   @@map("pro_labore_apresentacoes")
+}
+
+// Departamento das reuniões (ex.: Vendas, Pós-venda, Gestão): só entra quem
+// sabe a senha. A senha é guardada com hash; trocar a senha sobe
+// `senhaVersao` e derruba o acesso de todo mundo que já tinha entrado.
+model ReuniaoDepartamento {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  nome         String
+  descricao    String?
+  cor          String   @default("#5b8def")
+  senhaHash    String
+  senhaVersao  Int      @default(1)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuario       ProLaboreUsuario            @relation(fields: [usuarioId], references: [id])
+  pastas        ReuniaoPasta[]
+  apresentacoes Apresentacao[]
+  acessos       ReuniaoDepartamentoAcesso[]
+
+  @@index([usuarioId])
+  @@map("pro_labore_reunioes_departamentos")
+}
+
+// Pasta pra separar as apresentações — dentro de um departamento ou no
+// "Geral" (departamentoId nulo). Excluir a pasta não apaga nada: as
+// apresentações voltam pra raiz do departamento.
+model ReuniaoPasta {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  departamentoId String?
+  nome           String
+  criadoEm       DateTime @default(now())
+
+  usuario       ProLaboreUsuario     @relation(fields: [usuarioId], references: [id])
+  departamento  ReuniaoDepartamento? @relation(fields: [departamentoId], references: [id], onDelete: Cascade)
+  apresentacoes Apresentacao[]
+
+  @@index([usuarioId, departamentoId])
+  @@map("pro_labore_reunioes_pastas")
+}
+
+// Quem já digitou a senha certa do departamento ("dono:<id>" ou
+// "vendedor:<id>"). Vale enquanto `senhaVersao` bater com a do departamento.
+model ReuniaoDepartamentoAcesso {
+  id             String   @id @default(cuid())
+  departamentoId String
+  pessoa         String
+  senhaVersao    Int
+  liberadoEm     DateTime @default(now())
+
+  departamento ReuniaoDepartamento @relation(fields: [departamentoId], references: [id], onDelete: Cascade)
+
+  @@unique([departamentoId, pessoa])
+  @@map("pro_labore_reunioes_departamentos_acessos")
 }
 
 // Quem está assistindo (ou assistiu) — `pessoa` é "dono:<id>" ou
