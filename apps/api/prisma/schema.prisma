@@ -936,6 +936,7 @@ model ProLaboreUsuario {
   notas                     Nota[]
   pastas                    Pasta[]
   mapasMentais              MapaMental[]
+  apresentacoes             Apresentacao[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1824,4 +1825,61 @@ model MapaMentalVersao {
 
   @@index([mapaMentalId, criadoEm])
   @@map("pro_labore_mapas_mentais_versoes")
+}
+
+// Apresentação ao vivo (aba Reuniões): o dono monta um mapa mental (mesmo
+// motor da aba Anotações) e a equipe assiste em tempo real, só leitura.
+// Fica guardada depois, com anotações, lembretes e notas privadas.
+// `versao` sobe a cada mudança do conteúdo compartilhado; `palco` é o
+// estado efêmero da transmissão (enquadramento da tela, nó selecionado,
+// ponteiro laser) com a própria `palcoVersao` — separado pra o ponteiro,
+// que muda várias vezes por segundo, não reenviar o mapa inteiro.
+model Apresentacao {
+  id                  String    @id @default(cuid())
+  usuarioId           String
+  titulo              String
+  descricao           String?
+  icone               String?
+  // Árvore do motor de mapa mental: { id, text, children, collapsed }.
+  arvore              Json
+  // { layout: 'mind'|'org'|'list', tema, doisLados }
+  configuracao        Json?
+  // Blocos (mesmo formato do editor de Anotações), visíveis pra equipe.
+  notas               Json?
+  // Só o dono vê — roteiro/lembretes de quem apresenta.
+  notasPrivadas       String?
+  // [{ id, texto, feito, data? }] — visíveis pra equipe.
+  lembretes           Json?
+  visivelEquipe       Boolean   @default(true)
+  versao              Int       @default(0)
+  palco               Json?
+  palcoVersao         Int       @default(0)
+  aoVivo              Boolean   @default(false)
+  aoVivoDesde         DateTime?
+  apresentadorSinalEm DateTime?
+  criadoEm            DateTime  @default(now())
+  atualizadoEm        DateTime  @updatedAt
+
+  usuario      ProLaboreUsuario         @relation(fields: [usuarioId], references: [id])
+  espectadores ApresentacaoEspectador[]
+
+  @@index([usuarioId])
+  @@map("pro_labore_apresentacoes")
+}
+
+// Quem está assistindo (ou assistiu) — `pessoa` é "dono:<id>" ou
+// "vendedor:<id>". `ultimoSinalEm` é renovado pela conexão ao vivo; quem
+// não dá sinal há mais de ~40s deixa de contar como "assistindo agora".
+model ApresentacaoEspectador {
+  id             String   @id @default(cuid())
+  apresentacaoId String
+  pessoa         String
+  nome           String
+  entrouEm       DateTime @default(now())
+  ultimoSinalEm  DateTime @default(now())
+
+  apresentacao Apresentacao @relation(fields: [apresentacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([apresentacaoId, pessoa])
+  @@map("pro_labore_apresentacoes_espectadores")
 }

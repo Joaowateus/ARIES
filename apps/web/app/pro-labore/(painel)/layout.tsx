@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { proLaboreApi } from '@/lib/proLaboreApi'
 import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
@@ -57,6 +58,17 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   // própria preferência salva, lida só depois de montar pra não conflitar
   // com a renderização inicial do servidor (que não tem acesso ao localStorage).
   const [sidebarColapsada, setSidebarColapsada] = useState(false)
+  // Apresentação ao vivo agora (aba Reuniões): selo no menu pra equipe
+  // descobrir que começou, de qualquer tela do sistema.
+  const [reunioesAoVivo, setReunioesAoVivo] = useState(0)
+  useEffect(() => {
+    if (!usuario) return
+    let cancelado = false
+    const buscar = () => proLaboreApi.apresentacoes.aoVivo().then(l => { if (!cancelado) setReunioesAoVivo(l.length) }).catch(() => undefined)
+    void buscar()
+    const t = setInterval(buscar, 45_000)
+    return () => { cancelado = true; clearInterval(t) }
+  }, [usuario])
   const [gruposColapsados, setGruposColapsados] = useState<string[]>([])
 
   useEffect(() => {
@@ -166,11 +178,14 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`pl-sidebar-link ${pathname === item.href ? 'active' : ''}`}
+                    className={`pl-sidebar-link ${pathname === item.href || (item.href !== '/pro-labore' && pathname.startsWith(`${item.href}/`)) ? 'active' : ''}`}
                     title={sidebarColapsada ? item.label : undefined}
                   >
                     <NavIcon name={item.icon} />
                     <span className="pl-sidebar-link-label">{item.label}</span>
+                    {item.href === '/pro-labore/reunioes' && reunioesAoVivo > 0 && (
+                      <span className="pl-nav-aovivo" title="Apresentação ao vivo agora"><span className="pl-ap-pulso" aria-hidden="true" />{!sidebarColapsada && 'AO VIVO'}</span>
+                    )}
                   </Link>
                 ))}
               </div>

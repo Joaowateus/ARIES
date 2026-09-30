@@ -41,9 +41,19 @@ export interface MotorMapaMentalOpcoes {
   temas?: Record<string, Tema>
   onMudancaArvore?: (tree: NoArvore, counter: number, posicoes: Map<string, Ponto>) => void
   onMudancaEstado?: (estado: EstadoMotor) => void
+  // Modo "só assistir" (apresentação ao vivo): mapa não edita, não
+  // seleciona nem recolhe galho — só pan/zoom de quem está olhando.
+  somenteLeitura?: boolean
+  // Enquadramento atual em coordenadas do MAPA (não da tela) — permite
+  // outra tela, de outro tamanho, mostrar exatamente o mesmo pedaço.
+  onMudancaVista?: (vista: VistaMundo) => void
+  onMudancaSelecao?: (id: string | null) => void
+  // Quem está olhando mexeu na vista por conta própria (arrastou, zoom).
+  onInteracaoVista?: () => void
 }
 
 type Ponto = { x: number; y: number }
+export interface VistaMundo { x: number; y: number; w: number; h: number }
 
 export class MotorMapaMental {
   private container: HTMLElement
@@ -86,6 +96,13 @@ export class MotorMapaMental {
   private pinch: { d: number; k: number } | null = null
   private lastClick = { id: null as string | null, t: 0 }
   private destruido = false
+  private somenteLeitura: boolean
+  private onMudancaVista?: (vista: VistaMundo) => void
+  private onMudancaSelecao?: (id: string | null) => void
+  private onInteracaoVista?: () => void
+  private ultimaVistaEmitida = ''
+  private ultimaSelEmitida: string | null | undefined = undefined
+  private animVista: number | null = null
 
   constructor(opts: MotorMapaMentalOpcoes) {
     this.container = opts.container
@@ -97,6 +114,10 @@ export class MotorMapaMental {
     this.fabrica = criarFabricaDeNos(Math.max(opts.counterInicial || 0, maxIdArvore(this.tree)))
     this.onMudancaArvore = opts.onMudancaArvore
     this.onMudancaEstado = opts.onMudancaEstado
+    this.somenteLeitura = !!opts.somenteLeitura
+    this.onMudancaVista = opts.onMudancaVista
+    this.onMudancaSelecao = opts.onMudancaSelecao
+    this.onInteracaoVista = opts.onInteracaoVista
     this.RM = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
     this.container.tabIndex = this.container.tabIndex >= 0 ? this.container.tabIndex : 0
@@ -127,6 +148,10 @@ export class MotorMapaMental {
       <button type="button" data-a="toggle">Recolher <kbd>Espaço</kbd></button>
       <button type="button" data-a="del">Excluir <kbd>Del</kbd></button>`
     this.container.appendChild(this.actionsEl)
+    if (this.somenteLeitura) {
+      this.actionsEl.style.display = 'none'
+      this.container.classList.add('pl-motor-leitura')
+    }
 
     this.zoomEl = document.createElement('div')
     this.zoomEl.className = 'pl-motor-ui pl-motor-zoom'
@@ -190,8 +215,50 @@ export class MotorMapaMental {
   zoomIn(): void { this.zoomAt(this.container.clientWidth / 2, this.container.clientHeight / 2, this.view.k * 1.2) }
   zoomOut(): void { this.zoomAt(this.container.clientWidth / 2, this.container.clientHeight / 2, this.view.k / 1.2) }
   enquadrar(): void { this.fit() }
+
+  /* ---------- Transmissão ao vivo ---------- */
+  // Substitui o mapa inteiro pelo que veio do apresentador, animando a
+  // transição (nós novos nascem do pai, igual quando se edita localmente).
+  aplicarRemoto(tree: NoArvore, cfg: { layout?: Layout; theme?: string; balanced?: boolean }): void {
+    if (cfg.layout) this.layout = cfg.layout
+    if (cfg.theme && this.temas[cfg.theme]) this.theme = cfg.theme
+    if (cfg.balanced !== undefined) this.balanced = cfg.balanced
+    this.tree = tree
+    this.fabrica.setCounter(Math.max(this.fabrica.getCounter(), maxIdArvore(tree)))
+    this.relayout()
+  }
+  setSelecaoRemota(id: string | null): void {
+    if (id && id !== this.sel && this.byId.has(id)) { this.sel = id; this.render() }
+  }
+  getVistaMundo(): VistaMundo {
+    const { tx, ty, k } = this.view
+    return { x: -tx / k, y: -ty / k, w: this.container.clientWidth / k, h: this.container.clientHeight / k }
+  }
+  // Enquadra o mesmo retângulo do mapa que o apresentador está vendo,
+  // ajustado ao tamanho desta tela (cabe inteiro, centralizado).
+  irParaVistaMundo(v: VistaMundo, animar = true): void {
+    const W = this.container.clientWidth, H = this.container.clientHeight
+    if (!W || !H || v.w <= 0 || v.h <= 0) return
+    const k = Math.max(.2, Math.min(2.5, Math.min(W / v.w, H / v.h)))
+    const alvo = { k, tx: W / 2 - (v.x + v.w / 2) * k, ty: H / 2 - (v.y + v.h / 2) * k }
+    if (this.animVista != null) cancelAnimationFrame(this.animVista)
+    if (!animar || this.RM) { this.view = alvo; this.render(); return }
+    const de = { ...this.view }, t0 = performance.now()
+    const passo = (agora: number) => {
+      if (this.destruido) return
+      const t = Math.min(1, (agora - t0) / 280), e = 1 - Math.pow(1 - t, 3)
+      this.view = { k: de.k + (alvo.k - de.k) * e, tx: de.tx + (alvo.tx - de.tx) * e, ty: de.ty + (alvo.ty - de.ty) * e }
+      this.render()
+      this.animVista = t < 1 ? requestAnimationFrame(passo) : null
+    }
+    this.animVista = requestAnimationFrame(passo)
+  }
+  mundoParaTela(p: Ponto): Ponto { return { x: this.view.tx + p.x * this.view.k, y: this.view.ty + p.y * this.view.k } }
+  telaParaMundo(sx: number, sy: number): Ponto { return this.toWorld(sx, sy) }
+
   destroy(): void {
     this.destruido = true
+    if (this.animVista != null) cancelAnimationFrame(this.animVista)
     window.removeEventListener('resize', this.onResize)
     this.container.innerHTML = ''
   }
@@ -230,6 +297,19 @@ export class MotorMapaMental {
     this.zoomVal.textContent = Math.round(k * 100) + '%'
     this.placeEditor()
     this.syncActions()
+    this.emitirVistaESelecao()
+  }
+
+  private emitirVistaESelecao(): void {
+    if (this.onMudancaVista) {
+      const v = this.getVistaMundo()
+      const chave = `${Math.round(v.x)}|${Math.round(v.y)}|${Math.round(v.w)}|${Math.round(v.h)}`
+      if (chave !== this.ultimaVistaEmitida) { this.ultimaVistaEmitida = chave; this.onMudancaVista(v) }
+    }
+    if (this.onMudancaSelecao && this.sel !== this.ultimaSelEmitida) {
+      this.ultimaSelEmitida = this.sel
+      this.onMudancaSelecao(this.sel)
+    }
   }
 
   private relayout(o: { instant?: boolean; reveal?: boolean } = {}): void {
@@ -438,7 +518,7 @@ export class MotorMapaMental {
     })
 
     this.container.addEventListener('keydown', ev => {
-      if (ev.target === this.ed) return
+      if (ev.target === this.ed || this.somenteLeitura) return
       const mod = ev.ctrlKey || ev.metaKey, key = ev.key.toLowerCase()
       if (mod && key === 'z') { ev.preventDefault(); if (ev.shiftKey) this.redoImpl(); else this.undoImpl(); return }
       if (mod && key === 'y') { ev.preventDefault(); this.redoImpl(); return }
@@ -473,9 +553,9 @@ export class MotorMapaMental {
         this.down = null; this.dragging = null; this.dropTarget = null; this.container.classList.remove('pl-motor-panning')
         return
       }
-      const tg = (ev.target as HTMLElement).closest('[data-toggle]') as HTMLElement | null
+      const tg = this.somenteLeitura ? null : (ev.target as HTMLElement).closest('[data-toggle]') as HTMLElement | null
       if (tg) { this.toggle(tg.dataset.toggle!); return }
-      const ng = (ev.target as HTMLElement).closest('[data-node]') as HTMLElement | null
+      const ng = this.somenteLeitura ? null : (ev.target as HTMLElement).closest('[data-node]') as HTMLElement | null
       if (ng) { this.sel = ng.dataset.node!; this.down = { type: 'node', id: this.sel, sx, sy }; this.render() }
       else { this.down = { type: 'pan', sx, sy, tx: this.view.tx, ty: this.view.ty }; this.container.classList.add('pl-motor-panning') }
       this.container.setPointerCapture(ev.pointerId)
@@ -486,11 +566,16 @@ export class MotorMapaMental {
       if (this.pinch && this.pts.size === 2) {
         const [a, b] = [...this.pts.values()]
         this.zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, this.pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / this.pinch.d)
+        this.onInteracaoVista?.()
         return
       }
       if (!this.down) return
       const dx = sx - this.down.sx, dy = sy - this.down.sy
-      if (this.down.type === 'pan') { this.view.tx = this.down.tx! + dx; this.view.ty = this.down.ty! + dy; this.render(); return }
+      if (this.down.type === 'pan') {
+        this.view.tx = this.down.tx! + dx; this.view.ty = this.down.ty! + dy; this.render()
+        if (Math.hypot(dx, dy) > 3) this.onInteracaoVista?.()
+        return
+      }
       if (!this.dragging && Math.hypot(dx, dy) > 6 && this.down.id !== this.tree.id) this.dragging = this.down.id!
       if (this.dragging) { this.dragPos = this.toWorld(sx, sy); this.dropTarget = this.hitNode(this.dragPos); this.render() }
     })
@@ -519,6 +604,7 @@ export class MotorMapaMental {
       const r = rect()
       if (ev.ctrlKey || ev.metaKey) this.zoomAt(ev.clientX - r.left, ev.clientY - r.top, this.view.k * Math.exp(-ev.deltaY * .0025))
       else { this.view.tx -= ev.deltaX; this.view.ty -= ev.deltaY; this.render() }
+      this.onInteracaoVista?.()
     }, { passive: false })
     window.addEventListener('resize', this.onResize)
 
@@ -536,6 +622,7 @@ export class MotorMapaMental {
       const btn = (ev.target as HTMLElement).closest('button') as HTMLButtonElement | null
       if (!btn) return
       const a = btn.dataset.a
+      this.onInteracaoVista?.()
       if (a === 'zin') this.zoomIn()
       else if (a === 'zout') this.zoomOut()
       else if (a === 'fit') this.fit()

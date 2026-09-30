@@ -36,6 +36,7 @@ import notificacoesRoutes from './routes/notificacoes'
 import calendarioRoutes from './routes/calendario'
 import relatoriosRoutes from './routes/relatorios'
 import proLaboreRoutes from './routes/proLabore'
+import proLaboreApresentacoesRoutes from './routes/proLaboreApresentacoes'
 
 // Setup do Express isolado do listen() — assim o mesmo app serve tanto o
 // servidor tradicional (src/index.ts, usado localmente e em hosts sempre
@@ -89,7 +90,11 @@ app.use(rateLimit({
   // Webhook do WhatsApp chega sempre do mesmo IP (o servidor Evolution) e
   // em rajada quando vários leads escrevem juntos — é autenticado pelo
   // segredo na URL, não pelo limite.
-  skip: req => req.path.startsWith('/pro-labore/assistente/webhook/'),
+  // Transmissão ao vivo das apresentações: numa sala/escritório todo mundo
+  // sai pelo mesmo IP, e o apresentador manda o ponteiro várias vezes por
+  // segundo — rotas autenticadas, fora do limite por IP.
+  skip: req => req.path.startsWith('/pro-labore/assistente/webhook/')
+    || /^\/pro-labore\/apresentacoes\/[^/]+\/(transmissao|estado|palco)$/.test(req.path),
 }))
 
 // Stricter rate limit for auth endpoints
@@ -154,6 +159,7 @@ app.use('/calendario', calendarioRoutes)
 app.use('/relatorios', relatoriosRoutes)
 app.use('/pro-labore/auth', authLimiter)
 app.use('/pro-labore', proLaboreRoutes)
+app.use('/pro-labore', proLaboreApresentacoesRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

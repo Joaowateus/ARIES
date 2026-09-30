@@ -548,6 +548,29 @@ export const proLaboreApi = {
     excluirAcao: (id: string) => request<{ ok: boolean }>(`/pro-labore/plano-crescimento/acoes/${id}`, { method: 'DELETE' }),
     historico: (meses = 6) => request<HistoricoCrescimentoMes[]>(`/pro-labore/plano-crescimento/historico?meses=${meses}`),
   },
+  apresentacoes: {
+    listar: () => request<ApresentacaoResumo[]>('/pro-labore/apresentacoes'),
+    aoVivo: () => request<Array<{ id: string; titulo: string; aoVivoDesde: string | null }>>('/pro-labore/apresentacoes/ao-vivo'),
+    obter: (id: string) => request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}`),
+    criar: (data: { titulo: string; descricao?: string; icone?: string; arvore?: ArvoreApresentacao; configuracao?: ConfiguracaoApresentacao }) =>
+      request<ApresentacaoDetalhe>('/pro-labore/apresentacoes', { method: 'POST', body: JSON.stringify(data) }),
+    atualizar: (id: string, data: Partial<{
+      titulo: string; descricao: string | null; icone: string | null; arvore: ArvoreApresentacao; configuracao: ConfiguracaoApresentacao
+      notas: Bloco[]; lembretes: LembreteApresentacao[]; notasPrivadas: string | null; visivelEquipe: boolean
+    }>) => request<{ versao: number; atualizadoEm: string }>(`/pro-labore/apresentacoes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    excluir: (id: string) => request<null>(`/pro-labore/apresentacoes/${id}`, { method: 'DELETE' }),
+    definirAoVivo: (id: string, ativo: boolean) =>
+      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/ao-vivo`, { method: 'POST', body: JSON.stringify({ ativo }) }),
+    enviarPalco: (id: string, palco: PalcoApresentacao) =>
+      request<{ ok: boolean }>(`/pro-labore/apresentacoes/${id}/palco`, { method: 'PUT', body: JSON.stringify(palco) }),
+    espectadores: (id: string) => request<EspectadorApresentacao[]>(`/pro-labore/apresentacoes/${id}/espectadores`),
+    estado: (id: string, versao: number, palcoVersao: number) =>
+      request<EstadoPollApresentacao>(`/pro-labore/apresentacoes/${id}/estado?versao=${versao}&palcoVersao=${palcoVersao}`),
+    // A transmissão (SSE) é lida com fetch + stream no hook da tela, porque
+    // EventSource não deixa mandar o cabeçalho de autorização.
+    urlTransmissao: (id: string) => `${BASE}/pro-labore/apresentacoes/${id}/transmissao`,
+    token: () => getToken(),
+  },
   reunioes: {
     listar: (tipo?: TipoReuniao) => request<ReuniaoResumo[]>(`/pro-labore/reunioes${tipo ? `?tipo=${tipo}` : ''}`),
     criar: (data: { titulo: string; tipo?: TipoReuniao; data?: string; duracaoSegundos?: number; nomeArquivoOriginal?: string; transcricao?: string }) =>
@@ -1182,4 +1205,62 @@ export interface MapaMental {
 export interface MapaMentalVersao {
   id: string
   criadoEm: string
+}
+
+// --- Apresentações ao vivo (aba Reuniões) ---
+
+export interface ArvoreApresentacao { id: string; text: string; children: ArvoreApresentacao[]; collapsed: boolean }
+export interface ConfiguracaoApresentacao { layout: 'mind' | 'org' | 'list'; tema: string; doisLados: boolean }
+export interface LembreteApresentacao { id: string; texto: string; feito: boolean; data?: string | null }
+export interface VistaApresentacao { x: number; y: number; w: number; h: number }
+export interface PalcoApresentacao {
+  vista: VistaApresentacao | null
+  sel: string | null
+  laser: { ativo: boolean; pontos: Array<{ x: number; y: number }> }
+}
+
+export interface ApresentacaoResumo {
+  id: string
+  titulo: string
+  descricao: string | null
+  icone: string | null
+  visivelEquipe: boolean
+  aoVivo: boolean
+  aoVivoDesde: string | null
+  criadoEm: string
+  atualizadoEm: string
+  totalIdeias: number
+  lembretesPendentes: number
+}
+
+export interface ConteudoApresentacao {
+  titulo: string
+  descricao: string | null
+  icone: string | null
+  arvore: ArvoreApresentacao
+  configuracao: ConfiguracaoApresentacao | null
+  notas: Bloco[] | null
+  lembretes: LembreteApresentacao[] | null
+}
+
+export interface ApresentacaoDetalhe extends ApresentacaoResumo {
+  arvore: ArvoreApresentacao
+  configuracao: ConfiguracaoApresentacao | null
+  notas: Bloco[] | null
+  lembretes: LembreteApresentacao[] | null
+  versao: number
+  palco: PalcoApresentacao | null
+  palcoVersao: number
+  podeEditar: boolean
+  notasPrivadas?: string | null
+}
+
+export interface EspectadorApresentacao { nome: string; entrouEm: string; ultimoSinalEm: string; assistindo: boolean }
+
+export interface EstadoPollApresentacao {
+  versao: number
+  palcoVersao: number
+  aoVivo: boolean
+  conteudo?: ConteudoApresentacao
+  palco?: PalcoApresentacao | null
 }
