@@ -8,6 +8,14 @@ export function duracaoDesde(iso: string): string {
   return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`
 }
 
+// Volta pra mesma pasta/departamento de onde a apresentação está.
+export function linkBiblioteca(a: { departamentoId: string | null; pastaId: string | null }): string {
+  const q = new URLSearchParams()
+  if (a.departamentoId) q.set('dep', a.departamentoId)
+  if (a.pastaId) q.set('pasta', a.pastaId)
+  return `/pro-labore/reunioes${q.size ? `?${q}` : ''}`
+}
+
 export function tempoRelativo(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
   if (min < 1) return 'agora'

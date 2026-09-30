@@ -17,7 +17,7 @@ import { THEMES } from '../../anotacoes/motor-mapa-mental/temas'
 import QuadroMotor from './QuadroMotor'
 import Laser, { criarFonteLaser, type FonteLaser } from './Laser'
 import PainelLateral from './PainelLateral'
-import { IconeTelaCheia, IconeLaser, IconePainel, IconeLink, IconeVoltar, duracaoDesde, useTelaCheia } from './comum'
+import { IconeTelaCheia, IconeLaser, IconePainel, IconeLink, IconeVoltar, duracaoDesde, linkBiblioteca, useTelaCheia } from './comum'
 
 type Salvamento = 'salvo' | 'pendente' | 'salvando' | 'erro'
 type Campos = Partial<{
@@ -30,9 +30,9 @@ const LAYOUTS: Array<{ id: Layout; rotulo: string }> = [
   { id: 'org', rotulo: 'Organograma' },
   { id: 'list', rotulo: 'Lista' },
 ]
-const ESPERA_SALVAR_MS = 250
-const ESPERA_MAXIMA_MS = 700
-const INTERVALO_PALCO_MS = 300
+const ESPERA_SALVAR_MS = 90
+const ESPERA_MAXIMA_MS = 250
+const INTERVALO_PALCO_MS = 150
 const SINAL_VIDA_MS = 15_000
 const AMOSTRA_LASER_MS = 40
 
@@ -101,7 +101,7 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
     const agora = Date.now()
     if (!primeiroPendenteRef.current) primeiroPendenteRef.current = agora
     if (timerRef.current) clearTimeout(timerRef.current)
-    // Digitando sem parar: salva pelo menos a cada ~0,7s, pra equipe ver o
+    // Digitando sem parar: salva pelo menos a cada ~0,25s, pra equipe ver o
     // texto aparecendo, não só quando você para.
     const restante = Math.max(0, ESPERA_MAXIMA_MS - (agora - primeiroPendenteRef.current))
     timerRef.current = setTimeout(() => void enviar(), Math.min(espera, restante))
@@ -210,7 +210,7 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
   return (
     <div ref={telaRef} className={`pl-ap-tela ${cheia ? 'cheia' : ''}`}>
       <header className="pl-ap-barra">
-        <Link href="/pro-labore/reunioes" className="pl-ap-icone-btn" aria-label="Voltar pra biblioteca"><IconeVoltar /></Link>
+        <Link href={linkBiblioteca(inicial)} className="pl-ap-icone-btn" aria-label="Voltar pra biblioteca"><IconeVoltar /></Link>
         <input
           className="pl-ap-titulo"
           value={titulo}

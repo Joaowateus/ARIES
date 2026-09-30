@@ -4,8 +4,9 @@
 // conexão de eventos (SSE, lida via fetch porque EventSource não manda o
 // cabeçalho de autorização): o servidor segura ~24s empurrando cada
 // mudança e a tela reabre em seguida. Se a hospedagem segurar o fluxo em
-// vez de repassar na hora (o primeiro evento não chega em 6s, duas vezes
-// seguidas), cai pro modo reserva: pergunta a cada ~1s só pelo que mudou.
+// vez de repassar na hora (o primeiro evento não chega em ~3,5s), cai pro
+// modo reserva — espera segurada: a pergunta fica aberta no servidor e
+// volta no instante em que algo muda — e lembra a escolha na aba.
 import { useEffect, useRef, useState } from 'react'
 import { proLaboreApi, type ConteudoApresentacao, type PalcoApresentacao } from '@/lib/proLaboreApi'
 
@@ -26,8 +27,15 @@ interface EventoRecebido {
   aoVivo?: boolean
 }
 
-const ESPERA_PRIMEIRO_EVENTO_MS = 6000
-const INTERVALO_RESERVA_MS = 1000
+const ESPERA_PRIMEIRO_EVENTO_MS = 3500
+const CHAVE_MODO = 'pl_transmissao_reserva'
+
+function lerReserva(): boolean {
+  try { return sessionStorage.getItem(CHAVE_MODO) === '1' } catch { return false }
+}
+function gravarReserva() {
+  try { sessionStorage.setItem(CHAVE_MODO, '1') } catch { /* sem armazenamento: só não lembra */ }
+}
 
 const dormir = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -41,6 +49,7 @@ export function useTransmissao(id: string, inicial: { versao: number; palcoVersa
     let ativo = true
     let versao = inicialRef.current.versao
     let palcoVersao = inicialRef.current.palcoVersao
+    let aoVivo = false
     let controle: AbortController | null = null
 
     const aplicar = (e: EventoRecebido) => {
@@ -53,7 +62,7 @@ export function useTransmissao(id: string, inicial: { versao: number; palcoVersa
         palcoVersao = e.palcoVersao!
         h.onPalco(e.palco)
       }
-      if ((e.tipo === 'estado' || e.tipo === 'status') && typeof e.aoVivo === 'boolean') h.onStatus(e.aoVivo)
+      if ((e.tipo === 'estado' || e.tipo === 'status') && typeof e.aoVivo === 'boolean') { aoVivo = e.aoVivo; h.onStatus(e.aoVivo) }
     }
 
     // Uma conexão de eventos. Devolve true se chegou pelo menos um evento
@@ -99,21 +108,28 @@ export function useTransmissao(id: string, inicial: { versao: number; palcoVersa
       setModo('reserva')
       while (ativo) {
         try {
-          const e = await proLaboreApi.apresentacoes.estado(id, versao, palcoVersao)
+          const e = await proLaboreApi.apresentacoes.estado(id, versao, palcoVersao, aoVivo)
           aplicar({ tipo: 'estado', ...e, palco: e.palco === undefined ? undefined : e.palco })
-        } catch { /* rede instável: tenta de novo */ }
-        await dormir(document.hidden ? INTERVALO_RESERVA_MS * 3 : INTERVALO_RESERVA_MS)
+          // Aba em segundo plano: não precisa de tempo real.
+          if (document.hidden) await dormir(2000)
+        } catch {
+          await dormir(1500) // rede instável: tenta de novo
+        }
       }
     }
 
     ;(async () => {
+      if (lerReserva()) { await modoReserva(); return }
+      let conectouAlgumaVez = false
       let falhas = 0
       while (ativo) {
         const funcionou = await conexaoContinua()
         if (!ativo) return
+        conectouAlgumaVez ||= funcionou
         falhas = funcionou ? 0 : falhas + 1
-        if (falhas >= 2) { await modoReserva(); return }
-        await dormir(funcionou ? 150 : 1500)
+        // Nunca chegou evento a tempo: a hospedagem segura o fluxo.
+        if (!conectouAlgumaVez || falhas >= 2) { gravarReserva(); await modoReserva(); return }
+        await dormir(funcionou ? 50 : 800)
       }
     })()
 

@@ -11,7 +11,7 @@
 import { prisma } from './prisma'
 import { logger } from './logger'
 
-export const INTERVALO_OBSERVACAO_MS = 300
+export const INTERVALO_OBSERVACAO_MS = 150
 // Sem sinal do apresentador (a tela dele manda um a cada ~15s) por mais
 // que isso, a transmissão conta como encerrada — cobre fechar a aba sem
 // clicar em "Encerrar".
@@ -49,6 +49,9 @@ interface Sala {
   inscritos: Set<Inscrito>
   timer: ReturnType<typeof setInterval> | null
   ocupado: boolean
+  // Chegou aviso de mudança enquanto uma consulta já estava em andamento:
+  // roda de novo assim que ela terminar, sem esperar o próximo ciclo.
+  deNovo: boolean
 }
 
 const salas = new Map<string, Sala>()
@@ -82,7 +85,18 @@ async function observar(id: string, sala: Sala) {
     logger.warn({ err: e, apresentacaoId: id }, 'apresentação: falha ao observar')
   } finally {
     sala.ocupado = false
+    if (sala.deNovo) { sala.deNovo = false; void observar(id, sala) }
   }
+}
+
+// Chamado logo depois que o apresentador grava algo: se espectadores
+// dessa apresentação estão conectados nesta mesma instância da função,
+// eles recebem na hora, sem esperar o próximo ciclo de observação.
+export function sinalizarMudanca(id: string): void {
+  const sala = salas.get(id)
+  if (!sala) return
+  if (sala.ocupado) { sala.deNovo = true; return }
+  void observar(id, sala)
 }
 
 // Inscreve um espectador. `inicial` é o que ele já recebeu (lido do banco
@@ -91,7 +105,7 @@ async function observar(id: string, sala: Sala) {
 export function inscreverEspectador(id: string, inicial: Omit<Inscrito, 'enviar'>, enviar: Inscrito['enviar']): () => void {
   let sala = salas.get(id)
   if (!sala) {
-    sala = { inscritos: new Set(), timer: null, ocupado: false }
+    sala = { inscritos: new Set(), timer: null, ocupado: false, deNovo: false }
     salas.set(id, sala)
   }
   const inscrito: Inscrito = { ...inicial, enviar }
