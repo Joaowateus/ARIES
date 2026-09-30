@@ -559,11 +559,11 @@ export const proLaboreApi = {
     historico: (meses = 6) => request<HistoricoCrescimentoMes[]>(`/pro-labore/plano-crescimento/historico?meses=${meses}`),
   },
   apresentacoes: {
-    listar: () => request<ApresentacaoResumo[]>('/pro-labore/apresentacoes'),
+    listar: () => request<ApresentacaoResumo[]>('/pro-labore/apresentacoes').then(l => l.map(comAutoria)),
     aoVivo: () => request<Array<{ id: string; titulo: string; aoVivoDesde: string | null; bloqueado: boolean; departamento: { id: string; nome: string; cor: string } | null }>>('/pro-labore/apresentacoes/ao-vivo'),
-    obter: (id: string) => request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}`),
+    obter: (id: string) => request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}`).then(comAutoria),
     criar: (data: { titulo: string; descricao?: string; icone?: string; arvore?: ArvoreApresentacao; configuracao?: ConfiguracaoApresentacao; departamentoId?: string | null; pastaId?: string | null }) =>
-      request<ApresentacaoDetalhe>('/pro-labore/apresentacoes', { method: 'POST', body: JSON.stringify(data) }),
+      request<ApresentacaoDetalhe>('/pro-labore/apresentacoes', { method: 'POST', body: JSON.stringify(data) }).then(comAutoria),
     atualizar: (id: string, data: Partial<{
       titulo: string; descricao: string | null; icone: string | null; arvore: ArvoreApresentacao; configuracao: ConfiguracaoApresentacao
       notas: Bloco[]; lembretes: LembreteApresentacao[]; notasPrivadas: string | null; visivelEquipe: boolean
@@ -571,14 +571,14 @@ export const proLaboreApi = {
     }>) => request<{ versao: number; atualizadoEm: string }>(`/pro-labore/apresentacoes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     excluir: (id: string) => request<null>(`/pro-labore/apresentacoes/${id}`, { method: 'DELETE' }),
     pedir: (id: string, cancelar = false) =>
-      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/pedir`, { method: 'POST', body: JSON.stringify({ cancelar }) }),
+      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/pedir`, { method: 'POST', body: JSON.stringify({ cancelar }) }).then(comAutoria),
     decidir: (id: string, decisao: 'APROVAR' | 'RECUSAR', motivo?: string) =>
-      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/decisao`, { method: 'POST', body: JSON.stringify({ decisao, motivo }) }),
+      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/decisao`, { method: 'POST', body: JSON.stringify({ decisao, motivo }) }).then(comAutoria),
     pendencias: () => request<{ pedidos: number }>('/pro-labore/apresentacoes/pendencias'),
     salvarMinhaNota: (id: string, texto: string) =>
       request<{ ok: boolean }>(`/pro-labore/apresentacoes/${id}/minha-nota`, { method: 'PUT', body: JSON.stringify({ texto }) }),
     definirAoVivo: (id: string, ativo: boolean) =>
-      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/ao-vivo`, { method: 'POST', body: JSON.stringify({ ativo }) }),
+      request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/ao-vivo`, { method: 'POST', body: JSON.stringify({ ativo }) }).then(comAutoria),
     enviarPalco: (id: string, palco: PalcoApresentacao) =>
       request<{ ok: boolean }>(`/pro-labore/apresentacoes/${id}/palco`, { method: 'PUT', body: JSON.stringify(palco) }),
     espectadores: (id: string) => request<EspectadorApresentacao[]>(`/pro-labore/apresentacoes/${id}/espectadores`),
@@ -1301,6 +1301,20 @@ export interface ApresentacaoResumo {
   aprovacao: AprovacaoApresentacao
   aprovacaoMotivo: string | null
   pedidoEm: string | null
+}
+
+// Campos de autoria/autorização com valor padrão: se o site novo falar
+// com um servidor ainda na versão anterior (deploy atrasado), a tela
+// trata como apresentação do dono já autorizada em vez de quebrar.
+function comAutoria<T extends Partial<Pick<ApresentacaoResumo, 'aprovacao' | 'souAutor' | 'autorNome' | 'aprovacaoMotivo' | 'pedidoEm'>> & { podeEditar?: boolean }>(a: T): T & Pick<ApresentacaoResumo, 'aprovacao' | 'souAutor' | 'autorNome' | 'aprovacaoMotivo' | 'pedidoEm'> {
+  return {
+    ...a,
+    aprovacao: a.aprovacao ?? 'APROVADA',
+    souAutor: a.souAutor ?? a.podeEditar ?? false,
+    autorNome: a.autorNome ?? null,
+    aprovacaoMotivo: a.aprovacaoMotivo ?? null,
+    pedidoEm: a.pedidoEm ?? null,
+  }
 }
 
 export type AprovacaoApresentacao = 'RASCUNHO' | 'PENDENTE' | 'APROVADA' | 'RECUSADA'
