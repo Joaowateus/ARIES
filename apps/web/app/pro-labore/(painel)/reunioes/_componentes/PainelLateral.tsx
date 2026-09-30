@@ -104,7 +104,7 @@ export function Lembretes({ itens, editavel, onChange }: { itens: LembreteAprese
   )
 }
 
-export default function PainelLateral({ editavel, notas, lembretes, notasPrivadas, onNotas, onLembretes, onNotasPrivadas, chaveEditor, extra }: {
+export default function PainelLateral({ editavel, notas, lembretes, notasPrivadas, onNotas, onLembretes, onNotasPrivadas, statusPrivado, chaveEditor, extra }: {
   editavel: boolean
   notas: Bloco[]
   lembretes: LembreteApresentacao[]
@@ -112,6 +112,8 @@ export default function PainelLateral({ editavel, notas, lembretes, notasPrivada
   onNotas?: (b: Bloco[]) => void
   onLembretes?: (l: LembreteApresentacao[]) => void
   onNotasPrivadas?: (t: string) => void
+  // Aviso de salvamento embaixo do "Só pra mim" (tela de quem assiste).
+  statusPrivado?: React.ReactNode
   chaveEditor?: string
   extra?: React.ReactNode
 }) {
@@ -120,7 +122,7 @@ export default function PainelLateral({ editavel, notas, lembretes, notasPrivada
   const abas: Array<{ valor: Aba; rotulo: React.ReactNode }> = [
     { valor: 'anotacoes', rotulo: 'Anotações' },
     { valor: 'lembretes', rotulo: <>Lembretes{pendentes > 0 && <span className="pl-ap-contador">{pendentes}</span>}</> },
-    ...(editavel ? [{ valor: 'privado' as const, rotulo: 'Só pra mim' }] : []),
+    ...(onNotasPrivadas ? [{ valor: 'privado' as const, rotulo: 'Só pra mim' }] : []),
   ]
   return (
     <aside className="pl-ap-painel">
@@ -139,15 +141,22 @@ export default function PainelLateral({ editavel, notas, lembretes, notasPrivada
           )
           : <BlocosLeitura blocos={notas} />)}
         {aba === 'lembretes' && <Lembretes itens={lembretes} editavel={editavel} onChange={onLembretes} />}
-        {aba === 'privado' && editavel && (
+        {aba === 'privado' && onNotasPrivadas && (
           <>
-            <div className="pl-ap-dica">Só você vê — roteiro, falas, pontos pra não esquecer. Não é transmitido.</div>
+            <div className="pl-ap-dica">
+              {editavel
+                ? 'Só você vê — roteiro, falas, pontos pra não esquecer. Não é transmitido.'
+                : 'Só você vê — nem quem apresenta nem os colegas têm acesso. Fica salvo pra quando voltar nesta reunião.'}
+            </div>
             <textarea
               className="pl-input pl-textarea pl-ap-privado"
               value={notasPrivadas ?? ''}
-              placeholder={'Ex.:\n1. Abrir com o resultado do mês\n2. Mostrar o galho "Objeções"\n3. Fechar com a meta da semana'}
-              onChange={e => onNotasPrivadas?.(e.target.value)}
+              placeholder={editavel
+                ? 'Ex.:\n1. Abrir com o resultado do mês\n2. Mostrar o galho "Objeções"\n3. Fechar com a meta da semana'
+                : 'Ex.:\n- Ligar pro cliente X usando o argumento do ponto B\n- Dúvida pra levar no fim da reunião'}
+              onChange={e => onNotasPrivadas(e.target.value)}
             />
+            {statusPrivado && <div className="pl-ap-privado-status">{statusPrivado}</div>}
           </>
         )}
         {extra && <Fragment>{extra}</Fragment>}

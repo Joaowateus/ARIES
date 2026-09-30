@@ -5,8 +5,8 @@
 // Dá pra sair do "seguir" e explorar sozinho (arrastar/zoom); um botão
 // traz de volta pro que o apresentador está mostrando.
 import Link from 'next/link'
-import { useRef, useState } from 'react'
-import type { ApresentacaoDetalhe, Bloco, ConfiguracaoApresentacao, LembreteApresentacao, PalcoApresentacao } from '@/lib/proLaboreApi'
+import { useEffect, useRef, useState } from 'react'
+import { proLaboreApi, type ApresentacaoDetalhe, type Bloco, type ConfiguracaoApresentacao, type LembreteApresentacao, type PalcoApresentacao } from '@/lib/proLaboreApi'
 import type { MotorMapaMental } from '../../anotacoes/motor-mapa-mental/motor'
 import QuadroMotor from './QuadroMotor'
 import Laser, { criarFonteLaser, type FonteLaser } from './Laser'
@@ -33,6 +33,41 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
   const fonteLaserRef = useRef<FonteLaser>(criarFonteLaser())
   const aplicandoRef = useRef(false)
   const notasJsonRef = useRef(JSON.stringify(inicial.notas ?? []))
+
+  // "Só pra mim": nota pessoal de quem assiste, salva sozinha.
+  const [minhaNota, setMinhaNota] = useState(inicial.notaPessoal ?? '')
+  const [statusNota, setStatusNota] = useState<'salvando' | 'salvo' | 'erro' | null>(null)
+  const notaPendenteRef = useRef<string | null>(null)
+  const timerNotaRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  async function salvarNota() {
+    timerNotaRef.current = null
+    const texto = notaPendenteRef.current
+    if (texto === null) return
+    notaPendenteRef.current = null
+    try {
+      await proLaboreApi.apresentacoes.salvarMinhaNota(inicial.id, texto)
+      if (notaPendenteRef.current === null) setStatusNota('salvo')
+    } catch {
+      if (notaPendenteRef.current === null) notaPendenteRef.current = texto
+      setStatusNota('erro')
+    }
+  }
+
+  function mudarNota(t: string) {
+    setMinhaNota(t)
+    setStatusNota('salvando')
+    notaPendenteRef.current = t
+    if (timerNotaRef.current) clearTimeout(timerNotaRef.current)
+    timerNotaRef.current = setTimeout(() => { void salvarNota() }, 800)
+  }
+
+  // Saiu da tela com algo por salvar: manda na hora.
+  useEffect(() => () => {
+    if (timerNotaRef.current) clearTimeout(timerNotaRef.current)
+    const texto = notaPendenteRef.current
+    if (texto !== null) void proLaboreApi.apresentacoes.salvarMinhaNota(inicial.id, texto).catch(() => {})
+  }, [inicial.id])
 
   function aplicarPalco(p: PalcoApresentacao | null, animar = true) {
     const m = motorRef.current
@@ -130,7 +165,16 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
             </div>
           )}
         </div>
-        {painelAberto && <PainelLateral editavel={false} notas={notas} lembretes={lembretes} />}
+        {painelAberto && (
+          <PainelLateral
+            editavel={false} notas={notas} lembretes={lembretes}
+            notasPrivadas={minhaNota} onNotasPrivadas={mudarNota}
+            statusPrivado={statusNota === 'salvando' ? 'Salvando…'
+              : statusNota === 'salvo' ? 'Salvo'
+              : statusNota === 'erro' ? <span className="pl-ap-privado-erro">Não salvou — <button type="button" onClick={() => { setStatusNota('salvando'); void salvarNota() }}>tentar de novo</button></span>
+              : null}
+          />
+        )}
       </div>
     </div>
   )

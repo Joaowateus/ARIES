@@ -219,7 +219,15 @@ router.post('/apresentacoes', requireProLaboreAuth, requireDono, async (req: Req
 router.get('/apresentacoes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
   const a = await carregar(req, res)
   if (!a) return
-  res.json(detalhe(a, req))
+  if (ehDono(req)) {
+    res.json(detalhe(a, req))
+    return
+  }
+  const nota = await prisma.apresentacaoNotaPessoal.findUnique({
+    where: { apresentacaoId_pessoa: { apresentacaoId: a.id, pessoa: pessoaDe(req) } },
+    select: { texto: true },
+  })
+  res.json({ ...detalhe(a, req), notaPessoal: nota?.texto ?? '' })
 })
 
 const atualizarSchema = z.object({
@@ -291,6 +299,37 @@ router.delete('/apresentacoes/:id', requireProLaboreAuth, requireDono, async (re
   if (!a) return
   await prisma.apresentacao.delete({ where: { id: a.id } })
   res.status(204).end()
+})
+
+// "Só pra mim" de quem assiste: cada pessoa guarda a própria nota. Não
+// passa pela transmissão nem aparece pro dono (ele tem notasPrivadas).
+const notaPessoalSchema = z.object({ texto: z.string().max(50_000) })
+
+router.put('/apresentacoes/:id/minha-nota', requireProLaboreAuth, async (req: Request, res: Response) => {
+  if (ehDono(req)) {
+    res.status(400).json({ error: 'Quem apresenta usa as notas privadas da própria apresentação' })
+    return
+  }
+  const parse = notaPessoalSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'Nota grande demais' })
+    return
+  }
+  const a = await carregar(req, res)
+  if (!a) return
+  const chave = { apresentacaoId: a.id, pessoa: pessoaDe(req) }
+  const { texto } = parse.data
+  if (!texto.trim()) {
+    await prisma.apresentacaoNotaPessoal.deleteMany({ where: chave })
+    res.json({ ok: true })
+    return
+  }
+  await prisma.apresentacaoNotaPessoal.upsert({
+    where: { apresentacaoId_pessoa: chave },
+    create: { ...chave, texto },
+    update: { texto },
+  })
+  res.json({ ok: true })
 })
 
 // ---------- Ao vivo: lado do apresentador ----------
