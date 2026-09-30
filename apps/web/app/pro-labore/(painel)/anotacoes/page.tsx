@@ -1,34 +1,24 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
-  proLaboreApi, Bloco, CATEGORIAS_NOTA, CategoriaNota, MapaMental, MapaMentalVersao, Nota, Pasta,
+  proLaboreApi, Bloco, CATEGORIAS_NOTA, CategoriaNota, LoteAnotacoes, MapaMental, MapaMentalVersao, Nota, Pasta,
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
 import MapaMentalCanvas, {
   dadosIniciaisDoBoard, gerarBoardDoTemplate, TEMAS_BOARD, TemaBoard, TEMPLATES_BOARD, CONFIGURACAO_PADRAO, ConfiguracaoBoard,
 } from './MapaMental'
+import EscolherPasta from './EscolherPasta'
+import EnviarParaReunioes from './EnviarParaReunioes'
+import {
+  AcoesNavegador, Chave, FolhaArvore, NoArvore, Ordem, Trilha, VisaoPasta, caminhoAte, chaveDe, descendentes, formatarRelativo, partesDa,
+} from './Navegador'
 
 const EMOJIS_NOTA = ['📄', '📝', '💡', '🎯', '📌', '✅', '🔥', '📊', '🚀', '⭐', '🗂️', '📅', '💬', '🧠', '⚙️', '📈', '📚', '🧩']
 
 const CATEGORIA_LABEL: Record<CategoriaNota, string> = { TRABALHO: 'Trabalho', IDEIA: 'Ideia', APRENDIZADO: 'Aprendizado', OUTRO: 'Outro' }
-
-function formatarData(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-// "há 3 dias" / "há 2 meses" — mesma ideia do "2 months ago" da referência.
-function formatarRelativo(iso: string): string {
-  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-  if (dias <= 0) return 'hoje'
-  if (dias === 1) return 'ontem'
-  if (dias < 30) return `há ${dias} dia${dias > 1 ? 's' : ''}`
-  const meses = Math.floor(dias / 30)
-  if (meses < 12) return `há ${meses} ${meses === 1 ? 'mês' : 'meses'}`
-  const anos = Math.floor(meses / 12)
-  return `há ${anos} ${anos === 1 ? 'ano' : 'anos'}`
-}
 
 function IconeLixeira() {
   return (
@@ -81,233 +71,6 @@ function SeletorIcone({ valor, tamanhoClasse, onEscolher }: { valor: string; tam
             <button key={emoji} type="button" onClick={() => { onEscolher(emoji); setAberto(false) }}>{emoji}</button>
           ))}
           <button type="button" className="pl-nota-icone-remover" onClick={() => { onEscolher(null); setAberto(false) }}>Remover ícone</button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NoArvore({
-  pasta, nivel, pastas, notas, mapas, visao, abertas, onAlternarAberta, onAbrirPasta, onAbrirNota, onAbrirMapa, onNovaNota, onNovoMapa,
-}: {
-  pasta: Pasta
-  nivel: number
-  pastas: Pasta[]
-  notas: Nota[]
-  mapas: MapaMental[]
-  visao: VisaoAnotacoes
-  abertas: Set<string>
-  onAlternarAberta: (id: string) => void
-  onAbrirPasta: (id: string | null) => void
-  onAbrirNota: (id: string) => void
-  onAbrirMapa: (id: string) => void
-  onNovaNota: (pastaId: string | null) => void
-  onNovoMapa: (pastaId: string | null) => void
-}) {
-  const subpastas = pastas.filter(p => (p.paiId ?? null) === pasta.id)
-  const filhosNotas = notas.filter(n => (n.pastaId ?? null) === pasta.id)
-  const filhosMapas = mapas.filter(m => (m.pastaId ?? null) === pasta.id)
-  const temFilhos = subpastas.length > 0 || filhosNotas.length > 0 || filhosMapas.length > 0
-  const aberta = abertas.has(pasta.id)
-  const ativa = visao.tipo === 'pasta' && visao.id === pasta.id
-
-  return (
-    <div>
-      <div className={`pl-arvore-item ${ativa ? 'active' : ''}`} style={{ marginLeft: nivel * 14 }}>
-        <button type="button" className={`pl-arvore-chevron ${temFilhos ? '' : 'invisivel'}`} onClick={() => onAlternarAberta(pasta.id)}>
-          {temFilhos ? (aberta ? '▾' : '▸') : ''}
-        </button>
-        <button type="button" className="pl-arvore-label" onClick={() => onAbrirPasta(pasta.id)}>
-          <span className="pl-arvore-icone">{pasta.icone || '📁'}</span>
-          <span className="pl-arvore-nome">{pasta.nome}</span>
-        </button>
-        <button type="button" className="pl-arvore-acao" title="Nova página aqui" onClick={() => onNovaNota(pasta.id)}>+</button>
-      </div>
-      {aberta && (
-        <div>
-          {subpastas.map(p => (
-            <NoArvore
-              key={p.id} pasta={p} nivel={nivel + 1} pastas={pastas} notas={notas} mapas={mapas} visao={visao} abertas={abertas}
-              onAlternarAberta={onAlternarAberta} onAbrirPasta={onAbrirPasta} onAbrirNota={onAbrirNota} onAbrirMapa={onAbrirMapa}
-              onNovaNota={onNovaNota} onNovoMapa={onNovoMapa}
-            />
-          ))}
-          {filhosNotas.map(n => (
-            <div key={n.id} className={`pl-arvore-item ${visao.tipo === 'nota' && visao.id === n.id ? 'active' : ''}`} style={{ marginLeft: (nivel + 1) * 14 + 18 }}>
-              <button type="button" className="pl-arvore-label" onClick={() => onAbrirNota(n.id)}>
-                <span className="pl-arvore-icone">{n.icone || '📄'}</span>
-                <span className="pl-arvore-nome">{n.titulo || 'Sem título'}</span>
-              </button>
-            </div>
-          ))}
-          {filhosMapas.map(m => (
-            <div key={m.id} className={`pl-arvore-item ${visao.tipo === 'mapa' && visao.id === m.id ? 'active' : ''}`} style={{ marginLeft: (nivel + 1) * 14 + 18 }}>
-              <button type="button" className="pl-arvore-label" onClick={() => onAbrirMapa(m.id)}>
-                <span className="pl-arvore-icone">{m.icone || '🧠'}</span>
-                <span className="pl-arvore-nome">{m.titulo || 'Sem título'}</span>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-type LinhaTabela =
-  | { tipo: 'pasta'; item: Pasta; itens: number }
-  | { tipo: 'nota'; item: Nota }
-  | { tipo: 'mapa'; item: MapaMental }
-
-function VisaoPasta({
-  pasta, pastas, notas, mapas, onAbrirPasta, onAbrirNota, onAbrirMapa, onNovaNota, onNovoMapa, onNovaPasta,
-  onRenomearPasta, onIconePasta, onExcluirPasta, onExcluirNota, onExcluirMapa,
-}: {
-  pasta: Pasta | null
-  pastas: Pasta[]
-  notas: Nota[]
-  mapas: MapaMental[]
-  onAbrirPasta: (id: string | null) => void
-  onAbrirNota: (id: string) => void
-  onAbrirMapa: (id: string) => void
-  onNovaNota: () => void
-  onNovoMapa: () => void
-  onNovaPasta: () => void
-  onRenomearPasta: (id: string, nome: string) => void
-  onIconePasta: (id: string, icone: string | null) => void
-  onExcluirPasta: (id: string) => void
-  onExcluirNota: (id: string) => void
-  onExcluirMapa: (id: string) => void
-}) {
-  const [rascunhoNome, setRascunhoNome] = useState(pasta?.nome ?? '')
-  useEffect(() => { setRascunhoNome(pasta?.nome ?? '') }, [pasta?.id, pasta?.nome])
-
-  const caminho: Pasta[] = []
-  for (let atual = pasta; atual; atual = pastas.find(p => p.id === atual!.paiId) ?? null) caminho.unshift(atual)
-
-  const subpastas = pastas.filter(p => (p.paiId ?? null) === (pasta?.id ?? null))
-  const filhosNotas = notas.filter(n => (n.pastaId ?? null) === (pasta?.id ?? null))
-  const filhosMapas = mapas.filter(m => (m.pastaId ?? null) === (pasta?.id ?? null))
-
-  const linhas: LinhaTabela[] = [
-    ...subpastas.map((p): LinhaTabela => ({
-      tipo: 'pasta', item: p,
-      itens: pastas.filter(x => (x.paiId ?? null) === p.id).length
-        + notas.filter(n => (n.pastaId ?? null) === p.id).length
-        + mapas.filter(m => (m.pastaId ?? null) === p.id).length,
-    })),
-    ...filhosNotas.map((n): LinhaTabela => ({ tipo: 'nota', item: n })),
-    ...filhosMapas.map((m): LinhaTabela => ({ tipo: 'mapa', item: m })),
-  ].sort((a, b) => new Date(b.item.criadoEm).getTime() - new Date(a.item.criadoEm).getTime())
-
-  function salvarNome() {
-    const nome = rascunhoNome.trim()
-    if (pasta && nome && nome !== pasta.nome) onRenomearPasta(pasta.id, nome)
-    else setRascunhoNome(pasta?.nome ?? '')
-  }
-
-  return (
-    <div>
-      <div className="pl-breadcrumb-pastas">
-        <button type="button" onClick={() => onAbrirPasta(null)} className={!pasta ? 'active' : ''}>Todas as notas</button>
-        {caminho.map(p => (
-          <span key={p.id}>
-            <span className="pl-breadcrumb-sep">/</span>
-            <button type="button" onClick={() => onAbrirPasta(p.id)} className={pasta?.id === p.id ? 'active' : ''}>{p.nome}</button>
-          </span>
-        ))}
-      </div>
-
-      <div className="pl-notion-header">
-        {pasta ? (
-          <SeletorIcone valor={pasta.icone || '📁'} tamanhoClasse="pl-notion-header-icone-btn" onEscolher={icone => onIconePasta(pasta.id, icone)} />
-        ) : (
-          <span className="pl-notion-header-icone">🗂️</span>
-        )}
-        {pasta ? (
-          <input
-            className="pl-notion-titulo-input"
-            value={rascunhoNome}
-            onChange={e => setRascunhoNome(e.target.value)}
-            onBlur={salvarNome}
-            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-          />
-        ) : (
-          <span className="pl-notion-titulo-input pl-notion-titulo-estatico">Todas as notas</span>
-        )}
-        {pasta && (
-          <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir pasta" onClick={() => onExcluirPasta(pasta.id)}>
-            <IconeLixeira />
-          </button>
-        )}
-      </div>
-
-      <div className="pl-fb-tiles">
-        <button type="button" className="pl-fb-tile pl-fb-tile-roxo" onClick={onNovoMapa}>
-          <span className="pl-fb-tile-icone"><IconeTileMapa /></span>
-          <span>+ Novo mapa mental</span>
-        </button>
-        <button type="button" className="pl-fb-tile pl-fb-tile-azul" onClick={onNovaNota}>
-          <span className="pl-fb-tile-icone"><IconeTilePagina /></span>
-          <span>+ Nova página</span>
-        </button>
-        <button type="button" className="pl-fb-tile pl-fb-tile-cinza" onClick={onNovaPasta}>
-          <span className="pl-fb-tile-icone"><IconeTilePasta /></span>
-          <span>+ Nova pasta</span>
-        </button>
-      </div>
-
-      {linhas.length === 0 ? (
-        <div className="pl-empty pl-card">
-          <div className="pl-emoji">📝</div>
-          Nada por aqui ainda.
-        </div>
-      ) : (
-        <div className="pl-fb-tabela">
-          <div className="pl-fb-tabela-head">
-            <span className="pl-fb-col-nome">Nome</span>
-            <span className="pl-fb-col-data">Criado</span>
-            <span className="pl-fb-col-data">Modificado</span>
-            <span className="pl-fb-col-acao" />
-          </div>
-          {linhas.map(linha => {
-            if (linha.tipo === 'pasta') {
-              return (
-                <div key={linha.item.id} className="pl-fb-linha" onClick={() => onAbrirPasta(linha.item.id)}>
-                  <span className="pl-fb-col-nome"><span className="pl-fb-linha-icone">{linha.item.icone || '📁'}</span>{linha.item.nome}</span>
-                  <span className="pl-fb-col-data">{formatarData(linha.item.criadoEm)}</span>
-                  <span className="pl-fb-col-data">{formatarRelativo(linha.item.atualizadoEm)}{linha.itens > 0 ? ` · ${linha.itens} item${linha.itens > 1 ? 's' : ''}` : ''}</span>
-                  <span className="pl-fb-col-acao" />
-                </div>
-              )
-            }
-            if (linha.tipo === 'nota') {
-              return (
-                <div key={linha.item.id} className="pl-fb-linha" onClick={() => onAbrirNota(linha.item.id)}>
-                  <span className="pl-fb-col-nome"><span className="pl-fb-linha-icone">{linha.item.icone || '📄'}</span>{linha.item.titulo || 'Sem título'}</span>
-                  <span className="pl-fb-col-data">{formatarData(linha.item.criadoEm)}</span>
-                  <span className="pl-fb-col-data">{formatarRelativo(linha.item.atualizadoEm)}</span>
-                  <span className="pl-fb-col-acao">
-                    <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={e => { e.stopPropagation(); onExcluirNota(linha.item.id) }}>
-                      <IconeLixeira />
-                    </button>
-                  </span>
-                </div>
-              )
-            }
-            return (
-              <div key={linha.item.id} className="pl-fb-linha" onClick={() => onAbrirMapa(linha.item.id)}>
-                <span className="pl-fb-col-nome"><span className="pl-fb-linha-icone">{linha.item.icone || '🧠'}</span>{linha.item.titulo || 'Sem título'}</span>
-                <span className="pl-fb-col-data">{formatarData(linha.item.criadoEm)}</span>
-                <span className="pl-fb-col-data">{formatarRelativo(linha.item.atualizadoEm)}</span>
-                <span className="pl-fb-col-acao">
-                  <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={e => { e.stopPropagation(); onExcluirMapa(linha.item.id) }}>
-                    <IconeLixeira />
-                  </button>
-                </span>
-              </div>
-            )
-          })}
         </div>
       )}
     </div>
@@ -488,6 +251,22 @@ function IconeVoltar() {
   )
 }
 
+function IconeApresentar() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="12" rx="2" /><path d="M12 16v4M8 20h8" /><path d="m10 8 4 2-4 2z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function IconePastaMover() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" /><path d="M10 13h6M13 10l3 3-3 3" />
+    </svg>
+  )
+}
+
 function IconeHistorico() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -501,11 +280,13 @@ function IconeHistorico() {
 // app — só uma barra fina própria (voltar, ícone/título, status, excluir) e
 // o canvas ocupando o resto da tela. `position: fixed` cobrindo o app
 // inteiro é mais simples que reestruturar a rota/layout só pra essa página.
-function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
+function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar, onMover, onApresentar }: {
   mapa: MapaMental | null
   onAtualizado: (mapa: MapaMental) => void
   onExcluir: () => void
   onVoltar: () => void
+  onMover: () => void
+  onApresentar: () => void
 }) {
   const [titulo, setTitulo] = useState(mapa?.titulo ?? '')
   const [icone, setIcone] = useState(mapa?.icone ?? '')
@@ -633,6 +414,12 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar }: {
             </div>
           )}
         </div>
+        <button type="button" className="pl-board-topbar-btn" title="Levar uma cópia pra aba Reuniões e apresentar pra equipe" onClick={onApresentar}>
+          <IconeApresentar /> <span>Apresentar nas Reuniões</span>
+        </button>
+        <button type="button" className="pl-kanban-icon-btn" title="Mover pra outra pasta" onClick={onMover}>
+          <IconePastaMover />
+        </button>
         <button type="button" className={`pl-kanban-icon-btn ${historicoAberto ? 'ativo' : ''}`} title="Histórico de versões" onClick={alternarHistorico}>
           <IconeHistorico />
         </button>
@@ -812,26 +599,184 @@ function EscolhaTemplateModal({ aberta, onFechar, onEscolher }: {
   )
 }
 
-export default function ProLaboreAnotacoesPage() {
+// Onde a pessoa está fica na URL (?pasta=, ?nota=, ?mapa=, ?lixeira=1):
+// o botão voltar do navegador funciona, recarregar a página não perde o
+// lugar e dá pra abrir um item direto por link (ex.: vindo de Reuniões).
+function lerVisao(params: URLSearchParams): VisaoAnotacoes {
+  if (params.get('lixeira')) return { tipo: 'lixeira' }
+  const mapa = params.get('mapa')
+  if (mapa) return { tipo: 'mapa', id: mapa }
+  const nota = params.get('nota')
+  if (nota) return { tipo: 'nota', id: nota }
+  return { tipo: 'pasta', id: params.get('pasta') }
+}
+
+function urlDa(v: VisaoAnotacoes): string {
+  const q = new URLSearchParams()
+  if (v.tipo === 'lixeira') q.set('lixeira', '1')
+  else if (v.tipo === 'pasta') { if (v.id) q.set('pasta', v.id) }
+  else q.set(v.tipo, v.id)
+  return `/pro-labore/anotacoes${q.size ? `?${q}` : ''}`
+}
+
+const CHAVE_ORDEM = 'pl_anotacoes_ordem'
+
+function lerOrdemSalva(): Ordem {
+  try {
+    const v = localStorage.getItem(CHAVE_ORDEM)
+    return v === 'nome' || v === 'criado' ? v : 'modificado'
+  } catch {
+    return 'modificado'
+  }
+}
+
+function CabecalhoPasta({ pasta, onRenomear, onIcone, onExcluir }: {
+  pasta: Pasta | null
+  onRenomear: (id: string, nome: string) => void
+  onIcone: (id: string, icone: string | null) => void
+  onExcluir: (id: string) => void
+}) {
+  const [rascunhoNome, setRascunhoNome] = useState(pasta?.nome ?? '')
+  function salvarNome() {
+    const nome = rascunhoNome.trim()
+    if (pasta && nome && nome !== pasta.nome) onRenomear(pasta.id, nome)
+    else setRascunhoNome(pasta?.nome ?? '')
+  }
+  return (
+    <div className="pl-notion-header">
+      {pasta ? (
+        <SeletorIcone valor={pasta.icone || '📁'} tamanhoClasse="pl-notion-header-icone-btn" onEscolher={icone => onIcone(pasta.id, icone)} />
+      ) : (
+        <span className="pl-notion-header-icone">🗂️</span>
+      )}
+      {pasta ? (
+        <input
+          className="pl-notion-titulo-input"
+          value={rascunhoNome}
+          aria-label="Nome da pasta"
+          onChange={e => setRascunhoNome(e.target.value)}
+          onBlur={salvarNome}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        />
+      ) : (
+        <span className="pl-notion-titulo-input pl-notion-titulo-estatico">Todas as notas</span>
+      )}
+      {pasta && (
+        <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir pasta" onClick={() => onExcluir(pasta.id)}>
+          <IconeLixeira />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function MoverItens({ chaves, pastas, nomeDe, paiDe, onFechar, onMover, onPastaCriada }: {
+  chaves: Chave[]
+  pastas: Pasta[]
+  nomeDe: (c: Chave) => string
+  paiDe: (c: Chave) => string | null
+  onFechar: () => void
+  onMover: (destino: string | null) => Promise<void>
+  onPastaCriada: (p: Pasta) => void
+}) {
+  const pastasMovidas = chaves.map(partesDa).filter(p => p.tipo === 'pasta').map(p => p.id)
+  const bloqueadas = descendentes(pastas, pastasMovidas)
+  const pais = new Set(chaves.map(paiDe))
+  const [destino, setDestino] = useState<string | null>(pais.size === 1 ? [...pais][0] : null)
+  const [movendo, setMovendo] = useState(false)
+  const jaEstaoLa = chaves.every(c => paiDe(c) === destino)
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar() }
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [onFechar])
+  return (
+    <div className="pl-rn-modal" role="dialog" aria-modal="true" aria-label="Mover" onClick={e => { if (e.target === e.currentTarget) onFechar() }}>
+      <div className="pl-card pl-rn-modal-caixa pl-cp-caixa">
+        <div className="pl-card-title">{chaves.length === 1 ? `Mover “${nomeDe(chaves[0])}”` : `Mover ${chaves.length} itens`}</div>
+        <p className="pl-card-sub" style={{ margin: '4px 0 12px' }}>Escolha a pasta de destino{pastasMovidas.length ? ' (uma pasta não pode ir pra dentro dela mesma)' : ''}.</p>
+        <EscolherPasta pastas={pastas} valor={destino} onEscolher={setDestino} bloqueadas={bloqueadas} onPastaCriada={onPastaCriada} />
+        <div className="pl-ap-nova-botoes">
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={onFechar}>Cancelar</button>
+          <button
+            type="button" className="pl-btn pl-btn-primary" disabled={movendo || jaEstaoLa}
+            onClick={async () => { setMovendo(true); await onMover(destino); setMovendo(false) }}
+          >{movendo ? 'Movendo…' : jaEstaoLa ? 'Já está aqui' : 'Mover para cá'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function pastaDaVisao(v: VisaoAnotacoes, ns: Nota[], ms: MapaMental[]): string | null {
+  if (v.tipo === 'pasta') return v.id
+  if (v.tipo === 'nota') return ns.find(n => n.id === v.id)?.pastaId ?? null
+  if (v.tipo === 'mapa') return ms.find(m => m.id === v.id)?.pastaId ?? null
+  return null
+}
+
+function Anotacoes() {
+  const router = useRouter()
+  const params = useSearchParams()
+  const visao = lerVisao(params)
+  const visaoRef = useRef(visao)
+  useEffect(() => { visaoRef.current = visao })
+
   const [pastas, setPastas] = useState<Pasta[]>([])
   const [notas, setNotas] = useState<Nota[]>([])
   const [mapas, setMapas] = useState<MapaMental[]>([])
   const [lixeira, setLixeira] = useState<MapaMental[]>([])
-  const [visao, setVisao] = useState<VisaoAnotacoes>({ tipo: 'pasta', id: null })
   const [abertas, setAbertas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
   const [buscaAberta, setBuscaAberta] = useState(false)
+  const [ordem, setOrdem] = useState<Ordem>(lerOrdemSalva)
+  const [movendo, setMovendo] = useState<Chave[] | null>(null)
+  const [enviando, setEnviando] = useState<MapaMental | null>(null)
+  const [aviso, setAviso] = useState<{ texto: string; desfazer?: () => Promise<void> } | null>(null)
+  const avisoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [alvoSoltar, setAlvoSoltar] = useState<string | null>(null)
+  const arrastandoRef = useRef<Chave[]>([])
+  // Escolha de template ao criar um mapa mental novo (null = fechada).
+  const [escolhaTemplate, setEscolhaTemplate] = useState<{ pastaId: string | null } | null>(null)
+
+
+  // Abre na barra lateral o caminho até onde a pessoa está.
+  function expandirAte(pastaId: string | null, ps: Pasta[] = pastas) {
+    if (!pastaId) return
+    const ids = caminhoAte(ps, pastaId).map(p => p.id)
+    setAbertas(prev => (ids.every(id => prev.has(id)) ? prev : new Set([...prev, ...ids])))
+  }
+
+  const navegar = (v: VisaoAnotacoes, substituir = false) => {
+    expandirAte(pastaDaVisao(v, notas, mapas))
+    const url = urlDa(v)
+    if (substituir) router.replace(url, { scroll: false })
+    else router.push(url, { scroll: false })
+  }
 
   const carregarTudo = useCallback(() => {
     Promise.all([proLaboreApi.pastas.listar(), proLaboreApi.notas.listar(), proLaboreApi.mapasMentais.listar()])
-      .then(([ps, ns, ms]) => { setPastas(ps); setNotas(ns); setMapas(ms) })
+      .then(([ps, ns, ms]) => {
+        setPastas(ps); setNotas(ns); setMapas(ms)
+        const pastaAtual = pastaDaVisao(visaoRef.current, ns, ms)
+        if (pastaAtual) setAbertas(new Set(caminhoAte(ps, pastaAtual).map(p => p.id)))
+      })
       .finally(() => setCarregando(false))
   }, [])
   useEffect(() => { carregarTudo() }, [carregarTudo])
 
+  // Lixeira aberta (inclusive direto pelo link): busca o que tem lá.
+  useEffect(() => {
+    if (visao.tipo !== 'lixeira') return
+    let cancelado = false
+    proLaboreApi.mapasMentais.lixeira()
+      .then(l => { if (!cancelado) setLixeira(l) })
+      .catch(() => { if (!cancelado) alert('Não foi possível carregar a lixeira. Tente novamente.') })
+    return () => { cancelado = true }
+  }, [visao.tipo])
+
   // Ctrl/Cmd+K abre a paleta de comando de qualquer lugar dentro de
-  // Anotações — inclusive com um mapa mental aberto em tela cheia (por isso
-  // fica antes do early-return de PaginaMapaMental, nunca condicional).
+  // Anotações — inclusive com um mapa mental aberto em tela cheia.
   useEffect(() => {
     function aoTeclarGlobal(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -843,6 +788,19 @@ export default function ProLaboreAnotacoesPage() {
     return () => window.removeEventListener('keydown', aoTeclarGlobal)
   }, [])
 
+  useEffect(() => () => { if (avisoTimerRef.current) clearTimeout(avisoTimerRef.current) }, [])
+
+  function avisar(texto: string, desfazer?: () => Promise<void>) {
+    if (avisoTimerRef.current) clearTimeout(avisoTimerRef.current)
+    setAviso({ texto, desfazer })
+    avisoTimerRef.current = setTimeout(() => setAviso(null), desfazer ? 8000 : 4000)
+  }
+
+  function mudarOrdem(o: Ordem) {
+    setOrdem(o)
+    try { localStorage.setItem(CHAVE_ORDEM, o) } catch { /* sem armazenamento local: só não lembra */ }
+  }
+
   function alternarAberta(id: string) {
     setAbertas(prev => {
       const novo = new Set(prev)
@@ -851,19 +809,166 @@ export default function ProLaboreAnotacoesPage() {
     })
   }
 
-  // Escolha de template ao criar um mapa mental novo (null = fechada).
-  const [escolhaTemplate, setEscolhaTemplate] = useState<{ pastaId: string | null } | null>(null)
+  // ---------- Itens: nome, pasta de cada um, lote pra API ----------
+  function paiDe(c: Chave): string | null {
+    const { tipo, id } = partesDa(c)
+    if (tipo === 'pasta') return pastas.find(p => p.id === id)?.paiId ?? null
+    if (tipo === 'nota') return notas.find(n => n.id === id)?.pastaId ?? null
+    return mapas.find(m => m.id === id)?.pastaId ?? null
+  }
+  function nomeDe(c: Chave): string {
+    const { tipo, id } = partesDa(c)
+    if (tipo === 'pasta') return pastas.find(p => p.id === id)?.nome ?? 'Pasta'
+    if (tipo === 'nota') return notas.find(n => n.id === id)?.titulo || 'Sem título'
+    return mapas.find(m => m.id === id)?.titulo || 'Sem título'
+  }
+  function lote(chaves: Chave[]): Required<LoteAnotacoes> {
+    const l = { pastas: [] as string[], notas: [] as string[], mapas: [] as string[] }
+    chaves.map(partesDa).forEach(({ tipo, id }) => { l[tipo === 'pasta' ? 'pastas' : tipo === 'nota' ? 'notas' : 'mapas'].push(id) })
+    return l
+  }
+  function aplicarMovimento(chaves: Chave[], destino: string | null) {
+    const l = lote(chaves)
+    setPastas(prev => prev.map(p => (l.pastas.includes(p.id) ? { ...p, paiId: destino } : p)))
+    setNotas(prev => prev.map(n => (l.notas.includes(n.id) ? { ...n, pastaId: destino } : n)))
+    setMapas(prev => prev.map(m => (l.mapas.includes(m.id) ? { ...m, pastaId: destino } : m)))
+  }
 
-  // As três funções abaixo não tinham tratamento de erro nenhum — se a API
-  // falhasse por qualquer motivo (rede, sessão expirada, erro do servidor),
-  // o clique no botão simplesmente não fazia nada visível, sem mensagem
-  // nenhuma pro usuário (parecia que "não abre").
+  async function moverItens(chaves: Chave[], destino: string | null): Promise<boolean> {
+    const mudam = chaves.filter(c => paiDe(c) !== destino)
+    if (!mudam.length) return true
+    const pastasMovidas = lote(mudam).pastas
+    if (destino && descendentes(pastas, pastasMovidas).has(destino)) {
+      avisar('Uma pasta não pode ir pra dentro dela mesma')
+      return false
+    }
+    const origens = new Map<string | null, Chave[]>()
+    mudam.forEach(c => { const o = paiDe(c); origens.set(o, [...(origens.get(o) ?? []), c]) })
+    try {
+      await proLaboreApi.anotacoes.mover(lote(mudam), destino)
+    } catch (e) {
+      alert((e as Error).message)
+      return false
+    }
+    aplicarMovimento(mudam, destino)
+    expandirAte(destino)
+    const nomeDestino = destino ? pastas.find(p => p.id === destino)?.nome ?? 'a pasta' : 'Todas as notas'
+    avisar(`${mudam.length === 1 ? `“${nomeDe(mudam[0])}” movido` : `${mudam.length} itens movidos`} para ${nomeDestino}`, async () => {
+      for (const [origem, cs] of origens) {
+        await proLaboreApi.anotacoes.mover(lote(cs), origem)
+        aplicarMovimento(cs, origem)
+      }
+      avisar('Pronto, voltou pro lugar')
+    })
+    return true
+  }
+
+  async function excluirItens(chaves: Chave[]) {
+    if (!chaves.length) return
+    const l = lote(chaves)
+    let pergunta: string
+    if (chaves.length === 1) {
+      const nome = nomeDe(chaves[0])
+      pergunta = l.pastas.length ? `Excluir a pasta “${nome}”? O que estiver dentro dela não é apagado — sobe pra pasta de cima.`
+        : l.notas.length ? `Excluir a página “${nome}”? Não dá pra desfazer.`
+          : `Mover o mapa mental “${nome}” pra lixeira? Dá pra restaurar por 30 dias.`
+    } else {
+      const partes = [
+        l.notas.length && `${l.notas.length} ${l.notas.length === 1 ? 'página' : 'páginas'} (não dá pra desfazer)`,
+        l.pastas.length && `${l.pastas.length} ${l.pastas.length === 1 ? 'pasta' : 'pastas'} (o conteúdo sobe pra pasta de cima)`,
+        l.mapas.length && `${l.mapas.length} ${l.mapas.length === 1 ? 'mapa mental vai' : 'mapas mentais vão'} pra lixeira`,
+      ].filter(Boolean)
+      pergunta = `Excluir ${chaves.length} itens?\n\n• ${partes.join('\n• ')}`
+    }
+    if (!confirm(pergunta)) return
+    try {
+      await proLaboreApi.anotacoes.excluir(l)
+    } catch (e) {
+      alert((e as Error).message)
+      return
+    }
+    // Mesmas regras do servidor: conteúdo das pastas sobe até a primeira
+    // pasta de cima que não foi excluída junto.
+    const apagar = new Set(l.pastas)
+    const destinoDe = (id: string): string | null => {
+      let atual = pastas.find(p => p.id === id)?.paiId ?? null
+      while (atual && apagar.has(atual)) atual = pastas.find(p => p.id === atual)?.paiId ?? null
+      return atual
+    }
+    const destinos = new Map(l.pastas.map(id => [id, destinoDe(id)]))
+    const subir = <T extends { pastaId?: string | null }>(x: T): T => (x.pastaId && apagar.has(x.pastaId) ? { ...x, pastaId: destinos.get(x.pastaId) ?? null } : x)
+    setPastas(prev => prev.filter(p => !apagar.has(p.id)).map(p => (p.paiId && apagar.has(p.paiId) ? { ...p, paiId: destinos.get(p.paiId) ?? null } : p)))
+    setNotas(prev => prev.filter(n => !l.notas.includes(n.id)).map(subir))
+    setMapas(prev => prev.filter(m => !l.mapas.includes(m.id)).map(subir))
+
+    const v = visaoRef.current
+    if (v.tipo === 'pasta' && v.id && apagar.has(v.id)) navegar({ tipo: 'pasta', id: destinos.get(v.id) ?? null }, true)
+    else if (v.tipo === 'nota' && l.notas.includes(v.id)) navegar({ tipo: 'pasta', id: notas.find(n => n.id === v.id)?.pastaId ?? null }, true)
+    else if (v.tipo === 'mapa' && l.mapas.includes(v.id)) navegar({ tipo: 'pasta', id: mapas.find(m => m.id === v.id)?.pastaId ?? null }, true)
+
+    const soMapas = l.notas.length === 0 && l.pastas.length === 0
+    avisar(
+      soMapas ? `${l.mapas.length === 1 ? 'Mapa mental movido' : `${l.mapas.length} mapas mentais movidos`} pra lixeira` : `${chaves.length === 1 ? 'Item excluído' : `${chaves.length} itens excluídos`}`,
+      soMapas ? async () => {
+        const restaurados = await Promise.all(l.mapas.map(id => proLaboreApi.mapasMentais.restaurar(id)))
+        setMapas(prev => [...restaurados, ...prev])
+        avisar('Restaurado')
+      } : undefined,
+    )
+  }
+
+  async function duplicarItens(chaves: Chave[]) {
+    const l = lote(chaves)
+    try {
+      const novasNotas = await Promise.all(l.notas.map(id => {
+        const n = notas.find(x => x.id === id)!
+        return proLaboreApi.notas.criar({
+          titulo: `${n.titulo || 'Sem título'} (cópia)`.slice(0, 200), conteudo: n.conteudo, blocos: n.blocos ?? undefined,
+          icone: n.icone ?? null, categoria: n.categoria, pastaId: n.pastaId ?? null,
+        })
+      }))
+      const novosMapas = await Promise.all(l.mapas.map(id => {
+        const m = mapas.find(x => x.id === id)!
+        const { objetos, conectores } = dadosIniciaisDoBoard(m)
+        return proLaboreApi.mapasMentais.criar({
+          titulo: `${m.titulo || 'Sem título'} (cópia)`.slice(0, 200), icone: m.icone ?? null, tema: m.tema ?? null,
+          objetos, conectores, configuracao: m.configuracao ?? null, pastaId: m.pastaId ?? null,
+        })
+      }))
+      setNotas(prev => [...novasNotas, ...prev])
+      setMapas(prev => [...novosMapas, ...prev])
+      const total = novasNotas.length + novosMapas.length
+      if (total) avisar(total === 1 ? 'Cópia criada' : `${total} cópias criadas`)
+      if (l.pastas.length) avisar(`${total ? `${total} ${total === 1 ? 'cópia criada' : 'cópias criadas'}. ` : ''}Pastas não são duplicadas.`)
+    } catch (e) {
+      alert((e as Error).message)
+    }
+  }
+
+  async function renomear(c: Chave, nome: string) {
+    const { tipo, id } = partesDa(c)
+    try {
+      if (tipo === 'pasta') {
+        await renomearPasta(id, nome)
+      } else if (tipo === 'nota') {
+        setNotas(prev => prev.map(n => (n.id === id ? { ...n, titulo: nome } : n)))
+        await proLaboreApi.notas.atualizar(id, { titulo: nome })
+      } else {
+        setMapas(prev => prev.map(m => (m.id === id ? { ...m, titulo: nome } : m)))
+        await proLaboreApi.mapasMentais.atualizar(id, { titulo: nome })
+      }
+    } catch (e) {
+      alert((e as Error).message)
+    }
+  }
+
+  // As três funções abaixo avisam quando a API falha — antes o clique
+  // simplesmente não fazia nada visível (parecia que "não abre").
   async function criarNota(pastaId: string | null) {
     try {
       const nota = await proLaboreApi.notas.criar({ pastaId })
       setNotas(prev => [nota, ...prev])
-      setVisao({ tipo: 'nota', id: nota.id })
-      if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
+      navegar({ tipo: 'nota', id: nota.id })
     } catch {
       alert('Não foi possível criar a página. Tente novamente.')
     }
@@ -881,8 +986,7 @@ export default function ProLaboreAnotacoesPage() {
         : undefined
       const mapa = await proLaboreApi.mapasMentais.criar({ pastaId, objetos, conectores, configuracao })
       setMapas(prev => [mapa, ...prev])
-      setVisao({ tipo: 'mapa', id: mapa.id })
-      if (pastaId) setAbertas(prev => new Set(prev).add(pastaId))
+      navegar({ tipo: 'mapa', id: mapa.id })
     } catch {
       alert('Não foi possível criar o mapa mental. Tente novamente.')
     }
@@ -892,8 +996,7 @@ export default function ProLaboreAnotacoesPage() {
     try {
       const pasta = await proLaboreApi.pastas.criar({ nome: 'Nova pasta', paiId })
       setPastas(prev => [...prev, pasta])
-      setVisao({ tipo: 'pasta', id: pasta.id })
-      if (paiId) setAbertas(prev => new Set(prev).add(paiId))
+      navegar({ tipo: 'pasta', id: pasta.id })
     } catch {
       alert('Não foi possível criar a pasta. Tente novamente.')
     }
@@ -909,47 +1012,12 @@ export default function ProLaboreAnotacoesPage() {
     await proLaboreApi.pastas.atualizar(id, { icone })
   }
 
-  async function excluirPasta(id: string) {
-    if (!confirm('Excluir essa pasta? Subpastas e notas dentro dela não são apagadas — só sobem pro nível de cima.')) return
-    const pasta = pastas.find(p => p.id === id)
-    const paiId = pasta?.paiId ?? null
-    await proLaboreApi.pastas.excluir(id)
-    setPastas(prev => prev.filter(p => p.id !== id).map(p => (p.paiId === id ? { ...p, paiId } : p)))
-    setNotas(prev => prev.map(n => (n.pastaId === id ? { ...n, pastaId: paiId } : n)))
-    setMapas(prev => prev.map(m => (m.pastaId === id ? { ...m, pastaId: paiId } : m)))
-    setVisao(atual => (atual.tipo === 'pasta' && atual.id === id ? { tipo: 'pasta', id: paiId } : atual))
-  }
-
-  async function excluirNota(id: string) {
-    if (!confirm('Excluir essa nota?')) return
-    const nota = notas.find(n => n.id === id)
-    await proLaboreApi.notas.excluir(id)
-    setNotas(prev => prev.filter(n => n.id !== id))
-    setVisao(atual => (atual.tipo === 'nota' && atual.id === id ? { tipo: 'pasta', id: nota?.pastaId ?? null } : atual))
-  }
-
-  async function excluirMapa(id: string) {
-    if (!confirm('Mover esse mapa mental pra lixeira?')) return
-    const mapa = mapas.find(m => m.id === id)
-    await proLaboreApi.mapasMentais.excluir(id)
-    setMapas(prev => prev.filter(m => m.id !== id))
-    setVisao(atual => (atual.tipo === 'mapa' && atual.id === id ? { tipo: 'pasta', id: mapa?.pastaId ?? null } : atual))
-  }
-
-  async function abrirLixeira() {
-    setVisao({ tipo: 'lixeira' })
-    try {
-      setLixeira(await proLaboreApi.mapasMentais.lixeira())
-    } catch {
-      alert('Não foi possível carregar a lixeira. Tente novamente.')
-    }
-  }
-
   async function restaurarMapa(id: string) {
     try {
       const mapa = await proLaboreApi.mapasMentais.restaurar(id)
       setLixeira(prev => prev.filter(m => m.id !== id))
       setMapas(prev => [mapa, ...prev])
+      avisar('Mapa mental restaurado')
     } catch {
       alert('Não foi possível restaurar. Tente novamente.')
     }
@@ -973,10 +1041,97 @@ export default function ProLaboreAnotacoesPage() {
     setMapas(prev => prev.map(m => (m.id === mapa.id ? mapa : m)))
   }
 
+  function abrirItem(c: Chave) {
+    const { tipo, id } = partesDa(c)
+    navegar(tipo === 'pasta' ? { tipo: 'pasta', id } : { tipo, id })
+  }
+
+  function podeSoltarEm(destino: string | null, chaves: Chave[]): boolean {
+    if (!chaves.length) return false
+    return !(destino && descendentes(pastas, lote(chaves).pastas).has(destino))
+  }
+
+  // Alvos de soltar (pastas, trilha, "Todas as notas"): o destino vem no
+  // atributo data-destino ("" = fora de pasta).
+  const destinoDoAlvo = (e: React.DragEvent) => e.currentTarget.getAttribute('data-destino') || null
+  function arrastarSobre(e: React.DragEvent) {
+    const destino = destinoDoAlvo(e)
+    if (!podeSoltarEm(destino, arrastandoRef.current)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const alvo = destino ?? 'raiz'
+    setAlvoSoltar(a => (a === alvo ? a : alvo))
+  }
+  function sairDoAlvo(e: React.DragEvent) {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    const alvo = destinoDoAlvo(e) ?? 'raiz'
+    setAlvoSoltar(a => (a === alvo ? null : a))
+  }
+  function soltarNoAlvo(e: React.DragEvent) {
+    e.preventDefault()
+    const destino = destinoDoAlvo(e)
+    const chaves = arrastandoRef.current
+    arrastandoRef.current = []
+    setAlvoSoltar(null)
+    if (podeSoltarEm(destino, chaves)) void moverItens(chaves, destino)
+  }
+
+  const acoes: AcoesNavegador = {
+    abrir: abrirItem,
+    abrirPasta: id => navegar({ tipo: 'pasta', id }),
+    mover: chaves => setMovendo(chaves),
+    duplicar: chaves => { void duplicarItens(chaves) },
+    excluir: chaves => { void excluirItens(chaves) },
+    renomear: (c, nome) => { void renomear(c, nome) },
+    enviarReunioes: id => setEnviando(mapas.find(m => m.id === id) ?? null),
+    iniciarArraste: (e, chaves) => {
+      arrastandoRef.current = chaves
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', chaves.map(nomeDe).join(', '))
+    },
+    terminarArraste: () => { arrastandoRef.current = []; setAlvoSoltar(null) },
+    propsSoltar: destino => ({ 'data-destino': destino ?? '', onDragOver: arrastarSobre, onDragLeave: sairDoAlvo, onDrop: soltarNoAlvo }),
+    alvoSoltar,
+  }
+
+  const modais = (
+    <>
+      <ComandoBusca
+        aberta={buscaAberta}
+        pastas={pastas}
+        notas={notas}
+        mapas={mapas}
+        onFechar={() => setBuscaAberta(false)}
+        onAbrirPasta={id => navegar({ tipo: 'pasta', id })}
+        onAbrirNota={id => navegar({ tipo: 'nota', id })}
+        onAbrirMapa={id => navegar({ tipo: 'mapa', id })}
+      />
+      {movendo && (
+        <MoverItens
+          chaves={movendo} pastas={pastas} nomeDe={nomeDe} paiDe={paiDe}
+          onFechar={() => setMovendo(null)}
+          onPastaCriada={p => setPastas(prev => [...prev, p])}
+          onMover={async destino => { if (await moverItens(movendo, destino)) setMovendo(null) }}
+        />
+      )}
+      {enviando && <EnviarParaReunioes mapa={enviando} onFechar={() => setEnviando(null)} />}
+      {aviso && (
+        <div className="pl-an-aviso" role="status">
+          <span>{aviso.texto}</span>
+          {aviso.desfazer && (
+            <button type="button" onClick={() => { const d = aviso.desfazer!; setAviso(null); void d().catch(e => alert((e as Error).message)) }}>Desfazer</button>
+          )}
+          <button type="button" className="fechar" aria-label="Fechar aviso" onClick={() => setAviso(null)}>×</button>
+        </div>
+      )}
+    </>
+  )
+
   // Board em tela cheia: renderizado fora da sidebar/topbar do resto do app
   // (nem PageHeader nem pl-notion-shell), igual ao comportamento da
   // referência — abrir um mapa mental troca a tela inteira pro canvas.
   if (visao.tipo === 'mapa') {
+    if (carregando) return <div className="pl-card"><div className="pl-hint">Carregando...</div></div>
     const mapa = mapas.find(m => m.id === visao.id) ?? null
     return (
       <>
@@ -984,22 +1139,19 @@ export default function ProLaboreAnotacoesPage() {
           key={visao.id}
           mapa={mapa}
           onAtualizado={atualizarMapaLocal}
-          onExcluir={() => excluirMapa(visao.id)}
-          onVoltar={() => setVisao({ tipo: 'pasta', id: mapa?.pastaId ?? null })}
+          onExcluir={() => { void excluirItens([chaveDe('mapa', visao.id)]) }}
+          onVoltar={() => navegar({ tipo: 'pasta', id: mapa?.pastaId ?? null })}
+          onMover={() => setMovendo([chaveDe('mapa', visao.id)])}
+          onApresentar={() => setEnviando(mapa)}
         />
-        <ComandoBusca
-          aberta={buscaAberta}
-          pastas={pastas}
-          notas={notas}
-          mapas={mapas}
-          onFechar={() => setBuscaAberta(false)}
-          onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
-          onAbrirNota={id => setVisao({ tipo: 'nota', id })}
-          onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
-        />
+        {modais}
       </>
     )
   }
+
+  const ativo: Chave | null = visao.tipo === 'pasta' ? (visao.id ? chaveDe('pasta', visao.id) : null) : visao.tipo === 'nota' ? chaveDe('nota', visao.id) : null
+  const notaAberta = visao.tipo === 'nota' ? notas.find(n => n.id === visao.id) ?? null : null
+  const pastaAberta = visao.tipo === 'pasta' && visao.id ? pastas.find(p => p.id === visao.id) ?? null : null
 
   return (
     <div>
@@ -1022,48 +1174,29 @@ export default function ProLaboreAnotacoesPage() {
               </div>
             </div>
             <div className="pl-arvore-raiz">
-              <div className={`pl-arvore-item ${visao.tipo === 'pasta' && visao.id === null ? 'active' : ''}`}>
+              <div className={`pl-arvore-item ${visao.tipo === 'pasta' && visao.id === null ? 'active' : ''} ${alvoSoltar === 'raiz' ? 'pl-an-alvo' : ''}`} data-destino="" onDragOver={arrastarSobre} onDragLeave={sairDoAlvo} onDrop={soltarNoAlvo}>
                 <span className="pl-arvore-chevron invisivel" />
-                <button type="button" className="pl-arvore-label" onClick={() => setVisao({ tipo: 'pasta', id: null })}>
+                <button type="button" className="pl-arvore-label" onClick={() => navegar({ tipo: 'pasta', id: null })}>
                   <span className="pl-arvore-icone">🏠</span>
                   <span className="pl-arvore-nome">Todas as notas</span>
                 </button>
               </div>
               {pastas.filter(p => (p.paiId ?? null) === null).map(p => (
                 <NoArvore
-                  key={p.id} pasta={p} nivel={0} pastas={pastas} notas={notas} mapas={mapas} visao={visao} abertas={abertas}
-                  onAlternarAberta={alternarAberta}
-                  onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
-                  onAbrirNota={id => setVisao({ tipo: 'nota', id })}
-                  onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
-                  onNovaNota={criarNota}
-                  onNovoMapa={pastaId => setEscolhaTemplate({ pastaId })}
+                  key={p.id} pasta={p} nivel={0} pastas={pastas} notas={notas} mapas={mapas} ativo={ativo} abertas={abertas}
+                  onAlternarAberta={alternarAberta} onNovaNota={criarNota} acoes={acoes}
                 />
               ))}
               {notas.filter(n => (n.pastaId ?? null) === null).map(n => (
-                <div key={n.id} className={`pl-arvore-item ${visao.tipo === 'nota' && visao.id === n.id ? 'active' : ''}`}>
-                  <span className="pl-arvore-chevron invisivel" />
-                  <button type="button" className="pl-arvore-label" onClick={() => setVisao({ tipo: 'nota', id: n.id })}>
-                    <span className="pl-arvore-icone">{n.icone || '📄'}</span>
-                    <span className="pl-arvore-nome">{n.titulo || 'Sem título'}</span>
-                  </button>
-                </div>
+                <FolhaArvore key={n.id} chave={chaveDe('nota', n.id)} icone={n.icone || '📄'} nome={n.titulo || 'Sem título'} recuo={18} ativo={ativo} acoes={acoes} />
               ))}
               {mapas.filter(m => (m.pastaId ?? null) === null).map(m => (
-                // Nunca "active": abrir um mapa mental sai desta árvore (vira
-                // tela cheia, ver early-return de PaginaMapaMental acima).
-                <div key={m.id} className="pl-arvore-item">
-                  <span className="pl-arvore-chevron invisivel" />
-                  <button type="button" className="pl-arvore-label" onClick={() => setVisao({ tipo: 'mapa', id: m.id })}>
-                    <span className="pl-arvore-icone">{m.icone || '🧠'}</span>
-                    <span className="pl-arvore-nome">{m.titulo || 'Sem título'}</span>
-                  </button>
-                </div>
+                <FolhaArvore key={m.id} chave={chaveDe('mapa', m.id)} icone={m.icone || '🧠'} nome={m.titulo || 'Sem título'} recuo={18} ativo={ativo} acoes={acoes} />
               ))}
               <button type="button" className="pl-arvore-nova-pasta" onClick={() => criarPasta(null)}>+ Nova pasta</button>
               <div className={`pl-arvore-item ${visao.tipo === 'lixeira' ? 'active' : ''}`} style={{ marginTop: 10 }}>
                 <span className="pl-arvore-chevron invisivel" />
-                <button type="button" className="pl-arvore-label" onClick={abrirLixeira}>
+                <button type="button" className="pl-arvore-label" onClick={() => navegar({ tipo: 'lixeira' })}>
                   <span className="pl-arvore-icone">🗑️</span>
                   <span className="pl-arvore-nome">Lixeira</span>
                 </button>
@@ -1075,50 +1208,82 @@ export default function ProLaboreAnotacoesPage() {
             {visao.tipo === 'lixeira' ? (
               <VisaoLixeira
                 mapas={lixeira}
-                onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
+                onAbrirPasta={id => navegar({ tipo: 'pasta', id })}
                 onRestaurar={restaurarMapa}
                 onExcluirDefinitivo={excluirMapaDefinitivo}
               />
             ) : visao.tipo === 'pasta' ? (
-              <VisaoPasta
-                pasta={visao.id ? pastas.find(p => p.id === visao.id) ?? null : null}
-                pastas={pastas}
-                notas={notas}
-                mapas={mapas}
-                onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
-                onAbrirNota={id => setVisao({ tipo: 'nota', id })}
-                onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
-                onNovaNota={() => criarNota(visao.id)}
-                onNovoMapa={() => setEscolhaTemplate({ pastaId: visao.id })}
-                onNovaPasta={() => criarPasta(visao.id)}
-                onRenomearPasta={renomearPasta}
-                onIconePasta={definirIconePasta}
-                onExcluirPasta={excluirPasta}
-                onExcluirNota={excluirNota}
-                onExcluirMapa={excluirMapa}
-              />
+              visao.id && !pastaAberta ? (
+                <div className="pl-empty pl-card">
+                  <div className="pl-emoji">📁</div>
+                  Pasta não encontrada — pode ter sido excluída.
+                  <div style={{ marginTop: 10 }}><button type="button" className="pl-btn pl-btn-ghost" onClick={() => navegar({ tipo: 'pasta', id: null }, true)}>Ir pra Todas as notas</button></div>
+                </div>
+              ) : (
+                <VisaoPasta
+                  key={visao.id ?? 'raiz'}
+                  pasta={pastaAberta}
+                  pastas={pastas}
+                  notas={notas}
+                  mapas={mapas}
+                  ordem={ordem}
+                  onOrdem={mudarOrdem}
+                  atalhosAtivos={!movendo && !enviando && !buscaAberta && !escolhaTemplate}
+                  acoes={acoes}
+                  cabecalho={
+                    <CabecalhoPasta
+                      key={pastaAberta ? `${pastaAberta.id}-${pastaAberta.nome}` : 'raiz'}
+                      pasta={pastaAberta}
+                      onRenomear={(id, nome) => { void renomearPasta(id, nome) }}
+                      onIcone={(id, icone) => { void definirIconePasta(id, icone) }}
+                      onExcluir={id => { void excluirItens([chaveDe('pasta', id)]) }}
+                    />
+                  }
+                  tiles={
+                    <div className="pl-fb-tiles">
+                      <button type="button" className="pl-fb-tile pl-fb-tile-roxo" onClick={() => setEscolhaTemplate({ pastaId: visao.id })}>
+                        <span className="pl-fb-tile-icone"><IconeTileMapa /></span>
+                        <span>+ Novo mapa mental</span>
+                      </button>
+                      <button type="button" className="pl-fb-tile pl-fb-tile-azul" onClick={() => criarNota(visao.id)}>
+                        <span className="pl-fb-tile-icone"><IconeTilePagina /></span>
+                        <span>+ Nova página</span>
+                      </button>
+                      <button type="button" className="pl-fb-tile pl-fb-tile-cinza" onClick={() => criarPasta(visao.id)}>
+                        <span className="pl-fb-tile-icone"><IconeTilePasta /></span>
+                        <span>+ Nova pasta</span>
+                      </button>
+                    </div>
+                  }
+                />
+              )
             ) : (
-              <PaginaNota
-                key={visao.id}
-                nota={notas.find(n => n.id === visao.id) ?? null}
-                onAtualizada={atualizarNotaLocal}
-                onExcluir={() => excluirNota(visao.id)}
-              />
+              <>
+                {notaAberta && (
+                  <div className="pl-an-topo">
+                    <button type="button" className="pl-an-voltar" onClick={() => navegar({ tipo: 'pasta', id: notaAberta.pastaId ?? null })} title="Voltar pra pasta">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+                      Voltar
+                    </button>
+                    <Trilha pastas={pastas} atual={notaAberta.pastaId ?? null} acoes={acoes} final={notaAberta.titulo || 'Sem título'} />
+                    <span className="pl-an-topo-espaco" />
+                    <button type="button" className="pl-an-topo-btn" onClick={() => setMovendo([chaveDe('nota', notaAberta.id)])}>Mover</button>
+                    <button type="button" className="pl-an-topo-btn" onClick={() => { void duplicarItens([chaveDe('nota', notaAberta.id)]) }}>Duplicar</button>
+                  </div>
+                )}
+                <PaginaNota
+                  key={visao.id}
+                  nota={notaAberta}
+                  onAtualizada={atualizarNotaLocal}
+                  onExcluir={() => { void excluirItens([chaveDe('nota', visao.id)]) }}
+                />
+              </>
             )}
           </div>
         </div>
       )}
 
-      <ComandoBusca
-        aberta={buscaAberta}
-        pastas={pastas}
-        notas={notas}
-        mapas={mapas}
-        onFechar={() => setBuscaAberta(false)}
-        onAbrirPasta={id => setVisao({ tipo: 'pasta', id })}
-        onAbrirNota={id => setVisao({ tipo: 'nota', id })}
-        onAbrirMapa={id => setVisao({ tipo: 'mapa', id })}
-      />
+      {modais}
 
       <EscolhaTemplateModal
         aberta={escolhaTemplate !== null}
@@ -1129,5 +1294,13 @@ export default function ProLaboreAnotacoesPage() {
         }}
       />
     </div>
+  )
+}
+
+export default function ProLaboreAnotacoesPage() {
+  return (
+    <Suspense fallback={<div className="pl-card"><div className="pl-hint">Carregando...</div></div>}>
+      <Anotacoes />
+    </Suspense>
   )
 }

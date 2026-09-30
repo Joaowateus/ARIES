@@ -3,18 +3,21 @@
 // Aba Reuniões: biblioteca de apresentações ao vivo, organizada em
 // departamentos (cada um com senha) e pastas. O dono cria e apresenta
 // (mapa mental + anotações + lembretes); a equipe assiste ao vivo e revê
-// depois. Os registros de reunião do formato antigo continuam
-// acessíveis no fim da página.
+// depois — e também pode montar a própria apresentação, que vai pra
+// equipe depois da autorização do dono (ver "Quem pode apresentar").
+// Os registros de reunião do formato antigo continuam acessíveis no fim
+// da página.
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
-import { proLaboreApi, type ApresentacaoResumo, type ArvoreApresentacao, type EstruturaReunioes, type MapaMental } from '@/lib/proLaboreApi'
+import { proLaboreApi, type ApresentacaoDetalhe, type ApresentacaoResumo, type ArvoreApresentacao, type ConfiguracaoApresentacao, type EstruturaReunioes, type MapaMental } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
-import { boardParaArvore } from '../anotacoes/motor-mapa-mental/conversao'
 import RegistrosAntigos from './_componentes/RegistrosAntigos'
 import { duracaoDesde, tempoRelativo } from './_componentes/comum'
-import { FormDepartamento, IconeCadeado, IconePasta, MoverApresentacao, SenhaDepartamento } from './_componentes/Organizacao'
+import CopiarParaAnotacoes from './_componentes/CopiarParaAnotacoes'
+import { mapaParaApresentacao } from './_componentes/ponteAnotacoes'
+import { FormDepartamento, IconeCadeado, IconePasta, MoverApresentacao, PermissoesEquipe, SenhaDepartamento } from './_componentes/Organizacao'
 
 type Modelo = { id: string; rotulo: string; descricao: string; icone: string; ramos: Array<[string, string[]]> }
 
@@ -42,7 +45,7 @@ function arvoreDoModelo(m: Modelo, titulo: string): ArvoreApresentacao {
   return raiz
 }
 
-function NovaApresentacao({ destino, rotuloDestino, onFechar }: { destino: { departamentoId: string | null; pastaId: string | null }; rotuloDestino: string; onFechar: () => void }) {
+function NovaApresentacao({ destino, rotuloDestino, precisaAutorizacao, onFechar }: { destino: { departamentoId: string | null; pastaId: string | null }; rotuloDestino: string; precisaAutorizacao: boolean; onFechar: () => void }) {
   const router = useRouter()
   const [titulo, setTitulo] = useState('')
   const [descricao, setDescricao] = useState('')
@@ -68,14 +71,15 @@ function NovaApresentacao({ destino, rotuloDestino, onFechar }: { destino: { dep
     setErro('')
     try {
       let arvore: ArvoreApresentacao
+      let configuracao: ConfiguracaoApresentacao | undefined
       if (modelo === 'importar') {
         const mapa = mapas?.find(m => m.id === mapaId)
         if (!mapa) throw new Error('Escolha o mapa da aba Anotações')
-        arvore = boardParaArvore(mapa.objetos ?? [], mapa.conectores ?? []).tree
+        ;({ arvore, configuracao } = mapaParaApresentacao(mapa.objetos ?? [], mapa.conectores ?? [], mapa.configuracao))
       } else {
         arvore = arvoreDoModelo(MODELOS.find(m => m.id === modelo) ?? MODELOS[0], t)
       }
-      const a = await proLaboreApi.apresentacoes.criar({ titulo: t, descricao: descricao.trim() || undefined, arvore, ...destino })
+      const a = await proLaboreApi.apresentacoes.criar({ titulo: t, descricao: descricao.trim() || undefined, arvore, configuracao, ...destino })
       router.push(`/pro-labore/reunioes/${a.id}`)
     } catch (err) {
       setErro((err as Error).message)
@@ -86,7 +90,10 @@ function NovaApresentacao({ destino, rotuloDestino, onFechar }: { destino: { dep
   return (
     <form className="pl-card pl-ap-nova" onSubmit={criar}>
       <div className="pl-card-title">Nova apresentação</div>
-      <div className="pl-card-sub">Será criada em <b>{rotuloDestino}</b></div>
+      <div className="pl-card-sub">
+        Será criada em <b>{rotuloDestino}</b>
+        {precisaAutorizacao && ' — como rascunho seu. Quando estiver pronta, é só pedir a autorização do responsável pra apresentar.'}
+      </div>
       <div className="pl-ap-nova-campos">
         <label className="pl-field">
           <span>Título</span>
@@ -127,6 +134,13 @@ function NovaApresentacao({ destino, rotuloDestino, onFechar }: { destino: { dep
   )
 }
 
+function SeloAprovacao({ a, isDono = false }: { a: ApresentacaoResumo; isDono?: boolean }) {
+  if (a.aprovacao === 'RASCUNHO') return <span className="pl-ap-selo neutro">Rascunho</span>
+  if (a.aprovacao === 'PENDENTE') return <span className="pl-ap-selo pendente">{isDono ? `Pedido de ${a.autorNome ?? 'alguém'}` : 'Aguardando autorização'}</span>
+  if (a.aprovacao === 'RECUSADA') return <span className="pl-ap-selo recusada">{isDono ? 'Recusada' : 'Não autorizada'}</span>
+  return null
+}
+
 type Selecao = { dep: string | null; pasta: string | null }
 
 function Biblioteca() {
@@ -150,6 +164,8 @@ function Biblioteca() {
   const [painel, setPainel] = useState<null | 'nova' | 'departamento' | 'editarDep' | 'pasta'>(null)
   const [nomePasta, setNomePasta] = useState('')
   const [movendo, setMovendo] = useState<ApresentacaoResumo | null>(null)
+  const [copiando, setCopiando] = useState<ApresentacaoDetalhe | null>(null)
+  const [permissoesAbertas, setPermissoesAbertas] = useState(false)
   const [temRegistros, setTemRegistros] = useState(false)
   const [versao, setVersao] = useState(0)
   const recarregar = () => setVersao(v => v + 1)
@@ -183,7 +199,33 @@ function Biblioteca() {
   const aoVivo = (lista ?? []).filter(a => a.aoVivo)
   const depsTrancadosAoVivo = (estrutura?.departamentos ?? []).filter(d => d.aoVivo && !d.liberado)
   const rotuloDestino = [depAtual?.nome ?? 'Geral', pastaAtual?.nome].filter(Boolean).join(' / ')
+  const permissao = estrutura?.permissao
+  const podeCriar = !!permissao && permissao !== 'BLOQUEADO'
+  const pedidos = isDono ? (lista ?? []).filter(a => a.aprovacao === 'PENDENTE') : []
+  const minhasEmPreparo = isDono ? [] : (lista ?? []).filter(a => a.souAutor && a.aprovacao !== 'APROVADA')
+  const onde = (a: ApresentacaoResumo) => {
+    const dep = a.departamentoId ? estrutura?.departamentos.find(d => d.id === a.departamentoId) : null
+    const pastas = dep ? dep.pastas : estrutura?.geral.pastas ?? []
+    return [dep?.nome ?? 'Geral', pastas.find(p => p.id === a.pastaId)?.nome].filter(Boolean).join(' / ')
+  }
 
+  async function decidir(a: ApresentacaoResumo, decisao: 'APROVAR' | 'RECUSAR', perguntar = 'Recusar') {
+    let motivo: string | undefined
+    if (decisao === 'RECUSAR') {
+      const r = prompt(`${perguntar} "${a.titulo}", de ${a.autorNome ?? 'alguém da equipe'}? Se quiser, diga o motivo (a pessoa vê):`, '')
+      if (r === null) return
+      motivo = r.trim() || undefined
+    }
+    try {
+      await proLaboreApi.apresentacoes.decidir(a.id, decisao, motivo)
+      recarregar()
+    } catch (err) { alert((err as Error).message) }
+  }
+  async function abrirCopia(a: ApresentacaoResumo) {
+    try {
+      setCopiando(await proLaboreApi.apresentacoes.obter(a.id))
+    } catch (err) { alert((err as Error).message) }
+  }
   async function excluir(a: ApresentacaoResumo) {
     if (!confirm(`Excluir "${a.titulo}"? O mapa, as anotações e os lembretes somem pra todo mundo.`)) return
     await proLaboreApi.apresentacoes.excluir(a.id)
@@ -231,17 +273,61 @@ function Biblioteca() {
         title="Reuniões"
         subtitle={isDono
           ? 'Apresente mapas mentais ao vivo pra equipe, organizados em departamentos com senha e pastas — tudo fica guardado com anotações e lembretes'
-          : 'Reuniões da equipe: acompanhe ao vivo e reveja depois. Departamentos com cadeado pedem a senha uma vez.'}
+          : permissao === 'BLOQUEADO' || !permissao
+            ? 'Reuniões da equipe: acompanhe ao vivo e reveja depois. Departamentos com cadeado pedem a senha uma vez.'
+            : permissao === 'LIVRE'
+              ? 'Acompanhe as reuniões ao vivo e apresente as suas também — você está liberado pra apresentar sem pedir.'
+              : 'Acompanhe as reuniões ao vivo e monte as suas apresentações — elas vão pra equipe depois da autorização do responsável.'}
+        actions={isDono ? <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPermissoesAbertas(true)}>Quem pode apresentar</button> : undefined}
       />
+
+      {pedidos.length > 0 && (
+        <section className="pl-card pl-rn-pedidos" aria-label="Pedidos pra apresentar">
+          <div className="pl-card-title">{pedidos.length === 1 ? '1 pedido pra apresentar' : `${pedidos.length} pedidos pra apresentar`}</div>
+          <ul>
+            {pedidos.map(a => (
+              <li key={a.id}>
+                <span className="pl-rn-pedido-texto">
+                  <b>{a.titulo}</b>
+                  <small>por {a.autorNome ?? 'alguém da equipe'} · em {onde(a)}{a.pedidoEm ? ` · ${tempoRelativo(a.pedidoEm)}` : ''}</small>
+                </span>
+                <Link href={`/pro-labore/reunioes/${a.id}`} className="pl-btn pl-btn-ghost">Ver</Link>
+                <button type="button" className="pl-btn pl-btn-ghost" onClick={() => decidir(a, 'RECUSAR')}>Recusar</button>
+                <button type="button" className="pl-btn pl-btn-primary" onClick={() => decidir(a, 'APROVAR')}>Autorizar</button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {minhasEmPreparo.length > 0 && (
+        <section className="pl-card pl-rn-pedidos minhas" aria-label="Suas apresentações em preparo">
+          <div className="pl-card-title">Suas apresentações em preparo</div>
+          <ul>
+            {minhasEmPreparo.map(a => (
+              <li key={a.id}>
+                <span className="pl-rn-pedido-texto">
+                  <b>{a.titulo}</b>
+                  <small>
+                    <SeloAprovacao a={a} /> em {onde(a)}
+                    {a.aprovacao === 'RECUSADA' && a.aprovacaoMotivo ? <> · “{a.aprovacaoMotivo}”</> : null}
+                  </small>
+                </span>
+                <Link href={`/pro-labore/reunioes/${a.id}`} className="pl-btn pl-btn-ghost">Abrir</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {aoVivo.map(a => (
         <Link key={a.id} href={`/pro-labore/reunioes/${a.id}`} className="pl-ap-banner">
           <span className="pl-ap-pulso" aria-hidden="true" />
           <span className="pl-ap-banner-texto">
             <b>AO VIVO{a.aoVivoDesde ? ` há ${duracaoDesde(a.aoVivoDesde)}` : ''}: {a.titulo}</b>
-            <small>{isDono ? 'Sua transmissão está no ar — voltar pra apresentação' : 'Entre pra acompanhar em tempo real'}</small>
+            <small>{a.souAutor ? 'Sua transmissão está no ar — voltar pra apresentação' : a.autorNome ? `${a.autorNome} está apresentando — entre pra acompanhar` : 'Entre pra acompanhar em tempo real'}</small>
           </span>
-          <span className="pl-btn pl-btn-primary">{isDono ? 'Voltar' : 'Assistir agora'}</span>
+          <span className="pl-btn pl-btn-primary">{a.souAutor ? 'Voltar' : 'Assistir agora'}</span>
         </Link>
       ))}
       {depsTrancadosAoVivo.map(d => (
@@ -309,6 +395,11 @@ function Biblioteca() {
               {pastaAtual && <><span className="sep">/</span><span className="atual"><IconePasta /> {pastaAtual.nome}</span></>}
               {depAtual?.descricao && !pastaAtual && <small>{depAtual.descricao}</small>}
             </div>
+            {!isDono && podeCriar && !bloqueado && (
+              <div className="pl-rn-acoes">
+                <button type="button" className="pl-btn pl-btn-primary" onClick={() => setPainel('nova')}>Nova apresentação</button>
+              </div>
+            )}
             {isDono && !bloqueado && (
               <div className="pl-rn-acoes">
                 {!pastaAtual && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPainel(p => (p === 'pasta' ? null : 'pasta'))}>Nova pasta</button>}
@@ -329,7 +420,7 @@ function Biblioteca() {
               <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPainel(null)}>Cancelar</button>
             </form>
           )}
-          {painel === 'nova' && <NovaApresentacao destino={{ departamentoId: sel.dep, pastaId: sel.pasta }} rotuloDestino={rotuloDestino} onFechar={() => setPainel(null)} />}
+          {painel === 'nova' && <NovaApresentacao destino={{ departamentoId: sel.dep, pastaId: sel.pasta }} rotuloDestino={rotuloDestino} precisaAutorizacao={permissao === 'APROVACAO'} onFechar={() => setPainel(null)} />}
 
           {bloqueado && depAtual ? (
             <SenhaDepartamento departamento={depAtual} onLiberado={recarregar} />
@@ -354,7 +445,9 @@ function Biblioteca() {
                     <p style={{ margin: '6px 0 0' }}>
                       {isDono
                         ? 'Crie uma apresentação aqui, ou mova uma existente pelo menu do cartão. Na hora de apresentar, clique em "Iniciar ao vivo".'
-                        : 'Quando tiver uma apresentação ao vivo, ela aparece com o selo AO VIVO.'}
+                        : podeCriar
+                          ? 'Quando tiver uma apresentação ao vivo, ela aparece com o selo AO VIVO. Quer apresentar algo? Clique em "Nova apresentação".'
+                          : 'Quando tiver uma apresentação ao vivo, ela aparece com o selo AO VIVO.'}
                     </p>
                   </div>
                 )
@@ -366,22 +459,26 @@ function Biblioteca() {
                         <div className="pl-ap-cartao-topo">
                           <span className="pl-ap-cartao-icone">{a.icone ?? '🧠'}</span>
                           {a.aoVivo && <span className="pl-ap-selo"><span className="pl-ap-pulso" aria-hidden="true" />AO VIVO</span>}
-                          {isDono && !a.visivelEquipe && <span className="pl-ap-selo neutro">Só você revê</span>}
+                          {a.aprovacao !== 'APROVADA' && <SeloAprovacao a={a} isDono={isDono} />}
+                          {a.aprovacao === 'APROVADA' && a.souAutor && !a.visivelEquipe && <span className="pl-ap-selo neutro">Só você revê</span>}
                         </div>
                         <b className="pl-ap-cartao-titulo">{a.titulo}</b>
                         {a.descricao && <p className="pl-ap-cartao-desc">{a.descricao}</p>}
                         <div className="pl-ap-cartao-meta">
                           <span>{a.totalIdeias} {a.totalIdeias === 1 ? 'ideia' : 'ideias'}</span>
                           {a.lembretesPendentes > 0 && <span>{a.lembretesPendentes} {a.lembretesPendentes === 1 ? 'lembrete' : 'lembretes'}</span>}
+                          {a.autorNome && <span>por {a.souAutor ? 'você' : a.autorNome}</span>}
                           <span>atualizada {tempoRelativo(a.atualizadoEm)}</span>
                         </div>
                       </Link>
-                      {isDono && (
-                        <div className="pl-rn-cartao-acoes">
-                          <button type="button" onClick={() => setMovendo(a)} title="Mover pra outro departamento ou pasta">Mover</button>
-                          <button type="button" className="perigo" onClick={() => excluir(a)} aria-label={`Excluir ${a.titulo}`} title="Excluir">Excluir</button>
-                        </div>
-                      )}
+                      <div className="pl-rn-cartao-acoes">
+                        <button type="button" onClick={() => abrirCopia(a)} title="Salvar uma cópia nas suas Anotações">Copiar p/ Anotações</button>
+                        {(isDono || a.souAutor) && <button type="button" onClick={() => setMovendo(a)} title="Mover pra outro departamento ou pasta">Mover</button>}
+                        {isDono && a.autorNome && a.aprovacao === 'APROVADA' && (
+                          <button type="button" onClick={() => decidir(a, 'RECUSAR', 'Retirar a autorização de')} title="A equipe deixa de ver e a pessoa não pode mais transmitir essa">Retirar autorização</button>
+                        )}
+                        {(isDono || a.souAutor) && <button type="button" className="perigo" onClick={() => excluir(a)} aria-label={`Excluir ${a.titulo}`} title="Excluir">Excluir</button>}
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -404,6 +501,17 @@ function Biblioteca() {
           }}
         />
       )}
+
+      {copiando && (
+        <CopiarParaAnotacoes
+          onFechar={() => setCopiando(null)}
+          obter={() => ({
+            titulo: copiando.titulo, icone: copiando.icone, arvore: copiando.arvore, configuracao: copiando.configuracao,
+            notas: copiando.notas ?? [], textoPessoal: (copiando.podeEditar ? copiando.notasPrivadas : copiando.notaPessoal) ?? '',
+          })}
+        />
+      )}
+      {permissoesAbertas && <PermissoesEquipe onFechar={() => setPermissoesAbertas(false)} />}
 
       {temRegistros && (
         <details className="pl-ap-antigos">
