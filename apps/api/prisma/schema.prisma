@@ -1990,3 +1990,87 @@ model ApresentacaoNotaPessoal {
   @@unique([apresentacaoId, pessoa])
   @@map("pro_labore_apresentacoes_notas_pessoais")
 }
+
+// ---------- Tráfego (Gerenciador de Anúncios da Meta) ----------
+
+// Conta de anúncios conectada (uma por conta do sistema). O token é de um
+// usuário do sistema do Gerenciador de Negócios (não expira) ou de uma
+// pessoa (expira em ~60 dias) — nunca sai pro frontend.
+model TrafegoConta {
+  id                    String    @id @default(cuid())
+  usuarioId             String    @unique
+  adAccountId           String // "act_123..."
+  nome                  String
+  moeda                 String    @default("BRL")
+  fuso                  String?
+  accessToken           String
+  conectadoEm           DateTime  @default(now())
+  ultimaSincronizacaoEm DateTime?
+  ultimoErroSync        String?
+  // Até onde o histórico já foi puxado (a carga inicial vem em partes pra
+  // caber no tempo da função).
+  historicoDesde        DateTime?
+  // Etapas do funil que aparecem (null = automático, pelas que têm dado),
+  // metas por etapa e se "Leads no CRM" conta só os marcados como Tráfego.
+  configuracao          Json?
+  atualizadoEm          DateTime  @updatedAt
+
+  insights TrafegoInsightDiario[]
+
+  @@map("pro_labore_trafego_contas")
+}
+
+// Métricas de um anúncio num dia (data do fuso da conta de anúncios). A
+// campanha/conjunto/conta são somados a partir daqui — menos alcance e
+// frequência, que não somam (ver TrafegoAlcance).
+model TrafegoInsightDiario {
+  id            String   @id @default(cuid())
+  contaId       String
+  data          DateTime @db.Date
+  adId          String
+  adNome        String
+  adsetId       String
+  adsetNome     String
+  campanhaId    String
+  campanhaNome  String
+  objetivo      String?
+  gasto         Float    @default(0)
+  impressoes    Int      @default(0)
+  alcance       Int      @default(0)
+  cliques       Int      @default(0)
+  cliquesLink   Int      @default(0)
+  lpv           Int      @default(0)
+  conversas     Int      @default(0)
+  leads         Int      @default(0)
+  videoViews    Int      @default(0)
+  thruplays     Int      @default(0)
+  videoP25      Int      @default(0)
+  videoP50      Int      @default(0)
+  videoP75      Int      @default(0)
+  videoP100     Int      @default(0)
+  atualizadoEm  DateTime @updatedAt
+
+  conta TrafegoConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  @@unique([contaId, data, adId])
+  @@index([contaId, data])
+  @@map("pro_labore_trafego_insights")
+}
+
+// Alcance/frequência de um período (conta inteira ou por campanha): não dá
+// pra somar dias, então vem da própria Meta pro período pedido e fica
+// guardado um tempo pra não chamar a API a cada abertura da aba.
+model TrafegoAlcance {
+  id           String   @id @default(cuid())
+  contaId      String
+  inicio       DateTime @db.Date
+  fim          DateTime @db.Date
+  // "conta" ou o id da campanha
+  chave        String
+  alcance      Int
+  frequencia   Float
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([contaId, inicio, fim, chave])
+  @@map("pro_labore_trafego_alcance")
+}

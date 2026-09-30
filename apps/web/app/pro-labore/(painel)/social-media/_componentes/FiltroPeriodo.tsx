@@ -49,10 +49,14 @@ const SECOES = [
   ['sv-publicacoes', 'Todas as publicações'],
 ] as const
 
-export function FiltroPeriodo({ periodo, onChange, comparacao }: {
+export function FiltroPeriodo({ periodo, onChange, comparacao, secoes = SECOES, extra }: {
   periodo: Periodo
   onChange: (p: Periodo) => void
   comparacao: { inicio: string; fim: string } | null
+  // Atalhos pras seções da página (a aba Tráfego usa os dela).
+  secoes?: ReadonlyArray<readonly [string, string]>
+  // Controles a mais na mesma linha dos presets (ex.: filtro de campanha).
+  extra?: React.ReactNode
 }) {
   const [aberto, setAberto] = useState(false)
   const [inicio, setInicio] = useState(periodo.inicio)
@@ -100,13 +104,14 @@ export function FiltroPeriodo({ periodo, onChange, comparacao }: {
             </div>
           )}
         </div>
+        {extra}
         <div className="pl-sv-periodo-label">
           <b>{periodo.inicio === periodo.fim ? fmtDiaMes(periodo.inicio) : `${fmtDiaMes(periodo.inicio)} – ${fmtDiaMes(periodo.fim)}`}</b>
           {comparacao && <span>comparado com {comparacao.inicio === comparacao.fim ? fmtDiaMes(comparacao.inicio) : `${fmtDiaMes(comparacao.inicio)} – ${fmtDiaMes(comparacao.fim)}`}</span>}
         </div>
       </div>
       <nav className="pl-sv-nav" aria-label="Seções da análise">
-        {SECOES.map(([id, rotulo]) => <a key={id} href={`#${id}`}>{rotulo}</a>)}
+        {secoes.map(([id, rotulo]) => <a key={id} href={`#${id}`}>{rotulo}</a>)}
       </nav>
     </div>
   )
