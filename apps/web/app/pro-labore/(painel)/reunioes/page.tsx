@@ -1,280 +1,237 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import {
-  proLaboreApi, Reuniao, ReuniaoDetalhe, ReuniaoResumo, TIPOS_REUNIAO, TipoReuniao,
-} from '@/lib/proLaboreApi'
+// Aba Reuniões: biblioteca de apresentações ao vivo. O dono cria e
+// apresenta (mapa mental + anotações + lembretes); a equipe assiste ao
+// vivo e revê depois. Os registros de reunião do formato antigo continuam
+// acessíveis no fim da página.
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { proLaboreApi, type ApresentacaoResumo, type ArvoreApresentacao, type MapaMental } from '@/lib/proLaboreApi'
+import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
+import { boardParaArvore } from '../anotacoes/motor-mapa-mental/conversao'
+import RegistrosAntigos from './_componentes/RegistrosAntigos'
+import { duracaoDesde, tempoRelativo } from './_componentes/comum'
 
-const TIPO_LABEL: Record<TipoReuniao, string> = { REUNIAO: 'Reunião', AULA: 'Aula', VIDEO: 'Vídeo', OUTRO: 'Outro' }
+type Modelo = { id: string; rotulo: string; descricao: string; icone: string; ramos: Array<[string, string[]]> }
 
-function formatarDuracao(segundos?: number | null): string | null {
-  if (!segundos || segundos <= 0) return null
-  const min = Math.floor(segundos / 60)
-  const seg = Math.round(segundos % 60)
-  if (min === 0) return `${seg}s`
-  const h = Math.floor(min / 60)
-  const minRestante = min % 60
-  if (h > 0) return `${h}h${String(minRestante).padStart(2, '0')}`
-  return `${min}min${String(seg).padStart(2, '0')}`
+const MODELOS: Modelo[] = [
+  { id: 'branco', rotulo: 'Em branco', descricao: 'Só a ideia central', icone: '✦', ramos: [] },
+  {
+    id: 'semanal', rotulo: 'Reunião semanal', descricao: 'Resultados, atenção, próximos passos', icone: '📅',
+    ramos: [['Resultados da semana', ['Vendas', 'Leads', 'Destaques']], ['Pontos de atenção', []], ['Próximos passos', ['Metas da semana', 'Responsáveis']], ['Avisos', []]],
+  },
+  {
+    id: 'treinamento', rotulo: 'Treinamento', descricao: 'Objetivo, conceitos, exemplos, exercício', icone: '🎓',
+    ramos: [['Objetivo', []], ['Conceitos', ['Conceito 1', 'Conceito 2']], ['Exemplos práticos', []], ['Erros comuns', []], ['Exercício', []]],
+  },
+  {
+    id: 'plano', rotulo: 'Plano de ação', descricao: 'Situação, meta, ações e prazos', icone: '🎯',
+    ramos: [['Situação atual', []], ['Meta', []], ['Ações', ['Ação 1', 'Ação 2', 'Ação 3']], ['Prazos', []], ['Como vamos medir', []]],
+  },
+]
+
+function arvoreDoModelo(m: Modelo, titulo: string): ArvoreApresentacao {
+  let n = 1
+  const no = (text: string, children: ArvoreApresentacao[] = []): ArvoreApresentacao => ({ id: `n${n++}`, text, children, collapsed: false })
+  const raiz = no(titulo)
+  raiz.children = m.ramos.map(([t, filhos]) => no(t, filhos.map(f => no(f))))
+  return raiz
 }
 
-function formatarData(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-// Lê a duração de um arquivo de áudio/vídeo localmente, sem enviar os bytes
-// pra lugar nenhum — só metadado, direto no navegador.
-function lerDuracaoArquivo(file: File): Promise<number | null> {
-  return new Promise(resolve => {
-    const url = URL.createObjectURL(file)
-    const elemento = document.createElement(file.type.startsWith('video') ? 'video' : 'audio')
-    const limpar = () => URL.revokeObjectURL(url)
-    elemento.preload = 'metadata'
-    elemento.onloadedmetadata = () => { const d = elemento.duration; limpar(); resolve(Number.isFinite(d) ? d : null) }
-    elemento.onerror = () => { limpar(); resolve(null) }
-    elemento.src = url
-  })
-}
-
-function FormNovaReuniao({ onCriada, onCancelar }: { onCriada: (r: Reuniao) => void; onCancelar: () => void }) {
+function NovaApresentacao({ onFechar }: { onFechar: () => void }) {
+  const router = useRouter()
   const [titulo, setTitulo] = useState('')
-  const [tipo, setTipo] = useState<TipoReuniao>('REUNIAO')
-  const [arquivo, setArquivo] = useState<File | null>(null)
-  const [duracaoSegundos, setDuracaoSegundos] = useState<number | null>(null)
-  const [transcricao, setTranscricao] = useState('')
-  const [salvando, setSalvando] = useState(false)
+  const [descricao, setDescricao] = useState('')
+  const [modelo, setModelo] = useState('branco')
+  const [mapas, setMapas] = useState<MapaMental[] | null>(null)
+  const [mapaId, setMapaId] = useState('')
+  const [criando, setCriando] = useState(false)
   const [erro, setErro] = useState('')
 
-  async function selecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null
-    setArquivo(file)
-    if (file) {
-      if (!titulo) setTitulo(file.name.replace(/\.[^/.]+$/, ''))
-      setDuracaoSegundos(await lerDuracaoArquivo(file))
-    }
-  }
+  useEffect(() => {
+    let cancelado = false
+    proLaboreApi.mapasMentais.listar()
+      .then(l => { if (!cancelado) setMapas(l.filter(m => (m.objetos ?? []).some(o => o.tipo === 'noMapa'))) })
+      .catch(() => { if (!cancelado) setMapas([]) })
+    return () => { cancelado = true }
+  }, [])
 
-  async function salvar(e: React.FormEvent) {
+  async function criar(e: React.FormEvent) {
     e.preventDefault()
+    const t = titulo.trim()
+    if (!t) return
+    setCriando(true)
     setErro('')
-    if (!titulo.trim()) { setErro('Dê um título pra reunião'); return }
-    setSalvando(true)
     try {
-      const reuniao = await proLaboreApi.reunioes.criar({
-        titulo: titulo.trim(), tipo,
-        duracaoSegundos: duracaoSegundos ?? undefined,
-        nomeArquivoOriginal: arquivo?.name,
-        transcricao: transcricao.trim() || undefined,
-      })
-      onCriada(reuniao)
+      let arvore: ArvoreApresentacao
+      if (modelo === 'importar') {
+        const mapa = mapas?.find(m => m.id === mapaId)
+        if (!mapa) throw new Error('Escolha o mapa da aba Anotações')
+        arvore = boardParaArvore(mapa.objetos ?? [], mapa.conectores ?? []).tree
+      } else {
+        arvore = arvoreDoModelo(MODELOS.find(m => m.id === modelo) ?? MODELOS[0], t)
+      }
+      const a = await proLaboreApi.apresentacoes.criar({ titulo: t, descricao: descricao.trim() || undefined, arvore })
+      router.push(`/pro-labore/reunioes/${a.id}`)
     } catch (err) {
-      setErro(err instanceof Error ? err.message : 'Erro ao criar')
-    } finally {
-      setSalvando(false)
+      setErro((err as Error).message)
+      setCriando(false)
     }
   }
 
   return (
-    <form onSubmit={salvar} className="pl-card" style={{ marginBottom: 16 }}>
-      <div className="pl-card-title" style={{ marginBottom: 12 }}>Nova reunião</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div className="pl-field">
-          <label>Título</label>
-          <input className="pl-input" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Call com fornecedor de motos" />
-        </div>
-
-        <div className="pl-field">
-          <label>Tipo</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {TIPOS_REUNIAO.map(t => (
-              <button key={t} type="button" className={`pl-chip ${tipo === t ? 'active' : ''}`} onClick={() => setTipo(t)}>
-                {TIPO_LABEL[t]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="pl-field">
-          <label>Arquivo de áudio/vídeo já gravado (opcional)</label>
-          <input type="file" accept="audio/*,video/*" className="pl-input" onChange={selecionarArquivo} />
-          {arquivo && (
-            <span className="pl-hint">
-              {arquivo.name}{duracaoSegundos ? ` — ${formatarDuracao(duracaoSegundos)}` : ''}
-            </span>
-          )}
-        </div>
-
-        <div className="pl-field">
-          <label>Transcrição</label>
-          <textarea
-            className="pl-input pl-textarea"
-            rows={6}
-            value={transcricao}
-            onChange={e => setTranscricao(e.target.value)}
-            placeholder="Cole ou digite aqui o que foi conversado. A transcrição automática por IA ainda não está integrada — por enquanto esse texto é seu."
-          />
-          <span className="pl-hint">A transcrição automática por IA ainda depende de uma integração paga (ex: Whisper) que não está configurada. Por enquanto, escreva/cole aqui.</span>
-        </div>
-
-        {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
-
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Criar'}</button>
-          <button type="button" className="pl-btn pl-btn-ghost" onClick={onCancelar}>Cancelar</button>
-        </div>
+    <form className="pl-card pl-ap-nova" onSubmit={criar}>
+      <div className="pl-card-title">Nova apresentação</div>
+      <div className="pl-ap-nova-campos">
+        <label className="pl-field">
+          <span>Título</span>
+          <input className="pl-input" autoFocus value={titulo} maxLength={120} onChange={e => setTitulo(e.target.value)} placeholder="Ex.: Reunião de segunda — metas de outubro" />
+        </label>
+        <label className="pl-field">
+          <span>Descrição (opcional)</span>
+          <input className="pl-input" value={descricao} maxLength={500} onChange={e => setDescricao(e.target.value)} placeholder="Do que se trata, pra equipe saber antes de entrar" />
+        </label>
+      </div>
+      <div className="pl-ap-sub" style={{ marginTop: 14 }}>Começar com</div>
+      <div className="pl-ap-modelos" role="radiogroup" aria-label="Modelo inicial">
+        {MODELOS.map(m => (
+          <button key={m.id} type="button" role="radio" aria-checked={modelo === m.id} className={modelo === m.id ? 'ativo' : ''} onClick={() => setModelo(m.id)}>
+            <span className="icone">{m.icone}</span><b>{m.rotulo}</b><small>{m.descricao}</small>
+          </button>
+        ))}
+        <button type="button" role="radio" aria-checked={modelo === 'importar'} className={modelo === 'importar' ? 'ativo' : ''} onClick={() => setModelo('importar')} disabled={mapas?.length === 0}>
+          <span className="icone">🧠</span><b>Mapa das Anotações</b><small>{mapas === null ? 'Carregando…' : mapas.length === 0 ? 'Nenhum mapa mental salvo' : 'Copia um mapa que você já tem'}</small>
+        </button>
+      </div>
+      {modelo === 'importar' && mapas && mapas.length > 0 && (
+        <label className="pl-field" style={{ marginTop: 12 }}>
+          <span>Qual mapa</span>
+          <select className="pl-input" value={mapaId} onChange={e => { setMapaId(e.target.value); const m = mapas.find(x => x.id === e.target.value); if (m && !titulo.trim()) setTitulo(m.titulo ?? '') }}>
+            <option value="">Escolha…</option>
+            {mapas.map(m => <option key={m.id} value={m.id}>{m.icone ? `${m.icone} ` : ''}{m.titulo || 'Sem título'}</option>)}
+          </select>
+          <small className="pl-hint">É uma cópia: mexer na apresentação não altera o mapa original.</small>
+        </label>
+      )}
+      {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }}>{erro}</div>}
+      <div className="pl-ap-nova-botoes">
+        <button type="button" className="pl-btn pl-btn-ghost" onClick={onFechar}>Cancelar</button>
+        <button type="submit" className="pl-btn pl-btn-primary" disabled={criando || !titulo.trim() || (modelo === 'importar' && !mapaId)}>{criando ? 'Criando…' : 'Criar e abrir'}</button>
       </div>
     </form>
   )
 }
 
-function PainelReuniao({ id, onExcluida }: { id: string; onExcluida: () => void }) {
-  const [reuniao, setReuniao] = useState<ReuniaoDetalhe | null>(null)
-  const [editandoTranscricao, setEditandoTranscricao] = useState(false)
-  const [rascunhoTranscricao, setRascunhoTranscricao] = useState('')
-  const [novaNota, setNovaNota] = useState('')
+export default function ProLaboreReunioesPage() {
+  const { usuario } = useProLaboreAuth()
+  const isDono = usuario?.papel === 'DONO'
+  const [lista, setLista] = useState<ApresentacaoResumo[] | null>(null)
+  const [erro, setErro] = useState('')
+  const [criando, setCriando] = useState(false)
+  const [temRegistros, setTemRegistros] = useState(false)
+  const [versao, setVersao] = useState(0)
 
-  const carregar = useCallback(() => { proLaboreApi.reunioes.obter(id).then(r => { setReuniao(r); setRascunhoTranscricao(r.transcricao ?? '') }) }, [id])
-  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => {
+    let cancelado = false
+    proLaboreApi.apresentacoes.listar()
+      .then(l => { if (!cancelado) { setLista(l); setErro('') } })
+      .catch(e => { if (!cancelado) setErro((e as Error).message) })
+    return () => { cancelado = true }
+  }, [versao])
 
-  async function salvarTranscricao() {
-    await proLaboreApi.reunioes.atualizar(id, { transcricao: rascunhoTranscricao })
-    setEditandoTranscricao(false)
-    carregar()
-  }
-
-  async function adicionarNota(e: React.FormEvent) {
-    e.preventDefault()
-    if (!novaNota.trim()) return
-    await proLaboreApi.notas.criar({ conteudo: novaNota.trim(), reuniaoId: id })
-    setNovaNota('')
-    carregar()
-  }
-
-  async function excluir() {
-    if (!confirm('Excluir essa reunião e o vínculo das notas associadas?')) return
-    await proLaboreApi.reunioes.excluir(id)
-    onExcluida()
-  }
-
-  if (!reuniao) return <div className="pl-card"><div className="pl-hint">Carregando...</div></div>
-
-  return (
-    <div className="pl-card">
-      <div className="pl-card-head">
-        <div>
-          <div className="pl-card-title">{reuniao.titulo}</div>
-          <div className="pl-card-sub">{TIPO_LABEL[reuniao.tipo]} · {formatarData(reuniao.data)}{formatarDuracao(reuniao.duracaoSegundos) ? ` · ${formatarDuracao(reuniao.duracaoSegundos)}` : ''}</div>
-        </div>
-        <button type="button" className="pl-btn pl-btn-ghost" onClick={excluir}>Excluir</button>
-      </div>
-
-      <div className="pl-plano-secao-titulo">Transcrição</div>
-      {editandoTranscricao ? (
-        <>
-          <textarea className="pl-input pl-textarea" rows={10} value={rascunhoTranscricao} onChange={e => setRascunhoTranscricao(e.target.value)} />
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button type="button" className="pl-btn pl-btn-primary" onClick={salvarTranscricao}>Salvar</button>
-            <button type="button" className="pl-btn pl-btn-ghost" onClick={() => { setEditandoTranscricao(false); setRascunhoTranscricao(reuniao.transcricao ?? '') }}>Cancelar</button>
-          </div>
-        </>
-      ) : (
-        <div onClick={() => setEditandoTranscricao(true)} style={{ cursor: 'text', whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.6, color: reuniao.transcricao ? 'var(--pl-ink-2)' : 'var(--pl-ink-muted)', minHeight: 60 }}>
-          {reuniao.transcricao || 'Sem transcrição ainda — clique aqui pra escrever.'}
-        </div>
-      )}
-
-      <div className="pl-plano-secao-titulo" style={{ marginTop: 20 }}>Notas dessa reunião</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-        {reuniao.notas.length === 0 && <div className="pl-hint">Nenhuma nota ainda.</div>}
-        {reuniao.notas.map(n => (
-          <div key={n.id} className="pl-card" style={{ padding: '10px 14px' }}>
-            <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', color: 'var(--pl-ink-2)' }}>{n.conteudo}</div>
-          </div>
-        ))}
-      </div>
-      <form onSubmit={adicionarNota} style={{ display: 'flex', gap: 8 }}>
-        <input className="pl-input" placeholder="Adicionar uma nota..." value={novaNota} onChange={e => setNovaNota(e.target.value)} />
-        <button type="submit" className="pl-btn pl-btn-ghost">Adicionar</button>
-      </form>
-    </div>
-  )
-}
-
-function AbaReunioes() {
-  const [reunioes, setReunioes] = useState<ReuniaoResumo[]>([])
-  const [selecionadaId, setSelecionadaId] = useState<string | null>(null)
-  const [mostrarForm, setMostrarForm] = useState(false)
-  const [carregando, setCarregando] = useState(true)
-
-  const carregar = useCallback(() => {
-    proLaboreApi.reunioes.listar().then(rs => {
-      setReunioes(rs)
-      setSelecionadaId(atual => atual ?? rs[0]?.id ?? null)
-    }).finally(() => setCarregando(false))
+  // Atualiza a lista de tempos em tempos — é assim que a equipe descobre
+  // que uma apresentação acabou de entrar ao vivo.
+  useEffect(() => {
+    const t = setInterval(() => setVersao(v => v + 1), 20_000)
+    return () => clearInterval(t)
   }, [])
 
-  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => {
+    let cancelado = false
+    proLaboreApi.reunioes.listar().then(r => { if (!cancelado) setTemRegistros(r.length > 0) }).catch(() => undefined)
+    return () => { cancelado = true }
+  }, [])
 
-  return (
-    <div className="pl-grid-2">
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          {!mostrarForm && <button type="button" className="pl-btn pl-btn-primary" onClick={() => setMostrarForm(true)}>Nova reunião</button>}
-        </div>
-        {mostrarForm && (
-          <FormNovaReuniao
-            onCriada={r => { setMostrarForm(false); setSelecionadaId(r.id); carregar() }}
-            onCancelar={() => setMostrarForm(false)}
-          />
-        )}
-        <div className="pl-card" style={{ padding: '14px 10px' }}>
-          {carregando && <div className="pl-hint">Carregando...</div>}
-          {!carregando && reunioes.length === 0 && (
-            <div className="pl-empty">
-              <div className="pl-emoji">🎙️</div>
-              Nenhuma reunião registrada ainda.
-            </div>
-          )}
-          <div className="pl-chat-list">
-            {reunioes.map(r => (
-              <button key={r.id} type="button" className={`pl-chat-item ${selecionadaId === r.id ? 'active' : ''}`} onClick={() => setSelecionadaId(r.id)}>
-                <div className="pl-chat-item-body">
-                  <div className="pl-chat-item-top">
-                    <span className="pl-chat-item-name">{r.titulo}</span>
-                    <span className="pl-chat-item-time">{formatarData(r.data)}</span>
-                  </div>
-                  <div className="pl-chat-item-snippet">
-                    {TIPO_LABEL[r.tipo]}{formatarDuracao(r.duracaoSegundos) ? ` · ${formatarDuracao(r.duracaoSegundos)}` : ''}{r.quantidadeNotas > 0 ? ` · ${r.quantidadeNotas} nota${r.quantidadeNotas > 1 ? 's' : ''}` : ''}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+  async function excluir(a: ApresentacaoResumo) {
+    if (!confirm(`Excluir "${a.titulo}"? O mapa, as anotações e os lembretes somem pra todo mundo.`)) return
+    await proLaboreApi.apresentacoes.excluir(a.id)
+    setVersao(v => v + 1)
+  }
 
-      <div>
-        {selecionadaId ? (
-          <PainelReuniao key={selecionadaId} id={selecionadaId} onExcluida={() => { setSelecionadaId(null); carregar() }} />
-        ) : (
-          <div className="pl-card"><div className="pl-empty">Selecione uma reunião pra ver os detalhes.</div></div>
-        )}
-      </div>
-    </div>
-  )
-}
+  const aoVivo = (lista ?? []).filter(a => a.aoVivo)
 
-export default function ProLaboreReunioesPage() {
   return (
     <div>
       <PageHeader
         eyebrow="Operação"
         title="Reuniões"
-        subtitle="Registro pessoal de reuniões, aulas e vídeos, com transcrição — privado, só você vê"
+        subtitle={isDono
+          ? 'Apresente mapas mentais ao vivo: a equipe acompanha em tempo real, sem poder editar, e tudo fica guardado com anotações e lembretes'
+          : 'Apresentações da equipe: acompanhe ao vivo quando começar e reveja o conteúdo depois'}
+        actions={isDono && !criando && <button type="button" className="pl-btn pl-btn-primary" onClick={() => setCriando(true)}>Nova apresentação</button>}
       />
 
-      <AbaReunioes />
+      {aoVivo.map(a => (
+        <Link key={a.id} href={`/pro-labore/reunioes/${a.id}`} className="pl-ap-banner">
+          <span className="pl-ap-pulso" aria-hidden="true" />
+          <span className="pl-ap-banner-texto">
+            <b>AO VIVO{a.aoVivoDesde ? ` há ${duracaoDesde(a.aoVivoDesde)}` : ''}: {a.titulo}</b>
+            <small>{isDono ? 'Sua transmissão está no ar — voltar pra apresentação' : 'Entre pra acompanhar em tempo real'}</small>
+          </span>
+          <span className="pl-btn pl-btn-primary">{isDono ? 'Voltar' : 'Assistir agora'}</span>
+        </Link>
+      ))}
+
+      {criando && <NovaApresentacao onFechar={() => setCriando(false)} />}
+
+      {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
+      {!lista ? <div className="pl-hint">Carregando…</div> : lista.length === 0 ? (
+        !criando && (
+          <div className="pl-empty pl-card">
+            <div className="pl-emoji">🧠</div>
+            <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>{isDono ? 'Nenhuma apresentação ainda' : 'Nenhuma apresentação disponível ainda'}</h3>
+            <p style={{ margin: '6px 0 0' }}>
+              {isDono
+                ? 'Crie uma, monte o mapa mental e clique em "Iniciar ao vivo" — a equipe abre o link e acompanha o que você faz, sem poder editar.'
+                : 'Quando uma apresentação começar ao vivo, ela aparece aqui e no menu, com o selo AO VIVO.'}
+            </p>
+            {isDono && <button type="button" className="pl-btn pl-btn-primary" style={{ marginTop: 14 }} onClick={() => setCriando(true)}>Criar a primeira</button>}
+          </div>
+        )
+      ) : (
+        <div className="pl-ap-grade">
+          {lista.map(a => (
+            <article key={a.id} className={`pl-ap-cartao ${a.aoVivo ? 'aovivo' : ''}`}>
+              <Link href={`/pro-labore/reunioes/${a.id}`} className="pl-ap-cartao-link">
+                <div className="pl-ap-cartao-topo">
+                  <span className="pl-ap-cartao-icone">{a.icone ?? '🧠'}</span>
+                  {a.aoVivo && <span className="pl-ap-selo"><span className="pl-ap-pulso" aria-hidden="true" />AO VIVO</span>}
+                  {isDono && !a.visivelEquipe && <span className="pl-ap-selo neutro">Só você revê</span>}
+                </div>
+                <b className="pl-ap-cartao-titulo">{a.titulo}</b>
+                {a.descricao && <p className="pl-ap-cartao-desc">{a.descricao}</p>}
+                <div className="pl-ap-cartao-meta">
+                  <span>{a.totalIdeias} {a.totalIdeias === 1 ? 'ideia' : 'ideias'}</span>
+                  {a.lembretesPendentes > 0 && <span>{a.lembretesPendentes} {a.lembretesPendentes === 1 ? 'lembrete' : 'lembretes'}</span>}
+                  <span>atualizada {tempoRelativo(a.atualizadoEm)}</span>
+                </div>
+              </Link>
+              {isDono && (
+                <button type="button" className="pl-ap-cartao-excluir" onClick={() => excluir(a)} aria-label={`Excluir ${a.titulo}`} title="Excluir">×</button>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      {temRegistros && (
+        <details className="pl-ap-antigos">
+          <summary>Registros de reuniões (formato antigo)</summary>
+          <div style={{ marginTop: 14 }}><RegistrosAntigos /></div>
+        </details>
+      )}
     </div>
   )
 }
