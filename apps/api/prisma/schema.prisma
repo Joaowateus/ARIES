@@ -1870,6 +1870,7 @@ model Apresentacao {
   departamento ReuniaoDepartamento?     @relation(fields: [departamentoId], references: [id], onDelete: Restrict)
   pasta        ReuniaoPasta?            @relation(fields: [pastaId], references: [id], onDelete: SetNull)
   espectadores ApresentacaoEspectador[]
+  notasPessoais ApresentacaoNotaPessoal[]
 
   @@index([usuarioId])
   @@index([departamentoId])
@@ -1947,4 +1948,20 @@ model ApresentacaoEspectador {
 
   @@unique([apresentacaoId, pessoa])
   @@map("pro_labore_apresentacoes_espectadores")
+}
+
+// "Só pra mim" de quem assiste: cada pessoa da equipe tem a sua nota,
+// que nem o dono nem os colegas veem. (A do dono fica em notasPrivadas.)
+model ApresentacaoNotaPessoal {
+  id             String   @id @default(cuid())
+  apresentacaoId String
+  // "dono:<id>" | "vendedor:<id>"
+  pessoa         String
+  texto          String
+  atualizadoEm   DateTime @updatedAt
+
+  apresentacao Apresentacao @relation(fields: [apresentacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([apresentacaoId, pessoa])
+  @@map("pro_labore_apresentacoes_notas_pessoais")
 }

@@ -570,6 +570,8 @@ export const proLaboreApi = {
       destino: { departamentoId: string | null; pastaId: string | null }
     }>) => request<{ versao: number; atualizadoEm: string }>(`/pro-labore/apresentacoes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     excluir: (id: string) => request<null>(`/pro-labore/apresentacoes/${id}`, { method: 'DELETE' }),
+    salvarMinhaNota: (id: string, texto: string) =>
+      request<{ ok: boolean }>(`/pro-labore/apresentacoes/${id}/minha-nota`, { method: 'PUT', body: JSON.stringify({ texto }) }),
     definirAoVivo: (id: string, ativo: boolean) =>
       request<ApresentacaoDetalhe>(`/pro-labore/apresentacoes/${id}/ao-vivo`, { method: 'POST', body: JSON.stringify({ ativo }) }),
     enviarPalco: (id: string, palco: PalcoApresentacao) =>
@@ -1296,6 +1298,8 @@ export interface ApresentacaoDetalhe extends ApresentacaoResumo {
   palco: PalcoApresentacao | null
   palcoVersao: number
   podeEditar: boolean
+  // Só pra quem assiste: o "Só pra mim" da própria pessoa.
+  notaPessoal?: string
   notasPrivadas?: string | null
 }
 
