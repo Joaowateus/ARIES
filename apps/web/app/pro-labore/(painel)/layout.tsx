@@ -23,7 +23,8 @@ const NAV_GROUPS: NavGroup[] = [
     { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic' },
     { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook' },
     { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', donoOnly: true },
-    { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', donoOnly: true },
+    // Sem donoOnly: cada pessoa conecta o próprio Instagram e só vê o dela.
+    { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at' },
     // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o
     // próprio assistente, ligado ao próprio número, então todo mundo
     // precisa enxergar a própria aba (o escopo por pessoa é feito no backend).

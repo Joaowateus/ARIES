@@ -95,11 +95,10 @@ export default function ProLaboreSocialMediaPage() {
   }, [])
 
   useEffect(() => {
-    if (!isDono) return
     proLaboreApi.socialMedia.conta()
       .then(c => setConta(c))
       .finally(() => setCarregando(false))
-  }, [isDono])
+  }, [])
 
   // Conta recém-conectada (nunca sincronizada): dispara a primeira
   // sincronização sozinha, em vez de mostrar tudo zerado esperando o dono
@@ -147,22 +146,12 @@ export default function ProLaboreSocialMediaPage() {
     primeiraSyncDisparada.current = false
   }
 
-  if (!isDono) {
-    return (
-      <div className="pl-empty pl-card">
-        <div className="pl-emoji">🔒</div>
-        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
-        <p style={{ marginTop: 6 }}>Os dados de Social Media são usados pra auditar a produção da equipe.</p>
-      </div>
-    )
-  }
-
   return (
     <div>
       <PageHeader
-        eyebrow="Equipe"
+        eyebrow="Operação"
         title="Social Media"
-        subtitle="Desempenho, conteúdo, audiência e crescimento do Instagram — puxados direto da conta, sem lançamento manual"
+        subtitle="Desempenho, conteúdo, audiência e crescimento do seu Instagram, puxados direto da conta. Cada pessoa da equipe conecta o próprio e só vê o dela."
         actions={conta && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar}>Desconectar</button>
@@ -179,8 +168,8 @@ export default function ProLaboreSocialMediaPage() {
         <div className="pl-card" style={{ maxWidth: 580 }}>
           <div className="pl-card-head">
             <div>
-              <div className="pl-card-title">Conectar conta do Instagram</div>
-              <div className="pl-card-sub">Precisa ser uma conta profissional (comercial ou criador de conteúdo). O login é feito direto no Instagram — sem passar pelo Facebook.</div>
+              <div className="pl-card-title">Conectar o seu Instagram</div>
+              <div className="pl-card-sub">Precisa ser uma conta profissional (comercial ou criador de conteúdo). O login é feito direto no Instagram — sem passar pelo Facebook. Só você vê os dados da sua conta aqui.</div>
             </div>
           </div>
 
@@ -190,19 +179,27 @@ export default function ProLaboreSocialMediaPage() {
             </button>
           )}
 
+          {oauthConfigurado && (
+            <div className="pl-sv-aviso" style={{ marginBottom: 14, fontSize: 12.5, lineHeight: 1.55 }}>
+              {isDono
+                ? <>Enquanto o app da Meta não passa pela revisão, cada Instagram da equipe precisa ser convidado como <b>Testador do Instagram</b> no painel da Meta (Funções do app) e aceitar o convite em instagram.com/accounts/manage_access.</>
+                : <>Se o Instagram mostrar um erro ao entrar, sua conta ainda não foi liberada: peça pro responsável adicionar o seu @ como testador do app e aceite o convite em <b>instagram.com/accounts/manage_access</b> (aba “Convites do testador”).</>}
+            </div>
+          )}
+
           {!oauthConfigurado && (
             <div style={{ fontSize: 12.5, color: 'var(--pl-ink-muted)', marginBottom: 14 }}>
               O login com um clique ainda não está disponível nesse ambiente (falta configurar o app da Meta) — use o caminho manual abaixo por enquanto.
             </div>
           )}
 
-          {oauthConfigurado && !mostrarManual && (
+          {isDono && oauthConfigurado && !mostrarManual && (
             <button type="button" className="pl-link-action" style={{ fontSize: 12.5 }} onClick={() => setMostrarManual(true)}>
               Prefiro colar um token manualmente
             </button>
           )}
 
-          {mostrarManual && (
+          {(isDono || !oauthConfigurado) && mostrarManual && (
             <>
               {oauthConfigurado && <div className="pl-card-sub" style={{ margin: '4px 0 10px' }}>Caminho manual (avançado)</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '0 0 14px' }}>

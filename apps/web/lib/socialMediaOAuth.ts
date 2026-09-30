@@ -32,6 +32,10 @@ export function iniciarLoginInstagram(): void {
   url.searchParams.set('scope', INSTAGRAM_OAUTH_SCOPES)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('state', estado)
+  // Sempre pede login no Instagram, em vez de reaproveitar a sessão que
+  // estiver aberta no navegador — cada pessoa da equipe conecta a própria
+  // conta, não a de quem usou o computador antes.
+  url.searchParams.set('force_reauth', 'true')
   window.location.href = url.toString()
 }
 
