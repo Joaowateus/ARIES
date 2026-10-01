@@ -7,6 +7,7 @@ import { useState } from 'react'
 import type { AnaliseTrafego, LinhaTabelaTrafego } from '@/lib/proLaboreApi'
 import { Abas } from '../../social-media/_componentes/viz'
 import { ROTULO_RESULTADO, compacto, moeda, num, pct } from './formato'
+import { StatusObjeto } from './Criativos'
 
 type Nivel = 'campanhas' | 'conjuntos' | 'anuncios'
 type Coluna = { chave: string; rotulo: string; valor: (l: LinhaTabelaTrafego) => number | null; fmt: (l: LinhaTabelaTrafego) => string; titulo?: string }
@@ -20,7 +21,13 @@ export default function TabelaTrafego({ analise, onFiltrar }: {
   const [ordem, setOrdem] = useState<{ chave: string; desc: boolean }>({ chave: 'gasto', desc: true })
   const linhas = analise[nivel]
   const temVideo = analise.totais.videoViews > 0
+  const temEngajadas = analise.totais.conversasProf2 > 0
   const colunas: Coluna[] = [
+    ...(nivel !== 'anuncios' && analise.temEstrutura ? [{
+      chave: 'orc', rotulo: 'Orç./dia', titulo: 'Orçamento diário atual (do conjunto ou da campanha)',
+      valor: (l: LinhaTabelaTrafego) => l.estrutura?.orcamentoDiario ?? null,
+      fmt: (l: LinhaTabelaTrafego) => (l.estrutura?.orcamentoDiario ? moeda(l.estrutura.orcamentoDiario, c, 0) : l.estrutura?.orcamentoTotal ? `${moeda(l.estrutura.orcamentoTotal, c, 0)} total` : '—'),
+    }] : []),
     { chave: 'gasto', rotulo: 'Investimento', valor: l => l.metricas.gasto, fmt: l => moeda(l.metricas.gasto, c) },
     { chave: 'impressoes', rotulo: 'Impressões', valor: l => l.metricas.impressoes, fmt: l => compacto(l.metricas.impressoes) },
     ...(nivel === 'campanhas' ? [{ chave: 'freq', rotulo: 'Freq.', titulo: 'Frequência', valor: (l: LinhaTabelaTrafego) => l.derivadas.frequencia, fmt: (l: LinhaTabelaTrafego) => (l.derivadas.frequencia != null ? l.derivadas.frequencia.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—') }] : []),
@@ -34,6 +41,7 @@ export default function TabelaTrafego({ analise, onFiltrar }: {
     },
     { chave: 'res', rotulo: 'Resultado', valor: l => l.metricas[l.resultado], fmt: l => `${num(l.metricas[l.resultado])} ${ROTULO_RESULTADO[l.resultado]}` },
     { chave: 'custo', rotulo: 'Custo/result.', titulo: 'Custo por resultado', valor: l => l.custoResultado, fmt: l => moeda(l.custoResultado, c) },
+    ...(temEngajadas ? [{ chave: 'eng', rotulo: 'Conv. eng.', titulo: 'Conversas engajadas: 2+ mensagens da pessoa ÷ conversas iniciadas', valor: (l: LinhaTabelaTrafego) => l.derivadas.taxaConversaEngajada, fmt: (l: LinhaTabelaTrafego) => pct(l.derivadas.taxaConversaEngajada, 0) }] : []),
     ...(temVideo ? [
       { chave: 'hook', rotulo: 'Hook', titulo: 'Hook rate', valor: (l: LinhaTabelaTrafego) => l.derivadas.hookRate, fmt: (l: LinhaTabelaTrafego) => pct(l.derivadas.hookRate) },
       { chave: 'hold', rotulo: 'Hold', titulo: 'Hold rate', valor: (l: LinhaTabelaTrafego) => l.derivadas.holdRate, fmt: (l: LinhaTabelaTrafego) => pct(l.derivadas.holdRate) },
@@ -82,8 +90,17 @@ export default function TabelaTrafego({ analise, onFiltrar }: {
                   onKeyDown={podeFiltrar ? e => { if (e.key === 'Enter') onFiltrar(nivel === 'campanhas' ? { campanhaId: l.id } : { campanhaId: l.campanhaId, adsetId: l.id }) } : undefined}
                 >
                   <td className="nome">
-                    <b>{l.nome}</b>
-                    {nivel !== 'campanhas' && <small>{nivel === 'anuncios' ? `${l.campanhaNome} › ${l.adsetNome}` : l.campanhaNome}</small>}
+                    <div className="pl-tf-nome-linha">
+                      {nivel === 'anuncios' && (l.estrutura?.miniatura || l.estrutura?.imagem) && (
+                        // eslint-disable-next-line @next/next/no-img-element -- miniatura do CDN da Meta
+                        <img className="pl-tf-mini" src={(l.estrutura.miniatura ?? l.estrutura.imagem)!} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                      )}
+                      <div>
+                        <b>{l.nome}</b>
+                        {nivel !== 'campanhas' && <small>{nivel === 'anuncios' ? `${l.campanhaNome} › ${l.adsetNome}` : l.campanhaNome}</small>}
+                        {l.status && <small><StatusObjeto status={l.status} /></small>}
+                      </div>
+                    </div>
                   </td>
                   {colunas.map(x => <td key={x.chave} className="pl-mono">{x.fmt(l)}</td>)}
                 </tr>

@@ -5,9 +5,10 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
-import { listarContasDeAnuncio, ErroMetaAds } from '../lib/metaAds'
-import { sincronizarTrafego, DIAS_HISTORICO, hojeNoFuso, somarDias } from '../lib/trafegoSync'
+import { listarContasDeAnuncio, ErroMetaAds, erroDeToken } from '../lib/metaAds'
+import { sincronizarTrafego, DIAS_HISTORICO, VERSAO_DADOS, hojeNoFuso, somarDias } from '../lib/trafegoSync'
 import { analisarTrafego, ETAPAS_TRAFEGO, type ConfiguracaoTrafego } from '../lib/trafegoAnalytics'
+import { analisarPublicos } from '../lib/trafegoPublicos'
 
 const router = Router()
 
@@ -21,6 +22,15 @@ function resumoConta(c: NonNullable<Awaited<ReturnType<typeof prisma.trafegoCont
     hoje,
     configuracao: (c.configuracao ?? {}) as ConfiguracaoTrafego,
   }
+}
+
+// Dados guardados fora da conta (sem relação em cascata).
+async function limparCaches(contaId: string) {
+  await prisma.$transaction([
+    prisma.trafegoAlcance.deleteMany({ where: { contaId } }),
+    prisma.trafegoEstrutura.deleteMany({ where: { contaId } }),
+    prisma.trafegoPublicoCache.deleteMany({ where: { contaId } }),
+  ])
 }
 
 function erroMeta(res: Response, e: unknown) {
@@ -79,9 +89,11 @@ router.post('/trafego/conectar', requireProLaboreAuth, requireDono, async (req: 
     // Mesma conta, token novo (ex.: o anterior expirou): mantém o histórico.
     conta = await prisma.trafegoConta.update({ where: { id: atual.id }, data: { ...dados, ultimoErroSync: null } })
   } else {
-    if (atual) await prisma.trafegoConta.delete({ where: { id: atual.id } })
-    await prisma.trafegoAlcance.deleteMany({ where: { contaId: atual?.id ?? '' } })
-    conta = await prisma.trafegoConta.create({ data: { ...dados, usuarioId } })
+    if (atual) {
+      await limparCaches(atual.id)
+      await prisma.trafegoConta.delete({ where: { id: atual.id } })
+    }
+    conta = await prisma.trafegoConta.create({ data: { ...dados, usuarioId, versaoDados: VERSAO_DADOS } })
   }
   let aviso: string | null = null
   try {
@@ -96,7 +108,7 @@ router.post('/trafego/conectar', requireProLaboreAuth, requireDono, async (req: 
 router.delete('/trafego/conta', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const c = await prisma.trafegoConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
   if (c) {
-    await prisma.trafegoAlcance.deleteMany({ where: { contaId: c.id } })
+    await limparCaches(c.id)
     await prisma.trafegoConta.delete({ where: { id: c.id } })
   }
   res.status(204).end()
@@ -109,7 +121,7 @@ router.post('/trafego/sincronizar', requireProLaboreAuth, requireDono, async (re
     return
   }
   try {
-    const resultado = await sincronizarTrafego(c)
+    const resultado = await sincronizarTrafego(c, { forcarEstrutura: true })
     res.json({ conta: resumoConta(await prisma.trafegoConta.findUniqueOrThrow({ where: { id: c.id } })), resultado })
   } catch (e) {
     erroMeta(res, e)
@@ -153,6 +165,35 @@ router.get('/trafego/analise', requireProLaboreAuth, requireDono, async (req: Re
     return
   }
   res.json({ conta: resumoConta(c), ...(await analisarTrafego(c, inicio, fim, { campanhaId, adsetId })) })
+})
+
+// Públicos (idade/gênero, região, posicionamento, dispositivo, horário):
+// vem da Meta sob demanda e fica guardado por período.
+router.get('/trafego/publicos', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const parse = z.object({
+    inicio: dataSchema, fim: dataSchema,
+    campanhaId: z.string().max(40).optional(), adsetId: z.string().max(40).optional(), forcar: z.enum(['1']).optional(),
+  }).safeParse(req.query)
+  if (!parse.success || parse.data.inicio > parse.data.fim) {
+    res.status(400).json({ error: 'Período inválido' })
+    return
+  }
+  const c = await prisma.trafegoConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
+  if (!c) {
+    res.status(404).json({ error: 'Nenhuma conta de anúncios conectada' })
+    return
+  }
+  const { inicio, fim, campanhaId, adsetId, forcar } = parse.data
+  if ((Date.parse(fim) - Date.parse(inicio)) / 86_400_000 + 1 > DIAS_HISTORICO) {
+    res.status(400).json({ error: `O período vai até ${DIAS_HISTORICO} dias` })
+    return
+  }
+  try {
+    res.json(await analisarPublicos(c, inicio, fim, { campanhaId, adsetId }, forcar === '1'))
+  } catch (e) {
+    if (erroDeToken(e)) await prisma.trafegoConta.update({ where: { id: c.id }, data: { ultimoErroSync: e instanceof Error ? e.message : 'Token inválido' } })
+    erroMeta(res, e)
+  }
 })
 
 const metaSchema = z.object({ tipo: z.enum(['CONV_MIN', 'CUSTO_MAX']), valor: z.number().nonnegative().max(1_000_000) }).nullable()

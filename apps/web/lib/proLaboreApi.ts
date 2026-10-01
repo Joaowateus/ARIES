@@ -654,6 +654,13 @@ export const proLaboreApi = {
       if (p.adsetId) q.set('adsetId', p.adsetId)
       return request<AnaliseTrafego>(`/pro-labore/trafego/analise?${q}`)
     },
+    publicos: (p: { inicio: string; fim: string; campanhaId?: string; adsetId?: string; forcar?: boolean }) => {
+      const q = new URLSearchParams({ inicio: p.inicio, fim: p.fim })
+      if (p.campanhaId) q.set('campanhaId', p.campanhaId)
+      if (p.adsetId) q.set('adsetId', p.adsetId)
+      if (p.forcar) q.set('forcar', '1')
+      return request<PublicosTrafego>(`/pro-labore/trafego/publicos?${q}`)
+    },
     configurar: (c: Partial<{ etapas: Partial<Record<EtapaTrafego, ModoEtapaTrafego>>; metas: Partial<Record<EtapaTrafego, MetaEtapaTrafego | null>>; crmSomenteTrafego: boolean }>) =>
       request<ContaTrafego>('/pro-labore/trafego/configuracao', { method: 'PUT', body: JSON.stringify(c) }),
   },
@@ -1396,12 +1403,34 @@ export interface MetricasTrafego {
   gasto: number; impressoes: number; alcance: number; cliques: number; cliquesLink: number
   lpv: number; conversas: number; leads: number
   videoViews: number; thruplays: number; videoP25: number; videoP50: number; videoP75: number; videoP100: number
+  videoP95: number; videoPlays: number; videoTempoTotal: number
+  cliquesSaida: number; engajamento: number; reacoes: number; comentarios: number; compartilhamentos: number; salvamentos: number
+  conversasProf2: number; conversasProf3: number; conversasProf5: number; bloqueios: number
 }
 export interface DerivadasTrafego {
   cpm: number | null; ctr: number | null; ctrTodos: number | null; cpc: number | null
   connectRateLpv: number | null; connectRateConversa: number | null
   custoLpv: number | null; custoConversa: number | null; cpl: number | null
   hookRate: number | null; holdRate: number | null; frequencia: number | null
+  ctrSaida: number | null; taxaEngajamento: number | null; tempoMedioVideo: number | null
+  taxaConversaEngajada: number | null; custoConversaEngajada: number | null; taxaBloqueio: number | null; custoResultado: number | null
+}
+// Público configurado no conjunto (resumo do direcionamento).
+export interface PublicoConjuntoTrafego {
+  idade: string; generos: string; locais: string[]; interesses: string[]
+  publicosPersonalizados: string[]; excluidos: string[]; posicionamentos: string[] | null; advantage: boolean
+}
+export type RankingMeta = 'ABOVE_AVERAGE' | 'AVERAGE' | 'BELOW_AVERAGE_35' | 'BELOW_AVERAGE_20' | 'BELOW_AVERAGE_10' | string
+export interface EstruturaTrafego {
+  // campanha
+  objetivo?: string | null; orcamentoDiario?: number | null; orcamentoTotal?: number | null; orcamentoRestante?: number | null; lance?: string | null
+  // conjunto
+  campanhaId?: string | null; otimizacao?: string | null; cobranca?: string | null; destino?: string | null
+  aprendizado?: string | null; conversoesAprendizado?: number | null; publico?: PublicoConjuntoTrafego | null
+  // anúncio
+  adsetId?: string | null; previa?: string | null; imagem?: string | null; miniatura?: string | null
+  titulo?: string | null; texto?: string | null; chamada?: string | null; formato?: string | null
+  rankQualidade?: RankingMeta | null; rankEngajamento?: RankingMeta | null; rankConversao?: RankingMeta | null
 }
 export interface EtapaFunilTrafego {
   chave: EtapaTrafego; nome: string; detalhe: string | null; valor: number; valorAnterior: number
@@ -1414,6 +1443,25 @@ export interface LinhaTabelaTrafego {
   id: string; nome: string; campanhaId: string; campanhaNome: string; adsetId: string; adsetNome: string
   objetivo: string | null; metricas: MetricasTrafego; derivadas: DerivadasTrafego
   resultado: 'conversas' | 'leads' | 'lpv' | 'cliquesLink'; custoResultado: number | null; alcanceExato: boolean
+  diasAtivos: number; tendenciaCtr: number | null
+  status: string | null; estrutura: EstruturaTrafego | null
+}
+export type SecaoTrafego = 'tf-resumo' | 'tf-jornada' | 'tf-indicadores' | 'tf-melhorar' | 'tf-publicos' | 'tf-criativos' | 'tf-campanhas' | 'tf-dia'
+export interface ItemDiagnosticoTrafego { nivel: 'critico' | 'atencao' | 'positivo' | 'info'; titulo: string; texto: string; secao?: SecaoTrafego }
+export interface CheckAuditoriaTrafego { chave: string; titulo: string; valor: string; referencia: string; status: 'ok' | 'atencao' | 'critico' | 'sem_dado'; secao: SecaoTrafego }
+export type TipoPublicoTrafego = 'idadeGenero' | 'regiao' | 'posicionamento' | 'dispositivo' | 'hora'
+export interface SegmentoPublicoTrafego {
+  chave: string; rotulo: string; grupo: string | null; extra: string | null
+  gasto: number; impressoes: number; cliquesLink: number; destino: number; resultados: number; conversasProf2: number
+  cpm: number | null; ctr: number | null; cpc: number | null; connectRate: number | null; custoResultado: number | null
+  partGasto: number; partResultados: number; indiceCusto: number | null
+}
+export interface AchadoPublicoTrafego { nivel: 'critico' | 'atencao' | 'positivo' | 'info'; tipo: TipoPublicoTrafego; titulo: string; texto: string }
+export interface PublicosTrafego {
+  periodo: { inicio: string; fim: string }
+  resultado: 'contatos' | 'lpv' | 'cliquesLink'; nomeResultado: string
+  quebras: Record<TipoPublicoTrafego, { segmentos: SegmentoPublicoTrafego[]; achados: AchadoPublicoTrafego[]; atualizadoEm: string | null; erro: string | null }>
+  achados: AchadoPublicoTrafego[]
 }
 export interface AnaliseTrafego {
   conta: ContaTrafego
@@ -1426,7 +1474,18 @@ export interface AnaliseTrafego {
   funil: EtapaFunilTrafego[]
   tipoDestino: 'pagina' | 'whatsapp' | 'ambos'
   simulacoes: Array<{ etapa: EtapaTrafego; rotulo: string; de: number; para: number; finalAtual: number; finalNovo: number; etapaFinal: string; custoAtual: number; custoNovo: number | null }>
-  diario: Array<{ data: string; gasto: number; impressoes: number; cliquesLink: number; lpv: number; conversas: number; leads: number; leadsCrm: number | null }>
+  diario: Array<{
+    data: string; gasto: number; impressoes: number; cliques: number; cliquesLink: number; cliquesSaida: number
+    lpv: number; conversas: number; leads: number; conversasProf2: number; videoViews: number; thruplays: number; engajamento: number
+    leadsCrm: number | null
+  }>
+  semana: Array<{ dia: number; nome: string; ocorrencias: number; gasto: number; impressoes: number; cliquesLink: number; destino: number; contatos: number; leadsCrm: number | null }>
+  ritmoMes: {
+    mes: string; diaAtual: number; diasNoMes: number; gasto: number; contatos: number; leadsCrm: number | null; custoLeadCrm: number | null
+    mediaDiaria7: number; projecao: number; projecaoLeadsCrm: number | null; orcamentoDiarioAtivo: number | null
+  }
   campanhas: LinhaTabelaTrafego[]; conjuntos: LinhaTabelaTrafego[]; anuncios: LinhaTabelaTrafego[]
-  diagnostico: Array<{ nivel: 'critico' | 'atencao' | 'positivo' | 'info'; titulo: string; texto: string }>
+  diagnostico: ItemDiagnosticoTrafego[]
+  auditoria: { nota: number | null; itens: CheckAuditoriaTrafego[] }
+  temEstrutura: boolean
 }

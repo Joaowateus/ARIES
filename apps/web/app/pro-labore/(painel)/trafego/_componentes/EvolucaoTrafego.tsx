@@ -10,7 +10,7 @@ import { Abas, CartaoViz, LinhaTip, Tooltip, Vazio, ticksBonitos, useLargura, ty
 import { compacto, moeda, num, pct } from './formato'
 
 type Dia = AnaliseTrafego['diario'][number]
-type Chave = 'gasto' | 'impressoes' | 'cliquesLink' | 'destino' | 'leadsCrm' | 'ctr' | 'connectRate' | 'cpc' | 'cpm' | 'custoLead'
+type Chave = 'gasto' | 'impressoes' | 'cliquesLink' | 'destino' | 'conversas' | 'leadsCrm' | 'ctr' | 'connectRate' | 'cpc' | 'cpm' | 'custoConversa' | 'engajadas' | 'hook' | 'custoLead'
 interface Metrica { chave: Chave; rotulo: string; forma: 'barra' | 'linha'; valor: (d: Dia) => number | null; fmt: (v: number | null) => string; eixo: (v: number) => string; descricao: string }
 
 const ALTURA = 280
@@ -29,11 +29,15 @@ export default function EvolucaoTrafego({ analise }: { analise: AnaliseTrafego }
       { chave: 'impressoes', rotulo: 'Impressões', forma: 'barra', valor: d => d.impressoes, fmt: num, eixo: compacto, descricao: 'Vezes que os anúncios apareceram' },
       { chave: 'cliquesLink', rotulo: 'Cliques', forma: 'barra', valor: d => d.cliquesLink, fmt: num, eixo: compacto, descricao: 'Cliques no link por dia' },
       { chave: 'destino', rotulo: nomeDestino, forma: 'barra', valor: d => d.lpv + d.conversas, fmt: num, eixo: compacto, descricao: 'Quem chegou na página ou abriu o WhatsApp' },
+      ...(analise.totais.conversas > 0 && analise.tipoDestino === 'ambos' ? [{ chave: 'conversas' as const, rotulo: 'Conversas', forma: 'barra' as const, valor: (d: Dia) => d.conversas, fmt: num, eixo: compacto, descricao: 'Conversas iniciadas no WhatsApp/Direct por dia' }] : []),
       ...(analise.crm.leads != null ? [{ chave: 'leadsCrm' as const, rotulo: 'Leads no CRM', forma: 'barra' as const, valor: (d: Dia) => d.leadsCrm, fmt: num, eixo: compacto, descricao: 'Leads cadastrados no CRM por dia' }] : []),
       { chave: 'ctr', rotulo: 'CTR', forma: 'linha', valor: d => (d.impressoes ? d.cliquesLink / d.impressoes : null), fmt: v => pct(v, 2), eixo: v => pct(v, v < 0.1 ? 1 : 0), descricao: 'Cliques no link ÷ impressões' },
       { chave: 'connectRate', rotulo: 'Connect rate', forma: 'linha', valor: d => (d.cliquesLink ? (d.lpv + d.conversas) / d.cliquesLink : null), fmt: v => pct(v), eixo: v => pct(v, 0), descricao: 'Chegaram ao destino ÷ cliques no link' },
       { chave: 'cpc', rotulo: 'CPC', forma: 'linha', valor: d => (d.cliquesLink ? d.gasto / d.cliquesLink : null), fmt: brl, eixo: brlEixo, descricao: 'Custo por clique no link' },
       { chave: 'cpm', rotulo: 'CPM', forma: 'linha', valor: d => (d.impressoes ? (d.gasto * 1000) / d.impressoes : null), fmt: brl, eixo: brlEixo, descricao: 'Custo por mil impressões' },
+      ...(analise.totais.conversas > 0 ? [{ chave: 'custoConversa' as const, rotulo: 'Custo/conversa', forma: 'linha' as const, valor: (d: Dia) => (d.conversas ? d.gasto / d.conversas : null), fmt: brl, eixo: brlEixo, descricao: 'Investimento do dia ÷ conversas iniciadas' }] : []),
+      ...(analise.totais.conversasProf2 > 0 ? [{ chave: 'engajadas' as const, rotulo: 'Conv. engajadas', forma: 'linha' as const, valor: (d: Dia) => (d.conversas ? d.conversasProf2 / d.conversas : null), fmt: (v: number | null) => pct(v), eixo: (v: number) => pct(v, 0), descricao: 'Conversas com 2+ mensagens da pessoa ÷ conversas iniciadas' }] : []),
+      ...(analise.totais.videoViews > 0 ? [{ chave: 'hook' as const, rotulo: 'Hook rate', forma: 'linha' as const, valor: (d: Dia) => (d.impressoes && d.videoViews ? d.videoViews / d.impressoes : null), fmt: (v: number | null) => pct(v), eixo: (v: number) => pct(v, 0), descricao: 'Pararam 3s no vídeo ÷ impressões — cair dia após dia é sinal de fadiga' }] : []),
       ...(analise.crm.leads != null ? [{ chave: 'custoLead' as const, rotulo: 'Custo/lead CRM', forma: 'linha' as const, valor: (d: Dia) => (d.leadsCrm ? d.gasto / d.leadsCrm : null), fmt: brl, eixo: brlEixo, descricao: 'Investimento do dia ÷ leads cadastrados no dia' }] : []),
     ]
     return lista

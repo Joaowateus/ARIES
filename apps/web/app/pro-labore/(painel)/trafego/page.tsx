@@ -1,9 +1,9 @@
 'use client'
 
-// Aba Tráfego: o funil do anúncio (Gerenciador de Anúncios da Meta) até o
-// lead cadastrado no CRM, com a mesma lógica do funil comercial — pra
-// entender com números onde a jornada perde gente e quanto custa cada
-// etapa até o "custo por lead" que abre o funil comercial.
+// Aba Tráfego: auditoria do tráfego pago (Gerenciador de Anúncios da Meta)
+// até o lead cadastrado no CRM. A ordem das seções é a de uma auditoria:
+// resumo → jornada → indicadores → o que fazer → quem (públicos) → o quê
+// (criativos) → onde está a verba (campanhas) → quando (dia a dia).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { proLaboreApi, type AnaliseTrafego, type ContaTrafego, type EtapaTrafego, type MetaEtapaTrafego, type ModoEtapaTrafego } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
@@ -15,14 +15,23 @@ import KpisTrafego from './_componentes/KpisTrafego'
 import Diagnostico from './_componentes/Diagnostico'
 import EvolucaoTrafego from './_componentes/EvolucaoTrafego'
 import TabelaTrafego from './_componentes/TabelaTrafego'
+import Resumo from './_componentes/Resumo'
+import QualidadeConversas from './_componentes/QualidadeConversas'
+import Publicos from './_componentes/Publicos'
+import Criativos from './_componentes/Criativos'
+import DiasSemana from './_componentes/DiasSemana'
+import { ConjuntosConfigurados, DistribuicaoVerba } from './_componentes/Estrutura'
 import { tempoDesde } from './_componentes/formato'
 
 const SECOES = [
+  ['tf-resumo', 'Resumo'],
   ['tf-jornada', 'Jornada até o lead'],
   ['tf-indicadores', 'Indicadores'],
   ['tf-melhorar', 'Onde melhorar'],
-  ['tf-dia', 'Dia a dia'],
+  ['tf-publicos', 'Públicos'],
+  ['tf-criativos', 'Criativos'],
   ['tf-campanhas', 'Campanhas'],
+  ['tf-dia', 'Dia a dia'],
 ] as const
 
 // Sincroniza sozinho ao abrir se a última rodada foi há mais que isso.
@@ -153,7 +162,7 @@ export default function ProLaboreTrafegoPage() {
     <PageHeader
       eyebrow="Marketing"
       title="Tráfego"
-      subtitle="Do anúncio ao lead no CRM: cada etapa com conversão, perda e custo — atualizado todo dia a partir do Gerenciador de Anúncios"
+      subtitle="Auditoria do tráfego pago: do anúncio ao lead no CRM, por público, criativo e campanha — atualizado todo dia a partir do Gerenciador de Anúncios"
     />
   )
 
@@ -189,6 +198,7 @@ export default function ProLaboreTrafegoPage() {
       {campanhas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
     </select>
   )
+  const filtrarEIr = (f: { campanhaId?: string; adsetId?: string }) => { setFiltro(f); document.getElementById('tf-resumo')?.scrollIntoView({ behavior: 'smooth' }) }
   const conjuntoFiltrado = filtro.adsetId ? analise?.conjuntos.find(c => c.id === filtro.adsetId) : null
 
   return (
@@ -225,6 +235,9 @@ export default function ProLaboreTrafegoPage() {
       {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
       {!analise ? <div className="pl-hint" style={{ marginTop: 20 }}>{carregando ? 'Montando a análise…' : ''}</div> : (
         <div className={carregando ? 'pl-tf-recarregando' : ''}>
+          <Secao id="tf-resumo" eyebrow="Auditoria" titulo="Resumo" nota="Checagens objetivas do período, o que atacar primeiro e o ritmo do mês.">
+            <Resumo analise={analise} />
+          </Secao>
           <Secao id="tf-jornada" eyebrow="Funil do tráfego" titulo="Jornada até o lead" nota="Cada etapa com a conversão da anterior, a perda, o custo e a meta. O Connect rate mostra quantos dos cliques chegaram de verdade no destino.">
             <div className="pl-card"><FunilTrafego
               analise={analise}
@@ -233,6 +246,7 @@ export default function ProLaboreTrafegoPage() {
               onCrmSomenteTrafego={v => configurar({ crmSomenteTrafego: v })}
               onAtualizarCustoTopo={atualizarCustoTopo}
             /></div>
+            <QualidadeConversas analise={analise} />
           </Secao>
           <Secao id="tf-indicadores" eyebrow="Gerenciador de Anúncios" titulo="Indicadores" nota="Comparados com o período anterior de mesmo tamanho.">
             <KpisTrafego analise={analise} />
@@ -240,11 +254,23 @@ export default function ProLaboreTrafegoPage() {
           <Secao id="tf-melhorar" eyebrow="Diagnóstico" titulo="Onde melhorar">
             <Diagnostico analise={analise} />
           </Secao>
-          <Secao id="tf-dia" eyebrow="Evolução" titulo="Dia a dia">
-            <EvolucaoTrafego analise={analise} />
+          <Secao id="tf-publicos" eyebrow="Quem" titulo="Públicos" nota="Idade, gênero, região, plataforma, posicionamento, dispositivo e horário — vem da Meta pra cada período e fica guardado.">
+            <Publicos periodo={periodo} filtro={filtro} moedaConta={analise.conta.moeda} versao={versao} />
           </Secao>
-          <Secao id="tf-campanhas" eyebrow="Detalhe" titulo="Campanhas">
-            <TabelaTrafego analise={analise} onFiltrar={f => { setFiltro(f); document.getElementById('tf-jornada')?.scrollIntoView({ behavior: 'smooth' }) }} />
+          <Secao id="tf-criativos" eyebrow="O quê" titulo="Criativos">
+            <Criativos analise={analise} />
+          </Secao>
+          <Secao id="tf-campanhas" eyebrow="Onde está a verba" titulo="Campanhas">
+            <div className="pl-tf-dupla">
+              <DistribuicaoVerba analise={analise} nivel="campanhas" onFiltrar={filtrarEIr} />
+              <DistribuicaoVerba analise={analise} nivel="conjuntos" onFiltrar={filtrarEIr} />
+            </div>
+            <TabelaTrafego analise={analise} onFiltrar={filtrarEIr} />
+            <ConjuntosConfigurados analise={analise} />
+          </Secao>
+          <Secao id="tf-dia" eyebrow="Quando" titulo="Dia a dia">
+            <EvolucaoTrafego analise={analise} />
+            <DiasSemana analise={analise} />
           </Secao>
         </div>
       )}

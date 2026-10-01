@@ -2,8 +2,14 @@
 
 // "Onde melhorar": o que a análise encontrou (com o porquê e o que fazer)
 // e quanto cada meta batida renderia em leads e em custo por lead.
-import type { AnaliseTrafego } from '@/lib/proLaboreApi'
+import type { AnaliseTrafego, SecaoTrafego } from '@/lib/proLaboreApi'
+import { irPara } from './Resumo'
 import { minuscula, moeda, num, pct } from './formato'
+
+const NOME_SECAO: Record<SecaoTrafego, string> = {
+  'tf-resumo': 'Resumo', 'tf-jornada': 'Jornada', 'tf-indicadores': 'Indicadores', 'tf-melhorar': 'Onde melhorar',
+  'tf-publicos': 'Públicos', 'tf-criativos': 'Criativos', 'tf-campanhas': 'Campanhas', 'tf-dia': 'Dia a dia',
+}
 
 const NIVEL = {
   critico: { rotulo: 'Crítico', icone: '!' },
@@ -28,6 +34,7 @@ export default function Diagnostico({ analise }: { analise: AnaliseTrafego }) {
                 <div>
                   <b><span className="pl-tf-diag-nivel">{NIVEL[d.nivel].rotulo}</span>{d.titulo}</b>
                   <p>{d.texto}</p>
+                  {d.secao && d.secao !== 'tf-melhorar' && <button type="button" className="pl-link-action pl-tf-ver" onClick={() => irPara(d.secao)}>Ver em {NOME_SECAO[d.secao]} →</button>}
                 </div>
               </li>
             ))}
