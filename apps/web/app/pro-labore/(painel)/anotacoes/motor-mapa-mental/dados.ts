@@ -14,6 +14,9 @@ export interface EstiloTexto {
   tamanho?: TamanhoNo
   cor?: string // #rrggbb do texto
   fundo?: string // #rrggbb de fundo da ideia
+  // Largura do texto escolhida na ideia (arrastando a alça); sem ela, o
+  // texto quebra na largura padrão do layout.
+  largura?: number
 }
 // Imagem mostrada acima do texto (w/h = tamanho original, pra proporção).
 // w/h: tamanho real do arquivo; largura: tamanho escolhido na ideia (sem

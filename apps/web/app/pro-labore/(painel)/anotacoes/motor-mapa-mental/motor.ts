@@ -12,7 +12,7 @@ import {
   maxId as maxIdArvore, type NoArvore, reindexar, removeNode as removeNodeArvore, reparent as reparentArvore,
   toggleCollapse, urlSegura, type EstiloTexto, type ImagemNo, type LinkNo,
 } from './dados'
-import { buildLayout, larguraImagemValida, type Layout, type MapaLayout } from './layoutMotor'
+import { buildLayout, larguraImagemValida, larguraTextoValida, type Layout, type MapaLayout } from './layoutMotor'
 import { bandSvg, col, connectorsFor, esc, junctionSvg, ligacoesSvg, lum, nodeSvg } from './conectores'
 import { FONT } from './constantes'
 import { THEMES, type Tema } from './temas'
@@ -99,7 +99,7 @@ export class MotorMapaMental {
   private byId = new Map<string, NoArvore>()
   private parentOf = new Map<string, string>()
   private pts = new Map<number, Ponto>()
-  private down: { type: 'pan' | 'node' | 'redim'; sx: number; sy: number; tx?: number; ty?: number; id?: string; w0?: number; fator?: number; mudou?: boolean } | null = null
+  private down: { type: 'pan' | 'node' | 'redim' | 'larg'; sx: number; sy: number; tx?: number; ty?: number; id?: string; w0?: number; fator?: number; mudou?: boolean } | null = null
   private pinch: { d: number; k: number } | null = null
   private lastClick = { id: null as string | null, t: 0 }
   private destruido = false
@@ -222,13 +222,34 @@ export class MotorMapaMental {
   undo(): void { this.undoImpl() }
   redo(): void { this.redoImpl() }
   addChildSelecionado(): void { this.addChild(this.sel!) }
+  // Ideia nova (filha de `paiId`) já com imagem/estilo/link — sem abrir o
+  // editor de texto. Ex.: colar um print numa ideia que já tem imagem.
+  adicionarFilhoCom(paiId: string, campos: CamposNo, texto = ''): string | null {
+    if (this.somenteLeitura || !this.byId.has(paiId)) return null
+    this.snapshot()
+    const c = this.fabrica.mk(texto)
+    for (const k of ['estilo', 'imagem', 'link'] as const) if (campos[k]) (c as unknown as Record<string, unknown>)[k] = campos[k]
+    addChildArvore(this.byId, paiId, c)
+    this.sel = c.id
+    this.relayout({ reveal: true })
+    return c.id
+  }
+  idSelecionado(): string | null { return this.sel ?? null }
+  temImagem(id: string): boolean { return !!this.byId.get(id)?.imagem }
+  // O elemento está dentro do mapa? (pra decidir se um Ctrl+V é pra cá)
+  contem(el: Node | null): boolean { return !!el && this.container.contains(el) }
   addSiblingSelecionado(): void { this.addSibling(this.sel!) }
   editarSelecionado(): void { this.startEdit(this.sel!, { selectAll: true }) }
   toggleSelecionado(): void { this.toggle(this.sel!) }
   excluirSelecionado(): void { this.removeNode(this.sel!) }
   // Formatação, imagem e link da ideia selecionada (desfazível).
   atualizarSelecionado(campos: CamposNo): void {
-    const n = this.sel ? this.byId.get(this.sel) : null
+    if (this.sel) this.atualizarNo(this.sel, campos)
+  }
+  // Mesma coisa numa ideia específica (ex.: imagem colada que terminou de
+  // subir depois que a seleção já mudou).
+  atualizarNo(id: string, campos: CamposNo): void {
+    const n = this.byId.get(id)
     if (!n || this.somenteLeitura) return
     this.snapshot()
     for (const k of ['estilo', 'imagem', 'link'] as const) {
@@ -591,6 +612,7 @@ export class MotorMapaMental {
     return hit
   }
   private onResize = (): void => this.render()
+  private ultimoCliqueLarg: { id: string | null; t: number } = { id: null, t: 0 }
   private ouvintes = new AbortController()
 
   private bindEventos(): void {
@@ -673,6 +695,30 @@ export class MotorMapaMental {
         this.down = null; this.dragging = null; this.dropTarget = null; this.container.classList.remove('pl-motor-panning')
         return
       }
+      const lg = this.somenteLeitura ? null : (ev.target as Element).closest?.('[data-larg]') as HTMLElement | null
+      const eLg = lg ? this.L.get(lg.dataset.larg!) : null
+      if (eLg) {
+        const agora = performance.now()
+        // Duplo clique na alça: volta pra largura automática.
+        if (this.ultimoCliqueLarg.id === eLg.id && agora - this.ultimoCliqueLarg.t < 350) {
+          this.ultimoCliqueLarg = { id: null, t: 0 }
+          const n = this.byId.get(eLg.id)
+          if (n?.estilo?.largura != null) {
+            this.snapshot()
+            const { largura: _l, ...resto } = n.estilo
+            void _l
+            if (Object.keys(resto).length) n.estilo = resto; else delete n.estilo
+            this.relayout({ instant: true })
+          }
+          return
+        }
+        this.ultimoCliqueLarg = { id: eLg.id, t: agora }
+        const centrada = eLg.depth === 0 || this.layout === 'org'
+        const fator = centrada ? 2 : eLg.side === -1 ? -1 : 1
+        this.down = { type: 'larg', id: eLg.id, sx, sy, w0: eLg.w - eLg.pad.x * 2, fator }
+        this.container.setPointerCapture(ev.pointerId)
+        return
+      }
       const rd = this.somenteLeitura ? null : (ev.target as Element).closest?.('[data-redim]') as HTMLElement | null
       const eRd = rd ? this.L.get(rd.dataset.redim!) : null
       if (eRd?.midia) {
@@ -704,6 +750,16 @@ export class MotorMapaMental {
       }
       if (!this.down) return
       const dx = sx - this.down.sx, dy = sy - this.down.sy
+      if (this.down.type === 'larg') {
+        const n = this.byId.get(this.down.id!)
+        if (!n) return
+        const largura = larguraTextoValida(this.down.w0! + (dx * this.down.fator!) / this.view.k)!
+        if (largura === n.estilo?.largura) return
+        if (!this.down.mudou) { this.snapshot(); this.down.mudou = true }
+        n.estilo = { ...n.estilo, largura }
+        this.relayout({ instant: true })
+        return
+      }
       if (this.down.type === 'redim') {
         const n = this.byId.get(this.down.id!)
         if (!n?.imagem) return

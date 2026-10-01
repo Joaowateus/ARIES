@@ -51,6 +51,10 @@ export function fonteCss(e: Pick<NoLayout, 'it' | 'fw' | 'fs' | 'fam'>): string 
 export function larguraImagemValida(l: unknown): number | null {
   return typeof l === 'number' && Number.isFinite(l) ? Math.round(Math.min(MIDIA.maxLargura, Math.max(MIDIA.minLargura, l))) : null
 }
+// Largura do texto escolhida na ideia (entre 80 e 1000).
+export function larguraTextoValida(l: unknown): number | null {
+  return typeof l === 'number' && Number.isFinite(l) ? Math.round(Math.min(1000, Math.max(80, l))) : null
+}
 function medidaImagem(w: number, h: number, maxW: number, largura?: number): { w: number; h: number } {
   const ow = w > 0 ? w : maxW, oh = h > 0 ? h : maxW * 0.66
   const escolhida = larguraImagemValida(largura)
@@ -103,7 +107,8 @@ export function buildLayout(tree: NoArvore, layout: Layout, tema: Tema, balanced
     const fundo = corSegura(est.fundo)
     // Com cor de fundo, a ideia vira um "cartão": precisa de respiro em volta.
     const pad = fundo && (st === 'text' || st === 'underline') ? PAD.pill : PAD[st]
-    const maxW = depth === 0 ? Math.max(MAXW[layout], 260) : MAXW[layout]
+    const larguraFixa = larguraTextoValida(est.largura)
+    const maxW = larguraFixa ?? (depth === 0 ? Math.max(MAXW[layout], 260) : MAXW[layout])
     const { lines, w } = wrap(n.text || ' ', fonteCss({ it, fw, fs, fam }), maxW)
 
     // Mídia: imagem enviada, ou capa do vídeo quando o link é do YouTube.
@@ -123,7 +128,7 @@ export function buildLayout(tree: NoArvore, layout: Layout, tema: Tema, balanced
       const texto = `↗ ${(n.link?.titulo || (yt ? 'Vídeo no YouTube' : dominioDe(url))).slice(0, 40)}`
       chip = { texto, w: Math.ceil(wrap(texto, `600 12px ${FONTES.sans}`, 400).w) + 16, url }
     }
-    const larguraConteudo = Math.max(Math.ceil(w), midia?.w ?? 0, chip?.w ?? 0)
+    const larguraConteudo = Math.max(larguraFixa ?? 0, Math.ceil(w), midia?.w ?? 0, chip?.w ?? 0)
     const altMidia = midia ? midia.h + MIDIA.gap : 0
     const altChip = chip ? MIDIA.chipH + MIDIA.chipGap : 0
     M.set(n.id, {

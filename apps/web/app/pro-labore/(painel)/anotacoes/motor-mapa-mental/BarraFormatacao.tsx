@@ -4,7 +4,7 @@
 // formatação do texto, cor de fundo, imagem (enviar do computador ou colar
 // o link), link (do YouTube mostra a capa do vídeo) e "Conectar" — liga a
 // ideia selecionada a qualquer outra com uma seta tracejada.
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { proLaboreApi } from '@/lib/proLaboreApi'
 import type { CamposNo, EstadoMotor, MotorMapaMental } from './motor'
 import { idYoutube, urlSegura, type EstiloTexto, type FonteNo, type TamanhoNo } from './dados'
@@ -96,6 +96,59 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
     return () => document.removeEventListener('mousedown', fora)
   }, [painel])
 
+  // Print/imagem copiada: Ctrl+V com o mapa em foco cola na ideia
+  // selecionada (se ela já tem imagem, vira uma ideia nova, filha dela).
+  const [colando, setColando] = useState(false)
+  const [avisoColar, setAvisoColar] = useState('')
+  const colarImagem = useCallback(async (arquivo: File) => {
+    const motor = obterMotor()
+    const alvo = motor?.idSelecionado()
+    if (!motor || !alvo) return
+    setColando(true); setAvisoColar('')
+    try {
+      const { blob, w, h } = await prepararImagem(arquivo)
+      const src = await proLaboreApi.imagens.enviar(blob)
+      const m = obterMotor()
+      if (!m) return
+      if (m.temImagem(alvo)) m.adicionarFilhoCom(alvo, { imagem: { src, w, h } })
+      else m.atualizarNo(alvo, { imagem: { src, w, h } })
+    } catch (e) {
+      setAvisoColar((e as Error).message)
+    } finally {
+      setColando(false)
+    }
+  }, [obterMotor])
+  useEffect(() => {
+    const aoColar = (ev: ClipboardEvent) => {
+      const motor = obterMotor()
+      const alvo = ev.target as Node | null
+      if (!motor || !(motor.contem(alvo) || alvo === document.body)) return
+      const item = [...(ev.clipboardData?.items ?? [])].find(i => i.kind === 'file' && i.type.startsWith('image/'))
+      const arquivo = item?.getAsFile()
+      if (!arquivo) return
+      ev.preventDefault()
+      void colarImagem(arquivo)
+    }
+    document.addEventListener('paste', aoColar)
+    return () => document.removeEventListener('paste', aoColar)
+  }, [obterMotor, colarImagem])
+  async function colarDaArea() {
+    setErro('')
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const tipo = item.types.find(t => t.startsWith('image/'))
+        if (!tipo) continue
+        const blob = await item.getType(tipo)
+        setPainel(null)
+        await colarImagem(new File([blob], 'print.png', { type: tipo }))
+        return
+      }
+      setErro('Não tem imagem copiada. Tire o print (ou copie uma imagem) e tente de novo.')
+    } catch {
+      setErro('O navegador não deixou ler a área de transferência — clique no mapa e aperte Ctrl+V.')
+    }
+  }
+
   const aplicar = (c: CamposNo) => obterMotor()?.atualizarSelecionado(c)
   const estilo = (patch: Partial<EstiloTexto>) => {
     const novo: EstiloTexto = { ...est, ...patch }
@@ -163,6 +216,12 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
 
   return (
     <div className="pl-mf-barra" ref={raizRef} onPointerDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      {(colando || avisoColar) && (
+        <div className={`pl-mf-colando ${avisoColar ? 'erro' : ''}`} role="status">
+          {colando ? 'Colando imagem…' : avisoColar}
+          {avisoColar && <button type="button" onClick={() => setAvisoColar('')} aria-label="Fechar">×</button>}
+        </div>
+      )}
       <button type="button" className={painel === 'texto' ? 'ativo' : ''} onClick={() => abrir('texto')} title="Texto: fonte, negrito, itálico, tamanho e cor" aria-expanded={painel === 'texto'}>
         <IconeTexto cor={est.cor} />
       </button>
@@ -198,6 +257,11 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
               </button>
             ))}
           </div>
+          <div className="pl-mf-titulo">Largura do texto</div>
+          <div className="pl-mf-largura">
+            <span>{est.largura ? `${est.largura}px` : 'Automática'}</span>
+            {est.largura ? <button type="button" onClick={() => estilo({ largura: undefined })}>Voltar ao automático</button> : <small>arraste a alça ⟷ na lateral da ideia</small>}
+          </div>
           <div className="pl-mf-titulo">Cor do texto</div>
           <div className="pl-mf-cores">
             <button type="button" className={`auto ${!est.cor ? 'ativo' : ''}`} onClick={() => estilo({ cor: undefined })} title="Cor do tema" aria-label="Cor do tema" />
@@ -221,7 +285,9 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
       {painel === 'imagem' && (
         <div className="pl-mf-pop pl-mf-pop-largo" role="dialog" aria-label="Imagem">
           <input ref={arquivoRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={e => void enviarArquivo(e.target.files?.[0])} />
-          <button type="button" className="pl-btn pl-btn-primary pl-mf-btn" disabled={enviando} onClick={() => arquivoRef.current?.click()}>{enviando ? 'Enviando…' : 'Enviar do computador'}</button>
+          <button type="button" className="pl-btn pl-btn-primary pl-mf-btn" disabled={enviando || colando} onClick={() => arquivoRef.current?.click()}>{enviando ? 'Enviando…' : 'Enviar do computador'}</button>
+          <button type="button" className="pl-btn pl-btn-ghost pl-mf-btn pl-mf-btn-colar" disabled={enviando || colando} onClick={() => void colarDaArea()}>{colando ? 'Colando…' : 'Colar print copiado'}</button>
+          <div className="pl-mf-dica">Atalho: tire o print e aperte <kbd>Ctrl</kbd>+<kbd>V</kbd> com a ideia selecionada.{no.imagem ? ' Como esta ideia já tem imagem, o print vira uma ideia nova ligada a ela.' : ''}</div>
           <div className="pl-mf-ou">ou cole o link de uma imagem</div>
           <div className="pl-mf-linha-input">
             <input className="pl-input" placeholder="https://…/imagem.jpg" value={urlImagem} onChange={e => setUrlImagem(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void usarLinkImagem() }} />
