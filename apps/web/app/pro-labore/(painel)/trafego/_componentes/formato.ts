@@ -29,5 +29,6 @@ export function tempoDesde(iso: string | null): string {
   return d === 1 ? 'ontem' : `há ${d} dias`
 }
 export const ROTULO_RESULTADO: Record<string, string> = { conversas: 'conversas', leads: 'leads', lpv: 'visualizações', cliquesLink: 'cliques' }
+export const SINGULAR_RESULTADO: Record<string, string> = { conversas: 'conversa', leads: 'lead', lpv: 'visualização', cliquesLink: 'clique' }
 // "Leads no CRM" -> "leads no CRM" (só a primeira letra, preserva siglas).
 export const minuscula = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)

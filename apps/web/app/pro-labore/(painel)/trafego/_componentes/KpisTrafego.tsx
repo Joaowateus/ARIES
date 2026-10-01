@@ -59,8 +59,12 @@ export default function KpisTrafego({ analise }: { analise: AnaliseTrafego }) {
       {t.leads > 0 && <Kpi rotulo="CPL (Meta)" valor={moeda(d.cpl, c)} nota={`${num(t.leads)} leads de formulário/site`} atual={d.cpl} anterior={da.cpl} bom="desce" />}
       {crm.leads != null && <Kpi rotulo="Leads no CRM" valor={num(crm.leads)} nota={crm.somenteTrafego ? 'Marcados como “Tráfego”' : 'Todos os cadastrados'} atual={crm.leads} anterior={crm.leadsAnterior} bom="sobe" />}
       {crm.leads != null && <Kpi rotulo="Custo por lead (CRM)" valor={moeda(crm.custoReal, c)} nota="Investimento ÷ leads no CRM" atual={crm.custoReal} anterior={crm.leadsAnterior ? ta.gasto / crm.leadsAnterior : null} bom="desce" destaque />}
+      {t.conversasProf2 > 0 && <Kpi rotulo="Conversas engajadas" valor={pct(d.taxaConversaEngajada)} nota={`${num(t.conversasProf2)} com 2+ mensagens · ${moeda(d.custoConversaEngajada, c)} cada`} atual={d.taxaConversaEngajada} anterior={da.taxaConversaEngajada} bom="sobe" pontos />}
+      {t.cliquesSaida > 0 && <Kpi rotulo="CTR de saída" valor={pct(d.ctrSaida, 2)} nota={`${num(t.cliquesSaida)} cliques que saíram da Meta`} atual={d.ctrSaida} anterior={da.ctrSaida} bom="sobe" pontos />}
+      {t.engajamento > 0 && <Kpi rotulo="Engajamento" valor={pct(d.taxaEngajamento, 2)} nota={`${compacto(t.engajamento)} interações · ${num(t.comentarios)} comentários · ${num(t.salvamentos)} salvos`} atual={d.taxaEngajamento} anterior={da.taxaEngajamento} bom="sobe" pontos />}
       {temVideo && <Kpi rotulo="Hook rate" valor={pct(d.hookRate)} nota="Pararam 3s no vídeo ÷ impressões" atual={d.hookRate} anterior={da.hookRate} bom="sobe" pontos />}
       {temVideo && <Kpi rotulo="Hold rate" valor={pct(d.holdRate)} nota="Assistiram (ThruPlay) ÷ pararam 3s" atual={d.holdRate} anterior={da.holdRate} bom="sobe" pontos />}
+      {temVideo && d.tempoMedioVideo != null && <Kpi rotulo="Tempo médio no vídeo" valor={`${d.tempoMedioVideo.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}s`} nota="Quanto cada reprodução durou, em média" atual={d.tempoMedioVideo} anterior={da.tempoMedioVideo} bom="sobe" />}
     </div>
   )
 }

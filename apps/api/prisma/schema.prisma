@@ -2013,6 +2013,12 @@ model TrafegoConta {
   // Etapas do funil que aparecem (null = automático, pelas que têm dado),
   // metas por etapa e se "Leads no CRM" conta só os marcados como Tráfego.
   configuracao          Json?
+  // Versão do formato dos insights guardados: quando sobe (métricas novas),
+  // o histórico é puxado de novo.
+  versaoDados           Int       @default(1)
+  // Última leitura de campanhas/conjuntos/anúncios (status, orçamento,
+  // público, criativo).
+  estruturaEm           DateTime?
   atualizadoEm          DateTime  @updatedAt
 
   insights TrafegoInsightDiario[]
@@ -2048,6 +2054,22 @@ model TrafegoInsightDiario {
   videoP50      Int      @default(0)
   videoP75      Int      @default(0)
   videoP100     Int      @default(0)
+  videoP95      Int      @default(0)
+  videoPlays    Int      @default(0)
+  // Soma de (tempo médio assistido × reproduções), em segundos: dividida
+  // pelas reproduções do período dá o tempo médio.
+  videoTempoTotal Float  @default(0)
+  cliquesSaida  Int      @default(0)
+  engajamento   Int      @default(0)
+  reacoes       Int      @default(0)
+  comentarios   Int      @default(0)
+  compartilhamentos Int  @default(0)
+  salvamentos   Int      @default(0)
+  // Conversas em que a pessoa mandou 2, 3 e 5+ mensagens; e bloqueios.
+  conversasProf2 Int     @default(0)
+  conversasProf3 Int     @default(0)
+  conversasProf5 Int     @default(0)
+  bloqueios     Int      @default(0)
   atualizadoEm  DateTime @updatedAt
 
   conta TrafegoConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
@@ -2075,8 +2097,42 @@ model TrafegoAlcance {
   @@map("pro_labore_trafego_alcance")
 }
 
-// Imagens enviadas pra dentro dos mapas mentais (já reduzidas no navegador,
-// até ~700 KB). Servidas por GET público pela `chave` (aleatória, longa):
+// Campanhas, conjuntos e anúncios como estão agora no Gerenciador: status,
+// orçamento, otimização, público (resumo do direcionamento), fase de
+// aprendizado, criativo (miniatura, texto, chamada) e ranking de qualidade.
+model TrafegoEstrutura {
+  id           String   @id @default(cuid())
+  contaId      String
+  tipo         String // campanha | conjunto | anuncio
+  objetoId     String
+  nome         String
+  status       String?
+  dados        Json
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([contaId, tipo, objetoId])
+  @@index([contaId, tipo])
+  @@map("pro_labore_trafego_estrutura")
+}
+
+// Quebras por público de um período (idade/gênero, região, posicionamento,
+// dispositivo, horário), no nível de conjunto — o filtro de campanha/
+// conjunto é aplicado na hora. Vem da Meta sob demanda e fica guardado.
+model TrafegoPublicoCache {
+  id           String   @id @default(cuid())
+  contaId      String
+  inicio       DateTime @db.Date
+  fim          DateTime @db.Date
+  tipo         String
+  linhas       Json
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([contaId, inicio, fim, tipo])
+  @@map("pro_labore_trafego_publicos")
+}
+
+// Imagens enviadas pra dentro dos mapas mentais (o arquivo original, até
+// 4 MB; só as maiores chegam reduzidas pelo navegador). Servidas por GET público pela `chave` (aleatória, longa):
 // a tag <img> não manda o token de login.
 model ImagemUpload {
   id        String   @id @default(cuid())
