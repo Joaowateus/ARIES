@@ -3,7 +3,8 @@
 // curva/cotovelo, mesma exceção da raiz (as curvas nascem na borda da
 // elipse, na direção de cada filho — não num ponto de junção compartilhado
 // como os nós não-raiz).
-import { G, RED } from './constantes'
+import { G, MIDIA, RED } from './constantes'
+import type { Ligacao } from './dados'
 import type { MapaLayout, NoLayout } from './layoutMotor'
 import type { Layout } from './layoutMotor'
 import type { Tema } from './temas'
@@ -120,6 +121,8 @@ export function junctionSvg(layout: Layout, e: NoLayout, disp: Map<string, Ponto
 
 /* ---------- Nós ---------- */
 export const esc = (s: unknown): string => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// Pra valores dentro de atributo (URL, nome de fonte): aspas também.
+export const escAttr = (s: unknown): string => esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 export function hexA(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16)
   return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`
@@ -130,7 +133,7 @@ export function lum(hex: string): number {
   return .2126 * r + .7152 * g + .0722 * b
 }
 
-export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts: { sel: string | null; dropTarget: string | null; dragging: string | null; editing: string | null }): string {
+export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts: { sel: string | null; dropTarget: string | null; dragging: string | null; editing: string | null; uid?: string }): string {
   const p = disp.get(e.id)!, c = e.depth ? col(e, tema) : tema.text
   let s = `<g data-node="${e.id}" style="cursor:pointer"${opts.dragging === e.id ? ' opacity="0.35"' : ''}>`
   if (opts.sel === e.id)
@@ -138,7 +141,11 @@ export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts:
   if (opts.dropTarget === e.id)
     s += `<rect x="${f(p.x - 7)}" y="${f(p.y - 7)}" width="${f(e.w + 14)}" height="${f(e.h + 14)}" rx="10" fill="${tema.sel}" fill-opacity="0.14" stroke="${tema.sel}" stroke-width="2" stroke-dasharray="5 4"/>`
   let tc = e.depth === 0 ? tema.rootText : tema.text
-  if (e.st === 'pill') {
+  if (e.fundo) {
+    // Cor de fundo escolhida na ideia: vira um cartão, com o texto contrastando.
+    s += `<rect x="${f(p.x)}" y="${f(p.y)}" width="${e.w}" height="${e.h}" rx="${Math.min(e.h / 2, 14)}" fill="${e.fundo}"/>`
+    tc = lum(e.fundo) > .6 ? '#1b1e24' : '#ffffff'
+  } else if (e.st === 'pill') {
     const fill = e.depth === 0 ? tema.rootFill : e.depth === 1 ? c : hexA(c, .2)
     if (e.depth <= 1) tc = lum(e.depth === 0 ? tema.rootFill! : c) > .6 ? '#1b1e24' : '#ffffff'
     s += `<rect x="${f(p.x)}" y="${f(p.y)}" width="${e.w}" height="${e.h}" rx="${Math.min(e.h / 2, 16)}" fill="${fill}"/>`
@@ -149,12 +156,102 @@ export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts:
     if (e.st === 'underline' && e.depth > 0)
       s += `<line x1="${f(p.x)}" x2="${f(p.x + e.w)}" y1="${f(p.y + e.h)}" y2="${f(p.y + e.h)}" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`
   }
+  if (e.cor) tc = e.cor
+
+  if (e.midia) {
+    const m = e.midia, mx = p.x + (e.w - m.w) / 2, my = p.y + e.pad.y
+    const cid = `${opts.uid ?? 'm'}-c-${e.id}`
+    s += `<clipPath id="${cid}"><rect x="${f(mx)}" y="${f(my)}" width="${m.w}" height="${m.h}" rx="8"/></clipPath>` +
+      `<rect x="${f(mx)}" y="${f(my)}" width="${m.w}" height="${m.h}" rx="8" fill="${hexA(tema.text.length === 7 ? tema.text : '#888888', .06)}"/>` +
+      `<image href="${escAttr(m.src)}" x="${f(mx)}" y="${f(my)}" width="${m.w}" height="${m.h}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${cid})"/>`
+    if (m.tipo === 'youtube' && m.url) {
+      const cx = mx + m.w / 2, cy = my + m.h / 2
+      s += `<g data-link="${escAttr(m.url)}" style="cursor:pointer"><title>Abrir o vídeo no YouTube</title>` +
+        `<rect x="${f(cx - 26)}" y="${f(cy - 18)}" width="52" height="36" rx="10" fill="#ff0033" fill-opacity="0.92"/>` +
+        `<path d="M${f(cx - 7)} ${f(cy - 10)} L${f(cx + 11)} ${f(cy)} L${f(cx - 7)} ${f(cy + 10)} Z" fill="#ffffff"/></g>`
+    }
+  }
+
   if (opts.editing !== e.id) {
-    s += `<text font-size="${e.fs}" font-weight="${e.fw}" fill="${tc}">` +
-      e.lines.map((ln, i) => `<tspan x="${f(p.x + e.pad.x)}" y="${f(p.y + e.pad.y + i * e.lh + e.lh / 2)}" dominant-baseline="central">${esc(ln)}</tspan>`).join('') +
+    s += `<text font-size="${e.fs}" font-weight="${e.fw}" font-family="${escAttr(e.fam)}"${e.it ? ' font-style="italic"' : ''} fill="${tc}">` +
+      e.lines.map((ln, i) => `<tspan x="${f(p.x + e.pad.x)}" y="${f(p.y + e.topoTexto + i * e.lh + e.lh / 2)}" dominant-baseline="central">${esc(ln)}</tspan>`).join('') +
       `</text>`
   }
+
+  if (e.chip) {
+    const cc = e.depth ? c : tema.sel
+    const cy = p.y + e.topoTexto + e.lines.length * e.lh + MIDIA.chipGap
+    s += `<g data-link="${escAttr(e.chip.url)}" style="cursor:pointer"><title>Abrir ${escAttr(e.chip.url)}</title>` +
+      `<rect x="${f(p.x + e.pad.x)}" y="${f(cy)}" width="${e.chip.w}" height="${MIDIA.chipH}" rx="${MIDIA.chipH / 2}" fill="${hexA(cc, .14)}"/>` +
+      `<text x="${f(p.x + e.pad.x + 8)}" y="${f(cy + MIDIA.chipH / 2)}" dominant-baseline="central" font-size="12" font-weight="600" fill="${e.fundo ? tc : cc}">${esc(e.chip.texto)}</text></g>`
+  }
   return s + '</g>'
+}
+
+/* ---------- Conexões livres entre ideias ---------- */
+// Ponto na borda do retângulo da ideia, na direção do outro ponto.
+function naBorda(e: NoLayout, p: Ponto, alvo: Ponto): Ponto {
+  const cx = p.x + e.w / 2, cy = p.y + e.h / 2
+  const dx = alvo.x - cx, dy = alvo.y - cy
+  if (!dx && !dy) return { x: cx, y: cy }
+  const esc2 = Math.min(dx ? (e.w / 2 + 6) / Math.abs(dx) : Infinity, dy ? (e.h / 2 + 6) / Math.abs(dy) : Infinity)
+  return { x: cx + dx * esc2, y: cy + dy * esc2 }
+}
+
+function curvaLigacao(a: Ponto, b: Ponto, centro?: Ponto): { d: string; meio: Ponto } {
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+  const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy) || 1
+  // Arco bem visível (mínimo 46px), curvando pro lado de FORA do mapa —
+  // longe da ideia central — pra não passar por cima das ideias vizinhas.
+  const k = Math.min(160, Math.max(46, dist * 0.35))
+  const nx = -dy / dist, ny = dx / dist
+  let sinal = 1
+  if (centro) {
+    const d1 = Math.hypot(mx + nx * k - centro.x, my + ny * k - centro.y)
+    const d2 = Math.hypot(mx - nx * k - centro.x, my - ny * k - centro.y)
+    sinal = d1 >= d2 ? 1 : -1
+  }
+  const ctrl = { x: mx + nx * k * sinal, y: my + ny * k * sinal }
+  return {
+    d: `M${f(a.x)} ${f(a.y)} Q${f(ctrl.x)} ${f(ctrl.y)} ${f(b.x)} ${f(b.y)}`,
+    meio: { x: 0.25 * a.x + 0.5 * ctrl.x + 0.25 * b.x, y: 0.25 * a.y + 0.5 * ctrl.y + 0.25 * b.y },
+  }
+}
+
+export function ligacoesSvg(
+  ligacoes: Ligacao[], L: MapaLayout, disp: Map<string, Ponto>, tema: Tema,
+  o: { uid: string; selecionada: string | null; interativo: boolean; rascunho: { de: string; cursor: Ponto } | null; centro?: Ponto },
+): string {
+  const cor = tema.text.length === 7 ? hexA(tema.text, .55) : tema.text
+  let out = `<defs>` +
+    `<marker id="${o.uid}-seta" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="${cor}"/></marker>` +
+    `<marker id="${o.uid}-seta-sel" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="${tema.sel}"/></marker>` +
+    `</defs>`
+  for (const l of ligacoes) {
+    const ea = L.get(l.de), eb = L.get(l.para)
+    const pa = disp.get(l.de), pb = disp.get(l.para)
+    if (!ea || !eb || !pa || !pb) continue // alguma ponta está num galho recolhido
+    const ca = { x: pa.x + ea.w / 2, y: pa.y + ea.h / 2 }, cb = { x: pb.x + eb.w / 2, y: pb.y + eb.h / 2 }
+    const { d, meio } = curvaLigacao(naBorda(ea, pa, cb), naBorda(eb, pb, ca), o.centro)
+    const sel = o.selecionada === l.id
+    out += P(d, sel ? tema.sel : cor, sel ? 2.4 : 1.8, `stroke-dasharray="6 5" marker-end="url(#${o.uid}-seta${sel ? '-sel' : ''})"`)
+    if (o.interativo) {
+      out += `<path d="${d}" stroke="transparent" stroke-width="16" fill="none" data-ligacao="${l.id}" style="cursor:pointer"><title>Conexão — clique pra selecionar</title></path>`
+      if (sel) {
+        out += `<g data-del-ligacao="${l.id}" style="cursor:pointer"><title>Remover conexão</title>` +
+          `<circle cx="${f(meio.x)}" cy="${f(meio.y)}" r="11" fill="${tema.bg}" stroke="${tema.sel}" stroke-width="2"/>` +
+          P(`M${f(meio.x - 4)} ${f(meio.y - 4)} L${f(meio.x + 4)} ${f(meio.y + 4)} M${f(meio.x + 4)} ${f(meio.y - 4)} L${f(meio.x - 4)} ${f(meio.y + 4)}`, tema.sel, 2) + `</g>`
+      }
+    }
+  }
+  if (o.rascunho) {
+    const e = L.get(o.rascunho.de), p = disp.get(o.rascunho.de)
+    if (e && p) {
+      const a = naBorda(e, p, o.rascunho.cursor)
+      out += P(curvaLigacao(a, o.rascunho.cursor).d, tema.sel, 2, `stroke-dasharray="6 5" marker-end="url(#${o.uid}-seta-sel)"`)
+    }
+  }
+  return out
 }
 
 /* ---------- Faixa do galho (didático) ---------- */

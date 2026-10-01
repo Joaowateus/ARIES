@@ -2074,3 +2074,19 @@ model TrafegoAlcance {
   @@unique([contaId, inicio, fim, chave])
   @@map("pro_labore_trafego_alcance")
 }
+
+// Imagens enviadas pra dentro dos mapas mentais (já reduzidas no navegador,
+// até ~700 KB). Servidas por GET público pela `chave` (aleatória, longa):
+// a tag <img> não manda o token de login.
+model ImagemUpload {
+  id        String   @id @default(cuid())
+  chave     String   @unique
+  usuarioId String
+  mime      String
+  dados     Bytes
+  tamanho   Int
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId])
+  @@map("pro_labore_imagens")
+}

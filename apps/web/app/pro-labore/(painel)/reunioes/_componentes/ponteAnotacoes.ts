@@ -5,6 +5,7 @@ import {
   TIPOS_BLOCO, type ArvoreApresentacao, type Bloco, type BoardConector, type BoardObjeto, type ConfiguracaoApresentacao,
 } from '@/lib/proLaboreApi'
 import { arvoreParaObjetosBoard, boardParaArvore } from '../../anotacoes/motor-mapa-mental/conversao'
+import type { NoArvore } from '../../anotacoes/motor-mapa-mental/dados'
 
 const TEMAS_MOTOR = ['meister', 'prism', 'ocean', 'sunset', 'noite']
 // Limites da API de Anotações (ver mapaMentalSchema no backend).
@@ -38,11 +39,22 @@ export function apresentacaoParaMapa(arvore: ArvoreApresentacao, cfg: Configurac
 export function mapaParaApresentacao(objetos: BoardObjeto[], conectores: BoardConector[], configuracao: Record<string, unknown> | null | undefined) {
   const { tree } = boardParaArvore(objetos, conectores)
   let n = 0
-  // Ids novos e curtos (n1, n2…), no formato que o motor espera.
-  const renumerar = (no: ArvoreApresentacao): ArvoreApresentacao => ({
-    id: `n${++n}`, text: no.text.slice(0, 2000), collapsed: no.collapsed, children: no.children.map(renumerar),
-  })
+  const novoId = new Map<string, string>()
+  // Ids novos e curtos (n1, n2…), no formato que o motor espera — levando
+  // junto formatação, imagem e link de cada ideia.
+  const renumerar = (no: NoArvore): ArvoreApresentacao => {
+    const id = `n${++n}`
+    novoId.set(no.id, id)
+    return {
+      id, text: no.text.slice(0, 2000), collapsed: no.collapsed, children: no.children.map(renumerar),
+      ...(no.estilo ? { estilo: no.estilo } : {}), ...(no.imagem ? { imagem: no.imagem } : {}), ...(no.link ? { link: no.link } : {}),
+    }
+  }
   const arvore = renumerar(tree)
+  const ligacoes = (tree.ligacoes ?? [])
+    .filter(l => novoId.has(l.de) && novoId.has(l.para))
+    .map(l => ({ id: l.id, de: novoId.get(l.de)!, para: novoId.get(l.para)! }))
+  if (ligacoes.length) (arvore as ArvoreApresentacao & { ligacoes?: typeof ligacoes }).ligacoes = ligacoes
   const layout = configuracao?.layout
   const tema = typeof configuracao?.temaMotor === 'string' ? configuracao.temaMotor : 'meister'
   return {
