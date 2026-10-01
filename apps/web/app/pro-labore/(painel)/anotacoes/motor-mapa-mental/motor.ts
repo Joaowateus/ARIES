@@ -10,7 +10,7 @@
 import {
   addChild as addChildArvore, addSibling as addSiblingArvore, criarFabricaDeNos, isInside,
   maxId as maxIdArvore, type NoArvore, reindexar, removeNode as removeNodeArvore, reparent as reparentArvore,
-  toggleCollapse, urlSegura, type EstiloTexto, type ImagemNo, type LinkNo,
+  toggleCollapse, urlSegura, soTexto, CAMPOS_TEXTO, type EstiloTexto, type ImagemNo, type LinkNo,
 } from './dados'
 import { buildLayout, larguraImagemValida, larguraTextoValida, type Layout, type MapaLayout } from './layoutMotor'
 import { bandSvg, col, connectorsFor, esc, junctionSvg, ligacoesSvg, lum, nodeSvg } from './conectores'
@@ -31,6 +31,8 @@ export interface EstadoMotor {
   podeExcluirSelecionado: boolean
   // Formatação/mídia da ideia selecionada (pra barra de formatação).
   noSelecionado: { estilo: EstiloTexto; imagem: ImagemNo | null; link: LinkNo | null } | null
+  // Formatação de texto com que as ideias novas nascem.
+  estiloNovas: EstiloTexto | null
   // Modo "conectar": esperando o clique na ideia de destino.
   ligando: boolean
   ligacaoSelecionada: string | null
@@ -227,14 +229,42 @@ export class MotorMapaMental {
   adicionarFilhoCom(paiId: string, campos: CamposNo, texto = ''): string | null {
     if (this.somenteLeitura || !this.byId.has(paiId)) return null
     this.snapshot()
-    const c = this.fabrica.mk(texto)
-    for (const k of ['estilo', 'imagem', 'link'] as const) if (campos[k]) (c as unknown as Record<string, unknown>)[k] = campos[k]
+    const c = this.novoNo(texto)
+    if (campos.estilo) c.estilo = { ...c.estilo, ...campos.estilo }
+    if (campos.imagem) c.imagem = campos.imagem
+    if (campos.link) c.link = campos.link
     addChildArvore(this.byId, paiId, c)
     this.sel = c.id
     this.relayout({ reveal: true })
     return c.id
   }
   idSelecionado(): string | null { return this.sel ?? null }
+  // Formatação de texto das próximas ideias (null volta ao padrão do tema).
+  definirEstiloNovas(e: EstiloTexto | null): void {
+    if (this.somenteLeitura) return
+    const limpo = soTexto(e)
+    const atual = JSON.stringify(this.tree.estiloNovas ?? {})
+    if (JSON.stringify(limpo) === atual) return
+    if (Object.keys(limpo).length) this.tree.estiloNovas = limpo; else delete this.tree.estiloNovas
+    this.relayout({ instant: true })
+  }
+  // Aplica a formatação das ideias novas em todas as que já existem.
+  aplicarEstiloNovasEmTodas(): void {
+    if (this.somenteLeitura) return
+    const novas = soTexto(this.tree.estiloNovas)
+    this.snapshot()
+    const passar = (n: NoArvore) => {
+      const resto: EstiloTexto = { ...(n.estilo ?? {}) }
+      for (const k of CAMPOS_TEXTO) delete resto[k]
+      const final = { ...resto, ...novas }
+      if (Object.keys(final).length) n.estilo = final; else delete n.estilo
+      n.children.forEach(passar)
+    }
+    passar(this.tree)
+    this.relayout({ instant: true })
+    // O botão da barra some ao fechar o painel: o foco volta pro mapa (Ctrl+Z).
+    this.container.focus({ preventScroll: true })
+  }
   temImagem(id: string): boolean { return !!this.byId.get(id)?.imagem }
   // O elemento está dentro do mapa? (pra decidir se um Ctrl+V é pra cá)
   contem(el: Node | null): boolean { return !!el && this.container.contains(el) }
@@ -523,10 +553,17 @@ export class MotorMapaMental {
   }
 
   /* ---------- Ações na árvore ---------- */
+  // Ideia nova já com a formatação de texto escolhida por último.
+  private novoNo(texto: string): NoArvore {
+    const c = this.fabrica.mk(texto)
+    const e = this.tree.estiloNovas
+    if (e && Object.keys(e).length) c.estilo = { ...e }
+    return c
+  }
   private addChild(id: string): void {
     const n = this.byId.get(id); if (!n) return
     this.snapshot()
-    const c = this.fabrica.mk('Nova ideia')
+    const c = this.novoNo('Nova ideia')
     addChildArvore(this.byId, id, c)
     this.sel = c.id
     this.relayout({ reveal: true })
@@ -536,7 +573,7 @@ export class MotorMapaMental {
     const pid = this.parentOf.get(id)
     if (!pid) return this.addChild(id)
     this.snapshot()
-    const c = this.fabrica.mk('Nova ideia')
+    const c = this.novoNo('Nova ideia')
     addSiblingArvore({ byId: this.byId, parentOf: this.parentOf }, id, c)
     this.sel = c.id
     this.relayout({ reveal: true })
@@ -867,6 +904,7 @@ export class MotorMapaMental {
       selecionadoColapsado: !!n && n.collapsed,
       podeExcluirSelecionado: !!this.sel && !!this.parentOf.get(this.sel),
       noSelecionado: n ? { estilo: { ...(n.estilo ?? {}) }, imagem: n.imagem ?? null, link: n.link ?? null } : null,
+      estiloNovas: this.tree.estiloNovas ? { ...this.tree.estiloNovas } : null,
       ligando: !!this.ligandoDe,
       ligacaoSelecionada: this.selLigacao,
     }

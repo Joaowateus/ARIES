@@ -42,7 +42,7 @@ export default function MotorMapaMentalView(props: MotorMapaMentalViewProps) {
     layout: props.layoutInicial, theme: props.temaInicial, balanced: props.doisLadosInicial,
     showBand: false, zoomPct: 100, canUndo: false, canRedo: false,
     selecionadoId: null, selecionadoTemFilhos: false, selecionadoColapsado: false, podeExcluirSelecionado: false,
-    noSelecionado: null, ligando: false, ligacaoSelecionada: null,
+    noSelecionado: null, estiloNovas: null, ligando: false, ligacaoSelecionada: null,
   })
 
   useEffect(() => {

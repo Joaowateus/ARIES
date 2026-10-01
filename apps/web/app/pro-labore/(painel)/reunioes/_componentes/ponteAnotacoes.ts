@@ -55,6 +55,7 @@ export function mapaParaApresentacao(objetos: BoardObjeto[], conectores: BoardCo
     .filter(l => novoId.has(l.de) && novoId.has(l.para))
     .map(l => ({ id: l.id, de: novoId.get(l.de)!, para: novoId.get(l.para)! }))
   if (ligacoes.length) (arvore as ArvoreApresentacao & { ligacoes?: typeof ligacoes }).ligacoes = ligacoes
+  if (tree.estiloNovas) (arvore as ArvoreApresentacao & { estiloNovas?: NoArvore['estiloNovas'] }).estiloNovas = tree.estiloNovas
   const layout = configuracao?.layout
   const tema = typeof configuracao?.temaMotor === 'string' ? configuracao.temaMotor : 'meister'
   return {

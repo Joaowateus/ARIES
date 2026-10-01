@@ -15,6 +15,7 @@ interface DadosNoMapaConversao {
   estilo?: EstiloTexto
   imagem?: ImagemNo
   link?: LinkNo
+  estiloNovas?: EstiloTexto
 }
 
 // Conexões livres entre ideias viram conectores marcados como "relação"
@@ -57,6 +58,8 @@ export function boardParaArvore(objetos: BoardObjeto[], conectores: BoardConecto
     }
   }
   const tree = construir(central.id)
+  const novas = (central.conteudo as DadosNoMapaConversao)?.estiloNovas
+  if (novas && Object.keys(novas).length) tree.estiloNovas = novas
   const ligacoes: Ligacao[] = conectores
     .filter(c => ehRelacao(c) && visitados.has(c.origemId) && visitados.has(c.destinoId))
     .map((c, i) => ({ id: String((c.estilo as { ligacaoId?: string }).ligacaoId ?? `l${i + 1}`), de: c.origemId, para: c.destinoId }))
@@ -78,6 +81,7 @@ export function arvoreParaObjetosBoard(tree: NoArvore, posicoes?: Map<string, { 
         ...(no.estilo && Object.keys(no.estilo).length ? { estilo: no.estilo } : {}),
         ...(no.imagem ? { imagem: no.imagem } : {}),
         ...(no.link ? { link: no.link } : {}),
+        ...(ehCentral && tree.estiloNovas && Object.keys(tree.estiloNovas).length ? { estiloNovas: tree.estiloNovas } : {}),
       },
     })
     no.children.forEach(filho => {
