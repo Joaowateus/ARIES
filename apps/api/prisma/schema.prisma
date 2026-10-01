@@ -2149,3 +2149,17 @@ model ImagemUpload {
   @@index([usuarioId])
   @@map("pro_labore_imagens")
 }
+
+// Preferências de cada pessoa que usa o Pró-Labore (dono ou alguém da
+// equipe): ex. a formatação padrão das ideias nos mapas mentais.
+model PreferenciaProLabore {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  // "dono:<id>" ou "vendedor:<id>" (mesma chave das apresentações)
+  pessoa       String
+  dados        Json
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([usuarioId, pessoa])
+  @@map("pro_labore_preferencias")
+}

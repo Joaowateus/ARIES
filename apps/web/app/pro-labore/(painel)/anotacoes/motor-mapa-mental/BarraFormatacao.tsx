@@ -9,6 +9,7 @@ import { proLaboreApi } from '@/lib/proLaboreApi'
 import type { CamposNo, EstadoMotor, MotorMapaMental } from './motor'
 import { CAMPOS_TEXTO, idYoutube, soTexto, urlSegura, type EstiloTexto, type FonteNo, type TamanhoNo } from './dados'
 import { FONTES } from './constantes'
+import { usePreferenciasMapa } from './preferenciasMapa'
 
 const CORES = ['#3b6cf6', '#0ea5e9', '#12a898', '#2e9e4f', '#84cc16', '#f08a1c', '#ee4f8a', '#a36cf0', '#ffffff', '#8b8f98', '#2a2f38', '#111317']
 const FUNDOS = ['#e8efff', '#e0f2fe', '#ddf6f0', '#e3f5e6', '#fdf3d8', '#fde6d2', '#fde2ec', '#efe5fd', '#3b6cf6', '#12a898', '#ee4f8a', '#2a2f38']
@@ -153,13 +154,38 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
     }
   }
 
+  // Padrão da pessoa (vale em todos os mapas dela) e o "tudo que eu escolher
+  // vira padrão" — guardados no servidor.
+  const { prefs, salvar: salvarPrefs } = usePreferenciasMapa()
+  const automatico = prefs?.padraoAutomatico !== false
+  // obterMotor muda a cada render do pai: guardado num ref pros efeitos
+  // abaixo não rodarem de novo a cada render.
+  const obterMotorRef = useRef(obterMotor)
+  useEffect(() => { obterMotorRef.current = obterMotor })
+  const tornarPadrao = useCallback((e: EstiloTexto) => {
+    const limpo = soTexto(e)
+    const m = obterMotorRef.current()
+    m?.definirEstiloNovas(limpo)
+    m?.definirPadraoPessoa(limpo)
+    salvarPrefs({ estiloMapa: Object.keys(limpo).length ? limpo : null })
+  }, [salvarPrefs])
+  useEffect(() => {
+    if (prefs) obterMotorRef.current()?.definirPadraoPessoa(prefs.estiloMapa ?? null)
+  }, [prefs])
+  // Alça de largura (no mapa) também conta como escolha.
+  useEffect(() => {
+    const m = obterMotorRef.current()
+    m?.definirAoFormatarTexto(automatico ? e => tornarPadrao(e) : null)
+    return () => m?.definirAoFormatarTexto(null)
+  }, [automatico, tornarPadrao])
+
   const aplicar = (c: CamposNo) => obterMotor()?.atualizarSelecionado(c)
   const estilo = (patch: Partial<EstiloTexto>) => {
     const novo: EstiloTexto = { ...est, ...patch }
     for (const k of Object.keys(novo) as Array<keyof EstiloTexto>) if (novo[k] === undefined) delete novo[k]
     aplicar({ estilo: novo })
-    // Mexeu no texto: a formatação escolhida vale pras próximas ideias.
-    if (Object.keys(patch).some(k => (CAMPOS_TEXTO as readonly string[]).includes(k))) obterMotor()?.definirEstiloNovas(soTexto(novo))
+    // Mexeu no texto e o "vira padrão" está ligado: vale pras próximas ideias.
+    if (automatico && Object.keys(patch).some(k => (CAMPOS_TEXTO as readonly string[]).includes(k))) tornarPadrao(soTexto(novo))
   }
   const novas = estado.estiloNovas ?? {}
   const temNovas = Object.keys(novas).length > 0
@@ -167,6 +193,7 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
     novas.fonte && novas.fonte !== 'sans' ? ROTULO_FONTE[novas.fonte] : null,
     novas.negrito ? 'negrito' : null, novas.italico ? 'itálico' : null,
     novas.tamanho === 'p' ? 'pequeno' : novas.tamanho === 'g' ? 'grande' : null,
+    novas.largura ? `largura ${novas.largura}px` : null,
   ].filter(Boolean).join(' · ')
   function abrir(p: Painel) {
     setErro('')
@@ -282,17 +309,21 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
             <label className="pl-mf-custom" title="Outra cor">✎<input type="color" value={est.cor ?? '#3b6cf6'} onChange={e => estilo({ cor: e.target.value })} /></label>
           </div>
           <div className="pl-mf-novas">
+            <label className="pl-mf-auto">
+              <input type="checkbox" checked={automatico} onChange={e => salvarPrefs({ padraoAutomatico: e.target.checked })} />
+              <span>Tudo que eu escolher aqui vira o padrão</span>
+            </label>
+            <small className="pl-mf-auto-nota">{automatico ? 'Vale pras ideias novas em todos os seus mapas. Desligue pra mudar só esta ideia.' : 'Desligado: o que você muda agora vale só pra esta ideia; o padrão fica como está.'}</small>
             <div className="pl-mf-novas-topo">
-              <span>Ideias novas saem assim:</span>
+              <span>Padrão:</span>
               <b style={{ fontFamily: FONTES[novas.fonte ?? 'sans'], fontWeight: novas.negrito ? 700 : 500, fontStyle: novas.italico ? 'italic' : 'normal', color: novas.cor ?? undefined, fontSize: novas.tamanho === 'g' ? 17 : novas.tamanho === 'p' ? 12 : 14 }}>Abc</b>
               <small>{temNovas ? descricaoNovas || 'cor escolhida' : 'padrão do tema'}</small>
             </div>
-            {temNovas && (
-              <div className="pl-mf-novas-acoes">
-                <button type="button" onClick={() => { obterMotor()?.aplicarEstiloNovasEmTodas(); setPainel(null) }} title="Aplica essa formatação em todas as ideias que já existem (Ctrl+Z desfaz)">Aplicar em todas as ideias</button>
-                <button type="button" onClick={() => obterMotor()?.definirEstiloNovas(null)} title="As próximas ideias voltam ao padrão do tema">Voltar ao padrão</button>
-              </div>
-            )}
+            <div className="pl-mf-novas-acoes">
+              {!automatico && <button type="button" onClick={() => tornarPadrao(est)} title="As próximas ideias saem com a formatação desta">Usar esta como padrão</button>}
+              {temNovas && <button type="button" onClick={() => { obterMotor()?.aplicarEstiloNovasEmTodas(); setPainel(null) }} title="Aplica o padrão em todas as ideias deste mapa (Ctrl+Z desfaz)">Aplicar em todas as ideias</button>}
+              {temNovas && <button type="button" onClick={() => tornarPadrao({})} title="As próximas ideias voltam ao estilo normal do tema">Voltar ao padrão do tema</button>}
+            </div>
           </div>
         </div>
       )}
