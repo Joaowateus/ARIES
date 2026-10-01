@@ -1,15 +1,17 @@
-// Imagens dos mapas mentais: o navegador reduz a foto e manda como data URL;
-// aqui confere o tipo pelo conteúdo (não pelo que o cliente diz), guarda e
+// Imagens dos mapas mentais: o navegador manda o arquivo original (só reduz
+// quando passa do limite) como binário puro — sem base64, que aumenta 33% e
+// esbarra no limite do JSON. Aceita ainda o formato antigo (data URL). Aqui confere o tipo pelo conteúdo (não pelo que o cliente diz), guarda e
 // devolve um endereço público com chave aleatória — a tag <img> não envia
 // o token de login, então a chave longa é o que protege.
-import { Router, Request, Response } from 'express'
+import express, { Router, Request, Response } from 'express'
 import crypto from 'crypto'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 
 const router = Router()
-const MAX_BYTES = 700 * 1024
+// A Vercel recusa requisições acima de 4,5 MB; o site manda no máximo 3,5 MB.
+const MAX_BYTES = 4 * 1024 * 1024
 
 function tipoPelaAssinatura(b: Buffer): string | null {
   if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
@@ -19,16 +21,20 @@ function tipoPelaAssinatura(b: Buffer): string | null {
   return null
 }
 
-router.post('/imagens', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const parse = z.object({ dataUrl: z.string().max(1_100_000) }).safeParse(req.body)
-  const m = parse.success ? parse.data.dataUrl.match(/^data:image\/[a-z+]+;base64,([A-Za-z0-9+/=]+)$/) : null
-  if (!m) {
+router.post('/imagens', requireProLaboreAuth, express.raw({ type: 'application/octet-stream', limit: MAX_BYTES }), async (req: Request, res: Response) => {
+  let dados: Buffer | null = null
+  if (Buffer.isBuffer(req.body)) dados = req.body
+  else {
+    const parse = z.object({ dataUrl: z.string().max(1_100_000) }).safeParse(req.body)
+    const m = parse.success ? parse.data.dataUrl.match(/^data:image\/[a-z+]+;base64,([A-Za-z0-9+/=]+)$/) : null
+    if (m) dados = Buffer.from(m[1], 'base64')
+  }
+  if (!dados || !dados.length) {
     res.status(400).json({ error: 'Imagem inválida' })
     return
   }
-  const dados = Buffer.from(m[1], 'base64')
   if (dados.length > MAX_BYTES) {
-    res.status(413).json({ error: 'Imagem grande demais (máx. 700 KB depois de reduzida)' })
+    res.status(413).json({ error: 'Imagem grande demais (máx. 4 MB)' })
     return
   }
   const mime = tipoPelaAssinatura(dados)

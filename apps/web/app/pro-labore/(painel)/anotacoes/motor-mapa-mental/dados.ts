@@ -16,7 +16,9 @@ export interface EstiloTexto {
   fundo?: string // #rrggbb de fundo da ideia
 }
 // Imagem mostrada acima do texto (w/h = tamanho original, pra proporção).
-export interface ImagemNo { src: string; w: number; h: number }
+// w/h: tamanho real do arquivo; largura: tamanho escolhido na ideia (sem
+// ela, o tamanho padrão).
+export interface ImagemNo { src: string; w: number; h: number; largura?: number }
 export interface LinkNo { url: string; titulo?: string }
 // Conexão livre entre duas ideias quaisquer (além do galho pai → filho).
 export interface Ligacao { id: string; de: string; para: string }

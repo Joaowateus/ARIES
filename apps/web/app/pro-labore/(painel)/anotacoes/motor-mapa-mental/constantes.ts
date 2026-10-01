@@ -34,4 +34,4 @@ export const FONTES: Record<'sans' | 'serif' | 'mao' | 'mono', string> = {
 }
 export const ESCALA_TAMANHO = { p: 0.85, m: 1, g: 1.3 } as const
 // Mídia dentro da ideia
-export const MIDIA = { maxW: 220, maxWRaiz: 260, maxH: 240, gap: 8, yt: { w: 224, h: 126 }, chipH: 22, chipGap: 6 } as const
+export const MIDIA = { maxW: 220, maxWRaiz: 260, maxH: 240, minLargura: 80, maxLargura: 1600, gap: 8, yt: { w: 224, h: 126 }, chipH: 22, chipGap: 6 } as const

@@ -2728,6 +2728,8 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-mf-linha { display: flex; align-items: center; gap: 4px; padding-top: 8px; border-top: 1px solid rgba(14,16,30,.08); }
 .pl-mf-linha button { width: 38px; font-size: 16px; }
 .pl-mf-linha .sep { width: 1px; height: 22px; background: rgba(14,16,30,.12); margin: 0 6px; }
+.pl-mf-tamanhos { border-top: 0; padding-top: 2px; }
+.pl-mf-tamanhos button { flex: 1; width: auto; font-size: 13px; font-weight: 700; }
 .pl-mf-titulo { font-size: 12px; font-weight: 700; color: #6b7280; padding-top: 8px; border-top: 1px solid rgba(14,16,30,.08); }
 .pl-mf-pop > .pl-mf-titulo:first-child { border-top: 0; padding-top: 0; }
 .pl-mf-cores { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }

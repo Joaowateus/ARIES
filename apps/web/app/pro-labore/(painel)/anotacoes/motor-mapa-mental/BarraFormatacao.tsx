@@ -13,41 +13,58 @@ import { FONTES } from './constantes'
 const CORES = ['#3b6cf6', '#0ea5e9', '#12a898', '#2e9e4f', '#84cc16', '#f08a1c', '#ee4f8a', '#a36cf0', '#ffffff', '#8b8f98', '#2a2f38', '#111317']
 const FUNDOS = ['#e8efff', '#e0f2fe', '#ddf6f0', '#e3f5e6', '#fdf3d8', '#fde6d2', '#fde2ec', '#efe5fd', '#3b6cf6', '#12a898', '#ee4f8a', '#2a2f38']
 const ROTULO_FONTE: Record<FonteNo, string> = { sans: 'Padrão', serif: 'Serifada', mao: 'Manuscrita', mono: 'Máquina' }
-const LIMITE_BYTES = 640 * 1024
+// A API aceita até 4 MB (a Vercel corta em 4,5); fica uma folga.
+const LIMITE_BYTES = 3.5 * 1024 * 1024
+const LADO_MAXIMO = 4096
+const TIPOS_ACEITOS = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+// Larguras prontas pra imagem na ideia (o puxador no canto ajusta livre).
+const TAMANHOS_IMAGEM: Array<[string, number]> = [['P', 200], ['M', 360], ['G', 560], ['GG', 800]]
 
 type Painel = 'texto' | 'fundo' | 'imagem' | 'link' | null
 
-// Reduz a foto no navegador antes de enviar (lado maior até 1600px, JPEG),
-// pra caber no limite e o mapa abrir rápido.
-async function prepararImagem(arquivo: File): Promise<{ dataUrl: string; w: number; h: number }> {
-  const lerComoDataUrl = (b: Blob) => new Promise<string>((ok, erro) => {
-    const r = new FileReader()
-    r.onload = () => ok(String(r.result)); r.onerror = () => erro(new Error('Não foi possível ler o arquivo'))
-    r.readAsDataURL(b)
-  })
-  const original = await lerComoDataUrl(arquivo)
-  const img = await new Promise<HTMLImageElement>((ok, erro) => {
-    const i = new Image()
-    i.onload = () => ok(i); i.onerror = () => erro(new Error('Esse arquivo não é uma imagem válida'))
-    i.src = original
-  })
-  const w0 = img.naturalWidth, h0 = img.naturalHeight
-  // GIF e PNG pequenos vão como estão (mantém animação/transparência).
-  if ((arquivo.type === 'image/gif' || arquivo.type === 'image/png') && arquivo.size <= LIMITE_BYTES) return { dataUrl: original, w: w0, h: h0 }
-  let lado = 1600
-  for (let tentativa = 0; tentativa < 6; tentativa++) {
-    const esc = Math.min(1, lado / Math.max(w0, h0))
-    const w = Math.max(1, Math.round(w0 * esc)), h = Math.max(1, Math.round(h0 * esc))
-    const canvas = document.createElement('canvas')
-    canvas.width = w; canvas.height = h
-    const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h)
-    ctx.drawImage(img, 0, 0, w, h)
-    const dataUrl = canvas.toDataURL('image/jpeg', tentativa < 2 ? 0.85 : 0.75)
-    if ((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75 <= LIMITE_BYTES) return { dataUrl, w, h }
-    lado = Math.round(lado * 0.75)
+// Manda o arquivo ORIGINAL sempre que cabe (até 3,5 MB e 4096px) — print de
+// tela, gráfico e texto continuam nítidos mesmo com a imagem bem grande na
+// apresentação. Só quando passa disso a imagem é reduzida, e PNG continua
+// PNG (sem perda) enquanto couber.
+async function prepararImagem(arquivo: File): Promise<{ blob: Blob; w: number; h: number }> {
+  const url = URL.createObjectURL(arquivo)
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, erro) => {
+      const i = new Image()
+      i.onload = () => ok(i); i.onerror = () => erro(new Error('Esse arquivo não é uma imagem válida'))
+      i.src = url
+    })
+    const w0 = img.naturalWidth, h0 = img.naturalHeight
+    if (TIPOS_ACEITOS.includes(arquivo.type) && arquivo.size <= LIMITE_BYTES && Math.max(w0, h0) <= LADO_MAXIMO) return { blob: arquivo, w: w0, h: h0 }
+    const comoBlob = (c: HTMLCanvasElement, tipo: string, q?: number) => new Promise<Blob | null>(ok => c.toBlob(ok, tipo, q))
+    let lado = Math.min(2560, Math.max(w0, h0))
+    for (let tentativa = 0; tentativa < 6; tentativa++) {
+      const esc = Math.min(1, lado / Math.max(w0, h0))
+      const w = Math.max(1, Math.round(w0 * esc)), h = Math.max(1, Math.round(h0 * esc))
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')!
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, 0, 0, w, h)
+      if (arquivo.type === 'image/png') {
+        const png = await comoBlob(canvas, 'image/png')
+        if (png && png.size <= LIMITE_BYTES) return { blob: png, w, h }
+      }
+      // WebP guarda transparência e pesa menos; navegador sem WebP devolve PNG.
+      const webp = await comoBlob(canvas, 'image/webp', 0.92)
+      if (webp && webp.type === 'image/webp' && webp.size <= LIMITE_BYTES) return { blob: webp, w, h }
+      const fundo = document.createElement('canvas')
+      fundo.width = w; fundo.height = h
+      const cf = fundo.getContext('2d')!
+      cf.fillStyle = '#ffffff'; cf.fillRect(0, 0, w, h); cf.drawImage(canvas, 0, 0)
+      const jpg = await comoBlob(fundo, 'image/jpeg', 0.92)
+      if (jpg && jpg.size <= LIMITE_BYTES) return { blob: jpg, w, h }
+      lado = Math.round(lado * 0.8)
+    }
+    throw new Error('Imagem grande demais mesmo depois de reduzida')
+  } finally {
+    URL.revokeObjectURL(url)
   }
-  throw new Error('Imagem grande demais mesmo depois de reduzida')
 }
 
 function medidasDoLink(src: string): Promise<{ w: number; h: number }> {
@@ -96,8 +113,8 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
     if (!f) return
     setEnviando(true); setErro('')
     try {
-      const { dataUrl, w, h } = await prepararImagem(f)
-      const src = await proLaboreApi.imagens.enviar(dataUrl)
+      const { blob, w, h } = await prepararImagem(f)
+      const src = await proLaboreApi.imagens.enviar(blob)
       aplicar({ imagem: { src, w, h } })
       setPainel(null)
     } catch (e) {
@@ -210,6 +227,18 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
             <input className="pl-input" placeholder="https://…/imagem.jpg" value={urlImagem} onChange={e => setUrlImagem(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void usarLinkImagem() }} />
             <button type="button" className="pl-btn pl-btn-ghost" disabled={enviando || !urlImagem.trim()} onClick={() => void usarLinkImagem()}>Usar</button>
           </div>
+          {no.imagem && (
+            <>
+              <div className="pl-mf-titulo">Tamanho na ideia</div>
+              <div className="pl-mf-linha pl-mf-tamanhos">
+                {TAMANHOS_IMAGEM.map(([rot, larg]) => (
+                  <button key={rot} type="button" className={no.imagem!.largura === larg ? 'ativo' : ''} onClick={() => aplicar({ imagem: { ...no.imagem!, largura: larg } })} title={`${larg}px de largura`}>{rot}</button>
+                ))}
+                <button type="button" className={!no.imagem.largura ? 'ativo' : ''} onClick={() => aplicar({ imagem: { src: no.imagem!.src, w: no.imagem!.w, h: no.imagem!.h } })} title="Tamanho padrão">Padrão</button>
+              </div>
+              <div className="pl-mf-dica">Ou arraste o puxador no canto da imagem.</div>
+            </>
+          )}
           {no.imagem && <button type="button" className="pl-mf-remover" onClick={() => { aplicar({ imagem: null }); setPainel(null) }}>Remover imagem</button>}
           {erro && <div className="pl-mf-erro">{erro}</div>}
         </div>

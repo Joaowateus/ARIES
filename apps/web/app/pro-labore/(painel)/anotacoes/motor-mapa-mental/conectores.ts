@@ -133,7 +133,7 @@ export function lum(hex: string): number {
   return .2126 * r + .7152 * g + .0722 * b
 }
 
-export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts: { sel: string | null; dropTarget: string | null; dragging: string | null; editing: string | null; uid?: string }): string {
+export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts: { sel: string | null; dropTarget: string | null; dragging: string | null; editing: string | null; uid?: string; redimensionar?: boolean }): string {
   const p = disp.get(e.id)!, c = e.depth ? col(e, tema) : tema.text
   let s = `<g data-node="${e.id}" style="cursor:pointer"${opts.dragging === e.id ? ' opacity="0.35"' : ''}>`
   if (opts.sel === e.id)
@@ -169,6 +169,17 @@ export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts:
       s += `<g data-link="${escAttr(m.url)}" style="cursor:pointer"><title>Abrir o vídeo no YouTube</title>` +
         `<rect x="${f(cx - 26)}" y="${f(cy - 18)}" width="52" height="36" rx="10" fill="#ff0033" fill-opacity="0.92"/>` +
         `<path d="M${f(cx - 7)} ${f(cy - 10)} L${f(cx + 11)} ${f(cy)} L${f(cx - 7)} ${f(cy + 10)} Z" fill="#ffffff"/></g>`
+    }
+    // Puxador pra redimensionar a imagem (só da ideia selecionada, e só pra
+    // quem edita). Nas ideias do lado esquerdo do mapa ele fica no canto
+    // esquerdo, que é pra onde a ideia cresce.
+    if (m.tipo === 'imagem' && opts.redimensionar && opts.sel === e.id) {
+      const esq = e.depth > 0 && e.side === -1
+      const hx = esq ? mx : mx + m.w, hy = my + m.h
+      s += `<rect x="${f(mx)}" y="${f(my)}" width="${m.w}" height="${m.h}" rx="8" fill="none" stroke="${tema.sel}" stroke-width="1.5" pointer-events="none"/>` +
+        `<g data-redim="${e.id}" style="cursor:${esq ? 'nesw' : 'nwse'}-resize"><title>Arraste pra mudar o tamanho</title>` +
+        `<circle cx="${f(hx)}" cy="${f(hy)}" r="14" fill="transparent"/>` +
+        `<circle cx="${f(hx)}" cy="${f(hy)}" r="6.5" fill="#ffffff" stroke="${tema.sel}" stroke-width="2.5"/></g>`
     }
   }
 
