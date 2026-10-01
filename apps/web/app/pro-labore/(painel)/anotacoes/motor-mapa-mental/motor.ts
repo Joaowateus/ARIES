@@ -12,7 +12,7 @@ import {
   maxId as maxIdArvore, type NoArvore, reindexar, removeNode as removeNodeArvore, reparent as reparentArvore,
   toggleCollapse, urlSegura, type EstiloTexto, type ImagemNo, type LinkNo,
 } from './dados'
-import { buildLayout, type Layout, type MapaLayout } from './layoutMotor'
+import { buildLayout, larguraImagemValida, type Layout, type MapaLayout } from './layoutMotor'
 import { bandSvg, col, connectorsFor, esc, junctionSvg, ligacoesSvg, lum, nodeSvg } from './conectores'
 import { FONT } from './constantes'
 import { THEMES, type Tema } from './temas'
@@ -99,7 +99,7 @@ export class MotorMapaMental {
   private byId = new Map<string, NoArvore>()
   private parentOf = new Map<string, string>()
   private pts = new Map<number, Ponto>()
-  private down: { type: 'pan' | 'node'; sx: number; sy: number; tx?: number; ty?: number; id?: string } | null = null
+  private down: { type: 'pan' | 'node' | 'redim'; sx: number; sy: number; tx?: number; ty?: number; id?: string; w0?: number; fator?: number; mudou?: boolean } | null = null
   private pinch: { d: number; k: number } | null = null
   private lastClick = { id: null as string | null, t: 0 }
   private destruido = false
@@ -356,7 +356,7 @@ export class MotorMapaMental {
       rascunho: this.ligandoDe && this.ligCursor ? { de: this.ligandoDe, cursor: this.ligCursor } : null,
       centro: (() => { const r = this.L.get(this.tree.id), q = this.disp.get(this.tree.id); return r && q ? { x: q.x + r.w / 2, y: q.y + r.h / 2 } : undefined })(),
     }))
-    this.L.forEach(e => parts.push(nodeSvg(e, this.disp, th, { sel: this.sel, dropTarget: this.dropTarget, dragging: this.dragging, editing: this.editing, uid: this.uid })))
+    this.L.forEach(e => parts.push(nodeSvg(e, this.disp, th, { sel: this.sel, dropTarget: this.dropTarget, dragging: this.dragging, editing: this.editing, uid: this.uid, redimensionar: !this.somenteLeitura && !this.ligandoDe })))
     this.L.forEach(e => parts.push(junctionSvg(this.layout, e, this.disp, th)))
     if (this.dragging && this.dragPos) {
       const e = this.L.get(this.dragging)!
@@ -673,6 +673,18 @@ export class MotorMapaMental {
         this.down = null; this.dragging = null; this.dropTarget = null; this.container.classList.remove('pl-motor-panning')
         return
       }
+      const rd = this.somenteLeitura ? null : (ev.target as Element).closest?.('[data-redim]') as HTMLElement | null
+      const eRd = rd ? this.L.get(rd.dataset.redim!) : null
+      if (eRd?.midia) {
+        // Quanto a largura muda por pixel arrastado: ideia centralizada (raiz,
+        // organograma) cresce pros dois lados; do lado esquerdo, cresce pra
+        // esquerda.
+        const centrada = eRd.depth === 0 || this.layout === 'org'
+        const fator = centrada ? 2 : eRd.side === -1 ? -1 : 1
+        this.down = { type: 'redim', id: eRd.id, sx, sy, w0: eRd.midia.w, fator }
+        this.container.setPointerCapture(ev.pointerId)
+        return
+      }
       const tg = this.somenteLeitura ? null : (ev.target as HTMLElement).closest('[data-toggle]') as HTMLElement | null
       if (tg) { this.toggle(tg.dataset.toggle!); return }
       const ng = this.somenteLeitura ? null : (ev.target as HTMLElement).closest('[data-node]') as HTMLElement | null
@@ -692,6 +704,16 @@ export class MotorMapaMental {
       }
       if (!this.down) return
       const dx = sx - this.down.sx, dy = sy - this.down.sy
+      if (this.down.type === 'redim') {
+        const n = this.byId.get(this.down.id!)
+        if (!n?.imagem) return
+        const largura = larguraImagemValida(this.down.w0! + (dx * this.down.fator!) / this.view.k)!
+        if (largura === n.imagem.largura) return
+        if (!this.down.mudou) { this.snapshot(); this.down.mudou = true }
+        n.imagem = { ...n.imagem, largura }
+        this.relayout({ instant: true })
+        return
+      }
       if (this.down.type === 'pan') {
         this.view.tx = this.down.tx! + dx; this.view.ty = this.down.ty! + dy; this.render()
         if (Math.hypot(dx, dy) > 3) this.onInteracaoVista?.()

@@ -634,8 +634,10 @@ export const proLaboreApi = {
   },
   // Imagens dos mapas mentais: devolve o endereço público (absoluto).
   imagens: {
-    enviar: (dataUrl: string) =>
-      request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: JSON.stringify({ dataUrl }) }).then(r => `${BASE}${r.caminho}`),
+    // Vai o arquivo em binário puro (sem base64) pra não perder qualidade
+    // nem esbarrar no limite de tamanho do JSON.
+    enviar: (arquivo: Blob) =>
+      request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: arquivo, headers: { 'Content-Type': 'application/octet-stream' } }).then(r => `${BASE}${r.caminho}`),
   },
   // Aba Tráfego (Gerenciador de Anúncios da Meta) — só o dono.
   trafego: {

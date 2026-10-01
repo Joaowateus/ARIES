@@ -46,10 +46,15 @@ export function fonteCss(e: Pick<NoLayout, 'it' | 'fw' | 'fs' | 'fam'>): string 
   return `${e.it ? 'italic ' : ''}${e.fw} ${e.fs}px ${e.fam}`
 }
 
-// Tamanho de exibição da imagem: cabe na largura máxima e numa altura
-// máxima, mantendo a proporção original.
-function medidaImagem(w: number, h: number, maxW: number): { w: number; h: number } {
+// Tamanho de exibição da imagem: o escolhido (puxador/botões) ou, sem
+// escolha, cabe na largura e altura padrão — sempre na proporção original.
+export function larguraImagemValida(l: unknown): number | null {
+  return typeof l === 'number' && Number.isFinite(l) ? Math.round(Math.min(MIDIA.maxLargura, Math.max(MIDIA.minLargura, l))) : null
+}
+function medidaImagem(w: number, h: number, maxW: number, largura?: number): { w: number; h: number } {
   const ow = w > 0 ? w : maxW, oh = h > 0 ? h : maxW * 0.66
+  const escolhida = larguraImagemValida(largura)
+  if (escolhida) return { w: escolhida, h: Math.round(escolhida * (oh / ow)) }
   let dw = Math.min(maxW, ow), dh = dw * (oh / ow)
   if (dh > MIDIA.maxH) { dh = MIDIA.maxH; dw = dh * (ow / oh) }
   return { w: Math.round(dw), h: Math.round(dh) }
@@ -107,7 +112,7 @@ export function buildLayout(tree: NoArvore, layout: Layout, tema: Tema, balanced
     const imgSrc = urlSegura(n.imagem?.src)
     let midia: NoLayout['midia'] = null
     if (imgSrc) {
-      const m = medidaImagem(n.imagem!.w, n.imagem!.h, depth === 0 ? MIDIA.maxWRaiz : MIDIA.maxW)
+      const m = medidaImagem(n.imagem!.w, n.imagem!.h, depth === 0 ? MIDIA.maxWRaiz : MIDIA.maxW, n.imagem!.largura)
       midia = { tipo: 'imagem', src: imgSrc, ...m, url: null }
     } else if (yt) {
       midia = { tipo: 'youtube', src: `https://i.ytimg.com/vi/${yt}/mqdefault.jpg`, w: MIDIA.yt.w, h: MIDIA.yt.h, url }
