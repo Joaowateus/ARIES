@@ -639,6 +639,12 @@ export const proLaboreApi = {
     enviar: (arquivo: Blob) =>
       request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: arquivo, headers: { 'Content-Type': 'application/octet-stream' } }).then(r => `${BASE}${r.caminho}`),
   },
+  // Preferências de quem está usando (valem em qualquer aparelho).
+  preferencias: {
+    obter: () => request<PreferenciasProLabore>('/pro-labore/preferencias'),
+    salvar: (p: { [K in keyof PreferenciasProLabore]?: PreferenciasProLabore[K] | null }) =>
+      request<PreferenciasProLabore>('/pro-labore/preferencias', { method: 'PUT', body: JSON.stringify(p) }),
+  },
   // Aba Tráfego (Gerenciador de Anúncios da Meta) — só o dono.
   trafego: {
     conta: () => request<{ conectada: false } | { conectada: true; conta: ContaTrafego }>('/pro-labore/trafego/conta'),
@@ -1386,6 +1392,14 @@ export interface EstadoPollApresentacao {
   aoVivo: boolean
   conteudo?: ConteudoApresentacao
   palco?: PalcoApresentacao | null
+}
+
+// ---------- Preferências ----------
+export interface PreferenciasProLabore {
+  // Formatação padrão das ideias novas nos mapas mentais.
+  estiloMapa?: { fonte?: 'sans' | 'serif' | 'mao' | 'mono'; negrito?: boolean; italico?: boolean; tamanho?: 'p' | 'm' | 'g'; cor?: string; largura?: number }
+  // Tudo que a pessoa escolhe no painel de texto vira o padrão (padrão: sim).
+  padraoAutomatico?: boolean
 }
 
 // ---------- Tráfego ----------

@@ -42,7 +42,7 @@ export interface NoArvore {
 }
 
 // Campos do painel de texto (os que valem pras ideias novas).
-export const CAMPOS_TEXTO = ['fonte', 'negrito', 'italico', 'tamanho', 'cor'] as const
+export const CAMPOS_TEXTO = ['fonte', 'negrito', 'italico', 'tamanho', 'cor', 'largura'] as const
 export function soTexto(e: EstiloTexto | undefined | null): EstiloTexto {
   const out: EstiloTexto = {}
   for (const k of CAMPOS_TEXTO) if (e?.[k] !== undefined) (out as Record<string, unknown>)[k] = e[k]

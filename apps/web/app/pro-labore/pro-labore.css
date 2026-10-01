@@ -3027,3 +3027,6 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-mf-novas-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
 .pl-mf-novas-acoes button { border: 1px solid rgba(14,16,30,.18); background: #fff; border-radius: 8px; padding: 5px 9px; font-size: 12px; cursor: pointer; color: #1f2430; }
 .pl-mf-novas-acoes button:first-child { background: #1f2430; color: #fff; border-color: #1f2430; }
+.pl-mf-auto { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: #1f2430; cursor: pointer; }
+.pl-mf-auto input { width: 16px; height: 16px; accent-color: #2f6bff; cursor: pointer; }
+.pl-mf-auto-nota { font-size: 11.5px; color: #6b7280; line-height: 1.4; margin-top: -4px; }

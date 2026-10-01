@@ -39,6 +39,7 @@ import proLaboreRoutes from './routes/proLabore'
 import proLaboreApresentacoesRoutes from './routes/proLaboreApresentacoes'
 import proLaboreTrafegoRoutes from './routes/proLaboreTrafego'
 import proLaboreImagensRoutes from './routes/proLaboreImagens'
+import proLaborePreferenciasRoutes from './routes/proLaborePreferencias'
 
 // Setup do Express isolado do listen() — assim o mesmo app serve tanto o
 // servidor tradicional (src/index.ts, usado localmente e em hosts sempre
@@ -164,6 +165,7 @@ app.use('/pro-labore', proLaboreRoutes)
 app.use('/pro-labore', proLaboreApresentacoesRoutes)
 app.use('/pro-labore', proLaboreTrafegoRoutes)
 app.use('/pro-labore', proLaboreImagensRoutes)
+app.use('/pro-labore', proLaborePreferenciasRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

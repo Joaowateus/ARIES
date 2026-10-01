@@ -248,10 +248,21 @@ export class MotorMapaMental {
     if (Object.keys(limpo).length) this.tree.estiloNovas = limpo; else delete this.tree.estiloNovas
     this.relayout({ instant: true })
   }
+  // Padrão da pessoa (das preferências dela); null = usa o do mapa.
+  definirPadraoPessoa(e: EstiloTexto | null): void {
+    const limpo = e ? soTexto(e) : null
+    const novo = limpo && Object.keys(limpo).length ? limpo : null
+    if (JSON.stringify(novo) === JSON.stringify(this.padraoPessoa)) return
+    this.padraoPessoa = novo
+    this.syncChrome()
+  }
+  // Avisado quando a formatação de texto de uma ideia muda fora da barra
+  // (alça de largura), pra barra decidir se vira o padrão.
+  definirAoFormatarTexto(cb: ((estilo: EstiloTexto) => void) | null): void { this.aoFormatarTexto = cb }
   // Aplica a formatação das ideias novas em todas as que já existem.
   aplicarEstiloNovasEmTodas(): void {
     if (this.somenteLeitura) return
-    const novas = soTexto(this.tree.estiloNovas)
+    const novas = this.estiloNovasEfetivo()
     this.snapshot()
     const passar = (n: NoArvore) => {
       const resto: EstiloTexto = { ...(n.estilo ?? {}) }
@@ -556,10 +567,13 @@ export class MotorMapaMental {
   // Ideia nova já com a formatação de texto escolhida por último.
   private novoNo(texto: string): NoArvore {
     const c = this.fabrica.mk(texto)
-    const e = this.tree.estiloNovas
-    if (e && Object.keys(e).length) c.estilo = { ...e }
+    const e = this.estiloNovasEfetivo()
+    if (Object.keys(e).length) c.estilo = { ...e }
     return c
   }
+  // Padrão das ideias novas: o da pessoa (vale em todos os mapas dela) ou,
+  // sem ele, o guardado neste mapa.
+  private estiloNovasEfetivo(): EstiloTexto { return soTexto(this.padraoPessoa ?? this.tree.estiloNovas) }
   private addChild(id: string): void {
     const n = this.byId.get(id); if (!n) return
     this.snapshot()
@@ -650,6 +664,8 @@ export class MotorMapaMental {
   }
   private onResize = (): void => this.render()
   private ultimoCliqueLarg: { id: string | null; t: number } = { id: null, t: 0 }
+  private padraoPessoa: EstiloTexto | null = null
+  private aoFormatarTexto: ((estilo: EstiloTexto) => void) | null = null
   private ouvintes = new AbortController()
 
   private bindEventos(): void {
@@ -746,6 +762,7 @@ export class MotorMapaMental {
             void _l
             if (Object.keys(resto).length) n.estilo = resto; else delete n.estilo
             this.relayout({ instant: true })
+            this.aoFormatarTexto?.(soTexto(n.estilo))
           }
           return
         }
@@ -816,6 +833,10 @@ export class MotorMapaMental {
       if (this.dragging) { this.dragPos = this.toWorld(sx, sy); this.dropTarget = this.hitNode(this.dragPos); this.render() }
     }, sinal)
     const endPointer = (ev: PointerEvent) => {
+      if (this.down?.type === 'larg' && this.down.mudou) {
+        const n = this.byId.get(this.down.id!)
+        if (n) this.aoFormatarTexto?.(soTexto(n.estilo))
+      }
       this.pts.delete(ev.pointerId)
       if (this.pts.size < 2) this.pinch = null
       this.container.classList.remove('pl-motor-panning')
@@ -904,7 +925,7 @@ export class MotorMapaMental {
       selecionadoColapsado: !!n && n.collapsed,
       podeExcluirSelecionado: !!this.sel && !!this.parentOf.get(this.sel),
       noSelecionado: n ? { estilo: { ...(n.estilo ?? {}) }, imagem: n.imagem ?? null, link: n.link ?? null } : null,
-      estiloNovas: this.tree.estiloNovas ? { ...this.tree.estiloNovas } : null,
+      estiloNovas: (() => { const e = this.estiloNovasEfetivo(); return Object.keys(e).length ? e : null })(),
       ligando: !!this.ligandoDe,
       ligacaoSelecionada: this.selLigacao,
     }
