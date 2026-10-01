@@ -183,6 +183,17 @@ export function nodeSvg(e: NoLayout, disp: Map<string, Ponto>, tema: Tema, opts:
     }
   }
 
+  // Alça na lateral pra esticar/encolher a largura do texto (ideia
+  // selecionada, só pra quem edita). Do lado esquerdo do mapa fica à
+  // esquerda, que é pra onde a ideia cresce.
+  if (opts.redimensionar && opts.sel === e.id && opts.editing !== e.id) {
+    const esq = e.depth > 0 && e.side === -1
+    const hx = esq ? p.x - 5 : p.x + e.w + 5, hy = p.y + e.topoTexto + (e.lines.length * e.lh) / 2
+    s += `<g data-larg="${e.id}" style="cursor:ew-resize"><title>Arraste pra mudar a largura do texto · duplo clique volta ao automático</title>` +
+      `<rect x="${f(hx - 8)}" y="${f(hy - 18)}" width="16" height="36" fill="transparent"/>` +
+      `<rect x="${f(hx - 3)}" y="${f(hy - 11)}" width="6" height="22" rx="3" fill="#ffffff" stroke="${tema.sel}" stroke-width="2"/></g>`
+  }
+
   if (opts.editing !== e.id) {
     s += `<text font-size="${e.fs}" font-weight="${e.fw}" font-family="${escAttr(e.fam)}"${e.it ? ' font-style="italic"' : ''} fill="${tc}">` +
       e.lines.map((ln, i) => `<tspan x="${f(p.x + e.pad.x)}" y="${f(p.y + e.topoTexto + i * e.lh + e.lh / 2)}" dominant-baseline="central">${esc(ln)}</tspan>`).join('') +
