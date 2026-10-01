@@ -36,6 +36,17 @@ export interface NoArvore {
   link?: LinkNo
   // Só na raiz: as conexões livres do mapa inteiro.
   ligacoes?: Ligacao[]
+  // Só na raiz: a formatação de texto com que as ideias novas nascem (a
+  // última escolhida no painel de texto).
+  estiloNovas?: EstiloTexto
+}
+
+// Campos do painel de texto (os que valem pras ideias novas).
+export const CAMPOS_TEXTO = ['fonte', 'negrito', 'italico', 'tamanho', 'cor'] as const
+export function soTexto(e: EstiloTexto | undefined | null): EstiloTexto {
+  const out: EstiloTexto = {}
+  for (const k of CAMPOS_TEXTO) if (e?.[k] !== undefined) (out as Record<string, unknown>)[k] = e[k]
+  return out
 }
 
 // Só links web (nunca "javascript:" etc.) — o endereço vai pra window.open.

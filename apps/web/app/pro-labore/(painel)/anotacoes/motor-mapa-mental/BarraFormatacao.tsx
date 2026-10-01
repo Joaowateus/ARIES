@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { proLaboreApi } from '@/lib/proLaboreApi'
 import type { CamposNo, EstadoMotor, MotorMapaMental } from './motor'
-import { idYoutube, urlSegura, type EstiloTexto, type FonteNo, type TamanhoNo } from './dados'
+import { CAMPOS_TEXTO, idYoutube, soTexto, urlSegura, type EstiloTexto, type FonteNo, type TamanhoNo } from './dados'
 import { FONTES } from './constantes'
 
 const CORES = ['#3b6cf6', '#0ea5e9', '#12a898', '#2e9e4f', '#84cc16', '#f08a1c', '#ee4f8a', '#a36cf0', '#ffffff', '#8b8f98', '#2a2f38', '#111317']
@@ -91,9 +91,13 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
   // Fecha o painel aberto ao clicar fora da barra.
   useEffect(() => {
     if (!painel) return
-    const fora = (e: MouseEvent) => { if (raizRef.current && !raizRef.current.contains(e.target as Node)) setPainel(null) }
-    document.addEventListener('mousedown', fora)
-    return () => document.removeEventListener('mousedown', fora)
+    const fora = (e: PointerEvent) => { if (raizRef.current && !raizRef.current.contains(e.target as Node)) setPainel(null) }
+    // pointerdown (não mousedown): o mapa cancela o mousedown pra manter o
+    // foco nele, e aí clicar numa ideia não fechava o painel aberto.
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') setPainel(null) }
+    document.addEventListener('pointerdown', fora, true)
+    document.addEventListener('keydown', tecla)
+    return () => { document.removeEventListener('pointerdown', fora, true); document.removeEventListener('keydown', tecla) }
   }, [painel])
 
   // Print/imagem copiada: Ctrl+V com o mapa em foco cola na ideia
@@ -154,7 +158,16 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
     const novo: EstiloTexto = { ...est, ...patch }
     for (const k of Object.keys(novo) as Array<keyof EstiloTexto>) if (novo[k] === undefined) delete novo[k]
     aplicar({ estilo: novo })
+    // Mexeu no texto: a formatação escolhida vale pras próximas ideias.
+    if (Object.keys(patch).some(k => (CAMPOS_TEXTO as readonly string[]).includes(k))) obterMotor()?.definirEstiloNovas(soTexto(novo))
   }
+  const novas = estado.estiloNovas ?? {}
+  const temNovas = Object.keys(novas).length > 0
+  const descricaoNovas = [
+    novas.fonte && novas.fonte !== 'sans' ? ROTULO_FONTE[novas.fonte] : null,
+    novas.negrito ? 'negrito' : null, novas.italico ? 'itálico' : null,
+    novas.tamanho === 'p' ? 'pequeno' : novas.tamanho === 'g' ? 'grande' : null,
+  ].filter(Boolean).join(' · ')
   function abrir(p: Painel) {
     setErro('')
     if (p === 'link') { setUrlLink(no?.link?.url ?? ''); setTituloLink(no?.link?.titulo ?? '') }
@@ -215,7 +228,7 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
   if (!no) return null
 
   return (
-    <div className="pl-mf-barra" ref={raizRef} onPointerDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+    <div className="pl-mf-barra" ref={raizRef} onPointerDown={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') setPainel(null); e.stopPropagation() }}>
       {(colando || avisoColar) && (
         <div className={`pl-mf-colando ${avisoColar ? 'erro' : ''}`} role="status">
           {colando ? 'Colando imagem…' : avisoColar}
@@ -267,6 +280,19 @@ export default function BarraFormatacao({ obterMotor, estado }: { obterMotor: ()
             <button type="button" className={`auto ${!est.cor ? 'ativo' : ''}`} onClick={() => estilo({ cor: undefined })} title="Cor do tema" aria-label="Cor do tema" />
             {CORES.map(c => <button key={c} type="button" className={est.cor === c ? 'ativo' : ''} style={{ background: c }} onClick={() => estilo({ cor: c })} aria-label={`Cor ${c}`} />)}
             <label className="pl-mf-custom" title="Outra cor">✎<input type="color" value={est.cor ?? '#3b6cf6'} onChange={e => estilo({ cor: e.target.value })} /></label>
+          </div>
+          <div className="pl-mf-novas">
+            <div className="pl-mf-novas-topo">
+              <span>Ideias novas saem assim:</span>
+              <b style={{ fontFamily: FONTES[novas.fonte ?? 'sans'], fontWeight: novas.negrito ? 700 : 500, fontStyle: novas.italico ? 'italic' : 'normal', color: novas.cor ?? undefined, fontSize: novas.tamanho === 'g' ? 17 : novas.tamanho === 'p' ? 12 : 14 }}>Abc</b>
+              <small>{temNovas ? descricaoNovas || 'cor escolhida' : 'padrão do tema'}</small>
+            </div>
+            {temNovas && (
+              <div className="pl-mf-novas-acoes">
+                <button type="button" onClick={() => { obterMotor()?.aplicarEstiloNovasEmTodas(); setPainel(null) }} title="Aplica essa formatação em todas as ideias que já existem (Ctrl+Z desfaz)">Aplicar em todas as ideias</button>
+                <button type="button" onClick={() => obterMotor()?.definirEstiloNovas(null)} title="As próximas ideias voltam ao padrão do tema">Voltar ao padrão</button>
+              </div>
+            )}
           </div>
         </div>
       )}
