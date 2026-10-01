@@ -32,3 +32,6 @@ export const ROTULO_RESULTADO: Record<string, string> = { conversas: 'conversas'
 export const SINGULAR_RESULTADO: Record<string, string> = { conversas: 'conversa', leads: 'lead', lpv: 'visualização', cliquesLink: 'clique' }
 // "Leads no CRM" -> "leads no CRM" (só a primeira letra, preserva siglas).
 export const minuscula = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
+// "conversas" -> "conversa", "visualizações" -> "visualização"…
+const SINGULARES: Record<string, string> = { conversas: 'conversa', leads: 'lead', contatos: 'contato', 'visualizações': 'visualização', cliques: 'clique' }
+export const singular = (nome: string) => SINGULARES[nome] ?? nome

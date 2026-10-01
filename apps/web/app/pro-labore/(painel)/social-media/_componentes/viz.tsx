@@ -4,7 +4,7 @@
 // escalas, cores por formato, medição de largura, tooltip e o cartão que
 // alterna entre gráfico e tabela (todo gráfico tem uma tabela equivalente —
 // o valor exato nunca depende de passar o mouse).
-import { ReactNode, useEffect, useRef, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import type { FaixaImpactoSocial, FormatoPostSocial } from '@/lib/proLaboreApi'
 
 export const COR_FORMATO: Record<FormatoPostSocial | 'STORY', string> = {
@@ -97,18 +97,20 @@ export function ticksBonitos(max: number, quantidade = 4): number[] {
   return ticks
 }
 
-export function useLargura<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
-  const ref = useRef<T>(null)
+// Largura do contêiner do gráfico. Ref por callback: o gráfico pode
+// aparecer só depois (dados que chegam depois, cartão que alterna entre
+// tabela e gráfico) e mesmo assim passa a ser medido.
+export function useLargura<T extends HTMLElement>(): [(el: T | null) => void, number] {
+  const [el, setEl] = useState<T | null>(null)
   const [largura, setLargura] = useState(0)
   useEffect(() => {
-    const el = ref.current
     if (!el) return
+    // O ResizeObserver já avisa a medida inicial assim que começa a observar.
     const obs = new ResizeObserver(entradas => setLargura(Math.floor(entradas[0].contentRect.width)))
     obs.observe(el)
-    setLargura(Math.floor(el.getBoundingClientRect().width))
     return () => obs.disconnect()
-  }, [])
-  return [ref, largura]
+  }, [el])
+  return [setEl, largura]
 }
 
 export interface EstadoTooltip { x: number; y: number; conteudo: ReactNode }

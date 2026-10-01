@@ -20,7 +20,7 @@ import QualidadeConversas from './_componentes/QualidadeConversas'
 import Publicos from './_componentes/Publicos'
 import Criativos from './_componentes/Criativos'
 import DiasSemana from './_componentes/DiasSemana'
-import { ConjuntosConfigurados, DistribuicaoVerba } from './_componentes/Estrutura'
+import { ConjuntosConfigurados, DistribuicaoVerba, TreemapCampanhas } from './_componentes/Estrutura'
 import { tempoDesde } from './_componentes/formato'
 
 const SECOES = [
@@ -262,7 +262,7 @@ export default function ProLaboreTrafegoPage() {
           </Secao>
           <Secao id="tf-campanhas" eyebrow="Onde está a verba" titulo="Campanhas">
             <div className="pl-tf-dupla">
-              <DistribuicaoVerba analise={analise} nivel="campanhas" onFiltrar={filtrarEIr} />
+              <TreemapCampanhas analise={analise} onFiltrar={filtrarEIr} />
               <DistribuicaoVerba analise={analise} nivel="conjuntos" onFiltrar={filtrarEIr} />
             </div>
             <TabelaTrafego analise={analise} onFiltrar={filtrarEIr} />

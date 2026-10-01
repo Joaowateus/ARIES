@@ -21,6 +21,7 @@ function resumoConta(c: NonNullable<Awaited<ReturnType<typeof prisma.trafegoCont
     historicoCompleto: !!c.historicoDesde && c.historicoDesde.toISOString().slice(0, 10) <= somarDias(hoje, -(DIAS_HISTORICO - 1)),
     hoje,
     configuracao: (c.configuracao ?? {}) as ConfiguracaoTrafego,
+    acoesMeta: (c.acoesMeta ?? null) as { desde: string; ate: string; totais: Record<string, number> } | null,
   }
 }
 

@@ -2019,6 +2019,9 @@ model TrafegoConta {
   // Última leitura de campanhas/conjuntos/anúncios (status, orçamento,
   // público, criativo).
   estruturaEm           DateTime?
+  // Tipos de ação que a Meta mandou nos últimos dias, com o total de cada
+  // ({ desde, ate, totais }) — pra saber quais métricas a conta tem.
+  acoesMeta             Json?
   atualizadoEm          DateTime  @updatedAt
 
   insights TrafegoInsightDiario[]
