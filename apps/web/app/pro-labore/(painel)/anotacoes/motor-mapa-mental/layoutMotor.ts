@@ -4,8 +4,8 @@
 // do galho inteiro (bandStart + span/2), não no meio dos filhos diretos.
 // Não "melhore" nada aqui — qualquer ajuste de fórmula é uma divergência
 // visual em relação à referência.
-import { FONT, G, LI, MAXW, O, PAD, fontFor } from './constantes'
-import type { NoArvore } from './dados'
+import { ESCALA_TAMANHO, FONTES, G, LI, MAXW, MIDIA, O, PAD, fontFor } from './constantes'
+import { corSegura, dominioDe, idYoutube, urlSegura, type NoArvore } from './dados'
 import type { EstiloNo, Tema } from './temas'
 
 export type Layout = 'mind' | 'org' | 'list'
@@ -32,6 +32,27 @@ export interface NoLayout {
   side: 1 | -1
   span: number
   bandStart: number | null
+  // Formatação/mídia da ideia já resolvidas pro desenho
+  fam: string
+  it: boolean
+  cor: string | null
+  fundo: string | null
+  midia: { tipo: 'imagem' | 'youtube'; src: string; w: number; h: number; url: string | null } | null
+  chip: { texto: string; w: number; url: string } | null
+  topoTexto: number // distância do topo do nó até a 1ª linha de texto
+}
+
+export function fonteCss(e: Pick<NoLayout, 'it' | 'fw' | 'fs' | 'fam'>): string {
+  return `${e.it ? 'italic ' : ''}${e.fw} ${e.fs}px ${e.fam}`
+}
+
+// Tamanho de exibição da imagem: cabe na largura máxima e numa altura
+// máxima, mantendo a proporção original.
+function medidaImagem(w: number, h: number, maxW: number): { w: number; h: number } {
+  const ow = w > 0 ? w : maxW, oh = h > 0 ? h : maxW * 0.66
+  let dw = Math.min(maxW, ow), dh = dw * (oh / ow)
+  if (dh > MIDIA.maxH) { dh = MIDIA.maxH; dw = dh * (ow / oh) }
+  return { w: Math.round(dw), h: Math.round(dh) }
 }
 
 export type MapaLayout = Map<string, NoLayout>
@@ -66,18 +87,48 @@ export function buildLayout(tree: NoArvore, layout: Layout, tema: Tema, balanced
   const M: MapaLayout = new Map()
   ;(function walk(n: NoArvore, depth: number, branch: number, parent: string | null) {
     const kids = n.collapsed ? [] : n.children
-    const { fs, fw } = fontFor(depth)
+    const base = fontFor(depth)
+    const est = n.estilo ?? {}
+    const fs = Math.round(base.fs * ESCALA_TAMANHO[est.tamanho ?? 'm'])
+    const fw = est.negrito === true ? 700 : est.negrito === false ? 400 : base.fw
+    const it = !!est.italico
+    const fam = FONTES[est.fonte ?? 'sans'] ?? FONTES.sans
     const lh = Math.round(fs * 1.32)
     const st: EstiloNo = depth === 0 ? tema.rootStyle : tema.style
-    const pad = PAD[st]
+    const fundo = corSegura(est.fundo)
+    // Com cor de fundo, a ideia vira um "cartão": precisa de respiro em volta.
+    const pad = fundo && (st === 'text' || st === 'underline') ? PAD.pill : PAD[st]
     const maxW = depth === 0 ? Math.max(MAXW[layout], 260) : MAXW[layout]
-    const { lines, w } = wrap(n.text || ' ', `${fw} ${fs}px ${FONT}`, maxW)
+    const { lines, w } = wrap(n.text || ' ', fonteCss({ it, fw, fs, fam }), maxW)
+
+    // Mídia: imagem enviada, ou capa do vídeo quando o link é do YouTube.
+    const url = urlSegura(n.link?.url)
+    const yt = idYoutube(url)
+    const imgSrc = urlSegura(n.imagem?.src)
+    let midia: NoLayout['midia'] = null
+    if (imgSrc) {
+      const m = medidaImagem(n.imagem!.w, n.imagem!.h, depth === 0 ? MIDIA.maxWRaiz : MIDIA.maxW)
+      midia = { tipo: 'imagem', src: imgSrc, ...m, url: null }
+    } else if (yt) {
+      midia = { tipo: 'youtube', src: `https://i.ytimg.com/vi/${yt}/mqdefault.jpg`, w: MIDIA.yt.w, h: MIDIA.yt.h, url }
+    }
+    // Link (que não virou capa de vídeo): etiqueta clicável embaixo do texto.
+    let chip: NoLayout['chip'] = null
+    if (url && (!yt || imgSrc)) {
+      const texto = `↗ ${(n.link?.titulo || (yt ? 'Vídeo no YouTube' : dominioDe(url))).slice(0, 40)}`
+      chip = { texto, w: Math.ceil(wrap(texto, `600 12px ${FONTES.sans}`, 400).w) + 16, url }
+    }
+    const larguraConteudo = Math.max(Math.ceil(w), midia?.w ?? 0, chip?.w ?? 0)
+    const altMidia = midia ? midia.h + MIDIA.gap : 0
+    const altChip = chip ? MIDIA.chipH + MIDIA.chipGap : 0
     M.set(n.id, {
       id: n.id, depth, branch, parent, kids: kids.map(c => c.id),
       hasKids: n.children.length > 0, collapsed: n.collapsed && n.children.length > 0,
       hidden: n.collapsed ? n.children.length : 0,
-      fs, fw, lh, pad, st, lines, w: Math.ceil(w) + pad.x * 2, h: lines.length * lh + pad.y * 2,
+      fs, fw, lh, pad, st, lines,
+      w: larguraConteudo + pad.x * 2, h: altMidia + lines.length * lh + altChip + pad.y * 2,
       x: 0, y: 0, side: 1, span: 0, bandStart: null,
+      fam, it, cor: corSegura(est.cor), fundo, midia, chip, topoTexto: pad.y + altMidia,
     })
     kids.forEach((c, i) => walk(c, depth + 1, depth === 0 ? i : branch, n.id))
   })(tree, 0, -1, null)

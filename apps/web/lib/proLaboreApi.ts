@@ -632,6 +632,11 @@ export const proLaboreApi = {
       request<Nota>(`/pro-labore/notas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/notas/${id}`, { method: 'DELETE' }),
   },
+  // Imagens dos mapas mentais: devolve o endereço público (absoluto).
+  imagens: {
+    enviar: (dataUrl: string) =>
+      request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: JSON.stringify({ dataUrl }) }).then(r => `${BASE}${r.caminho}`),
+  },
   // Aba Tráfego (Gerenciador de Anúncios da Meta) — só o dono.
   trafego: {
     conta: () => request<{ conectada: false } | { conectada: true; conta: ContaTrafego }>('/pro-labore/trafego/conta'),

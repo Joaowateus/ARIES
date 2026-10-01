@@ -15,6 +15,7 @@ import type { NoArvore } from '../../anotacoes/motor-mapa-mental/dados'
 import type { Layout } from '../../anotacoes/motor-mapa-mental/layoutMotor'
 import { THEMES } from '../../anotacoes/motor-mapa-mental/temas'
 import QuadroMotor from './QuadroMotor'
+import BarraFormatacao from '../../anotacoes/motor-mapa-mental/BarraFormatacao'
 import Laser, { criarFonteLaser, type FonteLaser } from './Laser'
 import PainelLateral from './PainelLateral'
 import CopiarParaAnotacoes from './CopiarParaAnotacoes'
@@ -338,6 +339,7 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
             }}
           >
             <Laser motorRef={motorRef} fonteRef={fonteLaserRef} />
+            {estadoMotor && !laserAtivo && <BarraFormatacao obterMotor={() => motorRef.current} estado={estadoMotor} />}
           </QuadroMotor>
           {!aoVivo && aprovacao === 'APROVADA' && (
             <div className="pl-ap-dica-flutuante">

@@ -24,3 +24,14 @@ export const RED = '#e5484d'
 
 export const fontFor = (d: number): { fs: number; fw: number } =>
   d === 0 ? { fs: 22, fw: 700 } : d === 1 ? { fs: 17, fw: 600 } : { fs: 15, fw: 500 }
+
+// Fontes que dá pra escolher em cada ideia (a "sans" é a do tema).
+export const FONTES: Record<'sans' | 'serif' | 'mao' | 'mono', string> = {
+  sans: FONT,
+  serif: 'Georgia, "Times New Roman", serif',
+  mao: '"Segoe Print", "Bradley Hand", "Comic Neue", "Comic Sans MS", cursive',
+  mono: '"IBM Plex Mono", ui-monospace, SFMono-Regular, monospace',
+}
+export const ESCALA_TAMANHO = { p: 0.85, m: 1, g: 1.3 } as const
+// Mídia dentro da ideia
+export const MIDIA = { maxW: 220, maxWRaiz: 260, maxH: 240, gap: 8, yt: { w: 224, h: 126 }, chipH: 22, chipGap: 6 } as const

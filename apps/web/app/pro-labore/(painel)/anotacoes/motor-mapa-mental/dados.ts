@@ -4,11 +4,66 @@
 // (referencia/motor-mapa-mental.html): mesmo formato de nó, mesmas funções
 // `mk`/`chain`/`testTree`, mesma lógica de reindexação e das ações
 // (adicionar filho/irmão, excluir, colapsar, mover de pai).
+export type FonteNo = 'sans' | 'serif' | 'mao' | 'mono'
+export type TamanhoNo = 'p' | 'm' | 'g'
+// Formatação opcional da ideia (sem nada = visual do tema).
+export interface EstiloTexto {
+  fonte?: FonteNo
+  negrito?: boolean
+  italico?: boolean
+  tamanho?: TamanhoNo
+  cor?: string // #rrggbb do texto
+  fundo?: string // #rrggbb de fundo da ideia
+}
+// Imagem mostrada acima do texto (w/h = tamanho original, pra proporção).
+export interface ImagemNo { src: string; w: number; h: number }
+export interface LinkNo { url: string; titulo?: string }
+// Conexão livre entre duas ideias quaisquer (além do galho pai → filho).
+export interface Ligacao { id: string; de: string; para: string }
+
 export interface NoArvore {
   id: string
   text: string
   children: NoArvore[]
   collapsed: boolean
+  estilo?: EstiloTexto
+  imagem?: ImagemNo
+  link?: LinkNo
+  // Só na raiz: as conexões livres do mapa inteiro.
+  ligacoes?: Ligacao[]
+}
+
+// Só links web (nunca "javascript:" etc.) — o endereço vai pra window.open.
+export function urlSegura(u: string | undefined | null): string | null {
+  if (!u) return null
+  try {
+    const x = new URL(u)
+    return x.protocol === 'https:' || x.protocol === 'http:' ? x.href : null
+  } catch {
+    return null
+  }
+}
+
+export function corSegura(c: string | undefined | null): string | null {
+  return c && /^#[0-9a-fA-F]{6}$/.test(c) ? c : null
+}
+
+// youtube.com/watch?v=…, youtu.be/…, /shorts/…, /embed/… → id do vídeo.
+export function idYoutube(u: string | undefined | null): string | null {
+  const url = urlSegura(u)
+  if (!url) return null
+  const x = new URL(url)
+  const host = x.hostname.replace(/^www\.|^m\./, '')
+  let id: string | null = null
+  if (host === 'youtu.be') id = x.pathname.slice(1).split('/')[0]
+  else if (host === 'youtube.com' || host === 'music.youtube.com') {
+    id = x.searchParams.get('v') ?? (x.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/)?.[1] ?? null)
+  }
+  return id && /^[A-Za-z0-9_-]{6,20}$/.test(id) ? id : null
+}
+
+export function dominioDe(u: string): string {
+  try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u }
 }
 
 export interface IndiceArvore {

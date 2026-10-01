@@ -10,10 +10,10 @@
 import {
   addChild as addChildArvore, addSibling as addSiblingArvore, criarFabricaDeNos, isInside,
   maxId as maxIdArvore, type NoArvore, reindexar, removeNode as removeNodeArvore, reparent as reparentArvore,
-  toggleCollapse,
+  toggleCollapse, urlSegura, type EstiloTexto, type ImagemNo, type LinkNo,
 } from './dados'
 import { buildLayout, type Layout, type MapaLayout } from './layoutMotor'
-import { bandSvg, col, connectorsFor, esc, junctionSvg, lum, nodeSvg } from './conectores'
+import { bandSvg, col, connectorsFor, esc, junctionSvg, ligacoesSvg, lum, nodeSvg } from './conectores'
 import { FONT } from './constantes'
 import { THEMES, type Tema } from './temas'
 
@@ -29,7 +29,14 @@ export interface EstadoMotor {
   selecionadoTemFilhos: boolean
   selecionadoColapsado: boolean
   podeExcluirSelecionado: boolean
+  // Formatação/mídia da ideia selecionada (pra barra de formatação).
+  noSelecionado: { estilo: EstiloTexto; imagem: ImagemNo | null; link: LinkNo | null } | null
+  // Modo "conectar": esperando o clique na ideia de destino.
+  ligando: boolean
+  ligacaoSelecionada: string | null
 }
+
+export type CamposNo = { estilo?: EstiloTexto | null; imagem?: ImagemNo | null; link?: LinkNo | null }
 
 export interface MotorMapaMentalOpcoes {
   container: HTMLElement
@@ -103,6 +110,13 @@ export class MotorMapaMental {
   private ultimaVistaEmitida = ''
   private ultimaSelEmitida: string | null | undefined = undefined
   private animVista: number | null = null
+  // Prefixo único dos ids do SVG (clipPath/marcadores) — pode haver mais
+  // de um mapa na mesma página.
+  private uid = 'mm' + Math.random().toString(36).slice(2, 8)
+  private ligandoDe: string | null = null
+  private ligCursor: Ponto | null = null
+  private selLigacao: string | null = null
+  private ultimoEstadoChave = ''
 
   constructor(opts: MotorMapaMentalOpcoes) {
     this.container = opts.container
@@ -212,6 +226,56 @@ export class MotorMapaMental {
   editarSelecionado(): void { this.startEdit(this.sel!, { selectAll: true }) }
   toggleSelecionado(): void { this.toggle(this.sel!) }
   excluirSelecionado(): void { this.removeNode(this.sel!) }
+  // Formatação, imagem e link da ideia selecionada (desfazível).
+  atualizarSelecionado(campos: CamposNo): void {
+    const n = this.sel ? this.byId.get(this.sel) : null
+    if (!n || this.somenteLeitura) return
+    this.snapshot()
+    for (const k of ['estilo', 'imagem', 'link'] as const) {
+      if (!(k in campos)) continue
+      const v = campos[k]
+      if (v == null || (k === 'estilo' && Object.keys(v).length === 0)) delete n[k]
+      else (n as unknown as Record<string, unknown>)[k] = v
+    }
+    this.relayout({ instant: true })
+  }
+  // Conectar a ideia selecionada a outra: o próximo clique numa ideia
+  // escolhe o destino (Esc ou clique no vazio cancela).
+  iniciarLigacao(): void {
+    if (this.somenteLeitura || !this.sel) return
+    this.ligandoDe = this.sel
+    this.selLigacao = null
+    this.container.classList.add('pl-motor-ligando')
+    this.render()
+  }
+  cancelarLigacao(): void {
+    if (!this.ligandoDe) return
+    this.ligandoDe = null; this.ligCursor = null
+    this.container.classList.remove('pl-motor-ligando')
+    this.render()
+  }
+  removerLigacao(id: string): void {
+    const ls = this.tree.ligacoes ?? []
+    if (!ls.some(l => l.id === id)) return
+    this.snapshot()
+    this.tree.ligacoes = ls.filter(l => l.id !== id)
+    if (!this.tree.ligacoes.length) delete this.tree.ligacoes
+    this.selLigacao = null
+    this.relayout({ instant: true })
+  }
+  private criarLigacao(de: string, para: string): void {
+    this.cancelarLigacao()
+    if (de === para || !this.byId.has(de) || !this.byId.has(para)) return
+    const ls = this.tree.ligacoes ?? []
+    if (ls.some(l => (l.de === de && l.para === para) || (l.de === para && l.para === de))) return
+    this.snapshot()
+    let n = ls.length + 1
+    while (ls.some(l => l.id === `l${n}`)) n++
+    this.tree.ligacoes = [...ls, { id: `l${n}`, de, para }]
+    this.selLigacao = `l${n}`
+    this.relayout({ instant: true })
+  }
+
   zoomIn(): void { this.zoomAt(this.container.clientWidth / 2, this.container.clientHeight / 2, this.view.k * 1.2) }
   zoomOut(): void { this.zoomAt(this.container.clientWidth / 2, this.container.clientHeight / 2, this.view.k / 1.2) }
   enquadrar(): void { this.fit() }
@@ -259,7 +323,9 @@ export class MotorMapaMental {
   destroy(): void {
     this.destruido = true
     if (this.animVista != null) cancelAnimationFrame(this.animVista)
-    window.removeEventListener('resize', this.onResize)
+    // Solta todos os listeners do container: no modo estrito do React o mesmo
+    // container recebe um motor novo, e o antigo não pode continuar ouvindo.
+    this.ouvintes.abort()
     this.container.innerHTML = ''
   }
 
@@ -285,7 +351,12 @@ export class MotorMapaMental {
     this.container.style.backgroundPosition = `${tx}px ${ty}px`
     const parts: string[] = [`<g transform="translate(${round1(tx)},${round1(ty)}) scale(${k})">`, bandSvg(this.layout, this.sel, this.L, th, this.showBand)]
     this.L.forEach(e => { if (e.hasKids) parts.push(connectorsFor(this.layout, e, this.L, this.disp, th)) })
-    this.L.forEach(e => parts.push(nodeSvg(e, this.disp, th, { sel: this.sel, dropTarget: this.dropTarget, dragging: this.dragging, editing: this.editing })))
+    parts.push(ligacoesSvg(this.tree.ligacoes ?? [], this.L, this.disp, th, {
+      uid: this.uid, selecionada: this.selLigacao, interativo: !this.somenteLeitura,
+      rascunho: this.ligandoDe && this.ligCursor ? { de: this.ligandoDe, cursor: this.ligCursor } : null,
+      centro: (() => { const r = this.L.get(this.tree.id), q = this.disp.get(this.tree.id); return r && q ? { x: q.x + r.w / 2, y: q.y + r.h / 2 } : undefined })(),
+    }))
+    this.L.forEach(e => parts.push(nodeSvg(e, this.disp, th, { sel: this.sel, dropTarget: this.dropTarget, dragging: this.dragging, editing: this.editing, uid: this.uid })))
     this.L.forEach(e => parts.push(junctionSvg(this.layout, e, this.disp, th)))
     if (this.dragging && this.dragPos) {
       const e = this.L.get(this.dragging)!
@@ -298,6 +369,9 @@ export class MotorMapaMental {
     this.placeEditor()
     this.syncActions()
     this.emitirVistaESelecao()
+    // Seleção/modo mudou sem mexer na árvore: avisa a barra de formatação.
+    const chave = `${this.sel}|${this.ligandoDe}|${this.selLigacao}`
+    if (chave !== this.ultimoEstadoChave) { this.ultimoEstadoChave = chave; this.syncChrome() }
   }
 
   private emitirVistaESelecao(): void {
@@ -315,6 +389,12 @@ export class MotorMapaMental {
   private relayout(o: { instant?: boolean; reveal?: boolean } = {}): void {
     const prev = this.disp
     this.reindex()
+    if (this.tree.ligacoes) {
+      const validas = this.tree.ligacoes.filter(l => l.de !== l.para && this.byId.has(l.de) && this.byId.has(l.para))
+      if (validas.length !== this.tree.ligacoes.length) this.tree.ligacoes = validas
+      if (!validas.length) delete this.tree.ligacoes
+      if (this.selLigacao && !validas.some(l => l.id === this.selLigacao)) this.selLigacao = null
+    }
     this.L = buildLayout(this.tree, this.layout, this.tema(), this.balanced)
     if (!this.sel || !this.L.has(this.sel)) this.sel = this.tree.id
     this.from = new Map()
@@ -379,12 +459,17 @@ export class MotorMapaMental {
     const e = this.L.get(this.editing)!, th = this.tema(), k = this.view.k
     let tc = e.depth === 0 ? th.rootText : th.text
     if (e.st === 'pill' && e.depth <= 1) tc = lum(e.depth === 0 ? th.rootFill! : col(e, th)) > .6 ? '#1b1e24' : '#ffffff'
+    if (e.fundo) tc = lum(e.fundo) > .6 ? '#1b1e24' : '#ffffff'
+    if (e.cor) tc = e.cor
+    // O editor cobre só a parte do texto (a imagem/capa fica visível acima).
+    const topo = e.y + e.topoTexto - e.pad.y
     Object.assign(this.ed.style, {
       display: 'block',
-      left: (this.view.tx + e.x * k) + 'px', top: (this.view.ty + e.y * k) + 'px',
-      width: ((e.w + 10) * k) + 'px', height: (e.h * k + 2) + 'px',
+      left: (this.view.tx + e.x * k) + 'px', top: (this.view.ty + topo * k) + 'px',
+      width: ((e.w + 10) * k) + 'px', height: ((e.lines.length * e.lh + e.pad.y * 2) * k + 2) + 'px',
       padding: `${e.pad.y * k}px ${e.pad.x * k}px`,
       fontSize: (e.fs * k) + 'px', fontWeight: String(e.fw), lineHeight: (e.lh * k) + 'px', color: tc,
+      fontFamily: e.fam, fontStyle: e.it ? 'italic' : 'normal',
     })
   }
   private startEdit(id: string, o: { isNew?: boolean; initial?: string; selectAll?: boolean } = {}): void {
@@ -506,8 +591,10 @@ export class MotorMapaMental {
     return hit
   }
   private onResize = (): void => this.render()
+  private ouvintes = new AbortController()
 
   private bindEventos(): void {
+    const sinal = { signal: this.ouvintes.signal }
     this.ed.addEventListener('input', () => { if (!this.editing) return; this.byId.get(this.editing)!.text = this.ed.value; this.relayout({ instant: true }) })
     this.ed.addEventListener('blur', () => this.commitEdit())
     this.ed.addEventListener('keydown', ev => {
@@ -519,6 +606,14 @@ export class MotorMapaMental {
 
     this.container.addEventListener('keydown', ev => {
       if (ev.target === this.ed || this.somenteLeitura) return
+      if (ev.key === 'Escape' && (this.ligandoDe || this.selLigacao)) {
+        ev.preventDefault()
+        if (this.ligandoDe) this.cancelarLigacao(); else { this.selLigacao = null; this.render() }
+        return
+      }
+      if ((ev.key === 'Delete' || ev.key === 'Backspace') && this.selLigacao) {
+        ev.preventDefault(); this.removerLigacao(this.selLigacao); return
+      }
       const mod = ev.ctrlKey || ev.metaKey, key = ev.key.toLowerCase()
       if (mod && key === 'z') { ev.preventDefault(); if (ev.shiftKey) this.redoImpl(); else this.undoImpl(); return }
       if (mod && key === 'y') { ev.preventDefault(); this.redoImpl(); return }
@@ -538,14 +633,39 @@ export class MotorMapaMental {
         default:
           if (ev.key.length === 1) { ev.preventDefault(); this.startEdit(this.sel!, { initial: ev.key }) }
       }
-    })
+    }, sinal)
 
     const rect = () => this.container.getBoundingClientRect()
     this.container.addEventListener('pointerdown', ev => {
       if ((ev.target as HTMLElement).closest('.pl-motor-ui') || ev.target === this.ed) return
+      // Etiqueta de link / botão de play: abre em outra aba (vale também
+      // pra quem só assiste a apresentação).
+      const lk = (ev.target as Element).closest?.('[data-link]') as HTMLElement | null
+      if (lk && !this.ligandoDe) {
+        const url = urlSegura(lk.dataset.link)
+        if (url) window.open(url, '_blank', 'noopener,noreferrer')
+        return
+      }
       if (this.editing) this.commitEdit()
+      // O desenho é refeito já neste clique (o elemento clicado sai da
+      // página): sem isto o navegador joga o foco pro <body> e os atalhos
+      // (Delete, Ctrl+Z, Tab…) param de responder.
+      ev.preventDefault()
       this.container.focus({ preventScroll: true })
       const r = rect(), sx = ev.clientX - r.left, sy = ev.clientY - r.top
+      if (!this.somenteLeitura) {
+        const del = (ev.target as Element).closest?.('[data-del-ligacao]') as HTMLElement | null
+        if (del) { this.removerLigacao(del.dataset.delLigacao!); return }
+        if (this.ligandoDe) {
+          const alvo = (ev.target as Element).closest?.('[data-node]') as HTMLElement | null
+          if (alvo) this.criarLigacao(this.ligandoDe, alvo.dataset.node!)
+          else this.cancelarLigacao()
+          return
+        }
+        const lig = (ev.target as Element).closest?.('[data-ligacao]') as HTMLElement | null
+        if (lig) { this.selLigacao = lig.dataset.ligacao!; this.render(); return }
+        if (this.selLigacao) this.selLigacao = null
+      }
       this.pts.set(ev.pointerId, { x: sx, y: sy })
       if (this.pts.size === 2) {
         const [a, b] = [...this.pts.values()]
@@ -559,9 +679,10 @@ export class MotorMapaMental {
       if (ng) { this.sel = ng.dataset.node!; this.down = { type: 'node', id: this.sel, sx, sy }; this.render() }
       else { this.down = { type: 'pan', sx, sy, tx: this.view.tx, ty: this.view.ty }; this.container.classList.add('pl-motor-panning') }
       this.container.setPointerCapture(ev.pointerId)
-    })
+    }, sinal)
     this.container.addEventListener('pointermove', ev => {
       const r = rect(), sx = ev.clientX - r.left, sy = ev.clientY - r.top
+      if (this.ligandoDe && !this.down) { this.ligCursor = this.toWorld(sx, sy); this.render(); return }
       if (this.pts.has(ev.pointerId)) this.pts.set(ev.pointerId, { x: sx, y: sy })
       if (this.pinch && this.pts.size === 2) {
         const [a, b] = [...this.pts.values()]
@@ -578,7 +699,7 @@ export class MotorMapaMental {
       }
       if (!this.dragging && Math.hypot(dx, dy) > 6 && this.down.id !== this.tree.id) this.dragging = this.down.id!
       if (this.dragging) { this.dragPos = this.toWorld(sx, sy); this.dropTarget = this.hitNode(this.dragPos); this.render() }
-    })
+    }, sinal)
     const endPointer = (ev: PointerEvent) => {
       this.pts.delete(ev.pointerId)
       if (this.pts.size < 2) this.pinch = null
@@ -596,8 +717,8 @@ export class MotorMapaMental {
       }
       this.down = null
     }
-    this.container.addEventListener('pointerup', endPointer)
-    this.container.addEventListener('pointercancel', endPointer)
+    this.container.addEventListener('pointerup', endPointer, sinal)
+    this.container.addEventListener('pointercancel', endPointer, sinal)
     this.container.addEventListener('wheel', ev => {
       if ((ev.target as HTMLElement).closest('.pl-motor-ui')) return
       ev.preventDefault()
@@ -605,8 +726,8 @@ export class MotorMapaMental {
       if (ev.ctrlKey || ev.metaKey) this.zoomAt(ev.clientX - r.left, ev.clientY - r.top, this.view.k * Math.exp(-ev.deltaY * .0025))
       else { this.view.tx -= ev.deltaX; this.view.ty -= ev.deltaY; this.render() }
       this.onInteracaoVista?.()
-    }, { passive: false })
-    window.addEventListener('resize', this.onResize)
+    }, { passive: false, signal: this.ouvintes.signal })
+    window.addEventListener('resize', this.onResize, sinal)
 
     this.actionsEl.addEventListener('click', ev => {
       const btn = (ev.target as HTMLElement).closest('button') as HTMLButtonElement | null
@@ -667,6 +788,9 @@ export class MotorMapaMental {
       selecionadoTemFilhos: !!n && n.children.length > 0,
       selecionadoColapsado: !!n && n.collapsed,
       podeExcluirSelecionado: !!this.sel && !!this.parentOf.get(this.sel),
+      noSelecionado: n ? { estilo: { ...(n.estilo ?? {}) }, imagem: n.imagem ?? null, link: n.link ?? null } : null,
+      ligando: !!this.ligandoDe,
+      ligacaoSelecionada: this.selLigacao,
     }
   }
 }

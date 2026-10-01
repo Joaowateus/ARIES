@@ -13,6 +13,7 @@ import type { Layout } from './layoutMotor'
 import { EstadoMotor, MotorMapaMental } from './motor'
 import { NoArvore } from './dados'
 import { THEMES } from './temas'
+import BarraFormatacao from './BarraFormatacao'
 
 const LAYOUTS: { id: Layout; label: string }[] = [
   { id: 'mind', label: 'Mapa mental' },
@@ -41,6 +42,7 @@ export default function MotorMapaMentalView(props: MotorMapaMentalViewProps) {
     layout: props.layoutInicial, theme: props.temaInicial, balanced: props.doisLadosInicial,
     showBand: false, zoomPct: 100, canUndo: false, canRedo: false,
     selecionadoId: null, selecionadoTemFilhos: false, selecionadoColapsado: false, podeExcluirSelecionado: false,
+    noSelecionado: null, ligando: false, ligacaoSelecionada: null,
   })
 
   useEffect(() => {
@@ -120,7 +122,10 @@ export default function MotorMapaMentalView(props: MotorMapaMentalViewProps) {
           <IconeRefazer />
         </button>
       </div>
-      <div ref={containerRef} className="pl-motor-stage" />
+      <div className="pl-motor-area">
+        <div ref={containerRef} className="pl-motor-stage" />
+        <BarraFormatacao obterMotor={() => motorRef.current} estado={estado} />
+      </div>
     </div>
   )
 }
