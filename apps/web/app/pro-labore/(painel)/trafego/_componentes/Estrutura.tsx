@@ -5,10 +5,11 @@
 // otimização, orçamento e fase de aprendizado — pra auditar sem abrir a Meta.
 import { useState } from 'react'
 import type { AnaliseTrafego, LinhaTabelaTrafego } from '@/lib/proLaboreApi'
-import { CartaoViz, Vazio } from '../../social-media/_componentes/viz'
-import { BarrasParticipacao, type LinhaParticipacao } from './Publicos'
+import { CartaoViz, Vazio, useLargura } from '../../social-media/_componentes/viz'
+import { BarrasParticipacao, SeloCusto, type LinhaParticipacao } from './Publicos'
+import { corIndice } from './GraficosPublico'
 import { StatusObjeto } from './Criativos'
-import { SINGULAR_RESULTADO, moeda, pct } from './formato'
+import { SINGULAR_RESULTADO, moeda, num, pct, singular } from './formato'
 
 const OTIMIZACAO: Record<string, string> = {
   CONVERSATIONS: 'Conversas', LEAD_GENERATION: 'Leads (formulário)', QUALITY_LEAD: 'Leads de qualidade', OFFSITE_CONVERSIONS: 'Conversões no site',
@@ -53,6 +54,101 @@ export function DistribuicaoVerba({ analise, nivel, onFiltrar }: { analise: Anal
       linhas={dados} moedaConta={analise.conta.moeda} nomeResultado={r.nome} limite={8}
       onClicar={l => { const o = (l as typeof dados[number]).orig; onFiltrar(nivel === 'campanhas' ? { campanhaId: o.id } : { campanhaId: o.campanhaId, adsetId: o.id }) }}
     />
+  )
+}
+
+// ---------- Treemap: onde está a verba ----------
+type Caixa<T> = T & { x: number; y: number; w: number; h: number }
+// Treemap "squarified": blocos o mais quadrados possível, área = investimento.
+function squarify<T extends { area: number }>(itens: T[], x: number, y: number, w: number, h: number): Array<Caixa<T>> {
+  const out: Array<Caixa<T>> = []
+  let resto = [...itens].sort((a, b) => b.area - a.area)
+  const pior = (linha: T[], lado: number) => {
+    const soma = linha.reduce((s, i) => s + i.area, 0)
+    const mx = Math.max(...linha.map(i => i.area)), mn = Math.min(...linha.map(i => i.area))
+    return Math.max((lado * lado * mx) / (soma * soma), (soma * soma) / (lado * lado * mn))
+  }
+  while (resto.length && w > 0 && h > 0) {
+    const lado = Math.min(w, h)
+    let n = 1
+    while (n < resto.length && pior(resto.slice(0, n + 1), lado) <= pior(resto.slice(0, n), lado)) n++
+    const linha = resto.slice(0, n)
+    const soma = linha.reduce((s, i) => s + i.area, 0)
+    if (w >= h) {
+      const cw = soma / h
+      let yy = y
+      for (const i of linha) { const ih = i.area / cw; out.push({ ...i, x, y: yy, w: cw, h: ih }); yy += ih }
+      x += cw; w -= cw
+    } else {
+      const rh = soma / w
+      let xx = x
+      for (const i of linha) { const iw = i.area / rh; out.push({ ...i, x: xx, y, w: iw, h: rh }); xx += iw }
+      y += rh; h -= rh
+    }
+    resto = resto.slice(n)
+  }
+  return out
+}
+
+export function TreemapCampanhas({ analise, onFiltrar }: { analise: AnaliseTrafego; onFiltrar: (f: { campanhaId?: string }) => void }) {
+  const [ref, largura] = useLargura<HTMLDivElement>()
+  const [ativo, setAtivo] = useState<string | null>(null)
+  const c = analise.conta.moeda
+  const r = resultadoDe(analise)
+  const linhas = analise.campanhas.filter(l => l.metricas.gasto > 0)
+  const totG = linhas.reduce((s, l) => s + l.metricas.gasto, 0), totR = linhas.reduce((s, l) => s + r.valor(l), 0)
+  const medio = totR > 0 ? totG / totR : null
+  const ALT = 300
+  const itens = linhas.map(l => {
+    const res = r.valor(l)
+    const custo = res > 0 ? l.metricas.gasto / res : null
+    return { l, res, custo, indice: custo != null && medio ? custo / medio : null, area: totG > 0 ? (l.metricas.gasto / totG) * largura * ALT : 0 }
+  })
+  const caixas = largura > 0 ? squarify(itens, 0, 0, largura, ALT) : []
+  const sel = itens.find(i => i.l.id === ativo)
+  return (
+    <CartaoViz
+      titulo="Onde está a verba"
+      subtitulo={`Cada bloco é uma campanha: o tamanho é o investimento e a cor, o custo por ${singular(r.nome)} contra a média. Clique pra filtrar a aba.`}
+      tabela={{
+        colunas: ['Campanha', 'Investimento', '% invest.', r.nome, 'Custo/result.', 'vs média'],
+        linhas: itens.map(i => [i.l.nome, moeda(i.l.metricas.gasto, c), pct(totG ? i.l.metricas.gasto / totG : 0), num(i.res), moeda(i.custo, c), i.indice != null ? `${i.indice.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}x` : '—']),
+      }}
+    >
+      {linhas.length === 0 ? <Vazio>Nenhuma campanha com investimento no período.</Vazio> : (
+        <>
+          <div ref={ref} className="pl-tf-treemap" style={{ height: ALT }}>
+            {caixas.map(b => {
+              const cor = b.res === 0 ? { bg: 'var(--pl-surface-2)', ink: 'var(--pl-ink-2)' } : corIndice(b.indice)
+              const cabe = b.w > 86 && b.h > 40
+              return (
+                <button key={b.l.id} type="button" className={`pl-tf-tm-bloco ${ativo === b.l.id ? 'ativo' : ''} ${b.res === 0 ? 'sem' : ''}`}
+                  style={{ left: b.x, top: b.y, width: b.w, height: b.h, background: cor.bg, color: cor.ink }}
+                  onMouseEnter={() => setAtivo(b.l.id)} onMouseLeave={() => setAtivo(null)} onFocus={() => setAtivo(b.l.id)} onBlur={() => setAtivo(null)}
+                  onClick={() => onFiltrar({ campanhaId: b.l.id })}
+                  aria-label={`${b.l.nome}: ${moeda(b.l.metricas.gasto, c)}, ${num(b.res)} ${r.nome}, ${moeda(b.custo, c)} cada`}>
+                  {cabe && (
+                    <>
+                      <b>{b.l.nome}</b>
+                      <span>{moeda(b.l.metricas.gasto, c, 0)} · {pct(totG ? b.l.metricas.gasto / totG : 0, 0)}</span>
+                      {b.h > 64 && <span>{b.res === 0 ? `sem ${r.nome}` : `${moeda(b.custo, c)} por ${singular(r.nome)}`}</span>}
+                    </>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <div className="pl-tf-tm-rodape">
+            <div className="pl-tf-heat-legenda" aria-hidden="true" style={{ justifyContent: 'flex-start', marginTop: 0 }}>
+              <span>mais barato</span><i className="b2" /><i className="b1" /><i className="n" /><i className="c1" /><i className="c2" /><span>mais caro</span>
+            </div>
+            <span className="pl-tf-tm-info">
+              {sel ? <><b>{sel.l.nome}</b> · {moeda(sel.l.metricas.gasto, c)} · {num(sel.res)} {r.nome} · {moeda(sel.custo, c)} cada <SeloCusto indice={sel.indice} /></> : `Média: ${moeda(medio, c)} por ${singular(r.nome)}`}
+            </span>
+          </div>
+        </>
+      )}
+    </CartaoViz>
   )
 }
 

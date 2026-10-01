@@ -76,6 +76,7 @@ export async function sincronizarTrafego(conta: ContaSync, opcoes: { forcarEstru
     const recente = await buscarInsightsDiarios(conta.adAccountId, conta.accessToken, desdeRecente, hoje, prazoEm)
     if (!recente.completo) throw new ErroMetaAds('A Meta demorou demais pra responder. Tente de novo em instantes.')
     await gravarIntervalo(conta.id, desdeRecente, hoje, recente.linhas)
+    await prisma.trafegoConta.update({ where: { id: conta.id }, data: { acoesMeta: { desde: desdeRecente, ate: hoje, totais: recente.acoes } } })
     dias += DIAS_RECENTES
     totalLinhas += recente.linhas.length
 

@@ -1398,6 +1398,8 @@ export interface ContaTrafego {
   conectadoEm: string; ultimaSincronizacaoEm: string | null; ultimoErroSync: string | null
   historicoDesde: string | null; historicoCompleto: boolean; hoje: string
   configuracao: { etapas?: Partial<Record<EtapaTrafego, ModoEtapaTrafego>>; metas?: Partial<Record<EtapaTrafego, MetaEtapaTrafego | null>>; crmSomenteTrafego?: boolean }
+  // Tipos de ação que a Meta mandou nos últimos dias (com o total de cada).
+  acoesMeta: { desde: string; ate: string; totais: Record<string, number> } | null
 }
 export interface MetricasTrafego {
   gasto: number; impressoes: number; alcance: number; cliques: number; cliquesLink: number

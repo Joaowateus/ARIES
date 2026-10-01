@@ -1,106 +1,123 @@
 'use client'
 
-// Dias da semana: média por dia de cada dia da semana no período — pra ver
-// em que dias o resultado sai mais barato e onde vale reforçar atendimento
-// ou orçamento. Média por ocorrência (um período de 10 dias tem 2 segundas
-// e 1 domingo, por exemplo).
+// Calendário do período: cada quadradinho é um dia (linhas = dias da semana,
+// colunas = semanas), colorido pela métrica escolhida. Mostra ao mesmo tempo
+// o padrão por dia da semana (a média de cada linha, à direita) e o que
+// mudou ao longo das semanas — um dia fora da curva salta aos olhos.
 import { useState } from 'react'
 import type { AnaliseTrafego } from '@/lib/proLaboreApi'
-import { Abas, CartaoViz, LinhaTip, Tooltip, Vazio, ticksBonitos, useLargura, type EstadoTooltip } from '../../social-media/_componentes/viz'
-import { compacto, moeda, pct } from './formato'
+import { Abas, CartaoViz, Vazio } from '../../social-media/_componentes/viz'
+import { moeda, num, pct, singular } from './formato'
+import { corIndice } from './GraficosPublico'
 
-type Metrica = 'custo' | 'contatos' | 'gasto' | 'ctr' | 'crm'
-const ORDEM = [1, 2, 3, 4, 5, 6, 0]
+type Metrica = 'contatos' | 'custo' | 'gasto' | 'crm' | 'ctr'
+type Dia = AnaliseTrafego['diario'][number]
+const LINHAS = [1, 2, 3, 4, 5, 6, 0]
 const CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-const ALTURA = 230
-const M = { topo: 14, dir: 10, base: 28, esq: 56 }
+const SEQ = ['var(--sv-seq-1)', 'var(--sv-seq-2)', 'var(--sv-seq-3)', 'var(--sv-seq-4)', 'var(--sv-seq-5)']
+const TINTA = ['var(--sv-seq-ink-1)', 'var(--sv-seq-ink-2)', 'var(--sv-seq-ink-3)', 'var(--sv-seq-ink-4)', 'var(--sv-seq-ink-5)']
+const DIA_MS = 86_400_000
+const dataUTC = (s: string) => new Date(`${s}T12:00:00Z`)
+const chave = (d: Date) => d.toISOString().slice(0, 10)
 
 export default function DiasSemana({ analise }: { analise: AnaliseTrafego }) {
   const c = analise.conta.moeda
-  const [metrica, setMetrica] = useState<Metrica>('custo')
-  const [ref, largura] = useLargura<HTMLDivElement>()
-  const [ativo, setAtivo] = useState<number | null>(null)
-  const dias = ORDEM.map(d => analise.semana[d])
   const temCrm = analise.crm.leads != null
-  const valor = (w: AnaliseTrafego['semana'][number]): number | null => {
-    if (!w.ocorrencias) return null
-    if (metrica === 'custo') return w.contatos > 0 ? w.gasto / w.contatos : null
-    if (metrica === 'contatos') return w.contatos / w.ocorrencias
-    if (metrica === 'gasto') return w.gasto / w.ocorrencias
-    if (metrica === 'ctr') return w.impressoes > 0 ? w.cliquesLink / w.impressoes : null
-    return w.leadsCrm != null ? w.leadsCrm / w.ocorrencias : null
-  }
-  const fmt = (v: number | null) => (metrica === 'custo' || metrica === 'gasto' ? moeda(v, c) : metrica === 'ctr' ? pct(v, 2) : v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }))
-  const fmtEixo = (v: number) => (metrica === 'custo' || metrica === 'gasto' ? (v >= 1000 ? compacto(v) : moeda(v, c, v < 10 ? 2 : 0)) : metrica === 'ctr' ? pct(v, 1) : compacto(v))
-  const valores = dias.map(valor)
-  const temDado = valores.some(v => v != null && v > 0)
-  const validos = valores.filter((v): v is number => v != null && v > 0)
-  // Destaque: o melhor dia (custo menor; nas outras métricas, o maior).
-  const melhor = validos.length ? (metrica === 'custo' ? Math.min(...validos) : Math.max(...validos)) : null
-  const w = Math.max(0, largura - M.esq - M.dir), h = ALTURA - M.topo - M.base
-  const ticks = ticksBonitos(Math.max(0.0001, ...validos))
-  const topo = ticks.at(-1) || 1
-  const faixa = w / 7
-  const y = (v: number) => M.topo + h - (v / topo) * h
-  const base = M.topo + h
+  const [metrica, setMetrica] = useState<Metrica>('contatos')
+  const [ativo, setAtivo] = useState<string | null>(null)
   const nomeRes = analise.totais.leads === 0 ? 'conversas' : analise.totais.conversas === 0 ? 'leads' : 'contatos'
-  let tip: EstadoTooltip | null = null
-  if (ativo != null && dias[ativo].ocorrencias) {
-    const d = dias[ativo]
-    tip = {
-      x: M.esq + faixa * (ativo + 0.5), y: y(valores[ativo] ?? 0),
-      conteudo: (
-        <>
-          <div className="pl-sv-tip-titulo">{d.nome} ({d.ocorrencias}× no período)</div>
-          <LinhaTip valor={moeda(d.gasto / d.ocorrencias, c)} rotulo="investidos por dia" />
-          <LinhaTip valor={(d.contatos / d.ocorrencias).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} rotulo={`${nomeRes} por dia`} />
-          <LinhaTip valor={moeda(d.contatos ? d.gasto / d.contatos : null, c)} rotulo="por resultado" />
-          {d.leadsCrm != null && <LinhaTip valor={(d.leadsCrm / d.ocorrencias).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} rotulo="leads no CRM por dia" />}
-        </>
-      ),
-    }
+  const porDia = new Map(analise.diario.map(d => [d.data, d]))
+  const contatos = (d: Dia) => d.conversas + d.leads
+  const valor = (d: Dia): number | null => {
+    if (metrica === 'contatos') return contatos(d)
+    if (metrica === 'gasto') return d.gasto
+    if (metrica === 'crm') return d.leadsCrm
+    if (metrica === 'ctr') return d.impressoes ? d.cliquesLink / d.impressoes : null
+    return contatos(d) ? d.gasto / contatos(d) : null
   }
+  const fmt = (v: number | null) => (metrica === 'gasto' || metrica === 'custo' ? moeda(v, c, v != null && v >= 100 ? 0 : 2) : metrica === 'ctr' ? pct(v, 2) : num(v))
+  const totGasto = analise.diario.reduce((s, d) => s + d.gasto, 0), totCont = analise.diario.reduce((s, d) => s + contatos(d), 0)
+  const custoMedio = totCont ? totGasto / totCont : null
+  const valores = analise.diario.map(valor).filter((v): v is number => v != null)
+  const max = Math.max(0, ...valores)
+  const cor = (d: Dia | undefined) => {
+    if (!d) return null
+    const v = valor(d)
+    if (metrica === 'custo') return v == null ? { bg: 'var(--pl-surface-2)', ink: 'var(--pl-ink-muted)' } : corIndice(custoMedio ? v / custoMedio : null)
+    if (v == null || v <= 0 || max <= 0) return { bg: 'var(--pl-surface-2)', ink: 'var(--pl-ink-muted)' }
+    const k = Math.min(4, Math.floor((v / max) * 5))
+    return { bg: SEQ[k], ink: TINTA[k] }
+  }
+
+  // Semanas de segunda a domingo cobrindo o período.
+  const inicio = dataUTC(analise.periodo.inicio), fim = dataUTC(analise.periodo.fim)
+  const segunda = new Date(inicio.getTime() - ((inicio.getUTCDay() + 6) % 7) * DIA_MS)
+  const semanas: Date[] = []
+  for (let t = segunda.getTime(); t <= fim.getTime(); t += 7 * DIA_MS) semanas.push(new Date(t))
+  const celula = (sem: Date, diaSemana: number) => chave(new Date(sem.getTime() + ((diaSemana + 6) % 7) * DIA_MS))
+
+  // Média de cada dia da semana (linha do calendário).
+  const mediaLinha = (diaSemana: number) => {
+    const ds = analise.diario.filter(d => dataUTC(d.data).getUTCDay() === diaSemana)
+    if (!ds.length) return null
+    if (metrica === 'custo') { const g = ds.reduce((s, d) => s + d.gasto, 0), r = ds.reduce((s, d) => s + contatos(d), 0); return r ? g / r : null }
+    if (metrica === 'ctr') { const i = ds.reduce((s, d) => s + d.impressoes, 0); return i ? ds.reduce((s, d) => s + d.cliquesLink, 0) / i : null }
+    const vs = ds.map(valor).filter((v): v is number => v != null)
+    return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null
+  }
+  const medias = LINHAS.map(mediaLinha)
+  const maxMedia = Math.max(0, ...medias.map(v => v ?? 0))
+  const validas = medias.filter((v): v is number => v != null && v > 0)
+  const melhor = validas.length ? (metrica === 'custo' ? Math.min(...validas) : Math.max(...validas)) : null
+  const sel = ativo ? porDia.get(ativo) : null
+  const temDado = analise.diario.some(d => d.gasto > 0)
+
   return (
     <CartaoViz
-      titulo="Dias da semana"
-      subtitulo={metrica === 'custo' ? `Custo por ${nomeRes.replace(/s$/, '')} em cada dia da semana (o mais barato em destaque)` : 'Média por dia — cada dia da semana dividido pelas vezes que aparece no período'}
-      acoes={<Abas rotulo="Métrica" valor={metrica} onChange={setMetrica} opcoes={[{ valor: 'custo', rotulo: 'Custo/result.' }, { valor: 'contatos', rotulo: 'Resultados/dia' }, { valor: 'gasto', rotulo: 'Investimento/dia' }, { valor: 'ctr', rotulo: 'CTR' }, ...(temCrm ? [{ valor: 'crm' as const, rotulo: 'Leads CRM/dia' }] : [])]} />}
+      titulo="Calendário do período"
+      subtitulo={metrica === 'custo' ? `Custo por ${singular(nomeRes)} de cada dia contra a média do período: azul mais barato, laranja mais caro` : 'Cada quadradinho é um dia; à direita, a média de cada dia da semana'}
+      acoes={<Abas rotulo="Métrica do calendário" valor={metrica} onChange={setMetrica} opcoes={[{ valor: 'contatos', rotulo: 'Resultados' }, { valor: 'custo', rotulo: 'Custo/result.' }, { valor: 'gasto', rotulo: 'Investimento' }, ...(temCrm ? [{ valor: 'crm' as const, rotulo: 'Leads CRM' }] : []), { valor: 'ctr', rotulo: 'CTR' }]} />}
       tabela={{
-        colunas: ['Dia', 'Vezes no período', 'Investimento/dia', `${nomeRes}/dia`, 'Custo/result.', 'CTR', ...(temCrm ? ['Leads CRM/dia'] : [])],
-        linhas: dias.map(d => [d.nome, d.ocorrencias, moeda(d.ocorrencias ? d.gasto / d.ocorrencias : null, c), d.ocorrencias ? (d.contatos / d.ocorrencias).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '—', moeda(d.contatos ? d.gasto / d.contatos : null, c), pct(d.impressoes ? d.cliquesLink / d.impressoes : null, 2), ...(temCrm ? [d.ocorrencias && d.leadsCrm != null ? (d.leadsCrm / d.ocorrencias).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '—'] : [])]),
+        colunas: ['Dia', 'Investimento', nomeRes, 'Custo/result.', 'CTR', ...(temCrm ? ['Leads CRM'] : [])],
+        linhas: analise.diario.map(d => [`${CURTO[dataUTC(d.data).getUTCDay()]} ${d.data.slice(8, 10)}/${d.data.slice(5, 7)}`, moeda(d.gasto, c), num(contatos(d)), moeda(contatos(d) ? d.gasto / contatos(d) : null, c), pct(d.impressoes ? d.cliquesLink / d.impressoes : null, 2), ...(temCrm ? [num(d.leadsCrm)] : [])]),
       }}
     >
-      {!temDado ? <Vazio>Sem dados no período.</Vazio> : (
-        <div ref={ref} style={{ position: 'relative' }}>
-          {largura > 0 && (
-            <svg className="pl-sv-svg" width={largura} height={ALTURA} role="img" aria-label="Gráfico por dia da semana" onPointerLeave={() => setAtivo(null)}
-              onPointerMove={e => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.floor((e.clientX - r.left - M.esq) / (faixa || 1)); setAtivo(i >= 0 && i < 7 ? i : null) }}>
-              {ticks.map(t => (
-                <g key={t}>
-                  <line className="grade" x1={M.esq} x2={M.esq + w} y1={y(t)} y2={y(t)} />
-                  <text className="eixo" x={M.esq - 8} y={y(t) + 3.5} textAnchor="end">{fmtEixo(t)}</text>
-                </g>
-              ))}
-              <line className="base" x1={M.esq} x2={M.esq + w} y1={base} y2={base} />
-              {valores.map((v, i) => {
-                if (v == null || v <= 0) return null
-                const bw = Math.min(56, faixa - 14), x0 = M.esq + faixa * i + (faixa - bw) / 2, t = y(v), r = Math.min(4, base - t)
-                const destaque = v === melhor
-                return (
-                  <g key={i}>
-                    <path d={`M${x0} ${base} V${t + r} Q${x0} ${t} ${x0 + r} ${t} H${x0 + bw - r} Q${x0 + bw} ${t} ${x0 + bw} ${t + r} V${base} Z`}
-                      fill={destaque ? 'var(--sv-1)' : 'var(--sv-seq-1)'} opacity={ativo == null || ativo === i ? 1 : 0.55} />
-                    <text className="pl-tf-rotulo-ponto" x={x0 + bw / 2} y={t - 6} textAnchor="middle">{fmt(v)}</text>
-                  </g>
-                )
-              })}
-              {dias.map((d, i) => <text key={d.dia} className="eixo" x={M.esq + faixa * (i + 0.5)} y={ALTURA - 8} textAnchor="middle">{CURTO[d.dia]}</text>)}
-            </svg>
-          )}
-          <Tooltip estado={tip} largura={largura} />
+      {!temDado ? <Vazio>Sem investimento no período.</Vazio> : (
+        <div className="pl-tf-cal-wrap">
+          <div className="pl-tf-cal" style={{ gridTemplateColumns: `34px repeat(${semanas.length}, minmax(18px, 42px)) minmax(130px, 220px)` }}>
+            <span />
+            {semanas.map((s, i) => <span key={i} className="pl-tf-cal-sem">{i % 2 === 0 || semanas.length <= 6 ? `${chave(s).slice(8, 10)}/${chave(s).slice(5, 7)}` : ''}</span>)}
+            <span className="pl-tf-cal-sem">Média do dia</span>
+            {LINHAS.map((ds, li) => (
+              <div key={ds} className="pl-tf-cal-linha">
+                <span className="pl-tf-cal-dia">{CURTO[ds]}</span>
+                {semanas.map((s, si) => {
+                  const k = celula(s, ds)
+                  const d = porDia.get(k)
+                  const e = cor(d)
+                  if (!e || !d) return <span key={si} className="pl-tf-cal-cel fora" />
+                  return (
+                    <button key={si} type="button" className={`pl-tf-cal-cel ${ativo === k ? 'ativo' : ''}`} style={{ background: e.bg, color: e.ink }}
+                      onMouseEnter={() => setAtivo(k)} onMouseLeave={() => setAtivo(null)} onFocus={() => setAtivo(k)} onBlur={() => setAtivo(null)}
+                      aria-label={`${CURTO[ds]} ${k.slice(8, 10)}/${k.slice(5, 7)}: ${fmt(valor(d))}`}>
+                      {k.slice(8, 10)}
+                    </button>
+                  )
+                })}
+                <span className={`pl-tf-cal-media ${medias[li] != null && medias[li] === melhor ? 'melhor' : ''}`}>
+                  <i style={{ width: `${medias[li] != null && maxMedia > 0 ? (medias[li]! / maxMedia) * 100 : 0}%` }} />
+                  <b>{fmt(medias[li])}</b>
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="pl-tf-cal-info">
+            {sel ? (
+              <><b>{CURTO[dataUTC(sel.data).getUTCDay()]}, {sel.data.slice(8, 10)}/{sel.data.slice(5, 7)}</b> · {moeda(sel.gasto, c)} investidos · {num(contatos(sel))} {nomeRes} · {moeda(contatos(sel) ? sel.gasto / contatos(sel) : null, c)} cada{sel.leadsCrm != null && <> · {num(sel.leadsCrm)} leads no CRM</>}</>
+            ) : <>Passe o mouse num dia. {melhor != null && <>Melhor dia da semana em destaque à direita.</>}</>}
+          </div>
         </div>
       )}
     </CartaoViz>
   )
 }
-

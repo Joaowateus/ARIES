@@ -6,8 +6,9 @@
 // resultado? (barra de "% do investimento" contra "% dos resultados").
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type PublicosTrafego, type SegmentoPublicoTrafego } from '@/lib/proLaboreApi'
-import { Abas, CartaoViz, LinhaTip, Tooltip, Vazio, ticksBonitos, useLargura, type EstadoTooltip } from '../../social-media/_componentes/viz'
-import { compacto, moeda, num, pct } from './formato'
+import { Abas, CartaoViz, Vazio } from '../../social-media/_componentes/viz'
+import { moeda, num, pct } from './formato'
+import { DivergentePosicionamentos, EmpilhadoDispositivos, InclinacaoPlataformas, MapaRegioes, RelogioHoras } from './GraficosPublico'
 
 type Metrica = 'gasto' | 'resultados' | 'custo' | 'ctr' | 'connect'
 const NIVEL = { critico: { rotulo: 'Crítico', icone: '!' }, atencao: { rotulo: 'Atenção', icone: '▲' }, info: { rotulo: 'Informação', icone: 'i' }, positivo: { rotulo: 'Bom sinal', icone: '✓' } } as const
@@ -159,74 +160,6 @@ function IdadeGenero({ segs, moedaConta, nomeResultado }: { segs: SegmentoPublic
   )
 }
 
-// ---------- Horário ----------
-const ALTURA = 220
-const MG = { topo: 12, dir: 10, base: 28, esq: 52 }
-
-function Horas({ segs, moedaConta, nomeResultado }: { segs: SegmentoPublicoTrafego[]; moedaConta: string; nomeResultado: string }) {
-  const [metrica, setMetrica] = useState<Metrica>('resultados')
-  const [ref, largura] = useLargura<HTMLDivElement>()
-  const [ativo, setAtivo] = useState<number | null>(null)
-  const valores = segs.map(s => valorDe(s, metrica))
-  const temDado = segs.some(s => s.impressoes > 0)
-  const w = Math.max(0, largura - MG.esq - MG.dir), h = ALTURA - MG.topo - MG.base
-  const ticks = ticksBonitos(Math.max(0.0001, ...valores.map(v => v ?? 0)))
-  const topo = ticks.at(-1) || 1
-  const faixa = w / 24
-  const y = (v: number) => MG.topo + h - (v / topo) * h
-  const fmtEixo = (v: number) => (metrica === 'gasto' || metrica === 'custo' ? (v >= 1000 ? compacto(v) : moeda(v, moedaConta, v < 10 ? 2 : 0)) : metrica === 'resultados' ? compacto(v) : pct(v, v < 0.1 ? 1 : 0))
-  let tip: EstadoTooltip | null = null
-  if (ativo != null) {
-    const s = segs[ativo]
-    tip = {
-      x: MG.esq + faixa * (ativo + 0.5), y: y(valores[ativo] ?? 0),
-      conteudo: (
-        <>
-          <div className="pl-sv-tip-titulo">{s.rotulo} às {String((ativo + 1) % 24).padStart(2, '0')}h</div>
-          <LinhaTip valor={moeda(s.gasto, moedaConta)} rotulo="investidos" />
-          <LinhaTip valor={num(s.resultados)} rotulo={nomeResultado} />
-          <LinhaTip valor={moeda(s.custoResultado, moedaConta)} rotulo="por resultado" />
-          <LinhaTip valor={pct(s.ctr, 2)} rotulo="CTR" />
-        </>
-      ),
-    }
-  }
-  return (
-    <CartaoViz
-      titulo="Horário do dia"
-      subtitulo="Fuso da conta de anúncios. Use pra reforçar o atendimento onde os contatos chegam."
-      acoes={<Abas rotulo="Métrica" valor={metrica} onChange={setMetrica} opcoes={[{ valor: 'resultados', rotulo: 'Resultados' }, { valor: 'gasto', rotulo: 'Investimento' }, { valor: 'custo', rotulo: 'Custo/result.' }, { valor: 'ctr', rotulo: 'CTR' }]} />}
-      tabela={{ colunas: ['Hora', 'Investimento', `Resultados (${nomeResultado})`, 'Custo/result.', 'CTR', 'Connect rate'], linhas: segs.map(s => [s.rotulo, moeda(s.gasto, moedaConta), num(s.resultados), moeda(s.custoResultado, moedaConta), pct(s.ctr, 2), pct(s.connectRate)]) }}
-    >
-      {!temDado ? <Vazio>Sem dado por horário nesse período.</Vazio> : (
-        <div ref={ref} style={{ position: 'relative' }}>
-          {largura > 0 && (
-            <svg className="pl-sv-svg" width={largura} height={ALTURA} role="img" aria-label="Gráfico por hora do dia" onPointerLeave={() => setAtivo(null)}
-              onPointerMove={e => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.floor((e.clientX - r.left - MG.esq) / (faixa || 1)); setAtivo(i >= 0 && i < 24 ? i : null) }}>
-              {ticks.map(t => (
-                <g key={t}>
-                  <line className="grade" x1={MG.esq} x2={largura - MG.dir} y1={y(t)} y2={y(t)} />
-                  <text className="eixo" x={MG.esq - 8} y={y(t) + 3.5} textAnchor="end">{fmtEixo(t)}</text>
-                </g>
-              ))}
-              <line className="base" x1={MG.esq} x2={largura - MG.dir} y1={MG.topo + h} y2={MG.topo + h} />
-              {valores.map((v, i) => {
-                if (v == null || v <= 0) return null
-                const bw = Math.max(2, faixa - 3), x = MG.esq + faixa * i + (faixa - bw) / 2
-                const alto = Math.max(1, MG.topo + h - y(v))
-                return <path key={i} d={`M${x} ${MG.topo + h} V${MG.topo + h - alto + Math.min(4, alto)} Q${x} ${MG.topo + h - alto} ${x + Math.min(4, bw / 2)} ${MG.topo + h - alto} H${x + bw - Math.min(4, bw / 2)} Q${x + bw} ${MG.topo + h - alto} ${x + bw} ${MG.topo + h - alto + Math.min(4, alto)} V${MG.topo + h} Z`}
-                  fill="var(--sv-1)" opacity={ativo == null || ativo === i ? 1 : 0.45} />
-              })}
-              {segs.map((s, i) => (i % 3 === 0 ? <text key={i} className="eixo" x={MG.esq + faixa * (i + 0.5)} y={ALTURA - 8} textAnchor="middle">{s.rotulo}</text> : null))}
-            </svg>
-          )}
-          <Tooltip estado={tip} largura={largura} />
-        </div>
-      )}
-    </CartaoViz>
-  )
-}
-
 // Posicionamentos somados por plataforma (Facebook, Instagram…).
 function agruparPlataformas(segs: SegmentoPublicoTrafego[]): LinhaParticipacao[] {
   const m = new Map<string, { gasto: number; resultados: number; partGasto: number; partResultados: number; imp: number; cl: number; dest: number }>()
@@ -299,11 +232,11 @@ export default function Publicos({ periodo, filtro, moedaConta, versao }: {
       </div>
       <div className="pl-tf-publicos-grid">
         <IdadeGenero segs={q.idadeGenero.segmentos} moedaConta={moedaConta} nomeResultado={nomeRes} />
-        <BarrasParticipacao titulo="Plataformas" subtitulo="Facebook, Instagram, Messenger, Audience Network…" linhas={porPlataforma} moedaConta={moedaConta} nomeResultado={nomeRes} />
-        <BarrasParticipacao titulo="Posicionamentos" subtitulo="Onde o anúncio apareceu: feed, stories, reels…" linhas={q.posicionamento.segmentos.map(comoLinha)} moedaConta={moedaConta} nomeResultado={nomeRes} limite={10} />
-        <BarrasParticipacao titulo="Regiões" subtitulo="Estado de onde a pessoa viu o anúncio" linhas={q.regiao.segmentos.map(comoLinha)} moedaConta={moedaConta} nomeResultado={nomeRes} limite={10} />
-        <BarrasParticipacao titulo="Dispositivos" linhas={q.dispositivo.segmentos.map(comoLinha)} moedaConta={moedaConta} nomeResultado={nomeRes} />
-        <Horas segs={q.hora.segmentos} moedaConta={moedaConta} nomeResultado={nomeRes} />
+        <InclinacaoPlataformas linhas={porPlataforma} moedaConta={moedaConta} nomeResultado={nomeRes} />
+        <DivergentePosicionamentos linhas={q.posicionamento.segmentos.map(comoLinha)} moedaConta={moedaConta} nomeResultado={nomeRes} />
+        <MapaRegioes segs={q.regiao.segmentos} moedaConta={moedaConta} nomeResultado={nomeRes} />
+        <EmpilhadoDispositivos linhas={q.dispositivo.segmentos.map(comoLinha)} moedaConta={moedaConta} nomeResultado={nomeRes} />
+        <RelogioHoras segs={q.hora.segmentos} moedaConta={moedaConta} nomeResultado={nomeRes} />
       </div>
     </div>
   )

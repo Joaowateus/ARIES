@@ -148,12 +148,15 @@ export function converterLinha(l: Record<string, unknown>): InsightAnuncioDia {
 // Pagina até o fim ou até o prazo; devolve também se terminou.
 export async function buscarInsightsDiarios(
   adAccountId: string, token: string, desde: string, ate: string, prazoEm: number,
-): Promise<{ linhas: InsightAnuncioDia[]; completo: boolean }> {
+): Promise<{ linhas: InsightAnuncioDia[]; completo: boolean; acoes: Record<string, number> }> {
   const linhas: InsightAnuncioDia[] = []
+  // Total de cada tipo de ação que a Meta mandou — mostra na tela o que a
+  // conta realmente tem (ex.: se vem profundidade de conversa ou não).
+  const acoes: Record<string, number> = {}
   let url: string | null = null
   let primeira = true
   while (primeira || url) {
-    if (Date.now() > prazoEm) return { linhas, completo: false }
+    if (Date.now() > prazoEm) return { linhas, completo: false, acoes }
     const body: { data: Array<Record<string, unknown>>; paging?: { next?: string } } = primeira
       ? await chamar(`/${adAccountId}/insights`, {
         level: 'ad', fields: CAMPOS_INSIGHT, time_increment: '1', limit: '500',
@@ -165,9 +168,10 @@ export async function buscarInsightsDiarios(
       : await chamar(url!, {}, token)
     primeira = false
     linhas.push(...body.data.map(converterLinha))
+    for (const l of body.data) for (const a of (l.actions as Acao[] | undefined) ?? []) acoes[a.action_type] = (acoes[a.action_type] ?? 0) + num(a.value)
     url = body.paging?.next ?? null
   }
-  return { linhas, completo: true }
+  return { linhas, completo: true, acoes }
 }
 
 // Alcance e frequência do período: da conta e de cada campanha.
