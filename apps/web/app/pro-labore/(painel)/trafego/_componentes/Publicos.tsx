@@ -183,8 +183,15 @@ function agruparPlataformas(segs: SegmentoPublicoTrafego[]): LinhaParticipacao[]
 }
 
 // ---------- Seção ----------
-export default function Publicos({ periodo, filtro, moedaConta, versao }: {
+const NOME_QUEBRA: Record<string, string> = {
+  idadeGenero: 'idade e gênero', regiao: 'região', posicionamento: 'posicionamento', dispositivo: 'dispositivo', hora: 'horário',
+}
+
+export default function Publicos({ periodo, filtro, moedaConta, versao, erroConta }: {
   periodo: { inicio: string; fim: string }; filtro: { campanhaId?: string; adsetId?: string }; moedaConta: string; versao: number
+  // Erro de sincronização já mostrado no topo da página: se os públicos
+  // falharem pelo mesmo motivo, não repete o texto inteiro aqui.
+  erroConta?: string | null
 }) {
   const [dados, setDados] = useState<PublicosTrafego | null>(null)
   const [erro, setErro] = useState('')
@@ -206,7 +213,10 @@ export default function Publicos({ periodo, filtro, moedaConta, versao }: {
   const nomeRes = dados.nomeResultado
   const comoLinha = (s: SegmentoPublicoTrafego): LinhaParticipacao => ({ ...s, sub: null })
   const porPlataforma = agruparPlataformas(q.posicionamento.segmentos)
-  const erros = Object.entries(q).filter(([, v]) => v.erro).map(([k, v]) => `${k}: ${v.erro}`)
+  // Agrupa as quebras que falharam pelo mesmo motivo (normalmente é um só).
+  const porErro = new Map<string, string[]>()
+  for (const [k, v] of Object.entries(q)) if (v.erro) porErro.set(v.erro, [...(porErro.get(v.erro) ?? []), NOME_QUEBRA[k] ?? k])
+  const erros = [...porErro].map(([msg, nomes]) => ({ msg, nomes: nomes.join(', '), repetido: msg === erroConta }))
 
   return (
     <div className={`pl-tf-publicos ${carregando ? 'pl-tf-recarregando' : ''}`}>
@@ -218,7 +228,9 @@ export default function Publicos({ periodo, filtro, moedaConta, versao }: {
           </div>
           <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" disabled={carregando} onClick={() => setForcar(f => f + 1)}>{carregando ? 'Buscando…' : 'Buscar de novo na Meta'}</button>
         </div>
-        {erros.length > 0 && <div className="pl-alert pl-alert-error" style={{ marginTop: 10 }}>{erros.join(' · ')}</div>}
+        {erros.map(e => e.repetido
+          ? <p key={e.msg} className="pl-hint" style={{ marginTop: 10 }}>Não deu pra buscar {e.nomes} na Meta pelo mesmo motivo do aviso no topo da página.</p>
+          : <div key={e.msg} className="pl-alert pl-alert-error" style={{ marginTop: 10 }}>Não deu pra buscar {e.nomes}: {e.msg}</div>)}
         {dados.achados.length === 0 ? <p className="pl-hint" style={{ marginTop: 10 }}>Nenhuma diferença forte entre os públicos nesse período.</p> : (
           <ul className="pl-tf-diag-lista">
             {dados.achados.map((d, i) => (

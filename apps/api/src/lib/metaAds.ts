@@ -5,7 +5,8 @@ const GRAPH_BASE = process.env.META_GRAPH_BASE ?? 'https://graph.facebook.com'
 const VERSAO = process.env.META_GRAPH_VERSION ?? 'v23.0'
 
 export class ErroMetaAds extends Error {
-  constructor(message: string, readonly codigo?: number, readonly subcodigo?: number) {
+  // original: a mensagem da própria Meta (pra mostrar no diagnóstico).
+  constructor(message: string, readonly codigo?: number, readonly subcodigo?: number, readonly original?: string) {
     super(message)
   }
 }
@@ -22,7 +23,7 @@ export function erroDeLimite(e: unknown): boolean {
 
 function traduzir(msg: string, codigo?: number): string {
   if (codigo === 190) return 'O token do Gerenciador de Anúncios expirou ou foi revogado. Gere um novo e conecte de novo.'
-  if (codigo === 200 || codigo === 10) return 'O token não tem permissão pra ler essa conta de anúncios (precisa de ads_read e acesso à conta).'
+  if (codigo === 200 || codigo === 10) return 'A Meta recusou a leitura dessa conta de anúncios com o token salvo (falta a permissão ads_read ou o acesso do usuário do sistema à conta). Clique em "Diagnosticar conexão" pra ver o que está faltando.'
   if (erroDeLimite(new ErroMetaAds(msg, codigo))) return 'A Meta limitou as chamadas por agora. A próxima sincronização tenta de novo.'
   return `A Meta recusou: ${msg}`
 }
@@ -33,7 +34,8 @@ async function chamar<T>(caminho: string, params: Record<string, string>, token:
   const body = await res.json().catch(() => null) as { error?: { message?: string; code?: number; error_subcode?: number } } | null
   if (!res.ok || body?.error) {
     const e = body?.error
-    throw new ErroMetaAds(traduzir(e?.message ?? `HTTP ${res.status}`, e?.code), e?.code, e?.error_subcode)
+    const original = e?.message ?? `HTTP ${res.status}`
+    throw new ErroMetaAds(traduzir(original, e?.code), e?.code, e?.error_subcode, original)
   }
   return body as T
 }
@@ -65,6 +67,14 @@ export async function listarContasDeAnuncio(token: string): Promise<ContaDeAnunc
 
 type Acao = { action_type: string; value: string }
 
+// Campos mínimos (os da primeira versão): se a Meta recusar algum campo
+// extra, a sincronização segue só com esses em vez de parar.
+const CAMPOS_INSIGHT_BASICOS = [
+  'date_start', 'ad_id', 'ad_name', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name', 'objective',
+  'spend', 'impressions', 'reach', 'clicks', 'inline_link_clicks', 'actions',
+  'video_thruplay_watched_actions', 'video_p25_watched_actions', 'video_p50_watched_actions',
+  'video_p75_watched_actions', 'video_p100_watched_actions',
+].join(',')
 const CAMPOS_INSIGHT = [
   'date_start', 'ad_id', 'ad_name', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name', 'objective',
   'spend', 'impressions', 'reach', 'clicks', 'inline_link_clicks', 'outbound_clicks', 'actions',
@@ -157,15 +167,24 @@ export async function buscarInsightsDiarios(
   let primeira = true
   while (primeira || url) {
     if (Date.now() > prazoEm) return { linhas, completo: false, acoes }
-    const body: { data: Array<Record<string, unknown>>; paging?: { next?: string } } = primeira
-      ? await chamar(`/${adAccountId}/insights`, {
-        level: 'ad', fields: CAMPOS_INSIGHT, time_increment: '1', limit: '500',
-        time_range: JSON.stringify({ since: desde, until: ate }),
-        // Mesmo critério de atribuição configurado no Gerenciador — os números
-        // batem com o que aparece lá.
-        use_unified_attribution_setting: 'true',
-      }, token)
-      : await chamar(url!, {}, token)
+    const params = (fields: string) => ({
+      level: 'ad', fields, time_increment: '1', limit: '500',
+      time_range: JSON.stringify({ since: desde, until: ate }),
+      // Mesmo critério de atribuição configurado no Gerenciador — os números
+      // batem com o que aparece lá.
+      use_unified_attribution_setting: 'true',
+    })
+    let body: { data: Array<Record<string, unknown>>; paging?: { next?: string } }
+    if (!primeira) body = await chamar(url!, {}, token)
+    else {
+      try {
+        body = await chamar(`/${adAccountId}/insights`, params(CAMPOS_INSIGHT), token)
+      } catch (e) {
+        // Campo extra recusado (permissão/versão): tenta com os básicos.
+        if (!(e instanceof ErroMetaAds) || ![100, 200, 10, 3].includes(e.codigo ?? 0)) throw e
+        body = await chamar(`/${adAccountId}/insights`, params(CAMPOS_INSIGHT_BASICOS), token)
+      }
+    }
     primeira = false
     linhas.push(...body.data.map(converterLinha))
     for (const l of body.data) for (const a of (l.actions as Acao[] | undefined) ?? []) acoes[a.action_type] = (acoes[a.action_type] ?? 0) + num(a.value)
@@ -335,4 +354,80 @@ export async function buscarPublico(adAccountId: string, token: string, tipo: Ti
       lpv: a.lpv, conversas: a.conversas, leads: a.leads, videoViews: a.videoViews, conversasProf2: a.conversasProf2,
     }
   })
+}
+
+// ---------- Diagnóstico da conexão ----------
+const STATUS_CONTA: Record<number, string> = {
+  1: 'Ativa', 2: 'Desativada', 3: 'Com pagamento pendente', 7: 'Em análise de risco', 8: 'Com liquidação pendente',
+  9: 'Em período de carência', 100: 'Com encerramento pendente', 101: 'Encerrada', 201: 'Ativa', 202: 'Encerrada',
+}
+const MOTIVO_DESATIVACAO: Record<number, string> = {
+  1: 'violação das políticas de anúncios', 2: 'análise de propriedade intelectual', 3: 'problema de pagamento', 4: 'conta encerrada pela Meta',
+  5: 'análise da Meta', 6: 'integridade do negócio', 7: 'encerramento permanente', 8: 'conta de revendedor sem uso', 9: 'conta sem uso',
+}
+
+export interface PassoDiagnostico { chave: string; titulo: string; ok: boolean; detalhe: string; codigo?: number }
+
+// Testa cada etapa que a aba usa, na ordem em que uma depende da outra, e
+// diz qual falhou (com a mensagem da própria Meta).
+export async function diagnosticarConexao(adAccountId: string, token: string): Promise<PassoDiagnostico[]> {
+  const passos: PassoDiagnostico[] = []
+  const tentar = async (chave: string, titulo: string, f: () => Promise<string>) => {
+    try {
+      passos.push({ chave, titulo, ok: true, detalhe: await f() })
+      return true
+    } catch (e) {
+      const m = e instanceof ErroMetaAds ? e : null
+      passos.push({ chave, titulo, ok: false, detalhe: m?.original ?? (e instanceof Error ? e.message : 'Falhou'), codigo: m?.codigo })
+      return false
+    }
+  }
+  const tokenOk = await tentar('token', 'Token válido', async () => {
+    const me = await chamar<{ id: string; name?: string }>('/me', { fields: 'id,name' }, token)
+    return `Usuário: ${me.name ?? me.id}`
+  })
+  if (!tokenOk) return passos
+  await tentar('permissoes', 'Permissão ads_read no token', async () => {
+    const r = await chamar<{ data: Array<{ permission: string; status: string }> }>('/me/permissions', {}, token)
+    const concedidas = r.data.filter(p => p.status === 'granted').map(p => p.permission)
+    if (!concedidas.includes('ads_read') && !concedidas.includes('ads_management')) throw new ErroMetaAds('', 200, undefined, `O token tem: ${concedidas.join(', ') || 'nenhuma permissão'} — falta ads_read.`)
+    return `Concedidas: ${concedidas.join(', ')}`
+  })
+  const contas = await listarContasDeAnuncio(token).catch(() => [] as ContaDeAnuncio[])
+  await tentar('acesso', 'Usuário do sistema tem acesso à conta', async () => {
+    if (!contas.some(c => c.id === adAccountId)) {
+      throw new ErroMetaAds('', 200, undefined, contas.length
+        ? `A conta ${adAccountId} não está entre as que o token enxerga (${contas.map(c => c.nome).slice(0, 5).join(', ')}).`
+        : 'O token não enxerga nenhuma conta de anúncios.')
+    }
+    return 'A conta aparece na lista do token'
+  })
+  await tentar('status', 'Situação da conta de anúncios', async () => {
+    const c = await chamar<{ name?: string; account_status?: number; disable_reason?: number }>(`/${adAccountId}`, { fields: 'name,account_status,disable_reason' }, token)
+    const st = STATUS_CONTA[c.account_status ?? 0] ?? `status ${c.account_status}`
+    if (c.account_status !== 1 && c.account_status !== 201) {
+      const motivo = c.disable_reason ? MOTIVO_DESATIVACAO[c.disable_reason] : null
+      throw new ErroMetaAds('', 0, undefined, `${c.name ?? adAccountId}: ${st}${motivo ? ` (${motivo})` : ''}.`)
+    }
+    return `${c.name ?? adAccountId}: ${st}`
+  })
+  await tentar('insights', 'Leitura dos resultados (insights)', async () => {
+    const r = await chamar<{ data: Array<{ spend?: string }> }>(`/${adAccountId}/insights`, { fields: 'spend', date_preset: 'last_7d' }, token)
+    return `OK — investido nos últimos 7 dias: R$ ${Number(r.data[0]?.spend ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+  })
+  await tentar('detalhe', 'Métricas completas por anúncio', async () => {
+    await chamar(`/${adAccountId}/insights`, { level: 'ad', fields: CAMPOS_INSIGHT, date_preset: 'yesterday', limit: '1' }, token)
+    return 'OK'
+  })
+  await tentar('estrutura', 'Campanhas, conjuntos e anúncios', async () => {
+    await chamar(`/${adAccountId}/campaigns`, { fields: 'id,name,effective_status', limit: '1' }, token)
+    await chamar(`/${adAccountId}/adsets`, { fields: 'id,name,targeting', limit: '1' }, token)
+    await chamar(`/${adAccountId}/ads`, { fields: 'id,name,creative{thumbnail_url}', limit: '1' }, token)
+    return 'OK'
+  })
+  await tentar('publicos', 'Públicos (idade, gênero, região…)', async () => {
+    await chamar(`/${adAccountId}/insights`, { level: 'adset', fields: 'spend', breakdowns: 'age,gender', date_preset: 'last_7d', limit: '1' }, token)
+    return 'OK'
+  })
+  return passos
 }
