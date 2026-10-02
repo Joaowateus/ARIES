@@ -15,6 +15,7 @@ import KpisTrafego from './_componentes/KpisTrafego'
 import Diagnostico from './_componentes/Diagnostico'
 import EvolucaoTrafego from './_componentes/EvolucaoTrafego'
 import TabelaTrafego from './_componentes/TabelaTrafego'
+import DiagnosticoConexao from './_componentes/DiagnosticoConexao'
 import Resumo from './_componentes/Resumo'
 import QualidadeConversas from './_componentes/QualidadeConversas'
 import Publicos from './_componentes/Publicos'
@@ -54,6 +55,7 @@ export default function ProLaboreTrafegoPage() {
   const { usuario } = useProLaboreAuth()
   const [conta, setConta] = useState<ContaTrafego | null | undefined>(undefined)
   const [trocando, setTrocando] = useState(false)
+  const [verDiagnostico, setVerDiagnostico] = useState(false)
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoDoPreset('7d'))
   const [filtro, setFiltro] = useState<{ campanhaId?: string; adsetId?: string }>({})
   const [analise, setAnalise] = useState<AnaliseTrafego | null>(null)
@@ -212,11 +214,19 @@ export default function ProLaboreTrafegoPage() {
           {!conta.historicoCompleto && !sincronizando && ' · histórico de 90 dias ainda carregando'}
         </span>
         <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" disabled={sincronizando} onClick={() => void sincronizar()}>{sincronizando ? 'Atualizando…' : 'Atualizar agora'}</button>
+        <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" onClick={() => setVerDiagnostico(v => !v)}>Diagnosticar conexão</button>
         <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" onClick={() => setTrocando(true)}>Trocar token/conta</button>
         <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq pl-as-perigo" onClick={() => void desconectar()}>Desconectar</button>
       </div>
       {conta.ultimoErroSync && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{conta.ultimoErroSync}{/expirou|revogado/.test(conta.ultimoErroSync) && <> <button type="button" className="pl-link-action" onClick={() => setTrocando(true)}>Colar token novo</button></>}</div>}
-      {aviso && <div className="pl-alert" style={{ marginBottom: 12 }}>{aviso}</div>}
+      {aviso && aviso !== conta.ultimoErroSync && <div className="pl-alert" style={{ marginBottom: 12 }}>{aviso}</div>}
+      {(verDiagnostico || conta.ultimoErroSync) && (
+        <DiagnosticoConexao
+          automatico={!!conta.ultimoErroSync && !verDiagnostico}
+          onTrocarToken={() => setTrocando(true)}
+          onFechar={verDiagnostico ? () => setVerDiagnostico(false) : undefined}
+        />
+      )}
 
       <FiltroPeriodo
         periodo={periodo}
@@ -255,7 +265,7 @@ export default function ProLaboreTrafegoPage() {
             <Diagnostico analise={analise} />
           </Secao>
           <Secao id="tf-publicos" eyebrow="Quem" titulo="Públicos" nota="Idade, gênero, região, plataforma, posicionamento, dispositivo e horário — vem da Meta pra cada período e fica guardado.">
-            <Publicos periodo={periodo} filtro={filtro} moedaConta={analise.conta.moeda} versao={versao} />
+            <Publicos periodo={periodo} filtro={filtro} moedaConta={analise.conta.moeda} versao={versao} erroConta={conta.ultimoErroSync} />
           </Secao>
           <Secao id="tf-criativos" eyebrow="O quê" titulo="Criativos">
             <Criativos analise={analise} />

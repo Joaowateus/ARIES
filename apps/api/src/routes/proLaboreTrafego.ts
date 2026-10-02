@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
-import { listarContasDeAnuncio, ErroMetaAds, erroDeToken } from '../lib/metaAds'
+import { listarContasDeAnuncio, ErroMetaAds, erroDeToken, diagnosticarConexao, type PassoDiagnostico } from '../lib/metaAds'
 import { sincronizarTrafego, DIAS_HISTORICO, VERSAO_DADOS, hojeNoFuso, somarDias } from '../lib/trafegoSync'
 import { analisarTrafego, ETAPAS_TRAFEGO, type ConfiguracaoTrafego } from '../lib/trafegoAnalytics'
 import { analisarPublicos } from '../lib/trafegoPublicos'
@@ -124,6 +124,45 @@ router.post('/trafego/sincronizar', requireProLaboreAuth, requireDono, async (re
   try {
     const resultado = await sincronizarTrafego(c, { forcarEstrutura: true })
     res.json({ conta: resumoConta(await prisma.trafegoConta.findUniqueOrThrow({ where: { id: c.id } })), resultado })
+  } catch (e) {
+    erroMeta(res, e)
+  }
+})
+
+// O que fazer, pelo primeiro passo que falhou no diagnóstico.
+function comoResolver(passos: PassoDiagnostico[], nomeConta: string) {
+  const falha = passos.find(p => !p.ok)
+  const gerarToken = [
+    'No Facebook, abra Configurações do negócio → Usuários → Usuários do sistema → ARIES.',
+    'Clique em "Gerar novo token", escolha o app ARIES Tráfego, marque a permissão ads_read e gere.',
+    'Copie o token e, aqui na aba, clique em "Trocar token/conta" e cole (não mande o token por mensagem).',
+  ]
+  const atribuir = [
+    'No Facebook, abra Configurações do negócio → Usuários → Usuários do sistema → ARIES.',
+    `Clique em "Atribuir ativos" → Contas de anúncios → ${nomeConta} → ligue "Ver desempenho" (ou "Gerenciar campanhas") e salve.`,
+    'Volte aqui e clique em "Atualizar agora". Se continuar, gere um token novo (mesmo caminho, "Gerar novo token" com ads_read) e cole em "Trocar token/conta".',
+  ]
+  if (!falha) return { titulo: 'A conexão com a Meta está funcionando', passos: ['Clique em "Atualizar agora". Se o erro voltar, provavelmente foi uma instabilidade momentânea da Meta.'] }
+  switch (falha.chave) {
+    case 'token': return { titulo: 'O token salvo não vale mais (expirou ou foi revogado)', passos: gerarToken }
+    case 'permissoes': return { titulo: 'O token foi gerado sem a permissão ads_read', passos: gerarToken }
+    case 'acesso': return { titulo: `O usuário do sistema perdeu o acesso à conta ${nomeConta}`, passos: atribuir }
+    case 'status': return { titulo: 'A conta de anúncios está com restrição na Meta', passos: ['Abra o Gerenciador de Anúncios → Faturamento e pagamentos (ou a Central de qualidade da conta) e resolva a pendência indicada.', 'Depois volte aqui e clique em "Atualizar agora".'] }
+    case 'insights': return { titulo: 'A Meta bloqueou a leitura dos resultados dessa conta', passos: atribuir }
+    default: return { titulo: 'Parte dos dados está bloqueada', passos: ['Os números principais continuam sincronizando; só essa parte fica de fora.', ...atribuir] }
+  }
+}
+
+// Testa a conexão passo a passo e diz o que resolver.
+router.post('/trafego/diagnostico', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const c = await prisma.trafegoConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
+  if (!c) {
+    res.status(404).json({ error: 'Nenhuma conta de anúncios conectada' })
+    return
+  }
+  try {
+    const passos = await diagnosticarConexao(c.adAccountId, c.accessToken)
+    res.json({ passos, resolver: comoResolver(passos, c.nome) })
   } catch (e) {
     erroMeta(res, e)
   }

@@ -655,6 +655,7 @@ export const proLaboreApi = {
       request<{ conta: ContaTrafego; aviso: string | null }>('/pro-labore/trafego/conectar', { method: 'POST', body: JSON.stringify({ token, adAccountId }) }),
     desconectar: () => request<null>('/pro-labore/trafego/conta', { method: 'DELETE' }),
     sincronizar: () => request<{ conta: ContaTrafego }>('/pro-labore/trafego/sincronizar', { method: 'POST' }),
+    diagnostico: () => request<DiagnosticoTrafego>('/pro-labore/trafego/diagnostico', { method: 'POST' }),
     analise: (p: { inicio: string; fim: string; campanhaId?: string; adsetId?: string }) => {
       const q = new URLSearchParams({ inicio: p.inicio, fim: p.fim })
       if (p.campanhaId) q.set('campanhaId', p.campanhaId)
@@ -1406,6 +1407,10 @@ export interface PreferenciasProLabore {
 }
 
 // ---------- Tráfego ----------
+export interface DiagnosticoTrafego {
+  passos: Array<{ chave: string; titulo: string; ok: boolean; detalhe: string; codigo?: number }>
+  resolver: { titulo: string; passos: string[] }
+}
 export type EtapaTrafego = 'impressoes' | 'cliquesLink' | 'destino' | 'contatos' | 'leadsCrm'
 export type ModoEtapaTrafego = 'auto' | 'sim' | 'nao'
 export interface MetaEtapaTrafego { tipo: 'CONV_MIN' | 'CUSTO_MAX'; valor: number }
