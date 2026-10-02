@@ -4,6 +4,7 @@
 // de departamento e "mover apresentação".
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type DepartamentoReuniao, type EstruturaReunioes, type ModoApresentador, type PermissaoApresentador } from '@/lib/proLaboreApi'
+import { emOrdem, rotuloComNivel } from './arvorePastas'
 
 export const CORES_DEPARTAMENTO = ['#5b8def', '#e0687a', '#57c785', '#e0a83e', '#a679e0', '#4fc3d9', '#e08d4f', '#8b93a6']
 
@@ -161,7 +162,7 @@ export function MoverApresentacao({ titulo, atual, estrutura, onMover, onCancela
         <label className="pl-field" style={{ marginTop: 10 }}><span>Pasta</span>
           <select className="pl-input" value={pasta} onChange={e => setPasta(e.target.value)}>
             <option value="">Fora de pasta</option>
-            {pastas.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            {emOrdem(pastas).map(p => <option key={p.id} value={p.id}>{rotuloComNivel(p)}</option>)}
           </select>
         </label>
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 10 }}>{erro}</div>}

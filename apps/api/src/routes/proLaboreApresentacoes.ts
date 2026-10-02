@@ -677,7 +677,7 @@ router.get('/reunioes-departamentos', requireProLaboreAuth, async (req: Request,
   ])
   const visiveis = apresentacoes.filter(a => visivelPara(req, a))
   const contar = (dep: string | null, pasta?: string) => visiveis.filter(a => a.departamentoId === dep && (pasta === undefined || a.pastaId === pasta)).length
-  const pastasDe = (dep: string | null) => pastas.filter(p => (p.departamentoId ?? null) === dep).map(p => ({ id: p.id, nome: p.nome, total: contar(dep, p.id) }))
+  const pastasDe = (dep: string | null) => pastas.filter(p => (p.departamentoId ?? null) === dep).map(p => ({ id: p.id, nome: p.nome, paiId: p.paiId, total: contar(dep, p.id) }))
   res.json({
     permissao: await modoDe(req),
     pedidosPendentes: ehDono(req) ? apresentacoes.filter(a => a.aprovacao === 'PENDENTE').length : 0,
@@ -792,43 +792,92 @@ router.post('/reunioes-departamentos/:id/entrar', requireProLaboreAuth, async (r
   res.json({ ok: true })
 })
 
+// Profundidade máxima de pastas dentro de pastas.
+const MAX_NIVEIS_PASTA = 8
+
+// Valida a pasta "mãe" de uma pasta: do mesmo dono, no mesmo departamento,
+// sem passar do limite de níveis e (ao mover) sem cair dentro de si mesma.
+async function paiInvalido(usuarioId: string, departamentoId: string | null, paiId: string | null, movendoId?: string): Promise<string | null> {
+  if (!paiId) return null
+  const todas = await prisma.reuniaoPasta.findMany({ where: { usuarioId }, select: { id: true, paiId: true, departamentoId: true } })
+  const porId = new Map(todas.map(p => [p.id, p]))
+  const pai = porId.get(paiId)
+  if (!pai) return 'Pasta não encontrada'
+  if ((pai.departamentoId ?? null) !== departamentoId) return 'A pasta precisa estar no mesmo departamento'
+  let nivel = 1
+  for (let atual: string | null = paiId; atual; atual = porId.get(atual)?.paiId ?? null) {
+    if (movendoId && atual === movendoId) return 'Não dá pra mover uma pasta pra dentro dela mesma'
+    if (++nivel > MAX_NIVEIS_PASTA) return `Dá pra ter até ${MAX_NIVEIS_PASTA} níveis de pasta`
+  }
+  return null
+}
+
 router.post('/reunioes-pastas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const parse = z.object({ nome: z.string().trim().min(1, 'Dê um nome à pasta').max(60), departamentoId: z.string().nullable() }).safeParse(req.body)
+  const parse = z.object({
+    nome: z.string().trim().min(1, 'Dê um nome à pasta').max(60),
+    departamentoId: z.string().nullable(),
+    paiId: z.string().nullable().optional(),
+  }).safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
-  const invalido = await destinoInvalido(req.proLaboreUser!.sub, parse.data.departamentoId, null)
+  const usuarioId = req.proLaboreUser!.sub
+  const { nome, departamentoId, paiId = null } = parse.data
+  const invalido = await destinoInvalido(usuarioId, departamentoId, null) ?? await paiInvalido(usuarioId, departamentoId, paiId)
   if (invalido) {
     res.status(400).json({ error: invalido })
     return
   }
-  const pasta = await prisma.reuniaoPasta.create({ data: { ...parse.data, usuarioId: req.proLaboreUser!.sub } })
-  res.status(201).json({ id: pasta.id, nome: pasta.nome, departamentoId: pasta.departamentoId })
+  const pasta = await prisma.reuniaoPasta.create({ data: { nome, departamentoId, paiId, usuarioId } })
+  res.status(201).json({ id: pasta.id, nome: pasta.nome, departamentoId: pasta.departamentoId, paiId: pasta.paiId })
 })
 
+// Renomear e/ou mover pra dentro de outra pasta (do mesmo departamento).
 router.put('/reunioes-pastas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const parse = z.object({ nome: z.string().trim().min(1).max(60) }).safeParse(req.body)
+  const parse = z.object({ nome: z.string().trim().min(1).max(60).optional(), paiId: z.string().nullable().optional() }).safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'Nome inválido' })
+    res.status(400).json({ error: 'Dados inválidos' })
     return
   }
-  const r = await prisma.reuniaoPasta.updateMany({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub }, data: parse.data })
-  if (r.count === 0) {
+  const usuarioId = req.proLaboreUser!.sub
+  const pasta = await prisma.reuniaoPasta.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!pasta) {
     res.status(404).json({ error: 'Pasta não encontrada' })
     return
   }
+  if (parse.data.paiId !== undefined) {
+    if (parse.data.paiId === pasta.id) {
+      res.status(400).json({ error: 'Não dá pra mover uma pasta pra dentro dela mesma' })
+      return
+    }
+    const invalido = await paiInvalido(usuarioId, pasta.departamentoId ?? null, parse.data.paiId, pasta.id)
+    if (invalido) {
+      res.status(400).json({ error: invalido })
+      return
+    }
+  }
+  await prisma.reuniaoPasta.update({
+    where: { id: pasta.id },
+    data: { ...(parse.data.nome ? { nome: parse.data.nome } : {}), ...(parse.data.paiId !== undefined ? { paiId: parse.data.paiId } : {}) },
+  })
   res.json({ ok: true })
 })
 
-// Excluir a pasta não apaga as apresentações — elas voltam pra raiz do
-// departamento (ou do Geral).
+// Excluir a pasta não apaga nada: as subpastas e as apresentações dela sobem
+// pra pasta de cima (ou pra raiz do departamento / Geral).
 router.delete('/reunioes-pastas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const r = await prisma.reuniaoPasta.deleteMany({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub } })
-  if (r.count === 0) {
+  const usuarioId = req.proLaboreUser!.sub
+  const pasta = await prisma.reuniaoPasta.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  if (!pasta) {
     res.status(404).json({ error: 'Pasta não encontrada' })
     return
   }
+  await prisma.$transaction([
+    prisma.reuniaoPasta.updateMany({ where: { paiId: pasta.id, usuarioId }, data: { paiId: pasta.paiId } }),
+    prisma.apresentacao.updateMany({ where: { pastaId: pasta.id, usuarioId }, data: { pastaId: pasta.paiId } }),
+    prisma.reuniaoPasta.delete({ where: { id: pasta.id } }),
+  ])
   res.status(204).end()
 })
 

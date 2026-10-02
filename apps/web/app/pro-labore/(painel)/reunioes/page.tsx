@@ -10,7 +10,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
-import { proLaboreApi, type ApresentacaoDetalhe, type ApresentacaoResumo, type ArvoreApresentacao, type ConfiguracaoApresentacao, type EstruturaReunioes, type MapaMental } from '@/lib/proLaboreApi'
+import { proLaboreApi, type ApresentacaoDetalhe, type ApresentacaoResumo, type ArvoreApresentacao, type ConfiguracaoApresentacao, type EstruturaReunioes, type MapaMental, type PastaReuniao } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 import RegistrosAntigos from './_componentes/RegistrosAntigos'
@@ -18,6 +18,7 @@ import { duracaoDesde, tempoRelativo } from './_componentes/comum'
 import CopiarParaAnotacoes from './_componentes/CopiarParaAnotacoes'
 import { mapaParaApresentacao } from './_componentes/ponteAnotacoes'
 import { FormDepartamento, IconeCadeado, IconePasta, MoverApresentacao, PermissoesEquipe, SenhaDepartamento } from './_componentes/Organizacao'
+import { caminhoAte, emOrdem, filhasDe, rotuloComNivel, totalComSubpastas } from './_componentes/arvorePastas'
 
 type Modelo = { id: string; rotulo: string; descricao: string; icone: string; ramos: Array<[string, string[]]> }
 
@@ -143,6 +144,23 @@ function SeloAprovacao({ a, isDono = false }: { a: ApresentacaoResumo; isDono?: 
 
 type Selecao = { dep: string | null; pasta: string | null }
 
+// Pastas na barra lateral: as de cima sempre; as de dentro só no caminho da
+// pasta aberta (como um explorador de arquivos).
+function ArvoreLateral({ pastas, dep, selecionada, irPara }: { pastas: PastaReuniao[]; dep: string | null; selecionada: string | null; irPara: (s: Selecao) => void }) {
+  const abertas = new Set(caminhoAte(pastas, selecionada).map(p => p.id))
+  const ramo = (paiId: string | null, nivel: number): React.ReactNode => filhasDe(pastas, paiId).map(p => (
+    <div key={p.id}>
+      <button type="button" className={`pl-rn-item pasta ${selecionada === p.id ? 'ativo' : ''}`} style={{ paddingLeft: 26 + nivel * 14 }} onClick={() => irPara({ dep, pasta: p.id })}>
+        <IconePasta /><span className="nome">{p.nome}</span>
+        {filhasDe(pastas, p.id).length > 0 && <span className="pl-rn-seta" aria-hidden="true">{abertas.has(p.id) ? '▾' : '▸'}</span>}
+        <small>{totalComSubpastas(pastas, p.id)}</small>
+      </button>
+      {abertas.has(p.id) && nivel < 12 && ramo(p.id, nivel + 1)}
+    </div>
+  ))
+  return <>{ramo(null, 0)}</>
+}
+
 function Biblioteca() {
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel === 'DONO'
@@ -161,7 +179,8 @@ function Biblioteca() {
   const [lista, setLista] = useState<ApresentacaoResumo[] | null>(null)
   const [estrutura, setEstrutura] = useState<EstruturaReunioes | null>(null)
   const [erro, setErro] = useState('')
-  const [painel, setPainel] = useState<null | 'nova' | 'departamento' | 'editarDep' | 'pasta'>(null)
+  const [painel, setPainel] = useState<null | 'nova' | 'departamento' | 'editarDep' | 'pasta' | 'moverPasta'>(null)
+  const [destinoPasta, setDestinoPasta] = useState('')
   const [nomePasta, setNomePasta] = useState('')
   const [movendo, setMovendo] = useState<ApresentacaoResumo | null>(null)
   const [copiando, setCopiando] = useState<ApresentacaoDetalhe | null>(null)
@@ -192,13 +211,17 @@ function Biblioteca() {
   }, [])
 
   const depAtual = sel.dep ? estrutura?.departamentos.find(d => d.id === sel.dep) ?? null : null
-  const pastasAqui = sel.dep ? depAtual?.pastas ?? [] : estrutura?.geral.pastas ?? []
-  const pastaAtual = sel.pasta ? pastasAqui.find(p => p.id === sel.pasta) ?? null : null
+  // Todas as pastas do departamento (ou do Geral); as que aparecem aqui são
+  // as filhas da pasta aberta (ou as de cima, fora de pasta).
+  const pastasDoLugar = sel.dep ? depAtual?.pastas ?? [] : estrutura?.geral.pastas ?? []
+  const pastaAtual = sel.pasta ? pastasDoLugar.find(p => p.id === sel.pasta) ?? null : null
+  const caminho = caminhoAte(pastasDoLugar, pastaAtual?.id ?? null)
+  const pastasAqui = filhasDe(pastasDoLugar, pastaAtual?.id ?? null)
   const bloqueado = !!depAtual && !depAtual.liberado
   const itens = (lista ?? []).filter(a => (a.departamentoId ?? null) === sel.dep && (a.pastaId ?? null) === (sel.pasta ?? null))
   const aoVivo = (lista ?? []).filter(a => a.aoVivo)
   const depsTrancadosAoVivo = (estrutura?.departamentos ?? []).filter(d => d.aoVivo && !d.liberado)
-  const rotuloDestino = [depAtual?.nome ?? 'Geral', pastaAtual?.nome].filter(Boolean).join(' / ')
+  const rotuloDestino = [depAtual?.nome ?? 'Geral', ...caminho.map(p => p.nome)].join(' / ')
   const permissao = estrutura?.permissao
   const podeCriar = !!permissao && permissao !== 'BLOQUEADO'
   const pedidos = isDono ? (lista ?? []).filter(a => a.aprovacao === 'PENDENTE') : []
@@ -206,7 +229,7 @@ function Biblioteca() {
   const onde = (a: ApresentacaoResumo) => {
     const dep = a.departamentoId ? estrutura?.departamentos.find(d => d.id === a.departamentoId) : null
     const pastas = dep ? dep.pastas : estrutura?.geral.pastas ?? []
-    return [dep?.nome ?? 'Geral', pastas.find(p => p.id === a.pastaId)?.nome].filter(Boolean).join(' / ')
+    return [dep?.nome ?? 'Geral', ...caminhoAte(pastas, a.pastaId).map(p => p.nome)].join(' / ')
   }
 
   async function decidir(a: ApresentacaoResumo, decisao: 'APROVAR' | 'RECUSAR', perguntar = 'Recusar') {
@@ -235,7 +258,7 @@ function Biblioteca() {
     e.preventDefault()
     if (!nomePasta.trim()) return
     try {
-      const p = await proLaboreApi.reunioesOrg.criarPasta({ nome: nomePasta.trim(), departamentoId: sel.dep })
+      const p = await proLaboreApi.reunioesOrg.criarPasta({ nome: nomePasta.trim(), departamentoId: sel.dep, paiId: sel.pasta })
       setNomePasta('')
       setPainel(null)
       recarregar()
@@ -251,10 +274,20 @@ function Biblioteca() {
   }
   async function excluirPasta() {
     if (!pastaAtual) return
-    if (!confirm(`Excluir a pasta "${pastaAtual.nome}"? As apresentações dela não são apagadas — voltam pra ${depAtual?.nome ?? 'Geral'}.`)) return
+    const acima = caminho.at(-2)?.nome ?? depAtual?.nome ?? 'Geral'
+    if (!confirm(`Excluir a pasta "${pastaAtual.nome}"? Nada é apagado — as subpastas e apresentações dela vão pra "${acima}".`)) return
     await proLaboreApi.reunioesOrg.excluirPasta(pastaAtual.id)
-    irPara({ dep: sel.dep, pasta: null })
+    irPara({ dep: sel.dep, pasta: pastaAtual.paiId ?? null })
     recarregar()
+  }
+  async function moverPasta(e: React.FormEvent) {
+    e.preventDefault()
+    if (!pastaAtual) return
+    try {
+      await proLaboreApi.reunioesOrg.moverPasta(pastaAtual.id, destinoPasta || null)
+      setPainel(null)
+      recarregar()
+    } catch (err) { alert((err as Error).message) }
   }
   async function excluirDepartamento() {
     if (!depAtual) return
@@ -351,11 +384,7 @@ function Biblioteca() {
             {estrutura?.geral.aoVivo && <span className="pl-ap-pulso" title="Ao vivo agora" />}
             <small>{estrutura?.geral.total ?? ''}</small>
           </button>
-          {!sel.dep && (estrutura?.geral.pastas ?? []).map(p => (
-            <button key={p.id} type="button" className={`pl-rn-item pasta ${sel.pasta === p.id ? 'ativo' : ''}`} onClick={() => irPara({ dep: null, pasta: p.id })}>
-              <IconePasta /><span className="nome">{p.nome}</span><small>{p.total}</small>
-            </button>
-          ))}
+          {!sel.dep && <ArvoreLateral pastas={estrutura?.geral.pastas ?? []} dep={null} selecionada={sel.pasta} irPara={irPara} />}
 
           <div className="pl-rn-lateral-titulo">
             <span>Departamentos</span>
@@ -373,11 +402,7 @@ function Biblioteca() {
                 {!isDono && <span className="pl-rn-cadeado" title={d.liberado ? 'Você já tem acesso' : 'Pede senha'}><IconeCadeado aberto={d.liberado} /></span>}
                 {d.total != null && <small>{d.total}</small>}
               </button>
-              {sel.dep === d.id && d.pastas.map(p => (
-                <button key={p.id} type="button" className={`pl-rn-item pasta ${sel.pasta === p.id ? 'ativo' : ''}`} onClick={() => irPara({ dep: d.id, pasta: p.id })}>
-                  <IconePasta /><span className="nome">{p.nome}</span><small>{p.total}</small>
-                </button>
-              ))}
+              {sel.dep === d.id && <ArvoreLateral pastas={d.pastas} dep={d.id} selecionada={sel.pasta} irPara={irPara} />}
             </div>
           ))}
         </nav>
@@ -392,7 +417,14 @@ function Biblioteca() {
                 {depAtual && <span className="pl-rn-bolinha" style={{ background: depAtual.cor }} />}
                 {depAtual?.nome ?? 'Geral'}
               </button>
-              {pastaAtual && <><span className="sep">/</span><span className="atual"><IconePasta /> {pastaAtual.nome}</span></>}
+              {caminho.map((p, i) => (
+                <span key={p.id} className="pl-rn-trilha-passo">
+                  <span className="sep">/</span>
+                  {i === caminho.length - 1
+                    ? <span className="atual"><IconePasta /> {p.nome}</span>
+                    : <button type="button" onClick={() => irPara({ dep: sel.dep, pasta: p.id })}><IconePasta /> {p.nome}</button>}
+                </span>
+              ))}
               {depAtual?.descricao && !pastaAtual && <small>{depAtual.descricao}</small>}
             </div>
             {!isDono && podeCriar && !bloqueado && (
@@ -402,8 +434,9 @@ function Biblioteca() {
             )}
             {isDono && !bloqueado && (
               <div className="pl-rn-acoes">
-                {!pastaAtual && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPainel(p => (p === 'pasta' ? null : 'pasta'))}>Nova pasta</button>}
+                <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPainel(p => (p === 'pasta' ? null : 'pasta'))}>{pastaAtual ? 'Nova subpasta' : 'Nova pasta'}</button>
                 {pastaAtual && <button type="button" className="pl-btn pl-btn-ghost" onClick={renomearPasta}>Renomear pasta</button>}
+                {pastaAtual && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => { setDestinoPasta(pastaAtual.paiId ?? ''); setPainel(p => (p === 'moverPasta' ? null : 'moverPasta')) }}>Mover pasta</button>}
                 {pastaAtual && <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" onClick={excluirPasta}>Excluir pasta</button>}
                 {depAtual && !pastaAtual && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPainel('editarDep')}>Editar departamento</button>}
                 {depAtual && !pastaAtual && <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" onClick={excluirDepartamento}>Excluir</button>}
@@ -415,8 +448,20 @@ function Biblioteca() {
           {painel === 'pasta' && (
             <form className="pl-card pl-rn-pasta-form" onSubmit={criarPasta}>
               <IconePasta />
-              <input className="pl-input" autoFocus placeholder={`Nome da pasta em ${depAtual?.nome ?? 'Geral'}`} value={nomePasta} maxLength={60} onChange={e => setNomePasta(e.target.value)} />
+              <input className="pl-input" autoFocus placeholder={`Nome da pasta em ${rotuloDestino}`} value={nomePasta} maxLength={60} onChange={e => setNomePasta(e.target.value)} />
               <button type="submit" className="pl-btn pl-btn-primary" disabled={!nomePasta.trim()}>Criar pasta</button>
+              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPainel(null)}>Cancelar</button>
+            </form>
+          )}
+          {painel === 'moverPasta' && pastaAtual && (
+            <form className="pl-card pl-rn-pasta-form" onSubmit={moverPasta}>
+              <IconePasta />
+              <span className="pl-rn-pasta-form-rot">Mover “{pastaAtual.nome}” para</span>
+              <select className="pl-input" autoFocus value={destinoPasta} onChange={e => setDestinoPasta(e.target.value)}>
+                <option value="">{depAtual?.nome ?? 'Geral'} (fora de pasta)</option>
+                {emOrdem(pastasDoLugar, pastaAtual.id).map(p => <option key={p.id} value={p.id}>{rotuloComNivel(p)}</option>)}
+              </select>
+              <button type="submit" className="pl-btn pl-btn-primary" disabled={destinoPasta === (pastaAtual.paiId ?? '')}>Mover</button>
               <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setPainel(null)}>Cancelar</button>
             </form>
           )}
@@ -426,13 +471,13 @@ function Biblioteca() {
             <SenhaDepartamento departamento={depAtual} onLiberado={recarregar} />
           ) : !lista || !estrutura ? <div className="pl-hint">Carregando…</div> : (
             <>
-              {!sel.pasta && pastasAqui.length > 0 && (
+              {pastasAqui.length > 0 && (
                 <div className="pl-rn-pastas">
                   {pastasAqui.map(p => (
                     <button key={p.id} type="button" className="pl-rn-pasta" onClick={() => irPara({ dep: sel.dep, pasta: p.id })}>
                       <span className="icone" style={{ color: depAtual?.cor ?? 'var(--pl-ink-2)' }}><IconePasta /></span>
                       <b>{p.nome}</b>
-                      <small>{p.total} {p.total === 1 ? 'apresentação' : 'apresentações'}</small>
+                      <small>{(() => { const t = totalComSubpastas(pastasDoLugar, p.id), sub = filhasDe(pastasDoLugar, p.id).length; return `${t} ${t === 1 ? 'apresentação' : 'apresentações'}${sub ? ` · ${sub} ${sub === 1 ? 'subpasta' : 'subpastas'}` : ''}` })()}</small>
                     </button>
                   ))}
                 </div>
@@ -441,7 +486,7 @@ function Biblioteca() {
                 painel !== 'nova' && (
                   <div className="pl-empty pl-card">
                     <div className="pl-emoji">{pastaAtual ? '📁' : '🧠'}</div>
-                    <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>{pastaAtual ? 'Pasta vazia' : pastasAqui.length ? 'Nada fora das pastas' : 'Nenhuma apresentação aqui ainda'}</h3>
+                    <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>{pastasAqui.length ? (pastaAtual ? 'Nada solto nesta pasta' : 'Nada fora das pastas') : pastaAtual ? 'Pasta vazia' : 'Nenhuma apresentação aqui ainda'}</h3>
                     <p style={{ margin: '6px 0 0' }}>
                       {isDono
                         ? 'Crie uma apresentação aqui, ou mova uma existente pelo menu do cartão. Na hora de apresentar, clique em "Iniciar ao vivo".'
