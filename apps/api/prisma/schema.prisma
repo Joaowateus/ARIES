@@ -1911,17 +1911,20 @@ model ReuniaoDepartamento {
 }
 
 // Pasta pra separar as apresentações — dentro de um departamento ou no
-// "Geral" (departamentoId nulo). Excluir a pasta não apaga nada: as
-// apresentações voltam pra raiz do departamento.
+// "Geral" (departamentoId nulo), e dentro de outra pasta (paiId). Excluir a
+// pasta não apaga nada: subpastas e apresentações sobem um nível.
 model ReuniaoPasta {
   id             String   @id @default(cuid())
   usuarioId      String
   departamentoId String?
+  paiId          String?
   nome           String
   criadoEm       DateTime @default(now())
 
   usuario       ProLaboreUsuario     @relation(fields: [usuarioId], references: [id])
   departamento  ReuniaoDepartamento? @relation(fields: [departamentoId], references: [id], onDelete: Cascade)
+  pai           ReuniaoPasta?        @relation("ReuniaoPastaFilhas", fields: [paiId], references: [id], onDelete: SetNull)
+  filhas        ReuniaoPasta[]       @relation("ReuniaoPastaFilhas")
   apresentacoes Apresentacao[]
 
   @@index([usuarioId, departamentoId])

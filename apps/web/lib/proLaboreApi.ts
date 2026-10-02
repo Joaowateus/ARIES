@@ -599,8 +599,9 @@ export const proLaboreApi = {
     excluirDepartamento: (id: string) => request<null>(`/pro-labore/reunioes-departamentos/${id}`, { method: 'DELETE' }),
     entrar: (id: string, senha: string) =>
       request<{ ok: boolean }>(`/pro-labore/reunioes-departamentos/${id}/entrar`, { method: 'POST', body: JSON.stringify({ senha }) }),
-    criarPasta: (data: { nome: string; departamentoId: string | null }) =>
+    criarPasta: (data: { nome: string; departamentoId: string | null; paiId?: string | null }) =>
       request<{ id: string; nome: string }>('/pro-labore/reunioes-pastas', { method: 'POST', body: JSON.stringify(data) }),
+    moverPasta: (id: string, paiId: string | null) => request<{ ok: boolean }>(`/pro-labore/reunioes-pastas/${id}`, { method: 'PUT', body: JSON.stringify({ paiId }) }),
     renomearPasta: (id: string, nome: string) => request<{ ok: boolean }>(`/pro-labore/reunioes-pastas/${id}`, { method: 'PUT', body: JSON.stringify({ nome }) }),
     excluirPasta: (id: string) => request<null>(`/pro-labore/reunioes-pastas/${id}`, { method: 'DELETE' }),
     permissoes: () => request<PermissaoApresentador[]>('/pro-labore/reunioes-permissoes'),
@@ -1300,7 +1301,9 @@ export interface PalcoApresentacao {
   laser: { ativo: boolean; pontos: Array<{ x: number; y: number }> }
 }
 
-export interface PastaReuniao { id: string; nome: string; total: number }
+// paiId: pasta de cima (null = direto no departamento/Geral). Versões
+// antigas da API não mandam o campo — trate ausente como null.
+export interface PastaReuniao { id: string; nome: string; total: number; paiId?: string | null }
 export interface DepartamentoReuniao {
   id: string
   nome: string

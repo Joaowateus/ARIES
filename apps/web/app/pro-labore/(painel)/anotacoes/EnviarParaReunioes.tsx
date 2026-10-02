@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { proLaboreApi, type EstruturaReunioes, type MapaMental } from '@/lib/proLaboreApi'
 import { mapaParaApresentacao } from '../reunioes/_componentes/ponteAnotacoes'
 import { dadosIniciaisDoBoard } from './MapaMental'
+import { emOrdem, rotuloComNivel } from '../reunioes/_componentes/arvorePastas'
 
 export default function EnviarParaReunioes({ mapa, onFechar }: { mapa: MapaMental; onFechar: () => void }) {
   const [estrutura, setEstrutura] = useState<EstruturaReunioes | null>(null)
@@ -101,7 +102,7 @@ export default function EnviarParaReunioes({ mapa, onFechar }: { mapa: MapaMenta
                   <label className="pl-field" style={{ marginTop: 10 }}><span>Pasta</span>
                     <select className="pl-input" value={pasta} onChange={e => setPasta(e.target.value)}>
                       <option value="">Fora de pasta</option>
-                      {pastas.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                      {emOrdem(pastas).map(p => <option key={p.id} value={p.id}>{rotuloComNivel(p)}</option>)}
                     </select>
                   </label>
                 )}
