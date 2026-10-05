@@ -3051,3 +3051,100 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-tf-diagcon-resolver.falhou { border-left-color: var(--pl-critical); }
 .pl-tf-diagcon-resolver b { font-size: 14px; color: var(--pl-ink-1); }
 .pl-tf-diagcon-resolver ol { margin: 8px 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--pl-ink-2); }
+
+/* ---------- Vendas: comissões pagas ---------- */
+.pl-cms-resumo { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+.pl-cms-totais { display: flex; gap: 28px; flex-wrap: wrap; }
+.pl-cms-totais > div { display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
+.pl-cms-totais small { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--pl-ink-muted); }
+.pl-cms-totais b { font-size: 24px; font-weight: 700; color: var(--pl-ink-1); font-variant-numeric: tabular-nums; }
+.pl-cms-totais b.pl-cms-apagar { color: var(--pl-accent-4); }
+.pl-cms-totais span { font-size: 12.5px; color: var(--pl-ink-muted); }
+.pl-cms-vendedores { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 360px; justify-content: flex-end; }
+.pl-cms-vendedores li { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 12px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); background: var(--pl-surface-2); }
+.pl-cms-vendedores li > span { display: flex; flex-direction: column; line-height: 1.25; }
+.pl-cms-vendedores li b { font-size: 13px; color: var(--pl-ink-1); }
+.pl-cms-vendedores li small { font-size: 12px; color: var(--pl-ink-muted); font-variant-numeric: tabular-nums; }
+.pl-cms-pagar { padding: 6px 10px; font-size: 12px; }
+.pl-cms-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.pl-cms-abas { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); background: var(--pl-surface); }
+.pl-cms-abas button { border: 0; background: transparent; color: var(--pl-ink-2); font: inherit; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: var(--pl-radius-sm); cursor: pointer; }
+.pl-cms-abas button:hover { color: var(--pl-ink-1); }
+.pl-cms-abas button.ativo { background: var(--pl-surface-3); color: var(--pl-ink-1); }
+.pl-cms-vendedor { width: auto; min-width: 190px; }
+.pl-cms-celula { white-space: nowrap; }
+.pl-cms-status { display: inline-flex; flex-direction: column; gap: 2px; }
+.pl-cms-status label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--pl-ink-muted); }
+.pl-cms-status label input { width: 16px; height: 16px; accent-color: var(--pl-good); cursor: pointer; }
+.pl-cms-status.paga label { color: var(--pl-good); font-weight: 600; }
+.pl-cms-comprovante { font-size: 12px; margin-left: 24px; text-align: left; background: none; border: 0; padding: 0; }
+.pl-cms-sem { color: var(--pl-ink-muted); }
+.pl-cms-vazio { text-align: center; color: var(--pl-ink-muted); padding: 24px 12px !important; }
+
+.pl-pgc-modal { max-width: 520px; }
+.pl-pgc-lista { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pl-pgc-lista li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); background: var(--pl-surface-2); }
+.pl-pgc-lista li > span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.pl-pgc-lista li > span b { color: var(--pl-ink-1); font-size: 14px; }
+.pl-pgc-lista li small { color: var(--pl-ink-muted); font-size: 12px; }
+.pl-pgc-valor { color: var(--pl-accent-4); font-variant-numeric: tabular-nums; }
+.pl-pgc-btn { padding: 7px 12px; font-size: 12.5px; }
+.pl-pgc-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.pl-pgc-largo { grid-column: 1 / -1; }
+.pl-pgc-acoes { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+@media (max-width: 520px) {
+  .pl-pgc-campos { grid-template-columns: 1fr; }
+  .pl-pgc-lista li { flex-wrap: wrap; }
+  .pl-cms-vendedores { justify-content: flex-start; }
+}
+
+/* ---------- Comprovante de comissão (papel sempre branco) ---------- */
+.pl-recibo-pagina { min-height: 100vh; background: #e9ebef; color: #15171c; padding: 0 16px 40px; }
+.pl-recibo-barra { position: sticky; top: 0; z-index: 2; max-width: 210mm; margin: 0 auto; padding: 14px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #e9ebef; }
+.pl-recibo-voltar { color: #3b3f4a; font-size: 14px; font-weight: 600; text-decoration: none; }
+.pl-recibo-voltar:hover { text-decoration: underline; }
+.pl-recibo-barra-acoes { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.pl-recibo-barra-acoes label { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #3b3f4a; cursor: pointer; }
+.pl-recibo-barra-acoes button { font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: #15171c; border: 0; border-radius: 8px; padding: 10px 20px; cursor: pointer; }
+.pl-recibo-barra-acoes button:hover { background: #2c2f38; }
+.pl-recibo-aviso { max-width: 210mm; margin: 40px auto; text-align: center; color: #3b3f4a; }
+.pl-recibo-folha { box-sizing: border-box; max-width: 210mm; margin: 0 auto 24px; background: #fff; color: #15171c; padding: 18mm 18mm 14mm; box-shadow: 0 2px 14px rgba(0, 0, 0, .12); font-family: inherit; font-size: 13.5px; line-height: 1.55; }
+.pl-recibo-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid #15171c; padding-bottom: 12px; }
+.pl-recibo-topo h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: #15171c; }
+.pl-recibo-via { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; color: #5b606c; }
+.pl-recibo-num { display: flex; flex-direction: column; align-items: flex-end; }
+.pl-recibo-num small { font-size: 11px; color: #5b606c; font-weight: 600; }
+.pl-recibo-num b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.pl-recibo-valor { margin: 16px 0 12px auto; width: max-content; border: 2px solid #15171c; border-radius: 6px; padding: 6px 16px; display: flex; align-items: baseline; gap: 10px; }
+.pl-recibo-valor small { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #5b606c; }
+.pl-recibo-valor b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.pl-recibo-texto { margin: 10px 0; text-align: justify; }
+.pl-recibo-tabela { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 12.5px; }
+.pl-recibo-tabela th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #5b606c; border-bottom: 1px solid #15171c; padding: 6px 8px; }
+.pl-recibo-tabela td { padding: 6px 8px; border-bottom: 1px solid #d9dce2; font-variant-numeric: tabular-nums; }
+.pl-recibo-tabela .dir { text-align: right; }
+.pl-recibo-tabela tfoot td { font-weight: 800; border-bottom: 0; border-top: 2px solid #15171c; }
+.pl-recibo-obs { margin: 8px 0; font-size: 12.5px; }
+.pl-recibo-local { margin: 22px 0 0; }
+.pl-recibo-assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 56px; }
+.pl-recibo-assinaturas > div { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.pl-recibo-assinaturas .linha { display: block; width: 100%; border-top: 1px solid #15171c; margin-bottom: 6px; }
+.pl-recibo-assinaturas b { font-size: 13.5px; }
+.pl-recibo-assinaturas small { font-size: 11.5px; color: #5b606c; }
+.pl-recibo-rodape { margin-top: 28px; padding-top: 8px; border-top: 1px dashed #c3c7cf; font-size: 10.5px; color: #7a7f8a; text-align: center; }
+@media (max-width: 640px) {
+  .pl-recibo-folha { padding: 20px 16px; }
+  .pl-recibo-assinaturas { grid-template-columns: 1fr; gap: 44px; }
+  .pl-recibo-tabela { font-size: 11.5px; }
+}
+@media print {
+  @page { size: A4; margin: 0; }
+  .pl-app:has(.pl-recibo-pagina) { background: #fff !important; }
+  .pl-recibo-pagina { background: #fff; padding: 0; min-height: 0; }
+  .pl-recibo-barra { display: none; }
+  .pl-recibo-folha { box-shadow: none; margin: 0; max-width: none; width: 210mm; min-height: 0; padding: 16mm 18mm 12mm; break-after: page; }
+  .pl-recibo-folha:last-child { break-after: auto; }
+  .pl-recibo-tabela tr { break-inside: avoid; }
+}
+.pl-recibo-cancelado { background: #fff; border: 2px solid #b42318; border-radius: 8px; padding: 18px 22px; color: #15171c; text-align: left; line-height: 1.55; }
+.pl-recibo-cancelado b { color: #b42318; }

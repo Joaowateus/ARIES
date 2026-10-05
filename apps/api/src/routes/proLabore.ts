@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
+import { recalcularPagamentoComissao } from '../lib/comissoes'
 import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
@@ -432,6 +433,11 @@ router.delete('/vendedores/:id', requireProLaboreAuth, requireDono, async (req: 
     res.status(404).json({ error: 'Vendedor não encontrado' })
     return
   }
+  const comprovantes = await prisma.pagamentoComissao.count({ where: { vendedorId: atual.id } })
+  if (comprovantes > 0) {
+    res.status(409).json({ error: `Esse vendedor tem ${comprovantes} comprovante${comprovantes > 1 ? 's' : ''} de comissão registrado${comprovantes > 1 ? 's' : ''}. Desative o vendedor em vez de excluir, pra não perder o histórico.` })
+    return
+  }
   await prisma.vendedor.delete({ where: { id: atual.id } })
   res.json({ ok: true })
 })
@@ -493,6 +499,11 @@ router.delete('/vendedores/:id/acesso', requireProLaboreAuth, requireDono, async
 
 // --- Vendas (cadastro exclusivo do dono — vendedor não registra a própria venda) ---
 
+const VENDA_INCLUDE = {
+  vendedor: { select: { id: true, nome: true } },
+  pagamentoComissao: { select: { id: true, numero: true, pagoEm: true } },
+} satisfies Prisma.VendaInclude
+
 router.get('/vendas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const { ano } = req.query
   const where: { usuarioId: string; data?: { gte: Date; lte: Date } } = { usuarioId: req.proLaboreUser!.sub }
@@ -502,7 +513,7 @@ router.get('/vendas', requireProLaboreAuth, requireDono, async (req: Request, re
 
   const vendas = await prisma.venda.findMany({
     where,
-    include: { vendedor: { select: { id: true, nome: true } } },
+    include: VENDA_INCLUDE,
     orderBy: { data: 'desc' },
   })
   res.json(vendas)
@@ -568,7 +579,7 @@ router.post('/vendas', requireProLaboreAuth, requireDono, async (req: Request, r
       valorComissao,
       observacao: parse.data.observacao,
     },
-    include: { vendedor: { select: { id: true, nome: true } } },
+    include: VENDA_INCLUDE,
   })
   res.status(201).json(venda)
 })
@@ -610,6 +621,14 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Reque
     ? undefined
     : parse.data.valorComissao === undefined ? atual.valorComissao ?? 0 : parse.data.valorComissao ?? 0
 
+  // Comissão já paga fica travada: o comprovante impresso tem esse valor e
+  // esse vendedor. Pra corrigir, desmarca o pagamento antes.
+  if (atual.pagamentoComissaoId && (vendedorIdEfetivo !== atual.vendedorId || (valorComissaoEfetivo ?? null) !== atual.valorComissao)) {
+    const pg = await prisma.pagamentoComissao.findUnique({ where: { id: atual.pagamentoComissaoId }, select: { numero: true } })
+    res.status(409).json({ error: `A comissão dessa venda já foi paga (comprovante nº ${pg?.numero ?? '?'}). Desmarque o pagamento na coluna "Comissão paga" antes de mudar o vendedor ou o valor da comissão.` })
+    return
+  }
+
   const tetoProLabore = await resolverTetoProLabore(usuarioId)
   if (valorProLabore > tetoProLabore) {
     res.status(400).json({ error: `O pró-labore não pode ultrapassar o teto configurado (${tetoProLabore})` })
@@ -641,7 +660,7 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Reque
       valorComissao: valorComissaoEfetivo ?? null,
       observacao: parse.data.observacao ?? atual.observacao,
     },
-    include: { vendedor: { select: { id: true, nome: true } } },
+    include: VENDA_INCLUDE,
   })
   res.json(venda)
 })
@@ -653,7 +672,11 @@ router.delete('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Requ
     res.status(404).json({ error: 'Venda não encontrada' })
     return
   }
-  await prisma.venda.delete({ where: { id: atual.id } })
+  await prisma.$transaction(async tx => {
+    await tx.venda.delete({ where: { id: atual.id } })
+    // A venda saiu do comprovante: refaz o total (ou cancela o comprovante vazio).
+    if (atual.pagamentoComissaoId) await recalcularPagamentoComissao(tx, atual.pagamentoComissaoId)
+  })
   res.json({ ok: true })
 })
 
@@ -920,7 +943,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireDono, async (re
       valorComissao,
       observacao: parse.data.observacao ?? `Convertido do lead: ${atual.nomeCliente}`,
     },
-    include: { vendedor: { select: { id: true, nome: true } } },
+    include: VENDA_INCLUDE,
   })
 
   const lead = await prisma.lead.update({
