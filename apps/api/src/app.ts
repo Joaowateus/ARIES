@@ -38,6 +38,7 @@ import relatoriosRoutes from './routes/relatorios'
 import proLaboreRoutes from './routes/proLabore'
 import proLaboreApresentacoesRoutes from './routes/proLaboreApresentacoes'
 import proLaboreTrafegoRoutes from './routes/proLaboreTrafego'
+import proLaboreComissoesRoutes from './routes/proLaboreComissoes'
 import proLaboreImagensRoutes from './routes/proLaboreImagens'
 import proLaborePreferenciasRoutes from './routes/proLaborePreferencias'
 
@@ -164,6 +165,7 @@ app.use('/pro-labore/auth', authLimiter)
 app.use('/pro-labore', proLaboreRoutes)
 app.use('/pro-labore', proLaboreApresentacoesRoutes)
 app.use('/pro-labore', proLaboreTrafegoRoutes)
+app.use('/pro-labore', proLaboreComissoesRoutes)
 app.use('/pro-labore', proLaboreImagensRoutes)
 app.use('/pro-labore', proLaborePreferenciasRoutes)
 

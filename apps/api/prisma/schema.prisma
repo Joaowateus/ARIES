@@ -939,6 +939,7 @@ model ProLaboreUsuario {
   apresentacoes             Apresentacao[]
   reunioesDepartamentos     ReuniaoDepartamento[]
   reunioesPastas            ReuniaoPasta[]
+  pagamentosComissao        PagamentoComissao[]
 
   @@map("pro_labore_usuarios")
 }
@@ -974,6 +975,7 @@ model Vendedor {
 
   usuario             ProLaboreUsuario     @relation(fields: [usuarioId], references: [id])
   vendas              Venda[]
+  pagamentosComissao  PagamentoComissao[]
   leads               Lead[]
   ocorrencias         Ocorrencia[]
   assistenteComercial AssistenteComercial?
@@ -1134,16 +1136,50 @@ model Venda {
   valorProLabore Float
   valorComissao  Float?
   observacao     String?
+  // Comprovante em que a comissão desta venda foi paga ao vendedor (nulo =
+  // ainda a pagar). Enquanto estiver pago, valor e vendedor da comissão
+  // ficam travados — pra mudar, desmarca o pagamento antes.
+  pagamentoComissaoId String?
   criadoEm       DateTime @default(now())
   atualizadoEm   DateTime @updatedAt
 
-  usuario  ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  vendedor Vendedor?        @relation(fields: [vendedorId], references: [id])
-  lead     Lead?
+  usuario           ProLaboreUsuario   @relation(fields: [usuarioId], references: [id])
+  vendedor          Vendedor?          @relation(fields: [vendedorId], references: [id])
+  pagamentoComissao PagamentoComissao? @relation(fields: [pagamentoComissaoId], references: [id], onDelete: SetNull)
+  lead              Lead?
 
   @@index([usuarioId, data])
   @@index([vendedorId])
+  @@index([pagamentoComissaoId])
   @@map("pro_labore_vendas")
+}
+
+// Pagamento de comissão a um vendedor — agrupa as vendas pagas de uma vez e
+// vira o comprovante numerado (sequencial por conta) que se imprime e
+// assina. valorTotal é recalculado quando uma venda sai do pagamento.
+model PagamentoComissao {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  vendedorId     String
+  numero         Int
+  pagoEm         DateTime
+  formaPagamento String? // PIX | DINHEIRO | TRANSFERENCIA | OUTRO
+  observacao     String?
+  // Nome de quem paga, como sai no comprovante (padrão: nome do dono).
+  pagador        String
+  valorTotal     Float
+  // Preenchido quando todas as vendas saíram do pagamento: o registro fica
+  // (o número nunca é reaproveitado) e o comprovante aparece como cancelado.
+  canceladoEm    DateTime?
+  criadoEm       DateTime @default(now())
+
+  usuario  ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  vendedor Vendedor         @relation(fields: [vendedorId], references: [id])
+  vendas   Venda[]
+
+  @@unique([usuarioId, numero])
+  @@index([vendedorId])
+  @@map("pro_labore_pagamentos_comissao")
 }
 
 // Lead/oportunidade da esteira comercial do Pró-Labore. Substitui a
