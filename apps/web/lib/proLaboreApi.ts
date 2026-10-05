@@ -214,28 +214,37 @@ export interface Venda {
   // Preenchido quando a comissão já foi paga ao vendedor.
   pagamentoComissaoId?: string | null
   pagamentoComissao?: { id: string; numero: number; pagoEm: string } | null
+  // Idem pro pró-labore do dono.
+  pagamentoProLaboreId?: string | null
+  pagamentoProLabore?: { id: string; numero: number; pagoEm: string } | null
   criadoEm: string
 }
 
 export type FormaPagamentoComissao = 'PIX' | 'DINHEIRO' | 'TRANSFERENCIA' | 'OUTRO'
+// COMISSAO = comissão paga ao vendedor; PROLABORE = retirada do pró-labore do dono.
+export type TipoPagamentoVenda = 'COMISSAO' | 'PROLABORE'
 
 export interface PagamentoComissao {
   id: string
+  tipo: TipoPagamentoVenda
   numero: number
   pagoEm: string
   formaPagamento: FormaPagamentoComissao | null
   observacao: string | null
   pagador: string
+  // Só no pró-labore: quem recebe.
+  recebedor: string | null
   valorTotal: number
   // Preenchido quando todas as vendas saíram do pagamento.
   canceladoEm: string | null
   criadoEm: string
-  vendedor: { id: string; nome: string }
+  vendedor: { id: string; nome: string } | null
   _count?: { vendas: number }
 }
 
 export interface ComprovanteComissao extends PagamentoComissao {
-  vendas: Array<{ id: string; data: string; valorVenda: number; valorComissao: number | null; observacao: string | null; lead: { nomeCliente: string } | null }>
+  // `valor` = o que foi pago naquela venda (comissão ou pró-labore, conforme o tipo).
+  vendas: Array<{ id: string; data: string; valorVenda: number; valor: number; valorComissao: number | null; valorProLabore: number; observacao: string | null; lead: { nomeCliente: string } | null }>
 }
 
 export interface FunilMensal {
@@ -381,13 +390,14 @@ export const proLaboreApi = {
       request<Venda>(`/pro-labore/vendas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendas/${id}`, { method: 'DELETE' }),
   },
-  comissoes: {
-    pagar: (data: { vendaIds: string[]; pagoEm: string; formaPagamento?: FormaPagamentoComissao | null; observacao?: string | null; pagador?: string | null }) =>
-      request<PagamentoComissao[]>('/pro-labore/comissoes/pagamentos', { method: 'POST', body: JSON.stringify(data) }),
-    desmarcar: (vendaIds: string[]) =>
-      request<{ ok: boolean; desmarcadas: number }>('/pro-labore/comissoes/desmarcar', { method: 'POST', body: JSON.stringify({ vendaIds }) }),
-    listar: () => request<PagamentoComissao[]>('/pro-labore/comissoes/pagamentos'),
-    comprovante: (id: string) => request<ComprovanteComissao>(`/pro-labore/comissoes/pagamentos/${id}`),
+  // Comissões pagas aos vendedores e retiradas do pró-labore do dono.
+  pagamentosVendas: {
+    pagar: (data: { tipo: TipoPagamentoVenda; vendaIds: string[]; pagoEm: string; formaPagamento?: FormaPagamentoComissao | null; observacao?: string | null; pagador?: string | null; recebedor?: string | null }) =>
+      request<PagamentoComissao[]>('/pro-labore/pagamentos-vendas', { method: 'POST', body: JSON.stringify(data) }),
+    desmarcar: (tipo: TipoPagamentoVenda, vendaIds: string[]) =>
+      request<{ ok: boolean; desmarcadas: number }>('/pro-labore/pagamentos-vendas/desmarcar', { method: 'POST', body: JSON.stringify({ tipo, vendaIds }) }),
+    listar: (tipo: TipoPagamentoVenda) => request<PagamentoComissao[]>(`/pro-labore/pagamentos-vendas?tipo=${tipo}`),
+    comprovante: (id: string) => request<ComprovanteComissao>(`/pro-labore/pagamentos-vendas/${id}`),
   },
   funil: {
     listar: (ano?: number) => request<FunilMensal[]>(`/pro-labore/funil${ano ? `?ano=${ano}` : ''}`),

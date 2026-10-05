@@ -1,10 +1,11 @@
 'use client'
 
-// Confirma o pagamento das comissões escolhidas: data, forma e quem paga.
-// Vendas de vendedores diferentes viram um comprovante pra cada vendedor.
-// Depois de registrar, mostra os comprovantes prontos pra imprimir.
-import { useState } from 'react'
-import { proLaboreApi, type FormaPagamentoComissao, type PagamentoComissao, type Venda } from '@/lib/proLaboreApi'
+// Confirma o pagamento das vendas escolhidas: data, forma, quem paga e
+// (no pró-labore) quem recebe. Comissão de vendedores diferentes vira um
+// comprovante pra cada vendedor; pró-labore vira um recibo só. Depois de
+// registrar, mostra os comprovantes prontos pra imprimir.
+import { useEffect, useState } from 'react'
+import { proLaboreApi, type FormaPagamentoComissao, type PagamentoComissao, type TipoPagamentoVenda, type Venda } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 
 export const FORMAS_PAGAMENTO: Array<{ valor: FormaPagamentoComissao; rotulo: string }> = [
@@ -23,34 +24,53 @@ export function abrirComprovante(id: string) {
   window.open(`/pro-labore/comprovante/${id}`, '_blank', 'noopener')
 }
 
-export default function RegistrarPagamento({ vendas, pagadorPadrao, onFechar, onRegistrado }: {
+export const valorPago = (tipo: TipoPagamentoVenda, v: Venda) => (tipo === 'COMISSAO' ? v.valorComissao ?? 0 : v.valorProLabore)
+
+export default function RegistrarPagamento({ tipo, vendas, nomeDono, onFechar, onRegistrado }: {
+  tipo: TipoPagamentoVenda
   vendas: Venda[]
-  pagadorPadrao: string
+  nomeDono: string
   onFechar: () => void
   onRegistrado: () => void
 }) {
+  const proLabore = tipo === 'PROLABORE'
   const [pagoEm, setPagoEm] = useState(hojeLocal)
   const [forma, setForma] = useState<FormaPagamentoComissao>('PIX')
-  const [pagador, setPagador] = useState(pagadorPadrao)
+  // Comissão: quem paga é o dono. Pró-labore: quem recebe é o dono e quem
+  // paga é a empresa (vem preenchido com a da última retirada).
+  const [pagador, setPagador] = useState(proLabore ? '' : nomeDono)
+  const [recebedor, setRecebedor] = useState(nomeDono)
   const [observacao, setObservacao] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
   const [feitos, setFeitos] = useState<PagamentoComissao[] | null>(null)
 
-  const porVendedor = new Map<string, { nome: string; qtd: number; total: number }>()
+  useEffect(() => {
+    if (!proLabore) return
+    let cancelado = false
+    proLaboreApi.pagamentosVendas.listar('PROLABORE')
+      .then(l => { if (!cancelado && l[0]?.pagador) setPagador(atual => atual || l[0].pagador) })
+      .catch(() => {})
+    return () => { cancelado = true }
+  }, [proLabore])
+
+  const grupos = new Map<string, { nome: string; qtd: number; total: number }>()
   for (const v of vendas) {
-    const k = v.vendedorId ?? ''
-    const atual = porVendedor.get(k) ?? { nome: v.vendedor?.nome ?? '—', qtd: 0, total: 0 }
-    porVendedor.set(k, { ...atual, qtd: atual.qtd + 1, total: atual.total + (v.valorComissao ?? 0) })
+    const k = proLabore ? 'dono' : v.vendedorId ?? ''
+    const atual = grupos.get(k) ?? { nome: proLabore ? 'Pró-labore' : v.vendedor?.nome ?? '—', qtd: 0, total: 0 }
+    grupos.set(k, { ...atual, qtd: atual.qtd + 1, total: atual.total + valorPago(tipo, v) })
   }
-  const total = vendas.reduce((s, v) => s + (v.valorComissao ?? 0), 0)
+  const total = vendas.reduce((s, v) => s + valorPago(tipo, v), 0)
 
   async function confirmar(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
     setSalvando(true)
     try {
-      const r = await proLaboreApi.comissoes.pagar({ vendaIds: vendas.map(v => v.id), pagoEm, formaPagamento: forma, pagador, observacao: observacao || null })
+      const r = await proLaboreApi.pagamentosVendas.pagar({
+        tipo, vendaIds: vendas.map(v => v.id), pagoEm, formaPagamento: forma, pagador,
+        recebedor: proLabore ? recebedor : null, observacao: observacao || null,
+      })
       setFeitos(r)
       onRegistrado()
     } catch (err) {
@@ -60,19 +80,20 @@ export default function RegistrarPagamento({ vendas, pagadorPadrao, onFechar, on
     }
   }
 
+  const n = (q: number) => `${q} venda${q > 1 ? 's' : ''}`
   return (
     <div className="pl-modal-backdrop" onClick={onFechar}>
       <div className="pl-card pl-modal-panel pl-pgc-modal" role="dialog" aria-modal="true" aria-labelledby="pgc-titulo" onClick={e => e.stopPropagation()}>
         {feitos ? (
           <>
             <div className="pl-card-title" id="pgc-titulo">Pagamento registrado</div>
-            <div className="pl-card-sub">Imprima o comprovante e peça pro vendedor assinar.</div>
+            <div className="pl-card-sub">{proLabore ? 'Imprima o recibo e assine.' : 'Imprima o comprovante e peça pro vendedor assinar.'}</div>
             <ul className="pl-pgc-lista">
               {feitos.map(p => (
                 <li key={p.id}>
-                  <span><b>{p.vendedor.nome}</b><small>Comprovante nº {p.numero} · {p._count?.vendas ?? 0} venda{(p._count?.vendas ?? 0) > 1 ? 's' : ''}</small></span>
+                  <span><b>{proLabore ? p.recebedor : p.vendedor?.nome}</b><small>{proLabore ? 'Recibo' : 'Comprovante'} nº {p.numero} · {n(p._count?.vendas ?? 0)}</small></span>
                   <b className="pl-pgc-valor">{formatMoeda(p.valorTotal)}</b>
-                  <button type="button" className="pl-btn pl-btn-primary pl-pgc-btn" onClick={() => abrirComprovante(p.id)}>Abrir comprovante</button>
+                  <button type="button" className="pl-btn pl-btn-primary pl-pgc-btn" onClick={() => abrirComprovante(p.id)}>{proLabore ? 'Abrir recibo' : 'Abrir comprovante'}</button>
                 </li>
               ))}
             </ul>
@@ -82,15 +103,15 @@ export default function RegistrarPagamento({ vendas, pagadorPadrao, onFechar, on
           </>
         ) : (
           <form onSubmit={confirmar}>
-            <div className="pl-card-title" id="pgc-titulo">Marcar comissão como paga</div>
+            <div className="pl-card-title" id="pgc-titulo">{proLabore ? 'Marcar pró-labore como pago' : 'Marcar comissão como paga'}</div>
             <div className="pl-card-sub">
-              {vendas.length === 1 ? '1 venda' : `${vendas.length} vendas`} · {formatMoeda(total)}
-              {porVendedor.size > 1 && ` · um comprovante pra cada um dos ${porVendedor.size} vendedores`}
+              {n(vendas.length)} · {formatMoeda(total)}
+              {grupos.size > 1 && ` · um comprovante pra cada um dos ${grupos.size} vendedores`}
             </div>
             <ul className="pl-pgc-lista">
-              {[...porVendedor.values()].map(g => (
+              {[...grupos.values()].map(g => (
                 <li key={g.nome}>
-                  <span><b>{g.nome}</b><small>{g.qtd} venda{g.qtd > 1 ? 's' : ''}</small></span>
+                  <span><b>{g.nome}</b><small>{n(g.qtd)}</small></span>
                   <b className="pl-pgc-valor">{formatMoeda(g.total)}</b>
                 </li>
               ))}
@@ -106,13 +127,21 @@ export default function RegistrarPagamento({ vendas, pagadorPadrao, onFechar, on
                   {FORMAS_PAGAMENTO.map(f => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
                 </select>
               </div>
+              {proLabore && (
+                <div className="pl-field pl-pgc-largo">
+                  <label htmlFor="pgc-recebedor">Quem recebe (sai no recibo)</label>
+                  <input id="pgc-recebedor" type="text" className="pl-input" value={recebedor} onChange={e => setRecebedor(e.target.value)} maxLength={120} required />
+                </div>
+              )}
               <div className="pl-field pl-pgc-largo">
-                <label htmlFor="pgc-pagador">Quem paga (sai no comprovante)</label>
-                <input id="pgc-pagador" type="text" className="pl-input" value={pagador} onChange={e => setPagador(e.target.value)} maxLength={120} required />
+                <label htmlFor="pgc-pagador">{proLabore ? 'Quem paga — nome da empresa (sai no recibo)' : 'Quem paga (sai no comprovante)'}</label>
+                <input id="pgc-pagador" type="text" className="pl-input" value={pagador} onChange={e => setPagador(e.target.value)} maxLength={120} required
+                  placeholder={proLabore ? 'Ex: Minha Empresa LTDA' : undefined} />
               </div>
               <div className="pl-field pl-pgc-largo">
                 <label htmlFor="pgc-obs">Observação (opcional)</label>
-                <input id="pgc-obs" type="text" className="pl-input" value={observacao} onChange={e => setObservacao(e.target.value)} maxLength={500} placeholder="Ex: comissões de setembro" />
+                <input id="pgc-obs" type="text" className="pl-input" value={observacao} onChange={e => setObservacao(e.target.value)} maxLength={500}
+                  placeholder={proLabore ? 'Ex: pró-labore de setembro' : 'Ex: comissões de setembro'} />
               </div>
             </div>
             {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }}>{erro}</div>}

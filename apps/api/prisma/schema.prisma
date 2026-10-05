@@ -1140,44 +1140,58 @@ model Venda {
   // ainda a pagar). Enquanto estiver pago, valor e vendedor da comissão
   // ficam travados — pra mudar, desmarca o pagamento antes.
   pagamentoComissaoId String?
+  // Idem pro pró-labore: comprovante em que a retirada do pró-labore desta
+  // venda foi registrada (nulo = ainda não pago). Trava o valorProLabore.
+  pagamentoProLaboreId String?
   criadoEm       DateTime @default(now())
   atualizadoEm   DateTime @updatedAt
 
-  usuario           ProLaboreUsuario   @relation(fields: [usuarioId], references: [id])
-  vendedor          Vendedor?          @relation(fields: [vendedorId], references: [id])
-  pagamentoComissao PagamentoComissao? @relation(fields: [pagamentoComissaoId], references: [id], onDelete: SetNull)
-  lead              Lead?
+  usuario            ProLaboreUsuario   @relation(fields: [usuarioId], references: [id])
+  vendedor           Vendedor?          @relation(fields: [vendedorId], references: [id])
+  pagamentoComissao  PagamentoComissao? @relation("PagamentoDaComissao", fields: [pagamentoComissaoId], references: [id], onDelete: SetNull)
+  pagamentoProLabore PagamentoComissao? @relation("PagamentoDoProLabore", fields: [pagamentoProLaboreId], references: [id], onDelete: SetNull)
+  lead               Lead?
 
   @@index([usuarioId, data])
   @@index([vendedorId])
   @@index([pagamentoComissaoId])
+  @@index([pagamentoProLaboreId])
   @@map("pro_labore_vendas")
 }
 
-// Pagamento de comissão a um vendedor — agrupa as vendas pagas de uma vez e
-// vira o comprovante numerado (sequencial por conta) que se imprime e
-// assina. valorTotal é recalculado quando uma venda sai do pagamento.
+// Pagamento registrado a partir das vendas — agrupa as vendas pagas de uma
+// vez e vira o comprovante numerado que se imprime e assina. Dois tipos:
+//   COMISSAO  — comissão paga a um vendedor (vendedorId preenchido);
+//   PROLABORE — retirada do pró-labore do dono (vendedorId nulo; quem recebe
+//               fica em `recebedor`).
+// A numeração é sequencial por conta e por tipo. valorTotal é recalculado
+// quando uma venda sai do pagamento.
 model PagamentoComissao {
   id             String   @id @default(cuid())
   usuarioId      String
-  vendedorId     String
+  tipo           String   @default("COMISSAO") // COMISSAO | PROLABORE
+  vendedorId     String?
   numero         Int
   pagoEm         DateTime
   formaPagamento String? // PIX | DINHEIRO | TRANSFERENCIA | OUTRO
   observacao     String?
-  // Nome de quem paga, como sai no comprovante (padrão: nome do dono).
+  // Nome de quem paga, como sai no comprovante (comissão: padrão é o nome
+  // do dono; pró-labore: a empresa).
   pagador        String
+  // Só no pró-labore: nome de quem recebe (padrão: o dono).
+  recebedor      String?
   valorTotal     Float
   // Preenchido quando todas as vendas saíram do pagamento: o registro fica
   // (o número nunca é reaproveitado) e o comprovante aparece como cancelado.
   canceladoEm    DateTime?
   criadoEm       DateTime @default(now())
 
-  usuario  ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
-  vendedor Vendedor         @relation(fields: [vendedorId], references: [id])
-  vendas   Venda[]
+  usuario         ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
+  vendedor        Vendedor?        @relation(fields: [vendedorId], references: [id], onDelete: Restrict)
+  vendas          Venda[]          @relation("PagamentoDaComissao")
+  vendasProLabore Venda[]          @relation("PagamentoDoProLabore")
 
-  @@unique([usuarioId, numero])
+  @@unique([usuarioId, tipo, numero])
   @@index([vendedorId])
   @@map("pro_labore_pagamentos_comissao")
 }

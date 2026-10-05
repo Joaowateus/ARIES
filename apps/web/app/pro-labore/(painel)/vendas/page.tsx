@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { proLaboreApi, Venda, ParametroLiquidez, Vendedor } from '@/lib/proLaboreApi'
+import { proLaboreApi, Venda, ParametroLiquidez, Vendedor, type TipoPagamentoVenda } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
-import RegistrarPagamento, { abrirComprovante } from './RegistrarPagamento'
+import RegistrarPagamento, { abrirComprovante, valorPago } from './RegistrarPagamento'
 
 const MESES_MAP: Record<string, number> = {
   jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
@@ -26,10 +26,25 @@ function parseValorBR(raw: string): number {
 
 interface ResultadoImportacao { linha: string; ok: boolean; erro?: string }
 
-type FiltroComissao = 'todas' | 'apagar' | 'pagas'
+type FiltroPagamento = 'todas' | 'COMISSAO-apagar' | 'COMISSAO-pago' | 'PROLABORE-apagar' | 'PROLABORE-pago'
+const FILTROS: Array<[FiltroPagamento, string]> = [
+  ['todas', 'Todas as vendas'],
+  ['COMISSAO-apagar', 'Comissão a pagar'],
+  ['COMISSAO-pago', 'Comissão paga'],
+  ['PROLABORE-apagar', 'Pró-labore a pagar'],
+  ['PROLABORE-pago', 'Pró-labore pago'],
+]
 
 // Venda que gera comissão pra pagar: tem vendedor e valor maior que zero.
 const temComissao = (v: Venda) => !!v.vendedorId && (v.valorComissao ?? 0) > 0
+// Pagamentos que saem das vendas: comissão do vendedor e pró-labore do dono.
+const temPagamento = (tipo: TipoPagamentoVenda, v: Venda) => (tipo === 'COMISSAO' ? temComissao(v) : v.valorProLabore > 0)
+const pagamentoDe = (tipo: TipoPagamentoVenda, v: Venda) => (tipo === 'COMISSAO' ? v.pagamentoComissao : v.pagamentoProLabore) ?? null
+const aPagarDe = (tipo: TipoPagamentoVenda, v: Venda) => temPagamento(tipo, v) && !pagamentoDe(tipo, v)
+const TEXTO: Record<TipoPagamentoVenda, { nome: string; pago: string; doc: string }> = {
+  COMISSAO: { nome: 'comissão', pago: 'Paga', doc: 'Comprovante' },
+  PROLABORE: { nome: 'pró-labore', pago: 'Pago', doc: 'Recibo' },
+}
 
 // Vendas é cadastro exclusivo do dono — vendedor não registra a própria
 // venda, só acompanha o resultado (comissão) no Dashboard e trabalha o
@@ -53,8 +68,8 @@ export default function ProLaboreVendasPage() {
 
   // Pagamento de comissões: quais vendas estão no modal de "marcar como
   // paga", filtro da tabela e a venda sendo desmarcada (pra travar o clique).
-  const [pagando, setPagando] = useState<Venda[] | null>(null)
-  const [filtroComissao, setFiltroComissao] = useState<FiltroComissao>('todas')
+  const [pagando, setPagando] = useState<{ tipo: TipoPagamentoVenda; vendas: Venda[] } | null>(null)
+  const [filtroPagamento, setFiltroPagamento] = useState<FiltroPagamento>('todas')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [desmarcando, setDesmarcando] = useState<string | null>(null)
   const [erroComissao, setErroComissao] = useState('')
@@ -148,7 +163,10 @@ export default function ProLaboreVendasPage() {
 
   async function remover(id: string) {
     const v = vendas.find(x => x.id === id)
-    const aviso = v?.pagamentoComissao ? `\n\nA comissão dela está no comprovante nº ${v.pagamentoComissao.numero} — ela sai do comprovante.` : ''
+    const aviso = [
+      v?.pagamentoComissao && `A comissão dela está no comprovante nº ${v.pagamentoComissao.numero}.`,
+      v?.pagamentoProLabore && `O pró-labore dela está no recibo nº ${v.pagamentoProLabore.numero}.`,
+    ].filter(Boolean).map(t => `\n\n${t} Ela sai dele.`).join('')
     if (!confirm(`Remover esta venda?${aviso}`)) return
     await proLaboreApi.vendas.remover(id)
     if (editandoId === id) cancelarEdicao()
@@ -168,15 +186,18 @@ export default function ProLaboreVendasPage() {
     setSelecionadas(atual => (visiveis.length > 0 && visiveis.every(v => atual.has(v.id)) ? new Set() : new Set(visiveis.map(v => v.id))))
   }
 
-  // Clique na coluna "Comissão paga": a pagar → abre o modal pra registrar;
-  // paga → pergunta se quer desmarcar (sai do comprovante).
-  async function alternarPaga(v: Venda) {
+  // Clique nas colunas "Comissão paga" / "Pró-labore pago": a pagar → abre
+  // o modal pra registrar; pago → pergunta se quer desmarcar (sai do
+  // comprovante).
+  async function alternarPaga(tipo: TipoPagamentoVenda, v: Venda) {
     setErroComissao('')
-    if (!v.pagamentoComissao) { setPagando([v]); return }
-    if (!confirm(`Desmarcar a comissão de ${v.vendedor?.nome ?? 'vendedor'} como paga?\n\nEla volta pra "a pagar" e sai do comprovante nº ${v.pagamentoComissao.numero}.`)) return
-    setDesmarcando(v.id)
+    const pg = pagamentoDe(tipo, v)
+    if (!pg) { setPagando({ tipo, vendas: [v] }); return }
+    const quem = tipo === 'COMISSAO' ? `a comissão de ${v.vendedor?.nome ?? 'vendedor'}` : 'o pró-labore desta venda'
+    if (!confirm(`Desmarcar ${quem} como ${TEXTO[tipo].pago.toLowerCase()}?\n\nVolta pra "a pagar" e sai do ${TEXTO[tipo].doc.toLowerCase()} nº ${pg.numero}.`)) return
+    setDesmarcando(`${tipo}:${v.id}`)
     try {
-      await proLaboreApi.comissoes.desmarcar([v.id])
+      await proLaboreApi.pagamentosVendas.desmarcar(tipo, [v.id])
       carregar()
     } catch (err) {
       setErroComissao(err instanceof Error ? err.message : 'Não deu pra desmarcar')
@@ -185,9 +206,9 @@ export default function ProLaboreVendasPage() {
     }
   }
 
-  function pagarSelecionadas() {
+  function pagarSelecionadas(tipo: TipoPagamentoVenda) {
     setErroComissao('')
-    setPagando(vendas.filter(v => selecionadas.has(v.id) && temComissao(v) && !v.pagamentoComissao))
+    setPagando({ tipo, vendas: vendas.filter(v => selecionadas.has(v.id) && aPagarDe(tipo, v)) })
   }
 
   async function apagarSelecionadas() {
@@ -302,11 +323,16 @@ export default function ProLaboreVendasPage() {
   const tetoComissaoAtual = form.vendedorId ? tetoComissao(form.vendedorId) : null
   const vendaEditada = editandoId ? vendas.find(v => v.id === editandoId) : undefined
   const comissaoTravada = !!vendaEditada?.pagamentoComissao
+  const proLaboreTravado = !!vendaEditada?.pagamentoProLabore
 
-  // Resumo das comissões (sempre sobre todas as vendas, sem os filtros).
-  const aPagar = vendas.filter(v => temComissao(v) && !v.pagamentoComissao)
-  const totalAPagar = aPagar.reduce((s, v) => s + (v.valorComissao ?? 0), 0)
-  const totalPago = vendas.filter(v => v.pagamentoComissao).reduce((s, v) => s + (v.valorComissao ?? 0), 0)
+  // Resumo dos pagamentos (sempre sobre todas as vendas, sem os filtros).
+  const somar = (tipo: TipoPagamentoVenda, l: Venda[]) => l.reduce((s, v) => s + valorPago(tipo, v), 0)
+  const aPagar = vendas.filter(v => aPagarDe('COMISSAO', v))
+  const totalAPagar = somar('COMISSAO', aPagar)
+  const totalPago = somar('COMISSAO', vendas.filter(v => v.pagamentoComissao))
+  const proLaboreAPagar = vendas.filter(v => aPagarDe('PROLABORE', v))
+  const totalProLaboreAPagar = somar('PROLABORE', proLaboreAPagar)
+  const totalProLaborePago = somar('PROLABORE', vendas.filter(v => v.pagamentoProLabore))
   const aPagarPorVendedor = [...aPagar.reduce((m, v) => {
     const k = v.vendedorId!
     const g = m.get(k) ?? { id: k, nome: v.vendedor?.nome ?? '—', vendas: [] as Venda[], total: 0 }
@@ -314,10 +340,36 @@ export default function ProLaboreVendasPage() {
     return m.set(k, g)
   }, new Map<string, { id: string; nome: string; vendas: Venda[]; total: number }>()).values()].sort((a, b) => b.total - a.total)
 
-  const visiveis = vendas.filter(v =>
-    (!filtroVendedor || v.vendedorId === filtroVendedor) &&
-    (filtroComissao === 'todas' || (filtroComissao === 'pagas' ? !!v.pagamentoComissao : temComissao(v) && !v.pagamentoComissao)))
-  const selecionadasPagaveis = vendas.filter(v => selecionadas.has(v.id) && temComissao(v) && !v.pagamentoComissao).length
+  const visiveis = vendas.filter(v => {
+    if (filtroVendedor && v.vendedorId !== filtroVendedor) return false
+    if (filtroPagamento === 'todas') return true
+    const [tipo, sit] = filtroPagamento.split('-') as [TipoPagamentoVenda, 'apagar' | 'pago']
+    return sit === 'pago' ? !!pagamentoDe(tipo, v) : aPagarDe(tipo, v)
+  })
+  const selecionadasPagaveis = vendas.filter(v => selecionadas.has(v.id) && aPagarDe('COMISSAO', v)).length
+  const selecionadasProLabore = vendas.filter(v => selecionadas.has(v.id) && aPagarDe('PROLABORE', v)).length
+
+  // Célula das colunas "Comissão paga" e "Pró-labore pago".
+  const celulaPagamento = (tipo: TipoPagamentoVenda, v: Venda) => {
+    if (!temPagamento(tipo, v)) return <span className="pl-cms-sem">—</span>
+    const pg = pagamentoDe(tipo, v)
+    const t = TEXTO[tipo]
+    const quem = tipo === 'COMISSAO' ? `comissão de ${v.vendedor?.nome ?? ''}` : 'pró-labore'
+    return (
+      <span className={`pl-cms-status ${pg ? 'paga' : ''}`}>
+        <label>
+          <input type="checkbox" checked={!!pg} disabled={desmarcando === `${tipo}:${v.id}`} onChange={() => alternarPaga(tipo, v)}
+            aria-label={pg ? `${quem} ${t.pago.toLowerCase()} — desmarcar` : `Marcar ${quem} como ${t.pago.toLowerCase()}`} />
+          <span>{pg ? `${t.pago} em ${formatData(pg.pagoEm)}` : 'A pagar'}</span>
+        </label>
+        {pg && (
+          <button type="button" className="pl-link-action pl-cms-comprovante" onClick={() => abrirComprovante(pg.id)}>
+            {t.doc} nº {pg.numero}
+          </button>
+        )}
+      </span>
+    )
+  }
 
   return (
     <div>
@@ -336,8 +388,8 @@ export default function ProLaboreVendasPage() {
           </div>
           <div className="pl-field">
             <label>Pró-labore sacado (R$)</label>
-            <input type="number" step="0.01" min="0" max={tetoProLabore} className="pl-input" value={form.valorProLabore} onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required />
-            <span className="pl-hint">Máximo {formatMoeda(tetoProLabore)}</span>
+            <input type="number" step="0.01" min="0" max={tetoProLabore} className="pl-input" value={form.valorProLabore} onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required disabled={proLaboreTravado} />
+            <span className="pl-hint">{proLaboreTravado ? `Já pago (recibo nº ${vendaEditada!.pagamentoProLabore!.numero}). Desmarque na tabela pra mudar.` : `Máximo ${formatMoeda(tetoProLabore)}`}</span>
           </div>
           <div className="pl-field">
             <label>Vendedor (opcional)</label>
@@ -458,13 +510,29 @@ export default function ProLaboreVendasPage() {
                 <b>{formatMoeda(totalPago)}</b>
                 <span>com comprovante registrado</span>
               </div>
+              <div className="pl-cms-sep">
+                <small>Pró-labore a pagar</small>
+                <b className="pl-cms-prolabore">{formatMoeda(totalProLaboreAPagar)}</b>
+                <span>{proLaboreAPagar.length ? `${proLaboreAPagar.length} venda${proLaboreAPagar.length > 1 ? 's' : ''}` : 'tudo pago'}</span>
+              </div>
+              <div>
+                <small>Pró-labore pago</small>
+                <b>{formatMoeda(totalProLaborePago)}</b>
+                <span>com recibo registrado</span>
+              </div>
             </div>
-            {aPagarPorVendedor.length > 0 && (
-              <ul className="pl-cms-vendedores" aria-label="Comissões a pagar por vendedor">
+            {(aPagarPorVendedor.length > 0 || proLaboreAPagar.length > 0) && (
+              <ul className="pl-cms-vendedores" aria-label="Pagamentos pendentes">
+                {proLaboreAPagar.length > 0 && (
+                  <li className="pl-cms-chip-prolabore">
+                    <span><b>Pró-labore</b><small>{proLaboreAPagar.length} venda{proLaboreAPagar.length > 1 ? 's' : ''} · {formatMoeda(totalProLaboreAPagar)}</small></span>
+                    <button type="button" className="pl-btn pl-btn-ghost pl-cms-pagar" onClick={() => { setErroComissao(''); setPagando({ tipo: 'PROLABORE', vendas: proLaboreAPagar }) }}>Pagar tudo</button>
+                  </li>
+                )}
                 {aPagarPorVendedor.map(g => (
                   <li key={g.id}>
                     <span><b>{g.nome}</b><small>{g.vendas.length} venda{g.vendas.length > 1 ? 's' : ''} · {formatMoeda(g.total)}</small></span>
-                    <button type="button" className="pl-btn pl-btn-ghost pl-cms-pagar" onClick={() => { setErroComissao(''); setPagando(g.vendas) }}>Pagar tudo</button>
+                    <button type="button" className="pl-btn pl-btn-ghost pl-cms-pagar" onClick={() => { setErroComissao(''); setPagando({ tipo: 'COMISSAO', vendas: g.vendas }) }}>Pagar tudo</button>
                   </li>
                 ))}
               </ul>
@@ -472,11 +540,9 @@ export default function ProLaboreVendasPage() {
           </div>
 
           <div className="pl-cms-filtros">
-            <div className="pl-cms-abas" role="group" aria-label="Filtrar pela comissão">
-              {([['todas', 'Todas'], ['apagar', 'Comissão a pagar'], ['pagas', 'Comissão paga']] as const).map(([k, r]) => (
-                <button key={k} type="button" className={filtroComissao === k ? 'ativo' : ''} aria-pressed={filtroComissao === k} onClick={() => setFiltroComissao(k)}>{r}</button>
-              ))}
-            </div>
+            <select className="pl-select pl-cms-vendedor" value={filtroPagamento} onChange={e => setFiltroPagamento(e.target.value as FiltroPagamento)} aria-label="Filtrar pela situação do pagamento">
+              {FILTROS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}
+            </select>
             <select className="pl-select pl-cms-vendedor" value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} aria-label="Filtrar por vendedor">
               <option value="">Todos os vendedores</option>
               {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
@@ -489,8 +555,13 @@ export default function ProLaboreVendasPage() {
               <span style={{ fontSize: 13, fontWeight: 600 }}>{selecionadas.size} venda{selecionadas.size > 1 ? 's' : ''} selecionada{selecionadas.size > 1 ? 's' : ''}</span>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setSelecionadas(new Set())}>Limpar seleção</button>
+                {selecionadasProLabore > 0 && (
+                  <button type="button" className="pl-btn pl-btn-primary" onClick={() => pagarSelecionadas('PROLABORE')}>
+                    Marcar {selecionadasProLabore} pró-labore{selecionadasProLabore > 1 ? 's' : ''} como pago{selecionadasProLabore > 1 ? 's' : ''}
+                  </button>
+                )}
                 {selecionadasPagaveis > 0 && (
-                  <button type="button" className="pl-btn pl-btn-primary" onClick={pagarSelecionadas}>
+                  <button type="button" className="pl-btn pl-btn-primary" onClick={() => pagarSelecionadas('COMISSAO')}>
                     Marcar {selecionadasPagaveis} comiss{selecionadasPagaveis > 1 ? 'ões' : 'ão'} como paga{selecionadasPagaveis > 1 ? 's' : ''}
                   </button>
                 )}
@@ -511,6 +582,7 @@ export default function ProLaboreVendasPage() {
                   <th>Vendedor</th>
                   <th className="pl-right">Valor da venda</th>
                   <th className="pl-right">Pró-labore sacado</th>
+                  <th>Pró-labore pago</th>
                   <th className="pl-right">Comissão</th>
                   <th>Comissão paga</th>
                   <th className="pl-right">Ficou no caixa</th>
@@ -520,7 +592,7 @@ export default function ProLaboreVendasPage() {
               </thead>
               <tbody>
                 {visiveis.length === 0 && (
-                  <tr><td colSpan={10} className="pl-cms-vazio">Nenhuma venda com esse filtro.</td></tr>
+                  <tr><td colSpan={11} className="pl-cms-vazio">Nenhuma venda com esse filtro.</td></tr>
                 )}
                 {visiveis.map(v => (
                   <tr key={v.id} style={selecionadas.has(v.id) ? { background: 'var(--pl-surface-2)' } : undefined}>
@@ -531,23 +603,9 @@ export default function ProLaboreVendasPage() {
                     <td>{v.vendedor?.nome ?? '—'}</td>
                     <td className="pl-right">{formatMoeda(v.valorVenda)}</td>
                     <td className="pl-right" style={{ color: 'var(--pl-accent-3)', fontWeight: 700 }}>{formatMoeda(v.valorProLabore)}</td>
+                    <td className="pl-cms-celula">{celulaPagamento('PROLABORE', v)}</td>
                     <td className="pl-right" style={{ color: 'var(--pl-accent-4)', fontWeight: 700 }}>{v.valorComissao != null ? formatMoeda(v.valorComissao) : '—'}</td>
-                    <td className="pl-cms-celula">
-                      {temComissao(v) ? (
-                        <span className={`pl-cms-status ${v.pagamentoComissao ? 'paga' : ''}`}>
-                          <label>
-                            <input type="checkbox" checked={!!v.pagamentoComissao} disabled={desmarcando === v.id} onChange={() => alternarPaga(v)}
-                              aria-label={v.pagamentoComissao ? `Comissão de ${v.vendedor?.nome ?? ''} paga — desmarcar` : `Marcar comissão de ${v.vendedor?.nome ?? ''} como paga`} />
-                            <span>{v.pagamentoComissao ? `Paga em ${formatData(v.pagamentoComissao.pagoEm)}` : 'A pagar'}</span>
-                          </label>
-                          {v.pagamentoComissao && (
-                            <button type="button" className="pl-link-action pl-cms-comprovante" onClick={() => abrirComprovante(v.pagamentoComissao!.id)}>
-                              Comprovante nº {v.pagamentoComissao.numero}
-                            </button>
-                          )}
-                        </span>
-                      ) : <span className="pl-cms-sem">—</span>}
-                    </td>
+                    <td className="pl-cms-celula">{celulaPagamento('COMISSAO', v)}</td>
                     <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore - (v.valorComissao ?? 0))}</td>
                     <td>{v.observacao || '—'}</td>
                     <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
@@ -562,8 +620,8 @@ export default function ProLaboreVendasPage() {
         </div>
       )}
 
-      {pagando && pagando.length > 0 && (
-        <RegistrarPagamento vendas={pagando} pagadorPadrao={usuario?.nome ?? ''} onFechar={() => setPagando(null)}
+      {pagando && pagando.vendas.length > 0 && (
+        <RegistrarPagamento tipo={pagando.tipo} vendas={pagando.vendas} nomeDono={usuario?.nome ?? ''} onFechar={() => setPagando(null)}
           onRegistrado={() => { setSelecionadas(new Set()); carregar() }} />
       )}
     </div>
