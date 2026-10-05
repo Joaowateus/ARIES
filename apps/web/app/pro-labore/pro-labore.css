@@ -3148,3 +3148,9 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 }
 .pl-recibo-cancelado { background: #fff; border: 2px solid #b42318; border-radius: 8px; padding: 18px 22px; color: #15171c; text-align: left; line-height: 1.55; }
 .pl-recibo-cancelado b { color: #b42318; }
+.pl-recibo-tabela th.obs, .pl-recibo-tabela td.obs { width: 34%; }
+.pl-recibo-tabela td.obs { color: #3b3f4a; word-break: break-word; }
+.pl-cms-sep { padding-left: 28px; border-left: 1px solid var(--pl-border); }
+.pl-cms-totais b.pl-cms-prolabore { color: var(--pl-accent-3); }
+.pl-cms-chip-prolabore { border-color: var(--pl-accent-3-soft) !important; }
+@media (max-width: 720px) { .pl-cms-sep { padding-left: 0; border-left: 0; } }
