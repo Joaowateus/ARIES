@@ -315,11 +315,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   // Resposta sem corpo (204, ex.: desconectar) não é JSON — antes quebrava
   // aqui e a tela ficava parada mesmo com a ação feita no servidor.
   const texto = res.status === 204 ? '' : await res.text()
-  const body = texto ? JSON.parse(texto) : null
+  // Resposta que não é JSON (ex.: página de erro da hospedagem) não pode
+  // esconder o erro real atrás de um "Unexpected token".
+  let body = null
+  try { body = texto ? JSON.parse(texto) : null } catch { if (res.ok) throw new Error('Resposta inválida do servidor') }
   if (!res.ok) {
     // `codigo`/`dados` deixam a tela reagir a erros específicos (ex.: pedir
-    // a senha do departamento em vez de só mostrar a mensagem).
-    const erro = new Error(body?.error ?? 'Erro inesperado') as ErroApi
+    // a senha do departamento em vez de só mostrar a mensagem). O tratador
+    // geral da API responde com `message`; sem nenhum dos dois, mostra o
+    // status pra dar pra saber o que aconteceu.
+    const erro = new Error(body?.error ?? body?.message ?? `Erro inesperado (${res.status})`) as ErroApi
     erro.status = res.status
     erro.codigo = body?.codigo
     erro.dados = body

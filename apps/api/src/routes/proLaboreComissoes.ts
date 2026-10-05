@@ -4,6 +4,7 @@
 // e assinado. Só o dono mexe aqui, igual ao cadastro de vendas.
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
+import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
@@ -55,39 +56,59 @@ router.post('/comissoes/pagamentos', requireProLaboreAuth, requireDono, async (r
   const porVendedor = new Map<string, typeof vendas>()
   for (const v of vendas) porVendedor.set(v.vendedorId!, [...(porVendedor.get(v.vendedorId!) ?? []), v])
 
-  // O número é sequencial por conta; a transação serializável evita dois
-  // pagamentos simultâneos pegarem o mesmo número (o unique garante).
-  const criados = await prisma.$transaction(async tx => {
-    const ultimo = await tx.pagamentoComissao.aggregate({ where: { usuarioId }, _max: { numero: true } })
-    let numero = ultimo._max.numero ?? 0
-    const saida: string[] = []
+  // Um comprovante por vendedor. Sem transação interativa (no servidor ela
+  // tem limite de 5s e falhava com o banco longe da API): cada comprovante é
+  // gravado num lote atômico só (cria o pagamento + liga as vendas), e o
+  // número sequencial é garantido pelo unique (usuarioId, numero) — se outro
+  // pagamento pegou o mesmo número no meio do caminho, tenta o próximo.
+  const pagoEm = new Date(`${parse.data.pagoEm}T12:00:00Z`)
+  const observacao = parse.data.observacao?.trim() || null
+  const criados: string[] = []
+  let conflito = false
+  try {
     for (const [vendedorId, lista] of porVendedor) {
-      numero += 1
-      const pg = await tx.pagamentoComissao.create({
-        data: {
-          usuarioId,
-          vendedorId,
-          numero,
-          pagoEm: new Date(`${parse.data.pagoEm}T12:00:00Z`),
-          formaPagamento: parse.data.formaPagamento ?? null,
-          observacao: parse.data.observacao?.trim() || null,
-          pagador,
-          valorTotal: arred(lista.reduce((s, v) => s + (v.valorComissao ?? 0), 0)),
-        },
-      })
-      // Condição pagamentoComissaoId: null protege contra duas abas marcando
-      // a mesma venda ao mesmo tempo.
-      const r = await tx.venda.updateMany({ where: { id: { in: lista.map(v => v.id) }, pagamentoComissaoId: null }, data: { pagamentoComissaoId: pg.id } })
-      if (r.count !== lista.length) throw new Error('CONFLITO')
-      saida.push(pg.id)
+      const id = randomUUID()
+      const vendaIds = lista.map(v => v.id)
+      for (let tentativa = 0; ; tentativa++) {
+        const ultimo = await prisma.pagamentoComissao.aggregate({ where: { usuarioId }, _max: { numero: true } })
+        try {
+          const [, ligadas] = await prisma.$transaction([
+            prisma.pagamentoComissao.create({
+              data: {
+                id, usuarioId, vendedorId, pagoEm, observacao, pagador,
+                numero: (ultimo._max.numero ?? 0) + 1,
+                formaPagamento: parse.data.formaPagamento ?? null,
+                valorTotal: arred(lista.reduce((s, v) => s + (v.valorComissao ?? 0), 0)),
+              },
+            }),
+            // pagamentoComissaoId: null protege contra duas abas marcando a
+            // mesma venda ao mesmo tempo.
+            prisma.venda.updateMany({ where: { id: { in: vendaIds }, usuarioId, pagamentoComissaoId: null }, data: { pagamentoComissaoId: id } }),
+          ])
+          if (ligadas.count !== vendaIds.length) {
+            // Alguma venda foi marcada em outro lugar nesse meio-tempo:
+            // desfaz este comprovante (fica cancelado, o número não volta).
+            await prisma.venda.updateMany({ where: { pagamentoComissaoId: id }, data: { pagamentoComissaoId: null } })
+            await recalcularPagamentoComissao(prisma, id)
+            conflito = true
+          } else criados.push(id)
+          break
+        } catch (e) {
+          const numeroRepetido = e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002'
+          if (!numeroRepetido || tentativa >= 4) throw e
+        }
+      }
+      if (conflito) break
     }
-    return saida
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((e: unknown) => {
-    if (e instanceof Error && e.message === 'CONFLITO') return null
-    if (e instanceof Prisma.PrismaClientKnownRequestError && (e.code === 'P2002' || e.code === 'P2034')) return null
-    throw e
-  })
-  if (!criados) {
+  } catch (e) {
+    const codigo = e instanceof Prisma.PrismaClientKnownRequestError ? e.code : e instanceof Error ? e.name : 'desconhecido'
+    console.error('[comissoes] falha ao registrar pagamento', { usuarioId, codigo, erro: e instanceof Error ? e.message : e })
+    res.status(500).json({
+      error: `Não deu pra registrar o pagamento agora (código ${codigo}).${criados.length ? ` ${criados.length} comprovante(s) já foram gravados — atualize a página.` : ' Nada foi gravado — tente de novo.'}`,
+    })
+    return
+  }
+  if (conflito && !criados.length) {
     res.status(409).json({ error: 'Essas comissões acabaram de ser marcadas em outro lugar. Atualize a página e tente de novo.' })
     return
   }
@@ -114,10 +135,9 @@ router.post('/comissoes/desmarcar', requireProLaboreAuth, requireDono, async (re
     select: { id: true, pagamentoComissaoId: true },
   })
   const pagamentos = [...new Set(vendas.map(v => v.pagamentoComissaoId!))]
-  await prisma.$transaction(async tx => {
-    await tx.venda.updateMany({ where: { id: { in: vendas.map(v => v.id) } }, data: { pagamentoComissaoId: null } })
-    for (const id of pagamentos) await recalcularPagamentoComissao(tx, id)
-  })
+  await prisma.venda.updateMany({ where: { id: { in: vendas.map(v => v.id) } }, data: { pagamentoComissaoId: null } })
+  // Recalcular é idempotente: se falhar no meio, a próxima ação refaz.
+  for (const id of pagamentos) await recalcularPagamentoComissao(prisma, id)
   res.json({ ok: true, desmarcadas: vendas.length })
 })
 
