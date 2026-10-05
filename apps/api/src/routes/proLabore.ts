@@ -672,11 +672,9 @@ router.delete('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Requ
     res.status(404).json({ error: 'Venda não encontrada' })
     return
   }
-  await prisma.$transaction(async tx => {
-    await tx.venda.delete({ where: { id: atual.id } })
-    // A venda saiu do comprovante: refaz o total (ou cancela o comprovante vazio).
-    if (atual.pagamentoComissaoId) await recalcularPagamentoComissao(tx, atual.pagamentoComissaoId)
-  })
+  await prisma.venda.delete({ where: { id: atual.id } })
+  // A venda saiu do comprovante: refaz o total (ou cancela o comprovante vazio).
+  if (atual.pagamentoComissaoId) await recalcularPagamentoComissao(prisma, atual.pagamentoComissaoId)
   res.json({ ok: true })
 })
 
