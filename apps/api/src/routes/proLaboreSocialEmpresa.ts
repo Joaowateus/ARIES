@@ -21,6 +21,7 @@ import {
   listarContasInstagramDaEmpresa,
   verificarTokenEmpresa,
 } from '../lib/instagramGraph'
+import { publicarPautasVencidas } from '../lib/smPublicacao'
 import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialMediaSync'
 
 const router = Router()
@@ -266,10 +267,14 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (cronAutorizado(req, res)) res.json(await rodarJobSocialMedia('DIA'))
 })
-// A cada 5 min: novas tentativas vencidas (e, nas próximas fases, a
-// publicação agendada e os avisos agrupados).
+// A cada 5 min: novas tentativas vencidas e a publicação das pautas
+// agendadas que já chegaram no horário.
 router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
-  if (cronAutorizado(req, res)) res.json(await rodarJobSocialMedia('RETENTATIVA'))
+  if (!cronAutorizado(req, res)) return
+  // As imagens da pauta são servidas pela própria API: a Meta precisa da URL completa.
+  const baseApi = process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`
+  const [sincronizacao, publicacao] = await Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi)])
+  res.json({ ...sincronizacao, publicacao })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

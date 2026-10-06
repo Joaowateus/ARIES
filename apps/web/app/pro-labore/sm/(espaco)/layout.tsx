@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
 import {
-  Botao, CartaoStatusConta, EstadoVazio, IcAtendimento, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
+  Botao, CartaoStatusConta, EstadoVazio, IcAtendimento, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
   SidebarSM, SmApp, haQuanto, type ItemMenu, type StatusConta,
 } from '../_ui'
 import { EspacoSMCtx, atende } from './EspacoSM'
@@ -82,6 +82,9 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
         { href: '/pro-labore/sm/producao', rotulo: 'Produção', icone: <IcProducao /> },
       ] : []),
       ...(ctx.pode('atendimento') ? [{ href: '/pro-labore/sm/atendimento', rotulo: 'Atendimento', icone: <IcAtendimento />, contador: eu.contadores.atendimento }] : []),
+      // O estoque é mantido pelo gestor (decisão P3). No menu do papel ele só
+      // aparece quando o gestor libera o módulo como Completo.
+      ...(eu.visao === 'GESTOR' || ctx.pode('estoque', 'COMPLETO') ? [{ href: '/pro-labore/sm/estoque', rotulo: 'Estoque', icone: <IcEstoque /> }] : []),
     ] },
     { rotulo: 'Resultado', itens: [
       ...(ctx.pode('analise') ? [{ href: '/pro-labore/sm/desempenho', rotulo: 'Desempenho', icone: <IcDesempenho /> }] : []),
