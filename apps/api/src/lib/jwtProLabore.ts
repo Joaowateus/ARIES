@@ -6,8 +6,9 @@ export interface ProLaboreJwtPayload {
   sub: string
   email: string
   nome: string
-  papel: 'DONO' | 'VENDEDOR' | 'SUPERVISOR'
+  papel: 'DONO' | 'VENDEDOR' | 'SUPERVISOR' | 'SOCIAL_MEDIA'
   vendedorId?: string
+  smMembroId?: string
 }
 
 export function signProLaboreToken(payload: ProLaboreJwtPayload): string {

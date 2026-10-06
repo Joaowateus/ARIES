@@ -92,17 +92,20 @@ export function BotaoLink({ href, variante = 'sec', icone, children, className }
   )
 }
 
-export function Segmentado<T extends string>({ opcoes, valor, aoMudar, rotulo, className }: {
-  opcoes: ReadonlyArray<{ valor: T; rotulo: ReactNode; dica?: string }>
+export function Segmentado<T extends string>({ opcoes, valor, aoMudar, rotulo, className, variante, desabilitado }: {
+  opcoes: ReadonlyArray<{ valor: T; rotulo: ReactNode; dica?: string; tom?: 'ok' | 'info' | 'bad' }>
   valor: T
   aoMudar: (v: T) => void
   rotulo: string
   className?: string
+  /** "nivel": opção marcada colorida pelo tom (Completo / Leitura / Sem acesso). */
+  variante?: 'nivel'
+  desabilitado?: boolean
 }) {
   return (
-    <div className={juntar('sm-seg', className)} role="group" aria-label={rotulo}>
+    <div className={juntar('sm-seg', variante, className)} role="group" aria-label={rotulo}>
       {opcoes.map(o => (
-        <button key={o.valor} type="button" aria-pressed={o.valor === valor} title={o.dica} onClick={() => aoMudar(o.valor)}>
+        <button key={o.valor} type="button" className={o.tom ? `t-${o.tom}` : undefined} disabled={desabilitado} aria-pressed={o.valor === valor} title={o.dica} onClick={() => aoMudar(o.valor)}>
           {o.rotulo}
         </button>
       ))}

@@ -8,6 +8,8 @@ interface ProLaboreAuthCtx {
   usuario: ProLaboreUsuario | null
   loading: boolean
   login: (email: string, senha: string) => Promise<void>
+  /** Sessão já autenticada por outro caminho (ex.: aceitar o convite do Social Media). */
+  entrar: (token: string, usuario: ProLaboreUsuario) => void
   logout: () => void
 }
 
@@ -36,10 +38,14 @@ export function ProLaboreAuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, senha: string) {
     const { token, usuario: u } = await proLaboreApi.auth.login(email, senha)
+    entrar(token, u)
+  }
+
+  function entrar(token: string, u: ProLaboreUsuario) {
     setToken(token)
     setUsuario(u)
     setUsuarioState(u)
-    router.push('/pro-labore')
+    router.push(u.papel === 'SOCIAL_MEDIA' ? '/pro-labore/sm' : '/pro-labore')
   }
 
   function logout() {
@@ -49,7 +55,7 @@ export function ProLaboreAuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ProLaboreAuthContext.Provider value={{ usuario, loading, login, logout }}>
+    <ProLaboreAuthContext.Provider value={{ usuario, loading, login, entrar, logout }}>
       {children}
     </ProLaboreAuthContext.Provider>
   )

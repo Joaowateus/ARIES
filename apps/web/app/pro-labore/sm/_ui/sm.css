@@ -174,6 +174,12 @@
 .sm-seg button:hover { color: var(--sm-text); }
 .sm-seg button[aria-pressed="true"] { background: var(--sm-silver); color: var(--sm-on-silver); }
 .sm-seg button:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+/* Variante "nível" (tela 07): fundo mais fundo e a opção marcada colorida pelo significado. */
+.sm-seg.nivel { background: var(--sm-bg); }
+.sm-seg.nivel button[aria-pressed="true"] { background: var(--sm-surface-3); box-shadow: inset 0 0 0 1px var(--sm-border-strong); color: var(--sm-text); }
+.sm-seg.nivel button.t-ok[aria-pressed="true"] { color: var(--sm-ok-fg); }
+.sm-seg.nivel button.t-info[aria-pressed="true"] { color: var(--sm-info-fg); }
+.sm-seg.nivel button.t-bad[aria-pressed="true"] { color: var(--sm-bad-fg); }
 
 /* Toggle */
 .sm-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
@@ -294,3 +300,18 @@ textarea.sm-input { padding: 10px 12px; min-height: 88px; resize: vertical; }
   .sm-skel, .sm-toast-tempo { animation: none; }
   .sm-tog, .sm-tog > span { transition: none; }
 }
+
+/* Dentro do painel do gestor (tela 07): herda o fundo da moldura do Pró-Labore. */
+.sm-app.sm-embutido { background: transparent; }
+.sm-pagina { display: flex; flex-direction: column; gap: 22px; }
+.sm-pagina-cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.sm-pagina-cab > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sm-pagina-cab p { margin: 0; color: var(--sm-text-muted); font-size: 15px; }
+.sm-linha-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--sm-divider); }
+.sm-linha-item:last-child { border-bottom: 0; }
+.sm-linha-item-texto { flex: 1 1 260px; min-width: 0; }
+.sm-linha-item-texto b { font-weight: 600; display: block; }
+.sm-linha-item-texto small { font-size: 12px; color: var(--sm-text-muted); display: block; margin-top: 2px; }
+.sm-erro { color: var(--sm-bad-fg); font-size: 13px; margin: 0; }
+.sm-aviso-verComo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px; background: var(--sm-info-bg); color: var(--sm-info-fg); font-size: 13px; font-weight: 600; }
+.sm-aviso-verComo .sm-btn { min-height: 36px; }

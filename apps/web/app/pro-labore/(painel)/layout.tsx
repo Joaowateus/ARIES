@@ -37,6 +37,8 @@ const NAV_GROUPS: NavGroup[] = [
     // Ocorrências é a única aba visível pra supervisor mas escondida de
     // vendedor comum — por isso usa hideFromVendedor em vez de donoOnly.
     { href: '/pro-labore/ocorrencias', label: 'Ocorrências', icon: 'flag', hideFromVendedor: true },
+    // Tela 07 da especificação do Social Media: o que o papel enxerga e o convite.
+    { href: '/pro-labore/equipe/acessos', label: 'Acessos e permissões', icon: 'shield', donoOnly: true },
   ] },
   { label: 'Sistema', items: [
     { href: '/pro-labore/indicadores', label: 'Indicadores', icon: 'chart', donoOnly: true },
@@ -108,6 +110,8 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
 
   useEffect(() => {
     if (!loading && !usuario) router.replace('/pro-labore/login')
+    // O papel Social Media tem espaço próprio; a API também barra o resto.
+    else if (usuario?.papel === 'SOCIAL_MEDIA') router.replace('/pro-labore/sm')
   }, [usuario, loading, router])
 
   // fecha a gaveta (mobile) ao trocar de página
@@ -131,7 +135,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
   }
 
-  if (!usuario) return null
+  if (!usuario || usuario.papel === 'SOCIAL_MEDIA') return null
 
   const isDono = usuario.papel === 'DONO'
   const isVendedor = usuario.papel === 'VENDEDOR'
