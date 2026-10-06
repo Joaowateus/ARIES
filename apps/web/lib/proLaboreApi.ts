@@ -796,6 +796,10 @@ export const proLaboreApi = {
         request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/link`, { method: 'POST', body: JSON.stringify({ tipo, url }) }),
       removerMidia: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/${midiaId}`, { method: 'DELETE' }),
     },
+    calendario: {
+      mes: (mes?: string) => request<SmCalendario>(`/pro-labore/sm/calendario${mes ? `?mes=${mes}` : ''}`),
+      salvarConfig: (data: Partial<SmConfigCalendario>) => request<SmConfigCalendario>('/pro-labore/sm/gestor/calendario', { method: 'PUT', body: JSON.stringify(data) }),
+    },
     convite: {
       ver: (token: string) => request<{ nome: string; tratamento: string | null; email: string; jaTemSenha: boolean }>(`/pro-labore/sm/convite/${encodeURIComponent(token)}`),
       aceitar: (token: string, senha: string) =>
@@ -1837,4 +1841,45 @@ export interface SmQuadro {
 /** Endereço completo de um arquivo guardado pela API (/pro-labore/imagens/...). */
 export function urlArquivoApi(url: string): string {
   return url.startsWith('/pro-labore/') ? `${BASE}${url}` : url
+}
+
+export interface SmConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; horizonteDias: number; mixMeta: Record<SmPilar, number> }
+
+export interface SmItemCalendario {
+  tipo: 'PAUTA' | 'INSTAGRAM'
+  id: string
+  instante: string
+  hora: string
+  formato: SmFormato
+  titulo: string
+  pilar: SmPilar | null
+  status: SmStatusPauta
+  contaNaCadencia: boolean
+  arrastavel: boolean
+  permalink: string | null
+}
+
+export interface SmDiaCalendario {
+  data: string
+  doMes: boolean
+  hoje: boolean
+  passado: boolean
+  util: boolean
+  itens: SmItemCalendario[]
+  postsFeed: number
+  semPost: boolean
+  rajada: boolean
+  slotLivre: boolean
+}
+
+export interface SmCalendario {
+  mes: string
+  hoje: string
+  semanas: SmDiaCalendario[][]
+  regras: Array<{ chave: 'minDiasSemana' | 'maxPostsDia' | 'maxDiasSemPost'; status: 'OK' | 'AJUSTAR' | 'ATENCAO'; texto: string }>
+  mix: { pilares: Array<{ pilar: SmPilar; quantidade: number; percentual: number; meta: number }>; total: number; semPilar: number }
+  janelas: SmQuadro['janelas']
+  config: SmConfigCalendario
+  podeEditar: boolean
+  souGestor: boolean
 }
