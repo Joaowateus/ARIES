@@ -5,8 +5,8 @@
 ## Situação atual
 
 - **Etapa:** Fase 1 · Acesso isolado e trabalho diário (Fase 0 concluída e aprovada).
-- **Entregue:** 1a (papel, permissões, tela 07, convite, menu e cartão).
-- **Próximas:** 1b estoque, pautas e Produção · 1c Calendário · 1d Hoje e pautas automáticas.
+- **Entregue:** 1a (papel, permissões, tela 07, convite, menu e cartão) · 1b (estoque leve, Produção, aprovação, publicação pela API, Trial Reels).
+- **Próximas:** 1c Calendário · 1d Hoje e pautas automáticas (venda, insight, audiência, calendário).
 
 ## Checklist de aceite (seção 18)
 
@@ -26,9 +26,9 @@
 - [x] Menu lateral do papel e cartão da conta (1a: Trabalho e Resultado, itens somem quando o módulo está sem acesso; cartão com status da sincronização; papel e Sair no rodapé)
 - [ ] Tela 01 · Hoje, completa
 - [ ] Tela 02 · Calendário, com arrastar, regras, mix e janelas
-- [ ] Tela 03 · Produção, com kanban, briefing, checklist, aprovação e publicação agendada pela API
-- [ ] Trial Reels pela API
-- [ ] Integração de leitura com o estoque e pautas automáticas (estoque, venda, insight, audiência, calendário)
+- [x] Tela 03 · Produção, com kanban, briefing, checklist, aprovação e publicação agendada pela API (1b: quadro de 6 colunas com arrastar, Alt + setas e "Mover para"; briefing que salva ao sair do campo; código `#P-DDMM-MODELO` gerado com a data; checklist com legenda 300+, capa e janela calculada do histórico; aprovação e pedido de ajuste com aviso; mudança depois de aprovada volta para aprovação; o job de minuto publica foto, carrossel, reels e story, avisa se falhar e permite tentar de novo)
+- [x] Trial Reels pela API (1b: "Testar como Trial Reel" segue a mesma aprovação e publica com `trial_params`, promovido ao feed se performar bem)
+- [ ] Integração de leitura com o estoque e pautas automáticas (estoque, venda, insight, audiência, calendário) (1b: estoque leve e "Sugestões do estoque" com "Gerar pauta". Falta na 1d: venda, insight, audiência e calendário)
 
 ### Fase 2 · Atendimento e prova de venda
 - [ ] Tela 04 · Atendimento, com direct, comentários, respostas rápidas, janela de 24h e automações
@@ -110,6 +110,8 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | P13 | Expediente configurável, padrão seg a sex das 8h às 18h, fuso America/Belem. | Padrão |
 | P14 | Manrope nos títulos só no espaço do Social Media. | Recomendação do plano |
 | P15 | Nome, tratamento e e-mail informados pelo gestor no convite (tela 07). | Padrão |
+| Ajuste 1b | Estoque leve mantido pelo gestor em Social Media → Estoque. No menu do papel, só aparece quando o gestor libera o Estoque como Completo (o menu padrão da seção 3.1 não tem Estoque). | Encaixe |
+| Ajuste 1b | Autorização de imagem (P6): na pauta de Prova social, "Cliente autorizou" e a foto do termo anexada. | Decisão P6 |
 | Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 
 ## Perguntas em aberto
@@ -127,4 +129,6 @@ As perguntas P1 a P15 estão na seção 4 do [plano](PLANO_DE_ENCAIXE.md#4-pergu
 - [ ] Webhook no app da Meta: Webhooks → Instagram → callback `https://<api>/pro-labore/sm/webhook/instagram`, token de verificação igual a `META_WEBHOOK_VERIFY_TOKEN`, campos comments, mentions, messages e story_insights. `META_APP_SECRET` = Chave Secreta do app.
 - [ ] Conectar pela empresa: aba Social Media → "Conectar pela empresa" → colar o token do usuário do sistema. O histórico atual é mantido.
 - [ ] Chaves na Vercel: IA, armazenamento, e-mail, VAPID, token do webhook da Meta
+- [ ] Publicação pela API: o token da empresa precisa da permissão `instagram_content_publish` (pelo login do Instagram, `instagram_business_content_publish`). A API precisa de `API_PUBLIC_URL` (o endereço público dela): a Meta baixa as imagens por ele. A tarefa `/sm/cron/minuto` a cada 5 minutos publica as pautas vencidas; o atraso máximo é de 5 minutos.
+- [ ] Vídeo: por enquanto entra por link público (https). O envio direto de vídeo pelo sistema depende do armazenamento de arquivos (Vercel Blob, decisão P8).
 - [ ] E-mail do convite: `RESEND_API_KEY` e `EMAIL_FROM` na API. Sem elas, a tela 07 mostra o link para copiar. O link usa `FRONTEND_URL` (o endereço do sistema).

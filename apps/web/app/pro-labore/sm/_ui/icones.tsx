@@ -27,3 +27,4 @@ export const IcFechar = (p: P) => <Icone {...p}><path d="M6 6l12 12M18 6 6 18" /
 export const IcMais = (p: P) => <Icone {...p}><path d="M12 5v14M5 12h14" /></Icone>
 export const IcVazio = (p: P) => <Icone {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 14h5l1.5 2h5L16 14h5" /></Icone>
 export const IcEscudo = (p: P) => <Icone {...p}><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z" /></Icone>
+export const IcEstoque = (p: P) => <Icone {...p}><circle cx="6" cy="16" r="3" /><circle cx="18" cy="16" r="3" /><path d="M9 16h6l-3-7h4M6 16l3-7h3" /></Icone>

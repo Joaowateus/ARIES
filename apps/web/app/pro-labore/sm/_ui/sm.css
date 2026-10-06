@@ -315,3 +315,66 @@ textarea.sm-input { padding: 10px 12px; min-height: 88px; resize: vertical; }
 .sm-erro { color: var(--sm-bad-fg); font-size: 13px; margin: 0; }
 .sm-aviso-verComo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px; background: var(--sm-info-bg); color: var(--sm-info-fg); font-size: 13px; font-weight: 600; }
 .sm-aviso-verComo .sm-btn { min-height: 36px; }
+
+/* ============ Produção (tela 03) ============ */
+.sm-producao { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.sm-quadro { flex: 999 1 640px; min-width: 0; overflow-x: auto; padding-bottom: 6px; }
+.sm-quadro-colunas { display: flex; gap: 12px; min-width: 1080px; }
+.sm-coluna { flex: 1 1 0; min-width: 170px; background: var(--sm-bg-focus); border: 1px solid var(--sm-divider); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 10px; min-height: 120px; transition: border-color .12s, background .12s; }
+.sm-coluna.alvo { border-color: var(--sm-silver); background: var(--sm-surface); }
+.sm-coluna.recusa { border-color: var(--sm-bad-dot); }
+.sm-coluna-cab { display: flex; justify-content: space-between; align-items: center; padding: 4px 4px 2px; }
+.sm-coluna-cab .sm-mono { color: var(--sm-nav); }
+.sm-kcard { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; cursor: grab; font-family: var(--sm-font-text); font-size: 13px; color: var(--sm-text); width: 100%; background: var(--sm-surface); border: 1px solid var(--sm-border); touch-action: none; user-select: none; }
+.sm-kcard:hover { border-color: var(--sm-border-strong); }
+.sm-kcard[aria-current="true"] { background: var(--sm-surface-3); border-color: var(--sm-silver); }
+.sm-kcard:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-kcard.arrastando { opacity: .35; }
+.sm-kcard-titulo { font-weight: 600; line-height: 1.35; }
+.sm-kcard-rodape { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--sm-text-muted); }
+.sm-kcard-rodape .atrasada { color: var(--sm-bad-fg); font-weight: 600; }
+.sm-kcard-selos { display: flex; gap: 4px; flex-wrap: wrap; }
+.sm-kcard .sm-chip { align-self: flex-start; }
+.sm-fantasma { position: fixed; z-index: 1100; pointer-events: none; transform: rotate(2deg); box-shadow: 0 14px 34px rgba(0, 0, 0, .45); }
+.sm-marcador { height: 3px; border-radius: 3px; background: var(--sm-silver); margin: -5px 2px; }
+.sm-coluna-vazia { font-size: 12px; color: var(--sm-text-faint); text-align: center; padding: 12px 6px; border: 1px dashed var(--sm-border-strong); border-radius: 10px; }
+
+.sm-briefing { flex: 1 1 320px; min-width: 0; gap: 16px; }
+/* Lado a lado com o quadro: o briefing rola por dentro e fica à vista. */
+@media (min-width: 1100px) {
+  .sm-briefing { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+}
+.sm-bloco { background: var(--sm-surface-2); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.sm-bloco .sm-mono { color: var(--sm-info-fg); }
+.sm-bloco.cta .sm-mono { color: var(--sm-ok-fg); }
+.sm-bloco textarea, .sm-campo-livre { all: unset; box-sizing: border-box; width: 100%; font: 400 14px/1.45 var(--sm-font-text); color: var(--sm-text); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 22px; field-sizing: content; }
+.sm-bloco textarea::placeholder, .sm-campo-livre::placeholder { color: var(--sm-text-faint); }
+.sm-bloco:focus-within { box-shadow: inset 0 0 0 1px var(--sm-border-strong); }
+.sm-check { display: flex; gap: 10px; align-items: center; min-height: 32px; font-size: 14px; }
+.sm-check > span { display: flex; flex-direction: column; min-width: 0; }
+.sm-check input { width: 18px; height: 18px; accent-color: var(--sm-silver); flex: none; }
+.sm-check small { color: var(--sm-text-faint); font-size: 12px; }
+.sm-check.auto { color: var(--sm-text-muted); }
+.sm-arquivos { display: flex; flex-wrap: wrap; gap: 8px; }
+.sm-arquivo { position: relative; width: 72px; height: 72px; border-radius: 10px; overflow: hidden; background: var(--sm-surface-2); border: 1px solid var(--sm-border); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--sm-text-muted); text-align: center; padding: 4px; }
+.sm-arquivo img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+.sm-arquivo button { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .65); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.sm-arquivo button::after { content: ''; position: absolute; inset: -10px; }
+.sm-linha-acoes { display: flex; gap: 10px; flex-wrap: wrap; }
+.sm-grade-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+select.sm-input { appearance: auto; }
+
+/* Modal */
+.sm-modal-fundo { position: fixed; inset: 0; z-index: 1000; background: var(--sm-overlay); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.sm-modal { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--sm-surface); border: 1px solid var(--sm-border-strong); border-radius: var(--sm-radius-modal); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.sm-modal-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sm-modal-cab h2 { font-size: 20px; }
+.sm-lista-sugestoes { display: flex; flex-direction: column; }
+.sm-lista-sugestoes > div { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--sm-divider); }
+.sm-lista-sugestoes > div:first-child { border-top: 0; }
+/* Banner dentro de colunas estreitas (briefing): ícone menor ao lado do texto. */
+.sm-briefing .sm-banner { gap: 12px; padding: 14px; flex-wrap: nowrap; align-items: flex-start; }
+.sm-briefing .sm-banner-icone { width: 32px; height: 32px; border-radius: 9px; }
+.sm-briefing .sm-banner-icone svg { width: 18px; height: 18px; }
+.sm-briefing .sm-banner-corpo { flex: 1 1 auto; }
+.sm-briefing .sm-banner > .sm-btn { align-self: center; }

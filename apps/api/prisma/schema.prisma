@@ -943,6 +943,8 @@ model ProLaboreUsuario {
   smNotificacoes            SmNotificacao[]
   smMembro                  SmMembro?
   smPermissao               SmPermissao?
+  smMotos                   SmMotoEstoque[]
+  smPautas                  SmPauta[]
 
   @@map("pro_labore_usuarios")
 }
@@ -2362,4 +2364,93 @@ model SmPermissao {
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("pro_labore_sm_permissoes")
+}
+
+// Estoque leve do Social Media (decisão P3): só o que a produção de
+// conteúdo precisa — modelo, ano, cor e há quantos dias está na loja.
+// Nunca guarda custo nem margem. Mantido pelo gestor.
+model SmMotoEstoque {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  modelo       String
+  marca        String?
+  ano          Int?
+  cor          String?
+  entradaEm    DateTime
+  situacao     String    @default("DISPONIVEL") // DISPONIVEL | RESERVADA | VENDIDA
+  saidaEm      DateTime?
+  observacao   String?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  pautas  SmPauta[]
+
+  @@index([usuarioId, situacao])
+  @@map("pro_labore_sm_motos_estoque")
+}
+
+// Pauta de conteúdo (tela 03 · Produção): da ideia à publicação pela API.
+model SmPauta {
+  id                    String    @id @default(cuid())
+  usuarioId             String
+  titulo                String
+  pilar                 String // ESTOQUE | PROVA | EDUCACAO | BASTIDORES
+  formato               String // REELS | CARROSSEL | FOTO | STORY
+  status                String    @default("IDEIA") // IDEIA | ROTEIRO | GRAVACAO | EDICAO | APROVACAO | AGENDADO | PUBLICADO
+  ordem                 Float     @default(0)
+  prazo                 DateTime?
+  origem                String    @default("MANUAL") // MANUAL | ESTOQUE | VENDA | INSIGHT | AUDIENCIA | CALENDARIO
+  origemRef             String? // o que gerou a pauta (moto, venda, insight): evita sugerir duas vezes
+  motoId                String?
+  gancho                String?
+  retencao              String?
+  recompensa            String?
+  cta                   String?
+  legenda               String?
+  checklist             Json      @default("{}") // itens marcados à mão (ex.: capaTexto)
+  agendadoPara          DateTime?
+  codigo                String? // #P-DDMM-MODELO (stories: #S-...), gerado quando a pauta ganha data
+  trial                 Boolean   @default(false) // publicar como Trial Reel
+  aprovacao             String? // PENDENTE | APROVADA | AJUSTE
+  enviadaAprovacaoEm    DateTime?
+  aprovadaEm            DateTime?
+  comentarioAprovacao   String?
+  publicacaoStatus      String? // AGUARDANDO | PROCESSANDO | PUBLICADA | FALHA
+  publicacaoContainerId String?
+  publicacaoErro        String?
+  publicacaoTentativas  Int       @default(0)
+  publicadaEm           DateTime?
+  igMediaId             String?
+  permalink             String?
+  autorizacaoImagem     Boolean   @default(false) // decisão P6: entregas com cliente
+  criadoPor             String    @default("SOCIAL_MEDIA") // SOCIAL_MEDIA | GESTOR
+  criadoEm              DateTime  @default(now())
+  atualizadoEm          DateTime  @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  moto    SmMotoEstoque?   @relation(fields: [motoId], references: [id], onDelete: SetNull)
+  midias  SmPautaMidia[]
+
+  @@unique([usuarioId, codigo])
+  @@index([usuarioId, status])
+  @@index([usuarioId, agendadoPara])
+  @@index([motoId])
+  @@map("pro_labore_sm_pautas")
+}
+
+// Arquivos da pauta: imagens enviadas (armazenamento próprio), vídeo por
+// link público e o termo de autorização de imagem.
+model SmPautaMidia {
+  id       String   @id @default(cuid())
+  pautaId  String
+  tipo     String // IMAGEM | VIDEO | CAPA | TERMO
+  url      String
+  ordem    Int      @default(0)
+  criadoEm DateTime @default(now())
+
+  pauta SmPauta @relation(fields: [pautaId], references: [id], onDelete: Cascade)
+
+  @@index([pautaId])
+  @@map("pro_labore_sm_pautas_midias")
 }

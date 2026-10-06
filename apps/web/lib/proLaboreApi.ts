@@ -772,6 +772,30 @@ export const proLaboreApi = {
       definirAtivo: (ativo: boolean) => request<{ ok: boolean; status: SmStatusMembro }>('/pro-labore/sm/gestor/membro/ativo', { method: 'POST', body: JSON.stringify({ ativo }) }),
       removerMembro: () => request<{ ok: boolean }>('/pro-labore/sm/gestor/membro', { method: 'DELETE' }),
     },
+    estoque: {
+      listar: () => request<SmMoto[]>('/pro-labore/sm/estoque'),
+      sugestoes: () => request<SmMoto[]>('/pro-labore/sm/estoque/sugestoes'),
+      criar: (data: SmMotoEntrada) => request<SmMoto>('/pro-labore/sm/estoque', { method: 'POST', body: JSON.stringify(data) }),
+      atualizar: (id: string, data: Partial<SmMotoEntrada>) => request<SmMoto>(`/pro-labore/sm/estoque/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/sm/estoque/${id}`, { method: 'DELETE' }),
+    },
+    pautas: {
+      quadro: () => request<SmQuadro>('/pro-labore/sm/pautas'),
+      ver: (id: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}`),
+      criar: (data: SmPautaEntrada & { status?: SmColuna }) => request<SmPauta>('/pro-labore/sm/pautas', { method: 'POST', body: JSON.stringify(data) }),
+      atualizar: (id: string, data: Partial<SmPautaEntrada>) => request<SmPauta>(`/pro-labore/sm/pautas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      mover: (id: string, status: SmColuna, ordem?: number) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/mover`, { method: 'POST', body: JSON.stringify({ status, ordem }) }),
+      trial: (id: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/trial`, { method: 'POST' }),
+      aprovar: (id: string, comentario?: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/aprovar`, { method: 'POST', body: JSON.stringify({ comentario }) }),
+      pedirAjuste: (id: string, comentario: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/ajuste`, { method: 'POST', body: JSON.stringify({ comentario }) }),
+      republicar: (id: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/republicar`, { method: 'POST' }),
+      excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/sm/pautas/${id}`, { method: 'DELETE' }),
+      enviarImagem: (id: string, arquivo: Blob, tipo: 'IMAGEM' | 'CAPA' | 'TERMO' = 'IMAGEM') =>
+        request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias?tipo=${tipo}`, { method: 'POST', body: arquivo, headers: { 'Content-Type': 'application/octet-stream' } }),
+      adicionarLink: (id: string, tipo: 'VIDEO' | 'IMAGEM', url: string) =>
+        request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/link`, { method: 'POST', body: JSON.stringify({ tipo, url }) }),
+      removerMidia: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/${midiaId}`, { method: 'DELETE' }),
+    },
     convite: {
       ver: (token: string) => request<{ nome: string; tratamento: string | null; email: string; jaTemSenha: boolean }>(`/pro-labore/sm/convite/${encodeURIComponent(token)}`),
       aceitar: (token: string, senha: string) =>
@@ -1712,4 +1736,105 @@ export interface SmAcessoGestor {
   } | null
   conta: SmContaResumo | null
   emailConfigurado: boolean
+}
+
+export type SmPilar = 'ESTOQUE' | 'PROVA' | 'EDUCACAO' | 'BASTIDORES'
+export type SmFormato = 'REELS' | 'CARROSSEL' | 'FOTO' | 'STORY'
+export type SmColuna = 'IDEIA' | 'ROTEIRO' | 'GRAVACAO' | 'EDICAO' | 'APROVACAO' | 'AGENDADO'
+export type SmStatusPauta = SmColuna | 'PUBLICADO'
+export type SmOrigem = 'MANUAL' | 'ESTOQUE' | 'VENDA' | 'INSIGHT' | 'AUDIENCIA' | 'CALENDARIO'
+
+export interface SmMotoEntrada {
+  modelo: string
+  marca?: string | null
+  ano?: number | null
+  cor?: string | null
+  entradaEm: string
+  situacao?: 'DISPONIVEL' | 'RESERVADA' | 'VENDIDA'
+  saidaEm?: string | null
+  observacao?: string | null
+}
+
+export interface SmMoto extends Required<Omit<SmMotoEntrada, 'situacao'>> {
+  id: string
+  situacao: 'DISPONIVEL' | 'RESERVADA' | 'VENDIDA'
+  diasEmEstoque: number
+  posts: number
+  emProducao: number
+  status: 'PARADA' | 'ATENCAO' | 'OK'
+}
+
+export interface SmPautaEntrada {
+  titulo: string
+  pilar: SmPilar
+  formato: SmFormato
+  prazo?: string | null
+  motoId?: string | null
+  origem?: SmOrigem
+  origemRef?: string | null
+  gancho?: string | null
+  retencao?: string | null
+  recompensa?: string | null
+  cta?: string | null
+  legenda?: string | null
+  agendadoPara?: string | null
+  trial?: boolean
+  autorizacaoImagem?: boolean
+  checklist?: { capaTexto?: boolean }
+}
+
+export interface SmItemChecklist { chave: string; rotulo: string; ok: boolean | null; automatico: boolean; detalhe?: string }
+
+export interface SmPautaMidia { id: string; tipo: 'IMAGEM' | 'VIDEO' | 'CAPA' | 'TERMO'; url: string; ordem: number }
+
+export interface SmPauta {
+  id: string
+  titulo: string
+  pilar: SmPilar
+  formato: SmFormato
+  status: SmStatusPauta
+  ordem: number
+  prazo: string | null
+  origem: SmOrigem
+  motoId: string | null
+  moto: { id: string; modelo: string; ano: number | null; cor: string | null } | null
+  gancho: string | null
+  retencao: string | null
+  recompensa: string | null
+  cta: string | null
+  legenda: string | null
+  agendadoPara: string | null
+  codigo: string | null
+  trial: boolean
+  aprovacao: 'PENDENTE' | 'APROVADA' | 'AJUSTE' | null
+  enviadaAprovacaoEm: string | null
+  aprovadaEm: string | null
+  comentarioAprovacao: string | null
+  publicacaoStatus: 'AGUARDANDO' | 'PROCESSANDO' | 'PUBLICADA' | 'FALHA' | null
+  publicacaoErro: string | null
+  publicadaEm: string | null
+  permalink: string | null
+  autorizacaoImagem: boolean
+  criadoPor: 'SOCIAL_MEDIA' | 'GESTOR'
+  midias: SmPautaMidia[]
+  checklist: SmItemChecklist[]
+  checklistManual: { capaTexto?: boolean }
+  pendencias: string[]
+  atrasada: boolean
+  criadoEm: string
+}
+
+export interface SmJanela { dia: number; bloco: number; inicioHora: number; fimHora: number; posts: number; alcanceMedio: number; indice: number; status: 'COMPROVADA' | 'PROMISSORA' | 'SEGUIDORES_ONLINE' }
+
+export interface SmQuadro {
+  pautas: SmPauta[]
+  janelas: { base: 'POSTS' | 'SEGUIDORES_ONLINE' | 'SEM_DADOS'; amostra: number; janelas: SmJanela[] }
+  regras: { aprovacaoGestor: boolean }
+  podeEditar: boolean
+  souGestor: boolean
+}
+
+/** Endereço completo de um arquivo guardado pela API (/pro-labore/imagens/...). */
+export function urlArquivoApi(url: string): string {
+  return url.startsWith('/pro-labore/') ? `${BASE}${url}` : url
 }

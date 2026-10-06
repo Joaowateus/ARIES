@@ -639,3 +639,54 @@ export async function buscarContaInstagramPorId(igUserId: string, accessToken: s
     publicacoesTotal: info.media_count ?? 0,
   }
 }
+
+// ---------- Publicação (Content Publishing API) ----------
+// Fluxo da Meta: cria um contêiner com a mídia (a Meta baixa o arquivo pela
+// URL pública), espera ficar FINISHED (vídeo leva alguns segundos ou
+// minutos) e publica. Como a função serverless tem 30 s, cada etapa roda
+// numa passada do job de minuto (lib/smPublicacao.ts).
+// `conta` é 'me' no login do Instagram e o id da conta na conexão da empresa.
+
+async function postarGraphApi<T>(caminho: string, params: Record<string, string>): Promise<T> {
+  const query = new URLSearchParams(params).toString()
+  return lerResposta<T>(await fetch(`${baseAtual()}${caminho}?${query}`, { method: 'POST' }))
+}
+
+export interface ParametrosContainer {
+  image_url?: string
+  video_url?: string
+  media_type?: 'REELS' | 'CAROUSEL' | 'STORIES'
+  caption?: string
+  is_carousel_item?: 'true'
+  children?: string
+  share_to_feed?: 'true' | 'false'
+  trial_params?: string
+}
+
+export async function criarContainerMidia(conta: string, accessToken: string, p: ParametrosContainer): Promise<string> {
+  const params: Record<string, string> = { access_token: accessToken }
+  for (const [k, v] of Object.entries(p)) if (v != null) params[k] = v
+  const r = await postarGraphApi<{ id: string }>(`/${conta}/media`, params)
+  return r.id
+}
+
+export type StatusContainer = 'FINISHED' | 'IN_PROGRESS' | 'ERROR' | 'EXPIRED' | 'PUBLISHED'
+
+export async function statusContainer(containerId: string, accessToken: string): Promise<{ status: StatusContainer; detalhe: string | null }> {
+  const r = await chamarGraphApi<{ status_code?: StatusContainer; status?: string }>(`/${containerId}`, { fields: 'status_code,status', access_token: accessToken })
+  return { status: r.status_code ?? 'IN_PROGRESS', detalhe: r.status ?? null }
+}
+
+export async function publicarContainer(conta: string, accessToken: string, containerId: string): Promise<string> {
+  const r = await postarGraphApi<{ id: string }>(`/${conta}/media_publish`, { creation_id: containerId, access_token: accessToken })
+  return r.id
+}
+
+export async function buscarPermalink(mediaId: string, accessToken: string): Promise<string | null> {
+  try {
+    const r = await chamarGraphApi<{ permalink?: string }>(`/${mediaId}`, { fields: 'permalink', access_token: accessToken })
+    return r.permalink ?? null
+  } catch {
+    return null
+  }
+}
