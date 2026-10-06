@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Equipe · Permissões do Social Media</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0A0A0B}
+a{color:#8FB4FF}a:hover{color:#B8CEFF}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A8A93}
+.card{background:#121214;border:1px solid #232328;border-radius:14px;padding:20px;box-sizing:border-box}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;color:#C4C4CB;text-decoration:none;font-size:14px;font-weight:500;min-height:24px}
+.nav:hover{background:#18181B;color:#FFFFFF}
+.nav.on{background:#ECECEF;color:#0A0A0B}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;border-radius:10px;font:600 14px 'IBM Plex Sans',sans-serif;cursor:pointer;border:1px solid #2C2C32;background:#18181B;color:#EDEDEF;text-decoration:none}
+.btn.pri{background:#ECECEF;color:#0A0A0B;border-color:#ECECEF}
+.ttl{font-family:Manrope,sans-serif;font-weight:800;color:#F4F4F6;margin:0}
+.seg{all:unset;box-sizing:border-box;min-height:36px;padding:0 12px;border-radius:8px;font:600 13px 'IBM Plex Sans',sans-serif;cursor:pointer;display:inline-flex;align-items:center}
+.seg:focus-visible,.tog:focus-visible{outline:2px solid #8FB4FF;outline-offset:2px}
+.tog{all:unset;box-sizing:border-box;width:46px;height:28px;border-radius:99px;cursor:pointer;display:flex;align-items:center;padding:3px;flex:none}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #0A0A0B; color: #EDEDEF; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+  <aside style="flex: 1 1 232px; background: #0D0D0F; border-right: 1px solid #1E1E22; padding: 20px 14px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 6px">
+      <div style="width: 36px; height: 36px; border-radius: 10px; background: #ECECEF; color: #0A0A0B; display: flex; align-items: center; justify-content: center; font-family: Manrope, sans-serif; font-weight: 800; font-size: 16px">A</div>
+      <div><div style="font-family: Manrope, sans-serif; font-weight: 800; font-size: 17px">Pró-Labore</div><div style="font-size: 12px; color: #8A8A93">Liquidez &amp; pró-labore</div></div>
+    </div>
+    <nav aria-label="Principal" style="display: flex; flex-direction: column; gap: 2px">
+      <a class="nav" href="#">Dashboard</a>
+      <div class="mono" style="padding: 12px 12px 6px">Operação</div>
+      <a class="nav" href="#">CRM</a>
+      <a class="nav" href="#">Agenda</a>
+      <a class="nav" href="#">Reuniões</a>
+      <a class="nav" href="#">Anotações</a>
+      <a class="nav" href="#">Vendas</a>
+      <a class="nav" href="#">Social Media</a>
+      <a class="nav" href="#">Tráfego</a>
+      <a class="nav" href="#">Assistente Comercial</a>
+      <div class="mono" style="padding: 12px 12px 6px">Equipe</div>
+      <a class="nav on" href="Permissoes.dc.html">Acessos e permissões</a>
+    </nav>
+    <div style="margin-top: auto; padding: 0 8px; display: flex; justify-content: space-between"><span class="mono">João Mateus</span><span class="mono">Gestor</span></div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 40px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 22px">
+    <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span class="mono">Equipe · Acessos · Papel Social Media</span>
+        <h1 class="ttl" style="font-size: 34px">O que o Social Media enxerga</h1>
+        <p style="margin: 0; color: #A1A1AA; font-size: 15px">Acesso isolado: só o que ele precisa para produzir, atender e provar resultado.</p>
+      </div>
+      <a class="btn pri" href="Main.dc.html">Ver como Social Media</a>
+    </header>
+    <dc-import name="Assistente" aba="permissoes" hint-size="100%,250px"></dc-import>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start">
+      <section class="card" style="flex: 999 1 560px; min-width: 0; padding: 8px 20px">
+        <sc-for list="{{mods}}" as="m" hint-placeholder-count="9">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #1E1E22">
+            <div style="flex: 1 1 260px; min-width: 0"><div style="font-weight: 600">{{m.name}}</div><div style="font-size: 12px; color: #A1A1AA">{{m.note}}</div></div>
+            <div role="group" aria-label="Nível de acesso" style="display: flex; gap: 2px; background: #0F0F11; border: 1px solid #232328; border-radius: 10px; padding: 3px">
+              <sc-for list="{{m.opts}}" as="o" hint-placeholder-count="3">
+                <button class="seg" type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </section>
+
+      <div style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+        <section class="card" style="display: flex; flex-direction: column; gap: 12px">
+          <h2 class="ttl" style="font-size: 18px">Responsável</h2>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #A1A1AA">E-mail de acesso<input type="email" placeholder="[e-mail do social media]" style="box-sizing: border-box; min-height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid #2C2C32; background: #18181B; color: #EDEDEF; font: 500 14px 'IBM Plex Sans', sans-serif"></label>
+          <button class="btn" type="button">Enviar convite</button>
+        </section>
+
+        <section class="card" style="display: flex; flex-direction: column; gap: 14px">
+          <h2 class="ttl" style="font-size: 18px">Regras</h2>
+          <sc-for list="{{toggles}}" as="t" hint-placeholder-count="4">
+            <div style="display: flex; align-items: center; gap: 12px">
+              <div style="flex: 1; min-width: 0"><div style="font-weight: 600">{{t.label}}</div><div style="font-size: 12px; color: #A1A1AA">{{t.note}}</div></div>
+              <button class="tog" type="button" role="switch" aria-checked="{{t.on}}" aria-label="{{t.label}}" onClick="{{t.flip}}" style="{{t.track}}"><span style="{{t.knob}}"></span></button>
+            </div>
+          </sc-for>
+        </section>
+
+        <section class="card" style="display: flex; flex-direction: column; gap: 10px; border-color: #1F4A37">
+          <h2 class="ttl" style="font-size: 18px">Conexão do Instagram</h2>
+          <div style="display: flex; align-items: center; gap: 8px; color: #6EE7B7"><span style="width: 8px; height: 8px; border-radius: 50%; background: #34D399"></span>Conectado pela empresa</div>
+          <p style="margin: 0; font-size: 13px; color: #A1A1AA; line-height: 1.5">A conta fica ligada ao Business Manager da MM, não ao login pessoal. Se o responsável mudar, nada para de sincronizar.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1420}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      lv: { sm: 0, prod: 0, at: 0, est: 1, crm: 1, ven: 1, tra: 1, fin: 2, dash: 2 },
+      tg: { apr: true, rs: true, rel: true, ia: false }
+    };
+  }
+  renderVals() {
+    var self = this;
+    var L = ['Completo', 'Leitura', 'Sem acesso'];
+    var mods = [
+      ['sm','Social Media · análise','Todos os indicadores da conta'],
+      ['prod','Calendário e produção','Criar, editar e enviar pautas para aprovação'],
+      ['at','Atendimento do Instagram','Direct, comentários e envio de leads ao CRM'],
+      ['est','Estoque','Modelos e dias em estoque, sem custo e margem'],
+      ['crm','CRM','Só cria leads e acompanha os leads orgânicos'],
+      ['ven','Vendas','Só vendas atribuídas ao orgânico'],
+      ['tra','Tráfego','Só o gasto com impulsionamento de posts'],
+      ['fin','Financeiro e pró-labore','Liquidez, comissões e pró-labore'],
+      ['dash','Dashboard geral e equipe','Metas e desempenho dos consultores']
+    ].map(function (m) {
+      return {
+        name: m[1], note: m[2],
+        opts: L.map(function (lab, i) {
+          var on = self.state.lv[m[0]] === i;
+          var fg = i === 2 ? '#FCA5A5' : (i === 1 ? '#93C5FD' : '#6EE7B7');
+          return {
+            label: lab, on: on ? 'true' : 'false',
+            style: on ? 'background:#1C1C21;color:' + fg + ';box-shadow:inset 0 0 0 1px #3A3A40' : 'background:transparent;color:#8A8A93',
+            pick: function () { var lv = Object.assign({}, self.state.lv); lv[m[0]] = i; self.setState({ lv: lv }); }
+          };
+        })
+      };
+    });
+    var toggles = [
+      ['apr','Aprovação antes de publicar','Nada vai ao ar sem o seu ok'],
+      ['rs','Mostrar valores em R$','Valor negociado nas vendas atribuídas'],
+      ['rel','Relatório semanal','Toda segunda às 8h, para o gestor'],
+      ['ia','Assistente de roteiro com IA','Gera roteiro a partir da ficha da moto']
+    ].map(function (t) {
+      var on = !!self.state.tg[t[0]];
+      return {
+        label: t[1], note: t[2], on: on ? 'true' : 'false',
+        track: 'background:' + (on ? '#ECECEF' : '#26262B') + ';justify-content:' + (on ? 'flex-end' : 'flex-start'),
+        knob: 'width:22px;height:22px;border-radius:50%;background:' + (on ? '#0A0A0B' : '#8A8A93'),
+        flip: function () { var tg = Object.assign({}, self.state.tg); tg[t[0]] = !tg[t[0]]; self.setState({ tg: tg }); }
+      };
+    });
+    return { mods: mods, toggles: toggles };
+  }
+}
+</script>
+</body>
+</html>

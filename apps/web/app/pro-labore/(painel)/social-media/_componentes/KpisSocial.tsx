@@ -86,6 +86,7 @@ export function KpisSocial({ analise }: { analise: Analise }) {
   const seguidoresSerie = serie.filter(p => p.seguidores != null).map(p => p.seguidores as number)
   const seg = kpis.seguidores
   const pub = kpis.publicacoes
+  const dcp = kpis.diasComPost
   const semDadosConta = comDados.length === 0
   const er = kpis.taxaEngajamento
 
@@ -148,14 +149,14 @@ export function KpisSocial({ analise }: { analise: Analise }) {
         serie={kpis.toquesLinks.atual != null ? serieDe(p => p.toquesLinks) : undefined}
       />
       <Kpi
-        rotulo="Publicações no feed"
-        valor={fmtNum(pub.atual)}
-        unidade={` / ${pub.meta}`}
-        delta={<Delta valor={variacao(pub.atual, pub.anterior)} />}
-        nota={`Meta de ${pub.metaSemanal}/semana${kpis.stories.atual > 0 ? ` · + ${fmtNum(kpis.stories.atual)} stories registrados` : ''}`}
+        rotulo="Dias com post"
+        valor={fmtNum(dcp.atual)}
+        unidade={` / ${dcp.meta}`}
+        delta={<Delta valor={variacao(dcp.atual, dcp.anterior)} />}
+        nota={`Meta de ${dcp.metaSemanal} dias por semana · maior intervalo ${dcp.maiorIntervalo} ${dcp.maiorIntervalo === 1 ? 'dia' : 'dias'} · ${fmtNum(pub.atual)} posts no feed${kpis.stories.atual > 0 ? ` e ${fmtNum(kpis.stories.atual)} stories` : ''}`}
         extra={(
-          <div className="pl-sv-meter" role="meter" aria-valuemin={0} aria-valuemax={pub.meta} aria-valuenow={pub.atual} aria-label="Publicações em relação à meta">
-            <span style={{ width: `${Math.min(100, (pub.atual / Math.max(1, pub.meta)) * 100)}%`, background: pub.atual >= pub.meta ? 'var(--pl-good)' : 'var(--sv-1)' }} />
+          <div className="pl-sv-meter" role="meter" aria-valuemin={0} aria-valuemax={dcp.meta} aria-valuenow={dcp.atual} aria-label="Dias com post em relação à meta">
+            <span style={{ width: `${Math.min(100, (dcp.atual / Math.max(1, dcp.meta)) * 100)}%`, background: dcp.atual >= dcp.meta && dcp.maiorIntervalo <= 2 ? 'var(--pl-good)' : 'var(--sv-1)' }} />
           </div>
         )}
       />

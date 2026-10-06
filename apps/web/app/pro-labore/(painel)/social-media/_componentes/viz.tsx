@@ -47,9 +47,16 @@ export function fmtCompacto(v: number | null | undefined): string {
   return Math.round(v).toLocaleString('pt-BR')
 }
 
+// Nunca mostra "0,0%" pra um valor que não é zero: aumenta as casas até o
+// número aparecer (ex.: 0,05%), e abaixo de 0,01% mostra "< 0,01%".
 export function fmtPct(v: number | null | undefined, casas = 1): string {
   if (v == null || Number.isNaN(v)) return '—'
-  return `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`
+  const x = v * 100
+  if (x === 0) return '0%'
+  let c = casas
+  while (x !== 0 && c < 2 && Math.abs(x) < 0.5 * 10 ** -c) c++
+  if (x !== 0 && Math.abs(x) < 0.005) return '< 0,01%'
+  return `${x.toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c })}%`
 }
 
 export function fmtSeg(v: number | null | undefined): string {

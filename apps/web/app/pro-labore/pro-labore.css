@@ -3154,3 +3154,51 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-cms-totais b.pl-cms-prolabore { color: var(--pl-accent-3); }
 .pl-cms-chip-prolabore { border-color: var(--pl-accent-3-soft) !important; }
 @media (max-width: 720px) { .pl-cms-sep { padding-left: 0; border-left: 0; } }
+
+/* ---------- Social Media: qualidade dos dados, consistência e funil ---------- */
+.pl-sv-qualidade { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 11px 16px; border-radius: var(--pl-radius-md); border: 1px solid; font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
+.pl-sv-qualidade .ponto { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pl-sv-qualidade b { font-weight: 700; }
+.pl-sv-qualidade > span:last-child { flex: 1 1 320px; min-width: 0; }
+.pl-sv-qualidade.ok { background: color-mix(in srgb, var(--pl-good) 9%, var(--pl-surface)); border-color: color-mix(in srgb, var(--pl-good) 40%, transparent); color: var(--pl-ink-1); }
+.pl-sv-qualidade.ok .ponto { background: var(--pl-good); }
+.pl-sv-qualidade.lacunas { background: color-mix(in srgb, var(--pl-accent-4) 10%, var(--pl-surface)); border-color: color-mix(in srgb, var(--pl-accent-4) 45%, transparent); color: var(--pl-ink-1); }
+.pl-sv-qualidade.lacunas .ponto { background: var(--pl-accent-4); }
+.pl-sv-qualidade.grave { background: color-mix(in srgb, var(--pl-critical) 10%, var(--pl-surface)); border-color: color-mix(in srgb, var(--pl-critical) 45%, transparent); color: var(--pl-ink-1); }
+.pl-sv-qualidade.grave .ponto { background: var(--pl-critical); }
+
+.pl-sv-chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pl-sv-chip.bom { background: color-mix(in srgb, var(--pl-good) 16%, transparent); color: var(--pl-good); }
+.pl-sv-chip.ruim { background: color-mix(in srgb, var(--pl-critical) 16%, transparent); color: var(--pl-critical); }
+.pl-sv-chip.neutro { background: var(--pl-surface-2); color: var(--pl-ink-muted); }
+
+.pl-sv-cons-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.pl-sv-cons-dia { font-family: 'IBM Plex Mono'; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--pl-ink-muted); padding-bottom: 2px; }
+.pl-sv-cons-cel { height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pl-sv-cons-cel small { font-size: 10.5px; font-weight: 500; opacity: .9; }
+.pl-sv-cons-cel.c0, .pl-sv-cons-legenda i.c0 { background: var(--pl-surface-2); color: var(--pl-ink-muted); }
+.pl-sv-cons-cel.c1, .pl-sv-cons-legenda i.c1 { background: var(--sv-seq-2); color: var(--sv-seq-ink-2); }
+.pl-sv-cons-cel.c2, .pl-sv-cons-legenda i.c2 { background: var(--sv-seq-4); color: var(--sv-seq-ink-4); }
+.pl-sv-cons-cel.c3, .pl-sv-cons-legenda i.c3 { background: var(--sv-neg); color: #ffffff; }
+.pl-sv-cons-cel.futuro { background: transparent; border: 1px dashed var(--pl-border); color: var(--pl-ink-muted); opacity: .6; }
+.pl-sv-cons-legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--pl-ink-muted); }
+.pl-sv-cons-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.pl-sv-cons-legenda i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.pl-sv-cons-numeros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.pl-sv-cons-numeros > div { background: var(--pl-surface-2); border-radius: var(--pl-radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.pl-sv-cons-numeros b { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; color: var(--pl-ink-1); font-variant-numeric: tabular-nums; }
+.pl-sv-cons-numeros b small { font-size: 13px; color: var(--pl-ink-muted); font-weight: 600; }
+.pl-sv-cons-numeros b.ruim { color: var(--pl-critical); }
+.pl-sv-cons-numeros span { font-size: 12px; color: var(--pl-ink-muted); }
+
+.pl-sv-funil { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.pl-sv-funil-linha { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 13.5px; color: var(--pl-ink-1); }
+.pl-sv-funil-num { display: inline-flex; gap: 8px; align-items: baseline; font-variant-numeric: tabular-nums; }
+.pl-sv-funil-num b { font-weight: 700; }
+.pl-sv-funil-num small { font-size: 12px; color: var(--pl-ink-muted); }
+.pl-sv-funil-trilho { height: 10px; border-radius: 99px; background: var(--pl-surface-2); margin-top: 6px; overflow: hidden; }
+.pl-sv-funil-trilho span { display: block; height: 100%; border-radius: 99px; background: var(--sv-1); }
+.pl-sv-funil-motivo { font-size: 12px; color: var(--pl-ink-muted); margin-top: 4px; line-height: 1.45; }
+.pl-sv-rec-conf { display: inline-block; margin-left: 6px; font-family: 'IBM Plex Sans'; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--pl-ink-muted); }
+.pl-sv-rec.hipotese { border-left-style: dashed; }
+@media (max-width: 560px) { .pl-sv-cons-numeros { grid-template-columns: 1fr; } .pl-sv-cons-cel small { display: none; } }

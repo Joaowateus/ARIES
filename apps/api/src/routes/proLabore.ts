@@ -6,7 +6,7 @@ import { recalcularPagamentoComissao } from '../lib/comissoes'
 import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
-import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram } from '../lib/instagramGraph'
+import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, buscarAlcanceUnicoPeriodo, MAX_DIAS_ALCANCE_UNICO } from '../lib/instagramGraph'
 import { sincronizarContaSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
 import { montarAnaliseSocialMedia } from '../lib/socialMediaAnalytics'
 import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
@@ -2331,6 +2331,37 @@ router.post('/social-media/sincronizar-cron', async (req: Request, res: Response
 const MAX_DIAS_ANALISE_SOCIAL = 366
 const DIAS_JANELA_IMPACTO = 90
 
+// Alcance único do período (contas distintas), pro topo do funil — a API só
+// calcula sob demanda e até 30 dias. Guardado por período: período fechado
+// há mais de 3 dias não muda mais; o que inclui dias recentes é refeito a
+// cada 6h. Se a API falhar, usa o último valor guardado (ou explica).
+async function alcanceUnicoDoPeriodo(conta: { id: string; accessToken: string }, inicio: Date, fim: Date, hoje: Date) {
+  const DIA = 24 * 60 * 60 * 1000
+  const dias = Math.round((fim.getTime() - inicio.getTime()) / DIA) + 1
+  if (dias > MAX_DIAS_ALCANCE_UNICO) {
+    return { valor: null, motivo: `O Instagram só calcula o alcance único de períodos de até ${MAX_DIAS_ALCANCE_UNICO} dias. Escolha um período menor para ver essa etapa.` }
+  }
+  const cache = await prisma.socialMediaAlcancePeriodo.findUnique({ where: { contaId_inicio_fim: { contaId: conta.id, inicio, fim } } })
+  const fechado = fim.getTime() < hoje.getTime() - 3 * DIA
+  if (cache && (fechado ? cache.atualizadoEm.getTime() > fim.getTime() + 3 * DIA : Date.now() - cache.atualizadoEm.getTime() < 6 * 60 * 60 * 1000)) {
+    return { valor: cache.alcance, motivo: null }
+  }
+  try {
+    const ate = new Date(Math.min(Date.now(), inicioDoDiaBrasilia(new Date(fim.getTime() + DIA)).getTime()))
+    // `me`, como no sync: resolve pro ID profissional do dono do token.
+    const valor = await buscarAlcanceUnicoPeriodo('me', conta.accessToken, inicioDoDiaBrasilia(inicio), ate)
+    if (valor == null) return cache ? { valor: cache.alcance, motivo: null } : { valor: null, motivo: 'O Instagram não devolveu o alcance único desse período.' }
+    await prisma.socialMediaAlcancePeriodo.upsert({
+      where: { contaId_inicio_fim: { contaId: conta.id, inicio, fim } },
+      create: { contaId: conta.id, inicio, fim, alcance: valor },
+      update: { alcance: valor },
+    })
+    return { valor, motivo: null }
+  } catch {
+    return cache ? { valor: cache.alcance, motivo: null } : { valor: null, motivo: 'Não deu para buscar o alcance único no Instagram agora. Tente sincronizar de novo.' }
+  }
+}
+
 router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const { titular, vendedorId: vendedorTitular } = titularSocialMedia(req)
@@ -2369,6 +2400,7 @@ router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, re
     snapshots,
     metaPostagensSemanais: parametro.metaPostagensSemanais,
     leadsOrganicos,
+    alcanceUnico: await alcanceUnicoDoPeriodo(conta, inicio, fim, hoje),
   }))
 })
 

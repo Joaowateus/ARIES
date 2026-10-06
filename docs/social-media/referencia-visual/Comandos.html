@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Social Media · Paleta de comandos</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#050506}
+a{color:#8FB4FF}a:hover{color:#B8CEFF}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A8A93}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;box-sizing:border-box;font:500 11px 'IBM Plex Mono',monospace;border-radius:6px;background:#1C1C21;border:1px solid #2C2C32;color:#C4C4CB}
+.ttl{font-family:Manrope,sans-serif;font-weight:800;color:#F4F4F6;margin:0}
+.res{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;min-height:48px;padding:8px 12px;border-radius:10px;cursor:pointer;font:500 14px 'IBM Plex Sans',sans-serif;color:#EDEDEF}
+.res:focus-visible{outline:2px solid #8FB4FF}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #050506; color: #EDEDEF; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; padding: 72px 24px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: flex-start">
+  <section role="dialog" aria-label="Paleta de comandos" style="flex: 0 1 640px; min-width: 0; background: #121214; border: 1px solid #2C2C32; border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden">
+    <div style="display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid #232328">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8A8A93" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+      <label for="cmd" style="position: absolute; left: -9999px">Buscar ou executar</label>
+      <input id="cmd" type="text" value="xre" style="flex: 1; min-width: 0; background: transparent; border: 0; color: #F4F4F6; font: 500 18px 'IBM Plex Sans', sans-serif; outline: none">
+      <span class="kbd">Esc</span>
+    </div>
+    <div style="padding: 10px; display: flex; flex-direction: column; gap: 4px; max-height: 520px; overflow-y: auto">
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+        <div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 6px">
+          <span class="mono" style="padding: 8px 12px 4px">{{g.name}}</span>
+          <sc-for list="{{g.items}}" as="it" hint-placeholder-count="2">
+            <button class="res" type="button" onClick="{{it.pick}}" style="{{it.bg}}">
+              <span style="{{it.icon}}">{{it.ini}}</span>
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-weight: 600">{{it.t}}</span><span style="font-size: 12px; color: #8A8A93">{{it.s}}</span></span>
+              <sc-if value="{{it.on}}" hint-placeholder-val="{{false}}"><span class="kbd">Enter</span></sc-if>
+            </button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: flex; gap: 16px; padding: 12px 18px; border-top: 1px solid #232328; font-size: 12px; color: #8A8A93; flex-wrap: wrap">
+      <span><span class="kbd">↑</span> <span class="kbd">↓</span> navegar</span><span><span class="kbd">Enter</span> abrir</span><span><span class="kbd">Tab</span> ações do item</span>
+    </div>
+  </section>
+
+  <aside aria-label="Atalhos" style="flex: 0 1 340px; min-width: 0; background: #0E0E10; border: 1px solid #1E1E22; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 14px">
+    <h2 class="ttl" style="font-size: 18px">Atalhos do dia a dia</h2>
+    <sc-for list="{{keys}}" as="k" hint-placeholder-count="8">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 30px"><span style="color: #C4C4CB">{{k.l}}</span><span style="display: flex; gap: 4px"><span class="kbd">{{k.a}}</span><sc-if value="{{k.hasB}}" hint-placeholder-val="{{false}}"><span class="kbd">{{k.b}}</span></sc-if></span></div>
+    </sc-for>
+    <p style="margin: 0; font-size: 12px; color: #8A8A93; line-height: 1.5">Tudo também funciona no mouse. Os atalhos aparecem como dica ao passar o cursor sobre cada botão.</p>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { sel: 'a1' }; }
+  renderVals() {
+    var self = this;
+    var IC = function (bg, fg) { return 'width:32px;height:32px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;font:700 12px Manrope,sans-serif;background:' + bg + ';color:' + fg; };
+    var data = [
+      ['Ações', [['a1','+','Criar pauta para XRE 300 Sahara 2024','Roteiro sugerido a partir da ficha da moto',IC('#ECECEF','#0A0A0B')],['a2','✦','Gerar 3 ganchos para XRE 300','Com base nos ganchos que mais seguraram audiência',IC('#221A3A','#C4B5FD')]]],
+      ['Estoque', [['e1','E','XRE 300 Sahara 2024','34 dias no estoque · 0 posts',IC('#13213A','#93C5FD')]]],
+      ['Posts', [['p1','P','XRE 300 disponível na MM!','Reels · 17/09 · 11 leads · 1 venda',IC('#1A1A1E','#C4C4CB')]]],
+      ['Conversas', [['c1','R','Rafael S.','“A XRE 300 do vídeo ainda tá disponível?” · há 2h',IC('#2B1414','#FCA5A5')]]]
+    ];
+    var groups = data.map(function (g) {
+      return { name: g[0], items: g[1].map(function (r) {
+        var on = self.state.sel === r[0];
+        return { ini: r[1], t: r[2], s: r[3], icon: r[4], on: on, bg: on ? 'background:#1C1C21' : '', pick: function () { self.setState({ sel: r[0] }); } };
+      }) };
+    });
+    var keys = [['Abrir esta paleta','Ctrl','K'],['Começar modo foco','F',''],['Nova pauta','N',''],['Ir para Hoje','G','H'],['Ir para Calendário','G','C'],['Ir para Atendimento','G','A'],['Responder e virar lead','L',''],['Ver todos os atalhos','?','']].map(function (k) { return { l: k[0], a: k[1], b: k[2], hasB: !!k[2] }; });
+    return { groups: groups, keys: keys };
+  }
+}
+</script>
+</body>
+</html>

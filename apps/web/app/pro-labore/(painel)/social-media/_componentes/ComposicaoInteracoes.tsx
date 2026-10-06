@@ -6,14 +6,19 @@ import { CartaoViz, Vazio, caminhoSetor, fmtCompacto, fmtNum, fmtPct } from './v
 type Composicao = {
   fonte: 'conta' | 'posts'
   curtidas: number; comentarios: number; compartilhamentos: number; salvamentos: number; respostas: number
+  total: number; outras: number; excedente: number
 }
 
-const PARTES: Array<{ chave: keyof Omit<Composicao, 'fonte'>; rotulo: string; cor: string; dica: string }> = [
+type Parte = 'curtidas' | 'comentarios' | 'compartilhamentos' | 'salvamentos' | 'respostas' | 'outras'
+const PARTES: Array<{ chave: Parte; rotulo: string; cor: string; dica: string }> = [
   { chave: 'curtidas', rotulo: 'Curtidas', cor: 'var(--sv-1)', dica: 'reação rápida' },
   { chave: 'comentarios', rotulo: 'Comentários', cor: 'var(--sv-2)', dica: 'conversa' },
   { chave: 'compartilhamentos', rotulo: 'Compartilhamentos', cor: 'var(--sv-3)', dica: 'leva o post pra novas pessoas' },
   { chave: 'salvamentos', rotulo: 'Salvamentos', cor: 'var(--sv-4)', dica: 'conteúdo útil — sinal forte pro algoritmo' },
   { chave: 'respostas', rotulo: 'Respostas a stories', cor: 'var(--sv-5)', dica: 'conversa direta' },
+  // Diferença entre o total da Meta (o mesmo número do card "Interações") e
+  // a soma dos tipos que ela detalha.
+  { chave: 'outras', rotulo: 'Outras', cor: 'var(--pl-ink-muted)', dica: 'reposts e interações que a Meta soma mas não detalha' },
 ]
 
 const TAM = 200
@@ -25,7 +30,7 @@ const R_INT = 64
 export function ComposicaoInteracoes({ composicao, recarregando }: { composicao: Composicao; recarregando?: boolean }) {
   const [ativo, setAtivo] = useState<number | null>(null)
   const total = PARTES.reduce((s, p) => s + composicao[p.chave], 0)
-  const partes = PARTES.filter(p => composicao[p.chave] > 0 || p.chave !== 'respostas')
+  const partes = PARTES.filter(p => composicao[p.chave] > 0 || (p.chave !== 'respostas' && p.chave !== 'outras'))
   const lacuna = 0.035 // rad
 
   // Fatias no sentido horário a partir do topo (12h).
@@ -44,7 +49,8 @@ export function ComposicaoInteracoes({ composicao, recarregando }: { composicao:
   return (
     <CartaoViz
       titulo="Composição das interações"
-      subtitulo={composicao.fonte === 'conta' ? 'Todas as interações da conta no período (inclui posts antigos e stories)' : 'Interações dos posts publicados no período'}
+      subtitulo={composicao.fonte === 'conta' ? `Todas as interações da conta no período (inclui posts antigos e stories). Total igual ao card Interações: ${fmtNum(composicao.total)}` : 'Interações dos posts publicados no período'}
+      rodape={composicao.excedente > 0 ? `A soma dos tipos passa ${fmtNum(composicao.excedente)} do total que a Meta informa para a conta: as respostas a stories são contadas à parte do total.` : undefined}
       recarregando={recarregando}
       tabela={{
         colunas: ['Tipo', 'Quantidade', '% do total'],

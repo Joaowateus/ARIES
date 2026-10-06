@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Social Media · Modo foco</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#070708}
+a{color:#8FB4FF}a:hover{color:#B8CEFF}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A8A93}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 20px;border-radius:12px;font:600 15px 'IBM Plex Sans',sans-serif;cursor:pointer;border:1px solid #2C2C32;background:#18181B;color:#EDEDEF;text-decoration:none}
+.btn.pri{background:#ECECEF;color:#0A0A0B;border-color:#ECECEF}
+.btn:focus-visible{outline:2px solid #8FB4FF;outline-offset:2px}
+.kbd{font:500 11px 'IBM Plex Mono',monospace;padding:2px 6px;border-radius:5px;border:1px solid currentColor;opacity:.7}
+.ttl{font-family:Manrope,sans-serif;font-weight:800;color:#F4F4F6;margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #070708; color: #EDEDEF; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; display: flex; flex-direction: column">
+  <header style="display: flex; align-items: center; gap: 20px; padding: 20px 40px; border-bottom: 1px solid #17171A; flex-wrap: wrap">
+    <span class="mono" style="color: #C4C4CB">Modo foco · Ritual da manhã</span>
+    <div style="flex: 1 1 240px; display: flex; gap: 6px">
+      <sc-for list="{{bars}}" as="b" hint-placeholder-count="5"><div style="{{b}}"></div></sc-for>
+    </div>
+    <span style="font-size: 13px; color: #A1A1AA">{{progress}}</span>
+    <a class="btn" href="Main.dc.html" style="min-height: 40px">Sair <span class="kbd">Esc</span></a>
+  </header>
+
+  <main style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px 24px">
+    <sc-if value="{{working}}" hint-placeholder-val="{{true}}">
+      <div style="width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+          <span style="{{task.tagStyle}}">{{task.tag}}</span>
+          <span style="font-size: 13px; color: #8A8A93">{{task.time}}</span>
+        </div>
+        <h1 class="ttl" style="font-size: 38px; line-height: 1.15">{{task.title}}</h1>
+        <p style="margin: 0; font-size: 17px; color: #A1A1AA; line-height: 1.55">{{task.why}}</p>
+        <div style="background: #111113; border: 1px solid #222226; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+          <span class="mono">{{task.boxLabel}}</span>
+          <div style="font-size: 16px; line-height: 1.55; white-space: pre-line">{{task.box}}</div>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap">
+          <button class="btn pri" type="button" onClick="{{done}}">{{task.cta}} <span class="kbd">Enter</span></button>
+          <button class="btn" type="button" onClick="{{skip}}">Adiar para depois <span class="kbd">A</span></button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{finished}}" hint-placeholder-val="{{false}}">
+      <div style="width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 26px; align-items: flex-start">
+        <div style="width: 64px; height: 64px; border-radius: 20px; background: #0F2A20; color: #6EE7B7; display: flex; align-items: center; justify-content: center"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"></path></svg></div>
+        <h1 class="ttl" style="font-size: 44px; line-height: 1.1">Manhã resolvida em 13 minutos.</h1>
+        <p style="margin: 0; font-size: 17px; color: #A1A1AA">O resto do dia é seu para criar. Próximo compromisso: post das 17h, já agendado.</p>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%">
+          <div style="background: #111113; border: 1px solid #222226; border-radius: 14px; padding: 16px"><div class="ttl" style="font-size: 28px">{{doneCount}}</div><div style="font-size: 13px; color: #A1A1AA">tarefas concluídas</div></div>
+          <div style="background: #111113; border: 1px solid #222226; border-radius: 14px; padding: 16px"><div class="ttl" style="font-size: 28px">2</div><div style="font-size: 13px; color: #A1A1AA">leads enviados ao CRM</div></div>
+          <div style="background: #111113; border: 1px solid #222226; border-radius: 14px; padding: 16px"><div class="ttl" style="font-size: 28px; color: #FCD58A">6 dias</div><div style="font-size: 13px; color: #A1A1AA">seguidos com ritual feito</div></div>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap">
+          <a class="btn pri" href="Main.dc.html">Voltar ao Hoje</a>
+          <button class="btn" type="button" onClick="{{restart}}">Rever o ritual</button>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+
+  <footer style="padding: 16px 40px; border-top: 1px solid #17171A; display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: #6B6B73">
+    <span>Uma coisa por vez. O sistema ordena por urgência: cliente esperando, depois o que vai ao ar hoje, depois produção.</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { i: 0, done: 0 }; }
+  renderVals() {
+    var self = this;
+    var T = function (bg, fg) { return 'display:inline-flex;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:' + bg + ';color:' + fg; };
+    var tasks = [
+      { tag: 'Cliente esperando', tagStyle: T('#2B1414', '#FCA5A5'), time: 'há 2h10 · ~2 min',
+        title: 'Responder Rafael sobre a XRE 300', why: 'Ele perguntou disponibilidade e financiamento. Quem responde em até 15 min tem muito mais chance de virar visita.',
+        boxLabel: 'Resposta sugerida · edite à vontade', box: 'Bom dia, Rafael! A XRE 300 Sahara está disponível sim. Dá pra financiar, e posso simular agora pelo WhatsApp. Me passa seu número?',
+        cta: 'Enviar e virar lead' },
+      { tag: 'Cliente esperando', tagStyle: T('#2B1414', '#FCA5A5'), time: 'há 1h05 · ~1 min',
+        title: 'Camila quer simular a Twister com R$ 2 mil de entrada', why: 'Ela veio da automação “Comente QUERO”. O lead já foi pré-preenchido com o post de origem.',
+        boxLabel: 'Próximo passo', box: 'Enviar ao CRM com: CB Twister 250 · financiamento · entrada R$ 2.000\nConsultor: rodízio automático',
+        cta: 'Enviar ao CRM' },
+      { tag: 'Vai ao ar hoje', tagStyle: T('#13213A', '#93C5FD'), time: '11:30 · ~1 min',
+        title: 'Conferir o reel da XRE 300 antes de publicar', why: 'Último olhar: o gancho aparece nos 2 primeiros segundos? O código de rastreio está na legenda?',
+        boxLabel: 'Checklist', box: '✓ Link rastreado #P-1006-XRE\n✓ Legenda com 340 caracteres\n✓ Texto do gancho na tela\n✓ Horário dentro da janela',
+        cta: 'Está ok, manter agendado' },
+      { tag: 'Produção atrasada', tagStyle: T('#2A2110', '#FCD58A'), time: 'prazo era ontem · ~5 min',
+        title: 'Combinar a gravação da entrega da Twister', why: 'A venda foi fechada ontem no CRM. Entregas viram prova social: o cliente já autorizou a gravação.',
+        boxLabel: 'Roteiro de 3 tomadas', box: '1. Chave na mão, sem fala nos 2 primeiros segundos\n2. Uma frase do cliente\n3. Cliente saindo com a moto',
+        cta: 'Marcar com o consultor' },
+      { tag: 'Aprender', tagStyle: T('#221A3A', '#C4B5FD'), time: '~2 min',
+        title: 'O reel de ontem ficou 2,1× acima da mediana', why: 'Pulo nos 3s de 33%, o menor do mês. O gancho foi o ronco da partida.',
+        boxLabel: 'Guardar na biblioteca de ganchos?', box: '“Ronco da partida + nome do modelo na tela” → funcionou em MT-03 e FZ25',
+        cta: 'Salvar gancho' }
+    ];
+    var i = this.state.i, n = tasks.length;
+    var bars = tasks.map(function (t, k) { return 'flex:1;height:6px;border-radius:99px;background:' + (k < i ? '#ECECEF' : (k === i ? '#6B6B73' : '#1E1E22')); });
+    var go = function (d) { return function () { self.setState({ i: i + 1, done: self.state.done + d }); }; };
+    return {
+      bars: bars, working: i < n, finished: i >= n, task: tasks[Math.min(i, n - 1)],
+      progress: (i < n ? (i + 1) : n) + ' de ' + n, doneCount: String(this.state.done),
+      done: go(1), skip: go(0), restart: function () { self.setState({ i: 0, done: 0 }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

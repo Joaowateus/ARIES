@@ -137,6 +137,13 @@ const TIPO_REC: Record<RecomendacaoSocial['tipo'], { rotulo: string; icone: Reac
 
 const VISIVEIS_INICIO = 6
 
+// "Hipótese · confiança baixa (3 posts)" quando a amostra é pequena; senão
+// só o nível de confiança.
+function ROTULO_CONFIANCA(r: RecomendacaoSocial): string {
+  if (r.confianca === 'hipotese') return `confiança baixa${r.amostra ? ` (${r.amostra} posts)` : ''}`
+  return `confiança ${r.confianca === 'alta' ? 'alta' : r.confianca === 'media' ? 'média' : 'baixa'}`
+}
+
 export function Recomendacoes({ itens }: { itens: RecomendacaoSocial[] }) {
   const [todas, setTodas] = useState(false)
   if (itens.length === 0) {
@@ -147,10 +154,11 @@ export function Recomendacoes({ itens }: { itens: RecomendacaoSocial[] }) {
     <>
     <div className="pl-sv-recs">
       {lista.map(r => (
-        <article key={r.id} className={`pl-sv-rec ${r.tipo}`}>
+        <article key={r.id} className={`pl-sv-rec ${r.tipo} ${r.confianca === 'hipotese' ? 'hipotese' : ''}`}>
           <span className="pl-sv-rec-tag">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{TIPO_REC[r.tipo].icone}</svg>
-            {TIPO_REC[r.tipo].rotulo}
+            {r.confianca === 'hipotese' ? 'Hipótese' : TIPO_REC[r.tipo].rotulo}
+            <span className="pl-sv-rec-conf">{ROTULO_CONFIANCA(r)}</span>
           </span>
           <div className="pl-sv-rec-titulo">{r.titulo}</div>
           <div className="pl-sv-rec-detalhe">{r.detalhe}</div>

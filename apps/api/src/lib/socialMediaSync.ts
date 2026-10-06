@@ -103,9 +103,15 @@ async function executarSync(conta: ContaParaSync): Promise<ResultadoSync> {
   // completas (conta recém-conectada, ou snapshots do formato antigo, que
   // só guardavam alcance e visitas) — senão, só os últimos dias, que ainda
   // podem mudar enquanto a Meta termina de contabilizar.
+  // Fora isso, busca também qualquer dia da janela que ficou sem snapshot
+  // (sincronização parada por alguns dias): sem isso, a pausa virava um
+  // buraco permanente no histórico, sem aviso nenhum.
   const diasComMetricas = snapshotsRecentes.filter(s => s.visualizacoesDia > 0 || s.interacoesDia > 0 || s.alcanceContaDia > 0).length
-  const diasParaBuscar = diasComMetricas >= DIAS_BACKFILL - 10 ? DIAS_INCREMENTAL : DIAS_BACKFILL
-  const dias = Array.from({ length: diasParaBuscar }, (_, i) => new Date(hoje.getTime() - (diasParaBuscar - 1 - i) * DIA_MS))
+  const janela = Array.from({ length: DIAS_BACKFILL }, (_, i) => new Date(hoje.getTime() - (DIAS_BACKFILL - 1 - i) * DIA_MS))
+  const comSnapshot = new Set(snapshotsRecentes.filter(s => s.sincronizado).map(s => s.data.getTime()))
+  const dias = diasComMetricas >= DIAS_BACKFILL - 10
+    ? janela.filter((d, i) => i >= DIAS_BACKFILL - DIAS_INCREMENTAL || !comSnapshot.has(d.getTime()))
+    : janela
 
   const [midiasFeed, stories, demografia, seguidoresOnline, distribuicaoAlcance, metricasDias, novosSeguidores] = await Promise.all([
     buscarMidias(ig, accessToken, MAX_MIDIAS),

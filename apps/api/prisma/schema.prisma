@@ -1477,6 +1477,7 @@ model SocialMediaConta {
   vendedor  Vendedor?                   @relation(fields: [vendedorId], references: [id])
   midias    SocialMediaMidia[]
   snapshots SocialMediaSnapshotDiario[]
+  alcancesPeriodo SocialMediaAlcancePeriodo[]
 
   @@index([usuarioId])
   @@map("pro_labore_social_media_contas")
@@ -1554,6 +1555,9 @@ model SocialMediaSnapshotDiario {
   toquesLinksDia        Int      @default(0)
   cliquesSiteDia        Int      @default(0)
   publicacoesNoDia      Int      @default(0)
+  // O dia foi de fato sincronizado com a API (base do banner de qualidade
+  // dos dados e das lacunas). Dia sem linha = lacuna.
+  sincronizado          Boolean  @default(true)
   criadoEm              DateTime @default(now())
   atualizadoEm          DateTime @default(now()) @updatedAt
 
@@ -1561,6 +1565,23 @@ model SocialMediaSnapshotDiario {
 
   @@unique([contaId, data])
   @@map("pro_labore_social_media_snapshots")
+}
+
+// Alcance único (contas distintas) de um período, como o Instagram calcula —
+// não é a soma do alcance diário. A API só entrega esse número sob demanda
+// (até 30 dias por consulta), então ele fica guardado por período.
+model SocialMediaAlcancePeriodo {
+  id           String   @id @default(cuid())
+  contaId      String
+  inicio       DateTime // dia de Brasília (meia-noite UTC)
+  fim          DateTime
+  alcance      Int
+  atualizadoEm DateTime @default(now()) @updatedAt
+
+  conta SocialMediaConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  @@unique([contaId, inicio, fim])
+  @@map("pro_labore_social_media_alcance_periodo")
 }
 
 // Assistente comercial de WhatsApp — um por vendedor, ligado ao número que
