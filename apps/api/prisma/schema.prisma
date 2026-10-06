@@ -945,6 +945,7 @@ model ProLaboreUsuario {
   smPermissao               SmPermissao?
   smMotos                   SmMotoEstoque[]
   smPautas                  SmPauta[]
+  smConfig                  SmConfig?
 
   @@map("pro_labore_usuarios")
 }
@@ -2453,4 +2454,22 @@ model SmPautaMidia {
 
   @@index([pautaId])
   @@map("pro_labore_sm_pautas_midias")
+}
+
+// Regras de cadência e metas do calendário (seção 5), configuráveis pelo
+// gestor. Padrões da especificação: 4 dias com post por semana, até 2 posts
+// por dia, no máximo 2 dias seguidos sem post e o mix 40/20/25/15.
+model SmConfig {
+  id              String   @id @default(cuid())
+  usuarioId       String   @unique
+  minDiasSemana   Int      @default(4)
+  maxPostsDia     Int      @default(2)
+  maxDiasSemPost  Int      @default(2)
+  mixMeta         Json     @default("{\"ESTOQUE\":40,\"PROVA\":20,\"EDUCACAO\":25,\"BASTIDORES\":15}")
+  horizonteDias   Int      @default(21) // até onde o calendário oferece "+ slot livre"
+  atualizadoEm    DateTime @default(now()) @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("pro_labore_sm_config")
 }

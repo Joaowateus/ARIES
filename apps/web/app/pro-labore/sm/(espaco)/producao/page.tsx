@@ -38,7 +38,11 @@ function Producao() {
       veEstoque ? proLaboreApi.sm.estoque.listar() : Promise.resolve(null),
     ]).then(([q, sug, est]) => {
       setQuadro(q); setSugestoes(sug); setMotos(est); setErro(null)
-      setSelecionadaId(id => id && q.pautas.some(p => p.id === id) ? id : q.pautas.find(p => p.status === 'ROTEIRO')?.id ?? q.pautas.find(p => p.status !== 'PUBLICADO')?.id ?? null)
+      // Vindo do calendário (ou de um aviso): ?pauta=<id> abre direto o briefing.
+      const pedida = new URLSearchParams(window.location.search).get('pauta')
+      setSelecionadaId(id => id && q.pautas.some(p => p.id === id) ? id
+        : pedida && q.pautas.some(p => p.id === pedida) ? pedida
+          : q.pautas.find(p => p.status === 'ROTEIRO')?.id ?? q.pautas.find(p => p.status !== 'PUBLICADO')?.id ?? null)
     }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
   }, [veEstoque])
   useEffect(() => { carregar() }, [carregar])
