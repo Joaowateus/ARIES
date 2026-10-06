@@ -9,6 +9,7 @@ import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../m
 import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, buscarAlcanceUnicoPeriodo, MAX_DIAS_ALCANCE_UNICO, comApiDaEmpresa } from '../lib/instagramGraph'
 import { sincronizarContaSocialMedia, rodarJobSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
 import { montarAnaliseSocialMedia } from '../lib/socialMediaAnalytics'
+import { pagoPorMidia, type OrigemMetricas } from '../lib/socialMediaOrigem'
 import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
 import { randomBytes } from 'crypto'
 import { logger } from '../lib/logger'
@@ -2395,6 +2396,13 @@ router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, re
     }),
   ])
 
+  // Orgânico (padrão), pago ou total. O pago vem dos anúncios do Tráfego,
+  // que é da operação: só entra na conta do dono (a da empresa), nunca no
+  // Instagram pessoal de alguém da equipe.
+  const origemQuery = typeof req.query.origem === 'string' ? req.query.origem.toUpperCase() : 'ORGANICO'
+  const origem = (['ORGANICO', 'PAGO', 'TOTAL'].includes(origemQuery) ? origemQuery : 'ORGANICO') as OrigemMetricas
+  const pagos = vendedorTitular ? new Map() : await pagoPorMidia(usuarioId)
+
   res.json(montarAnaliseSocialMedia({
     conta,
     periodo: { inicio, fim },
@@ -2403,6 +2411,8 @@ router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, re
     metaPostagensSemanais: parametro.metaPostagensSemanais,
     leadsOrganicos,
     alcanceUnico: await alcanceUnicoDoPeriodo(conta, inicio, fim, hoje),
+    origem,
+    pagoPorMidia: pagos,
   }))
 })
 

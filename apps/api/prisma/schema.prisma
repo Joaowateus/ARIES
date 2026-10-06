@@ -1528,6 +1528,9 @@ model SocialMediaMidia {
   tempoTotalAssistidoSeg Float? // só reels
   // Navegação de story: { avancos, retornos, saidas, proximoStory }
   navegacaoStory         Json?
+  // Cópia própria da miniatura (caminho servido pela API): as URLs da CDN
+  // do Instagram expiram e quebravam as imagens da tela (seção 17.8).
+  miniaturaLocal         String?
   insightsAtualizadoEm   DateTime?
   atualizadoEm           DateTime  @updatedAt
 

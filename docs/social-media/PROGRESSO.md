@@ -14,9 +14,9 @@
 - [ ] Tokens, fontes e componentes base (seção 2)
 - [x] Conexão pela empresa com status, alertas e nova tentativa (0b: usuário do sistema pelo Graph do Facebook, diagnóstico, nova tentativa com backoff de 5 min a 6 h, aviso agrupado ao gestor e ao Social Media, selo no menu)
 - [x] Jobs de sincronização (conta, mídias, stories de hora em hora, webhooks) (0b: `/sm/cron/hora`, `/sm/cron/dia`, `/sm/cron/minuto` e `/sm/webhook/instagram` com assinatura verificada; os eventos ficam guardados para o Atendimento da Fase 2)
-- [ ] Cache de miniaturas
+- [x] Cache de miniaturas (0c: cópia da capa no armazenamento próprio, stories primeiro, até 1,5 MB, só imagens com assinatura conhecida; a tela usa a cópia e cai para a URL da Meta enquanto não houver)
 - [x] Marcação de lacunas de dados (0a)
-- [ ] Separação orgânico, pago e total
+- [x] Separação orgânico, pago e total (0c: seletor Orgânico/Pago/Total na aba; o pago vem dos anúncios do Tráfego que usam o post, ligados por `effective_instagram_media_id`; chip "Impulsionado" e alcance estimado marcado com ≈)
 - [ ] Todas as correções da seção 17
 
 ### Fase 1 · Acesso isolado e trabalho diário
@@ -82,10 +82,10 @@
 | 5 | Interações divergentes | Feito (0a): a composição usa a mesma fonte do card e mostra a diferença como "Outras" |
 | 6 | "0,0%" em valores pequenos | Feito (0a): o formatador aumenta as casas e nunca mostra 0,0% para um valor que não é zero |
 | 7 | Insights com amostra pequena como fato | Feito (0a): 5+ posts por grupo é fato, 3 ou 4 é hipótese de confiança baixa, 1 ou 2 não gera insight |
-| 8 | Miniaturas quebradas | Fase 0c |
+| 8 | Miniaturas quebradas | Feito (0c): a sincronização guarda uma cópia de cada capa (`miniaturaLocal`) e a tela usa a cópia, que não expira |
 | 9 | Stories nunca registrados | Feito (0b): o job de hora em hora captura os stories no ar e as métricas deles. Depende da tarefa de hora em hora no cron-job.org. |
 | 10 | Linha do período anterior desalinhada | Conferido (0a): o gráfico já alinha por índice do dia (dia 1 com dia 1) |
-| 11 | Pago misturado com orgânico | Fase 0c |
+| 11 | Pago misturado com orgânico | Feito (0c): visão Orgânico (padrão), Pago e Total. Premissa a conferir com dados reais: os insights de mídia do Instagram não incluem a atividade dos anúncios. As métricas diárias da conta não separam a origem; a tela mostra a fatia do alcance vinda de anúncios. Visualizações de reels por plataforma (crosspost) ficam para a Fase 3. |
 | 12 | "Seguidores gerados n/d" nos reels | Feito (0a): mostra o número quando a API manda; senão, "—" com dica explicando o motivo |
 
 ## Decisões tomadas
