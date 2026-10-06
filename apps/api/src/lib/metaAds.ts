@@ -260,7 +260,7 @@ export function resumoPublico(t: Record<string, unknown> | undefined) {
 
 const CAMPOS_CAMPANHA = 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,stop_time'
 const CAMPOS_CONJUNTO = 'id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_strategy,bid_amount,destination_type,targeting,start_time,end_time'
-const CAMPOS_ANUNCIO = 'id,name,adset_id,campaign_id,status,effective_status,preview_shareable_link,creative{id,thumbnail_url,image_url,title,body,call_to_action_type,object_type,video_id}'
+const CAMPOS_ANUNCIO = 'id,name,adset_id,campaign_id,status,effective_status,preview_shareable_link,creative{id,thumbnail_url,image_url,title,body,call_to_action_type,object_type,video_id,effective_instagram_media_id}'
 
 export async function buscarEstrutura(adAccountId: string, token: string, prazoEm: number): Promise<{ objetos: ObjetoEstrutura[]; completo: boolean }> {
   type Bruto = Record<string, unknown> & { id: string; name?: string; effective_status?: string; status?: string }
@@ -311,6 +311,10 @@ export async function buscarEstrutura(adAccountId: string, token: string, prazoE
           imagem: cr.image_url ?? cr.thumbnail_url ?? null, miniatura: cr.thumbnail_url ?? cr.image_url ?? null,
           titulo: cr.title ?? null, texto: cr.body ?? null, chamada: cr.call_to_action_type ?? null,
           formato: cr.video_id ? 'video' : cr.object_type ?? null,
+          // Post do Instagram que o anúncio usa (impulsionamento ou anúncio
+          // feito a partir de um post): liga o gasto e o resultado pago ao
+          // post no módulo Social Media.
+          igMidiaId: cr.effective_instagram_media_id ?? null,
           rankQualidade: ranking(r?.quality_ranking), rankEngajamento: ranking(r?.engagement_rate_ranking), rankConversao: ranking(r?.conversion_rate_ranking),
         },
       }

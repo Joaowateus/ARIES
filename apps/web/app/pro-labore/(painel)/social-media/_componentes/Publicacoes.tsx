@@ -248,7 +248,8 @@ type Coluna = { chave: keyof PostSocial | 'post'; rotulo: string; num?: boolean;
 const COLUNAS: Coluna[] = [
   { chave: 'publicadoEm', rotulo: 'Publicado', fmt: p => fmtDataHora(p.publicadoEm), csv: p => p.publicadoEm },
   { chave: 'formato', rotulo: 'Formato', fmt: p => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><i className="pl-sv-chave" style={{ background: COR_FORMATO[p.formato] }} />{ROTULO_FORMATO[p.formato]}</span>, csv: p => ROTULO_FORMATO[p.formato] },
-  { chave: 'alcance', rotulo: 'Alcance', num: true, fmt: p => fmtNum(p.alcance), csv: p => p.alcance },
+  // "≈" marca o alcance que soma orgânico e pago (estimado).
+  { chave: 'alcance', rotulo: 'Alcance', num: true, fmt: p => `${p.alcanceEstimado ? '≈ ' : ''}${fmtNum(p.alcance)}`, csv: p => p.alcance },
   { chave: 'visualizacoes', rotulo: 'Visualiz.', num: true, fmt: p => fmtNum(p.visualizacoes), csv: p => p.visualizacoes },
   { chave: 'curtidas', rotulo: 'Curtidas', num: true, fmt: p => fmtNum(p.curtidas), csv: p => p.curtidas },
   { chave: 'comentarios', rotulo: 'Coment.', num: true, fmt: p => fmtNum(p.comentarios), csv: p => p.comentarios },
@@ -282,8 +283,8 @@ export function TabelaPublicacoes({ posts, periodo, recarregando }: { posts: Pos
   }, [posts, ordem])
 
   function exportarCsv() {
-    const cabecalho = ['Link', 'Legenda', ...COLUNAS.map(c => c.rotulo)]
-    const linhas = ordenados.map(p => [p.permalink ?? '', p.legenda ?? '', ...COLUNAS.map(c => c.csv(p))])
+    const cabecalho = ['Link', 'Legenda', 'Impulsionado', 'Investido em anúncio (R$)', ...COLUNAS.map(c => c.rotulo)]
+    const linhas = ordenados.map(p => [p.permalink ?? '', p.legenda ?? '', p.impulsionado ? 'sim' : 'não', p.gastoPago != null ? p.gastoPago.toFixed(2).replace('.', ',') : '', ...COLUNAS.map(c => c.csv(p))])
     const csv = [cabecalho, ...linhas].map(l => l.map(csvSeguro).join(';')).join('\n')
     const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -322,6 +323,7 @@ export function TabelaPublicacoes({ posts, periodo, recarregando }: { posts: Pos
                       <a href={p.permalink ?? undefined} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 260 }}>
                         <span className="pl-sv-post-img" style={{ width: 36, height: 36, flex: 'none', borderRadius: 6, overflow: 'hidden' }}><Miniatura post={p} classe="pl-sv-thumb-mini" /></span>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--pl-ink-2)' }}>{p.legenda || 'Sem legenda'}</span>
+                        {p.impulsionado && <span className="pl-sv-chip-pago" title={p.gastoPago != null ? `Usado em anúncio · ${p.gastoPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} investidos` : 'Usado em anúncio'}>Impulsionado</span>}
                       </a>
                     </td>
                     {COLUNAS.map(c => <td key={c.chave} className={c.num ? 'pl-right' : ''}>{p.semInsights && c.num && c.chave !== 'curtidas' && c.chave !== 'comentarios' ? '—' : c.fmt(p)}</td>)}

@@ -564,11 +564,16 @@ export const proLaboreApi = {
     sincronizacoes: () => request<SincronizacaoSocial[]>('/pro-labore/social-media/sincronizacoes'),
     avisos: () => request<AvisoSocial[]>('/pro-labore/social-media/avisos'),
     marcarAvisoLido: (id: string) => request<{ ok: boolean }>(`/pro-labore/social-media/avisos/${id}/lida`, { method: 'POST' }),
-    resumo: (periodo?: { inicio: string; fim: string }) => {
+    resumo: (periodo?: { inicio: string; fim: string }, origem?: OrigemSocial) => {
       const params = new URLSearchParams()
       if (periodo) { params.set('inicio', periodo.inicio); params.set('fim', periodo.fim) }
+      if (origem) params.set('origem', origem)
       const qs = params.toString()
-      return request<AnaliseSocialMedia>(`/pro-labore/social-media/resumo${qs ? `?${qs}` : ''}`)
+      // Miniaturas guardadas pelo sistema vêm como caminho da API.
+      return request<AnaliseSocialMedia>(`/pro-labore/social-media/resumo${qs ? `?${qs}` : ''}`).then(a => {
+        if (a.conectado) for (const p of a.publicacoes) if (p.thumbnail?.startsWith('/pro-labore/')) p.thumbnail = `${BASE}${p.thumbnail}`
+        return a
+      })
     },
   },
   assistente: {
@@ -951,6 +956,12 @@ export interface PostSocial {
   hashtags: string[]
   tamanhoLegenda: number
   semInsights: boolean
+  // Usado em anúncio (impulsionado ou anúncio a partir do post).
+  impulsionado: boolean
+  gastoPago: number | null
+  // Alcance que soma orgânico e pago: a mesma pessoa pode ter visto pelos
+  // dois, então é estimado.
+  alcanceEstimado: boolean
 }
 
 export interface AgregadoPostsSocial {
@@ -994,6 +1005,9 @@ export interface RecomendacaoSocial {
   confianca: 'alta' | 'media' | 'baixa' | 'hipotese'
   amostra: number | null
 }
+
+// Orgânico (padrão), pago (anúncios do Tráfego) ou total.
+export type OrigemSocial = 'ORGANICO' | 'PAGO' | 'TOTAL'
 
 export type AnaliseSocialMedia =
   | { conectado: false }
@@ -1062,6 +1076,10 @@ export type AnaliseSocialMedia =
       } | null
       seguidoresOnline: number[] | null
       relacaoVendas: { leadsGerados: number; leadsGanhos: number; valorNegociadoTotal: number }
+      origem: {
+        selecionada: OrigemSocial; temPago: boolean; postsImpulsionados: number; gastoImpulsionamento: number
+        fracaoAlcanceAnunciosConta: number | null
+      }
       funil: {
         alcanceUnico: number | null; alcanceUnicoMotivo: string | null
         visitasPerfil: number | null

@@ -3236,3 +3236,11 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 @media (max-width: 560px) { .pl-sv-historico li { grid-template-columns: 1fr; gap: 2px; } }
 /* Selo de aviso do Instagram da empresa no menu (ex.: falha de sincronização). */
 .pl-nav-alerta { margin-left: auto; width: 18px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; background: var(--pl-critical); color: #fff; }
+
+/* ---------- Social Media: orgânico / pago / total ---------- */
+.pl-sv-origem { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 12px; }
+.pl-sv-origem-seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); background: var(--pl-surface); }
+.pl-sv-origem-seg button { border: 0; background: transparent; color: var(--pl-ink-2); font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: var(--pl-radius-sm); cursor: pointer; min-height: 34px; }
+.pl-sv-origem-seg button.ativo { background: var(--pl-surface-3); color: var(--pl-ink-1); }
+.pl-sv-origem-nota { flex: 1 1 320px; font-size: 12.5px; color: var(--pl-ink-muted); line-height: 1.5; }
+.pl-sv-chip-pago { flex: none; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--sv-2) 18%, transparent); color: var(--sv-2); }

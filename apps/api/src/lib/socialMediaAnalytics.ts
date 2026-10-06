@@ -1,5 +1,6 @@
 import type { SocialMediaConta, SocialMediaMidia, SocialMediaSnapshotDiario } from '@prisma/client'
 import { diaBrasilia } from './socialMediaSync'
+import type { OrigemMetricas, PagoDaMidia } from './socialMediaOrigem'
 
 // Análise da conta do Instagram num período — tudo aqui é cálculo puro em
 // cima do que o sync gravou (nenhuma chamada à API do Instagram), então a
@@ -49,6 +50,10 @@ export interface EntradaAnalise {
   // Alcance único do período inteiro, como o Instagram calcula (contas
   // distintas). Null quando a API não fornece (ex.: período > 30 dias).
   alcanceUnico?: { valor: number | null; motivo: string | null }
+  // Orgânico (padrão: comparações usam o orgânico — seção 13.2), pago ou
+  // total, e o resultado pago de cada post vindo do Tráfego.
+  origem?: OrigemMetricas
+  pagoPorMidia?: Map<string, PagoDaMidia>
 }
 
 function chaveDia(d: Date): string {
@@ -132,42 +137,68 @@ export interface PostAnalise {
   hashtags: string[]
   tamanhoLegenda: number
   semInsights: boolean
+  // Post usado em anúncio (impulsionado ou anúncio a partir do post).
+  impulsionado: boolean
+  gastoPago: number | null
+  // Alcance que mistura orgânico e pago (ou é a soma diária do pago):
+  // estimado, porque a mesma pessoa pode ter visto pelos dois caminhos.
+  alcanceEstimado: boolean
 }
 
-function montarPost(m: SocialMediaMidia, medianaReferencia: number): PostAnalise {
+function montarPost(m: SocialMediaMidia, medianaReferencia: number, origem: OrigemMetricas = 'ORGANICO', pago?: PagoDaMidia): PostAnalise {
   const formato = formatoDoPost(m) as FormatoPost
-  const interacoes = interacoesDo(m)
-  const indice = medianaReferencia > 0 && m.insightsAtualizadoEm ? m.alcance / medianaReferencia : null
+  // Insights da mídia = orgânico; pago = anúncios do Tráfego; total = soma.
+  const org = {
+    alcance: m.alcance, visualizacoes: m.visualizacoes, curtidas: m.curtidas, comentarios: m.comentarios,
+    compartilhamentos: m.compartilhamentos, salvamentos: m.salvamentos, interacoes: interacoesDo(m),
+    visitasPerfil: m.visitasPerfil, seguidoresGerados: m.seguidoresGerados,
+  }
+  const pg = {
+    alcance: pago?.alcance ?? 0, visualizacoes: pago?.impressoes ?? 0, curtidas: pago?.curtidas ?? 0, comentarios: pago?.comentarios ?? 0,
+    compartilhamentos: pago?.compartilhamentos ?? 0, salvamentos: pago?.salvamentos ?? 0, interacoes: pago?.interacoes ?? 0,
+    visitasPerfil: 0, seguidoresGerados: 0,
+  }
+  const v = (Object.keys(org) as Array<keyof typeof org>).reduce((acc, k) => {
+    acc[k] = origem === 'ORGANICO' ? org[k] : origem === 'PAGO' ? pg[k] : org[k] + pg[k]
+    return acc
+  }, {} as typeof org)
+  const interacoes = v.interacoes
+  // A régua do índice é sempre a mediana do orgânico (seção 12).
+  const indice = medianaReferencia > 0 && m.insightsAtualizadoEm ? v.alcance / medianaReferencia : null
   const legenda = m.legenda ?? null
   return {
     id: m.id,
     formato,
     legenda: legenda && legenda.length > 400 ? `${legenda.slice(0, 400)}…` : legenda,
-    // Vídeo/reels só tem imagem na thumbnail; foto e carrossel, na própria mídia.
-    thumbnail: m.thumbnailUrl ?? m.urlMidia ?? null,
+    // Cópia própria primeiro (a URL da CDN expira); senão, vídeo/reels só
+    // tem imagem na thumbnail e foto/carrossel, na própria mídia.
+    thumbnail: m.miniaturaLocal ?? m.thumbnailUrl ?? m.urlMidia ?? null,
     permalink: m.urlPermalink,
     publicadoEm: m.publicadoEm.toISOString(),
     dia: chaveDia(diaBrasilia(m.publicadoEm)),
     diaSemana: diaBrasilia(m.publicadoEm).getUTCDay(),
     hora: new Date(m.publicadoEm.getTime() - OFFSET_BRASILIA_MS).getUTCHours(),
-    alcance: m.alcance,
-    visualizacoes: m.visualizacoes,
-    curtidas: m.curtidas,
-    comentarios: m.comentarios,
-    compartilhamentos: m.compartilhamentos,
-    salvamentos: m.salvamentos,
+    alcance: v.alcance,
+    visualizacoes: v.visualizacoes,
+    curtidas: v.curtidas,
+    comentarios: v.comentarios,
+    compartilhamentos: v.compartilhamentos,
+    salvamentos: v.salvamentos,
     interacoes,
-    visitasPerfil: m.visitasPerfil,
-    seguidoresGerados: m.seguidoresGerados,
+    visitasPerfil: v.visitasPerfil,
+    seguidoresGerados: v.seguidoresGerados,
     tempoMedioAssistidoSeg: m.tempoMedioAssistidoSeg,
-    taxaEngajamento: razao(interacoes, m.alcance),
-    taxaSalvamento: razao(m.salvamentos, m.alcance),
-    taxaCompartilhamento: razao(m.compartilhamentos, m.alcance),
+    taxaEngajamento: razao(interacoes, v.alcance),
+    taxaSalvamento: razao(v.salvamentos, v.alcance),
+    taxaCompartilhamento: razao(v.compartilhamentos, v.alcance),
     indiceImpacto: indice,
     faixaImpacto: indice != null ? faixaDoImpacto(indice) : null,
     hashtags: hashtagsDe(m.legenda),
     tamanhoLegenda: m.legenda?.length ?? 0,
     semInsights: m.insightsAtualizadoEm == null,
+    impulsionado: !!pago,
+    gastoPago: pago ? Math.round(pago.gasto * 100) / 100 : null,
+    alcanceEstimado: !!pago && origem !== 'ORGANICO',
   }
 }
 
@@ -295,6 +326,11 @@ function vezes(v: number): string {
 
 export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
   const { conta, periodo, midias, snapshots, metaPostagensSemanais, leadsOrganicos } = entrada
+  const origem: OrigemMetricas = entrada.origem ?? 'ORGANICO'
+  const pagos = entrada.pagoPorMidia ?? new Map<string, PagoDaMidia>()
+  const post = (m: SocialMediaMidia) => montarPost(m, medianaReferencia, origem, pagos.get(m.instagramMediaId))
+  // No modo Pago só entram os posts que foram usados em anúncio.
+  const naOrigem = (m: SocialMediaMidia) => origem !== 'PAGO' || pagos.has(m.instagramMediaId)
   const diasPeriodo = Math.round((periodo.fim.getTime() - periodo.inicio.getTime()) / DIA_MS) + 1
   const anteriorFim = new Date(periodo.inicio.getTime() - DIA_MS)
   const anteriorInicio = new Date(anteriorFim.getTime() - (diasPeriodo - 1) * DIA_MS)
@@ -313,13 +349,18 @@ export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
   const medianaReferencia = mediana(referencia.map(m => m.alcance))
 
   const postsAtual = feed
-    .filter(m => dentro(diaBrasilia(m.publicadoEm), periodo.inicio, periodo.fim))
-    .map(m => montarPost(m, medianaReferencia))
+    .filter(m => dentro(diaBrasilia(m.publicadoEm), periodo.inicio, periodo.fim) && naOrigem(m))
+    .map(post)
     .sort((a, b) => b.publicadoEm.localeCompare(a.publicadoEm))
   const postsAnterior = feed
-    .filter(m => dentro(diaBrasilia(m.publicadoEm), anteriorInicio, anteriorFim))
-    .map(m => montarPost(m, medianaReferencia))
+    .filter(m => dentro(diaBrasilia(m.publicadoEm), anteriorInicio, anteriorFim) && naOrigem(m))
+    .map(post)
   const storiesAtual = stories.filter(m => dentro(diaBrasilia(m.publicadoEm), periodo.inicio, periodo.fim))
+  // Cadência mede produção: conta todo post do feed, seja qual for a origem
+  // selecionada.
+  const feedPeriodo = feed.filter(m => dentro(diaBrasilia(m.publicadoEm), periodo.inicio, periodo.fim))
+  const feedAtual = feedPeriodo.map(m => montarPost(m, medianaReferencia))
+  const feedAnterior = feed.filter(m => dentro(diaBrasilia(m.publicadoEm), anteriorInicio, anteriorFim)).map(m => montarPost(m, medianaReferencia))
 
   const diasAtual = Array.from({ length: diasPeriodo }, (_, i) => new Date(periodo.inicio.getTime() + i * DIA_MS))
   const diasAnterior = Array.from({ length: diasPeriodo }, (_, i) => new Date(anteriorInicio.getTime() + i * DIA_MS))
@@ -328,8 +369,8 @@ export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
     for (const p of posts) mapa.set(p.dia, (mapa.get(p.dia) ?? 0) + 1)
     return mapa
   }
-  const serie = montarSerie(diasAtual, snapshots, contarPorDia(postsAtual))
-  const serieAnterior = montarSerie(diasAnterior, snapshots, contarPorDia(postsAnterior))
+  const serie = montarSerie(diasAtual, snapshots, contarPorDia(feedAtual))
+  const serieAnterior = montarSerie(diasAnterior, snapshots, contarPorDia(feedAnterior))
   preencherTotalSeguidores(serie, conta.seguidores, periodo.fim.getTime() >= hoje.getTime())
 
   const comDados = serie.filter(p => p.temDados)
@@ -353,7 +394,7 @@ export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
   // Consistência (seções 8 e 17.3): a meta é de DIAS com post, e o maior
   // intervalo sem post sai do mesmo cálculo — assim "meta cumprida" e "N
   // dias sem publicar" nunca aparecem juntos.
-  const postsPorDiaAtual = contarPorDia(postsAtual)
+  const postsPorDiaAtual = contarPorDia(feedAtual)
   const diasComPost = diasAtual.filter(d => (postsPorDiaAtual.get(chaveDia(d)) ?? 0) > 0).length
   let maiorIntervalo = 0
   let intervaloCorrente = 0
@@ -439,7 +480,7 @@ export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
     publicacoes: { atual: postsAtual.length, anterior: postsAnterior.length, meta: metaPeriodo, metaSemanal: metaPostagensSemanais },
     diasComPost: {
       atual: diasComPost,
-      anterior: diasAnterior.filter(d => (contarPorDia(postsAnterior).get(chaveDia(d)) ?? 0) > 0).length,
+      anterior: diasAnterior.filter(d => (contarPorDia(feedAnterior).get(chaveDia(d)) ?? 0) > 0).length,
       meta: consistencia.metaDiasPeriodo,
       metaSemanal: metaDiasSemana,
       maiorIntervalo,
@@ -559,6 +600,19 @@ export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
   // vendas, cada taxa sobre a etapa anterior que tem número. Conversas
   // iniciadas chegam com o Atendimento (direct + WhatsApp por link
   // rastreado); até lá a etapa aparece sem número, com o motivo.
+  // Origem das métricas: quantos posts do período foram usados em anúncio e
+  // quanto do alcance da CONTA veio de anúncios (as métricas diárias da conta
+  // não separam pago e orgânico — só a distribuição de 30 dias mostra isso).
+  const alcanceAnuncios = distribuicao?.porFormato.find(f => f.chave === 'AD')?.valor ?? 0
+  const alcanceFormatos = distribuicao?.porFormato.reduce((s2, f) => s2 + f.valor, 0) ?? 0
+  const origemInfo = {
+    selecionada: origem,
+    temPago: pagos.size > 0,
+    postsImpulsionados: feedPeriodo.filter(m => pagos.has(m.instagramMediaId)).length,
+    gastoImpulsionamento: Math.round(feedPeriodo.reduce((s2, m) => s2 + (pagos.get(m.instagramMediaId)?.gasto ?? 0), 0) * 100) / 100,
+    fracaoAlcanceAnunciosConta: alcanceFormatos > 0 ? alcanceAnuncios / alcanceFormatos : null,
+  }
+
   const funil = {
     alcanceUnico: entrada.alcanceUnico?.valor ?? null,
     alcanceUnicoMotivo: entrada.alcanceUnico?.motivo ?? null,
@@ -619,6 +673,7 @@ export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
     seguidoresOnline: conta.seguidoresOnline as number[] | null,
     relacaoVendas,
     funil,
+    origem: origemInfo,
     consistencia,
     qualidade,
     recomendacoes,

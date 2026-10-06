@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { proLaboreApi, SocialMediaConta, AnaliseSocialMedia, ResultadoSyncSocialMedia } from '@/lib/proLaboreApi'
+import { proLaboreApi, SocialMediaConta, AnaliseSocialMedia, ResultadoSyncSocialMedia, type OrigemSocial } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { iniciarLoginInstagram, instagramAppIdConfigurado } from '@/lib/socialMediaOAuth'
@@ -46,6 +46,9 @@ export default function ProLaboreSocialMediaPage() {
   const [carregando, setCarregando] = useState(true)
   const [conta, setConta] = useState<SocialMediaConta | null>(null)
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoDoPreset('30d'))
+  // Orgânico por padrão: as comparações usam o orgânico, a menos que a
+  // pessoa escolha Pago ou Total (seção 13.2 da especificação).
+  const [origem, setOrigem] = useState<OrigemSocial>('ORGANICO')
   // A análise guarda a "chave" (período + última sync) com que foi
   // carregada: enquanto a chave pedida for outra, a tela mostra a análise
   // anterior esmaecida (sem piscar/pular layout) até a nova chegar.
@@ -106,15 +109,15 @@ export default function ProLaboreSocialMediaPage() {
   }, [conta, sincronizar])
 
   const contaId = conta?.id
-  const chaveAnalise = `${contaId}|${periodo.inicio}|${periodo.fim}|${conta?.ultimaSincronizacaoEm ?? ''}`
+  const chaveAnalise = `${contaId}|${periodo.inicio}|${periodo.fim}|${origem}|${conta?.ultimaSincronizacaoEm ?? ''}`
   useEffect(() => {
     if (!contaId) return
     let cancelado = false
-    proLaboreApi.socialMedia.resumo({ inicio: periodo.inicio, fim: periodo.fim })
+    proLaboreApi.socialMedia.resumo({ inicio: periodo.inicio, fim: periodo.fim }, origem)
       .then(r => { if (!cancelado && r.conectado) { setCarregada({ chave: chaveAnalise, analise: r }); setErroAnalise('') } })
       .catch(err => { if (!cancelado) setErroAnalise(err instanceof Error ? err.message : 'Erro ao carregar a análise') })
     return () => { cancelado = true }
-  }, [contaId, chaveAnalise, periodo.inicio, periodo.fim])
+  }, [contaId, chaveAnalise, periodo.inicio, periodo.fim, origem])
   const analise = carregada?.analise ?? null
   const recarregando = !!carregada && carregada.chave !== chaveAnalise
 
@@ -313,6 +316,20 @@ export default function ProLaboreSocialMediaPage() {
                 onChange={setPeriodo}
                 comparacao={{ inicio: analise.periodo.anteriorInicio, fim: analise.periodo.anteriorFim }}
               />
+              <div className="pl-sv-origem">
+                <div role="group" aria-label="Origem das métricas dos posts" className="pl-sv-origem-seg">
+                  {([['ORGANICO', 'Orgânico'], ['PAGO', 'Pago'], ['TOTAL', 'Total']] as const).map(([v, r]) => (
+                    <button key={v} type="button" aria-pressed={origem === v} className={origem === v ? 'ativo' : ''} onClick={() => setOrigem(v)}>{r}</button>
+                  ))}
+                </div>
+                <span className="pl-sv-origem-nota">
+                  {origem === 'PAGO'
+                    ? (analise.origem.temPago ? `Só os ${analise.origem.postsImpulsionados} posts usados em anúncio no período, com o resultado vindo do Tráfego.` : 'Nenhum post usado em anúncio: o pago aparece aqui quando o Tráfego estiver conectado e algum anúncio usar um post do Instagram.')
+                    : origem === 'TOTAL' ? 'Orgânico + pago nos posts. O alcance de posts impulsionados é estimado (≈): a mesma pessoa pode ter visto pelos dois caminhos.'
+                      : `Métricas dos posts sem anúncios${analise.origem.postsImpulsionados ? ` (${analise.origem.postsImpulsionados} posts foram impulsionados no período)` : ''}.`}
+                  {analise.origem.fracaoAlcanceAnunciosConta != null && analise.origem.fracaoAlcanceAnunciosConta > 0 && ` As métricas diárias da conta (alcance por dia, visualizações, interações) não separam: ${Math.round(analise.origem.fracaoAlcanceAnunciosConta * 100)}% do alcance dos últimos 30 dias veio de anúncios.`}
+                </span>
+              </div>
               <BannerQualidade qualidade={analise.qualidade} />
 
               <Secao id="sv-visao" eyebrow="Visão geral" titulo="Como a conta está indo" nota="Variações sempre comparadas com o período anterior de mesma duração">

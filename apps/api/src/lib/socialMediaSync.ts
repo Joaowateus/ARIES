@@ -21,6 +21,7 @@ import {
   erroDeTokenExpirado,
   renovarTokenLongo,
 } from './instagramGraph'
+import { baixarEGuardarImagem } from './armazenamento'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 // Fuso fixo de Brasília (UTC-3, sem horário de verão desde 2019) — mesma
@@ -77,6 +78,7 @@ export interface ResultadoSync {
   midiasListadas: number
   insightsAtualizados: number
   insightsPendentes: number
+  miniaturasGuardadas?: number
   diasAtualizados: number
 }
 
@@ -262,6 +264,9 @@ async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<Resul
       thumbnailUrl: m.thumbnailUrl ?? null,
       urlPermalink: m.urlPermalink ?? null,
       publicadoEm: m.publicadoEm,
+      // A cópia própria da miniatura não depende da URL da CDN, que muda a
+      // cada listagem: continua a mesma.
+      miniaturaLocal: antigo?.miniaturaLocal ?? null,
       // Stories não têm like_count/comments_count na listagem — o valor
       // vem do insight, quando existe.
       curtidas: novo?.curtidas ?? (m.formato === 'STORY' ? antigo?.curtidas ?? 0 : m.curtidas),
@@ -337,12 +342,40 @@ async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<Resul
   ])
 
   const pendentes = candidatas.filter(m => !insights.has(m.instagramMediaId)).length
+  const miniaturasGuardadas = await guardarMiniaturas(conta, midias, prazo + 6000)
   return {
     midiasListadas: midias.length,
     insightsAtualizados: insights.size,
     insightsPendentes: pendentes,
     diasAtualizados: linhasSnapshot.length,
+    miniaturasGuardadas,
   }
+}
+
+// Guarda uma cópia própria das miniaturas que ainda não têm (seção 17.8):
+// só das mídias desta listagem, cujas URLs da CDN ainda valem. Stories
+// primeiro (somem em 24h), depois as mais recentes. Para no prazo e
+// continua na próxima rodada.
+async function guardarMiniaturas(conta: ContaParaSync, midias: MidiaInstagram[], prazo: number): Promise<number> {
+  const listadas = new Map(midias.map(m => [m.instagramMediaId, m]))
+  const semCopia = await prisma.socialMediaMidia.findMany({
+    where: { contaId: conta.id, miniaturaLocal: null, instagramMediaId: { in: [...listadas.keys()] } },
+    select: { id: true, instagramMediaId: true },
+  })
+  const fila = semCopia
+    .map(r => ({ ...r, m: listadas.get(r.instagramMediaId)! }))
+    .map(r => ({ ...r, url: r.m.thumbnailUrl ?? (r.m.tipo !== 'VIDEO' ? r.m.urlMidia : undefined) }))
+    .filter((r): r is typeof r & { url: string } => !!r.url)
+    .sort((a, b) => Number(b.m.formato === 'STORY') - Number(a.m.formato === 'STORY') || b.m.publicadoEm.getTime() - a.m.publicadoEm.getTime())
+  let guardadas = 0
+  for (let i = 0; i < fila.length && Date.now() < prazo; i += 8) {
+    const lote = fila.slice(i, i + 8)
+    const caminhos = await Promise.all(lote.map(r => baixarEGuardarImagem(conta.usuarioId, r.url)))
+    await Promise.all(lote.map((r, k) => caminhos[k]
+      ? prisma.socialMediaMidia.update({ where: { id: r.id }, data: { miniaturaLocal: caminhos[k] } }).then(() => { guardadas++ })
+      : Promise.resolve()))
+  }
+  return guardadas
 }
 
 function montarSnapshots(
