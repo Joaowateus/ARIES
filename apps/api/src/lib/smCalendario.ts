@@ -11,14 +11,17 @@ const DIA_MS = 24 * 3600 * 1000
 export const PILARES_MIX = ['ESTOQUE', 'PROVA', 'EDUCACAO', 'BASTIDORES'] as const
 export const MIX_PADRAO: Record<(typeof PILARES_MIX)[number], number> = { ESTOQUE: 40, PROVA: 20, EDUCACAO: 25, BASTIDORES: 15 }
 
-export interface ConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; mixMeta: Record<string, number>; horizonteDias: number }
-export const CONFIG_PADRAO: ConfigCalendario = { minDiasSemana: 4, maxPostsDia: 2, maxDiasSemPost: 2, mixMeta: { ...MIX_PADRAO }, horizonteDias: 21 }
+export interface ConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; mixMeta: Record<string, number>; horizonteDias: number; metaLeadsSemana: number; metaRespostaMin: number; metaRetencao: number }
+export const CONFIG_PADRAO: ConfigCalendario = { minDiasSemana: 4, maxPostsDia: 2, maxDiasSemPost: 2, mixMeta: { ...MIX_PADRAO }, horizonteDias: 21, metaLeadsSemana: 10, metaRespostaMin: 15, metaRetencao: 45 }
 
 export async function carregarConfig(usuarioId: string): Promise<ConfigCalendario> {
   const c = await prisma.smConfig.findUnique({ where: { usuarioId } })
   if (!c) return { ...CONFIG_PADRAO, mixMeta: { ...MIX_PADRAO } }
   const mix = { ...MIX_PADRAO, ...(c.mixMeta as Record<string, number>) }
-  return { minDiasSemana: c.minDiasSemana, maxPostsDia: c.maxPostsDia, maxDiasSemPost: c.maxDiasSemPost, mixMeta: mix, horizonteDias: c.horizonteDias }
+  return {
+    minDiasSemana: c.minDiasSemana, maxPostsDia: c.maxPostsDia, maxDiasSemPost: c.maxDiasSemPost, mixMeta: mix, horizonteDias: c.horizonteDias,
+    metaLeadsSemana: c.metaLeadsSemana, metaRespostaMin: c.metaRespostaMin, metaRetencao: c.metaRetencao,
+  }
 }
 
 /** 'YYYY-MM-DD' (Belém) do instante. */

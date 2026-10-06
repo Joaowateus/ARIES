@@ -22,6 +22,7 @@ import {
   verificarTokenEmpresa,
 } from '../lib/instagramGraph'
 import { publicarPautasVencidas } from '../lib/smPublicacao'
+import { gerarPautasDeVendas } from '../lib/smPautasAuto'
 import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialMediaSync'
 
 const router = Router()
@@ -265,7 +266,13 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   if (cronAutorizado(req, res)) res.json(await rodarJobSocialMedia('HORA'))
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
-  if (cronAutorizado(req, res)) res.json(await rodarJobSocialMedia('DIA'))
+  if (!cronAutorizado(req, res)) return
+  const sincronizacao = await rodarJobSocialMedia('DIA')
+  // Vendas fechadas no CRM viram pautas de entrega (seção 6), mesmo sem ninguém abrir a tela.
+  const operacoes = await prisma.smMembro.findMany({ select: { usuarioId: true } })
+  let pautasDeEntrega = 0
+  for (const o of operacoes) pautasDeEntrega += await gerarPautasDeVendas(o.usuarioId)
+  res.json({ ...sincronizacao, pautasDeEntrega })
 })
 // A cada 5 min: novas tentativas vencidas e a publicação das pautas
 // agendadas que já chegaram no horário.

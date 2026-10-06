@@ -2467,6 +2467,10 @@ model SmConfig {
   maxDiasSemPost  Int      @default(2)
   mixMeta         Json     @default("{\"ESTOQUE\":40,\"PROVA\":20,\"EDUCACAO\":25,\"BASTIDORES\":15}")
   horizonteDias   Int      @default(21) // até onde o calendário oferece "+ slot livre"
+  // Metas da semana da tela Hoje (seção 4); todas editáveis pelo gestor.
+  metaLeadsSemana Int      @default(10)
+  metaRespostaMin Int      @default(15) // tempo de resposta a DMs, em minutos
+  metaRetencao    Int      @default(45) // retenção média dos reels, em %
   atualizadoEm    DateTime @default(now()) @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)

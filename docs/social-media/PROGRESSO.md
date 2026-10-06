@@ -4,9 +4,8 @@
 
 ## Situação atual
 
-- **Etapa:** Fase 1 · Acesso isolado e trabalho diário (Fase 0 concluída e aprovada).
-- **Entregue:** 1a (papel, permissões, tela 07, convite, menu e cartão) · 1b (estoque leve, Produção, aprovação, publicação pela API, Trial Reels) · 1c (Calendário).
-- **Próxima:** 1d Hoje e pautas automáticas (venda, insight, audiência, calendário).
+- **Etapa:** Fase 1 · Acesso isolado e trabalho diário concluída: 1a #144, 1b #145, 1c #146, 1d.
+- **Próxima:** Fase 2 · Atendimento e prova de venda, depois da conferência do gestor.
 
 ## Checklist de aceite (seção 18)
 
@@ -24,11 +23,11 @@
 - [x] Papel `social_media` com permissões aplicadas no backend (1a: papel `SOCIAL_MEDIA` no login; um filtro único barra o token do papel em qualquer rota fora de `/pro-labore/sm/*`; nível por módulo checado em cada rota do espaço; acesso suspenso derruba a sessão na próxima ação)
 - [x] Tela 07 · Permissões, com convite, regras e "Ver como Social Media" (1a: Equipe → Acessos e permissões; convite com link de uso único válido por 7 dias; "ver como" aplica os mesmos filtros em modo só leitura. O assistente da aba entra na Fase 3, junto com as outras telas)
 - [x] Menu lateral do papel e cartão da conta (1a: Trabalho e Resultado, itens somem quando o módulo está sem acesso; cartão com status da sincronização; papel e Sair no rodapé)
-- [ ] Tela 01 · Hoje, completa
+- [x] Tela 01 · Hoje, completa (1d: saudação pelo horário com o tratamento, resumo do dia com dados reais, banner de retomada com 3+ dias sem post, 4 metas da semana, publicar hoje, estoque sem conteúdo com "Gerar pauta", últimos posts contra a mediana de 90 dias, produção e insights que viram pauta. Dependem de outras fases e aparecem sem número inventado: fila de atendimento e tempo de resposta (Fase 2), retenção em % (precisa da duração dos reels, Fase 3), botão "Começar o ritual da manhã" (tela 09, Fase 4) e o motor completo de saudação (seção 14, Fase 4))
 - [x] Tela 02 · Calendário, com arrastar, regras, mix e janelas (1c: mês e semana começando na segunda; posts planejados e publicados (feed do Instagram, sem os stories); Hoje, "sem post", Rajada e "+ slot livre" que cria a pauta naquele dia; arrastar entre dias mantendo o horário e revalidando as regras; filtros por pilar; regras de cadência (OK, Ajustar, Atenção) e mix de pilares configuráveis pelo gestor; melhores janelas com "Comprovado" a partir de 5 posts)
 - [x] Tela 03 · Produção, com kanban, briefing, checklist, aprovação e publicação agendada pela API (1b: quadro de 6 colunas com arrastar, Alt + setas e "Mover para"; briefing que salva ao sair do campo; código `#P-DDMM-MODELO` gerado com a data; checklist com legenda 300+, capa e janela calculada do histórico; aprovação e pedido de ajuste com aviso; mudança depois de aprovada volta para aprovação; o job de minuto publica foto, carrossel, reels e story, avisa se falhar e permite tentar de novo)
 - [x] Trial Reels pela API (1b: "Testar como Trial Reel" segue a mesma aprovação e publica com `trial_params`, promovido ao feed se performar bem)
-- [ ] Integração de leitura com o estoque e pautas automáticas (estoque, venda, insight, audiência, calendário) (1b: estoque leve e "Sugestões do estoque" com "Gerar pauta". Falta na 1d: venda, insight, audiência e calendário)
+- [x] Integração de leitura com o estoque e pautas automáticas (estoque, venda, insight, audiência, calendário) (1b e 1d: estoque leve e sugestões; venda fechada no CRM vira "Entrega: {modelo}" com o roteiro de 3 tomadas, sozinha, pelo job do dia ou ao abrir a tela; insight vira pauta pelo cartão; sugestões da audiência a partir da demografia; slot do calendário cria a pauta do dia)
 
 ### Fase 2 · Atendimento e prova de venda
 - [ ] Tela 04 · Atendimento, com direct, comentários, respostas rápidas, janela de 24h e automações
@@ -113,6 +112,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | Ajuste 1b | Estoque leve mantido pelo gestor em Social Media → Estoque. No menu do papel, só aparece quando o gestor libera o Estoque como Completo (o menu padrão da seção 3.1 não tem Estoque). | Encaixe |
 | Ajuste 1b | Autorização de imagem (P6): na pauta de Prova social, "Cliente autorizou" e a foto do termo anexada. | Decisão P6 |
 | Ajuste 1c | Janelas com 3 ou 4 posts aparecem como "Hipótese"; "Em teste" fica para quando houver teste A/B (Fase 3). A tela Desempenho ainda usa a meta semanal antiga (`metaPostagensSemanais`); na Fase 3 ela passa a usar as mesmas regras do calendário. | Encaixe |
+| Ajuste 1d | Metas da semana da Hoje (leads orgânicos, resposta a DMs, retenção) editáveis pelo gestor junto com as regras do calendário. Uma venda só vira pauta de entrega se o papel tiver acesso a Vendas. | Encaixe |
 | Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 
 ## Perguntas em aberto

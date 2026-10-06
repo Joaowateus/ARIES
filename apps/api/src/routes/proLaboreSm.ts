@@ -9,6 +9,7 @@ import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { MODULOS_SM, NIVEIS_SM, NIVEIS_PADRAO, REGRAS_PADRAO, carregarPermissoes, contextoSM, niveisCompletos, requireGestorSM } from '../lib/smAcesso'
 import { emailConfigurado, enviarEmail, escaparHtml } from '../lib/email'
+import { montarHoje } from '../lib/smHoje'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -79,6 +80,17 @@ router.get('/sm/eu', ...autenticado, async (req: Request, res: Response) => {
     conta: resumoConta(conta),
     contadores: { atendimento: 0 }, // Fase 2 (Atendimento)
   })
+})
+
+// ---------- Tela 01 · Hoje ----------
+
+router.get('/sm/hoje', ...autenticado, async (req: Request, res: Response) => {
+  const sm = req.sm!
+  const membro = await prisma.smMembro.findUnique({ where: { usuarioId: sm.usuarioId }, select: { nome: true, tratamento: true } })
+  const pessoa = sm.visao === 'SOCIAL_MEDIA'
+    ? { nome: membro?.nome ?? 'Social Media', tratamento: membro?.tratamento ?? null }
+    : { nome: req.proLaboreUser!.nome, tratamento: null }
+  res.json(await montarHoje(sm, pessoa))
 })
 
 // ---------- Tela 07 · Permissões (gestor) ----------

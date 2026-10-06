@@ -796,6 +796,8 @@ export const proLaboreApi = {
         request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/link`, { method: 'POST', body: JSON.stringify({ tipo, url }) }),
       removerMidia: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/${midiaId}`, { method: 'DELETE' }),
     },
+    hoje: () => request<SmHoje>('/pro-labore/sm/hoje'),
+    sugestoesAudiencia: () => request<SmSugestaoAudiencia[]>('/pro-labore/sm/sugestoes/audiencia'),
     calendario: {
       mes: (mes?: string) => request<SmCalendario>(`/pro-labore/sm/calendario${mes ? `?mes=${mes}` : ''}`),
       salvarConfig: (data: Partial<SmConfigCalendario>) => request<SmConfigCalendario>('/pro-labore/sm/gestor/calendario', { method: 'PUT', body: JSON.stringify(data) }),
@@ -1843,7 +1845,7 @@ export function urlArquivoApi(url: string): string {
   return url.startsWith('/pro-labore/') ? `${BASE}${url}` : url
 }
 
-export interface SmConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; horizonteDias: number; mixMeta: Record<SmPilar, number> }
+export interface SmConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; horizonteDias: number; mixMeta: Record<SmPilar, number>; metaLeadsSemana: number; metaRespostaMin: number; metaRetencao: number }
 
 export interface SmItemCalendario {
   tipo: 'PAUTA' | 'INSTAGRAM'
@@ -1882,4 +1884,24 @@ export interface SmCalendario {
   config: SmConfigCalendario
   podeEditar: boolean
   souGestor: boolean
+}
+
+export interface SmSugestaoAudiencia { ref: string; titulo: string; pilar: SmPilar; formato: SmFormato; motivo: string; gancho: string }
+
+export interface SmHoje {
+  cabecalho: { rotulo: string; saudacao: string; resumo: string }
+  retomada: { diasSemPost: number; feitos: number; meta: number; maxPostsDia: number } | null
+  metas: {
+    diasComPost: { valor: number; meta: number; planejados: number }
+    respostaDm: { valorMin: number | null; meta: number }
+    leads: { valor: number; meta: number } | null
+    retencao: { percentual: number | null; tempoMedioSeg: number | null; meta: number } | null
+  }
+  publicarHoje: Array<{ id: string; hora: string; formato: SmFormato; titulo: string; pilar: SmPilar; codigo: string | null; trial: boolean; status: SmStatusPauta; aprovacao: SmPauta['aprovacao']; publicacaoStatus: SmPauta['publicacaoStatus'] }> | null
+  estoqueSemConteudo: Array<{ id: string; modelo: string; ano: number | null; cor: string | null; diasEmEstoque: number; posts: number; emProducao: number; status: 'PARADA' | 'ATENCAO' | 'OK' }> | null
+  ultimosPosts: { mediana: number; posts: Array<{ id: string; titulo: string; formato: SmFormato; publicadoEm: string; alcance: number; multiplo: number | null }> } | null
+  atendimento: null
+  producao: { atrasadas: number; aguardandoAprovacao: number; prontasParaAgendar: number; falhas: number } | null
+  insights: Array<{ id: string; tipo: 'destaque' | 'oportunidade' | 'alerta' | 'info'; titulo: string; detalhe: string; confianca: 'alta' | 'media' | 'baixa' | 'hipotese' | string; amostra: number | null }> | null
+  podeCriarPauta: boolean
 }
