@@ -2,7 +2,7 @@
 
 // "+ Nova pauta" e "Sugestões do estoque" (cabeçalho da Produção).
 import { useState } from 'react'
-import { proLaboreApi, type SmFormato, type SmMoto, type SmPauta, type SmPilar } from '@/lib/proLaboreApi'
+import { proLaboreApi, type SmFormato, type SmMoto, type SmPauta, type SmPilar, type SmSugestaoAudiencia } from '@/lib/proLaboreApi'
 import { Botao, Chip, EstadoVazio, FORMATO_ROTULO, Modal, PILAR_ROTULO, dataParaIso } from '../../_ui'
 
 export function NovaPauta({ motos, inicial, aoCriar, aoFechar }: {
@@ -75,15 +75,38 @@ export function NovaPauta({ motos, inicial, aoCriar, aoFechar }: {
 
 const STATUS_MOTO = { PARADA: { texto: 'Parada', tom: 'bad' as const }, ATENCAO: { texto: 'Atenção', tom: 'warn' as const }, OK: { texto: 'Ok', tom: 'ok' as const } }
 
-export function SugestoesEstoque({ sugestoes, podeEditar, aoGerar, aoFechar }: {
+export function SugestoesEstoque({ sugestoes, audiencia, podeEditar, aoGerar, aoGerarAudiencia, aoFechar }: {
   sugestoes: SmMoto[]
+  audiencia: SmSugestaoAudiencia[]
   podeEditar: boolean
   aoGerar: (m: SmMoto) => Promise<void>
+  aoGerarAudiencia: (a: SmSugestaoAudiencia) => Promise<void>
   aoFechar: () => void
 }) {
   const [gerando, setGerando] = useState<string | null>(null)
   return (
     <Modal titulo="Sugestões do estoque" aoFechar={aoFechar}>
+      {audiencia.length > 0 && (
+        <>
+          <span className="sm-mono">Da audiência</span>
+          <div className="sm-lista-sugestoes">
+            {audiencia.map(a => (
+              <div key={a.ref}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{a.titulo}</div>
+                  <div className="sm-legenda">{a.motivo} · {PILAR_ROTULO[a.pilar]} · {FORMATO_ROTULO[a.formato]}</div>
+                </div>
+                {podeEditar && (
+                  <Botao disabled={!!gerando} onClick={async () => { setGerando(a.ref); try { await aoGerarAudiencia(a) } finally { setGerando(null) } }}>
+                    {gerando === a.ref ? 'Gerando…' : 'Gerar pauta'}
+                  </Botao>
+                )}
+              </div>
+            ))}
+          </div>
+          <span className="sm-mono">Do estoque</span>
+        </>
+      )}
       <p className="sm-muted" style={{ margin: 0 }}>Motos há mais tempo na loja e sem conteúdo em produção. “Gerar pauta” cria a ideia com origem Estoque.</p>
       {sugestoes.length === 0
         ? <EstadoVazio titulo="Nenhuma moto parada sem conteúdo">Quando uma moto passar de 20 dias na loja sem pauta, ela aparece aqui.</EstadoVazio>

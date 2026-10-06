@@ -23,6 +23,9 @@ const configSchema = z.object({
   maxPostsDia: z.number().int().min(1).max(10),
   maxDiasSemPost: z.number().int().min(1).max(14),
   horizonteDias: z.number().int().min(7).max(90),
+  metaLeadsSemana: z.number().int().min(0).max(1000),
+  metaRespostaMin: z.number().int().min(1).max(1440),
+  metaRetencao: z.number().int().min(1).max(100),
   mixMeta: z.object(Object.fromEntries(PILARES_MIX.map(p => [p, z.number().int().min(0).max(100)])) as Record<(typeof PILARES_MIX)[number], z.ZodNumber>)
     .refine(m => Object.values(m).reduce((s, v) => s + v, 0) === 100, 'O mix precisa somar 100%'),
 }).partial()

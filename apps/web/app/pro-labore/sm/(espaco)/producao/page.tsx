@@ -3,7 +3,7 @@
 // Tela 03 · Produção (seção 6 da especificação · Producao.html): da ideia
 // ao agendado. Quadro de 6 colunas à esquerda, briefing da pauta à direita.
 import { useCallback, useEffect, useState } from 'react'
-import { proLaboreApi, type SmColuna, type SmMoto, type SmPauta, type SmQuadro } from '@/lib/proLaboreApi'
+import { proLaboreApi, type SmColuna, type SmMoto, type SmPauta, type SmQuadro, type SmSugestaoAudiencia } from '@/lib/proLaboreApi'
 import { Botao, CardEsqueleto, EstadoVazio, IcMais, Rotulo, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { Quadro } from './Quadro'
@@ -28,6 +28,7 @@ function Producao() {
   const [selecionadaId, setSelecionadaId] = useState<string | null>(null)
   const [motos, setMotos] = useState<SmMoto[] | null>(null)
   const [sugestoes, setSugestoes] = useState<SmMoto[]>([])
+  const [audiencia, setAudiencia] = useState<SmSugestaoAudiencia[]>([])
   const [dialogo, setDialogo] = useState<'nova' | 'sugestoes' | null>(null)
   const veEstoque = pode('estoque')
 
@@ -36,10 +37,13 @@ function Producao() {
       proLaboreApi.sm.pautas.quadro(),
       veEstoque ? proLaboreApi.sm.estoque.sugestoes() : Promise.resolve([]),
       veEstoque ? proLaboreApi.sm.estoque.listar() : Promise.resolve(null),
-    ]).then(([q, sug, est]) => {
-      setQuadro(q); setSugestoes(sug); setMotos(est); setErro(null)
+      proLaboreApi.sm.sugestoesAudiencia().catch(() => []),
+    ]).then(([q, sug, est, aud]) => {
+      setQuadro(q); setSugestoes(sug); setMotos(est); setAudiencia(aud); setErro(null)
       // Vindo do calendário (ou de um aviso): ?pauta=<id> abre direto o briefing.
-      const pedida = new URLSearchParams(window.location.search).get('pauta')
+      const params = new URLSearchParams(window.location.search)
+      const pedida = params.get('pauta')
+      if (params.get('nova') === '1' && q.podeEditar) setDialogo(d => d ?? 'nova')
       setSelecionadaId(id => id && q.pautas.some(p => p.id === id) ? id
         : pedida && q.pautas.some(p => p.id === pedida) ? pedida
           : q.pautas.find(p => p.status === 'ROTEIRO')?.id ?? q.pautas.find(p => p.status !== 'PUBLICADO')?.id ?? null)
@@ -72,6 +76,18 @@ function Producao() {
     }
   }
 
+  async function gerarDaAudiencia(a: SmSugestaoAudiencia) {
+    try {
+      const p = await proLaboreApi.sm.pautas.criar({ titulo: a.titulo, pilar: a.pilar, formato: a.formato, origem: 'AUDIENCIA', origemRef: a.ref, gancho: a.gancho })
+      atualizar(p)
+      setAudiencia(l => l.filter(x => x.ref !== a.ref))
+      setSelecionadaId(p.id)
+      toast({ mensagem: `Pauta criada em Ideias: ${p.titulo}` })
+    } catch (e) {
+      toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível criar', tom: 'bad' })
+    }
+  }
+
   async function gerarDaMoto(m: SmMoto) {
     try {
       const p = await proLaboreApi.sm.pautas.criar({
@@ -100,7 +116,7 @@ function Producao() {
           <p>Clique numa pauta para abrir o briefing. {quadro?.regras.aprovacaoGestor ? 'Nada é publicado sem passar pela aprovação.' : 'A aprovação do gestor está desligada: a pauta pode ser agendada direto.'}</p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {veEstoque && <Botao onClick={() => setDialogo('sugestoes')}>Sugestões do estoque ({sugestoes.length})</Botao>}
+          {(veEstoque || audiencia.length > 0) && <Botao onClick={() => setDialogo('sugestoes')}>{veEstoque ? `Sugestões do estoque (${sugestoes.length + audiencia.length})` : `Sugestões (${audiencia.length})`}</Botao>}
           {podeEditar && <Botao variante="pri" icone={<IcMais tamanho={16} />} onClick={() => setDialogo('nova')}>Nova pauta</Botao>}
         </div>
       </header>
@@ -139,7 +155,7 @@ function Producao() {
         <NovaPauta motos={motos} aoFechar={() => setDialogo(null)} aoCriar={p => { atualizar(p); setSelecionadaId(p.id); setDialogo(null); toast({ mensagem: 'Pauta criada em Ideias.' }) }} />
       )}
       {dialogo === 'sugestoes' && (
-        <SugestoesEstoque sugestoes={sugestoes} podeEditar={podeEditar} aoFechar={() => setDialogo(null)} aoGerar={gerarDaMoto} />
+        <SugestoesEstoque sugestoes={sugestoes} audiencia={audiencia} podeEditar={podeEditar} aoFechar={() => setDialogo(null)} aoGerar={gerarDaMoto} aoGerarAudiencia={gerarDaAudiencia} />
       )}
     </>
   )

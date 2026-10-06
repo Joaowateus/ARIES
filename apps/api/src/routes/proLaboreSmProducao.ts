@@ -9,6 +9,8 @@ import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { contextoSM, requireGestorSM, requireModuloSM } from '../lib/smAcesso'
 import { guardarImagem, tipoPelaAssinatura } from '../lib/armazenamento'
 import { melhoresJanelas, type JanelasResultado } from '../lib/smJanelas'
+import { listarEstoque } from '../lib/smEstoque'
+import { gerarPautasDeVendas, sugestoesDeAudiencia } from '../lib/smPautasAuto'
 import {
   CAMPOS_DE_CONTEUDO, COLUNAS, FORMATOS, ORIGENS, PILARES, checklistDaPauta, gerarCodigo, marcarAvisosLidos, notificar, pendenciasParaPublicar,
   type Ator,
@@ -25,27 +27,6 @@ const erro = (res: Response, status: number, mensagem: string, extra?: Record<st
 // ---------- Estoque leve ----------
 
 const SELECT_MOTO = { id: true, modelo: true, marca: true, ano: true, cor: true, entradaEm: true, situacao: true, saidaEm: true, observacao: true } as const
-
-export function statusEstoque(dias: number, posts: number): 'PARADA' | 'ATENCAO' | 'OK' {
-  if (dias >= 30 && posts === 0) return 'PARADA'
-  if (dias >= 20) return 'ATENCAO'
-  return 'OK'
-}
-
-async function listarEstoque(usuarioId: string, agora = new Date()) {
-  const motos = await prisma.smMotoEstoque.findMany({
-    where: { usuarioId },
-    select: { ...SELECT_MOTO, pautas: { select: { status: true } } },
-    orderBy: { entradaEm: 'asc' },
-  })
-  return motos.map(({ pautas, ...m }) => {
-    const fim = m.saidaEm ?? agora
-    const dias = Math.max(0, Math.floor((fim.getTime() - m.entradaEm.getTime()) / DIA_MS))
-    const posts = pautas.filter(p => p.status === 'PUBLICADO').length
-    const emProducao = pautas.filter(p => p.status !== 'PUBLICADO').length
-    return { ...m, diasEmEstoque: dias, posts, emProducao, status: statusEstoque(dias, posts) }
-  })
-}
 
 router.get('/sm/estoque', ...autenticado, requireModuloSM('estoque', 'LEITURA'), async (req: Request, res: Response) => {
   res.json(await listarEstoque(req.sm!.usuarioId))
@@ -100,6 +81,11 @@ router.delete('/sm/estoque/:id', ...autenticado, requireModuloSM('estoque', 'COM
   res.json({ ok: true })
 })
 
+// Sugestões a partir da demografia dos seguidores (origem Audiência).
+router.get('/sm/sugestoes/audiencia', ...autenticado, requireModuloSM('producao', 'LEITURA'), async (req: Request, res: Response) => {
+  res.json(await sugestoesDeAudiencia(req.sm!.usuarioId))
+})
+
 // ---------- Pautas ----------
 
 const INCLUDE_PAUTA = {
@@ -137,6 +123,7 @@ async function responderPauta(res: Response, usuarioId: string, id: string, stat
 
 router.get('/sm/pautas', ...autenticado, requireModuloSM('producao', 'LEITURA'), async (req: Request, res: Response) => {
   const usuarioId = req.sm!.usuarioId
+  await gerarPautasDeVendas(usuarioId)
   const desde = new Date(Date.now() - 45 * DIA_MS)
   const [pautas, janelas] = await Promise.all([
     prisma.smPauta.findMany({

@@ -219,7 +219,7 @@ function EditarRegras({ config, aoFechar, aoSalvar }: { config: SmConfigCalendar
     <label className="sm-campo">{rotulo}<input className="sm-input" type="number" min={min} max={max} value={c[k]} onChange={e => setC({ ...c, [k]: Number(e.target.value) })} required /></label>
   )
   return (
-    <Modal titulo="Regras de cadência" aoFechar={aoFechar}>
+    <Modal titulo="Regras e metas" aoFechar={aoFechar}>
       <form style={{ display: 'flex', flexDirection: 'column', gap: 12 }} onSubmit={async e => {
         e.preventDefault()
         try { await proLaboreApi.sm.calendario.salvarConfig(c); aoSalvar() } catch (err) { setErro(err instanceof Error ? err.message : 'Não foi possível salvar') }
@@ -229,6 +229,12 @@ function EditarRegras({ config, aoFechar, aoSalvar }: { config: SmConfigCalendar
           {num('maxPostsDia', 'Máximo de posts por dia', 1, 10)}
           {num('maxDiasSemPost', 'Máximo de dias seguidos sem post', 1, 14)}
           {num('horizonteDias', 'Horizonte de planejamento (dias)', 7, 90)}
+        </div>
+        <Rotulo>Metas da semana (tela Hoje)</Rotulo>
+        <div className="sm-grade-2">
+          {num('metaLeadsSemana', 'Leads orgânicos por semana', 0, 1000)}
+          {num('metaRespostaMin', 'Resposta a DMs (minutos)', 1, 1440)}
+          {num('metaRetencao', 'Retenção dos reels (%)', 1, 100)}
         </div>
         <Rotulo>Mix de pilares (meta do mês, %)</Rotulo>
         <div className="sm-grade-2">
