@@ -4,20 +4,20 @@
 
 ## Situação atual
 
-- **Etapa:** Fase 0 · Base confiável.
-- **Status:** plano aprovado em 06/10/2026. Em construção.
+- **Etapa:** Fase 0 · Base confiável concluída (0a #140, 0b #141, 0c #142, 0d).
+- **Próxima:** Fase 1 · Acesso isolado e trabalho diário, depois da conferência do gestor.
 
 ## Checklist de aceite (seção 18)
 
 ### Fase 0 · Base confiável
 - [x] Mapeamento do repositório e plano de encaixe entregues ([PLANO_DE_ENCAIXE.md](PLANO_DE_ENCAIXE.md)) · aprovado em 06/10/2026
-- [ ] Tokens, fontes e componentes base (seção 2)
+- [x] Tokens, fontes e componentes base (seção 2) (0d: tokens `--sm-*` escopados em `.sm-app`, tema escuro padrão e claro derivado com contraste ≥ 4,5:1 conferido por script; Manrope nos títulos; componentes em `app/pro-labore/sm/_ui/`: Card, Chip, Botao, Segmentado, Toggle, KpiCard, BarraProgresso, Banner, Kbd, SidebarSM, CartaoStatusConta, EstadoVazio, Esqueleto e Toast com desfazer. Catálogo para conferência em `/pro-labore/sm/componentes`, só para o dono)
 - [x] Conexão pela empresa com status, alertas e nova tentativa (0b: usuário do sistema pelo Graph do Facebook, diagnóstico, nova tentativa com backoff de 5 min a 6 h, aviso agrupado ao gestor e ao Social Media, selo no menu)
 - [x] Jobs de sincronização (conta, mídias, stories de hora em hora, webhooks) (0b: `/sm/cron/hora`, `/sm/cron/dia`, `/sm/cron/minuto` e `/sm/webhook/instagram` com assinatura verificada; os eventos ficam guardados para o Atendimento da Fase 2)
 - [x] Cache de miniaturas (0c: cópia da capa no armazenamento próprio, stories primeiro, até 1,5 MB, só imagens com assinatura conhecida; a tela usa a cópia e cai para a URL da Meta enquanto não houver)
 - [x] Marcação de lacunas de dados (0a)
 - [x] Separação orgânico, pago e total (0c: seletor Orgânico/Pago/Total na aba; o pago vem dos anúncios do Tráfego que usam o post, ligados por `effective_instagram_media_id`; chip "Impulsionado" e alcance estimado marcado com ≈)
-- [ ] Todas as correções da seção 17
+- [x] Todas as correções da seção 17 (tabela abaixo)
 
 ### Fase 1 · Acesso isolado e trabalho diário
 - [ ] Papel `social_media` com permissões aplicadas no backend
@@ -101,6 +101,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | P5 | IA pela API da Anthropic, com chave só na Vercel. Sem chave, o produto usa textos por template. | Recomendação do plano |
 | P6 | Autorização de imagem: checkbox "cliente autorizou" com foto do termo anexada à pauta de entrega. | Padrão mais simples |
 | P7 | PWA instalável com Web Push. | Recomendação do plano |
+| Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 | P8 | Armazenamento com camada própria: Vercel Blob quando houver token, senão o Postgres para imagens pequenas. Vídeo exige o Blob. | Recomendação do plano |
 | P9 | O consultor cola o código no lead e o CRM reconhece sozinho. O reconhecimento automático no WhatsApp fica para quando a Evolution for ligada. | Padrão sem dependência externa |
 | P10 | E-mail por provedor configurável (Resend). Sem chave, o convite vira link para copiar e o relatório fica na tela e no push. | Recomendação do plano |
