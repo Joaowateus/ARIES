@@ -12,6 +12,7 @@ export function setToken(token: string) {
 export function clearToken() {
   localStorage.removeItem('pro_labore_token')
   localStorage.removeItem('pro_labore_usuario')
+  definirVerComoSocialMedia(false)
 }
 
 export function getUsuario(): ProLaboreUsuario | null {
@@ -24,7 +25,19 @@ export function setUsuario(usuario: ProLaboreUsuario) {
   localStorage.setItem('pro_labore_usuario', JSON.stringify(usuario))
 }
 
-export type ProLaborePapel = 'DONO' | 'VENDEDOR' | 'SUPERVISOR'
+export type ProLaborePapel = 'DONO' | 'VENDEDOR' | 'SUPERVISOR' | 'SOCIAL_MEDIA'
+
+// "Ver como Social Media" (tela 07): o dono navega no espaço do papel com o
+// próprio token e este cabeçalho; a API aplica os mesmos filtros do papel,
+// só leitura. Fica na aba do navegador (sessionStorage), não na conta.
+const CHAVE_VER_COMO = 'pl_sm_ver_como'
+export function verComoSocialMediaAtivo(): boolean {
+  if (typeof window === 'undefined') return false
+  try { return sessionStorage.getItem(CHAVE_VER_COMO) === '1' } catch { return false }
+}
+export function definirVerComoSocialMedia(ligado: boolean) {
+  try { if (ligado) sessionStorage.setItem(CHAVE_VER_COMO, '1'); else sessionStorage.removeItem(CHAVE_VER_COMO) } catch { /* sem storage: segue sem pré-visualização */ }
+}
 
 export interface ProLaboreUsuario {
   id: string
@@ -318,6 +331,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(path.startsWith('/pro-labore/sm/') && verComoSocialMediaAtivo() ? { 'x-ver-como': 'SOCIAL_MEDIA' } : {}),
       ...(options.headers ?? {}),
     },
   })
@@ -746,6 +760,23 @@ export const proLaboreApi = {
     atualizar: (id: string, data: Partial<{ nome: string; icone: string | null; paiId: string | null }>) =>
       request<Pasta>(`/pro-labore/pastas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/pastas/${id}`, { method: 'DELETE' }),
+  },
+  sm: {
+    eu: () => request<SmEu>('/pro-labore/sm/eu'),
+    gestor: {
+      acesso: () => request<SmAcessoGestor>('/pro-labore/sm/gestor/acesso'),
+      salvarPermissoes: (data: { niveis?: Partial<Record<SmModulo, SmNivel>>; regras?: Partial<SmRegras> }) =>
+        request<{ niveis: Record<SmModulo, SmNivel>; regras: SmRegras }>('/pro-labore/sm/gestor/permissoes', { method: 'PUT', body: JSON.stringify(data) }),
+      convidar: (data: { nome: string; tratamento?: string | null; email: string }) =>
+        request<{ link: string; emailEnviado: boolean; erroEmail: string | null }>('/pro-labore/sm/gestor/convite', { method: 'POST', body: JSON.stringify(data) }),
+      definirAtivo: (ativo: boolean) => request<{ ok: boolean; status: SmStatusMembro }>('/pro-labore/sm/gestor/membro/ativo', { method: 'POST', body: JSON.stringify({ ativo }) }),
+      removerMembro: () => request<{ ok: boolean }>('/pro-labore/sm/gestor/membro', { method: 'DELETE' }),
+    },
+    convite: {
+      ver: (token: string) => request<{ nome: string; tratamento: string | null; email: string; jaTemSenha: boolean }>(`/pro-labore/sm/convite/${encodeURIComponent(token)}`),
+      aceitar: (token: string, senha: string) =>
+        request<{ token: string; usuario: ProLaboreUsuario }>(`/pro-labore/sm/convite/${encodeURIComponent(token)}`, { method: 'POST', body: JSON.stringify({ senha }) }),
+    },
   },
   mapasMentais: {
     // pastaId: undefined = sem filtro (lista tudo, uso da árvore); '' = raiz; string = dentro daquela pasta.
@@ -1633,4 +1664,52 @@ export interface AnaliseTrafego {
   diagnostico: ItemDiagnosticoTrafego[]
   auditoria: { nota: number | null; itens: CheckAuditoriaTrafego[] }
   temEstrutura: boolean
+}
+
+// ---------- Espaço do Social Media (papel isolado) ----------
+
+export const SM_MODULOS = ['analise', 'producao', 'atendimento', 'estoque', 'crm', 'vendas', 'trafego', 'financeiro', 'dashboard'] as const
+export type SmModulo = (typeof SM_MODULOS)[number]
+export type SmNivel = 'COMPLETO' | 'LEITURA' | 'SEM_ACESSO'
+export interface SmRegras { aprovacaoGestor: boolean; mostrarValores: boolean; relatorioSemanal: boolean; assistenteIA: boolean }
+export type SmStatusMembro = 'ATIVO' | 'CONVIDADO' | 'CONVITE_EXPIRADO' | 'SUSPENSO'
+
+export interface SmContaResumo {
+  usuario: string
+  nome: string | null
+  tipoConexao: string
+  status: 'ok' | 'warn' | 'bad' | 'neutro'
+  ultimaSincronizacaoEm: string | null
+  erro: string | null
+  proximaTentativaEm: string | null
+}
+
+export interface SmEu {
+  visao: 'GESTOR' | 'SOCIAL_MEDIA'
+  verComo: boolean
+  somenteLeitura: boolean
+  pessoa: { nome: string; tratamento: string | null }
+  primeiroAcesso: boolean
+  niveis: Record<SmModulo, SmNivel>
+  regras: SmRegras
+  conta: SmContaResumo | null
+  contadores: { atendimento: number }
+}
+
+export interface SmAcessoGestor {
+  niveis: Record<SmModulo, SmNivel>
+  regras: SmRegras
+  padrao: { niveis: Record<SmModulo, SmNivel>; regras: SmRegras }
+  membro: {
+    nome: string
+    tratamento: string | null
+    email: string
+    status: SmStatusMembro
+    convidadoEm: string
+    conviteExpiraEm: string | null
+    ativadoEm: string | null
+    ultimoAcessoEm: string | null
+  } | null
+  conta: SmContaResumo | null
+  emailConfigurado: boolean
 }

@@ -4,8 +4,9 @@
 
 ## Situação atual
 
-- **Etapa:** Fase 0 · Base confiável concluída (0a #140, 0b #141, 0c #142, 0d).
-- **Próxima:** Fase 1 · Acesso isolado e trabalho diário, depois da conferência do gestor.
+- **Etapa:** Fase 1 · Acesso isolado e trabalho diário (Fase 0 concluída e aprovada).
+- **Entregue:** 1a (papel, permissões, tela 07, convite, menu e cartão).
+- **Próximas:** 1b estoque, pautas e Produção · 1c Calendário · 1d Hoje e pautas automáticas.
 
 ## Checklist de aceite (seção 18)
 
@@ -20,9 +21,9 @@
 - [x] Todas as correções da seção 17 (tabela abaixo)
 
 ### Fase 1 · Acesso isolado e trabalho diário
-- [ ] Papel `social_media` com permissões aplicadas no backend
-- [ ] Tela 07 · Permissões, com convite, regras e "Ver como Social Media"
-- [ ] Menu lateral do papel e cartão da conta
+- [x] Papel `social_media` com permissões aplicadas no backend (1a: papel `SOCIAL_MEDIA` no login; um filtro único barra o token do papel em qualquer rota fora de `/pro-labore/sm/*`; nível por módulo checado em cada rota do espaço; acesso suspenso derruba a sessão na próxima ação)
+- [x] Tela 07 · Permissões, com convite, regras e "Ver como Social Media" (1a: Equipe → Acessos e permissões; convite com link de uso único válido por 7 dias; "ver como" aplica os mesmos filtros em modo só leitura. O assistente da aba entra na Fase 3, junto com as outras telas)
+- [x] Menu lateral do papel e cartão da conta (1a: Trabalho e Resultado, itens somem quando o módulo está sem acesso; cartão com status da sincronização; papel e Sair no rodapé)
 - [ ] Tela 01 · Hoje, completa
 - [ ] Tela 02 · Calendário, com arrastar, regras, mix e janelas
 - [ ] Tela 03 · Produção, com kanban, briefing, checklist, aprovação e publicação agendada pela API
@@ -101,7 +102,6 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | P5 | IA pela API da Anthropic, com chave só na Vercel. Sem chave, o produto usa textos por template. | Recomendação do plano |
 | P6 | Autorização de imagem: checkbox "cliente autorizou" com foto do termo anexada à pauta de entrega. | Padrão mais simples |
 | P7 | PWA instalável com Web Push. | Recomendação do plano |
-| Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 | P8 | Armazenamento com camada própria: Vercel Blob quando houver token, senão o Postgres para imagens pequenas. Vídeo exige o Blob. | Recomendação do plano |
 | P9 | O consultor cola o código no lead e o CRM reconhece sozinho. O reconhecimento automático no WhatsApp fica para quando a Evolution for ligada. | Padrão sem dependência externa |
 | P10 | E-mail por provedor configurável (Resend). Sem chave, o convite vira link para copiar e o relatório fica na tela e no push. | Recomendação do plano |
@@ -110,6 +110,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | P13 | Expediente configurável, padrão seg a sex das 8h às 18h, fuso America/Belem. | Padrão |
 | P14 | Manrope nos títulos só no espaço do Social Media. | Recomendação do plano |
 | P15 | Nome, tratamento e e-mail informados pelo gestor no convite (tela 07). | Padrão |
+| Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 
 ## Perguntas em aberto
 
@@ -126,3 +127,4 @@ As perguntas P1 a P15 estão na seção 4 do [plano](PLANO_DE_ENCAIXE.md#4-pergu
 - [ ] Webhook no app da Meta: Webhooks → Instagram → callback `https://<api>/pro-labore/sm/webhook/instagram`, token de verificação igual a `META_WEBHOOK_VERIFY_TOKEN`, campos comments, mentions, messages e story_insights. `META_APP_SECRET` = Chave Secreta do app.
 - [ ] Conectar pela empresa: aba Social Media → "Conectar pela empresa" → colar o token do usuário do sistema. O histórico atual é mantido.
 - [ ] Chaves na Vercel: IA, armazenamento, e-mail, VAPID, token do webhook da Meta
+- [ ] E-mail do convite: `RESEND_API_KEY` e `EMAIL_FROM` na API. Sem elas, a tela 07 mostra o link para copiar. O link usa `FRONTEND_URL` (o endereço do sistema).

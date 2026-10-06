@@ -187,11 +187,31 @@ router.post('/auth/login', async (req: Request, res: Response) => {
     return
   }
 
+  // Responsável pelo Social Media (convite da tela 07). O token só abre o
+  // espaço do papel: ver guardaPapelSocialMedia em lib/smAcesso.ts.
+  const membroSm = await prisma.smMembro.findUnique({ where: { email: email.toLowerCase() } })
+  if (membroSm?.senhaHash && membroSm.ativo && (await bcrypt.compare(senha, membroSm.senhaHash))) {
+    await prisma.smMembro.update({ where: { id: membroSm.id }, data: { ultimoAcessoEm: new Date() } })
+    const token = signProLaboreToken({ sub: membroSm.usuarioId, email: membroSm.email, nome: membroSm.nome, papel: 'SOCIAL_MEDIA', smMembroId: membroSm.id })
+    res.json({ token, usuario: { id: membroSm.id, nome: membroSm.nome, email: membroSm.email, papel: 'SOCIAL_MEDIA' } })
+    return
+  }
+
   res.status(401).json({ error: 'Email ou senha incorretos' })
 })
 
 router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const { papel, vendedorId, sub } = req.proLaboreUser!
+  const { papel, vendedorId, sub, smMembroId } = req.proLaboreUser!
+
+  if (papel === 'SOCIAL_MEDIA') {
+    const membro = await prisma.smMembro.findUnique({ where: { id: smMembroId }, select: { id: true, nome: true, email: true } })
+    if (!membro) {
+      res.status(404).json({ error: 'Acesso não encontrado' })
+      return
+    }
+    res.json({ ...membro, papel })
+    return
+  }
 
   if (papel === 'VENDEDOR' || papel === 'SUPERVISOR') {
     const vendedor = await prisma.vendedor.findUnique({
@@ -465,11 +485,12 @@ router.post('/vendedores/:id/acesso', requireProLaboreAuth, requireDono, async (
   }
 
   const { email, senha } = parse.data
-  const [emailDoDono, emailDeOutroVendedor] = await Promise.all([
+  const [emailDoDono, emailDeOutroVendedor, emailDoSocialMedia] = await Promise.all([
     prisma.proLaboreUsuario.findUnique({ where: { email } }),
     prisma.vendedor.findFirst({ where: { email, NOT: { id: atual.id } } }),
+    prisma.smMembro.findUnique({ where: { email: email.toLowerCase() } }),
   ])
-  if (emailDoDono || emailDeOutroVendedor) {
+  if (emailDoDono || emailDeOutroVendedor || emailDoSocialMedia) {
     res.status(409).json({ error: 'Este email já está em uso' })
     return
   }

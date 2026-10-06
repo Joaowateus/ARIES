@@ -941,6 +941,8 @@ model ProLaboreUsuario {
   reunioesPastas            ReuniaoPasta[]
   pagamentosComissao        PagamentoComissao[]
   smNotificacoes            SmNotificacao[]
+  smMembro                  SmMembro?
+  smPermissao               SmPermissao?
 
   @@map("pro_labore_usuarios")
 }
@@ -2317,4 +2319,47 @@ model PreferenciaProLabore {
 
   @@unique([usuarioId, pessoa])
   @@map("pro_labore_preferencias")
+}
+
+// Responsável pelo papel Social Media (seção 3.1 da especificação). Um por
+// operação: entra pelo convite da tela 07, define a própria senha e loga na
+// mesma tela do Pró-Labore. O token dele só abre as rotas /pro-labore/sm/*.
+model SmMembro {
+  id               String    @id @default(cuid())
+  usuarioId        String    @unique // conta do dono (a operação)
+  nome             String
+  tratamento       String? // como a saudação chama a pessoa
+  email            String    @unique
+  senhaHash        String?
+  ativo            Boolean   @default(true)
+  conviteHash      String?   @unique // sha256 do token do link; o token em si nunca fica no banco
+  conviteExpiraEm  DateTime?
+  convidadoEm      DateTime  @default(now())
+  ativadoEm        DateTime?
+  primeiroAcessoEm DateTime?
+  ultimoAcessoEm   DateTime?
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("pro_labore_sm_membros")
+}
+
+// O que o papel Social Media enxerga (tela 07): nível por módulo e as quatro
+// regras. `niveis` guarda só o que o gestor mudou; o resto vem do padrão da
+// seção 3.1 (lib/smAcesso.ts).
+model SmPermissao {
+  id               String   @id @default(cuid())
+  usuarioId        String   @unique
+  niveis           Json     @default("{}")
+  aprovacaoGestor  Boolean  @default(true)
+  mostrarValores   Boolean  @default(true)
+  relatorioSemanal Boolean  @default(true)
+  assistenteIA     Boolean  @default(false)
+  atualizadoEm     DateTime @default(now()) @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("pro_labore_sm_permissoes")
 }

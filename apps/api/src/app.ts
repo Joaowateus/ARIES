@@ -42,6 +42,8 @@ import proLaboreComissoesRoutes from './routes/proLaboreComissoes'
 import proLaboreSocialEmpresaRoutes from './routes/proLaboreSocialEmpresa'
 import proLaboreImagensRoutes from './routes/proLaboreImagens'
 import proLaborePreferenciasRoutes from './routes/proLaborePreferencias'
+import proLaboreSmRoutes from './routes/proLaboreSm'
+import { guardaPapelSocialMedia } from './lib/smAcesso'
 
 // Setup do Express isolado do listen() — assim o mesmo app serve tanto o
 // servidor tradicional (src/index.ts, usado localmente e em hosts sempre
@@ -166,6 +168,9 @@ app.use('/notificacoes', notificacoesRoutes)
 app.use('/calendario', calendarioRoutes)
 app.use('/relatorios', relatoriosRoutes)
 app.use('/pro-labore/auth', authLimiter)
+app.use('/pro-labore/sm/convite', authLimiter)
+// Token do papel Social Media só passa no espaço dele (antes de qualquer rota).
+app.use('/pro-labore', guardaPapelSocialMedia)
 app.use('/pro-labore', proLaboreRoutes)
 app.use('/pro-labore', proLaboreApresentacoesRoutes)
 app.use('/pro-labore', proLaboreTrafegoRoutes)
@@ -173,6 +178,7 @@ app.use('/pro-labore', proLaboreComissoesRoutes)
 app.use('/pro-labore', proLaboreSocialEmpresaRoutes)
 app.use('/pro-labore', proLaboreImagensRoutes)
 app.use('/pro-labore', proLaborePreferenciasRoutes)
+app.use('/pro-labore', proLaboreSmRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

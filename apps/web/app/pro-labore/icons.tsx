@@ -1,6 +1,6 @@
 // Ícones da navegação — mesmo estilo Feather (stroke, 24x24) já usado no
 // botão de hambúrguer/fechar da gaveta antiga, só que num só lugar agora.
-export type NavIconName = 'home' | 'kanban' | 'calendar' | 'cart' | 'users' | 'flag' | 'at' | 'chart' | 'gear' | 'chat' | 'compass' | 'mic' | 'notebook' | 'funnel'
+export type NavIconName = 'home' | 'kanban' | 'calendar' | 'cart' | 'users' | 'flag' | 'at' | 'chart' | 'gear' | 'chat' | 'compass' | 'mic' | 'notebook' | 'funnel' | 'shield'
 
 const PATHS: Record<NavIconName, React.ReactNode> = {
   home: (
@@ -53,6 +53,7 @@ const PATHS: Record<NavIconName, React.ReactNode> = {
   ),
   // Funil (aba Tráfego)
   funnel: <path d="M3 4h18l-7 8v6l-4 2v-8z" />,
+  shield: <path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z" />,
   chart: (
     <>
       <line x1="18" y1="20" x2="18" y2="10" />
