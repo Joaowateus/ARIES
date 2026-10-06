@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Social Media · Vendas por post</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0A0A0B}
+a{color:#8FB4FF}a:hover{color:#B8CEFF}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A8A93}
+.card{background:#121214;border:1px solid #232328;border-radius:14px;padding:20px;box-sizing:border-box}
+.nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:#C4C4CB;text-decoration:none;font-size:14px;font-weight:500;min-height:24px}
+.nav:hover{background:#18181B;color:#FFFFFF}
+.nav.on{background:#ECECEF;color:#0A0A0B}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;border-radius:10px;font:600 14px 'IBM Plex Sans',sans-serif;cursor:pointer;border:1px solid #2C2C32;background:#18181B;color:#EDEDEF;text-decoration:none}
+.ttl{font-family:Manrope,sans-serif;font-weight:800;color:#F4F4F6;margin:0}
+table{border-collapse:collapse;width:100%;min-width:760px}
+th{font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#8A8A93;text-align:right;padding:10px 12px;border-bottom:1px solid #232328}
+th:first-child,td:first-child{text-align:left}
+td{padding:14px 12px;border-bottom:1px solid #1E1E22;text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #0A0A0B; color: #EDEDEF; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px">
+  <aside style="flex: 1 1 232px; background: #0D0D0F; border-right: 1px solid #1E1E22; padding: 20px 14px; display: flex; flex-direction: column; gap: 22px; box-sizing: border-box">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 6px">
+      <div style="width: 36px; height: 36px; border-radius: 10px; background: #ECECEF; color: #0A0A0B; display: flex; align-items: center; justify-content: center; font-family: Manrope, sans-serif; font-weight: 800; font-size: 16px">A</div>
+      <div><div style="font-family: Manrope, sans-serif; font-weight: 800; font-size: 17px">Pró-Labore</div><div style="font-size: 12px; color: #8A8A93">Social Media · acesso isolado</div></div>
+    </div>
+    <nav aria-label="Principal" style="display: flex; flex-direction: column; gap: 2px">
+      <div class="mono" style="padding: 6px 12px">Trabalho</div>
+      <a class="nav" href="Main.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21H3z"></path></svg>Hoje</a>
+      <a class="nav" href="Calendario.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Calendário</a>
+      <a class="nav" href="Producao.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"></rect><rect x="10" y="4" width="5" height="10" rx="1.5"></rect><rect x="17" y="4" width="4" height="13" rx="1.5"></rect></svg>Produção</a>
+      <a class="nav" href="Atendimento.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>Atendimento<span class="chip" style="margin-left: auto; background: #3B82F6; color: #FFFFFF">19</span></a>
+      <div class="mono" style="padding: 14px 12px 6px">Resultado</div>
+      <a class="nav" href="Desempenho.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V11M11 20V5M17 20v-6M3 20h18"></path></svg>Desempenho</a>
+      <a class="nav on" href="Atribuicao.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle></svg>Vendas por post</a>
+    </nav>
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 12px">
+      <div class="card" style="padding: 14px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <div style="width: 34px; height: 34px; border-radius: 50%; background: #F5C518; color: #111111; display: flex; align-items: center; justify-content: center; font-family: Manrope, sans-serif; font-weight: 800; font-size: 12px">MM</div>
+          <div style="min-width: 0"><div style="font-weight: 600; font-size: 13px">@mmnegociosveiculos</div><div style="font-size: 12px; color: #8A8A93">Conta da empresa</div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6EE7B7"><span style="width: 8px; height: 8px; border-radius: 50%; background: #34D399"></span>Sincronizado há 12 min</div>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 8px"><span class="mono">Social Media</span><a href="#" style="font-size: 13px; color: #8A8A93">Sair</a></div>
+    </div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 40px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 22px">
+    <header style="display: flex; flex-direction: column; gap: 6px">
+      <span class="mono">Resultado · Vendas por post · 07/09 a 06/10</span>
+      <h1 class="ttl" style="font-size: 34px">Qual conteúdo vende moto</h1>
+      <p style="margin: 0; color: #A1A1AA; font-size: 15px">Cada post tem um código rastreado. Leads e vendas do CRM voltam para o post que os gerou.</p>
+    </header>
+    <dc-import name="Assistente" aba="atribuicao" hint-size="100%,250px"></dc-import>
+
+    <section aria-label="Resumo" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px">
+      <div class="card" style="display: flex; flex-direction: column; gap: 6px"><span class="mono">Leads orgânicos</span><div class="ttl" style="font-size: 30px">118</div></div>
+      <div class="card" style="display: flex; flex-direction: column; gap: 6px"><span class="mono">Vendas</span><div class="ttl" style="font-size: 30px">5</div></div>
+      <div class="card" style="display: flex; flex-direction: column; gap: 6px"><span class="mono">Valor negociado</span><div class="ttl" style="font-size: 30px">R$ 117,9 mil</div></div>
+      <div class="card" style="display: flex; flex-direction: column; gap: 6px"><span class="mono">Lead → venda</span><div class="ttl" style="font-size: 30px">4,2%</div></div>
+      <div class="card" style="display: flex; flex-direction: column; gap: 6px"><span class="mono">Ticket médio</span><div class="ttl" style="font-size: 30px">R$ 23,6 mil</div></div>
+    </section>
+
+    <section class="card" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; background: #0F1A2E; border-color: #22406E">
+      <div style="flex: 1 1 400px; display: flex; flex-direction: column; gap: 4px">
+        <span class="mono" style="color: #93C5FD">O que os dados dizem</span>
+        <div style="font-weight: 600; font-size: 16px">42% dos leads vieram de 3 reels de estoque: FZ25, CB 500X e MT-03</div>
+        <div style="color: #B4C6E4; font-size: 13px">Os três abrem com a moto em movimento e o nome do modelo na tela. Vale transformar em modelo de roteiro.</div>
+      </div>
+      <a class="btn" href="Producao.dc.html">Criar pautas no mesmo formato</a>
+    </section>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start">
+      <section class="card" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center">
+          <h2 class="ttl" style="font-size: 18px">Atribuição</h2>
+          <div role="group" aria-label="Agrupar por" style="display: flex; background: #0F0F11; border: 1px solid #232328; border-radius: 10px; padding: 3px">
+            <sc-for list="{{tabs}}" as="t" hint-placeholder-count="2">
+              <button class="btn" type="button" aria-pressed="{{t.on}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="overflow-x: auto">
+          <table>
+            <thead><tr><th>{{head}}</th><th>Toques no link</th><th>Conversas</th><th>Leads</th><th>Vendas</th><th>Valor negociado</th></tr></thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+                <tr><td><div style="font-weight: 600">{{r.name}}</div><div style="font-size: 12px; color: #8A8A93">{{r.sub}}</div></td><td>{{r.links}}</td><td>{{r.conv}}</td><td style="font-weight: 600">{{r.leads}}</td><td>{{r.sales}}</td><td style="{{r.revStyle}}">{{r.rev}}</td></tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+        <section class="card" style="display: flex; flex-direction: column; gap: 14px">
+          <h2 class="ttl" style="font-size: 18px">Leads por formato</h2>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span>Reels · 41 posts</span><span style="font-weight: 600">112</span></div><div style="height: 8px; border-radius: 99px; background: #232328"><div style="width: 95%; height: 8px; border-radius: 99px; background: #4C8DF6"></div></div><span style="font-size: 12px; color: #A1A1AA">2,7 leads por post</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; justify-content: space-between"><span>Carrossel · 3 posts</span><span style="font-weight: 600">6</span></div><div style="height: 8px; border-radius: 99px; background: #232328"><div style="width: 5%; height: 8px; border-radius: 99px; background: #F08A4B"></div></div><span style="font-size: 12px; color: #A1A1AA">2,0 leads por post · amostra pequena</span></div>
+        </section>
+        <section class="card" style="display: flex; flex-direction: column; gap: 10px">
+          <h2 class="ttl" style="font-size: 18px">Ciclo de venda</h2>
+          <div style="display: flex; justify-content: space-between"><span>Do primeiro contato à venda</span><span style="font-weight: 600">9 dias</span></div>
+          <div style="display: flex; justify-content: space-between"><span>Leads ainda em negociação</span><span style="font-weight: 600">31</span></div>
+          <p style="margin: 0; font-size: 12px; color: #A1A1AA">Vendas fechadas depois do período continuam sendo creditadas ao post de origem.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1870}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { by: 'post' }; }
+  renderVals() {
+    var self = this;
+    var posts = [
+      ['CB 500X: potência e liberdade','Reels · 16/09 · #P-0916-500X','14','24','16','1','R$ 39.900'],
+      ['MT-03 é na MM!','Reels · 17/09 · #P-0917-MT03','12','21','14','1','R$ 27.900'],
+      ['XRE 300 disponível na MM!','Reels · 17/09 · #P-0917-XRE','9','15','11','1','R$ 20.400'],
+      ['FZ25 Cinza 2025 é na MM!','Reels · 17/09 · #P-0917-FZC','22','29','19','1','R$ 16.900'],
+      ['Honda PCX 2020: praticidade','Reels · 18/09 · #P-0918-PCX','4','9','7','1','R$ 12.800'],
+      ['CB 250 com apenas 6.000 km','Reels · 18/09 · #P-0918-CB250','10','14','9','0','—'],
+      ['Outros 38 posts','Feed · 07/09 a 18/09','45','100','42','0','—']
+    ];
+    var canais = [
+      ['Link rastreado → WhatsApp','Bio e posts com código','116','85','46','2','R$ 56.800'],
+      ['Direct','Conversas iniciadas no Instagram','—','98','51','2','R$ 40.700'],
+      ['Comente QUERO → direct','Automação de comentário','—','29','21','1','R$ 20.400']
+    ];
+    var src = this.state.by === 'post' ? posts : canais;
+    var rows = src.map(function (r) {
+      return { name: r[0], sub: r[1], links: r[2], conv: r[3], leads: r[4], sales: r[5], rev: r[6], revStyle: r[6] === '—' ? 'color:#6B6B73' : 'color:#6EE7B7;font-weight:600' };
+    });
+    var tabs = [['post','Por post'],['canal','Por canal']].map(function (t) {
+      var on = self.state.by === t[0];
+      return { label: t[1], on: on ? 'true' : 'false', pick: function () { self.setState({ by: t[0] }); },
+        style: 'min-height:38px;border:0;' + (on ? 'background:#ECECEF;color:#0A0A0B' : 'background:transparent') };
+    });
+    return { rows: rows, tabs: tabs, head: this.state.by === 'post' ? 'Post' : 'Canal' };
+  }
+}
+</script>
+</body>
+</html>

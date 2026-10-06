@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Social Media · Primeiro acesso</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0;background:#0A0A0B}
+a{color:#8FB4FF}a:hover{color:#B8CEFF}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8A8A93}
+.card{background:#121214;border:1px solid #232328;border-radius:14px;padding:20px;box-sizing:border-box}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 20px;border-radius:12px;font:600 15px 'IBM Plex Sans',sans-serif;cursor:pointer;border:1px solid #2C2C32;background:#18181B;color:#EDEDEF;text-decoration:none}
+.btn.pri{background:#ECECEF;color:#0A0A0B;border-color:#ECECEF}
+.ttl{font-family:Manrope,sans-serif;font-weight:800;color:#F4F4F6;margin:0}
+.opt{all:unset;box-sizing:border-box;min-height:48px;padding:0 18px;border-radius:12px;cursor:pointer;font:600 15px 'IBM Plex Sans',sans-serif;display:inline-flex;align-items:center}
+.opt:focus-visible,.btn:focus-visible{outline:2px solid #8FB4FF;outline-offset:2px}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; background: #0A0A0B; color: #EDEDEF; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px">
+  <aside style="flex: 1 1 300px; background: #0D0D0F; border-right: 1px solid #1E1E22; padding: 40px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 32px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <div style="width: 36px; height: 36px; border-radius: 10px; background: #ECECEF; color: #0A0A0B; display: flex; align-items: center; justify-content: center; font-family: Manrope, sans-serif; font-weight: 800; font-size: 16px">A</div>
+      <div style="font-family: Manrope, sans-serif; font-weight: 800; font-size: 17px">Pró-Labore</div>
+    </div>
+    <ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+        <li style="display: flex; gap: 14px; align-items: center; padding: 10px 0">
+          <span style="{{s.dot}}">{{s.mark}}</span>
+          <span style="{{s.txt}}">{{s.label}}</span>
+        </li>
+      </sc-for>
+    </ol>
+    <p style="margin-top: auto; margin-bottom: 0; font-size: 13px; color: #8A8A93; line-height: 1.5">Leva menos de 3 minutos. Dá para mudar tudo depois em Preferências.</p>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 64px 72px; box-sizing: border-box; display: flex; flex-direction: column; gap: 32px; max-width: 980px">
+    <sc-if value="{{s0}}" hint-placeholder-val="{{true}}">
+      <div style="display: flex; flex-direction: column; gap: 28px">
+        <span class="mono">Primeiro acesso</span>
+        <h1 class="ttl" style="font-size: 48px; line-height: 1.1">Este é o seu espaço de trabalho na MM.</h1>
+        <p style="margin: 0; font-size: 18px; color: #A1A1AA; line-height: 1.55; max-width: 640px">Aqui você planeja, produz, atende e mostra quanto o Instagram vende. Tudo num lugar só, sem planilha paralela.</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px">
+          <div class="card" style="display: flex; flex-direction: column; gap: 8px"><span class="mono" style="color: #93C5FD">Todo dia</span><div style="font-weight: 600">Um ritual de 15 minutos</div><div style="font-size: 13px; color: #A1A1AA">O sistema monta sua fila: responder, aprovar, publicar.</div></div>
+          <div class="card" style="display: flex; flex-direction: column; gap: 8px"><span class="mono" style="color: #93C5FD">Toda semana</span><div style="font-weight: 600">Sua retrospectiva pronta</div><div style="font-size: 13px; color: #A1A1AA">O que funcionou, o que vendeu e o que testar a seguir.</div></div>
+          <div class="card" style="display: flex; flex-direction: column; gap: 8px"><span class="mono" style="color: #93C5FD">Sempre</span><div style="font-weight: 600">Seu trabalho vira venda visível</div><div style="font-size: 13px; color: #A1A1AA">Cada lead e cada moto vendida voltam para o post que os trouxe.</div></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{s1}}" hint-placeholder-val="{{false}}">
+      <div style="display: flex; flex-direction: column; gap: 28px">
+        <span class="mono">Passo 2 · Seu ponto de partida</span>
+        <h1 class="ttl" style="font-size: 40px; line-height: 1.15">A conta hoje, sem filtro.</h1>
+        <p style="margin: 0; font-size: 17px; color: #A1A1AA; max-width: 640px">É daqui que medimos sua evolução. Nada aqui é cobrança: é a linha de base.</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px">
+          <div class="card"><div class="ttl" style="font-size: 32px">10.297</div><div style="color: #A1A1AA; font-size: 13px">seguidores</div></div>
+          <div class="card"><div class="ttl" style="font-size: 32px">118</div><div style="color: #A1A1AA; font-size: 13px">leads orgânicos em 30 dias</div></div>
+          <div class="card"><div class="ttl" style="font-size: 32px">5</div><div style="color: #A1A1AA; font-size: 13px">vendas vindas do Instagram</div></div>
+          <div class="card" style="border-color: #5A4316"><div class="ttl" style="font-size: 32px; color: #FCD58A">18 dias</div><div style="color: #A1A1AA; font-size: 13px">sem post no feed: sua primeira vitória é zerar isso</div></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{s2}}" hint-placeholder-val="{{false}}">
+      <div style="display: flex; flex-direction: column; gap: 28px">
+        <span class="mono">Passo 3 · Metas da semana</span>
+        <h1 class="ttl" style="font-size: 40px; line-height: 1.15">Combine o que é possível. Depois a gente sobe.</h1>
+        <sc-for list="{{goals}}" as="g" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <div style="font-weight: 600">{{g.label}}</div>
+            <div role="group" aria-label="{{g.label}}" style="display: flex; gap: 8px; flex-wrap: wrap">
+              <sc-for list="{{g.opts}}" as="o" hint-placeholder-count="3">
+                <button class="opt" type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+        <p style="margin: 0; font-size: 13px; color: #8A8A93">Sugestão do sistema com base nos últimos 90 dias. O gestor vê e pode ajustar.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{s3}}" hint-placeholder-val="{{false}}">
+      <div style="display: flex; flex-direction: column; gap: 28px">
+        <span class="mono">Passo 4 · Seu ritmo</span>
+        <h1 class="ttl" style="font-size: 40px; line-height: 1.15">Três rituais. Nada além disso.</h1>
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div class="card" style="display: flex; gap: 18px; align-items: center"><div class="ttl" style="font-size: 22px; width: 90px">9h00</div><div><div style="font-weight: 600">Modo foco diário · 15 min</div><div style="font-size: 13px; color: #A1A1AA">Uma tarefa por vez, na ordem certa.</div></div></div>
+          <div class="card" style="display: flex; gap: 18px; align-items: center"><div class="ttl" style="font-size: 22px; width: 90px">Sex</div><div><div style="font-weight: 600">Retrospectiva da semana · 5 min</div><div style="font-size: 13px; color: #A1A1AA">Pronta automaticamente, com um botão para enviar ao gestor.</div></div></div>
+          <div class="card" style="display: flex; gap: 18px; align-items: center"><div class="ttl" style="font-size: 22px; width: 90px">Dia 25</div><div><div style="font-weight: 600">Planejamento do mês seguinte · 40 min</div><div style="font-size: 13px; color: #A1A1AA">Calendário pré-montado com estoque e datas comerciais.</div></div></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <span class="mono">Avisar no</span>
+          <div style="display: flex; gap: 18px; flex-wrap: wrap">
+            <label style="display: flex; gap: 8px; align-items: center; min-height: 44px"><input type="checkbox" checked="checked"> WhatsApp</label>
+            <label style="display: flex; gap: 8px; align-items: center; min-height: 44px"><input type="checkbox" checked="checked"> Celular (app)</label>
+            <label style="display: flex; gap: 8px; align-items: center; min-height: 44px"><input type="checkbox"> E-mail</label>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="display: flex; gap: 12px; align-items: center; margin-top: 8px">
+      <sc-if value="{{canBack}}" hint-placeholder-val="{{false}}"><button class="btn" type="button" onClick="{{back}}">Voltar</button></sc-if>
+      <sc-if value="{{notLast}}" hint-placeholder-val="{{true}}"><button class="btn pri" type="button" onClick="{{next}}">{{nextLabel}}</button></sc-if>
+      <sc-if value="{{s3}}" hint-placeholder-val="{{false}}"><a class="btn pri" href="Main.dc.html">Começar meu primeiro dia</a></sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { step: 0, g: [2, 0, 1] }; }
+  renderVals() {
+    var self = this, st = this.state.step;
+    var steps = ['Boas-vindas', 'Ponto de partida', 'Metas da semana', 'Seu ritmo'].map(function (l, i) {
+      var done = i < st, cur = i === st;
+      return {
+        label: l, mark: done ? '✓' : String(i + 1),
+        dot: 'width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 13px Manrope,sans-serif;flex:none;' + (cur ? 'background:#ECECEF;color:#0A0A0B' : (done ? 'background:#0F2A20;color:#6EE7B7' : 'background:#1A1A1E;color:#8A8A93')),
+        txt: 'font-weight:' + (cur ? '600' : '500') + ';color:' + (cur ? '#F4F4F6' : '#A1A1AA')
+      };
+    });
+    var defs = [
+      ['Dias com post por semana', ['3 dias', '4 dias', '5 dias']],
+      ['Tempo máximo para responder uma DM', ['15 min', '30 min', '1 hora']],
+      ['Leads orgânicos por semana', ['20', '30', '40']]
+    ];
+    var goals = defs.map(function (d, gi) {
+      return { label: d[0], opts: d[1].map(function (o, oi) {
+        var on = self.state.g[gi] === oi;
+        return { label: o, on: on ? 'true' : 'false',
+          style: on ? 'background:#ECECEF;color:#0A0A0B' : 'background:#18181B;color:#EDEDEF;box-shadow:inset 0 0 0 1px #2C2C32',
+          pick: function () { var g = self.state.g.slice(); g[gi] = oi; self.setState({ g: g }); } };
+      }) };
+    });
+    return {
+      steps: steps, goals: goals,
+      s0: st === 0, s1: st === 1, s2: st === 2, s3: st === 3,
+      canBack: st > 0, notLast: st < 3,
+      nextLabel: st === 0 ? 'Começar' : 'Continuar',
+      next: function () { self.setState({ step: Math.min(3, st + 1) }); },
+      back: function () { self.setState({ step: Math.max(0, st - 1) }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

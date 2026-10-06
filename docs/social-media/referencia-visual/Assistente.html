@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Assistente da aba</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<section aria-label="Assistente" style="width: 100%; box-sizing: border-box; background: #101013; border: 1px solid #2A2A30; border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #EDEDEF; font-size: 14px">
+  <div style="display: flex; gap: 12px; align-items: flex-start">
+    <div style="width: 34px; height: 34px; border-radius: 10px; background: #ECECEF; color: #0A0A0B; display: flex; align-items: center; justify-content: center; font: 800 14px Manrope, sans-serif; flex: none">A</div>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+      <span style="font: 500 11px 'IBM Plex Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #8A8A93">{{kicker}}</span>
+      <span style="{{msgStyle}}">{{msg}}</span>
+    </div>
+    <button type="button" onClick="{{toggle}}" aria-expanded="{{expanded}}" style="min-height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid #2C2C32; background: transparent; color: #A1A1AA; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer; flex: none">{{toggleLabel}}</button>
+  </div>
+  <sc-if value="{{open}}" hint-placeholder-val="{{true}}">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px">
+      <sc-for list="{{sugs}}" as="s" hint-placeholder-count="3">
+        <div style="{{s.box}}">
+          <span style="{{s.tag}}">{{s.label}}</span>
+          <span style="line-height: 1.45; flex: 1">{{s.text}}</span>
+          <sc-if value="{{s.pending}}" hint-placeholder-val="{{true}}">
+            <button type="button" onClick="{{s.act}}" style="align-self: flex-start; min-height: 36px; padding: 0 14px; border-radius: 9px; border: 1px solid #ECECEF; background: #ECECEF; color: #0A0A0B; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer">{{s.cta}}</button>
+          </sc-if>
+          <sc-if value="{{s.done}}" hint-placeholder-val="{{false}}">
+            <span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; font-weight: 600; font-size: 13px; color: #6EE7B7"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"></path></svg>Feito · desfazer em 5s</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+      <span style="font-size: 12px; color: #8A8A93; margin-right: 2px">Pergunte:</span>
+      <sc-for list="{{asks}}" as="a" hint-placeholder-count="3">
+        <button type="button" style="min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid #2C2C32; background: #16161A; color: #C4C4CB; font: 500 13px 'IBM Plex Sans', sans-serif; cursor: pointer">{{a}}</button>
+      </sc-for>
+    </div>
+  </sc-if>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"aba":{"editor":"enum","options":["calendario","producao","atendimento","desempenho","atribuicao","permissoes"],"default":"calendario"},"nome":{"editor":"text","default":"Bia"},"$preview":{"width":1100,"height":260}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { closed: false, done: {} }; }
+  renderVals() {
+    var self = this, n = this.props.nome ?? 'Bia', aba = this.props.aba ?? 'calendario';
+    var T = function (bg, fg) { return 'align-self:flex-start;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:' + bg + ';color:' + fg; };
+    var TAG = { urg: T('#2B1414', '#FCA5A5'), att: T('#2A2110', '#FCD58A'), post: T('#13213A', '#93C5FD'), ok: T('#0F2A20', '#6EE7B7'), learn: T('#221A3A', '#C4B5FD') };
+    var D = {
+      calendario: ['Assistente · Calendário', n + ', outubro está 72% planejado. Três ajustes deixam o mês sem buracos.',
+        [['att','Rajada','16/10 tem 3 posts. Sugiro mover a FZ25 para 19/10.','Mover'],
+         ['post','Semana vazia','19 a 23/10 sem posts. Separei 4 pautas do estoque para preencher.','Ver pautas'],
+         ['learn','Mix','Educação abaixo da meta: carrossel “Consórcio ou financiamento?” em 21/10.','Agendar']],
+        ['Monte a semana de 19/10','Quais datas comerciais vêm aí?','Equilibre o mix de pilares']],
+      producao: ['Assistente · Produção', '2 pautas atrasadas e 3 esperando aprovação. Comece pela entrega da Twister: o cliente pode gravar hoje às 15h.',
+        [['urg','Atrasada','Entrega da Twister: combinar a gravação com o consultor.','Avisar consultor'],
+         ['att','Aprovação','3 pautas paradas há mais de 1 dia aguardando o gestor.','Enviar lembrete'],
+         ['learn','Gancho','O roteiro da MT-03 pode usar o “ronco da partida”, o gancho com menor pulo do mês.','Aplicar gancho']],
+        ['Escreva o roteiro da NMax','Gere 3 ganchos para a Biz','O que destravar primeiro?']],
+      atendimento: ['Assistente · Atendimento', '7 conversas esperando. A do Rafael é a mais quente: perguntou de financiamento e já disse onde mora.',
+        [['urg','2h10 sem resposta','Rafael · XRE 300. Deixei uma resposta pronta para revisar.','Responder agora'],
+         ['ok','Pronta para lead','Camila já pediu simulação com R$ 2 mil de entrada.','Enviar ao CRM'],
+         ['learn','Padrão da semana','4 pessoas perguntaram se aceitamos troca. Vale uma resposta rápida e um post sobre isso.','Criar resposta']],
+        ['Quem está mais perto de comprar?','Resuma as conversas de hoje','Sugira resposta para o @lucas.moto']],
+      desempenho: ['Assistente · Desempenho', 'A retenção subiu, mas o gancho segue sendo o gargalo: metade das pessoas pula nos 3 primeiros segundos.',
+        [['learn','Descoberta','Reels que abrem com a moto em movimento têm bem menos pulo do que os que abrem com a moto parada.','Ver comparação'],
+         ['att','Envios','0,8 envio por mil alcançados (meta 3). Teste um final “mande para quem…”.','Criar teste'],
+         ['ok','Dados confiáveis','30 de 30 dias sincronizados. As comparações deste período valem.','Ver detalhes']],
+        ['Por que o alcance caiu em setembro?','Compare orgânico e pago','Qual meu melhor horário?']],
+      atribuicao: ['Assistente · Vendas por post', 'Seu conteúdo ajudou a gerar R$ 117,9 mil em vendas no período. Três reels de estoque concentram 42% dos leads.',
+        [['ok','Repetir','O formato da FZ25 trouxe 19 leads com um só post. Vale uma pauta igual para a XRE 300.','Criar pauta igual'],
+         ['att','Em negociação','31 leads orgânicos seguem abertos no CRM. Alguns vieram de motos de ticket alto.','Ver leads'],
+         ['learn','Amostra pequena','Só 3 carrosséis no período. Mais 3 dizem se eles vendem tanto quanto os reels.','Agendar teste']],
+        ['Qual moto vende mais pelo Instagram?','Quanto vale um lead orgânico?','Monte o relatório do mês']],
+      permissoes: ['Assistente · Acessos', 'João, a ' + n + ' está com acesso desde segunda. Duas mudanças ajudam a render mais sem abrir dados sensíveis.',
+        [['ok','Motivação','Mantenha os valores em R$ das vendas atribuídas visíveis: ver a venda que o post gerou engaja.','Manter'],
+         ['att','Gargalo','3 pautas esperam sua aprovação há mais de 1 dia. Ative o aviso de aprovação no celular.','Ativar aviso'],
+         ['learn','Leitura','Liberar o gasto com impulsionamento ajuda a separar orgânico de pago nos relatórios.','Liberar']],
+        ['Como a ' + n + ' está indo?','O que foi produzido esta semana?','Ajuste as metas da semana']]
+    };
+    var d = D[aba] || D.calendario;
+    var open = !this.state.closed;
+    var sugs = d[2].map(function (s, i) {
+      var done = !!self.state.done[i];
+      return {
+        tag: TAG[s[0]], label: s[1], text: s[2], cta: s[3], done: done, pending: !done,
+        box: 'background:' + (done ? '#0E1814' : '#16161A') + ';border:1px solid ' + (done ? '#1F4A37' : '#26262B') + ';border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px',
+        act: function () { var dn = Object.assign({}, self.state.done); dn[i] = true; self.setState({ done: dn }); }
+      };
+    });
+    return {
+      kicker: d[0], msg: d[1], sugs: sugs, asks: d[3], open: open,
+      expanded: open ? 'true' : 'false', toggleLabel: open ? 'Recolher' : 'Abrir',
+      msgStyle: 'font-size:15px;line-height:1.5;color:#E4E4E7' + (open ? '' : ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis'),
+      toggle: function () { self.setState({ closed: !self.state.closed }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
