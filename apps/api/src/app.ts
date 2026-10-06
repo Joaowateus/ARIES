@@ -39,6 +39,7 @@ import proLaboreRoutes from './routes/proLabore'
 import proLaboreApresentacoesRoutes from './routes/proLaboreApresentacoes'
 import proLaboreTrafegoRoutes from './routes/proLaboreTrafego'
 import proLaboreComissoesRoutes from './routes/proLaboreComissoes'
+import proLaboreSocialEmpresaRoutes from './routes/proLaboreSocialEmpresa'
 import proLaboreImagensRoutes from './routes/proLaboreImagens'
 import proLaborePreferenciasRoutes from './routes/proLaborePreferencias'
 
@@ -110,7 +111,10 @@ const authLimiter = rateLimit({
   message: { success: false, code: 'RATE_LIMIT_AUTH', message: 'Muitas tentativas de login. Aguarde 15 minutos.' },
 })
 
-app.use(express.json({ limit: '1mb' }))
+// Guarda o corpo cru junto: o webhook da Meta assina os bytes exatos que
+// enviou (X-Hub-Signature-256), e o JSON já interpretado não serve pra
+// conferir a assinatura.
+app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { (req as unknown as { rawBody?: Buffer }).rawBody = buf } }))
 
 // Health check
 const START_TIME = Date.now()
@@ -166,6 +170,7 @@ app.use('/pro-labore', proLaboreRoutes)
 app.use('/pro-labore', proLaboreApresentacoesRoutes)
 app.use('/pro-labore', proLaboreTrafegoRoutes)
 app.use('/pro-labore', proLaboreComissoesRoutes)
+app.use('/pro-labore', proLaboreSocialEmpresaRoutes)
 app.use('/pro-labore', proLaboreImagensRoutes)
 app.use('/pro-labore', proLaborePreferenciasRoutes)
 

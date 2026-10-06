@@ -20,18 +20,9 @@ import { Audiencia } from './_componentes/Audiencia'
 import { HashtagsELegendas, Recomendacoes, ReelsEStories } from './_componentes/Conteudo'
 import { fmtNum } from './_componentes/viz'
 import { BannerQualidade, Consistencia, FunilInstagram } from './_componentes/Consistencia'
+import { AvisosSocial, ConectarEmpresa, DiagnosticoEmpresa, HistoricoSincronizacoes, StatusSincronizacao } from './_componentes/ConexaoEmpresa'
 
 type Analise = Extract<AnaliseSocialMedia, { conectado: true }>
-
-function tempoDesde(iso: string | null | undefined): string {
-  if (!iso) return 'nunca'
-  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
-  if (min < 1) return 'agora há pouco'
-  if (min < 60) return `há ${min} min`
-  const h = Math.round(min / 60)
-  if (h < 24) return `há ${h}h`
-  return `em ${new Date(iso).toLocaleDateString('pt-BR')}`
-}
 
 function Secao({ id, eyebrow, titulo, nota, children }: { id: string; eyebrow: string; titulo: string; nota?: string; children: React.ReactNode }) {
   return (
@@ -76,6 +67,10 @@ export default function ProLaboreSocialMediaPage() {
   const [erroSync, setErroSync] = useState('')
   const [resultadoSync, setResultadoSync] = useState<ResultadoSyncSocialMedia | null>(null)
   const primeiraSyncDisparada = useRef(false)
+  // Conta da empresa: formulário de conexão/troca de token e diagnóstico.
+  const [conectandoEmpresa, setConectandoEmpresa] = useState(false)
+  const [verDiagnostico, setVerDiagnostico] = useState(false)
+  const [avisoConexao, setAvisoConexao] = useState('')
 
 
   const sincronizar = useCallback(async () => {
@@ -151,9 +146,13 @@ export default function ProLaboreSocialMediaPage() {
       <PageHeader
         eyebrow="Operação"
         title="Social Media"
-        subtitle="Desempenho, conteúdo, audiência e crescimento do seu Instagram, puxados direto da conta. Cada pessoa da equipe conecta o próprio e só vê o dela."
+        subtitle={conta?.tipoConexao === 'EMPRESA'
+          ? 'Desempenho, conteúdo, audiência e crescimento do Instagram da empresa, conectado pelo Business Manager: não depende do login de ninguém.'
+          : 'Desempenho, conteúdo, audiência e crescimento do seu Instagram, puxados direto da conta. Cada pessoa da equipe conecta o próprio e só vê o dela.'}
         actions={conta && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {isDono && conta.tipoConexao === 'EMPRESA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setVerDiagnostico(v => !v)}>Diagnosticar conexão</button>}
+            {isDono && conta.tipoConexao === 'EMPRESA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setConectandoEmpresa(true)}>Trocar token</button>}
             <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar}>Desconectar</button>
             <button type="button" className="pl-btn pl-btn-primary" onClick={() => void sincronizar()} disabled={sincronizando}>
               {sincronizando ? 'Sincronizando…' : 'Sincronizar agora'}
@@ -164,11 +163,37 @@ export default function ProLaboreSocialMediaPage() {
 
       {carregando && <div className="pl-hint">Carregando…</div>}
 
+      {isDono && <AvisosSocial versao={`${conta?.ultimaSincronizacaoEm ?? ''}|${conta?.ultimoErroSync ?? ''}`} />}
+      {avisoConexao && <div className="pl-sv-aviso info" role="status"><div>{avisoConexao}</div></div>}
+
+      {isDono && !carregando && (!conta || conectandoEmpresa) && (
+        <ConectarEmpresa
+          conversao={!!conta && conta.tipoConexao !== 'EMPRESA'}
+          onCancelar={conta ? () => setConectandoEmpresa(false) : undefined}
+          onConectado={r => {
+            setConta(r.conta)
+            setConectandoEmpresa(false)
+            setAvisoConexao(r.permissoesFaltando.length
+              ? `Conectado pela empresa. Ainda faltam permissões para o Atendimento e a publicação: ${r.permissoesFaltando.join(', ')}. A leitura dos dados já funciona.`
+              : 'Conectado pela empresa, com todas as permissões.')
+          }}
+        />
+      )}
+      {isDono && conta && verDiagnostico && (
+        <DiagnosticoEmpresa onFechar={() => setVerDiagnostico(false)} onTrocarToken={() => { setVerDiagnostico(false); setConectandoEmpresa(true) }} />
+      )}
+      {isDono && conta && conta.tipoConexao !== 'EMPRESA' && !conectandoEmpresa && (
+        <div className="pl-sv-aviso info" role="note">
+          <div style={{ flex: 1 }}><b>Essa conta depende do seu login pessoal do Instagram.</b> Passe para a conexão pela empresa (usuário do sistema do Business Manager): ela não expira com o login de ninguém e é a que o acesso do Social Media vai usar. O histórico continua.</div>
+          <button type="button" className="pl-btn pl-btn-primary" onClick={() => setConectandoEmpresa(true)}>Conectar pela empresa</button>
+        </div>
+      )}
+
       {!carregando && !conta && (
         <div className="pl-card" style={{ maxWidth: 580 }}>
           <div className="pl-card-head">
             <div>
-              <div className="pl-card-title">Conectar o seu Instagram</div>
+              <div className="pl-card-title">{isDono ? 'Ou conectar com o seu login do Instagram' : 'Conectar o seu Instagram'}</div>
               <div className="pl-card-sub">Precisa ser uma conta profissional (comercial ou criador de conteúdo). O login é feito direto no Instagram — sem passar pelo Facebook. Só você vê os dados da sua conta aqui.</div>
             </div>
           </div>
@@ -243,13 +268,13 @@ export default function ProLaboreSocialMediaPage() {
               <div className="pl-sv-perfil-nome">
                 @{conta.nomeUsuario}
                 {conta.tipoConta && <span className="pl-sv-badge">{conta.tipoConta === 'MEDIA_CREATOR' ? 'Criador' : 'Comercial'}</span>}
+                {conta.tipoConexao === 'EMPRESA' && <span className="pl-sv-badge empresa" title={conta.paginaNome ? `Página ${conta.paginaNome}` : undefined}>Conta da empresa</span>}
               </div>
               {conta.nomeExibicao && <div style={{ fontSize: 13, color: 'var(--pl-ink-1)', fontWeight: 600, marginTop: 2 }}>{conta.nomeExibicao}</div>}
               {conta.biografia && <div className="pl-sv-bio">{conta.biografia}</div>}
               {conta.site && <a href={conta.site} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--sv-1)', fontWeight: 600 }}>{conta.site.replace(/^https?:\/\//, '')}</a>}
-              <div className="pl-sv-sync">
-                {sincronizando ? 'Sincronizando com o Instagram…' : `Última sincronização ${tempoDesde(conta.ultimaSincronizacaoEm)}`}
-              </div>
+              <StatusSincronizacao conta={conta} sincronizando={sincronizando} />
+              {isDono && <HistoricoSincronizacoes versao={`${conta.ultimaSincronizacaoEm ?? ''}|${conta.ultimoErroSync ?? ''}`} />}
             </div>
             <div className="pl-sv-perfil-stats">
               <div className="pl-sv-perfil-stat"><b>{fmtNum(conta.seguidores)}</b><span>Seguidores</span></div>
@@ -258,10 +283,13 @@ export default function ProLaboreSocialMediaPage() {
             </div>
           </div>
 
-          {(erroSync || conta.ultimoErroSync) && !sincronizando && (
+          {/* A falha registrada na conta já aparece no status do cartão acima;
+              aqui só o erro de um clique em "Sincronizar agora" que ainda não
+              chegou à conta. */}
+          {erroSync && erroSync !== conta.ultimoErroSync && !sincronizando && (
             <div className="pl-sv-aviso erro" role="alert">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Zm0 6v5m0 3v.5" /></svg>
-              <div><b>A última sincronização falhou.</b> {erroSync || conta.ultimoErroSync} Os números abaixo são da última sincronização bem-sucedida.</div>
+              <div><b>A última sincronização falhou.</b> {erroSync} Os números abaixo são da última sincronização bem-sucedida.</div>
             </div>
           )}
           {sincronizando && !conta.ultimaSincronizacaoEm && (

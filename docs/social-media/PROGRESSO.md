@@ -12,10 +12,10 @@
 ### Fase 0 · Base confiável
 - [x] Mapeamento do repositório e plano de encaixe entregues ([PLANO_DE_ENCAIXE.md](PLANO_DE_ENCAIXE.md)) · aprovado em 06/10/2026
 - [ ] Tokens, fontes e componentes base (seção 2)
-- [ ] Conexão pela empresa com status, alertas e nova tentativa
-- [ ] Jobs de sincronização (conta, mídias, stories de hora em hora, webhooks)
+- [x] Conexão pela empresa com status, alertas e nova tentativa (0b: usuário do sistema pelo Graph do Facebook, diagnóstico, nova tentativa com backoff de 5 min a 6 h, aviso agrupado ao gestor e ao Social Media, selo no menu)
+- [x] Jobs de sincronização (conta, mídias, stories de hora em hora, webhooks) (0b: `/sm/cron/hora`, `/sm/cron/dia`, `/sm/cron/minuto` e `/sm/webhook/instagram` com assinatura verificada; os eventos ficam guardados para o Atendimento da Fase 2)
 - [ ] Cache de miniaturas
-- [ ] Marcação de lacunas de dados
+- [x] Marcação de lacunas de dados (0a)
 - [ ] Separação orgânico, pago e total
 - [ ] Todas as correções da seção 17
 
@@ -75,7 +75,7 @@
 
 | # | Correção | Status |
 |---|---|---|
-| 1 | "API access blocked": conexão pela empresa, alertas e nova tentativa | Fase 0b |
+| 1 | "API access blocked": conexão pela empresa, alertas e nova tentativa | Feito (0b): conexão pelo usuário do sistema, diagnóstico que aponta a causa, nova tentativa automática e aviso |
 | 2 | Sincronização congelada sem aviso | Feito (0a): banner de qualidade dos dados, dias sem sincronizar marcados (`sincronizado`), tendências avisam ou somem com mais de 20% de lacunas. A sincronização também passou a buscar os dias que ficaram para trás (antes, uma pausa virava buraco permanente). |
 | 3 | Meta de frequência contraditória | Feito (0a): card "Dias com post" e cadência numa leitura só, com o maior intervalo calculado junto |
 | 4 | Funil errado | Feito (0a): funil alcance único → visitas → conversas → leads → vendas. O alcance único vem da API (até 30 dias) e fica em cache por período. |
@@ -83,7 +83,7 @@
 | 6 | "0,0%" em valores pequenos | Feito (0a): o formatador aumenta as casas e nunca mostra 0,0% para um valor que não é zero |
 | 7 | Insights com amostra pequena como fato | Feito (0a): 5+ posts por grupo é fato, 3 ou 4 é hipótese de confiança baixa, 1 ou 2 não gera insight |
 | 8 | Miniaturas quebradas | Fase 0c |
-| 9 | Stories nunca registrados | Fase 0b (captura de hora em hora) |
+| 9 | Stories nunca registrados | Feito (0b): o job de hora em hora captura os stories no ar e as métricas deles. Depende da tarefa de hora em hora no cron-job.org. |
 | 10 | Linha do período anterior desalinhada | Conferido (0a): o gráfico já alinha por índice do dia (dia 1 com dia 1) |
 | 11 | Pago misturado com orgânico | Fase 0c |
 | 12 | "Seguidores gerados n/d" nos reels | Feito (0a): mostra o número quando a API manda; senão, "—" com dica explicando o motivo |
@@ -118,5 +118,10 @@ As perguntas P1 a P15 estão na seção 4 do [plano](PLANO_DE_ENCAIXE.md#4-pergu
 
 - [ ] Instagram da empresa ligado a uma Página no Business Manager, com usuário do sistema e token com as permissões da seção 3.2
 - [ ] App Review da Meta e app em modo Live
-- [ ] Tarefas no cron-job.org (5 min, 1 h, diária)
+- [ ] Tarefas no cron-job.org, todas `POST` com o cabeçalho `x-cron-secret: <SOCIAL_MEDIA_CRON_SECRET>`:
+  - `https://<api>/pro-labore/sm/cron/hora`, de hora em hora (substitui a tarefa antiga `/social-media/sincronizar-cron`, que continua funcionando);
+  - `https://<api>/pro-labore/sm/cron/dia`, uma vez por dia (madrugada);
+  - `https://<api>/pro-labore/sm/cron/minuto`, a cada 5 minutos.
+- [ ] Webhook no app da Meta: Webhooks → Instagram → callback `https://<api>/pro-labore/sm/webhook/instagram`, token de verificação igual a `META_WEBHOOK_VERIFY_TOKEN`, campos comments, mentions, messages e story_insights. `META_APP_SECRET` = Chave Secreta do app.
+- [ ] Conectar pela empresa: aba Social Media → "Conectar pela empresa" → colar o token do usuário do sistema. O histórico atual é mantido.
 - [ ] Chaves na Vercel: IA, armazenamento, e-mail, VAPID, token do webhook da Meta

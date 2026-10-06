@@ -7,6 +7,8 @@ import {
   MetricasRecusadas,
   MidiaInstagram,
   buscarContaInstagram,
+  buscarContaInstagramPorId,
+  comApiDaEmpresa,
   buscarDemografia,
   buscarDistribuicaoAlcance,
   buscarInsightsMidia,
@@ -50,7 +52,26 @@ export function inicioDoDiaBrasilia(dia: Date): Date {
   return new Date(dia.getTime() + OFFSET_BRASILIA_MS)
 }
 
-type ContaParaSync = { id: string; accessToken: string; tokenExpiraEm: Date }
+type ContaParaSync = {
+  id: string; usuarioId: string; accessToken: string; tokenExpiraEm: Date
+  tipoConexao: string; instagramUserId: string; nomeUsuario: string; falhasSeguidas: number
+}
+
+// MANUAL / CONEXAO: sincronização completa (botão ou conta recém-ligada).
+// HORA: conta, stories e mídias dos últimos 7 dias (cron de hora em hora —
+// stories só têm métricas enquanto estão no ar).
+// DIA: insights das mídias de 7 a 90 dias (cron diário).
+// RETENTATIVA: igual à HORA, disparada pelo backoff depois de uma falha.
+export type ModoSync = 'MANUAL' | 'CONEXAO' | 'HORA' | 'DIA' | 'RETENTATIVA'
+
+const DIAS_MIDIA_RECENTE = 7
+const DIAS_MIDIA_DIARIA = 90
+// Backoff da nova tentativa: 5 min, 10, 20, 40... até 6h.
+const BACKOFF_BASE_MS = 5 * 60 * 1000
+const BACKOFF_MAX_MS = 6 * 60 * 60 * 1000
+export function proximaTentativa(falhasSeguidas: number, agora = Date.now()): Date {
+  return new Date(agora + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, falhasSeguidas - 1)))
+}
 
 export interface ResultadoSync {
   midiasListadas: number
@@ -65,34 +86,98 @@ function mensagemAmigavel(e: unknown): string {
   return e instanceof Error ? e.message : 'Falha desconhecida ao sincronizar com o Instagram'
 }
 
-export async function sincronizarContaSocialMedia(conta: ContaParaSync): Promise<ResultadoSync> {
+// Toda sincronização fica registrada (SmSincronizacao). Na falha, a conta
+// ganha uma nova tentativa com backoff e, se for a conta da empresa, o
+// gestor e o Social Media recebem um aviso (agrupado: falhas seguidas do
+// mesmo motivo atualizam o mesmo aviso). No sucesso, o aviso de falha
+// pendente é dado como resolvido.
+export async function sincronizarContaSocialMedia(conta: ContaParaSync, modo: ModoSync = 'MANUAL'): Promise<ResultadoSync> {
+  const registro = await prisma.smSincronizacao.create({ data: { contaId: conta.id, job: modo } })
   try {
-    const resultado = await executarSync(conta)
-    await prisma.socialMediaConta.update({ where: { id: conta.id }, data: { ultimaSincronizacaoEm: new Date(), ultimoErroSync: null } })
+    const resultado = conta.tipoConexao === 'EMPRESA'
+      ? await comApiDaEmpresa(() => executarSync(conta, modo))
+      : await executarSync(conta, modo)
+    const agora = new Date()
+    await prisma.$transaction([
+      prisma.socialMediaConta.update({ where: { id: conta.id }, data: { ultimaSincronizacaoEm: agora, ultimoErroSync: null, falhasSeguidas: 0, proximaTentativaEm: null } }),
+      prisma.smSincronizacao.update({ where: { id: registro.id }, data: { status: 'SUCESSO', terminadoEm: agora, resumo: resultado as unknown as Prisma.InputJsonValue } }),
+      prisma.smNotificacao.updateMany({ where: { chave: chaveFalha(conta.id), lidaEm: null }, data: { lidaEm: agora } }),
+    ])
     return resultado
   } catch (e) {
-    await prisma.socialMediaConta.update({ where: { id: conta.id }, data: { ultimoErroSync: mensagemAmigavel(e) } }).catch(() => {})
-    throw new Error(mensagemAmigavel(e))
+    const mensagem = mensagemAmigavel(e)
+    const falhas = conta.falhasSeguidas + 1
+    const proxima = proximaTentativa(falhas)
+    await prisma.$transaction([
+      prisma.socialMediaConta.update({ where: { id: conta.id }, data: { ultimoErroSync: mensagem, falhasSeguidas: falhas, proximaTentativaEm: proxima } }),
+      prisma.smSincronizacao.update({ where: { id: registro.id }, data: { status: 'ERRO', terminadoEm: new Date(), erro: mensagem } }),
+    ]).catch(() => {})
+    if (conta.tipoConexao === 'EMPRESA') await avisarFalha(conta, mensagem, proxima).catch(() => {})
+    throw new Error(mensagem)
   }
 }
 
-async function executarSync(conta: ContaParaSync): Promise<ResultadoSync> {
+// Jobs do cron (seção 3.2 da especificação):
+// - HORA: toda conta que não está esperando uma nova tentativa;
+// - DIA: mídias de 7 a 90 dias, idem;
+// - RETENTATIVA: só as contas cuja nova tentativa já venceu.
+// As contas rodam em paralelo; cada uma tem o próprio prazo dentro dos 30s.
+export async function rodarJobSocialMedia(job: 'HORA' | 'DIA' | 'RETENTATIVA') {
+  const agora = new Date()
+  const contas = await prisma.socialMediaConta.findMany({
+    where: job === 'RETENTATIVA'
+      ? { falhasSeguidas: { gt: 0 }, proximaTentativaEm: { lte: agora } }
+      : { OR: [{ proximaTentativaEm: null }, { proximaTentativaEm: { lte: agora } }] },
+  })
+  const resultados = await Promise.allSettled(contas.map(c => sincronizarContaSocialMedia(c, job)))
+  return {
+    job,
+    total: contas.length,
+    sucesso: resultados.filter(r => r.status === 'fulfilled').length,
+    falhas: resultados.filter(r => r.status === 'rejected').length,
+  }
+}
+
+const chaveFalha = (contaId: string) => `sync-falha:${contaId}`
+
+// Um aviso por destinatário; falhas seguidas atualizam o mesmo aviso.
+async function avisarFalha(conta: ContaParaSync, mensagem: string, proxima: Date) {
+  const hora = proxima.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Belem' })
+  const titulo = `Falha na sincronização do @${conta.nomeUsuario}`
+  const texto = `${mensagem} Nova tentativa automática às ${hora}.`
+  for (const destinatario of ['GESTOR', 'SOCIAL_MEDIA'] as const) {
+    const aberta = await prisma.smNotificacao.findFirst({ where: { usuarioId: conta.usuarioId, destinatario, chave: chaveFalha(conta.id), lidaEm: null } })
+    if (aberta) {
+      await prisma.smNotificacao.update({ where: { id: aberta.id }, data: { texto, ocorrencias: { increment: 1 } } })
+    } else {
+      await prisma.smNotificacao.create({
+        data: { usuarioId: conta.usuarioId, destinatario, tipo: 'SYNC_FALHA', chave: chaveFalha(conta.id), titulo, texto, payload: { contaId: conta.id } },
+      })
+    }
+  }
+}
+
+async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<ResultadoSync> {
+  const empresa = conta.tipoConexao === 'EMPRESA'
   const prazo = Date.now() + PRAZO_BUSCA_MS
-  // `me` resolve pro ID profissional do próprio dono do token — evita
-  // depender de qual dos dois IDs da conta (app-scoped x profissional) foi
-  // gravado no momento da conexão.
-  const ig = 'me'
+  // Login do Instagram: `me` resolve pro ID profissional do próprio dono do
+  // token — evita depender de qual dos dois IDs da conta (app-scoped x
+  // profissional) foi gravado na conexão. Conta da empresa (Graph do
+  // Facebook): o token é do usuário do sistema, então vai o ID da conta.
+  const ig = empresa ? conta.instagramUserId : 'me'
   const recusadas: MetricasRecusadas = new Set()
 
   let accessToken = conta.accessToken
+  // Token do usuário do sistema não expira (ou é trocado à mão pelo gestor);
+  // o renovável é o do login do Instagram.
   const diasParaExpirar = (conta.tokenExpiraEm.getTime() - Date.now()) / DIA_MS
-  if (diasParaExpirar < 10) {
+  if (!empresa && diasParaExpirar < 10) {
     const renovado = await renovarTokenLongo(accessToken)
     accessToken = renovado.accessToken
     await prisma.socialMediaConta.update({ where: { id: conta.id }, data: { accessToken: renovado.accessToken, tokenExpiraEm: renovado.expiraEm } })
   }
 
-  const infoConta = await buscarContaInstagram(accessToken)
+  const infoConta = empresa ? await buscarContaInstagramPorId(ig, accessToken) : await buscarContaInstagram(accessToken)
 
   const hoje = diaBrasilia(new Date())
   const [existentesMidia, snapshotsRecentes] = await Promise.all([
@@ -133,11 +218,20 @@ async function executarSync(conta: ContaParaSync): Promise<ResultadoSync> {
   // Ordem de prioridade: posts que nunca tiveram insight, depois stories
   // (somem em 24h), depois recentes, depois os antigos vencidos.
   const agora = Date.now()
+  // Modo HORA (e retentativa): só stories, mídias sem insight e as dos
+  // últimos 7 dias. Modo DIA: as de 7 a 90 dias, as mais desatualizadas
+  // primeiro. MANUAL/CONEXAO: tudo, na ordem acima.
+  const idade = (m: MidiaInstagram) => agora - m.publicadoEm.getTime()
   const prioridade = (m: MidiaInstagram): number => {
     const existente = existentePorId.get(m.instagramMediaId)
+    if (modo === 'DIA') {
+      if (m.formato === 'STORY' || idade(m) < DIAS_MIDIA_RECENTE * DIA_MS || idade(m) > DIAS_MIDIA_DIARIA * DIA_MS) return -1
+      return existente?.insightsAtualizadoEm ? 1 : 0
+    }
     if (!existente?.insightsAtualizadoEm) return 0
     if (m.formato === 'STORY') return 1
-    if (agora - m.publicadoEm.getTime() < DIAS_POST_RECENTE * DIA_MS) return 2
+    if (modo === 'HORA' || modo === 'RETENTATIVA') return idade(m) < DIAS_MIDIA_RECENTE * DIA_MS ? 2 : -1
+    if (idade(m) < DIAS_POST_RECENTE * DIA_MS) return 2
     if (agora - existente.insightsAtualizadoEm.getTime() > DIAS_REVALIDAR_POST_ANTIGO * DIA_MS) return 3
     return -1
   }
