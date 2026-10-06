@@ -4,13 +4,13 @@
 
 ## Situação atual
 
-- **Etapa:** passos 1 e 2 do prompt (leitura completa e plano de encaixe).
-- **Status:** plano entregue em [PLANO_DE_ENCAIXE.md](PLANO_DE_ENCAIXE.md). **Aguardando a aprovação do João e as respostas das perguntas P1 a P15** antes de escrever código.
+- **Etapa:** Fase 0 · Base confiável.
+- **Status:** plano aprovado em 06/10/2026. Em construção.
 
 ## Checklist de aceite (seção 18)
 
 ### Fase 0 · Base confiável
-- [x] Mapeamento do repositório e plano de encaixe entregues ([PLANO_DE_ENCAIXE.md](PLANO_DE_ENCAIXE.md)) · aguardando aprovação
+- [x] Mapeamento do repositório e plano de encaixe entregues ([PLANO_DE_ENCAIXE.md](PLANO_DE_ENCAIXE.md)) · aprovado em 06/10/2026
 - [ ] Tokens, fontes e componentes base (seção 2)
 - [ ] Conexão pela empresa com status, alertas e nova tentativa
 - [ ] Jobs de sincronização (conta, mídias, stories de hora em hora, webhooks)
@@ -71,11 +71,44 @@
 - [ ] Percorrer este documento seção por seção e confirmar cada regra
 - [ ] Listar para o João tudo que ficou marcado como [CONFIRMAR COM O JOÃO] e o que foi decidido
 
+## Seção 17 · Correções da aba atual
+
+| # | Correção | Status |
+|---|---|---|
+| 1 | "API access blocked": conexão pela empresa, alertas e nova tentativa | Fase 0b |
+| 2 | Sincronização congelada sem aviso | Feito (0a): banner de qualidade dos dados, dias sem sincronizar marcados (`sincronizado`), tendências avisam ou somem com mais de 20% de lacunas. A sincronização também passou a buscar os dias que ficaram para trás (antes, uma pausa virava buraco permanente). |
+| 3 | Meta de frequência contraditória | Feito (0a): card "Dias com post" e cadência numa leitura só, com o maior intervalo calculado junto |
+| 4 | Funil errado | Feito (0a): funil alcance único → visitas → conversas → leads → vendas. O alcance único vem da API (até 30 dias) e fica em cache por período. |
+| 5 | Interações divergentes | Feito (0a): a composição usa a mesma fonte do card e mostra a diferença como "Outras" |
+| 6 | "0,0%" em valores pequenos | Feito (0a): o formatador aumenta as casas e nunca mostra 0,0% para um valor que não é zero |
+| 7 | Insights com amostra pequena como fato | Feito (0a): 5+ posts por grupo é fato, 3 ou 4 é hipótese de confiança baixa, 1 ou 2 não gera insight |
+| 8 | Miniaturas quebradas | Fase 0c |
+| 9 | Stories nunca registrados | Fase 0b (captura de hora em hora) |
+| 10 | Linha do período anterior desalinhada | Conferido (0a): o gráfico já alinha por índice do dia (dia 1 com dia 1) |
+| 11 | Pago misturado com orgânico | Fase 0c |
+| 12 | "Seguidores gerados n/d" nos reels | Feito (0a): mostra o número quando a API manda; senão, "—" com dica explicando o motivo |
+
 ## Decisões tomadas
 
-| Data | Decisão | Origem |
+Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a recomendação do plano. Todas podem ser trocadas depois.
+
+| # | Decisão (padrão adotado) | Origem |
 |---|---|---|
-| — | (aguardando as respostas do plano) | — |
+| P1 | Mesmo app da Meta e mesmo usuário do sistema do Tráfego, com as permissões do Instagram acrescentadas. | Recomendação do plano |
+| P2 | Contas pessoais continuam no fluxo atual (login do Instagram), separadas da conta da empresa. | Padrão seguro |
+| P3 | Estoque leve dentro do Pró-Labore (`SmMotoEstoque`): modelo, ano, cor, entrada e situação, mantido pelo gestor, sem custo nem margem. Dá para ligar ao ARIES principal depois. | Padrão sem dependência externa |
+| P4 | Rodízio: consultores ativos com login, em ordem fixa, guardando o último atendido. Vale para os leads do Social Media. | Recomendação do plano |
+| P5 | IA pela API da Anthropic, com chave só na Vercel. Sem chave, o produto usa textos por template. | Recomendação do plano |
+| P6 | Autorização de imagem: checkbox "cliente autorizou" com foto do termo anexada à pauta de entrega. | Padrão mais simples |
+| P7 | PWA instalável com Web Push. | Recomendação do plano |
+| P8 | Armazenamento com camada própria: Vercel Blob quando houver token, senão o Postgres para imagens pequenas. Vídeo exige o Blob. | Recomendação do plano |
+| P9 | O consultor cola o código no lead e o CRM reconhece sozinho. O reconhecimento automático no WhatsApp fica para quando a Evolution for ligada. | Padrão sem dependência externa |
+| P10 | E-mail por provedor configurável (Resend). Sem chave, o convite vira link para copiar e o relatório fica na tela e no push. | Recomendação do plano |
+| P11 | Avisos por push e e-mail. WhatsApp quando a Evolution estiver ativa. | Recomendação do plano |
+| P12 | Lista de concorrentes editável pelo gestor na própria tela. | Padrão sem dependência externa |
+| P13 | Expediente configurável, padrão seg a sex das 8h às 18h, fuso America/Belem. | Padrão |
+| P14 | Manrope nos títulos só no espaço do Social Media. | Recomendação do plano |
+| P15 | Nome, tratamento e e-mail informados pelo gestor no convite (tela 07). | Padrão |
 
 ## Perguntas em aberto
 

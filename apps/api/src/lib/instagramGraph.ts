@@ -507,6 +507,25 @@ export async function buscarDistribuicaoAlcance(igUserId: string, accessToken: s
   }
 }
 
+// Alcance único (contas distintas) num intervalo — o número que o Instagram
+// mostra como "contas alcançadas" no período, que NÃO é a soma do alcance
+// diário (a mesma pessoa conta uma vez só). A API só calcula pra janelas de
+// até 30 dias; acima disso devolve null e a tela explica o motivo.
+export const MAX_DIAS_ALCANCE_UNICO = 30
+export async function buscarAlcanceUnicoPeriodo(igUserId: string, accessToken: string, desde: Date, ate: Date): Promise<number | null> {
+  if (ate.getTime() - desde.getTime() > MAX_DIAS_ALCANCE_UNICO * DIA_MS) return null
+  const body = await chamarGraphApi<{ data: ItemInsight[] }>(`/${igUserId}/insights`, {
+    metric: 'reach',
+    period: 'day',
+    metric_type: 'total_value',
+    since: String(Math.floor(desde.getTime() / 1000)),
+    until: String(Math.floor(ate.getTime() / 1000)),
+    access_token: accessToken,
+  })
+  const valor = body.data[0]?.total_value?.value
+  return typeof valor === 'number' ? valor : null
+}
+
 // Média de seguidores online por hora (0..23) nos últimos dias que a API
 // devolver (até 30). Null quando a métrica não está disponível.
 export async function buscarSeguidoresOnlinePorHora(igUserId: string, accessToken: string): Promise<number[] | null> {

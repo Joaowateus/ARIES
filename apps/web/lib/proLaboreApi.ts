@@ -958,6 +958,9 @@ export interface RecomendacaoSocial {
   tipo: 'destaque' | 'oportunidade' | 'alerta' | 'info'
   titulo: string
   detalhe: string
+  // "hipotese" = comparação com 3 ou 4 posts no menor grupo (não é fato).
+  confianca: 'alta' | 'media' | 'baixa' | 'hipotese'
+  amostra: number | null
 }
 
 export type AnaliseSocialMedia =
@@ -992,6 +995,7 @@ export type AnaliseSocialMedia =
         taxaEngajamento: KpiComparadoSocial
         alcanceMedioPost: KpiComparadoSocial
         publicacoes: { atual: number; anterior: number; meta: number; metaSemanal: number }
+        diasComPost: { atual: number; anterior: number; meta: number; metaSemanal: number; maiorIntervalo: number }
         stories: { atual: number }
       }
       serie: PontoSerieSocial[]
@@ -999,6 +1003,9 @@ export type AnaliseSocialMedia =
       composicaoInteracoes: {
         fonte: 'conta' | 'posts'
         curtidas: number; comentarios: number; compartilhamentos: number; salvamentos: number; respostas: number
+        // `total` é o mesmo número do card "Interações"; `outras` é a parte
+        // que a Meta soma no total mas não detalha (ex.: reposts).
+        total: number; outras: number; excedente: number
       }
       porFormato: Array<{ formato: FormatoPostSocial } & AgregadoPostsSocial>
       porDiaSemana: Array<{ dia: number } & AgregadoPostsSocial>
@@ -1023,7 +1030,24 @@ export type AnaliseSocialMedia =
       } | null
       seguidoresOnline: number[] | null
       relacaoVendas: { leadsGerados: number; leadsGanhos: number; valorNegociadoTotal: number }
-      jornada: { alcance: number; visitasPerfil: number; novosSeguidores: number; leadsGerados: number }
+      funil: {
+        alcanceUnico: number | null; alcanceUnicoMotivo: string | null
+        visitasPerfil: number | null
+        conversasIniciadas: number | null; conversasMotivo: string
+        leads: number; vendas: number
+      }
+      consistencia: {
+        dias: Array<{ data: string; posts: number; futuro: boolean }>
+        diasComPost: number; diasNoPeriodo: number; metaDiasSemana: number; metaDiasPeriodo: number
+        maiorIntervalo: number; diasSemPostAteHoje: number | null
+        maxDiasSemPost: number; maxPostsPorDia: number
+        pico: { data: string; posts: number } | null
+        rajadas: number
+      }
+      qualidade: {
+        diasPeriodo: number; diasSincronizados: number; diasSemDados: string[]; fracaoFaltante: number
+        storiesCapturados: number; status: 'completo' | 'lacunas' | 'grave'
+      }
       recomendacoes: RecomendacaoSocial[]
     }
 

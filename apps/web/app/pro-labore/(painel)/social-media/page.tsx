@@ -5,7 +5,6 @@ import { proLaboreApi, SocialMediaConta, AnaliseSocialMedia, ResultadoSyncSocial
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { iniciarLoginInstagram, instagramAppIdConfigurado } from '@/lib/socialMediaOAuth'
-import { SocialJourneyCircular } from './SocialJourneyCircular'
 import { PageHeader } from '../../PageHeader'
 import { FiltroPeriodo, Periodo, periodoDoPreset } from './_componentes/FiltroPeriodo'
 import { KpisSocial } from './_componentes/KpisSocial'
@@ -20,6 +19,7 @@ import { CalendarioPublicacoes, TabelaPublicacoes, TopPublicacoes } from './_com
 import { Audiencia } from './_componentes/Audiencia'
 import { HashtagsELegendas, Recomendacoes, ReelsEStories } from './_componentes/Conteudo'
 import { fmtNum } from './_componentes/viz'
+import { BannerQualidade, Consistencia, FunilInstagram } from './_componentes/Consistencia'
 
 type Analise = Extract<AnaliseSocialMedia, { conectado: true }>
 
@@ -285,12 +285,17 @@ export default function ProLaboreSocialMediaPage() {
                 onChange={setPeriodo}
                 comparacao={{ inicio: analise.periodo.anteriorInicio, fim: analise.periodo.anteriorFim }}
               />
+              <BannerQualidade qualidade={analise.qualidade} />
 
               <Secao id="sv-visao" eyebrow="Visão geral" titulo="Como a conta está indo" nota="Variações sempre comparadas com o período anterior de mesma duração">
                 <KpisSocial analise={analise} />
                 <div>
                   <div className="pl-card-sub" style={{ margin: '6px 0 10px', fontWeight: 600, color: 'var(--pl-ink-2)' }}>O que os dados dizem · próximos passos</div>
                   <Recomendacoes itens={analise.recomendacoes} />
+                </div>
+                <div className="pl-sv-grid pl-sv-grid-2-eq">
+                  <Consistencia consistencia={analise.consistencia} recarregando={recarregando} />
+                  <FunilInstagram funil={analise.funil} recarregando={recarregando} />
                 </div>
                 <div className="pl-sv-grid pl-sv-grid-2">
                   <EvolucaoDiaria serie={analise.serie} serieAnterior={analise.serieAnterior} recarregando={recarregando} />
@@ -335,21 +340,7 @@ export default function ProLaboreSocialMediaPage() {
               </Secao>
 
               <Secao id="sv-comercial" eyebrow="Resultado comercial" titulo="Do Instagram até a venda" nota="Leads com canal Orgânico no CRM, criados no período">
-                <div className="pl-sv-grid pl-sv-grid-2">
-                  <div className="pl-card">
-                    <div className="pl-card-head">
-                      <div>
-                        <div className="pl-card-title">Jornada Seguidor → Lead</div>
-                        <div className="pl-card-sub">Do alcance do conteúdo até virar lead no CRM, no período selecionado</div>
-                      </div>
-                    </div>
-                    <SocialJourneyCircular
-                      alcance={analise.jornada.alcance}
-                      visitasPerfil={analise.jornada.visitasPerfil}
-                      novosSeguidores={analise.jornada.novosSeguidores}
-                      leadsGerados={analise.jornada.leadsGerados}
-                    />
-                  </div>
+                <div className="pl-sv-grid">
                   <div className="pl-card">
                     <div className="pl-card-head">
                       <div>
@@ -361,7 +352,7 @@ export default function ProLaboreSocialMediaPage() {
                       <div className="pl-sv-mini-stat"><span>Leads gerados</span><b>{fmtNum(analise.relacaoVendas.leadsGerados)}</b></div>
                       <div className="pl-sv-mini-stat"><span>Viraram venda</span><b>{fmtNum(analise.relacaoVendas.leadsGanhos)}</b><small>{analise.relacaoVendas.leadsGerados > 0 ? `${((analise.relacaoVendas.leadsGanhos / analise.relacaoVendas.leadsGerados) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% de conversão` : '—'}</small></div>
                       <div className="pl-sv-mini-stat"><span>Valor negociado</span><b style={{ fontSize: 15 }}>{formatMoeda(analise.relacaoVendas.valorNegociadoTotal)}</b></div>
-                      <div className="pl-sv-mini-stat"><span>Lead por visita</span><b>{analise.jornada.visitasPerfil > 0 ? `${((analise.relacaoVendas.leadsGerados / analise.jornada.visitasPerfil) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</b><small>leads ÷ visitas ao perfil</small></div>
+                      <div className="pl-sv-mini-stat"><span>Lead por visita</span><b>{analise.funil.visitasPerfil ? `${((analise.relacaoVendas.leadsGerados / analise.funil.visitasPerfil) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</b><small>leads ÷ visitas ao perfil</small></div>
                     </div>
                   </div>
                 </div>

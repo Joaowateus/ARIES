@@ -21,9 +21,12 @@ const METRICAS: Array<{ chave: keyof AgregadoPostsSocial; rotulo: string; fmt: (
 export function FormatosComparativo({ porFormato, recarregando }: { porFormato: LinhaFormato[]; recarregando?: boolean }) {
   const total = porFormato.reduce((s, f) => s + f.quantidade, 0)
   const linhas = ORDEM_FORMATOS.map(f => porFormato.find(x => x.formato === f) ?? { formato: f, quantidade: 0, alcanceMedio: 0, visualizacoesMedias: 0, interacoesMedias: 0, taxaEngajamento: 0, salvamentosMedios: 0, compartilhamentosMedios: 0, seguidoresGerados: 0 })
-  // A Meta não fornece "seguidores gerados" (follows) pra reels — mostrar 0
-  // ali seria afirmar que reel não traz seguidor nenhum.
-  const indisponivel = (f: FormatoPostSocial, chave: keyof AgregadoPostsSocial) => f === 'REELS' && chave === 'seguidoresGerados'
+  // A Meta nem sempre fornece "seguidores gerados" (follows) pra reels —
+  // quando nenhum reel do período trouxe o número, mostrar 0 seria afirmar
+  // que reel não traz seguidor nenhum. Se a API passar a mandar, o valor
+  // aparece normalmente.
+  const reelsSemSeguidores = (porFormato.find(x => x.formato === 'REELS')?.seguidoresGerados ?? 0) === 0
+  const indisponivel = (f: FormatoPostSocial, chave: keyof AgregadoPostsSocial) => f === 'REELS' && chave === 'seguidoresGerados' && reelsSemSeguidores
   const maximos = Object.fromEntries(METRICAS.map(m => [m.chave, Math.max(0, ...linhas.filter(l => l.quantidade > 0 && !indisponivel(l.formato, m.chave)).map(l => l[m.chave]))]))
   const comparaveis = linhas.filter(l => l.quantidade > 0).length >= 2
 
@@ -34,7 +37,7 @@ export function FormatosComparativo({ porFormato, recarregando }: { porFormato: 
       recarregando={recarregando}
       tabela={{
         colunas: ['Formato', 'Posts', ...METRICAS.map(m => m.rotulo)],
-        linhas: linhas.map(l => [ROTULO_FORMATO[l.formato], l.quantidade, ...METRICAS.map(m => (indisponivel(l.formato, m.chave) ? 'n/d' : m.fmt(l[m.chave])))]),
+        linhas: linhas.map(l => [ROTULO_FORMATO[l.formato], l.quantidade, ...METRICAS.map(m => (indisponivel(l.formato, m.chave) ? '— (a API não informa)' : m.fmt(l[m.chave])))]),
       }}
     >
       {total === 0 ? <Vazio>Nenhuma publicação no período.</Vazio> : (
@@ -49,9 +52,9 @@ export function FormatosComparativo({ porFormato, recarregando }: { porFormato: 
               {l.quantidade === 0 ? <div className="pl-hint" style={{ fontSize: 12 }}>Nenhum {ROTULO_FORMATO[l.formato].toLowerCase()} no período.</div> : METRICAS.map(m => {
                 if (indisponivel(l.formato, m.chave)) {
                   return (
-                    <div key={m.chave} className="pl-sv-capsula-linha" title="O Instagram não fornece essa métrica pra reels">
+                    <div key={m.chave} className="pl-sv-capsula-linha" title="O Instagram não informa quantos seguidores cada reel gerou para esta conta. O número aparece aqui quando a API passar a fornecer.">
                       <span>{m.rotulo}</span>
-                      <b style={{ color: 'var(--pl-ink-muted)' }}>n/d</b>
+                      <b style={{ color: 'var(--pl-ink-muted)' }} aria-label="não informado pela API">—<span className="pl-sv-rec-conf">não informado</span></b>
                       <div className="pl-sv-capsula" aria-hidden="true" />
                     </div>
                   )
