@@ -64,12 +64,17 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const [reunioesAoVivo, setReunioesAoVivo] = useState(0)
   // Pedidos da equipe pra apresentar esperando o dono responder.
   const [pedidosReuniao, setPedidosReuniao] = useState(0)
+  // Avisos do Instagram da empresa (ex.: falha de sincronização) ainda
+  // abertos: selo no menu, visível de qualquer tela. Some sozinho quando a
+  // sincronização volta a funcionar.
+  const [avisosSocial, setAvisosSocial] = useState<string[]>([])
   useEffect(() => {
     if (!usuario) return
     let cancelado = false
     const buscar = () => {
       proLaboreApi.apresentacoes.aoVivo().then(l => { if (!cancelado) setReunioesAoVivo(l.length) }).catch(() => undefined)
       if (usuario.papel === 'DONO') proLaboreApi.apresentacoes.pendencias().then(r => { if (!cancelado) setPedidosReuniao(r.pedidos) }).catch(() => undefined)
+      if (usuario.papel === 'DONO') proLaboreApi.socialMedia.avisos().then(l => { if (!cancelado) setAvisosSocial(l.filter(a => !a.lidaEm).map(a => a.titulo)) }).catch(() => undefined)
     }
     void buscar()
     const t = setInterval(buscar, 45_000)
@@ -191,6 +196,9 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                     <span className="pl-sidebar-link-label">{item.label}</span>
                     {item.href === '/pro-labore/reunioes' && reunioesAoVivo > 0 && (
                       <span className="pl-nav-aovivo" title="Apresentação ao vivo agora"><span className="pl-ap-pulso" aria-hidden="true" />{!sidebarColapsada && 'AO VIVO'}</span>
+                    )}
+                    {item.href === '/pro-labore/social-media' && avisosSocial.length > 0 && (
+                      <span className="pl-nav-alerta" title={avisosSocial.join(' · ')} aria-label={`${avisosSocial.length} ${avisosSocial.length === 1 ? 'aviso' : 'avisos'} do Instagram`}>!</span>
                     )}
                     {item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 && pedidosReuniao > 0 && (
                       <span className="pl-nav-pedidos" title={`${pedidosReuniao} ${pedidosReuniao === 1 ? 'pedido' : 'pedidos'} da equipe pra apresentar`}>{pedidosReuniao}</span>

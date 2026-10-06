@@ -3202,3 +3202,37 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-sv-rec-conf { display: inline-block; margin-left: 6px; font-family: 'IBM Plex Sans'; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--pl-ink-muted); }
 .pl-sv-rec.hipotese { border-left-style: dashed; }
 @media (max-width: 560px) { .pl-sv-cons-numeros { grid-template-columns: 1fr; } .pl-sv-cons-cel small { display: none; } }
+
+/* ---------- Social Media: conta da empresa (status, avisos, histórico) ---------- */
+.pl-sv-status { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: var(--pl-ink-muted); }
+.pl-sv-status .ponto { width: 8px; height: 8px; border-radius: 50%; flex: none; margin-top: 6px; background: var(--pl-ink-muted); }
+.pl-sv-status.ok { color: var(--pl-good); }
+.pl-sv-status.ok .ponto { background: var(--pl-good); }
+.pl-sv-status.falha { color: var(--pl-critical); }
+.pl-sv-status.falha .ponto { background: var(--pl-critical); }
+.pl-sv-status.falha b { font-weight: 700; }
+.pl-sv-status.rodando .ponto { background: var(--sv-1); animation: pl-sv-pulso 1.2s ease-in-out infinite; }
+@keyframes pl-sv-pulso { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pl-sv-status.rodando .ponto { animation: none; } }
+.pl-sv-badge.empresa { background: color-mix(in srgb, var(--pl-good) 14%, transparent); color: var(--pl-good); border-color: color-mix(in srgb, var(--pl-good) 35%, transparent); }
+.pl-sv-empresa { max-width: 760px; margin-bottom: 16px; }
+.pl-sv-empresa-passos { margin: 0 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--pl-ink-2); }
+.pl-sv-empresa .pl-field { display: flex; flex-direction: column; gap: 6px; }
+.pl-sv-empresa .pl-field > span { font-size: 12.5px; font-weight: 600; color: var(--pl-ink-2); }
+.pl-sv-empresa-contas { border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); padding: 10px 14px; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.pl-sv-empresa-contas legend { font-size: 12.5px; font-weight: 600; color: var(--pl-ink-2); padding: 0 4px; }
+.pl-sv-empresa-contas label { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13.5px; color: var(--pl-ink-1); cursor: pointer; }
+.pl-sv-empresa-contas small { color: var(--pl-ink-muted); }
+.pl-sv-avisos { display: flex; flex-direction: column; gap: 0; }
+.pl-sv-avisos .pl-sv-aviso { align-items: center; }
+.pl-sv-historico { margin-top: 8px; font-size: 12.5px; color: var(--pl-ink-muted); }
+.pl-sv-historico summary { cursor: pointer; font-weight: 600; color: var(--pl-ink-2); width: max-content; }
+.pl-sv-historico ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-width: 620px; }
+.pl-sv-historico li { display: grid; grid-template-columns: 96px 110px 1fr; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--pl-border); }
+.pl-sv-historico li.erro span:last-child { color: var(--pl-critical); }
+.pl-sv-historico li.ok span:last-child { color: var(--pl-ink-2); }
+.pl-tf-diagcon-passos li.aviso { border-color: color-mix(in srgb, var(--pl-accent-4) 45%, var(--pl-border)); }
+.pl-tf-diagcon-passos li.aviso .icone { background: var(--pl-accent-4); }
+@media (max-width: 560px) { .pl-sv-historico li { grid-template-columns: 1fr; gap: 2px; } }
+/* Selo de aviso do Instagram da empresa no menu (ex.: falha de sincronização). */
+.pl-nav-alerta { margin-left: auto; width: 18px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; background: var(--pl-critical); color: #fff; }

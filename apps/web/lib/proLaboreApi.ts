@@ -556,6 +556,14 @@ export const proLaboreApi = {
       request<SocialMediaConta>('/pro-labore/social-media/conectar-oauth', { method: 'POST', body: JSON.stringify({ code }) }),
     desconectar: () => request<void>('/pro-labore/social-media/conta', { method: 'DELETE' }),
     sincronizar: () => request<{ conta: SocialMediaConta; resultado: ResultadoSyncSocialMedia }>('/pro-labore/social-media/sincronizar', { method: 'POST' }),
+    // Conta da empresa (usuário do sistema do Business Manager).
+    conectarEmpresa: (accessToken: string, instagramUserId?: string) =>
+      request<{ conta: SocialMediaConta; erroSync: string | null; permissoesFaltando: string[] }>('/pro-labore/social-media/conectar-empresa', { method: 'POST', body: JSON.stringify({ accessToken, instagramUserId }) }),
+    diagnosticoEmpresa: (accessToken?: string) =>
+      request<DiagnosticoSocialEmpresa>('/pro-labore/social-media/diagnostico-empresa', { method: 'POST', body: JSON.stringify(accessToken ? { accessToken } : {}) }),
+    sincronizacoes: () => request<SincronizacaoSocial[]>('/pro-labore/social-media/sincronizacoes'),
+    avisos: () => request<AvisoSocial[]>('/pro-labore/social-media/avisos'),
+    marcarAvisoLido: (id: string) => request<{ ok: boolean }>(`/pro-labore/social-media/avisos/${id}/lida`, { method: 'POST' }),
     resumo: (periodo?: { inicio: string; fim: string }) => {
       const params = new URLSearchParams()
       if (periodo) { params.set('inicio', periodo.inicio); params.set('fim', periodo.fim) }
@@ -879,6 +887,30 @@ export interface SocialMediaConta {
   tokenExpiraEm: string
   ultimaSincronizacaoEm?: string | null
   ultimoErroSync?: string | null
+  // PESSOAL = login do Instagram; EMPRESA = usuário do sistema do Business
+  // Manager (não depende do login de ninguém).
+  tipoConexao?: 'PESSOAL' | 'EMPRESA'
+  paginaNome?: string | null
+  falhasSeguidas?: number
+  proximaTentativaEm?: string | null
+}
+
+export interface ContaInstagramDaEmpresa { instagramUserId: string; nomeUsuario: string; fotoUrl?: string; paginaId: string; paginaNome: string }
+
+export interface DiagnosticoSocialEmpresa {
+  passos: Array<{ chave: string; titulo: string; nivel: 'ok' | 'aviso' | 'erro'; detalhe: string }>
+  resolver: { titulo: string; passos: string[] }
+}
+
+export interface SincronizacaoSocial {
+  id: string; job: 'MANUAL' | 'CONEXAO' | 'HORA' | 'DIA' | 'RETENTATIVA'
+  iniciadoEm: string; terminadoEm: string | null; status: 'RODANDO' | 'SUCESSO' | 'ERRO'; erro: string | null
+  resumo: { midiasListadas?: number; insightsAtualizados?: number; insightsPendentes?: number; diasAtualizados?: number } | null
+}
+
+export interface AvisoSocial {
+  id: string; tipo: string; titulo: string; texto: string; ocorrencias: number
+  criadoEm: string; atualizadoEm: string; lidaEm: string | null
 }
 
 export interface ResultadoSyncSocialMedia {

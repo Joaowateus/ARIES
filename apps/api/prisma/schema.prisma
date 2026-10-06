@@ -940,6 +940,7 @@ model ProLaboreUsuario {
   reunioesDepartamentos     ReuniaoDepartamento[]
   reunioesPastas            ReuniaoPasta[]
   pagamentosComissao        PagamentoComissao[]
+  smNotificacoes            SmNotificacao[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1472,12 +1473,25 @@ model SocialMediaConta {
   // não deixar o dono achando que os números estão atualizados quando não
   // estão. Limpa a cada sync bem-sucedido.
   ultimoErroSync        String?
+  // PESSOAL = login do Instagram de uma pessoa (graph.instagram.com).
+  // EMPRESA = conta da empresa pelo usuário do sistema do Business Manager
+  // (graph.facebook.com): não depende do login de ninguém e é a que o papel
+  // Social Media enxerga.
+  tipoConexao           String    @default("PESSOAL")
+  paginaId              String?
+  paginaNome            String?
+  // Nova tentativa com backoff exponencial depois de uma falha (5 min, 10,
+  // 20... até 6h). Zerado no primeiro sucesso.
+  falhasSeguidas        Int       @default(0)
+  proximaTentativaEm    DateTime?
 
   usuario   ProLaboreUsuario            @relation(fields: [usuarioId], references: [id])
   vendedor  Vendedor?                   @relation(fields: [vendedorId], references: [id])
   midias    SocialMediaMidia[]
   snapshots SocialMediaSnapshotDiario[]
   alcancesPeriodo SocialMediaAlcancePeriodo[]
+  sincronizacoes  SmSincronizacao[]
+  webhookEventos  SmWebhookEvento[]
 
   @@index([usuarioId])
   @@map("pro_labore_social_media_contas")
@@ -1565,6 +1579,70 @@ model SocialMediaSnapshotDiario {
 
   @@unique([contaId, data])
   @@map("pro_labore_social_media_snapshots")
+}
+
+// Registro de cada sincronização (manual, de hora em hora, diária ou nova
+// tentativa): quando, como terminou e o que fez. Base do cartão da conta
+// ("Sincronizado há X min" / "Falha na sincronização") e do histórico.
+model SmSincronizacao {
+  id          String    @id @default(cuid())
+  contaId     String
+  job         String // MANUAL | HORA | DIA | RETENTATIVA | CONEXAO
+  iniciadoEm  DateTime  @default(now())
+  terminadoEm DateTime?
+  status      String    @default("RODANDO") // RODANDO | SUCESSO | ERRO
+  erro        String?
+  resumo      Json?
+
+  conta SocialMediaConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  @@index([contaId, iniciadoEm])
+  @@map("pro_labore_sm_sincronizacoes")
+}
+
+// Evento recebido pelo webhook da Meta (comentário, menção, mensagem,
+// insights de story que expirou). Guardado como chegou; o Atendimento
+// processa em seguida e marca `processadoEm`.
+model SmWebhookEvento {
+  id           String    @id @default(cuid())
+  contaId      String?
+  objeto       String // instagram | page
+  campo        String // comments | mentions | messages | story_insights | ...
+  payload      Json
+  recebidoEm   DateTime  @default(now())
+  processadoEm DateTime?
+
+  conta SocialMediaConta? @relation(fields: [contaId], references: [id], onDelete: SetNull)
+
+  @@index([processadoEm, recebidoEm])
+  @@index([contaId, campo])
+  @@map("pro_labore_sm_webhook_eventos")
+}
+
+// Aviso para o gestor ou para o Social Media (falha de sincronização,
+// pauta para aprovar, venda creditada...). `chave` agrupa avisos repetidos
+// do mesmo assunto para não virar barulho: enquanto houver um não lido com
+// a mesma chave, o novo só atualiza o existente.
+model SmNotificacao {
+  id           String    @id @default(cuid())
+  usuarioId    String // conta do dono (a operação)
+  destinatario String // GESTOR | SOCIAL_MEDIA
+  tipo         String // SYNC_FALHA | SYNC_OK | APROVACAO | VENDA | CLIENTE_ESPERANDO | PUBLICACAO_FALHA | ...
+  chave        String
+  titulo       String
+  texto        String
+  payload      Json?
+  ocorrencias  Int       @default(1)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @default(now()) @updatedAt
+  lidaEm       DateTime?
+  enviadaEm    DateTime?
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, destinatario, lidaEm])
+  @@index([chave])
+  @@map("pro_labore_sm_notificacoes")
 }
 
 // Alcance único (contas distintas) de um período, como o Instagram calcula —

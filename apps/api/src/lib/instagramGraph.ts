@@ -10,8 +10,25 @@
 // lembra dela (pra não repetir a tentativa em todo post do mesmo sync) e
 // segue com as outras — em vez de zerar tudo por causa de uma só.
 
+import { AsyncLocalStorage } from 'async_hooks'
+
 // Sobrescrevível só pra rodar o sync local contra um servidor simulado.
 const GRAPH_BASE = process.env.INSTAGRAM_GRAPH_BASE ?? 'https://graph.instagram.com'
+// Conta da EMPRESA: a mesma API de mídia e insights, só que pelo Graph do
+// Facebook com o token do usuário do sistema do Business Manager (mesmo
+// caminho e versão do módulo Tráfego).
+const FACEBOOK_GRAPH_BASE = `${process.env.FACEBOOK_GRAPH_BASE ?? process.env.META_GRAPH_BASE ?? 'https://graph.facebook.com'}/${process.env.META_GRAPH_VERSION ?? 'v23.0'}`
+
+// Qual API as chamadas desta execução usam. O sync de uma conta da empresa
+// roda dentro de `comApiDaEmpresa(...)` e todas as funções deste arquivo
+// passam a falar com o Graph do Facebook, sem mudar a assinatura delas.
+const contextoApi = new AsyncLocalStorage<{ base: string }>()
+function baseAtual(): string {
+  return contextoApi.getStore()?.base ?? GRAPH_BASE
+}
+export function comApiDaEmpresa<T>(fn: () => Promise<T>): Promise<T> {
+  return contextoApi.run({ base: FACEBOOK_GRAPH_BASE }, fn)
+}
 
 export class ErroGraphApi extends Error {
   constructor(message: string, readonly codigo?: number) {
@@ -40,7 +57,7 @@ async function lerResposta<T>(res: Response): Promise<T> {
 
 async function chamarGraphApi<T>(caminho: string, params: Record<string, string>): Promise<T> {
   const query = new URLSearchParams(params).toString()
-  return lerResposta<T>(await fetch(`${GRAPH_BASE}${caminho}?${query}`))
+  return lerResposta<T>(await fetch(`${baseAtual()}${caminho}?${query}`))
 }
 
 // Executa `fn` em lotes paralelos de `tamanho` — a API aguenta bem umas
@@ -185,7 +202,7 @@ function mapearMidia(m: MidiaApi, formatoPadrao: string): MidiaInstagram {
 // tendência de qualquer período maior que duas semanas.
 export async function buscarMidias(igUserId: string, accessToken: string, limite = 150): Promise<MidiaInstagram[]> {
   const midias: MidiaInstagram[] = []
-  let proxima: string | null = `${GRAPH_BASE}/${igUserId}/media?${new URLSearchParams({ fields: CAMPOS_MIDIA, limit: '50', access_token: accessToken })}`
+  let proxima: string | null = `${baseAtual()}/${igUserId}/media?${new URLSearchParams({ fields: CAMPOS_MIDIA, limit: '50', access_token: accessToken })}`
   while (proxima && midias.length < limite) {
     const pagina: { data: MidiaApi[]; paging?: { next?: string } } = await lerResposta(await fetch(proxima))
     midias.push(...pagina.data.map(m => mapearMidia(m, 'FEED')))
@@ -547,5 +564,78 @@ export async function buscarSeguidoresOnlinePorHora(igUserId: string, accessToke
   } catch (e) {
     if (erroDeTokenExpirado(e)) throw e
     return null
+  }
+}
+
+// --- Conta da empresa (usuário do sistema do Business Manager) ---
+
+// Permissões que a conexão da empresa usa (seção 3.2 da especificação do
+// Social Media). As três primeiras são indispensáveis para ler a conta; as
+// outras liberam atendimento, comentários, publicação e concorrentes.
+export const PERMISSOES_EMPRESA_ESSENCIAIS = ['instagram_basic', 'instagram_manage_insights', 'pages_show_list', 'pages_read_engagement']
+export const PERMISSOES_EMPRESA_COMPLETAS = [
+  ...PERMISSOES_EMPRESA_ESSENCIAIS,
+  'instagram_manage_comments', 'instagram_manage_messages', 'instagram_content_publish', 'business_management',
+]
+
+export interface ContaInstagramDaEmpresa {
+  instagramUserId: string
+  nomeUsuario: string
+  fotoUrl?: string
+  paginaId: string
+  paginaNome: string
+}
+
+// Quem é o dono do token e quais permissões ele tem.
+export async function verificarTokenEmpresa(accessToken: string): Promise<{ id: string; nome: string; concedidas: string[] }> {
+  return comApiDaEmpresa(async () => {
+    const eu = await chamarGraphApi<{ id: string; name?: string }>('/me', { fields: 'id,name', access_token: accessToken })
+    const perms = await chamarGraphApi<{ data: Array<{ permission: string; status: string }> }>('/me/permissions', { access_token: accessToken })
+    return { id: eu.id, nome: eu.name ?? eu.id, concedidas: perms.data.filter(p => p.status === 'granted').map(p => p.permission) }
+  })
+}
+
+// Contas do Instagram ligadas às Páginas que o usuário do sistema enxerga.
+export async function listarContasInstagramDaEmpresa(accessToken: string): Promise<ContaInstagramDaEmpresa[]> {
+  return comApiDaEmpresa(async () => {
+    const body = await chamarGraphApi<{ data: Array<{ id: string; name: string; instagram_business_account?: { id: string; username?: string; profile_picture_url?: string } }> }>('/me/accounts', {
+      fields: 'id,name,instagram_business_account{id,username,profile_picture_url}',
+      limit: '100',
+      access_token: accessToken,
+    })
+    return body.data
+      .filter(p => p.instagram_business_account)
+      .map(p => ({
+        instagramUserId: p.instagram_business_account!.id,
+        nomeUsuario: p.instagram_business_account!.username ?? p.instagram_business_account!.id,
+        fotoUrl: p.instagram_business_account!.profile_picture_url,
+        paginaId: p.id,
+        paginaNome: p.name,
+      }))
+  })
+}
+
+// Mesmo retrato da conta que `buscarContaInstagram`, pelo Graph do
+// Facebook (que pede o ID da conta em vez de `/me`). Chamar dentro de
+// `comApiDaEmpresa`.
+export async function buscarContaInstagramPorId(igUserId: string, accessToken: string): Promise<ContaInstagram> {
+  const info = await chamarGraphApi<{
+    id: string; username: string; name?: string; profile_picture_url?: string; biography?: string; website?: string
+    followers_count?: number; follows_count?: number; media_count?: number
+  }>(`/${igUserId}`, {
+    fields: 'id,username,name,profile_picture_url,biography,website,followers_count,follows_count,media_count',
+    access_token: accessToken,
+  })
+  return {
+    instagramUserId: info.id,
+    nomeUsuario: info.username,
+    nomeExibicao: info.name,
+    fotoUrl: info.profile_picture_url,
+    biografia: info.biography,
+    site: info.website,
+    tipoConta: 'BUSINESS',
+    seguidores: info.followers_count ?? 0,
+    seguindo: info.follows_count ?? 0,
+    publicacoesTotal: info.media_count ?? 0,
   }
 }
