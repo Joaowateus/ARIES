@@ -951,6 +951,8 @@ model ProLaboreUsuario {
   smTestes                  SmTeste[]
   smInsightAcoes            SmInsightAcao[]
   smAssistenteEstados       SmAssistenteEstado[]
+  smIATextos                SmIATexto[]
+  smIAUsos                  SmIAUso[]
   smGanchos                 SmGancho[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
@@ -2720,4 +2722,33 @@ model SmAssistenteEstado {
 
   @@unique([usuarioId, ator, aba])
   @@map("pro_labore_sm_assistente_estados")
+}
+
+// IA (seção 16.3): texto redigido pela IA, guardado pelo hash da entrada
+// (a frase do template já com os números), para não chamar de novo à toa.
+model SmIATexto {
+  id        String   @id @default(cuid())
+  usuarioId String
+  tipo      String // FRASE
+  chave     String // hash da entrada
+  texto     String
+  criadoEm  DateTime @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, tipo, chave])
+  @@map("pro_labore_sm_ia_textos")
+}
+
+// Chamadas à IA por conta e por dia (teto de custo: SM_IA_LIMITE_DIA).
+model SmIAUso {
+  id        String @id @default(cuid())
+  usuarioId String
+  dia       String // AAAA-MM-DD em Brasília
+  chamadas  Int    @default(0)
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, dia])
+  @@map("pro_labore_sm_ia_usos")
 }

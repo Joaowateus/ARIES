@@ -10,6 +10,8 @@ import { signProLaboreToken } from '../lib/jwtProLabore'
 import { MODULOS_SM, NIVEIS_SM, NIVEIS_PADRAO, REGRAS_PADRAO, carregarPermissoes, contextoSM, niveisCompletos, requireGestorSM } from '../lib/smAcesso'
 import { emailConfigurado, enviarEmail, escaparHtml } from '../lib/email'
 import { montarHoje } from '../lib/smHoje'
+import { iaLigada } from '../lib/smIA'
+import { podeRoteiroIA } from '../lib/smPerguntas'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -77,6 +79,8 @@ router.get('/sm/eu', ...autenticado, async (req: Request, res: Response) => {
     primeiroAcesso: papel === 'SOCIAL_MEDIA' && !!membro && !membro.primeiroAcessoEm,
     niveis: sm.visao === 'GESTOR' ? Object.fromEntries(MODULOS_SM.map(m => [m, 'COMPLETO'])) : sm.permissoes.niveis,
     regras: sm.permissoes.regras,
+    // IA ligada (chave no ambiente) e ganchos/roteiros liberados para quem vê.
+    ia: { ligada: iaLigada(), roteiro: podeRoteiroIA(sm) },
     conta: resumoConta(conta),
     contadores: { atendimento: sm.pode('atendimento', 'LEITURA') ? await prisma.smConversa.count({ where: { usuarioId: sm.usuarioId, aguardandoDesde: { not: null }, status: { not: 'ARQUIVADA' } } }) : 0 },
   })

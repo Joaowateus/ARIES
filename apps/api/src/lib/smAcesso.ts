@@ -79,6 +79,8 @@ declare global {
 
 const ROTAS_PUBLICAS_SM = /^\/sm\/(cron|webhook|convite)\//
 const ROTAS_DO_GESTOR_SM = /^\/sm\/gestor(\/|$)/
+// POST que só lê: perguntar ao assistente vale também no "ver como".
+const ROTAS_POST_LEITURA_SM = /^\/sm\/assistente\/[a-z]+\/perguntar$/
 
 /**
  * Montado em app.use('/pro-labore', ...) antes de todas as rotas do
@@ -121,7 +123,7 @@ export async function contextoSM(req: Request, res: Response, next: NextFunction
   }
   const verComo = u.papel === 'DONO' && String(req.headers['x-ver-como'] ?? '').toUpperCase() === 'SOCIAL_MEDIA'
   const visao = u.papel === 'SOCIAL_MEDIA' || verComo ? 'SOCIAL_MEDIA' : 'GESTOR'
-  if (verComo && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+  if (verComo && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !ROTAS_POST_LEITURA_SM.test(req.path)) {
     res.status(403).json({ error: 'Pré-visualização do Social Media: só leitura' })
     return
   }

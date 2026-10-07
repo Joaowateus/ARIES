@@ -1,11 +1,14 @@
-// Assistente da aba (seção 16): avatar, rótulo, a frase de leitura do momento
-// e as 3 sugestões do motor de insights. A frase é montada sobre os números
-// do banco; a IA (Fase 3d) só redige por cima, nunca inventa número.
+// Assistente da aba (seção 16): avatar, rótulo, a frase de leitura do momento,
+// as 3 sugestões do motor de insights e a linha "Pergunte:". A frase é
+// montada sobre os números do banco; a IA (seção 16.3) só redige por cima,
+// com os mesmos números (fraseIA), e nunca é obrigatória.
 import { prisma } from './prisma'
 import type { ContextoSM } from './smAcesso'
 import { atorDe, insightsDaAba, textoAmostra, type Aba, type InfoAba, type Insight } from './smInsights'
+import { fraseGuardada, iaLigada, redigirFrase } from './smIA'
+import { perguntasDaAba } from './smPerguntas'
 
-const NOME_ABA: Record<Aba, string> = { calendario: 'Calendário', producao: 'Produção', atendimento: 'Atendimento', desempenho: 'Desempenho', atribuicao: 'Vendas por post', permissoes: 'Acessos' }
+export const NOME_ABA: Record<Aba, string> = { calendario: 'Calendário', producao: 'Produção', atendimento: 'Atendimento', desempenho: 'Desempenho', atribuicao: 'Vendas por post', permissoes: 'Acessos' }
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`
 const num = (v: number, c = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: c })
@@ -80,17 +83,33 @@ function frase(aba: Aba, info: InfoAba, insights: Insight[], p: Awaited<ReturnTy
   return ''
 }
 
-export async function montarAssistente(sm: ContextoSM, aba: Aba, agora = new Date()) {
+async function base(sm: ContextoSM, aba: Aba, agora: Date) {
   const info: InfoAba = {}
-  const [insights, p, estado] = await Promise.all([
-    insightsDaAba(sm, aba, agora, info),
-    pessoas(sm),
+  const [insights, p] = await Promise.all([insightsDaAba(sm, aba, agora, info), pessoas(sm)])
+  return { info, insights, frase: frase(aba, info, insights, p, sm) }
+}
+
+/** Frase do momento redigida pela IA (null: fica a do template). */
+export async function fraseDaIA(sm: ContextoSM, aba: Aba, agora = new Date()): Promise<string | null> {
+  if (!iaLigada()) return null
+  const b = await base(sm, aba, agora)
+  return redigirFrase(sm.usuarioId, aba, NOME_ABA[aba], b.frase, { numeros: b.info, sugestoes: b.insights.slice(0, 3).map(i => i.texto) })
+}
+
+export async function montarAssistente(sm: ContextoSM, aba: Aba, agora = new Date()) {
+  const [{ insights, frase: texto }, estado, perguntas] = await Promise.all([
+    base(sm, aba, agora),
     prisma.smAssistenteEstado.findUnique({ where: { usuarioId_ator_aba: { usuarioId: sm.usuarioId, ator: atorDe(sm), aba } }, select: { recolhido: true } }),
+    perguntasDaAba(sm, aba, agora),
   ])
   return {
     aba,
     rotulo: `Assistente · ${NOME_ABA[aba]}`,
-    frase: frase(aba, info, insights, p, sm),
+    frase: texto,
+    // Já redigida antes para estes mesmos números; senão a tela pede em /frase.
+    fraseIA: await fraseGuardada(sm.usuarioId, aba, texto),
+    ia: iaLigada(),
+    perguntas,
     sugestoes: insights.slice(0, 3).map(i => ({
       chave: i.chave, tipo: i.tipo, rotulo: i.rotulo, texto: i.texto, confianca: i.confianca, amostra: i.amostra, amostraTexto: textoAmostra(i.chave, i.amostra),
       acao: i.acao ? { rotulo: i.acao.rotulo, navega: i.acao.operacao.tipo === 'ABRIR' } : null,
