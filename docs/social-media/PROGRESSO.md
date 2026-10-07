@@ -5,8 +5,8 @@
 ## Situação atual
 
 - **Etapa:** Fase 2 · Atendimento e prova de venda (Fase 1 concluída e aprovada: 1a #144, 1b #145, 1c #146, 1d #147).
-- **Entregue:** 2a (Atendimento, lead com rodízio, Comente QUERO).
-- **Próxima:** 2b (link rastreado `/r/{code}`, código no CRM, venda herdando a origem e Vendas por post).
+- **Entregue:** 2a #148 (Atendimento, lead com rodízio, Comente QUERO) e 2b (link rastreado, código no CRM, venda herdando a origem e Vendas por post).
+- **Próxima:** apresentação da Fase 2 para aprovação; depois a Fase 3 (Inteligência).
 
 ## Checklist de aceite (seção 18)
 
@@ -33,10 +33,10 @@
 ### Fase 2 · Atendimento e prova de venda
 - [x] Tela 04 · Atendimento, com direct, comentários, respostas rápidas, janela de 24h e automações (2a: conversas criadas pelo webhook da Meta, ligadas ao post e ao código; resposta pelo direct ou no comentário; respostas rápidas e automações editáveis pelo gestor; janela de 24 h com aviso nas últimas 4 h e bloqueio depois; tempo de resposta = mediana da 1ª resposta humana, automação não conta; resposta fora do expediente uma vez a cada 12 h; contador no menu e fila na tela Hoje)
 - [x] "Transformar em lead" integrado ao CRM com rodízio (2a: o lead nasce orgânico com origem, código, mídia, canal e conversa; o rodízio passa pelos consultores ativos com login, na ordem de cadastro, guardando o último)
-- [ ] Códigos por post, link rastreado `/r/{code}` e reconhecimento do código no WhatsApp ou CRM
+- [x] Códigos por post, link rastreado `/r/{code}` e reconhecimento do código no WhatsApp ou CRM (2b: cada pauta com código ganha um link curto `/r/{slug}`, e a bio usa `#BIO`; o toque é registrado (o mesmo visitante em 30 min conta uma vez, sem guardar IP) e abre o WhatsApp da loja com "Oi! Vi a {moto} no Instagram ({código})"; o número é do gestor, na própria tela 06; o link aparece no briefing com "Copiar link"; o CRM reconhece o código colado em qualquer campo do lead, no cadastro ou na edição, e avisa no formulário; o Assistente do WhatsApp reconhece o código na primeira mensagem quando a Evolution estiver ligada)
 - [x] Automação "Comente QUERO" (2a: a palavra-chave no comentário manda a ficha da moto do post no direct por resposta privada; a conversa nasce ligada ao post; disparos e leads da semana na tela)
-- [ ] Venda herdando a origem do lead
-- [ ] Tela 06 · Vendas por post, com totais batendo com o CRM
+- [x] Venda herdando a origem do lead (2b: na conversão, a venda copia origem, código, mídia e canal; código colado depois no lead já vendido atualiza a venda; venda lançada direto com o código na observação também é creditada; o cartão do lead mostra "Instagram · código")
+- [x] Tela 06 · Vendas por post, com totais batendo com o CRM (2b: período de 7, 30 ou 90 dias; a coorte são os leads orgânicos criados no período, com a venda onde quer que ela caia; 5 KPIs com R$ obedecendo "Mostrar valores" (desligado, nenhum valor sai da API para o papel); banner pela regra de concentração (até 3 posts com 30%+ dos leads, a partir de 5 leads com post) com "Criar pautas no mesmo formato"; tabela por post e por canal com linha de total, conferida contra o banco nos 3 períodos; leads por formato com "amostra pequena" abaixo de 5 posts; ciclo de venda pela mediana desde a 1ª conversa e leads em negociação. O assistente da aba entra na Fase 3)
 
 ### Fase 3 · Inteligência
 - [ ] Tela 05 · Desempenho, com os 6 KPIs, consistência, funil, diagnóstico de reels, teste em andamento e todas as seções antigas corrigidas
@@ -115,6 +115,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | Ajuste 1c | Janelas com 3 ou 4 posts aparecem como "Hipótese"; "Em teste" fica para quando houver teste A/B (Fase 3). A tela Desempenho ainda usa a meta semanal antiga (`metaPostagensSemanais`); na Fase 3 ela passa a usar as mesmas regras do calendário. | Encaixe |
 | Ajuste 1d | Metas da semana da Hoje (leads orgânicos, resposta a DMs, retenção) editáveis pelo gestor junto com as regras do calendário. Uma venda só vira pauta de entrega se o papel tiver acesso a Vendas. | Encaixe |
 | Ajuste 2a | Rodízio (P4): consultores ativos com login, na ordem de cadastro; vale para os leads criados pelo Atendimento. Forma de pagamento do lead vai na observação (o CRM não tem esse campo). Expediente configurável no diálogo de regras do calendário. | Decisão P4 / encaixe |
+| Ajuste 2b | Link `/r/{slug}` com slug curto aleatório (8 caracteres) em vez do código: a rota é pública e o código só é único dentro da conta. A mensagem do WhatsApp continua levando o código. "Conversas" do link rastreado aparecem como "—": as conversas do WhatsApp só são contadas quando a Evolution estiver ligada. Lead orgânico sem código fica na linha "Sem código" para os totais baterem com o CRM. O direct sem post, marcado `#BIO` desde a 2a, aparece como "Perfil (sem post)". | Encaixe / dados reais |
 | Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 
 ## Perguntas em aberto
@@ -132,6 +133,7 @@ As perguntas P1 a P15 estão na seção 4 do [plano](PLANO_DE_ENCAIXE.md#4-pergu
 - [ ] Atendimento em produção: as permissões `instagram_manage_messages` e `instagram_manage_comments` dependem da revisão do app (C10). Sem elas, a tela recebe as conversas mas avisa que o envio ainda não foi liberado pela Meta.
 - [ ] Webhook no app da Meta: Webhooks → Instagram → callback `https://<api>/pro-labore/sm/webhook/instagram`, token de verificação igual a `META_WEBHOOK_VERIFY_TOKEN`, campos comments, mentions, messages e story_insights. `META_APP_SECRET` = Chave Secreta do app.
 - [ ] Conectar pela empresa: aba Social Media → "Conectar pela empresa" → colar o token do usuário do sistema. O histórico atual é mantido.
+- [ ] WhatsApp da loja: o gestor informa o número em Social Media → Vendas por post → Links rastreados. Sem ele, o toque é contado, mas o cliente vê o aviso em vez de abrir o WhatsApp.
 - [ ] Chaves na Vercel: IA, armazenamento, e-mail, VAPID, token do webhook da Meta
 - [ ] Publicação pela API: o token da empresa precisa da permissão `instagram_content_publish` (pelo login do Instagram, `instagram_business_content_publish`). A API precisa de `API_PUBLIC_URL` (o endereço público dela): a Meta baixa as imagens por ele. A tarefa `/sm/cron/minuto` a cada 5 minutos publica as pautas vencidas; o atraso máximo é de 5 minutos.
 - [ ] Vídeo: por enquanto entra por link público (https). O envio direto de vídeo pelo sistema depende do armazenamento de arquivos (Vercel Blob, decisão P8).

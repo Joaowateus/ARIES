@@ -13,6 +13,7 @@ import { pagoPorMidia, type OrigemMetricas } from '../lib/socialMediaOrigem'
 import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
 import { randomBytes } from 'crypto'
 import { logger } from '../lib/logger'
+import { origemPorCodigo } from '../lib/smAtribuicao'
 import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
@@ -592,10 +593,13 @@ router.post('/vendas', requireProLaboreAuth, requireDono, async (req: Request, r
     }
   }
 
+  // Código do post colado na observação (#P-..., #BIO): a venda fica creditada ao post.
+  const origemPost = await origemPorCodigo(usuarioId, parse.data.observacao)
   const venda = await prisma.venda.create({
     data: {
       usuarioId,
       vendedorId,
+      ...origemPost,
       data: new Date(parse.data.data),
       valorVenda,
       valorProLabore,
@@ -790,10 +794,15 @@ router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) 
     }
   }
 
+  // O consultor cola o código do post (#P-..., #BIO) em qualquer campo e o
+  // lead fica ligado ao post (decisão P9).
+  const d = parse.data
+  const origemPost = await origemPorCodigo(usuarioId, d.observacao, d.modeloInteresse, d.nomeCliente, d.telefone, d.email, d.endereco, d.cpf)
   const lead = await prisma.lead.create({
     data: {
       usuarioId,
       vendedorId,
+      ...origemPost,
       nomeCliente: parse.data.nomeCliente,
       telefone: parse.data.telefone,
       email: parse.data.email,
@@ -801,7 +810,7 @@ router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) 
       endereco: parse.data.endereco,
       modeloInteresse: parse.data.modeloInteresse,
       observacao: parse.data.observacao,
-      tipoLead: parse.data.tipoLead,
+      tipoLead: parse.data.tipoLead ?? (origemPost ? 'ORGANICO' : undefined),
       tipoNegociacao: parse.data.tipoNegociacao,
       valorNegociacao: parse.data.valorNegociacao,
     },
@@ -844,6 +853,7 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
     nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string
     modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: string | null
     tipoNegociacao?: string | null; valorNegociacao?: number
+    origem?: string; postCode?: string; midiaId?: string | null; canalEntrada?: string
   } = {
     nomeCliente: parse.data.nomeCliente,
     telefone: parse.data.telefone,
@@ -868,7 +878,20 @@ router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Respo
     data.vendedorId = parse.data.vendedorId
   }
 
+  // Código colado depois (o lead ainda sem post): liga ao post agora.
+  if (!atual.postCode) {
+    const d = parse.data
+    const origemPost = await origemPorCodigo(usuarioId, d.observacao, d.modeloInteresse, d.nomeCliente, d.telefone, d.email, d.endereco, d.cpf)
+    if (origemPost) {
+      Object.assign(data, origemPost)
+      if (!atual.tipoLead && d.tipoLead === undefined) data.tipoLead = 'ORGANICO'
+    }
+  }
+
   const lead = await prisma.lead.update({ where: { id: atual.id }, data, include: LEAD_INCLUDE })
+  if (data.postCode && atual.vendaId) {
+    await prisma.venda.update({ where: { id: atual.vendaId }, data: { origem: data.origem, postCode: data.postCode, midiaId: data.midiaId, canalEntrada: data.canalEntrada } })
+  }
   res.json(lead)
 })
 
@@ -965,6 +988,8 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireDono, async (re
     data: {
       usuarioId,
       vendedorId: atual.vendedorId,
+      // A venda herda a origem do lead (seção 3.5).
+      origem: atual.origem, postCode: atual.postCode, midiaId: atual.midiaId, canalEntrada: atual.canalEntrada,
       data: new Date(parse.data.data),
       valorVenda,
       valorProLabore,

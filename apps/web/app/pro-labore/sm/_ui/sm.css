@@ -23,6 +23,7 @@
   --sm-on-silver: #0A0A0B;
   --sm-data-blue: #4C8DF6;
   --sm-data-blue-dark: #2D5BA8;
+  --sm-data-orange: #F08A4B;
   --sm-badge-blue: #2563EB; /* protótipo: #3B82F6, mas branco nele dá 3,7:1; este dá 5,2:1 */
   --sm-on-badge: #FFFFFF;
   --sm-brand-yellow: #F5C518;
@@ -92,6 +93,7 @@
   --sm-on-silver: #FAFAFA;
   --sm-data-blue: #2563EB;
   --sm-data-blue-dark: #93B4F0;
+  --sm-data-orange: #EA580C;
   --sm-badge-blue: #2563EB;
   --sm-on-badge: #FFFFFF;
   --sm-brand-yellow: #F5C518;
@@ -494,3 +496,28 @@ a.sm-row-link { color: inherit; text-decoration: none; }
 .sm-radios label { display: flex; gap: 6px; align-items: center; min-height: 32px; font-size: 14px; color: var(--sm-text); }
 .sm-radios input { accent-color: var(--sm-silver); width: 16px; height: 16px; }
 .sm-info-bloco { background: var(--sm-surface-2); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--sm-text-muted); line-height: 1.5; }
+
+/* ---------- Tela 06 · Vendas por post ---------- */
+.sm-atrib-kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.sm-atrib-kpis .sm-kpi-valor { font-size: clamp(24px, 2.2vw, 30px); white-space: nowrap; }
+.sm-pagina-cab > .sm-seg { flex-direction: row; }
+.sm-atrib-tabela th, .sm-atrib-tabela td { padding-left: 10px; padding-right: 10px; }
+.sm-atrib-banner-tit { display: flex; flex-direction: column; gap: 4px; }
+.sm-atrib-banner-tit .sm-mono { color: var(--sm-bn-info-title); }
+.sm-atrib-nome { font-weight: 600; color: var(--sm-text-strong); }
+.sm-atrib-valor { color: var(--sm-ok-fg); font-weight: 600; }
+.sm-atrib-vazio { color: var(--sm-text-faint); }
+.sm-tabela tfoot th, .sm-tabela tfoot td { border-bottom: 0; border-top: 1px solid var(--sm-border-strong); padding-top: 14px; font-weight: 600; color: var(--sm-text-strong); }
+.sm-tabela tfoot th { font: 600 14px var(--sm-font-text); letter-spacing: 0; text-transform: none; text-align: left; }
+.sm-atrib-par { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.sm-atrib-par b { color: var(--sm-text-strong); white-space: nowrap; }
+.sm-atrib-formatos { display: flex; flex-direction: column; gap: 14px; }
+.sm-atrib-formato { display: flex; flex-direction: column; gap: 6px; }
+.sm-atrib-trilho { height: 8px; border-radius: 99px; background: var(--sm-border); overflow: hidden; }
+.sm-atrib-trilho span { display: block; height: 100%; border-radius: 99px; }
+.sm-atrib-whats { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.sm-atrib-whats .sm-campo { flex: 1 1 160px; }
+.sm-atrib-aviso { color: var(--sm-warn-fg); }
+.sm-atrib-link { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px; border: 1px solid var(--sm-border); border-radius: var(--sm-radius-btn); background: var(--sm-bg); }
+.sm-atrib-link > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sm-atrib-link code { font: 500 13px var(--sm-font-mono); color: var(--sm-text); overflow-wrap: anywhere; }
