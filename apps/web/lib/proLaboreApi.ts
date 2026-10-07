@@ -205,6 +205,10 @@ export interface Lead {
   vendaId?: string | null
   vendedorId?: string | null
   vendedor?: { id: string; nome: string } | null
+  // Origem vinda do Social Media: post (#P-..., #BIO) e canal de entrada.
+  origem?: string | null
+  postCode?: string | null
+  canalEntrada?: string | null
   criadoEm: string
   atualizadoEm: string
   fechadoEm?: string | null
@@ -809,6 +813,15 @@ export const proLaboreApi = {
       salvarAutomacao: (tipo: 'PALAVRA_CHAVE' | 'FORA_HORARIO', data: { ativa?: boolean; palavra?: string; resposta?: string }) =>
         request<{ tipo: string; palavra: string | null; resposta: string; ativa: boolean }>(`/pro-labore/sm/gestor/automacoes/${tipo}`, { method: 'PUT', body: JSON.stringify(data) }),
     },
+    vendasPorPost: {
+      ver: (dias: 7 | 30 | 90 = 30) => request<SmVendasPorPost>(`/pro-labore/sm/vendas-por-post?dias=${dias}`),
+      criarPautas: (codigos: string[]) =>
+        request<{ criadas: Array<{ id: string; titulo: string }>; jaExistiam: number }>('/pro-labore/sm/vendas-por-post/pautas', { method: 'POST', body: JSON.stringify({ codigos }) }),
+      salvarWhatsapp: (numero: string | null) =>
+        request<{ whatsappLoja: string | null }>('/pro-labore/sm/gestor/whatsapp', { method: 'PUT', body: JSON.stringify({ numero }) }),
+    },
+    /** Toque público no link rastreado /r/{slug} (sem login). */
+    abrirLink: (slug: string) => request<{ url: string; codigo: string }>(`/pro-labore/sm/r/${encodeURIComponent(slug)}`, { method: 'POST' }),
     sugestoesAudiencia: () => request<SmSugestaoAudiencia[]>('/pro-labore/sm/sugestoes/audiencia'),
     calendario: {
       mes: (mes?: string) => request<SmCalendario>(`/pro-labore/sm/calendario${mes ? `?mes=${mes}` : ''}`),
@@ -1823,6 +1836,7 @@ export interface SmPauta {
   legenda: string | null
   agendadoPara: string | null
   codigo: string | null
+  linkSlug: string | null
   trial: boolean
   aprovacao: 'PENDENTE' | 'APROVADA' | 'AJUSTE' | null
   enviadaAprovacaoEm: string | null
@@ -1950,4 +1964,33 @@ export interface SmConversaDetalhe {
   janela: { aberta: boolean; horasRestantes: number | null }
   proximoConsultor: string | null
   mensagens: Array<{ id: string; direcao: 'IN' | 'OUT'; autor: 'CLIENTE' | 'HUMANO' | 'AUTOMACAO'; automacao: string | null; texto: string; enviadaEm: string }>
+}
+
+export interface SmLinhaAtribuicao {
+  chave: string
+  nome: string
+  sub: string
+  toques: number | null
+  conversas: number | null
+  leads: number
+  vendas: number
+  valor: number | null
+}
+
+export interface SmVendasPorPost {
+  periodo: { inicio: string; fim: string; dias: number; rotulo: string }
+  valoresOcultos: boolean
+  kpis: { leads: number; vendas: number; valor: number | null; conversao: number | null; ticket: number | null }
+  concentracao: { titulo: string; detalhe: string; posts: Array<{ codigo: string | null; nome: string; formato: SmFormato | null; pilar: SmPilar | null }> } | null
+  leadsComPost: number
+  minimoConcentracao: number
+  porPost: SmLinhaAtribuicao[]
+  porCanal: SmLinhaAtribuicao[]
+  totais: SmLinhaAtribuicao
+  leadsPorFormato: Array<{ formato: SmFormato; rotulo: string; posts: number; leads: number; leadsPorPost: number; amostraPequena: boolean }>
+  ciclo: { medianaDias: number | null; vendas: number; emNegociacao: number }
+  whatsappConfigurado: boolean
+  links: { bio: { slug: string; codigo: string; toques: number }; whatsappLoja: string | null }
+  podeCriarPautas: boolean
+  souGestor: boolean
 }

@@ -15,6 +15,7 @@ import {
   CAMPOS_DE_CONTEUDO, COLUNAS, FORMATOS, ORIGENS, PILARES, checklistDaPauta, gerarCodigo, marcarAvisosLidos, notificar, pendenciasParaPublicar,
   type Ator,
 } from '../lib/smPautas'
+import { garantirLinkDaPauta, sincronizarLinks } from '../lib/smAtribuicao'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -100,10 +101,11 @@ function inicioDeHojeBrasilia(agora = new Date()) {
   return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + 3 * 3600 * 1000)
 }
 
-function serializar(p: PautaCompleta, janelas: JanelasResultado, agora = new Date()) {
+function serializar(p: PautaCompleta, janelas: JanelasResultado, linkSlug: string | null = null, agora = new Date()) {
   const fechada = p.status === 'AGENDADO' || p.status === 'PUBLICADO'
   return {
     ...p,
+    linkSlug, // link rastreado /r/{slug} (seção 3.5)
     checklist: checklistDaPauta(p, janelas),
     checklistManual: p.checklist,
     pendencias: p.status === 'PUBLICADO' ? [] : pendenciasParaPublicar(p, p.midias, agora),
@@ -118,23 +120,24 @@ async function carregar(usuarioId: string, id: string) {
 async function responderPauta(res: Response, usuarioId: string, id: string, status = 200) {
   const [p, janelas] = await Promise.all([carregar(usuarioId, id), melhoresJanelas(usuarioId)])
   if (!p) return erro(res, 404, 'Pauta não encontrada')
-  res.status(status).json(serializar(p, janelas))
+  res.status(status).json(serializar(p, janelas, await garantirLinkDaPauta(p)))
 }
 
 router.get('/sm/pautas', ...autenticado, requireModuloSM('producao', 'LEITURA'), async (req: Request, res: Response) => {
   const usuarioId = req.sm!.usuarioId
   await gerarPautasDeVendas(usuarioId)
   const desde = new Date(Date.now() - 45 * DIA_MS)
-  const [pautas, janelas] = await Promise.all([
+  const [pautas, janelas, links] = await Promise.all([
     prisma.smPauta.findMany({
       where: { usuarioId, OR: [{ status: { not: 'PUBLICADO' } }, { publicadaEm: { gte: desde } }] },
       include: INCLUDE_PAUTA,
       orderBy: [{ ordem: 'asc' }, { criadoEm: 'asc' }],
     }),
     melhoresJanelas(usuarioId),
+    sincronizarLinks(usuarioId),
   ])
   res.json({
-    pautas: pautas.map(p => serializar(p, janelas)),
+    pautas: pautas.map(p => serializar(p, janelas, links.get(p.id) ?? null)),
     janelas,
     regras: { aprovacaoGestor: req.sm!.permissoes.regras.aprovacaoGestor },
     podeEditar: req.sm!.pode('producao', 'COMPLETO') && !req.sm!.somenteLeitura,

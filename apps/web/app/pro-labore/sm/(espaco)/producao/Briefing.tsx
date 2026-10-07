@@ -4,7 +4,7 @@
 // CTA, legenda, data, arquivos, checklist antes de aprovar e as ações
 // (Trial Reel, enviar para aprovação, aprovar ou pedir ajuste). Cada campo
 // salva ao sair dele.
-import { useRef, useState } from 'react'
+import { useRef, useState, useSyncExternalStore } from 'react'
 import { proLaboreApi, urlArquivoApi, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar } from '@/lib/proLaboreApi'
 import {
   Banner, Botao, Chip, COLUNA_ROTULO, COLUNAS, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
@@ -149,6 +149,8 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
             onChange={e => setTextos(t => ({ ...t, legenda: e.target.value }))} onBlur={() => aoSairDoCampo('legenda')} />
         </div>
       </div>
+
+      {pauta.codigo && pauta.linkSlug && <LinkDoPost codigo={pauta.codigo} slug={pauta.linkSlug} />}
 
       <div className="sm-grade-2">
         <label className="sm-campo">Publicação (Brasília)
@@ -296,5 +298,26 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
         </div>
       )}
     </aside>
+  )
+}
+
+const assinarNada = () => () => {}
+
+/** Link rastreado da pauta (seção 3.5): vai na bio, no story ou no direct. */
+function LinkDoPost({ codigo, slug }: { codigo: string; slug: string }) {
+  const toast = useToast()
+  const origem = useSyncExternalStore(assinarNada, () => window.location.origin, () => '')
+  const url = `${origem}/r/${slug}`
+  async function copiar() {
+    try { await navigator.clipboard.writeText(url); toast({ mensagem: 'Link rastreado copiado.' }) } catch { toast({ mensagem: 'Não deu para copiar; selecione o link e copie.', tom: 'bad' }) }
+  }
+  return (
+    <div className="sm-atrib-link">
+      <div>
+        <span className="sm-legenda">Link rastreado · abre o WhatsApp da loja com {codigo}</span>
+        <code>{url}</code>
+      </div>
+      <Botao onClick={copiar}>Copiar link</Botao>
+    </div>
   )
 }

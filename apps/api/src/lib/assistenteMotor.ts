@@ -16,6 +16,7 @@ import { prisma } from './prisma'
 import { logger } from './logger'
 import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
 import { contarMensagensComContato, enviarTexto, perfilInstancia } from './whatsappEvolution'
+import { origemPorCodigo } from './smAtribuicao'
 import {
   ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, PassoRoteiro, TEXTO_MENU,
   avancarRoteiro, casaGatilho, complementarResposta, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
@@ -443,17 +444,21 @@ export async function vincularOuCriarLead(
     respostas._inicial ? `Primeira mensagem: "${respostas._inicial}"` : null,
     ...resumo,
   ].filter(Boolean).join('\n')
+  // Mensagem do link rastreado ("Oi! Vi a XRE 300 no Instagram (#P-0917-XRE)"):
+  // o lead já nasce ligado ao post (seção 3.5).
+  const origemPost = conversa.origem === 'ANUNCIO' ? null : await origemPorCodigo(usuarioId, respostas._inicial)
   const lead = await prisma.lead.create({
     data: {
       usuarioId,
       vendedorId,
+      ...origemPost,
       nomeCliente: respostaDoCampo(cfg, respostas, 'nomeCompleto') ?? conversa.nomeContato,
       telefone: formatarTelefone(conversa.numeroContato),
       modeloInteresse: respostaDoCampo(cfg, respostas, 'modeloInteresse'),
       observacao,
       // Anúncio e frase de campanha = tráfego pago. Contato novo sem sinal
       // de campanha fica sem canal — o vendedor classifica.
-      tipoLead: conversa.origem === 'ANUNCIO' || conversa.origem === 'GATILHO' ? 'TRAFEGO' : null,
+      tipoLead: origemPost ? 'ORGANICO' : conversa.origem === 'ANUNCIO' || conversa.origem === 'GATILHO' ? 'TRAFEGO' : null,
     },
   })
   await prisma.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })

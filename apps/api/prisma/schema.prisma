@@ -947,6 +947,7 @@ model ProLaboreUsuario {
   smPautas                  SmPauta[]
   smConfig                  SmConfig?
   smConversas               SmConversa[]
+  smLinks                   SmLinkRastreado[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
 
@@ -1152,6 +1153,12 @@ model Venda {
   // Idem pro pró-labore: comprovante em que a retirada do pró-labore desta
   // venda foi registrada (nulo = ainda não pago). Trava o valorProLabore.
   pagamentoProLaboreId String?
+  // Origem herdada do lead na conversão (seção 3.5): a venda continua
+  // creditada ao post mesmo fechada depois do período analisado.
+  origem         String? // INSTAGRAM_ORGANICO
+  postCode       String?
+  midiaId        String?
+  canalEntrada   String?
   criadoEm       DateTime @default(now())
   atualizadoEm   DateTime @updatedAt
 
@@ -2487,6 +2494,8 @@ model SmConfig {
   expedienteDias   String  @default("1,2,3,4,5") // 0 = domingo
   // Rodízio dos leads do Social Media (decisão P4): o último consultor que recebeu.
   rodizioUltimoVendedorId String?
+  // WhatsApp da loja (decisão P9): destino do link rastreado /r/{code}.
+  whatsappLoja    String?
   atualizadoEm    DateTime @default(now()) @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -2572,4 +2581,41 @@ model SmRespostaRapida {
 
   @@index([usuarioId, ordem])
   @@map("pro_labore_sm_respostas_rapidas")
+}
+
+// Link rastreado (seção 3.5): /r/{slug} registra o toque e abre o WhatsApp
+// da loja com a mensagem que traz o código do post. O slug é curto e único
+// no sistema todo (a rota é pública); o código é o da pauta (#P-, #S-) ou #BIO.
+model SmLinkRastreado {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  slug       String   @unique
+  codigo     String
+  tipo       String // POST | STORY | BIO
+  pautaId    String?  @unique
+  titulo     String?
+  mensagem   String
+  cliques    Int      @default(0)
+  criadoEm   DateTime @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  toques  SmLinkClique[]
+
+  @@unique([usuarioId, codigo])
+  @@map("pro_labore_sm_links")
+}
+
+// Cada toque no link (para filtrar por período). O visitante é um hash
+// de IP + navegador, sem guardar o dado em si, só para não contar o mesmo
+// toque repetido em poucos minutos.
+model SmLinkClique {
+  id        String   @id @default(cuid())
+  linkId    String
+  visitante String
+  em        DateTime @default(now())
+
+  link SmLinkRastreado @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, em])
+  @@map("pro_labore_sm_links_cliques")
 }

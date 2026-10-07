@@ -107,6 +107,22 @@ function proximaEtapaSimples(estagio: EstagioLead): EstagioLead | null {
   return ORDEM_COLUNAS[idx + 1]
 }
 
+// Código do post do Instagram (#P-0917-XRE, #S-..., #BIO) colado em qualquer
+// campo: o servidor liga o lead ao post (seção 3.5 do Social Media).
+const REGEX_CODIGO_POST = /#(?:[PS]-\d{4}-[A-Z0-9]{1,6}(?:-\d{1,2})?|BIO)(?![A-Z0-9])/i
+function codigoNoFormulario(f: FormLead): string | null {
+  for (const v of [f.observacao, f.modeloInteresse, f.nomeCliente, f.telefone, f.email, f.endereco, f.cpf]) {
+    const m = v.match(REGEX_CODIGO_POST)
+    if (m) return m[0].toUpperCase()
+  }
+  return null
+}
+
+function AvisoCodigoPost({ codigo }: { codigo: string | null }) {
+  if (!codigo) return null
+  return <div className="pl-alert pl-alert-success" role="status" style={{ marginTop: 14 }}>Código {codigo} reconhecido: ao salvar, o lead fica ligado a esse post do Instagram (orgânico).</div>
+}
+
 function correspondeBusca(lead: Lead, termo: string): boolean {
   const alvo = termo.trim().toLowerCase()
   if (!alvo) return true
@@ -964,6 +980,7 @@ export default function ProLaboreLeadsPage() {
                 <input className="pl-input" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: preferências do cliente" />
               </div>
             </div>
+            <AvisoCodigoPost codigo={codigoNoFormulario(form)} />
             {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{erro}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Adicionar lead'}</button>
@@ -1078,6 +1095,7 @@ export default function ProLaboreLeadsPage() {
                 <input className="pl-input" value={editForm.observacao} onChange={e => setEditForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: preferências do cliente" />
               </div>
             </div>
+            {!leadEditando.postCode && <AvisoCodigoPost codigo={codigoNoFormulario(editForm)} />}
             {editErro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{editErro}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button type="button" className="pl-btn pl-btn-primary" disabled={editSalvando} onClick={salvarEdicao}>
@@ -1146,6 +1164,7 @@ function KanbanCard({
       {lead.modeloInteresse && <div className="pl-kanban-card-meta">Interesse: {lead.modeloInteresse}</div>}
       {lead.observacao && <div className="pl-kanban-card-meta">{lead.observacao}</div>}
       {lead.tipoLead && <span className={`pl-kanban-card-tag ${TIPO_CLASS[lead.tipoLead]}`}>{TIPO_LABEL[lead.tipoLead]}</span>}
+      {lead.postCode && <span className="pl-kanban-card-tag organico" title="Post do Instagram que trouxe o lead" style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>Instagram · {lead.postCode}</span>}
       {lead.tipoNegociacao && (
         <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]} style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>
           {lead.tipoNegociacao}
