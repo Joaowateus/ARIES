@@ -4,9 +4,9 @@
 
 ## Situação atual
 
-- **Etapa:** Fase 2 · Atendimento e prova de venda (Fase 1 concluída e aprovada: 1a #144, 1b #145, 1c #146, 1d #147).
-- **Entregue:** 2a #148 (Atendimento, lead com rodízio, Comente QUERO) e 2b (link rastreado, código no CRM, venda herdando a origem e Vendas por post).
-- **Próxima:** apresentação da Fase 2 para aprovação; depois a Fase 3 (Inteligência).
+- **Etapa:** Fase 3 · Inteligência (Fase 2 concluída e aprovada: 2a #148, 2b #149).
+- **Entregue:** 3a (tela 05 · Desempenho: métricas novas dos reels, 6 sinais, consistência, funil até a venda, diagnóstico dos reels e as seções antigas).
+- **Próxima:** 3b (motor de insights e assistente da aba), 3c (testes A/B e biblioteca de ganchos, que completam o "teste em andamento" da tela 05) e 3d (IA).
 
 ## Checklist de aceite (seção 18)
 
@@ -39,7 +39,7 @@
 - [x] Tela 06 · Vendas por post, com totais batendo com o CRM (2b: período de 7, 30 ou 90 dias; a coorte são os leads orgânicos criados no período, com a venda onde quer que ela caia; 5 KPIs com R$ obedecendo "Mostrar valores" (desligado, nenhum valor sai da API para o papel); banner pela regra de concentração (até 3 posts com 30%+ dos leads, a partir de 5 leads com post) com "Criar pautas no mesmo formato"; tabela por post e por canal com linha de total, conferida contra o banco nos 3 períodos; leads por formato com "amostra pequena" abaixo de 5 posts; ciclo de venda pela mediana desde a 1ª conversa e leads em negociação. O assistente da aba entra na Fase 3)
 
 ### Fase 3 · Inteligência
-- [ ] Tela 05 · Desempenho, com os 6 KPIs, consistência, funil, diagnóstico de reels, teste em andamento e todas as seções antigas corrigidas
+- [ ] Tela 05 · Desempenho, com os 6 KPIs, consistência, funil, diagnóstico de reels, teste em andamento e todas as seções antigas corrigidas (3a feita: o sync passa a gravar o pulo nos 3 s (`reels_skip_rate`, em fração), os reposts e a duração do reel, lida do cabeçalho do MP4 por Range (a API não expõe a duração), o que libera a retenção em % também na tela Hoje; os 6 sinais com as fórmulas da seção 12 e metas editáveis pelo gestor; consistência com as cores da seção 8; funil com alcance único, conversas iniciadas (direct + WhatsApp com código) até as vendas; diagnóstico dos reels com o veredito da seção 8; Orgânico/Pago/Total e os 8 filtros de período; as seções antigas em "Análise completa", com a tabela de publicações ganhando retenção, pulo 3s, envios/mil, código, leads e vendas, também no CSV. A análise é a mesma da aba do painel (lib compartilhada); para o papel, sai sem gasto de anúncio, sem R$ fora da regra e sem leads/vendas sem acesso. Falta o "teste em andamento", que vem com os testes A/B na 3c)
 - [ ] Motor de insights com todas as regras de 13.4 e de qualidade de 13.2
 - [ ] Testes A/B (13.3)
 - [ ] Biblioteca de ganchos
@@ -115,6 +115,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | Ajuste 1c | Janelas com 3 ou 4 posts aparecem como "Hipótese"; "Em teste" fica para quando houver teste A/B (Fase 3). A tela Desempenho ainda usa a meta semanal antiga (`metaPostagensSemanais`); na Fase 3 ela passa a usar as mesmas regras do calendário. | Encaixe |
 | Ajuste 1d | Metas da semana da Hoje (leads orgânicos, resposta a DMs, retenção) editáveis pelo gestor junto com as regras do calendário. Uma venda só vira pauta de entrega se o papel tiver acesso a Vendas. | Encaixe |
 | Ajuste 2a | Rodízio (P4): consultores ativos com login, na ordem de cadastro; vale para os leads criados pelo Atendimento. Forma de pagamento do lead vai na observação (o CRM não tem esse campo). Expediente configurável no diálogo de regras do calendário. | Decisão P4 / encaixe |
+| Ajuste 3a | Duração dos reels lida do próprio vídeo (caixa `moov/mvhd` do MP4, só cabeçalhos por Range, 12 reels por sincronização): a Graph API não tem esse campo. "Alcance em não seguidores" vem da divisão da conta inteira (30 dias), porque o Instagram não separa por post nem por origem; o cartão diz isso. No funil, uma etapa maior que a anterior (ex.: leads cadastrados direto no CRM) aparece sem taxa e com a explicação, em vez de "2.750%". | Dados reais |
 | Ajuste 2b | Link `/r/{slug}` com slug curto aleatório (8 caracteres) em vez do código: a rota é pública e o código só é único dentro da conta. A mensagem do WhatsApp continua levando o código. "Conversas" do link rastreado aparecem como "—": as conversas do WhatsApp só são contadas quando a Evolution estiver ligada. Lead orgânico sem código fica na linha "Sem código" para os totais baterem com o CRM. O direct sem post, marcado `#BIO` desde a 2a, aparece como "Perfil (sem post)". | Encaixe / dados reais |
 | Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 

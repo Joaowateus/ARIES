@@ -258,8 +258,15 @@ const COLUNAS: Coluna[] = [
   { chave: 'taxaEngajamento', rotulo: 'Engaj.', num: true, fmt: p => fmtPct(p.taxaEngajamento), csv: p => (p.taxaEngajamento * 100).toFixed(2) },
   { chave: 'visitasPerfil', rotulo: 'Visitas', num: true, fmt: p => fmtNum(p.visitasPerfil), csv: p => p.visitasPerfil },
   { chave: 'seguidoresGerados', rotulo: 'Seguid.', num: true, fmt: p => fmtNum(p.seguidoresGerados), csv: p => p.seguidoresGerados },
-  { chave: 'tempoMedioAssistidoSeg', rotulo: 'Retenção', num: true, fmt: p => fmtSeg(p.tempoMedioAssistidoSeg), csv: p => p.tempoMedioAssistidoSeg?.toFixed(1) ?? '' },
+  { chave: 'tempoMedioAssistidoSeg', rotulo: 'Tempo médio', num: true, fmt: p => fmtSeg(p.tempoMedioAssistidoSeg), csv: p => p.tempoMedioAssistidoSeg?.toFixed(1) ?? '' },
+  { chave: 'retencao', rotulo: 'Retenção', num: true, fmt: p => (p.retencao != null ? fmtPct(p.retencao) : '—'), csv: p => (p.retencao != null ? (p.retencao * 100).toFixed(1) : '') },
+  { chave: 'taxaPulo', rotulo: 'Pulo 3s', num: true, fmt: p => (p.taxaPulo != null ? fmtPct(p.taxaPulo) : '—'), csv: p => (p.taxaPulo != null ? (p.taxaPulo * 100).toFixed(1) : '') },
+  // Envios por mil alcançados (seção 12); ordena pela mesma taxa.
+  { chave: 'taxaCompartilhamento', rotulo: 'Envios/mil', num: true, fmt: p => (p.alcance ? (p.taxaCompartilhamento * 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'), csv: p => (p.alcance ? (p.taxaCompartilhamento * 1000).toFixed(2) : '') },
   { chave: 'indiceImpacto', rotulo: 'Impacto', num: true, fmt: p => (p.indiceImpacto != null ? `${p.indiceImpacto.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}×` : '—'), csv: p => p.indiceImpacto?.toFixed(2) ?? '' },
+  { chave: 'codigo', rotulo: 'Código', fmt: p => p.codigo ?? '—', csv: p => p.codigo ?? '' },
+  { chave: 'leads', rotulo: 'Leads', num: true, fmt: p => (p.leads != null ? fmtNum(p.leads) : '—'), csv: p => p.leads ?? '' },
+  { chave: 'vendas', rotulo: 'Vendas', num: true, fmt: p => (p.vendas != null ? fmtNum(p.vendas) : '—'), csv: p => p.vendas ?? '' },
 ]
 
 function csvSeguro(v: string | number): string {
@@ -283,8 +290,10 @@ export function TabelaPublicacoes({ posts, periodo, recarregando }: { posts: Pos
   }, [posts, ordem])
 
   function exportarCsv() {
-    const cabecalho = ['Link', 'Legenda', 'Impulsionado', 'Investido em anúncio (R$)', ...COLUNAS.map(c => c.rotulo)]
-    const linhas = ordenados.map(p => [p.permalink ?? '', p.legenda ?? '', p.impulsionado ? 'sim' : 'não', p.gastoPago != null ? p.gastoPago.toFixed(2).replace('.', ',') : '', ...COLUNAS.map(c => c.csv(p))])
+    // O investimento em anúncio só sai para quem pode vê-lo (o gestor).
+    const comGasto = ordenados.some(p => p.gastoPago != null)
+    const cabecalho = ['Link', 'Legenda', 'Impulsionado', ...(comGasto ? ['Investido em anúncio (R$)'] : []), ...COLUNAS.map(c => c.rotulo)]
+    const linhas = ordenados.map(p => [p.permalink ?? '', p.legenda ?? '', p.impulsionado ? 'sim' : 'não', ...(comGasto ? [p.gastoPago != null ? p.gastoPago.toFixed(2).replace('.', ',') : ''] : []), ...COLUNAS.map(c => c.csv(p))])
     const csv = [cabecalho, ...linhas].map(l => l.map(csvSeguro).join(';')).join('\n')
     const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)

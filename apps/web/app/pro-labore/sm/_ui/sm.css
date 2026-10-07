@@ -521,3 +521,39 @@ a.sm-row-link { color: inherit; text-decoration: none; }
 .sm-atrib-link { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px; border: 1px solid var(--sm-border); border-radius: var(--sm-radius-btn); background: var(--sm-bg); }
 .sm-atrib-link > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .sm-atrib-link code { font: 500 13px var(--sm-font-mono); color: var(--sm-text); overflow-wrap: anywhere; }
+
+/* ---------- Tela 05 · Desempenho ---------- */
+.sm-desemp { display: flex; flex-direction: column; gap: 18px; transition: opacity .2s; }
+.sm-recarregando { opacity: .55; }
+.sm-desemp-periodo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.sm-desemp-datas { display: flex; gap: 10px; flex-wrap: wrap; }
+.sm-desemp-sinais { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.sm-desemp-par { display: flex; flex-wrap: wrap; gap: 18px; align-items: stretch; }
+.sm-desemp-meio { flex: 1 1 420px; }
+.sm-cons-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.sm-cons-grade > .sm-mono { text-align: center; }
+/* Cores da seção 8: 0 · 1 a 2 · 3 a 4 · mais de 4 (rajada). */
+.sm-cons-cel { min-height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-variant-numeric: tabular-nums; color: #FFFFFF; }
+.sm-cons-cel.c0 { background: #1A1A1E; color: var(--sm-text-faint); }
+.sm-cons-cel.c1 { background: #2D5BA8; }
+.sm-cons-cel.c2 { background: #4C8DF6; color: #0A0A0B; }
+.sm-cons-cel.c3 { background: #B42318; }
+.sm-cons-cel.futuro { background: transparent; border: 1px dashed var(--sm-border); color: var(--sm-text-faint); }
+.pl-app[data-theme="light"] .sm-cons-cel.c0 { background: #E7E7EC; }
+.sm-cons-numeros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sm-cons-numeros > div { background: var(--sm-bg); border: 1px solid var(--sm-divider); border-radius: var(--sm-radius-btn); padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.sm-cons-numeros b { font: 800 22px var(--sm-font-title); color: var(--sm-text-strong); }
+.sm-cons-numeros b small { font-size: 14px; color: var(--sm-text-faint); }
+.sm-cons-numeros b.ruim { color: var(--sm-bad-fg); }
+.sm-cons-numeros span { font-size: 12px; color: var(--sm-text-muted); }
+.sm-funil-etapa { display: flex; flex-direction: column; gap: 6px; }
+.sm-funil-etapa small { color: var(--sm-text-faint); font-size: 12px; }
+.sm-funil-etapa .sm-atrib-trilho { height: 10px; }
+.sm-desemp-teste-tit { font-weight: 600; font-size: 16px; color: var(--sm-text-strong); margin: 4px 0; }
+.sm-desemp-completa { display: flex; flex-direction: column; gap: 14px; padding-top: 6px; }
+.sm-desemp-completa-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sm-desemp-legado { min-width: 0; }
+@media (max-width: 560px) {
+  .sm-cons-numeros { grid-template-columns: 1fr; }
+  .sm-cons-cel { min-height: 32px; font-size: 10px; }
+}

@@ -286,12 +286,14 @@ export interface InsightsMidia {
   comentarios?: number
   tempoMedioAssistidoSeg: number | null
   tempoTotalAssistidoSeg: number | null
+  taxaPulo: number | null
+  reposts: number
   navegacaoStory: { avancos: number; retornos: number; saidas: number; proximoStory: number } | null
 }
 
 const METRICAS_POR_FORMATO: Record<string, string[]> = {
-  FEED: ['reach', 'views', 'likes', 'comments', 'shares', 'saved', 'total_interactions', 'profile_visits', 'follows'],
-  REELS: ['reach', 'views', 'likes', 'comments', 'shares', 'saved', 'total_interactions', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time'],
+  FEED: ['reach', 'views', 'likes', 'comments', 'shares', 'saved', 'total_interactions', 'profile_visits', 'follows', 'reposts'],
+  REELS: ['reach', 'views', 'likes', 'comments', 'shares', 'saved', 'total_interactions', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'reels_skip_rate', 'reposts'],
   STORY: ['reach', 'views', 'shares', 'replies', 'total_interactions', 'follows', 'profile_visits'],
 }
 
@@ -303,7 +305,7 @@ export async function buscarInsightsMidia(mediaId: string, formato: string, acce
   const resultado: InsightsMidia = {
     alcance: 0, visualizacoes: 0, salvamentos: 0, compartilhamentos: 0, interacoesTotais: 0,
     visitasPerfil: 0, seguidoresGerados: 0, respostas: 0,
-    tempoMedioAssistidoSeg: null, tempoTotalAssistidoSeg: null, navegacaoStory: null,
+    tempoMedioAssistidoSeg: null, tempoTotalAssistidoSeg: null, taxaPulo: null, reposts: 0, navegacaoStory: null,
   }
   let itens: Map<string, ItemInsight>
   try {
@@ -326,6 +328,9 @@ export async function buscarInsightsMidia(mediaId: string, formato: string, acce
   // A API devolve os tempos de reels em milissegundos.
   if (itens.has('ig_reels_avg_watch_time')) resultado.tempoMedioAssistidoSeg = valorNumerico(itens.get('ig_reels_avg_watch_time')) / 1000
   if (itens.has('ig_reels_video_view_total_time')) resultado.tempoTotalAssistidoSeg = valorNumerico(itens.get('ig_reels_video_view_total_time')) / 1000
+  // reels_skip_rate vem em porcentagem (ex.: 38.5); guardamos a fração.
+  if (itens.has('reels_skip_rate')) { const v = valorNumerico(itens.get('reels_skip_rate')); resultado.taxaPulo = v > 1 ? v / 100 : v }
+  resultado.reposts = valorNumerico(itens.get('reposts'))
 
   if (chaveFormato === 'STORY') {
     try {

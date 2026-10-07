@@ -801,6 +801,8 @@ export const proLaboreApi = {
       removerMidia: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/${midiaId}`, { method: 'DELETE' }),
     },
     hoje: () => request<SmHoje>('/pro-labore/sm/hoje'),
+    desempenho: (periodo: { inicio: string; fim: string }, origem: OrigemSocial = 'ORGANICO') =>
+      request<SmDesempenho>(`/pro-labore/sm/desempenho?inicio=${periodo.inicio}&fim=${periodo.fim}&origem=${origem}`),
     atendimento: {
       lista: () => request<SmAtendimento>('/pro-labore/sm/atendimento'),
       conversa: (id: string) => request<SmConversaDetalhe>(`/pro-labore/sm/conversas/${id}`),
@@ -1016,6 +1018,7 @@ export type FaixaImpactoSocial = 'BAIXO' | 'MEDIO' | 'ALTO' | 'EXCEPCIONAL'
 
 export interface PostSocial {
   id: string
+  instagramMediaId: string
   formato: FormatoPostSocial
   legenda: string | null
   thumbnail: string | null
@@ -1034,6 +1037,15 @@ export interface PostSocial {
   visitasPerfil: number
   seguidoresGerados: number
   tempoMedioAssistidoSeg: number | null
+  // Reels: duração lida do vídeo, retenção (fração), pulo nos 3 s (fração) e reposts.
+  duracaoSeg: number | null
+  retencao: number | null
+  taxaPulo: number | null
+  reposts: number
+  // Código do post (#P-...), leads e vendas creditados a ele; null quando não se aplica ou sem acesso.
+  codigo?: string | null
+  leads?: number | null
+  vendas?: number | null
   taxaEngajamento: number
   taxaSalvamento: number
   taxaCompartilhamento: number
@@ -1163,7 +1175,7 @@ export type AnaliseSocialMedia =
       seguidoresOnline: number[] | null
       relacaoVendas: { leadsGerados: number; leadsGanhos: number; valorNegociadoTotal: number }
       origem: {
-        selecionada: OrigemSocial; temPago: boolean; postsImpulsionados: number; gastoImpulsionamento: number
+        selecionada: OrigemSocial; temPago: boolean; postsImpulsionados: number; gastoImpulsionamento: number | null
         fracaoAlcanceAnunciosConta: number | null
       }
       funil: {
@@ -1871,7 +1883,7 @@ export function urlArquivoApi(url: string): string {
   return url.startsWith('/pro-labore/') ? `${BASE}${url}` : url
 }
 
-export interface SmConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; horizonteDias: number; mixMeta: Record<SmPilar, number>; metaLeadsSemana: number; metaRespostaMin: number; metaRetencao: number }
+export interface SmConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; horizonteDias: number; mixMeta: Record<SmPilar, number>; metaLeadsSemana: number; metaRespostaMin: number; metaRetencao: number; metaPuloPct?: number; metaEnviosMil?: number; metaSalvosMil?: number; metaCurtidasPct?: number }
 
 export interface SmItemCalendario {
   tipo: 'PAUTA' | 'INSTAGRAM'
@@ -1994,3 +2006,46 @@ export interface SmVendasPorPost {
   podeCriarPautas: boolean
   souGestor: boolean
 }
+
+export type AnaliseSocialConectada = Extract<AnaliseSocialMedia, { conectado: true }>
+
+export interface SmSinal {
+  chave: 'retencao' | 'pulo' | 'envios' | 'salvos' | 'curtidas' | 'naoSeguidores'
+  rotulo: string
+  valor: number | null
+  unidade: '%' | 'por mil'
+  meta: number | null
+  metaTexto: string | null
+  status: 'ok' | 'atencao' | 'sem_dados' | 'informativo'
+  texto: string
+  amostra: number
+}
+
+export interface SmReelDiagnostico {
+  id: string
+  nome: string
+  permalink: string | null
+  publicadoEm: string
+  duracaoSeg: number | null
+  retencao: number | null
+  pulo: number | null
+  enviosMil: number | null
+  alcance: number
+  multiplo: number | null
+  veredito: 'REPETIR' | 'BOM' | 'GANCHO_FRACO' | 'ABAIXO'
+}
+
+/** Tela 05 · Desempenho: a análise da aba Social Media, filtrada pelo papel, mais os blocos novos. */
+export type SmDesempenho =
+  | { conectado: false }
+  | (Omit<AnaliseSocialConectada, 'relacaoVendas' | 'funil'> & {
+      relacaoVendas: { leadsGerados: number; leadsGanhos: number | null; valorNegociadoTotal: number | null } | null
+      funil: Omit<AnaliseSocialConectada['funil'], 'leads' | 'vendas'> & { leads: number | null; vendas: number | null }
+      sinais: SmSinal[]
+      reelsDiagnostico: SmReelDiagnostico[]
+      testeEmAndamento: null
+      metas: { metaRetencao: number; metaPuloPct: number; metaEnviosMil: number; metaSalvosMil: number; metaCurtidasPct: number }
+      souGestor: boolean
+      verCrm: boolean
+      verVendas: boolean
+    })

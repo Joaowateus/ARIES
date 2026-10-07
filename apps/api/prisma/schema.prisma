@@ -1548,6 +1548,11 @@ model SocialMediaMidia {
   respostas              Int       @default(0) // só stories
   tempoMedioAssistidoSeg Float? // só reels
   tempoTotalAssistidoSeg Float? // só reels
+  // Seção 3.3: taxa de pulo nos 3 primeiros segundos (reels_skip_rate, 0 a 1),
+  // reposts e a duração do vídeo (lida do cabeçalho do MP4; a API não expõe).
+  taxaPulo               Float?
+  reposts                Int       @default(0)
+  duracaoSeg             Float?
   // Navegação de story: { avancos, retornos, saidas, proximoStory }
   navegacaoStory         Json?
   // Cópia própria da miniatura (caminho servido pela API): as URLs da CDN
@@ -2488,6 +2493,11 @@ model SmConfig {
   metaLeadsSemana Int      @default(10)
   metaRespostaMin Int      @default(15) // tempo de resposta a DMs, em minutos
   metaRetencao    Int      @default(45) // retenção média dos reels, em %
+  // Metas dos sinais da tela 05 · Desempenho (seção 12), editáveis pelo gestor.
+  metaPuloPct     Int      @default(40) // pulo nos 3 s, em % (abaixo é melhor)
+  metaEnviosMil   Float    @default(3) // envios por mil alcançados
+  metaSalvosMil   Float    @default(3) // salvos por mil alcançados
+  metaCurtidasPct Float    @default(3) // curtidas por alcance, em %
   // Expediente (decisão P13): fora dele, a automação de resposta avisa o cliente.
   expedienteInicio Int     @default(8)
   expedienteFim    Int     @default(18)

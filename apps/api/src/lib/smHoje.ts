@@ -128,6 +128,7 @@ export async function montarHoje(sm: ContextoSM, pessoa: { nome: string; tratame
   // --- Insights e retenção (motor de análise do Desempenho, 30 dias, orgânico) ---
   let insights: Array<{ id: string; tipo: string; titulo: string; detalhe: string; confianca: string; amostra: number | null }> | null = null
   let tempoMedioReelsSeg: number | null = null
+  let retencaoReels: number | null = null
   if (veAnalise && conta) {
     const fim = new Date(Date.UTC(+hoje.slice(0, 4), +hoje.slice(5, 7) - 1, +hoje.slice(8, 10)))
     const inicio = new Date(fim.getTime() - 29 * DIA_MS)
@@ -143,6 +144,9 @@ export async function montarHoje(sm: ContextoSM, pessoa: { nome: string; tratame
     if (analise.conectado) {
       insights = analise.recomendacoes.filter(r => r.tipo !== 'info').slice(0, 3)
       tempoMedioReelsSeg = analise.reels.tempoMedioAssistidoSeg ?? null
+      // Retenção em % (seção 12): média de tempo médio / duração dos reels com a duração lida do vídeo.
+      const comRetencao = analise.publicacoes.filter(p => p.formato === 'REELS' && p.retencao != null)
+      retencaoReels = comRetencao.length ? comRetencao.reduce((s, p) => s + p.retencao!, 0) / comRetencao.length : null
     }
   }
 
@@ -174,7 +178,7 @@ export async function montarHoje(sm: ContextoSM, pessoa: { nome: string; tratame
       diasComPost: { valor: diasPublicados.size, meta: config.minDiasSemana, planejados: diasNaSemana },
       respostaDm: veAtendimento ? { valorMin: tempoResposta, meta: config.metaRespostaMin } : null,
       leads: leadsSemana == null ? null : { valor: leadsSemana, meta: config.metaLeadsSemana },
-      retencao: veAnalise ? { percentual: null as number | null, tempoMedioSeg: tempoMedioReelsSeg, meta: config.metaRetencao } : null,
+      retencao: veAnalise ? { percentual: retencaoReels, tempoMedioSeg: tempoMedioReelsSeg, meta: config.metaRetencao } : null,
     },
     publicarHoje: veProducao ? publicarHoje : null,
     estoqueSemConteudo,

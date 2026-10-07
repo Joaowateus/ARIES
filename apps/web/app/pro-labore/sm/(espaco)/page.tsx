@@ -104,7 +104,11 @@ export default function HojePage() {
             valor={m.retencao.percentual != null ? `${Math.round(m.retencao.percentual * 100)}%` : m.retencao.tempoMedioSeg != null ? m.retencao.tempoMedioSeg.toFixed(1).replace('.', ',') : '—'}
             unidade={m.retencao.percentual == null && m.retencao.tempoMedioSeg != null ? 's assistidos' : undefined}
             legenda={m.retencao.percentual == null ? 'Tempo médio; em % quando houver a duração dos reels' : undefined}
-            chip={{ tom: 'neutro', texto: `Meta ${m.retencao.meta}%` }}
+            chip={m.retencao.percentual == null
+              ? { tom: 'neutro', texto: `Meta ${m.retencao.meta}%` }
+              : m.retencao.percentual * 100 >= m.retencao.meta
+                ? { tom: 'ok', texto: `Dentro da meta de ${m.retencao.meta}%` }
+                : { tom: 'bad', texto: `Abaixo da meta de ${m.retencao.meta}%` }}
           />
         )}
       </section>

@@ -1,0 +1,11 @@
+-- AlterTable
+ALTER TABLE "pro_labore_sm_config" ADD COLUMN     "metaCurtidasPct" DOUBLE PRECISION NOT NULL DEFAULT 3,
+ADD COLUMN     "metaEnviosMil" DOUBLE PRECISION NOT NULL DEFAULT 3,
+ADD COLUMN     "metaPuloPct" INTEGER NOT NULL DEFAULT 40,
+ADD COLUMN     "metaSalvosMil" DOUBLE PRECISION NOT NULL DEFAULT 3;
+
+-- AlterTable
+ALTER TABLE "pro_labore_social_media_midias" ADD COLUMN     "duracaoSeg" DOUBLE PRECISION,
+ADD COLUMN     "reposts" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "taxaPulo" DOUBLE PRECISION;
+
