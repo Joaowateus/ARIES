@@ -11,7 +11,7 @@ import {
   definirVerComoSocialMedia, proLaboreApi, SM_MODULOS,
   type SmAcessoGestor, type SmModulo, type SmNivel, type SmRegras, type SmStatusMembro,
 } from '@/lib/proLaboreApi'
-import { Botao, Card, CardEsqueleto, Chip, Rotulo, Segmentado, SmApp, Toggle, haQuanto, useToast, type Tom } from '../../../sm/_ui'
+import { AssistenteAba, Botao, Card, CardEsqueleto, Chip, Rotulo, Segmentado, SmApp, Toggle, haQuanto, useToast, type Tom } from '../../../sm/_ui'
 
 const MODULOS: Record<SmModulo, { nome: string; nota: string }> = {
   analise: { nome: 'Social Media · análise', nota: 'Todos os indicadores da conta' },
@@ -100,6 +100,7 @@ function Acessos() {
         </div>
         <Botao variante="pri" onClick={verComo}>Ver como Social Media</Botao>
       </header>
+      <AssistenteAba aba="permissoes" aoMudar={carregar} />
 
       {erro && <p className="sm-erro" role="alert">{erro}</p>}
 

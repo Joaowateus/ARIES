@@ -578,3 +578,25 @@ a.sm-row-link { color: inherit; text-decoration: none; }
 .sm-ganchos-lista li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--sm-border); border-radius: var(--sm-radius-btn); }
 .sm-ganchos-texto { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sm-ganchos-texto b { color: var(--sm-text-strong); font-weight: 600; overflow-wrap: anywhere; }
+
+/* ---------- Assistente da aba (seção 16) ---------- */
+.sm-assist { background: var(--sm-assist-bg, #101013); border: 1px solid var(--sm-assist-borda, #2A2A30); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.pl-app[data-theme="light"] .sm-assist { --sm-assist-bg: #F7F7FA; --sm-assist-borda: #DCDCE3; }
+.sm-assist-cab { display: flex; gap: 12px; align-items: flex-start; }
+.sm-assist-avatar { width: 34px; height: 34px; border-radius: 10px; background: var(--sm-silver); color: var(--sm-on-silver); display: flex; align-items: center; justify-content: center; font: 800 14px var(--sm-font-title); flex: none; }
+.sm-assist-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sm-assist-frase { font-size: 15px; line-height: 1.5; color: var(--sm-text); }
+.sm-assist.recolhido .sm-assist-frase { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-assist-alternar { min-height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--sm-border-strong); background: transparent; color: var(--sm-text-muted); font: 600 13px var(--sm-font-text); cursor: pointer; flex: none; }
+.sm-assist-alternar:hover { color: var(--sm-text); }
+.sm-assist-alternar:focus-visible, .sm-assist-acao:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-assist-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.sm-assist-card { background: var(--sm-surface); border: 1px solid var(--sm-border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sm-assist-card .sm-chip { align-self: flex-start; }
+.sm-assist-card.feito { background: var(--sm-bn-ok-bg); border-color: var(--sm-bn-ok-border); }
+.sm-assist-card-texto { line-height: 1.45; flex: 1; overflow-wrap: anywhere; }
+.sm-assist-conf { font-size: 12px; color: var(--sm-text-faint); }
+.sm-assist-acao { align-self: flex-start; min-height: 36px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--sm-silver); background: var(--sm-silver); color: var(--sm-on-silver); font: 600 13px var(--sm-font-text); cursor: pointer; }
+.sm-assist-acao:disabled { opacity: .6; cursor: progress; }
+.sm-assist-feito { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; min-height: 36px; font-weight: 600; font-size: 13px; color: var(--sm-ok-fg); }
+.sm-assist-feito .sm-link-botao { margin: 0; align-self: center; }

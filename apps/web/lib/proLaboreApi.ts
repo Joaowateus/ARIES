@@ -815,6 +815,12 @@ export const proLaboreApi = {
       salvarAutomacao: (tipo: 'PALAVRA_CHAVE' | 'FORA_HORARIO', data: { ativa?: boolean; palavra?: string; resposta?: string }) =>
         request<{ tipo: string; palavra: string | null; resposta: string; ativa: boolean }>(`/pro-labore/sm/gestor/automacoes/${tipo}`, { method: 'PUT', body: JSON.stringify(data) }),
     },
+    assistente: {
+      ver: (aba: SmAbaAssistente) => request<SmAssistente>(`/pro-labore/sm/assistente/${aba}`),
+      recolher: (aba: SmAbaAssistente, recolhido: boolean) => request<{ recolhido: boolean }>(`/pro-labore/sm/assistente/${aba}/estado`, { method: 'PUT', body: JSON.stringify({ recolhido }) }),
+      executar: (aba: SmAbaAssistente, chave: string) => request<{ acaoId?: string; mensagem: string; href?: string; desfazivel?: boolean }>(`/pro-labore/sm/assistente/${aba}/executar`, { method: 'POST', body: JSON.stringify({ chave }) }),
+      desfazer: (acaoId: string) => request<{ ok: boolean }>(`/pro-labore/sm/assistente/desfazer/${acaoId}`, { method: 'POST' }),
+    },
     testes: {
       listar: () => request<{ ativos: SmTesteAB[]; concluidos: SmTesteAB[]; podeEditar: boolean }>('/pro-labore/sm/testes'),
       criar: (data: SmTesteEntrada) => request<{ id: string }>('/pro-labore/sm/testes', { method: 'POST', body: JSON.stringify(data) }),
@@ -2112,4 +2118,27 @@ export interface SmBibliotecaGanchos {
   ganchos: SmGanchoBiblioteca[]
   sugestoes: Array<{ texto: string; midiaIgIds: string[]; puloMedio: number | null; comPulo: number; alcanceMedio: number | null }>
   podeEditar: boolean
+}
+
+export type SmAbaAssistente = 'calendario' | 'producao' | 'atendimento' | 'desempenho' | 'atribuicao' | 'permissoes'
+export type SmTipoInsight = 'URGENTE' | 'ATENCAO' | 'OPORTUNIDADE' | 'PONTO_FORTE' | 'APRENDIZADO' | 'OBSERVACAO'
+
+/** Assistente da aba (seção 16): frase do momento e as 3 sugestões do motor de insights. */
+export interface SmAssistente {
+  aba: SmAbaAssistente
+  rotulo: string
+  frase: string
+  sugestoes: Array<{
+    chave: string
+    tipo: SmTipoInsight
+    rotulo: string
+    texto: string
+    confianca: 'alta' | 'media' | 'baixa' | 'hipotese'
+    amostra: number | null
+    amostraTexto: string | null
+    acao: { rotulo: string; navega: boolean } | null
+  }>
+  total: number
+  recolhido: boolean
+  somenteLeitura: boolean
 }
