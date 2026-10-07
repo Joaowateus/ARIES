@@ -8,6 +8,7 @@ import { listarEstoque } from './smEstoque'
 import { pendenciasParaPublicar } from './smPautas'
 import { gerarPautasDeVendas } from './smPautasAuto'
 import { montarAnaliseSocialMedia } from './socialMediaAnalytics'
+import { filaAtendimento, tempoRespostaSemana } from './smAtendimento'
 
 const OFFSET_MS = 3 * 3600 * 1000
 const DIA_MS = 24 * 3600 * 1000
@@ -36,6 +37,7 @@ export async function montarHoje(sm: ContextoSM, pessoa: { nome: string; tratame
   const veEstoque = sm.pode('estoque', 'LEITURA')
   const veCrm = sm.pode('crm', 'LEITURA')
   const veAnalise = sm.pode('analise', 'LEITURA')
+  const veAtendimento = sm.pode('atendimento', 'LEITURA')
   if (veProducao) await gerarPautasDeVendas(usuarioId, agora)
 
   const hoje = diaLocal(agora)
@@ -144,16 +146,24 @@ export async function montarHoje(sm: ContextoSM, pessoa: { nome: string; tratame
     }
   }
 
+  const [fila, tempoResposta] = veAtendimento ? await Promise.all([filaAtendimento(usuarioId), tempoRespostaSemana(usuarioId, agora)]) : [null, null]
+
   // --- Cabeçalho (recepção simples; o motor completo da seção 14 vem na Fase 4) ---
   const local = new Date(agora.getTime() - OFFSET_MS)
   const rotulo = `${DIAS_SEMANA[local.getUTCDay()]}, ${String(local.getUTCDate()).padStart(2, '0')} de ${MESES[local.getUTCMonth()]}`
   const nome = pessoa.tratamento ?? pessoa.nome.split(' ')[0]
-  const partes: string[] = []
+  const itens: string[] = []
   const planejadosHoje = publicarHoje.filter(p => p.status !== 'PUBLICADO').length
-  if (veProducao) partes.push(planejadosHoje ? `Hoje ${planejadosHoje === 1 ? 'tem 1 post' : `temos ${planejadosHoje} posts`}` : 'Nenhum post planejado para hoje')
+  if (planejadosHoje) itens.push(planejadosHoje === 1 ? '1 post' : `${planejadosHoje} posts`)
+  const esperando = fila ? fila.dmsSemResposta + fila.comentariosSemResposta : 0
+  if (esperando) itens.push(`${esperando} ${esperando === 1 ? 'cliente esperando' : 'clientes esperando'}`)
   const parada = estoqueSemConteudo?.find(m => m.status === 'PARADA')
-  if (parada) partes.push(`${partes.length ? 'e ' : ''}uma ${parada.modelo} parada há ${parada.diasEmEstoque} dias`)
-  const resumo = partes.length ? `${partes.join(' ')}.` : 'Tudo em dia por aqui.'
+  if (parada) itens.push(`uma ${parada.modelo} parada há ${parada.diasEmEstoque} dias`)
+  const lista = itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}` : itens[0]
+  const semPost = veProducao && planejadosHoje === 0 ? 'Nenhum post planejado para hoje.' : ''
+  const resumo = !itens.length
+    ? semPost || 'Tudo em dia por aqui.'
+    : planejadosHoje ? `Hoje ${planejadosHoje === 1 ? 'tem' : 'temos'} ${lista}.` : `${semPost ? `${semPost} ` : ''}Temos ${lista}.`
 
   return {
     cabecalho: { rotulo, saudacao: `${saudacaoDoHorario(agora)}, ${nome}.`, resumo },
@@ -162,14 +172,14 @@ export async function montarHoje(sm: ContextoSM, pessoa: { nome: string; tratame
       : null,
     metas: {
       diasComPost: { valor: diasPublicados.size, meta: config.minDiasSemana, planejados: diasNaSemana },
-      respostaDm: { valorMin: null as number | null, meta: config.metaRespostaMin },
+      respostaDm: veAtendimento ? { valorMin: tempoResposta, meta: config.metaRespostaMin } : null,
       leads: leadsSemana == null ? null : { valor: leadsSemana, meta: config.metaLeadsSemana },
       retencao: veAnalise ? { percentual: null as number | null, tempoMedioSeg: tempoMedioReelsSeg, meta: config.metaRetencao } : null,
     },
     publicarHoje: veProducao ? publicarHoje : null,
     estoqueSemConteudo,
     ultimosPosts: ultimosPosts && { mediana: Math.round(med), posts: ultimosPosts },
-    atendimento: null, // Fase 2 (Atendimento)
+    atendimento: fila && { ...fila, maisAntiga: fila.maisAntiga && { ...fila.maisAntiga, atrasada: agora.getTime() - fila.maisAntiga.desde.getTime() > config.metaRespostaMin * 60_000 } },
     producao,
     insights,
     podeCriarPauta: sm.pode('producao', 'COMPLETO') && !sm.somenteLeitura,

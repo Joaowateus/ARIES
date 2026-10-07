@@ -23,6 +23,7 @@ import {
 } from '../lib/instagramGraph'
 import { publicarPautasVencidas } from '../lib/smPublicacao'
 import { gerarPautasDeVendas } from '../lib/smPautasAuto'
+import { processarEventosPendentes } from '../lib/smAtendimento'
 import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialMediaSync'
 
 const router = Router()
@@ -280,8 +281,8 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
   // As imagens da pauta são servidas pela própria API: a Meta precisa da URL completa.
   const baseApi = process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`
-  const [sincronizacao, publicacao] = await Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi)])
-  res.json({ ...sincronizacao, publicacao })
+  const [sincronizacao, publicacao, atendimento] = await Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi), processarEventosPendentes(100)])
+  res.json({ ...sincronizacao, publicacao, atendimento })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
@@ -330,9 +331,10 @@ router.post('/sm/webhook/instagram', async (req: Request, res: Response) => {
     }
   }
   if (eventos.length) await prisma.smWebhookEvento.createMany({ data: eventos })
-  // A Meta reenvia se não receber 200 rápido: responde já, o processamento
-  // (Atendimento) lê a fila depois.
-  res.status(200).json({ recebidos: eventos.length })
+  // Processa na hora (conversas, "Comente QUERO", fora do horário). O que
+  // não der tempo fica na fila e o job de minuto termina.
+  const processamento = eventos.length ? await processarEventosPendentes(20).catch(() => null) : null
+  res.status(200).json({ recebidos: eventos.length, processados: processamento?.processados ?? 0 })
 })
 
 export default router

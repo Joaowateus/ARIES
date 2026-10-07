@@ -53,3 +53,12 @@ export function quandoCurto(iso: string, comHora = true, agora = new Date()): st
   if (alvo === amanha) return `amanhã${hora}`
   return `${local.slice(8, 10)}/${local.slice(5, 7)}${hora}`
 }
+
+/** "há 2h10", "há 25 min" */
+export function esperaDesde(iso: string, agora = Date.now()): string {
+  const min = Math.max(0, Math.round((agora - new Date(iso).getTime()) / 60000))
+  if (min < 60) return `há ${min} min`
+  const h = Math.floor(min / 60), r = min % 60
+  if (h < 48) return `há ${h}h${r ? String(r).padStart(2, '0') : ''}`
+  return `há ${Math.floor(h / 24)} dias`
+}

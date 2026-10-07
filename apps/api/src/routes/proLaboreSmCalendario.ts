@@ -26,6 +26,9 @@ const configSchema = z.object({
   metaLeadsSemana: z.number().int().min(0).max(1000),
   metaRespostaMin: z.number().int().min(1).max(1440),
   metaRetencao: z.number().int().min(1).max(100),
+  expedienteInicio: z.number().int().min(0).max(23),
+  expedienteFim: z.number().int().min(1).max(24),
+  expedienteDias: z.string().regex(/^[0-6](,[0-6])*$/, 'Dias do expediente inválidos'),
   mixMeta: z.object(Object.fromEntries(PILARES_MIX.map(p => [p, z.number().int().min(0).max(100)])) as Record<(typeof PILARES_MIX)[number], z.ZodNumber>)
     .refine(m => Object.values(m).reduce((s, v) => s + v, 0) === 100, 'O mix precisa somar 100%'),
 }).partial()

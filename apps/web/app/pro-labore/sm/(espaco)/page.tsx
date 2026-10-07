@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { proLaboreApi, type SmHoje } from '@/lib/proLaboreApi'
 import {
   Banner, BarraProgresso, Botao, BotaoLink, Card, CardEsqueleto, Chip, EstadoVazio, FORMATO_ROTULO, IcMais, KpiCard, PILAR_CHIP, PILAR_ROTULO, Rotulo,
-  quandoCurto, useToast, type Tom,
+  esperaDesde, quandoCurto, useToast, type Tom,
 } from '../_ui'
 import { useEspacoSM } from './EspacoSM'
 
@@ -81,7 +81,19 @@ export default function HojePage() {
 
       <section aria-label="Metas da semana" className="sm-grade">
         <KpiCard rotulo="Dias com post" valor={m.diasComPost.valor} unidade={`/ ${m.diasComPost.meta}`} legenda={m.diasComPost.planejados > m.diasComPost.valor ? `Meta da semana · ${m.diasComPost.planejados} contando os agendados` : 'Meta da semana'} />
-        <KpiCard rotulo="Resposta a DMs" valor="—" legenda="Mede quando o Atendimento entrar" chip={{ tom: 'neutro', texto: `Meta ≤ ${m.respostaDm.meta} min` }} />
+        {m.respostaDm && (
+          <KpiCard
+            rotulo="Resposta a DMs"
+            valor={m.respostaDm.valorMin ?? '—'}
+            unidade={m.respostaDm.valorMin != null ? 'min' : undefined}
+            legenda={m.respostaDm.valorMin == null ? 'Sem respostas nesta semana ainda' : 'Mediana da 1ª resposta humana'}
+            chip={m.respostaDm.valorMin == null
+              ? { tom: 'neutro', texto: `Meta ≤ ${m.respostaDm.meta} min` }
+              : m.respostaDm.valorMin <= m.respostaDm.meta
+                ? { tom: 'ok', texto: `Dentro da meta ≤ ${m.respostaDm.meta} min` }
+                : { tom: 'bad', texto: `Acima da meta de ${m.respostaDm.meta} min` }}
+          />
+        )}
         {m.leads && (
           <KpiCard rotulo="Leads orgânicos" valor={m.leads.valor} unidade={`/ ${m.leads.meta}`}
             rodape={<BarraProgresso rotulo="Leads orgânicos da semana" valor={Math.min(m.leads.valor, m.leads.meta)} max={Math.max(1, m.leads.meta)} ocultarCabecalho />} />
@@ -166,13 +178,18 @@ export default function HojePage() {
         </div>
 
         <div className="sm-hoje-lado">
-          {pode('atendimento') && (
+          {h.atendimento && (
             <Card titulo="Fila de atendimento">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-                <div className="sm-mini"><b>—</b><span>DMs sem resposta</span></div>
-                <div className="sm-mini"><b>—</b><span>Comentários</span></div>
+                <div className="sm-mini"><b>{h.atendimento.dmsSemResposta}</b><span>DMs sem resposta</span></div>
+                <div className="sm-mini"><b>{h.atendimento.comentariosSemResposta}</b><span>Comentários</span></div>
               </div>
-              <span className="sm-legenda">A fila de direct e comentários entra com a tela Atendimento (Fase 2).</span>
+              {h.atendimento.maisAntiga
+                ? <div style={{ fontSize: 13, color: h.atendimento.maisAntiga.atrasada ? 'var(--sm-bad-fg)' : 'var(--sm-text-muted)' }}>
+                  Mais antiga: {esperaDesde(h.atendimento.maisAntiga.desde)} · {h.atendimento.maisAntiga.nome}{h.atendimento.maisAntiga.texto ? ` · “${h.atendimento.maisAntiga.texto.length > 60 ? `${h.atendimento.maisAntiga.texto.slice(0, 57)}…` : h.atendimento.maisAntiga.texto}”` : ''}
+                </div>
+                : <span className="sm-legenda">Ninguém esperando resposta.</span>}
+              <BotaoLink href="/pro-labore/sm/atendimento" variante="pri">Abrir atendimento</BotaoLink>
             </Card>
           )}
 

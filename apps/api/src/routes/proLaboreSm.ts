@@ -78,7 +78,7 @@ router.get('/sm/eu', ...autenticado, async (req: Request, res: Response) => {
     niveis: sm.visao === 'GESTOR' ? Object.fromEntries(MODULOS_SM.map(m => [m, 'COMPLETO'])) : sm.permissoes.niveis,
     regras: sm.permissoes.regras,
     conta: resumoConta(conta),
-    contadores: { atendimento: 0 }, // Fase 2 (Atendimento)
+    contadores: { atendimento: sm.pode('atendimento', 'LEITURA') ? await prisma.smConversa.count({ where: { usuarioId: sm.usuarioId, aguardandoDesde: { not: null }, status: { not: 'ARQUIVADA' } } }) : 0 },
   })
 })
 
