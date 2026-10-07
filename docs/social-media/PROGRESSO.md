@@ -4,8 +4,9 @@
 
 ## Situação atual
 
-- **Etapa:** Fase 1 · Acesso isolado e trabalho diário concluída: 1a #144, 1b #145, 1c #146, 1d.
-- **Próxima:** Fase 2 · Atendimento e prova de venda, depois da conferência do gestor.
+- **Etapa:** Fase 2 · Atendimento e prova de venda (Fase 1 concluída e aprovada: 1a #144, 1b #145, 1c #146, 1d #147).
+- **Entregue:** 2a (Atendimento, lead com rodízio, Comente QUERO).
+- **Próxima:** 2b (link rastreado `/r/{code}`, código no CRM, venda herdando a origem e Vendas por post).
 
 ## Checklist de aceite (seção 18)
 
@@ -30,10 +31,10 @@
 - [x] Integração de leitura com o estoque e pautas automáticas (estoque, venda, insight, audiência, calendário) (1b e 1d: estoque leve e sugestões; venda fechada no CRM vira "Entrega: {modelo}" com o roteiro de 3 tomadas, sozinha, pelo job do dia ou ao abrir a tela; insight vira pauta pelo cartão; sugestões da audiência a partir da demografia; slot do calendário cria a pauta do dia)
 
 ### Fase 2 · Atendimento e prova de venda
-- [ ] Tela 04 · Atendimento, com direct, comentários, respostas rápidas, janela de 24h e automações
-- [ ] "Transformar em lead" integrado ao CRM com rodízio
+- [x] Tela 04 · Atendimento, com direct, comentários, respostas rápidas, janela de 24h e automações (2a: conversas criadas pelo webhook da Meta, ligadas ao post e ao código; resposta pelo direct ou no comentário; respostas rápidas e automações editáveis pelo gestor; janela de 24 h com aviso nas últimas 4 h e bloqueio depois; tempo de resposta = mediana da 1ª resposta humana, automação não conta; resposta fora do expediente uma vez a cada 12 h; contador no menu e fila na tela Hoje)
+- [x] "Transformar em lead" integrado ao CRM com rodízio (2a: o lead nasce orgânico com origem, código, mídia, canal e conversa; o rodízio passa pelos consultores ativos com login, na ordem de cadastro, guardando o último)
 - [ ] Códigos por post, link rastreado `/r/{code}` e reconhecimento do código no WhatsApp ou CRM
-- [ ] Automação "Comente QUERO"
+- [x] Automação "Comente QUERO" (2a: a palavra-chave no comentário manda a ficha da moto do post no direct por resposta privada; a conversa nasce ligada ao post; disparos e leads da semana na tela)
 - [ ] Venda herdando a origem do lead
 - [ ] Tela 06 · Vendas por post, com totais batendo com o CRM
 
@@ -113,6 +114,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | Ajuste 1b | Autorização de imagem (P6): na pauta de Prova social, "Cliente autorizou" e a foto do termo anexada. | Decisão P6 |
 | Ajuste 1c | Janelas com 3 ou 4 posts aparecem como "Hipótese"; "Em teste" fica para quando houver teste A/B (Fase 3). A tela Desempenho ainda usa a meta semanal antiga (`metaPostagensSemanais`); na Fase 3 ela passa a usar as mesmas regras do calendário. | Encaixe |
 | Ajuste 1d | Metas da semana da Hoje (leads orgânicos, resposta a DMs, retenção) editáveis pelo gestor junto com as regras do calendário. Uma venda só vira pauta de entrega se o papel tiver acesso a Vendas. | Encaixe |
+| Ajuste 2a | Rodízio (P4): consultores ativos com login, na ordem de cadastro; vale para os leads criados pelo Atendimento. Forma de pagamento do lead vai na observação (o CRM não tem esse campo). Expediente configurável no diálogo de regras do calendário. | Decisão P4 / encaixe |
 | Ajuste 0d | Contador azul do menu: `#2563EB` em vez de `#3B82F6`. O branco sobre o tom do protótipo dá 3,7:1, abaixo do mínimo de 4,5:1 da seção 2.5; o novo tom dá 5,2:1. | Acessibilidade |
 
 ## Perguntas em aberto
@@ -127,6 +129,7 @@ As perguntas P1 a P15 estão na seção 4 do [plano](PLANO_DE_ENCAIXE.md#4-pergu
   - `https://<api>/pro-labore/sm/cron/hora`, de hora em hora (substitui a tarefa antiga `/social-media/sincronizar-cron`, que continua funcionando);
   - `https://<api>/pro-labore/sm/cron/dia`, uma vez por dia (madrugada);
   - `https://<api>/pro-labore/sm/cron/minuto`, a cada 5 minutos.
+- [ ] Atendimento em produção: as permissões `instagram_manage_messages` e `instagram_manage_comments` dependem da revisão do app (C10). Sem elas, a tela recebe as conversas mas avisa que o envio ainda não foi liberado pela Meta.
 - [ ] Webhook no app da Meta: Webhooks → Instagram → callback `https://<api>/pro-labore/sm/webhook/instagram`, token de verificação igual a `META_WEBHOOK_VERIFY_TOKEN`, campos comments, mentions, messages e story_insights. `META_APP_SECRET` = Chave Secreta do app.
 - [ ] Conectar pela empresa: aba Social Media → "Conectar pela empresa" → colar o token do usuário do sistema. O histórico atual é mantido.
 - [ ] Chaves na Vercel: IA, armazenamento, e-mail, VAPID, token do webhook da Meta

@@ -797,6 +797,18 @@ export const proLaboreApi = {
       removerMidia: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/${midiaId}`, { method: 'DELETE' }),
     },
     hoje: () => request<SmHoje>('/pro-labore/sm/hoje'),
+    atendimento: {
+      lista: () => request<SmAtendimento>('/pro-labore/sm/atendimento'),
+      conversa: (id: string) => request<SmConversaDetalhe>(`/pro-labore/sm/conversas/${id}`),
+      responder: (id: string, texto: string) => request<{ ok: boolean }>(`/pro-labore/sm/conversas/${id}/responder`, { method: 'POST', body: JSON.stringify({ texto }) }),
+      arquivar: (id: string, arquivar = true) => request<{ ok: boolean }>(`/pro-labore/sm/conversas/${id}/arquivar`, { method: 'POST', body: JSON.stringify({ arquivar }) }),
+      criarLead: (id: string, data: { nome: string; whatsapp: string | null; moto: string | null; pagamento: 'FINANCIAMENTO' | 'A_VISTA' | 'CONSORCIO' }) =>
+        request<{ leadId: string; consultor: string | null }>(`/pro-labore/sm/conversas/${id}/lead`, { method: 'POST', body: JSON.stringify(data) }),
+      salvarRespostasRapidas: (lista: Array<{ titulo: string; texto: string }>) =>
+        request<SmAtendimento['respostasRapidas']>('/pro-labore/sm/gestor/respostas-rapidas', { method: 'PUT', body: JSON.stringify(lista) }),
+      salvarAutomacao: (tipo: 'PALAVRA_CHAVE' | 'FORA_HORARIO', data: { ativa?: boolean; palavra?: string; resposta?: string }) =>
+        request<{ tipo: string; palavra: string | null; resposta: string; ativa: boolean }>(`/pro-labore/sm/gestor/automacoes/${tipo}`, { method: 'PUT', body: JSON.stringify(data) }),
+    },
     sugestoesAudiencia: () => request<SmSugestaoAudiencia[]>('/pro-labore/sm/sugestoes/audiencia'),
     calendario: {
       mes: (mes?: string) => request<SmCalendario>(`/pro-labore/sm/calendario${mes ? `?mes=${mes}` : ''}`),
@@ -1893,15 +1905,49 @@ export interface SmHoje {
   retomada: { diasSemPost: number; feitos: number; meta: number; maxPostsDia: number } | null
   metas: {
     diasComPost: { valor: number; meta: number; planejados: number }
-    respostaDm: { valorMin: number | null; meta: number }
+    respostaDm: { valorMin: number | null; meta: number } | null
     leads: { valor: number; meta: number } | null
     retencao: { percentual: number | null; tempoMedioSeg: number | null; meta: number } | null
   }
   publicarHoje: Array<{ id: string; hora: string; formato: SmFormato; titulo: string; pilar: SmPilar; codigo: string | null; trial: boolean; status: SmStatusPauta; aprovacao: SmPauta['aprovacao']; publicacaoStatus: SmPauta['publicacaoStatus'] }> | null
   estoqueSemConteudo: Array<{ id: string; modelo: string; ano: number | null; cor: string | null; diasEmEstoque: number; posts: number; emProducao: number; status: 'PARADA' | 'ATENCAO' | 'OK' }> | null
   ultimosPosts: { mediana: number; posts: Array<{ id: string; titulo: string; formato: SmFormato; publicadoEm: string; alcance: number; multiplo: number | null }> } | null
-  atendimento: null
+  atendimento: { dmsSemResposta: number; comentariosSemResposta: number; maisAntiga: { desde: string; nome: string; texto: string | null; moto: string | null; atrasada: boolean } | null } | null
   producao: { atrasadas: number; aguardandoAprovacao: number; prontasParaAgendar: number; falhas: number } | null
   insights: Array<{ id: string; tipo: 'destaque' | 'oportunidade' | 'alerta' | 'info'; titulo: string; detalhe: string; confianca: 'alta' | 'media' | 'baixa' | 'hipotese' | string; amostra: number | null }> | null
   podeCriarPauta: boolean
+}
+
+export type SmCanalConversa = 'DIRECT' | 'COMENTARIO' | 'COMENTARIO_AUTOMACAO' | 'RESPOSTA_STORY'
+
+export interface SmAtendimento {
+  cabecalho: { tempoMedioMin: number | null; viraramLeadSemana: number }
+  metaRespostaMin: number
+  expediente: string
+  contadores: { todos: number; direct: number; comentarios: number; aguardando: number }
+  conversas: Array<{
+    id: string; canal: SmCanalConversa; canalNome: string; nome: string; previa: string; ultimaDirecao: 'IN' | 'OUT' | null
+    ultimaMsgEm: string; aguardandoDesde: string | null; atrasada: boolean; moto: string | null; postCode: string | null; status: string
+  }>
+  respostasRapidas: Array<{ id: string; titulo: string; texto: string }>
+  automacoes: Array<{ tipo: 'PALAVRA_CHAVE' | 'FORA_HORARIO'; palavra: string | null; resposta: string; ativa: boolean; disparosSemana: number; leadsSemana: number | null }>
+  podeResponder: boolean
+  podeCriarLead: boolean
+  souGestor: boolean
+}
+
+export interface SmConversaDetalhe {
+  id: string
+  canal: SmCanalConversa
+  canalNome: string
+  nome: string
+  usuario: string | null
+  post: { titulo: string | null; codigo: string | null; miniatura: string | null; permalink: string | null }
+  moto: string | null
+  status: string
+  leadId: string | null
+  aguardandoDesde: string | null
+  janela: { aberta: boolean; horasRestantes: number | null }
+  proximoConsultor: string | null
+  mensagens: Array<{ id: string; direcao: 'IN' | 'OUT'; autor: 'CLIENTE' | 'HUMANO' | 'AUTOMACAO'; automacao: string | null; texto: string; enviadaEm: string }>
 }

@@ -946,6 +946,9 @@ model ProLaboreUsuario {
   smMotos                   SmMotoEstoque[]
   smPautas                  SmPauta[]
   smConfig                  SmConfig?
+  smConversas               SmConversa[]
+  smAutomacoes              SmAutomacao[]
+  smRespostasRapidas        SmRespostaRapida[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1231,6 +1234,13 @@ model Lead {
   tipoNegociacao  String?
   estagio         String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
   vendaId         String?   @unique
+  // Origem vinda do Social Media (seção 3.4): o lead criado pelo Atendimento
+  // guarda o post e o canal de entrada, e a venda herda isso pelo lead.
+  origem          String? // INSTAGRAM_ORGANICO
+  postCode        String? // #P-DDMM-MODELO, #S-..., #BIO
+  midiaId         String? // id da mídia no Instagram
+  canalEntrada    String? // DIRECT | COMENTARIO | COMENTE_QUERO | RESPOSTA_STORY | LINK_WHATSAPP
+  conversaId      String?
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   fechadoEm       DateTime?
@@ -2471,9 +2481,95 @@ model SmConfig {
   metaLeadsSemana Int      @default(10)
   metaRespostaMin Int      @default(15) // tempo de resposta a DMs, em minutos
   metaRetencao    Int      @default(45) // retenção média dos reels, em %
+  // Expediente (decisão P13): fora dele, a automação de resposta avisa o cliente.
+  expedienteInicio Int     @default(8)
+  expedienteFim    Int     @default(18)
+  expedienteDias   String  @default("1,2,3,4,5") // 0 = domingo
+  // Rodízio dos leads do Social Media (decisão P4): o último consultor que recebeu.
+  rodizioUltimoVendedorId String?
   atualizadoEm    DateTime @default(now()) @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("pro_labore_sm_config")
+}
+
+// Conversa do Atendimento (tela 04): direct (uma por cliente) ou fio de
+// comentário (uma por comentário raiz). Chega pelo webhook da Meta.
+model SmConversa {
+  id              String    @id @default(cuid())
+  usuarioId       String
+  canal           String // DIRECT | COMENTARIO | COMENTARIO_AUTOMACAO | RESPOSTA_STORY
+  chave           String // direct: id do cliente (IGSID); comentário: id do comentário raiz
+  clienteIgId     String
+  clienteNome     String?
+  clienteUsuario  String?
+  midiaIgId       String? // post (ou story) de origem
+  postCode        String?
+  postTitulo      String?
+  motoInteresse   String?
+  comentarioIgId  String? // fio do comentário (para responder)
+  status          String    @default("ABERTA") // ABERTA | RESPONDIDA | LEAD | ARQUIVADA
+  ultimaMsgEm     DateTime
+  ultimaEntradaEm DateTime? // última mensagem do cliente (janela de 24 h)
+  aguardandoDesde DateTime? // primeira mensagem do cliente ainda sem resposta humana
+  foraHorarioEm   DateTime? // última resposta automática de fora do expediente
+  leadId          String?
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+
+  usuario   ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  mensagens SmMensagem[]
+
+  @@unique([usuarioId, canal, chave])
+  @@index([usuarioId, aguardandoDesde])
+  @@index([usuarioId, ultimaMsgEm])
+  @@map("pro_labore_sm_conversas")
+}
+
+model SmMensagem {
+  id           String   @id @default(cuid())
+  conversaId   String
+  direcao      String // IN | OUT
+  autor        String // CLIENTE | HUMANO | AUTOMACAO
+  automacao    String? // PALAVRA_CHAVE | FORA_HORARIO
+  texto        String
+  igMensagemId String?  @unique
+  respostaMin  Float? // 1ª resposta humana: minutos desde a mensagem que esperava
+  enviadaEm    DateTime @default(now())
+
+  conversa SmConversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+
+  @@index([conversaId, enviadaEm])
+  @@map("pro_labore_sm_mensagens")
+}
+
+// Automações do Atendimento: "Comente QUERO" (palavra-chave em comentário
+// manda a ficha da moto no direct) e resposta fora do expediente.
+model SmAutomacao {
+  id        String   @id @default(cuid())
+  usuarioId String
+  tipo      String // PALAVRA_CHAVE | FORA_HORARIO
+  palavra   String?
+  resposta  String
+  ativa     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, tipo])
+  @@map("pro_labore_sm_automacoes")
+}
+
+model SmRespostaRapida {
+  id        String @id @default(cuid())
+  usuarioId String
+  titulo    String
+  texto     String
+  ordem     Int    @default(0)
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, ordem])
+  @@map("pro_labore_sm_respostas_rapidas")
 }

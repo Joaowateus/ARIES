@@ -455,3 +455,42 @@ a.sm-row-link { color: inherit; text-decoration: none; }
 .sm-chip { max-width: 100%; }
 .sm-kpi .sm-chip, .sm-insight .sm-chip, .sm-banner .sm-chip { white-space: normal; }
 .sm-kpi .sm-chip, .sm-insight .sm-chip { border-radius: 8px; }
+
+/* ============ Atendimento (tela 04) ============ */
+.sm-atend { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+.sm-atend-lista { flex: 1 1 280px; min-width: 0; padding: 12px; gap: 8px; max-height: 760px; }
+.sm-atend-lista-itens { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; }
+.sm-filtros { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px; }
+.sm-filtros button { border: 0; cursor: pointer; font-family: inherit; min-height: 32px; background: var(--sm-neutral-bg); color: var(--sm-nav); }
+.sm-filtros button[aria-pressed="true"] { background: var(--sm-silver); color: var(--sm-on-silver); }
+.sm-conv { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 12px; cursor: pointer; width: 100%; font-family: var(--sm-font-text); font-size: 13px; color: var(--sm-text); border: 1px solid transparent; }
+.sm-conv:hover { background: var(--sm-surface-2); }
+.sm-conv[aria-current="true"] { background: var(--sm-surface-3); border-color: var(--sm-border-strong); }
+.sm-conv:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-conv-topo { display: flex; justify-content: space-between; gap: 8px; }
+.sm-conv-topo b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-conv-idade { font-size: 12px; color: var(--sm-text-faint); white-space: nowrap; }
+.sm-conv-idade.atrasada { color: var(--sm-bad-fg); font-weight: 600; }
+.sm-conv-previa { color: var(--sm-nav); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-conv .sm-chip { font-size: 11px; }
+.sm-conversa { flex: 999 1 380px; min-width: 0; padding: 0; gap: 0; max-height: 760px; }
+.sm-conversa-cab { padding: 16px 20px; border-bottom: 1px solid var(--sm-border); display: flex; flex-direction: column; gap: 8px; }
+.sm-origem { display: flex; gap: 10px; align-items: center; background: var(--sm-surface-2); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--sm-text-muted); }
+.sm-origem-mini { width: 36px; height: 48px; border-radius: 6px; background: var(--sm-surface-3); flex: none; overflow: hidden; }
+.sm-origem-mini img { width: 100%; height: 100%; object-fit: cover; }
+.sm-origem b { color: var(--sm-text); font-weight: 600; }
+.sm-mensagens { flex: 1; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; min-height: 280px; overflow-y: auto; }
+.sm-bolha { max-width: 78%; padding: 10px 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sm-bolha.in { align-self: flex-start; background: var(--sm-surface-3); border-radius: 14px 14px 14px 4px; }
+.sm-bolha.out { align-self: flex-end; background: var(--sm-silver); color: var(--sm-on-silver); border-radius: 14px 14px 4px 14px; }
+.sm-bolha.auto { align-self: flex-end; background: transparent; color: var(--sm-text-muted); border: 1px dashed var(--sm-border-strong); border-radius: 14px 14px 4px 14px; }
+.sm-bolha small { display: block; font-size: 11px; opacity: .7; margin-top: 4px; }
+.sm-conversa-pe { padding: 14px 20px; border-top: 1px solid var(--sm-border); display: flex; flex-direction: column; gap: 10px; }
+.sm-rapidas { display: flex; gap: 6px; flex-wrap: wrap; }
+.sm-rapidas button { border: 1px solid var(--sm-border-strong); cursor: pointer; min-height: 32px; font-family: inherit; background: var(--sm-neutral-bg); color: var(--sm-nav); }
+.sm-rapidas button:hover { color: var(--sm-text); }
+.sm-atend-lado { flex: 1 1 290px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.sm-radios { display: flex; gap: 14px; flex-wrap: wrap; }
+.sm-radios label { display: flex; gap: 6px; align-items: center; min-height: 32px; font-size: 14px; color: var(--sm-text); }
+.sm-radios input { accent-color: var(--sm-silver); width: 16px; height: 16px; }
+.sm-info-bloco { background: var(--sm-surface-2); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--sm-text-muted); line-height: 1.5; }

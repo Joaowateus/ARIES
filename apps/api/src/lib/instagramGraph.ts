@@ -690,3 +690,41 @@ export async function buscarPermalink(mediaId: string, accessToken: string): Pro
     return null
   }
 }
+
+// ---------- Atendimento (Messaging API e comentários) ----------
+// `remetente` é 'me' no login do Instagram e a Página (ou a conta) na
+// conexão da empresa. Mensagens só podem ser enviadas até 24 h depois da
+// última mensagem do cliente (regra da Meta).
+
+export async function enviarMensagemDirect(remetente: string, accessToken: string, destinatarioId: string, texto: string): Promise<string | null> {
+  const r = await postarGraphApi<{ message_id?: string }>(`/${remetente}/messages`, {
+    recipient: JSON.stringify({ id: destinatarioId }),
+    message: JSON.stringify({ text: texto }),
+    access_token: accessToken,
+  })
+  return r.message_id ?? null
+}
+
+/** Resposta privada a um comentário: a mensagem chega no direct de quem comentou. */
+export async function enviarRespostaPrivada(remetente: string, accessToken: string, comentarioId: string, texto: string): Promise<string | null> {
+  const r = await postarGraphApi<{ message_id?: string }>(`/${remetente}/messages`, {
+    recipient: JSON.stringify({ comment_id: comentarioId }),
+    message: JSON.stringify({ text: texto }),
+    access_token: accessToken,
+  })
+  return r.message_id ?? null
+}
+
+export async function responderComentario(comentarioId: string, accessToken: string, texto: string): Promise<string> {
+  const r = await postarGraphApi<{ id: string }>(`/${comentarioId}/replies`, { message: texto, access_token: accessToken })
+  return r.id
+}
+
+export async function buscarPerfilRemetente(igsid: string, accessToken: string): Promise<{ nome: string | null; usuario: string | null }> {
+  try {
+    const r = await chamarGraphApi<{ name?: string; username?: string }>(`/${igsid}`, { fields: 'name,username', access_token: accessToken })
+    return { nome: r.name ?? null, usuario: r.username ?? null }
+  } catch {
+    return { nome: null, usuario: null }
+  }
+}
