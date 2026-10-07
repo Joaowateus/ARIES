@@ -6,10 +6,9 @@ import { recalcularPagamentoComissao } from '../lib/comissoes'
 import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
-import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, buscarAlcanceUnicoPeriodo, MAX_DIAS_ALCANCE_UNICO, comApiDaEmpresa } from '../lib/instagramGraph'
+import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, comApiDaEmpresa } from '../lib/instagramGraph'
 import { sincronizarContaSocialMedia, rodarJobSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
-import { montarAnaliseSocialMedia } from '../lib/socialMediaAnalytics'
-import { pagoPorMidia, type OrigemMetricas } from '../lib/socialMediaOrigem'
+import { analisarContaSocialMedia } from '../lib/socialMediaResumo'
 import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../lib/planoCrescimento'
 import { randomBytes } from 'crypto'
 import { logger } from '../lib/logger'
@@ -2370,47 +2369,6 @@ router.post('/social-media/sincronizar-cron', async (req: Request, res: Response
   res.json(await rodarJobSocialMedia('HORA'))
 })
 
-// Análise completa da conta num período (padrão: últimos 30 dias), já com
-// o período anterior de mesma duração pra comparação — ver
-// lib/socialMediaAnalytics.ts. Datas em 'YYYY-MM-DD' do calendário de
-// Brasília. Só lê do banco: trocar de período não gasta cota da API da Meta.
-const MAX_DIAS_ANALISE_SOCIAL = 366
-const DIAS_JANELA_IMPACTO = 90
-
-// Alcance único do período (contas distintas), pro topo do funil — a API só
-// calcula sob demanda e até 30 dias. Guardado por período: período fechado
-// há mais de 3 dias não muda mais; o que inclui dias recentes é refeito a
-// cada 6h. Se a API falhar, usa o último valor guardado (ou explica).
-async function alcanceUnicoDoPeriodo(conta: { id: string; accessToken: string; tipoConexao: string; instagramUserId: string }, inicio: Date, fim: Date, hoje: Date) {
-  const DIA = 24 * 60 * 60 * 1000
-  const dias = Math.round((fim.getTime() - inicio.getTime()) / DIA) + 1
-  if (dias > MAX_DIAS_ALCANCE_UNICO) {
-    return { valor: null, motivo: `O Instagram só calcula o alcance único de períodos de até ${MAX_DIAS_ALCANCE_UNICO} dias. Escolha um período menor para ver essa etapa.` }
-  }
-  const cache = await prisma.socialMediaAlcancePeriodo.findUnique({ where: { contaId_inicio_fim: { contaId: conta.id, inicio, fim } } })
-  const fechado = fim.getTime() < hoje.getTime() - 3 * DIA
-  if (cache && (fechado ? cache.atualizadoEm.getTime() > fim.getTime() + 3 * DIA : Date.now() - cache.atualizadoEm.getTime() < 6 * 60 * 60 * 1000)) {
-    return { valor: cache.alcance, motivo: null }
-  }
-  try {
-    const ate = new Date(Math.min(Date.now(), inicioDoDiaBrasilia(new Date(fim.getTime() + DIA)).getTime()))
-    // Como no sync: `me` no login do Instagram; o ID da conta (pelo Graph
-    // do Facebook) na conta da empresa.
-    const valor = conta.tipoConexao === 'EMPRESA'
-      ? await comApiDaEmpresa(() => buscarAlcanceUnicoPeriodo(conta.instagramUserId, conta.accessToken, inicioDoDiaBrasilia(inicio), ate))
-      : await buscarAlcanceUnicoPeriodo('me', conta.accessToken, inicioDoDiaBrasilia(inicio), ate)
-    if (valor == null) return cache ? { valor: cache.alcance, motivo: null } : { valor: null, motivo: 'O Instagram não devolveu o alcance único desse período.' }
-    await prisma.socialMediaAlcancePeriodo.upsert({
-      where: { contaId_inicio_fim: { contaId: conta.id, inicio, fim } },
-      create: { contaId: conta.id, inicio, fim, alcance: valor },
-      update: { alcance: valor },
-    })
-    return { valor, motivo: null }
-  } catch {
-    return cache ? { valor: cache.alcance, motivo: null } : { valor: null, motivo: 'Não deu para buscar o alcance único no Instagram agora. Tente sincronizar de novo.' }
-  }
-}
-
 router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const { titular, vendedorId: vendedorTitular } = titularSocialMedia(req)
@@ -2419,46 +2377,11 @@ router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, re
     res.json({ conectado: false })
     return
   }
-
-  const DIA = 24 * 60 * 60 * 1000
-  const hoje = diaBrasilia(new Date())
-  const fim = (typeof req.query.fim === 'string' ? parseDataDiaUTC(req.query.fim) : null) ?? hoje
-  let inicio = (typeof req.query.inicio === 'string' ? parseDataDiaUTC(req.query.inicio) : null) ?? new Date(fim.getTime() - 29 * DIA)
-  if (inicio.getTime() > fim.getTime()) inicio = fim
-  if ((fim.getTime() - inicio.getTime()) / DIA >= MAX_DIAS_ANALISE_SOCIAL) inicio = new Date(fim.getTime() - (MAX_DIAS_ANALISE_SOCIAL - 1) * DIA)
-  const dias = Math.round((fim.getTime() - inicio.getTime()) / DIA) + 1
-  const anteriorInicio = new Date(inicio.getTime() - dias * DIA)
-  const inicioBuscaMidias = new Date(Math.min(anteriorInicio.getTime(), fim.getTime() - (DIAS_JANELA_IMPACTO - 1) * DIA))
-  const fimExclusivo = inicioDoDiaBrasilia(new Date(fim.getTime() + DIA))
-
-  const [midias, snapshots, parametro, leadsOrganicos] = await Promise.all([
-    prisma.socialMediaMidia.findMany({ where: { contaId: conta.id, publicadoEm: { gte: inicioDoDiaBrasilia(inicioBuscaMidias), lt: fimExclusivo } } }),
-    prisma.socialMediaSnapshotDiario.findMany({ where: { contaId: conta.id, data: { gte: anteriorInicio, lte: fim } }, orderBy: { data: 'asc' } }),
-    prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
-    prisma.lead.findMany({
-      // Instagram de vendedor: cruza só com os leads orgânicos dele.
-      where: { usuarioId, ...(vendedorTitular && { vendedorId: vendedorTitular }), tipoLead: 'ORGANICO', criadoEm: { gte: inicioDoDiaBrasilia(inicio), lt: fimExclusivo } },
-      select: { criadoEm: true, valorNegociacao: true, estagio: true },
-    }),
-  ])
-
-  // Orgânico (padrão), pago ou total. O pago vem dos anúncios do Tráfego,
-  // que é da operação: só entra na conta do dono (a da empresa), nunca no
-  // Instagram pessoal de alguém da equipe.
-  const origemQuery = typeof req.query.origem === 'string' ? req.query.origem.toUpperCase() : 'ORGANICO'
-  const origem = (['ORGANICO', 'PAGO', 'TOTAL'].includes(origemQuery) ? origemQuery : 'ORGANICO') as OrigemMetricas
-  const pagos = vendedorTitular ? new Map() : await pagoPorMidia(usuarioId)
-
-  res.json(montarAnaliseSocialMedia({
-    conta,
-    periodo: { inicio, fim },
-    midias,
-    snapshots,
-    metaPostagensSemanais: parametro.metaPostagensSemanais,
-    leadsOrganicos,
-    alcanceUnico: await alcanceUnicoDoPeriodo(conta, inicio, fim, hoje),
-    origem,
-    pagoPorMidia: pagos,
+  res.json(await analisarContaSocialMedia({
+    usuarioId, conta, vendedorTitular,
+    inicio: typeof req.query.inicio === 'string' ? req.query.inicio : null,
+    fim: typeof req.query.fim === 'string' ? req.query.fim : null,
+    origem: typeof req.query.origem === 'string' ? req.query.origem : null,
   }))
 })
 

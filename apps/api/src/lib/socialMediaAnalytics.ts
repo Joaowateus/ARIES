@@ -111,6 +111,7 @@ function hashtagsDe(legenda: string | null): string[] {
 
 export interface PostAnalise {
   id: string
+  instagramMediaId: string
   formato: FormatoPost
   legenda: string | null
   thumbnail: string | null
@@ -129,6 +130,12 @@ export interface PostAnalise {
   visitasPerfil: number
   seguidoresGerados: number
   tempoMedioAssistidoSeg: number | null
+  // Reels (seção 3.3): duração lida do vídeo, retenção = tempo médio / duração,
+  // pulo nos 3 s (fração) e reposts.
+  duracaoSeg: number | null
+  retencao: number | null
+  taxaPulo: number | null
+  reposts: number
   taxaEngajamento: number
   taxaSalvamento: number
   taxaCompartilhamento: number
@@ -168,6 +175,7 @@ function montarPost(m: SocialMediaMidia, medianaReferencia: number, origem: Orig
   const legenda = m.legenda ?? null
   return {
     id: m.id,
+    instagramMediaId: m.instagramMediaId,
     formato,
     legenda: legenda && legenda.length > 400 ? `${legenda.slice(0, 400)}…` : legenda,
     // Cópia própria primeiro (a URL da CDN expira); senão, vídeo/reels só
@@ -188,6 +196,10 @@ function montarPost(m: SocialMediaMidia, medianaReferencia: number, origem: Orig
     visitasPerfil: v.visitasPerfil,
     seguidoresGerados: v.seguidoresGerados,
     tempoMedioAssistidoSeg: m.tempoMedioAssistidoSeg,
+    duracaoSeg: m.duracaoSeg,
+    retencao: m.duracaoSeg && m.tempoMedioAssistidoSeg != null ? Math.min(1, m.tempoMedioAssistidoSeg / m.duracaoSeg) : null,
+    taxaPulo: m.taxaPulo,
+    reposts: m.reposts,
     taxaEngajamento: razao(interacoes, v.alcance),
     taxaSalvamento: razao(v.salvamentos, v.alcance),
     taxaCompartilhamento: razao(v.compartilhamentos, v.alcance),
@@ -202,7 +214,7 @@ function montarPost(m: SocialMediaMidia, medianaReferencia: number, origem: Orig
   }
 }
 
-interface AgregadoPosts {
+export interface AgregadoPosts {
   quantidade: number
   alcanceMedio: number
   visualizacoesMedias: number

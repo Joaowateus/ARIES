@@ -22,6 +22,7 @@ import {
   renovarTokenLongo,
 } from './instagramGraph'
 import { baixarEGuardarImagem } from './armazenamento'
+import { duracaoDoVideo } from './videoDuracao'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 // Fuso fixo de Brasília (UTC-3, sem horário de verão desde 2019) — mesma
@@ -250,6 +251,15 @@ async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<Resul
     lote.forEach((m, idx) => insights.set(m.instagramMediaId, resultados[idx]))
   }
 
+  // Duração dos reels (retenção em %): lida uma vez do cabeçalho do vídeo.
+  const semDuracao = midias.filter(m => m.formato === 'REELS' && m.urlMidia && existentePorId.get(m.instagramMediaId)?.duracaoSeg == null).slice(0, 12)
+  const duracoes = new Map<string, number>()
+  for (let i = 0; i < semDuracao.length && Date.now() < prazo; i += 6) {
+    const lote = semDuracao.slice(i, i + 6)
+    const r = await Promise.all(lote.map(m => duracaoDoVideo(m.urlMidia!).catch(() => null)))
+    lote.forEach((m, idx) => { if (r[idx]) duracoes.set(m.instagramMediaId, r[idx]!) })
+  }
+
   const agoraData = new Date()
   const linhasMidia: Prisma.SocialMediaMidiaCreateManyInput[] = midias.map(m => {
     const antigo = existentePorId.get(m.instagramMediaId)
@@ -272,6 +282,7 @@ async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<Resul
       curtidas: novo?.curtidas ?? (m.formato === 'STORY' ? antigo?.curtidas ?? 0 : m.curtidas),
       comentarios: novo?.comentarios ?? (m.formato === 'STORY' ? antigo?.comentarios ?? 0 : m.comentarios),
       impressoes: antigo?.impressoes ?? 0,
+      duracaoSeg: duracoes.get(m.instagramMediaId) ?? antigo?.duracaoSeg ?? null,
     }
     if (novo) {
       return {
@@ -286,6 +297,8 @@ async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<Resul
         respostas: novo.respostas,
         tempoMedioAssistidoSeg: novo.tempoMedioAssistidoSeg,
         tempoTotalAssistidoSeg: novo.tempoTotalAssistidoSeg,
+        taxaPulo: novo.taxaPulo ?? antigo?.taxaPulo ?? null,
+        reposts: novo.reposts,
         navegacaoStory: novo.navegacaoStory ?? Prisma.DbNull,
         insightsAtualizadoEm: agoraData,
       }
@@ -302,6 +315,8 @@ async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<Resul
       respostas: antigo?.respostas ?? 0,
       tempoMedioAssistidoSeg: antigo?.tempoMedioAssistidoSeg ?? null,
       tempoTotalAssistidoSeg: antigo?.tempoTotalAssistidoSeg ?? null,
+      taxaPulo: antigo?.taxaPulo ?? null,
+      reposts: antigo?.reposts ?? 0,
       navegacaoStory: (antigo?.navegacaoStory ?? Prisma.DbNull) as Prisma.InputJsonValue,
       insightsAtualizadoEm: antigo?.insightsAtualizadoEm ?? null,
     }

@@ -11,8 +11,8 @@ const DIA_MS = 24 * 3600 * 1000
 export const PILARES_MIX = ['ESTOQUE', 'PROVA', 'EDUCACAO', 'BASTIDORES'] as const
 export const MIX_PADRAO: Record<(typeof PILARES_MIX)[number], number> = { ESTOQUE: 40, PROVA: 20, EDUCACAO: 25, BASTIDORES: 15 }
 
-export interface ConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; mixMeta: Record<string, number>; horizonteDias: number; metaLeadsSemana: number; metaRespostaMin: number; metaRetencao: number; expedienteInicio: number; expedienteFim: number; expedienteDias: string }
-export const CONFIG_PADRAO: ConfigCalendario = { minDiasSemana: 4, maxPostsDia: 2, maxDiasSemPost: 2, mixMeta: { ...MIX_PADRAO }, horizonteDias: 21, metaLeadsSemana: 10, metaRespostaMin: 15, metaRetencao: 45, expedienteInicio: 8, expedienteFim: 18, expedienteDias: '1,2,3,4,5' }
+export interface ConfigCalendario { minDiasSemana: number; maxPostsDia: number; maxDiasSemPost: number; mixMeta: Record<string, number>; horizonteDias: number; metaLeadsSemana: number; metaRespostaMin: number; metaRetencao: number; metaPuloPct: number; metaEnviosMil: number; metaSalvosMil: number; metaCurtidasPct: number; expedienteInicio: number; expedienteFim: number; expedienteDias: string }
+export const CONFIG_PADRAO: ConfigCalendario = { minDiasSemana: 4, maxPostsDia: 2, maxDiasSemPost: 2, mixMeta: { ...MIX_PADRAO }, horizonteDias: 21, metaLeadsSemana: 10, metaRespostaMin: 15, metaRetencao: 45, metaPuloPct: 40, metaEnviosMil: 3, metaSalvosMil: 3, metaCurtidasPct: 3, expedienteInicio: 8, expedienteFim: 18, expedienteDias: '1,2,3,4,5' }
 
 export async function carregarConfig(usuarioId: string): Promise<ConfigCalendario> {
   const c = await prisma.smConfig.findUnique({ where: { usuarioId } })
@@ -21,6 +21,7 @@ export async function carregarConfig(usuarioId: string): Promise<ConfigCalendari
   return {
     minDiasSemana: c.minDiasSemana, maxPostsDia: c.maxPostsDia, maxDiasSemPost: c.maxDiasSemPost, mixMeta: mix, horizonteDias: c.horizonteDias,
     metaLeadsSemana: c.metaLeadsSemana, metaRespostaMin: c.metaRespostaMin, metaRetencao: c.metaRetencao,
+    metaPuloPct: c.metaPuloPct, metaEnviosMil: c.metaEnviosMil, metaSalvosMil: c.metaSalvosMil, metaCurtidasPct: c.metaCurtidasPct,
     expedienteInicio: c.expedienteInicio, expedienteFim: c.expedienteFim, expedienteDias: c.expedienteDias,
   }
 }
