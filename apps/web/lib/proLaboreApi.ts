@@ -815,6 +815,16 @@ export const proLaboreApi = {
       salvarAutomacao: (tipo: 'PALAVRA_CHAVE' | 'FORA_HORARIO', data: { ativa?: boolean; palavra?: string; resposta?: string }) =>
         request<{ tipo: string; palavra: string | null; resposta: string; ativa: boolean }>(`/pro-labore/sm/gestor/automacoes/${tipo}`, { method: 'PUT', body: JSON.stringify(data) }),
     },
+    testes: {
+      listar: () => request<{ ativos: SmTesteAB[]; concluidos: SmTesteAB[]; podeEditar: boolean }>('/pro-labore/sm/testes'),
+      criar: (data: SmTesteEntrada) => request<{ id: string }>('/pro-labore/sm/testes', { method: 'POST', body: JSON.stringify(data) }),
+      cancelar: (id: string) => request<{ ok: boolean }>(`/pro-labore/sm/testes/${id}/cancelar`, { method: 'POST' }),
+    },
+    ganchos: {
+      listar: () => request<SmBibliotecaGanchos>('/pro-labore/sm/ganchos'),
+      salvar: (texto: string, midiaIgIds: string[] = []) => request<{ id: string; texto: string; exemplos: number; novo: boolean }>('/pro-labore/sm/ganchos', { method: 'POST', body: JSON.stringify({ texto, midiaIgIds }) }),
+      excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/sm/ganchos/${id}`, { method: 'DELETE' }),
+    },
     vendasPorPost: {
       ver: (dias: 7 | 30 | 90 = 30) => request<SmVendasPorPost>(`/pro-labore/sm/vendas-por-post?dias=${dias}`),
       criarPautas: (codigos: string[]) =>
@@ -1824,6 +1834,8 @@ export interface SmPautaEntrada {
   trial?: boolean
   autorizacaoImagem?: boolean
   checklist?: { capaTexto?: boolean }
+  testeId?: string | null
+  testeGrupo?: 'A' | 'B' | null
 }
 
 export interface SmItemChecklist { chave: string; rotulo: string; ok: boolean | null; automatico: boolean; detalhe?: string }
@@ -1849,6 +1861,9 @@ export interface SmPauta {
   agendadoPara: string | null
   codigo: string | null
   linkSlug: string | null
+  testeId: string | null
+  testeGrupo: 'A' | 'B' | null
+  teste: { id: string; hipotese: string; grupoA: string; grupoB: string; status: SmTesteAB['status'] } | null
   trial: boolean
   aprovacao: 'PENDENTE' | 'APROVADA' | 'AJUSTE' | null
   enviadaAprovacaoEm: string | null
@@ -1868,7 +1883,7 @@ export interface SmPauta {
   criadoEm: string
 }
 
-export interface SmJanela { dia: number; bloco: number; inicioHora: number; fimHora: number; posts: number; alcanceMedio: number; indice: number; status: 'COMPROVADA' | 'PROMISSORA' | 'SEGUIDORES_ONLINE' }
+export interface SmJanela { dia: number; bloco: number; inicioHora: number; fimHora: number; posts: number; alcanceMedio: number; indice: number; status: 'COMPROVADA' | 'PROMISSORA' | 'SEGUIDORES_ONLINE'; emTeste?: boolean }
 
 export interface SmQuadro {
   pautas: SmPauta[]
@@ -1897,6 +1912,7 @@ export interface SmItemCalendario {
   contaNaCadencia: boolean
   arrastavel: boolean
   permalink: string | null
+  teste?: { grupo: 'A' | 'B'; rotulo: string } | null
 }
 
 export interface SmDiaCalendario {
@@ -2023,6 +2039,7 @@ export interface SmSinal {
 
 export interface SmReelDiagnostico {
   id: string
+  instagramMediaId: string
   nome: string
   permalink: string | null
   publicadoEm: string
@@ -2043,9 +2060,56 @@ export type SmDesempenho =
       funil: Omit<AnaliseSocialConectada['funil'], 'leads' | 'vendas'> & { leads: number | null; vendas: number | null }
       sinais: SmSinal[]
       reelsDiagnostico: SmReelDiagnostico[]
-      testeEmAndamento: null
+      testeEmAndamento: SmTesteAB | null
+      podeCriarTeste: boolean
       metas: { metaRetencao: number; metaPuloPct: number; metaEnviosMil: number; metaSalvosMil: number; metaCurtidasPct: number }
       souGestor: boolean
       verCrm: boolean
       verVendas: boolean
     })
+
+export type SmVariavelTeste = 'HORARIO' | 'GANCHO' | 'FORMATO' | 'CTA' | 'OUTRO'
+export type SmMetricaTeste = 'ALCANCE' | 'ENVIOS' | 'SALVOS' | 'PULO' | 'RETENCAO'
+
+/** Teste A/B (seção 13.3) com o progresso calculado das métricas reais. */
+export interface SmTesteAB {
+  id: string
+  hipotese: string
+  descricao: string | null
+  variavel: SmVariavelTeste
+  metrica: SmMetricaTeste
+  metricaRotulo: string
+  grupoA: string
+  grupoB: string
+  horaA: number | null
+  horaB: number | null
+  amostraAlvo: number
+  amostraAtual: number
+  status: 'ATIVO' | 'CONCLUIDO' | 'CANCELADO'
+  criadoEm: string
+  concluidoEm: string | null
+  resultado: { mediaA: number | null; mediaB: number | null; nA: number; nB: number; diferenca: number | null; vencedor: 'A' | 'B' | 'EMPATE'; confianca: 'alta' | 'media' | 'baixa' | 'hipotese'; texto: string } | null
+  grupos: Record<'A' | 'B', { rotulo: string; posts: number; medidos: number; media: number | null }>
+  posts: Array<{ pautaId: string; titulo: string; grupo: 'A' | 'B'; status: string; publicadaEm: string | null; agendadoPara: string | null; valor: number | null; medido: boolean }>
+}
+
+export interface SmTesteEntrada {
+  hipotese: string
+  descricao?: string | null
+  variavel: SmVariavelTeste
+  grupoA: string
+  grupoB: string
+  horaA?: number | null
+  horaB?: number | null
+  metrica?: SmMetricaTeste
+  amostraAlvo?: number
+  origem?: 'MANUAL' | 'INSIGHT'
+  origemRef?: string | null
+}
+
+export interface SmGanchoBiblioteca { id: string; texto: string; exemplos: number; criadoEm: string; links: string[]; puloMedio: number | null; comPulo: number; alcanceMedio: number | null }
+export interface SmBibliotecaGanchos {
+  ganchos: SmGanchoBiblioteca[]
+  sugestoes: Array<{ texto: string; midiaIgIds: string[]; puloMedio: number | null; comPulo: number; alcanceMedio: number | null }>
+  podeEditar: boolean
+}

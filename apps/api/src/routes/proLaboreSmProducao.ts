@@ -91,6 +91,7 @@ router.get('/sm/sugestoes/audiencia', ...autenticado, requireModuloSM('producao'
 
 const INCLUDE_PAUTA = {
   moto: { select: { id: true, modelo: true, ano: true, cor: true } },
+  teste: { select: { id: true, hipotese: true, grupoA: true, grupoB: true, status: true } },
   midias: { orderBy: [{ ordem: 'asc' }, { criadoEm: 'asc' }] },
 } satisfies Prisma.SmPautaInclude
 
@@ -168,6 +169,9 @@ const pautaSchema = z.object({
   trial: z.boolean().optional(),
   autorizacaoImagem: z.boolean().optional(),
   checklist: z.object({ capaTexto: z.boolean().optional() }).optional(),
+  // Teste A/B (seção 13.3): grupo da pauta no teste em andamento.
+  testeId: z.string().nullable().optional(),
+  testeGrupo: z.enum(['A', 'B']).nullable().optional(),
 })
 
 async function motoDaConta(usuarioId: string, motoId: string | null | undefined) {
@@ -235,6 +239,12 @@ router.patch('/sm/pautas/:id', ...autenticado, requireModuloSM('producao', 'COMP
   if (bloqueio) return erro(res, 409, bloqueio)
   const d = parse.data
   if (d.motoId !== undefined && d.motoId && !(await motoDaConta(usuarioId, d.motoId))) return erro(res, 400, 'Moto não encontrada no estoque')
+  if (d.testeId) {
+    const t = await prisma.smTeste.findFirst({ where: { id: d.testeId, usuarioId }, select: { status: true } })
+    if (!t) return erro(res, 400, 'Teste não encontrado')
+    if (t.status !== 'ATIVO') return erro(res, 409, 'Esse teste não está mais em andamento')
+    if (!d.testeGrupo) return erro(res, 400, 'Escolha o grupo do teste (A ou B)')
+  }
   const mudouConteudo = CAMPOS_DE_CONTEUDO.some(c => {
     if (!(c in d)) return false
     const novo = d[c as keyof typeof d], antigo = p[c as keyof typeof p]
@@ -248,6 +258,7 @@ router.patch('/sm/pautas/:id', ...autenticado, requireModuloSM('producao', 'COMP
     ...('autorizacaoImagem' in d && { autorizacaoImagem: d.autorizacaoImagem }),
     ...('motoId' in d && { moto: d.motoId ? { connect: { id: d.motoId } } : { disconnect: true } }),
     ...('checklist' in d && { checklist: { ...(p.checklist as object), ...d.checklist } }),
+    ...('testeId' in d && { teste: d.testeId ? { connect: { id: d.testeId } } : { disconnect: true }, testeGrupo: d.testeId ? d.testeGrupo : null }),
     ...efeitoNaAprovacao(req, p, mudouConteudo),
   }
   const atualizada = await prisma.smPauta.update({ where: { id: p.id }, data, include: INCLUDE_PAUTA })

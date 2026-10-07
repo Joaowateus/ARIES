@@ -9,6 +9,7 @@ import { contextoSM, requireModuloSM } from '../lib/smAcesso'
 import { carregarConfig } from '../lib/smCalendario'
 import { analisarContaSocialMedia } from '../lib/socialMediaResumo'
 import { diagnosticoDosReels, filtrarParaOPapel, sinaisDoPeriodo } from '../lib/smDesempenho'
+import { testeEmDestaque } from '../lib/smTestes'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -18,7 +19,7 @@ router.get('/sm/desempenho', ...autenticado, requireModuloSM('analise', 'LEITURA
   const usuarioId = sm.usuarioId
   const conta = await prisma.socialMediaConta.findUnique({ where: { titular: `dono:${usuarioId}` } })
   if (!conta) { res.json({ conectado: false }); return }
-  const [analise, config] = await Promise.all([
+  const [analise, config, teste] = await Promise.all([
     analisarContaSocialMedia({
       usuarioId, conta, vendedorTitular: null,
       inicio: typeof req.query.inicio === 'string' ? req.query.inicio : null,
@@ -26,13 +27,14 @@ router.get('/sm/desempenho', ...autenticado, requireModuloSM('analise', 'LEITURA
       origem: typeof req.query.origem === 'string' ? req.query.origem : null,
     }),
     carregarConfig(usuarioId),
+    testeEmDestaque(usuarioId),
   ])
   res.json({
     ...filtrarParaOPapel(analise, sm),
     sinais: sinaisDoPeriodo(analise, config),
     reelsDiagnostico: diagnosticoDosReels(analise),
-    // Testes A/B (seção 13.3) entram na Fase 3c.
-    testeEmAndamento: null,
+    testeEmAndamento: teste,
+    podeCriarTeste: sm.pode('analise', 'COMPLETO') && !sm.somenteLeitura,
     metas: { metaRetencao: config.metaRetencao, metaPuloPct: config.metaPuloPct, metaEnviosMil: config.metaEnviosMil, metaSalvosMil: config.metaSalvosMil, metaCurtidasPct: config.metaCurtidasPct },
     souGestor: sm.visao === 'GESTOR' && !sm.verComo,
     verCrm: sm.pode('crm', 'LEITURA'),

@@ -7,6 +7,7 @@
 // com 5 ou mais é "Comprovada". Sem posts suficientes, cai para o pico de
 // seguidores online que o próprio Instagram informa, marcado como tal.
 import { prisma } from './prisma'
+import { horasEmTeste } from './smTestes'
 
 const OFFSET_BRASILIA_MS = 3 * 60 * 60 * 1000
 const DIAS_HISTORICO = 90
@@ -23,6 +24,8 @@ export interface Janela {
   alcanceMedio: number
   indice: number // alcance médio da janela / mediana dos posts
   status: 'COMPROVADA' | 'PROMISSORA' | 'SEGUIDORES_ONLINE'
+  /** Há um teste A/B de horário em andamento com uma hora nesta janela (seção 5). */
+  emTeste?: boolean
 }
 
 export interface JanelasResultado {
@@ -44,6 +47,12 @@ const mediana = (v: number[]) => {
 }
 
 export async function melhoresJanelas(usuarioId: string, agora = new Date()): Promise<JanelasResultado> {
+  const [r, horas] = await Promise.all([calcularJanelas(usuarioId, agora), horasEmTeste(usuarioId)])
+  if (!horas.length) return r
+  return { ...r, janelas: r.janelas.map(j => ({ ...j, emTeste: horas.some(h => h >= j.inicioHora && h < j.fimHora) })) }
+}
+
+async function calcularJanelas(usuarioId: string, agora: Date): Promise<JanelasResultado> {
   const conta = await prisma.socialMediaConta.findUnique({ where: { titular: `dono:${usuarioId}` }, select: { id: true, seguidoresOnline: true } })
   if (!conta) return { base: 'SEM_DADOS', amostra: 0, janelas: [] }
   const desde = new Date(agora.getTime() - DIAS_HISTORICO * 24 * 3600 * 1000)
