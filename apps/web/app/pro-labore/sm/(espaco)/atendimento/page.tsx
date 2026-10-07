@@ -5,7 +5,7 @@
 // janela de 24 h, automações e "Transformar em lead" com rodízio.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { proLaboreApi, urlArquivoApi, type SmAtendimento, type SmConversaDetalhe } from '@/lib/proLaboreApi'
-import { Banner, Botao, Card, CardEsqueleto, Chip, EstadoVazio, Modal, Rotulo, esperaDesde, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, Card, CardEsqueleto, Chip, EstadoVazio, Modal, Rotulo, esperaDesde, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 
 type Filtro = 'TODOS' | 'DIRECT' | 'COMENTARIOS'
@@ -26,10 +26,15 @@ function Atendimento() {
   const [conversa, setConversa] = useState<SmConversaDetalhe | null>(null)
   const [config, setConfig] = useState(false)
 
+  // Conversa pedida na URL (?conversa=, ex.: "Responder agora" do assistente): só na primeira carga.
+  const pedida = useRef<string | null | undefined>(undefined)
   const carregarLista = useCallback(() => {
     proLaboreApi.sm.atendimento.lista().then(d => {
       setDados(d); setErro(null)
-      setSelId(id => id && d.conversas.some(c => c.id === id) ? id : d.conversas[0]?.id ?? null)
+      if (pedida.current === undefined) pedida.current = new URLSearchParams(window.location.search).get('conversa')
+      const alvo = pedida.current && d.conversas.some(c => c.id === pedida.current) ? pedida.current : null
+      pedida.current = null
+      setSelId(id => alvo ?? (id && d.conversas.some(c => c.id === id) ? id : d.conversas[0]?.id ?? null))
     }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
   }, [])
   const carregarConversa = useCallback((id: string) => {
@@ -81,6 +86,7 @@ function Atendimento() {
           {dados.souGestor && <Botao onClick={() => setConfig(true)}>Respostas e automações</Botao>}
         </div>
       </header>
+      <AssistenteAba aba="atendimento" aoMudar={aposMudanca} />
 
       <div className="sm-atend">
         <section aria-label="Conversas" className="sm-card sm-atend-lista">

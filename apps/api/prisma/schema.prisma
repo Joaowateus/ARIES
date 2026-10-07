@@ -949,6 +949,8 @@ model ProLaboreUsuario {
   smConversas               SmConversa[]
   smLinks                   SmLinkRastreado[]
   smTestes                  SmTeste[]
+  smInsightAcoes            SmInsightAcao[]
+  smAssistenteEstados       SmAssistenteEstado[]
   smGanchos                 SmGancho[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
@@ -2684,4 +2686,38 @@ model SmGancho {
 
   @@unique([usuarioId, chave])
   @@map("pro_labore_sm_ganchos")
+}
+
+// Ação de um insight executada pelo assistente da aba (seção 13.1): guarda
+// o que foi feito para desfazer e para o insight não voltar logo em seguida.
+model SmInsightAcao {
+  id         String    @id @default(cuid())
+  usuarioId  String
+  ator       String // id do membro Social Media, ou GESTOR
+  aba        String
+  chave      String // identificador estável do insight
+  operacao   Json
+  desfazer   Json?
+  mensagem   String
+  executadoEm DateTime @default(now())
+  desfeitoEm DateTime?
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, chave])
+  @@map("pro_labore_sm_insight_acoes")
+}
+
+// Assistente da aba recolhido ou aberto, por pessoa e por aba (seção 16.2).
+model SmAssistenteEstado {
+  id        String  @id @default(cuid())
+  usuarioId String
+  ator      String
+  aba       String
+  recolhido Boolean @default(false)
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, ator, aba])
+  @@map("pro_labore_sm_assistente_estados")
 }

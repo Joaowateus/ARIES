@@ -6,7 +6,7 @@
 // regra "Mostrar valores em R$" do gestor.
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { proLaboreApi, type SmLinhaAtribuicao, type SmVendasPorPost } from '@/lib/proLaboreApi'
-import { Banner, Botao, Card, CardEsqueleto, Chip, EstadoVazio, KpiCard, Rotulo, Segmentado, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, Card, CardEsqueleto, Chip, EstadoVazio, KpiCard, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 
 type Dias = 7 | 30 | 90
@@ -81,6 +81,7 @@ export default function VendasPorPostPage() {
         </div>
         <Segmentado rotulo="Período" opcoes={PERIODOS} valor={`${dias}`} aoMudar={v => setDias(Number(v) as Dias)} />
       </header>
+      <AssistenteAba aba="atribuicao" aoMudar={() => carregar(dias)} />
 
       {erro && <p className="sm-erro" role="alert">{erro}</p>}
       {!dados && !erro && <><div className="sm-grade">{[0, 1, 2, 3, 4].map(i => <CardEsqueleto key={i} linhas={2} />)}</div><CardEsqueleto linhas={6} /></>}

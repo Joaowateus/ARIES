@@ -7,7 +7,7 @@
 // análise do gestor, filtradas pelo que o papel pode ver.
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type AnaliseSocialConectada, type OrigemSocial, type SmDesempenho, type SmReelDiagnostico, type SmSinal } from '@/lib/proLaboreApi'
-import { Banner, Botao, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { CartaoTeste } from './Testes'
 import { periodoDoPreset, type Periodo, type PresetPeriodo } from '../../../(painel)/social-media/_componentes/FiltroPeriodo'
@@ -86,6 +86,7 @@ export default function DesempenhoPage() {
         </div>
         <Segmentado rotulo="Origem do alcance" opcoes={ORIGENS} valor={origem} aoMudar={setOrigem} />
       </header>
+      <AssistenteAba aba="desempenho" aoMudar={() => setVersao(v => v + 1)} />
 
       <div className="sm-desemp-periodo">
         <Segmentado rotulo="Período" opcoes={PRESETS} valor={periodo.preset} aoMudar={p => setPeriodo(p === 'custom' ? { ...periodo, preset: 'custom' } : periodoDoPreset(p))} />
@@ -227,7 +228,7 @@ function FunilSM({ f, dias }: { f: Conectado['funil']; dias: number }) {
 function DiagnosticoReels({ reels, podeSalvarGancho }: { reels: SmReelDiagnostico[]; podeSalvarGancho: boolean }) {
   const [salvando, setSalvando] = useState<SmReelDiagnostico | null>(null)
   return (
-    <section className="sm-card" aria-label="Diagnóstico dos reels">
+    <section id="reels" className="sm-card" aria-label="Diagnóstico dos reels">
       <div className="sm-card-cab">
         <h2 className="sm-h-card">Diagnóstico dos reels</h2>
         <Rotulo>Gancho = pulo nos 3 primeiros segundos</Rotulo>

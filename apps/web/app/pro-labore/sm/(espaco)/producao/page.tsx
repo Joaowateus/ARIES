@@ -4,7 +4,7 @@
 // ao agendado. Quadro de 6 colunas à esquerda, briefing da pauta à direita.
 import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, type SmColuna, type SmMoto, type SmPauta, type SmQuadro, type SmSugestaoAudiencia } from '@/lib/proLaboreApi'
-import { Botao, CardEsqueleto, EstadoVazio, IcMais, Rotulo, useToast } from '../../_ui'
+import { AssistenteAba, Botao, CardEsqueleto, EstadoVazio, IcMais, Rotulo, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { Quadro } from './Quadro'
 import { Briefing } from './Briefing'
@@ -122,6 +122,7 @@ function Producao() {
           {podeEditar && <Botao variante="pri" icone={<IcMais tamanho={16} />} onClick={() => setDialogo('nova')}>Nova pauta</Botao>}
         </div>
       </header>
+      <AssistenteAba aba="producao" aoMudar={carregar} />
 
       {erro && <p className="sm-erro" role="alert">{erro}</p>}
       {!quadro && !erro && <CardEsqueleto linhas={5} />}

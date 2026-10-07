@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { proLaboreApi, type SmCalendario, type SmConfigCalendario, type SmDiaCalendario, type SmItemCalendario, type SmMoto, type SmPilar } from '@/lib/proLaboreApi'
-import { Botao, Card, CardEsqueleto, Chip, EstadoVazio, IcMais, Modal, PILAR_CHIP, PILAR_ROTULO, Rotulo, Segmentado, localParaIso, useToast, type Tom } from '../../_ui'
+import { AssistenteAba, Botao, Card, CardEsqueleto, Chip, EstadoVazio, IcMais, Modal, PILAR_CHIP, PILAR_ROTULO, Rotulo, Segmentado, localParaIso, useToast, type Tom } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { NovaPauta } from '../producao/Dialogos'
 import { Grade } from './Grade'
@@ -120,6 +120,7 @@ function Calendario() {
           {cal?.podeEditar && <Botao variante="pri" icone={<IcMais tamanho={16} />} onClick={() => setNovaEm(null)}>Nova pauta</Botao>}
         </div>
       </header>
+      <AssistenteAba aba="calendario" aoMudar={() => carregar(mes)} />
 
       <div className="sm-cal-legenda" role="group" aria-label="Filtrar por pilar">
         <span className="sm-mono" style={{ marginRight: 4 }}>Pilares</span>
