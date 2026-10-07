@@ -4,12 +4,13 @@
 // CTA, legenda, data, arquivos, checklist antes de aprovar e as ações
 // (Trial Reel, enviar para aprovação, aprovar ou pedir ajuste). Cada campo
 // salva ao sair dele.
-import { useRef, useState, useSyncExternalStore } from 'react'
-import { proLaboreApi, urlArquivoApi, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar } from '@/lib/proLaboreApi'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { proLaboreApi, urlArquivoApi, type SmTesteAB, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar } from '@/lib/proLaboreApi'
 import {
   Banner, Botao, Chip, COLUNA_ROTULO, COLUNAS, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
   dataParaIso, isoParaData, isoParaLocal, localParaIso, quandoCurto, useToast,
 } from '../../_ui'
+import { BibliotecaGanchos } from './Ganchos'
 
 type Campo = 'titulo' | 'gancho' | 'retencao' | 'recompensa' | 'cta' | 'legenda'
 
@@ -38,6 +39,7 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
   // Itens manuais do checklist mudam na hora; o servidor confirma depois.
   const [manual, setManual] = useState<Record<string, boolean>>(() => ({ ...pauta.checklistManual }))
   const [linkVideo, setLinkVideo] = useState('')
+  const [biblioteca, setBiblioteca] = useState(false)
   const [pedindoAjuste, setPedindoAjuste] = useState(false)
   const [comentario, setComentario] = useState('')
   const arquivo = useRef<HTMLInputElement>(null)
@@ -139,8 +141,12 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
               onChange={e => setTextos(t => ({ ...t, [b.campo]: e.target.value }))}
               onBlur={() => aoSairDoCampo(b.campo)}
             />
+            {b.campo === 'gancho' && !travada && (
+              <button type="button" className="sm-link-botao" onClick={() => setBiblioteca(true)}>Usar um gancho da biblioteca</button>
+            )}
           </div>
         ))}
+        {biblioteca && <BibliotecaGanchos aoFechar={() => setBiblioteca(false)} aoEscolher={texto => { setTextos(t => ({ ...t, gancho: texto })); salvar({ gancho: texto }) }} />}
         <div className="sm-bloco">
           <label className="sm-mono" htmlFor="briefing-legenda" style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>Legenda</span><span style={{ color: textos.legenda.trim().length >= 300 ? 'var(--sm-ok-fg)' : 'var(--sm-text-faint)' }}>{textos.legenda.trim().length} / 300+</span>
@@ -181,6 +187,8 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
           </label>
         )}
       </div>
+
+      <TesteDaPauta pauta={pauta} travada={travada} salvar={salvar} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <Rotulo>Arquivos</Rotulo>
@@ -318,6 +326,40 @@ function LinkDoPost({ codigo, slug }: { codigo: string; slug: string }) {
         <code>{url}</code>
       </div>
       <Botao onClick={copiar}>Copiar link</Botao>
+    </div>
+  )
+}
+
+/** Teste A/B da pauta (seção 13.3): escolhe o teste em andamento e o grupo. */
+function TesteDaPauta({ pauta, travada, salvar }: { pauta: SmPauta; travada: boolean; salvar: (d: Partial<SmPautaEntrada>) => Promise<void> }) {
+  const [ativos, setAtivos] = useState<SmTesteAB[] | null>(null)
+  useEffect(() => {
+    let vivo = true
+    // Sem acesso à Análise, a lista não vem e o bloco mostra só o teste atual da pauta.
+    proLaboreApi.sm.testes.listar().then(r => { if (vivo) setAtivos(r.ativos) }).catch(() => { if (vivo) setAtivos([]) })
+    return () => { vivo = false }
+  }, [])
+  const atual = pauta.teste && pauta.teste.status !== 'CANCELADO' ? pauta.teste : null
+  if (!atual && (travada || !ativos?.length)) return null
+  const teste = ativos?.find(t => t.id === pauta.testeId)
+  return (
+    <div className="sm-bloco sm-teste-pauta">
+      <span className="sm-mono">Teste A/B</span>
+      {atual && <span>{atual.hipotese} · grupo <b>{pauta.testeGrupo}</b> ({pauta.testeGrupo === 'A' ? atual.grupoA : atual.grupoB})</span>}
+      {!travada && ativos && ativos.length > 0 && (
+        <div className="sm-linha-acoes">
+          <select className="sm-input" aria-label="Teste A/B" style={{ flex: '1 1 200px' }} value={pauta.testeId ?? ''}
+            onChange={e => salvar(e.target.value ? { testeId: e.target.value, testeGrupo: pauta.testeGrupo ?? 'A' } : { testeId: null, testeGrupo: null })}>
+            <option value="">Fora de teste</option>
+            {ativos.map(t => <option key={t.id} value={t.id}>{t.hipotese}</option>)}
+          </select>
+          {pauta.testeId && teste && (['A', 'B'] as const).map(g => (
+            <Botao key={g} variante={pauta.testeGrupo === g ? 'pri' : 'sec'} aria-pressed={pauta.testeGrupo === g} onClick={() => salvar({ testeId: pauta.testeId, testeGrupo: g })}>
+              {g}: {g === 'A' ? teste.grupoA : teste.grupoB}
+            </Botao>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

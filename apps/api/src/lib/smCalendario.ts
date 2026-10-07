@@ -50,6 +50,8 @@ export interface ItemCalendario {
   contaNaCadencia: boolean
   arrastavel: boolean
   permalink: string | null
+  /** Pauta num teste A/B (seção 13.3): grupo e o nome do grupo. */
+  teste?: { grupo: 'A' | 'B'; rotulo: string } | null
 }
 
 export interface DiaCalendario {
@@ -190,7 +192,7 @@ export async function calendarioDoMes(usuarioId: string, mes: string, opcoes: { 
   const [pautas, midias, janelas] = await Promise.all([
     prisma.smPauta.findMany({
       where: { usuarioId, OR: [{ agendadoPara: { gte: inicio, lt: fim } }, { publicadaEm: { gte: inicio, lt: fim } }] },
-      select: { id: true, titulo: true, pilar: true, formato: true, status: true, agendadoPara: true, publicadaEm: true, igMediaId: true, permalink: true, publicacaoStatus: true },
+      select: { id: true, titulo: true, pilar: true, formato: true, status: true, agendadoPara: true, publicadaEm: true, igMediaId: true, permalink: true, publicacaoStatus: true, testeGrupo: true, teste: { select: { grupoA: true, grupoB: true, status: true } } },
     }),
     conta
       ? prisma.socialMediaMidia.findMany({
@@ -211,6 +213,9 @@ export async function calendarioDoMes(usuarioId: string, mes: string, opcoes: { 
         contaNaCadencia: p.formato !== 'STORY',
         arrastavel: opcoes.podeArrastar && p.status !== 'PUBLICADO' && p.publicacaoStatus !== 'PROCESSANDO',
         permalink: p.permalink,
+        teste: p.teste && p.teste.status !== 'CANCELADO' && (p.testeGrupo === 'A' || p.testeGrupo === 'B')
+          ? { grupo: p.testeGrupo as 'A' | 'B', rotulo: p.testeGrupo === 'A' ? p.teste.grupoA : p.teste.grupoB }
+          : null,
       }
     }),
     ...midias.filter(m => !publicadosPorPauta.has(m.instagramMediaId)).map(m => {

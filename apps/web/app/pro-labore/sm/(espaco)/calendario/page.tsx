@@ -184,10 +184,13 @@ function Calendario() {
               {cal.janelas.base === 'POSTS' && cal.janelas.janelas.map(j => (
                 <div key={`${j.dia}-${j.bloco}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }} title={`${j.posts} posts, alcance médio ${j.alcanceMedio.toLocaleString('pt-BR')} (${j.indice.toFixed(1).replace('.', ',')}× a mediana)`}>
                   <span>{DIAS_SEMANA[j.dia]} · {j.inicioHora}h–{j.fimHora}h</span>
-                  <Chip tom={j.status === 'COMPROVADA' ? 'ok' : 'info'}>{j.status === 'COMPROVADA' ? 'Comprovado' : 'Hipótese'}</Chip>
+                  <span style={{ display: 'flex', gap: 6 }}>
+                    {j.emTeste && <Chip tom="learn">Em teste</Chip>}
+                    <Chip tom={j.status === 'COMPROVADA' ? 'ok' : 'info'}>{j.status === 'COMPROVADA' ? 'Comprovado' : 'Hipótese'}</Chip>
+                  </span>
                 </div>
               ))}
-              <p className="sm-legenda" style={{ margin: 0 }}>Horários de Brasília. Janela só vira “comprovada” com 5 posts ou mais.</p>
+              <p className="sm-legenda" style={{ margin: 0 }}>Horários de Brasília. Janela só vira “comprovada” com 5 posts ou mais; “em teste” quando um teste A/B de horário usa essa faixa.</p>
             </Card>
           </div>
         </div>

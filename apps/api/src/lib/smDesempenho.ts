@@ -105,6 +105,7 @@ export function diagnosticoDosReels(analise: Analise) {
       const multiplo = mediana > 0 ? arred(p.alcance / mediana, 2) : null
       return {
         id: p.id,
+        instagramMediaId: p.instagramMediaId,
         nome: tituloDoPost(p),
         permalink: p.permalink,
         publicadoEm: p.publicadoEm,

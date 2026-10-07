@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { proLaboreApi, type AnaliseSocialConectada, type OrigemSocial, type SmDesempenho, type SmReelDiagnostico, type SmSinal } from '@/lib/proLaboreApi'
 import { Banner, Botao, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
+import { CartaoTeste } from './Testes'
 import { periodoDoPreset, type Periodo, type PresetPeriodo } from '../../../(painel)/social-media/_componentes/FiltroPeriodo'
 import { KpisSocial } from '../../../(painel)/social-media/_componentes/KpisSocial'
 import { EvolucaoDiaria } from '../../../(painel)/social-media/_componentes/EvolucaoDiaria'
@@ -51,7 +52,7 @@ function pctFracao(v: number | null): string {
 }
 
 export default function DesempenhoPage() {
-  const { pode } = useEspacoSM()
+  const { pode, eu } = useEspacoSM()
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoDoPreset('30d'))
   const [origem, setOrigem] = useState<OrigemSocial>('ORGANICO')
   const [sub, setSub] = useState<Sub>('visao')
@@ -115,15 +116,9 @@ export default function DesempenhoPage() {
             <FunilSM f={dados.funil} dias={dados.periodo.dias} />
           </div>
 
-          <DiagnosticoReels reels={dados.reelsDiagnostico} />
+          <DiagnosticoReels reels={dados.reelsDiagnostico} podeSalvarGancho={pode('producao', 'COMPLETO') && !eu.somenteLeitura} />
 
-          <section className="sm-card sm-desemp-teste" aria-label="Teste em andamento">
-            <div>
-              <Rotulo>Teste em andamento</Rotulo>
-              <div className="sm-desemp-teste-tit">Nenhum teste A/B em andamento</div>
-              <p className="sm-legenda" style={{ margin: 0 }}>Quando houver um teste, a hipótese e a amostra aparecem aqui. O resultado só é declarado com a amostra completa.</p>
-            </div>
-          </section>
+          <CartaoTeste teste={dados.testeEmAndamento} podeCriar={dados.podeCriarTeste} aoMudar={() => setVersao(v => v + 1)} />
 
           <section className="sm-desemp-completa" aria-label="Análise completa">
             <div className="sm-desemp-completa-cab">
@@ -229,7 +224,8 @@ function FunilSM({ f, dias }: { f: Conectado['funil']; dias: number }) {
   )
 }
 
-function DiagnosticoReels({ reels }: { reels: SmReelDiagnostico[] }) {
+function DiagnosticoReels({ reels, podeSalvarGancho }: { reels: SmReelDiagnostico[]; podeSalvarGancho: boolean }) {
+  const [salvando, setSalvando] = useState<SmReelDiagnostico | null>(null)
   return (
     <section className="sm-card" aria-label="Diagnóstico dos reels">
       <div className="sm-card-cab">
@@ -239,7 +235,7 @@ function DiagnosticoReels({ reels }: { reels: SmReelDiagnostico[] }) {
       {reels.length === 0 ? <EstadoVazio titulo="Nenhum reel no período">O diagnóstico aparece quando houver reels com métricas.</EstadoVazio> : (
         <div className="sm-tabela-rola">
           <table className="sm-tabela" style={{ minWidth: 720 }}>
-            <thead><tr><th scope="col">Reel</th><th scope="col">Duração</th><th scope="col">Retenção</th><th scope="col">Pulo 3s</th><th scope="col">Envios / mil</th><th scope="col">vs. mediana</th><th scope="col">Veredito</th></tr></thead>
+            <thead><tr><th scope="col">Reel</th><th scope="col">Duração</th><th scope="col">Retenção</th><th scope="col">Pulo 3s</th><th scope="col">Envios / mil</th><th scope="col">vs. mediana</th><th scope="col">Veredito</th>{podeSalvarGancho && <th scope="col"><span className="sm-sr">Biblioteca</span></th>}</tr></thead>
             <tbody>
               {reels.map(r => (
                 <tr key={r.id}>
@@ -250,6 +246,7 @@ function DiagnosticoReels({ reels }: { reels: SmReelDiagnostico[] }) {
                   <td>{r.enviosMil != null ? dec(r.enviosMil, 2) : '—'}</td>
                   <td>{r.multiplo != null ? `${dec(r.multiplo)}×` : '—'}</td>
                   <td><Chip tom={VEREDITO[r.veredito].tom}>{VEREDITO[r.veredito].texto}</Chip></td>
+                  {podeSalvarGancho && <td>{(r.veredito === 'REPETIR' || r.veredito === 'BOM') && <Botao variante="fantasma" onClick={() => setSalvando(r)}>Salvar gancho</Botao>}</td>}
                 </tr>
               ))}
             </tbody>
@@ -257,6 +254,7 @@ function DiagnosticoReels({ reels }: { reels: SmReelDiagnostico[] }) {
         </div>
       )}
       <p className="sm-legenda" style={{ margin: 0 }}>Repetir estrutura: 2,5× a mediana de 90 dias e pulo abaixo de 40%. Bom: 1,3× ou mais. Gancho fraco: pulo de 60% ou mais.</p>
+      {salvando && <SalvarGancho reel={salvando} aoFechar={() => setSalvando(null)} />}
     </section>
   )
 }
@@ -336,6 +334,35 @@ function MetasSinais({ metas, aoFechar, aoSalvar }: { metas: Conectado['metas'];
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <Botao onClick={aoFechar}>Cancelar</Botao>
           <Botao variante="pri" type="submit">Salvar metas</Botao>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+/** "Salvar o gancho na biblioteca" a partir de um reel que foi bem. */
+function SalvarGancho({ reel, aoFechar }: { reel: SmReelDiagnostico; aoFechar: () => void }) {
+  const toast = useToast()
+  const [texto, setTexto] = useState(reel.nome.replace(/…$/, ''))
+  const [erro, setErro] = useState<string | null>(null)
+  return (
+    <Modal titulo="Salvar gancho na biblioteca" aoFechar={aoFechar}>
+      <form className="sm-form" onSubmit={async e => {
+        e.preventDefault()
+        try {
+          const r = await proLaboreApi.sm.ganchos.salvar(texto.trim(), [reel.instagramMediaId])
+          toast({ mensagem: r.novo ? 'Gancho salvo na biblioteca.' : 'Reel juntado ao gancho que já estava na biblioteca.' })
+          aoFechar()
+        } catch (err) { setErro(err instanceof Error ? err.message : 'Não foi possível salvar') }
+      }}>
+        <p className="sm-legenda" style={{ margin: 0 }}>Descreva a abertura do reel (o que aparece e o que se diz nos 3 primeiros segundos). O pulo deste reel ({pctFracao(reel.pulo)}) entra na média do gancho.</p>
+        <label className="sm-campo">Gancho
+          <textarea className="sm-input" rows={3} required minLength={3} maxLength={300} value={texto} onChange={e => setTexto(e.target.value)} />
+        </label>
+        {erro && <p className="sm-erro" role="alert">{erro}</p>}
+        <div className="sm-linha-acoes" style={{ justifyContent: 'flex-end' }}>
+          <Botao onClick={aoFechar}>Cancelar</Botao>
+          <Botao type="submit" variante="pri">Salvar</Botao>
         </div>
       </form>
     </Modal>

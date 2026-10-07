@@ -18,7 +18,7 @@ function Post({ it, arrastando, aoAbrir, aoIniciar }: {
   aoIniciar?: (e: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const planejado = it.tipo === 'PAUTA' && it.status !== 'PUBLICADO'
-  const rotulo = `${it.hora} · ${FORMATO_ROTULO[it.formato]}: ${it.titulo}. ${it.pilar ? PILAR_ROTULO[it.pilar] : 'Publicado no Instagram'}${planejado ? ', planejado' : ', publicado'}.`
+  const rotulo = `${it.hora} · ${FORMATO_ROTULO[it.formato]}: ${it.titulo}. ${it.pilar ? PILAR_ROTULO[it.pilar] : 'Publicado no Instagram'}${planejado ? ', planejado' : ', publicado'}.${it.teste ? ` Teste A/B, grupo ${it.teste.grupo} (${it.teste.rotulo}).` : ''}`
   return (
     <button
       type="button"
@@ -30,6 +30,7 @@ function Post({ it, arrastando, aoAbrir, aoIniciar }: {
     >
       <b>{it.hora} · {FORMATO_ROTULO[it.formato]}</b>
       <span>{it.titulo}</span>
+      {it.teste && <i className="sm-post-teste">Teste {it.teste.grupo}</i>}
     </button>
   )
 }

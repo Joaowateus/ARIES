@@ -948,6 +948,8 @@ model ProLaboreUsuario {
   smConfig                  SmConfig?
   smConversas               SmConversa[]
   smLinks                   SmLinkRastreado[]
+  smTestes                  SmTeste[]
+  smGanchos                 SmGancho[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
 
@@ -2447,6 +2449,9 @@ model SmPauta {
   igMediaId             String?
   permalink             String?
   autorizacaoImagem     Boolean   @default(false) // decisão P6: entregas com cliente
+  // Teste A/B (seção 13.3): a pauta entra num grupo do teste.
+  testeId               String?
+  testeGrupo            String? // A | B
   criadoPor             String    @default("SOCIAL_MEDIA") // SOCIAL_MEDIA | GESTOR
   criadoEm              DateTime  @default(now())
   atualizadoEm          DateTime  @updatedAt
@@ -2454,11 +2459,13 @@ model SmPauta {
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   moto    SmMotoEstoque?   @relation(fields: [motoId], references: [id], onDelete: SetNull)
   midias  SmPautaMidia[]
+  teste   SmTeste?         @relation(fields: [testeId], references: [id], onDelete: SetNull)
 
   @@unique([usuarioId, codigo])
   @@index([usuarioId, status])
   @@index([usuarioId, agendadoPara])
   @@index([motoId])
+  @@index([testeId])
   @@map("pro_labore_sm_pautas")
 }
 
@@ -2628,4 +2635,53 @@ model SmLinkClique {
 
   @@index([linkId, em])
   @@map("pro_labore_sm_links_cliques")
+}
+
+// Teste A/B (seção 13.3): hipótese, variável, dois grupos e a amostra alvo
+// (padrão 6, 3 por grupo). Os posts entram pela Produção ou pelo Calendário;
+// o resultado só é declarado com a amostra completa.
+model SmTeste {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  hipotese    String
+  descricao   String?
+  variavel    String // HORARIO | GANCHO | FORMATO | CTA | OUTRO
+  grupoA      String
+  grupoB      String
+  horaA       Int? // testes de horário: a hora de cada grupo (marca "Em teste" nas melhores janelas)
+  horaB       Int?
+  metrica     String    @default("ALCANCE") // ALCANCE | ENVIOS | SALVOS | PULO | RETENCAO
+  amostraAlvo Int       @default(6)
+  status      String    @default("ATIVO") // ATIVO | CONCLUIDO | CANCELADO
+  resultado   Json?
+  vencedor    String? // A | B | EMPATE
+  confianca   String? // alta | media | baixa | hipotese
+  origem      String    @default("MANUAL") // MANUAL | INSIGHT
+  origemRef   String?
+  criadoPor   String    @default("SOCIAL_MEDIA")
+  criadoEm    DateTime  @default(now())
+  concluidoEm DateTime?
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  pautas  SmPauta[]
+
+  @@index([usuarioId, status])
+  @@map("pro_labore_sm_testes")
+}
+
+// Biblioteca de ganchos (seção 3.4): o texto e os reels que o usaram; o
+// pulo médio sai das métricas desses reels, nunca é digitado.
+model SmGancho {
+  id        String   @id @default(cuid())
+  usuarioId String
+  texto     String
+  chave     String // texto normalizado (sem acento, minúsculo) para não duplicar
+  exemplos  String[] @default([]) // ids das mídias no Instagram
+  criadoPor String   @default("SOCIAL_MEDIA")
+  criadoEm  DateTime @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, chave])
+  @@map("pro_labore_sm_ganchos")
 }

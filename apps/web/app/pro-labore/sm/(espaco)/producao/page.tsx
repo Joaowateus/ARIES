@@ -9,6 +9,7 @@ import { useEspacoSM } from '../EspacoSM'
 import { Quadro } from './Quadro'
 import { Briefing } from './Briefing'
 import { NovaPauta, SugestoesEstoque } from './Dialogos'
+import { BibliotecaGanchos } from './Ganchos'
 
 export default function ProducaoPage() {
   const { pode } = useEspacoSM()
@@ -29,7 +30,7 @@ function Producao() {
   const [motos, setMotos] = useState<SmMoto[] | null>(null)
   const [sugestoes, setSugestoes] = useState<SmMoto[]>([])
   const [audiencia, setAudiencia] = useState<SmSugestaoAudiencia[]>([])
-  const [dialogo, setDialogo] = useState<'nova' | 'sugestoes' | null>(null)
+  const [dialogo, setDialogo] = useState<'nova' | 'sugestoes' | 'ganchos' | null>(null)
   const veEstoque = pode('estoque')
 
   const carregar = useCallback(() => {
@@ -117,6 +118,7 @@ function Producao() {
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {(veEstoque || audiencia.length > 0) && <Botao onClick={() => setDialogo('sugestoes')}>{veEstoque ? `Sugestões do estoque (${sugestoes.length + audiencia.length})` : `Sugestões (${audiencia.length})`}</Botao>}
+          <Botao onClick={() => setDialogo('ganchos')}>Biblioteca de ganchos</Botao>
           {podeEditar && <Botao variante="pri" icone={<IcMais tamanho={16} />} onClick={() => setDialogo('nova')}>Nova pauta</Botao>}
         </div>
       </header>
@@ -154,6 +156,7 @@ function Producao() {
       {dialogo === 'nova' && (
         <NovaPauta motos={motos} aoFechar={() => setDialogo(null)} aoCriar={p => { atualizar(p); setSelecionadaId(p.id); setDialogo(null); toast({ mensagem: 'Pauta criada em Ideias.' }) }} />
       )}
+      {dialogo === 'ganchos' && <BibliotecaGanchos aoFechar={() => setDialogo(null)} />}
       {dialogo === 'sugestoes' && (
         <SugestoesEstoque sugestoes={sugestoes} audiencia={audiencia} podeEditar={podeEditar} aoFechar={() => setDialogo(null)} aoGerar={gerarDaMoto} aoGerarAudiencia={gerarDaAudiencia} />
       )}

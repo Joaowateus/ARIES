@@ -25,6 +25,7 @@ import { publicarPautasVencidas } from '../lib/smPublicacao'
 import { gerarPautasDeVendas } from '../lib/smPautasAuto'
 import { processarEventosPendentes } from '../lib/smAtendimento'
 import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialMediaSync'
+import { listarTestes } from '../lib/smTestes'
 
 const router = Router()
 
@@ -273,7 +274,15 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const operacoes = await prisma.smMembro.findMany({ select: { usuarioId: true } })
   let pautasDeEntrega = 0
   for (const o of operacoes) pautasDeEntrega += await gerarPautasDeVendas(o.usuarioId)
-  res.json({ ...sincronizacao, pautasDeEntrega })
+  // Testes A/B com a amostra completa são concluídos sem ninguém abrir a tela.
+  const comTeste = await prisma.smTeste.findMany({ where: { status: 'ATIVO' }, distinct: ['usuarioId'], select: { usuarioId: true } })
+  let testesConcluidos = 0
+  for (const o of comTeste) {
+    const antes = await prisma.smTeste.count({ where: { usuarioId: o.usuarioId, status: 'CONCLUIDO' } })
+    await listarTestes(o.usuarioId)
+    testesConcluidos += (await prisma.smTeste.count({ where: { usuarioId: o.usuarioId, status: 'CONCLUIDO' } })) - antes
+  }
+  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos })
 })
 // A cada 5 min: novas tentativas vencidas e a publicação das pautas
 // agendadas que já chegaram no horário.
