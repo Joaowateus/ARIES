@@ -491,6 +491,8 @@ a.sm-row-link { color: inherit; text-decoration: none; }
 .sm-rapidas { display: flex; gap: 6px; flex-wrap: wrap; }
 .sm-rapidas button { border: 1px solid var(--sm-border-strong); cursor: pointer; min-height: 32px; font-family: inherit; background: var(--sm-neutral-bg); color: var(--sm-nav); }
 .sm-rapidas button:hover { color: var(--sm-text); }
+.sm-rapidas button.sm-chip-sugerir { background: var(--sm-info-bg); color: var(--sm-info-fg); border-color: transparent; font-weight: 600; }
+.sm-rapidas button.sm-chip-sugerir:disabled { opacity: .7; cursor: progress; }
 .sm-atend-lado { flex: 1 1 290px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .sm-radios { display: flex; gap: 14px; flex-wrap: wrap; }
 .sm-radios label { display: flex; gap: 6px; align-items: center; min-height: 32px; font-size: 14px; color: var(--sm-text); }
@@ -600,3 +602,32 @@ a.sm-row-link { color: inherit; text-decoration: none; }
 .sm-assist-acao:disabled { opacity: .6; cursor: progress; }
 .sm-assist-feito { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; min-height: 36px; font-weight: 600; font-size: 13px; color: var(--sm-ok-fg); }
 .sm-assist-feito .sm-link-botao { margin: 0; align-self: center; }
+.sm-assist-perguntas { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sm-assist-pergunte { font-size: 12px; color: var(--sm-text-faint); margin-right: 2px; }
+.sm-assist-pergunta { min-height: 34px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--sm-border-strong); background: var(--sm-surface); color: var(--sm-text-muted); font: 500 13px var(--sm-font-text); cursor: pointer; text-align: left; max-width: 100%; overflow-wrap: anywhere; }
+.sm-assist-pergunta:hover, .sm-assist-pergunta[aria-pressed="true"] { color: var(--sm-text); border-color: var(--sm-text-faint); }
+.sm-assist-pergunta:focus-visible, .sm-assist-conversa:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-assist-conversa { background: var(--sm-surface); border: 1px solid var(--sm-border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.sm-assist-conversa-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sm-assist-conversa-cab .sm-link-botao { margin: 0; }
+.sm-assist-turnos { display: flex; flex-direction: column; gap: 14px; max-height: 420px; overflow-y: auto; }
+.sm-assist-turno { display: flex; flex-direction: column; gap: 8px; }
+.sm-assist-q { margin: 0; align-self: flex-end; max-width: 85%; background: var(--sm-border); border-radius: 12px 12px 4px 12px; padding: 8px 12px; font-size: 14px; overflow-wrap: anywhere; }
+.sm-assist-r { margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: var(--sm-text); }
+.sm-assist-r p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.sm-assist-r.carregando { color: var(--sm-text-faint); }
+.sm-assist-r.erro { color: var(--sm-bad-fg); }
+.sm-assist-fonte { font-size: 12px; color: var(--sm-text-faint); }
+.sm-assist-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sm-assist-form .sm-input { flex: 1 1 220px; min-width: 0; }
+
+/* Ganchos e roteiro pela IA no briefing (seção 16.3) */
+.sm-bloco-links { display: flex; gap: 14px; flex-wrap: wrap; }
+.sm-ia-roteiro { border: 1px solid var(--sm-border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--sm-surface); }
+.sm-ia-roteiro-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sm-ia-roteiro-cab .sm-link-botao { margin: 0; }
+.sm-ia-gancho { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px solid var(--sm-border); padding-bottom: 8px; }
+.sm-ia-gancho span { line-height: 1.4; overflow-wrap: anywhere; }
+.sm-ia-resto { display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; }
+.sm-ia-resto p { margin: 0; }
+.sm-ia-resto .sm-btn { align-self: flex-start; }

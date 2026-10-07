@@ -793,6 +793,7 @@ export const proLaboreApi = {
       aprovar: (id: string, comentario?: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/aprovar`, { method: 'POST', body: JSON.stringify({ comentario }) }),
       pedirAjuste: (id: string, comentario: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/ajuste`, { method: 'POST', body: JSON.stringify({ comentario }) }),
       republicar: (id: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/republicar`, { method: 'POST' }),
+      roteiroIA: (id: string) => request<SmRoteiroIA>(`/pro-labore/sm/pautas/${id}/roteiro-ia`, { method: 'POST' }),
       excluir: (id: string) => request<{ ok: boolean }>(`/pro-labore/sm/pautas/${id}`, { method: 'DELETE' }),
       enviarImagem: (id: string, arquivo: Blob, tipo: 'IMAGEM' | 'CAPA' | 'TERMO' = 'IMAGEM') =>
         request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias?tipo=${tipo}`, { method: 'POST', body: arquivo, headers: { 'Content-Type': 'application/octet-stream' } }),
@@ -807,6 +808,7 @@ export const proLaboreApi = {
       lista: () => request<SmAtendimento>('/pro-labore/sm/atendimento'),
       conversa: (id: string) => request<SmConversaDetalhe>(`/pro-labore/sm/conversas/${id}`),
       responder: (id: string, texto: string) => request<{ ok: boolean }>(`/pro-labore/sm/conversas/${id}/responder`, { method: 'POST', body: JSON.stringify({ texto }) }),
+      sugestao: (id: string) => request<{ texto: string; ia: boolean }>(`/pro-labore/sm/conversas/${id}/sugestao`, { method: 'POST' }),
       arquivar: (id: string, arquivar = true) => request<{ ok: boolean }>(`/pro-labore/sm/conversas/${id}/arquivar`, { method: 'POST', body: JSON.stringify({ arquivar }) }),
       criarLead: (id: string, data: { nome: string; whatsapp: string | null; moto: string | null; pagamento: 'FINANCIAMENTO' | 'A_VISTA' | 'CONSORCIO' }) =>
         request<{ leadId: string; consultor: string | null }>(`/pro-labore/sm/conversas/${id}/lead`, { method: 'POST', body: JSON.stringify(data) }),
@@ -817,6 +819,9 @@ export const proLaboreApi = {
     },
     assistente: {
       ver: (aba: SmAbaAssistente) => request<SmAssistente>(`/pro-labore/sm/assistente/${aba}`),
+      frase: (aba: SmAbaAssistente) => request<{ frase: string | null }>(`/pro-labore/sm/assistente/${aba}/frase`),
+      perguntar: (aba: SmAbaAssistente, data: { pergunta: string; perguntaId?: string | null; historico?: Array<{ pergunta: string; resposta: string }> }) =>
+        request<SmRespostaAssistente>(`/pro-labore/sm/assistente/${aba}/perguntar`, { method: 'POST', body: JSON.stringify(data) }),
       recolher: (aba: SmAbaAssistente, recolhido: boolean) => request<{ recolhido: boolean }>(`/pro-labore/sm/assistente/${aba}/estado`, { method: 'PUT', body: JSON.stringify({ recolhido }) }),
       executar: (aba: SmAbaAssistente, chave: string) => request<{ acaoId?: string; mensagem: string; href?: string; desfazivel?: boolean }>(`/pro-labore/sm/assistente/${aba}/executar`, { method: 'POST', body: JSON.stringify({ chave }) }),
       desfazer: (acaoId: string) => request<{ ok: boolean }>(`/pro-labore/sm/assistente/desfazer/${acaoId}`, { method: 'POST' }),
@@ -1767,6 +1772,9 @@ export interface SmContaResumo {
   proximaTentativaEm: string | null
 }
 
+export interface SmRespostaAssistente { resposta: string; ia: boolean; acao: { rotulo: string; href: string } | null }
+export interface SmRoteiroIA { ganchos: string[]; retencao: string; recompensa: string; cta: string }
+
 export interface SmEu {
   visao: 'GESTOR' | 'SOCIAL_MEDIA'
   verComo: boolean
@@ -1775,6 +1783,8 @@ export interface SmEu {
   primeiroAcesso: boolean
   niveis: Record<SmModulo, SmNivel>
   regras: SmRegras
+  /** IA ligada (chave configurada) e ganchos/roteiros liberados para quem vê. */
+  ia: { ligada: boolean; roteiro: boolean }
   conta: SmContaResumo | null
   contadores: { atendimento: number }
 }
@@ -2128,6 +2138,10 @@ export interface SmAssistente {
   aba: SmAbaAssistente
   rotulo: string
   frase: string
+  /** A mesma frase redigida pela IA (seção 16.3), já guardada; senão a tela pede em /frase. */
+  fraseIA: string | null
+  ia: boolean
+  perguntas: Array<{ id: string; texto: string }>
   sugestoes: Array<{
     chave: string
     tipo: SmTipoInsight

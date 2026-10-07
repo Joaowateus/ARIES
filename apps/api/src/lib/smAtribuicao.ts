@@ -145,6 +145,7 @@ export interface LinhaAtribuicao {
   leads: number
   vendas: number
   valor: number | null // null quando o gestor esconde os valores
+  moto?: string | null // moto do estoque ligada à pauta do post
 }
 
 interface Acumulador { toques: number; conversas: number; leads: number; vendas: number; valor: number }
@@ -314,7 +315,7 @@ export async function vendasPorPost(usuarioId: string, periodo: PeriodoAtribuica
   const MAX_POSTS = 6
   const visiveis = posts.slice(0, MAX_POSTS)
   const outros = posts.slice(MAX_POSTS)
-  const linhasPost: LinhaAtribuicao[] = visiveis.map(p => linha(p.chave, p.info.nome, p.info.sub, p.a))
+  const linhasPost: LinhaAtribuicao[] = visiveis.map(p => ({ ...linha(p.chave, p.info.nome, p.info.sub, p.a), moto: p.info.moto }))
   if (outros.length) {
     const soma = outros.reduce((s, p) => { s.toques += p.a.toques; s.conversas += p.a.conversas; s.leads += p.a.leads; s.vendas += p.a.vendas; s.valor += p.a.valor; return s }, vazio())
     linhasPost.push(linha('OUTROS', `Outros ${outros.length} ${outros.length === 1 ? 'post' : 'posts'}`, 'Com toques, conversas ou leads no período', soma))

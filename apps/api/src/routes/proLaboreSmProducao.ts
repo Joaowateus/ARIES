@@ -16,6 +16,8 @@ import {
   type Ator,
 } from '../lib/smPautas'
 import { garantirLinkDaPauta, sincronizarLinks } from '../lib/smAtribuicao'
+import { gerarRoteiro, iaLigada } from '../lib/smIA'
+import { fatosDoRoteiro, podeRoteiroIA } from '../lib/smPerguntas'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -381,6 +383,20 @@ router.post('/sm/pautas/:id/ajuste', ...autenticado, requireGestorSM, async (req
 })
 
 // Depois de uma falha, tenta publicar de novo na próxima passada do job.
+// Ganchos e roteiro pela IA a partir da ficha da moto (seção 16.3): só com a
+// regra "Assistente de roteiro com IA" ligada. Nada é gravado: quem escreve
+// escolhe o que usar no briefing.
+router.post('/sm/pautas/:id/roteiro-ia', ...autenticado, requireModuloSM('producao', 'COMPLETO'), async (req: Request, res: Response) => {
+  const sm = req.sm!
+  if (!iaLigada()) { res.status(503).json({ error: 'A IA ainda não está ligada nesta conta.' }); return }
+  if (!podeRoteiroIA(sm)) { res.status(403).json({ error: 'O assistente de roteiro com IA está desligado. O gestor liga em Acessos.' }); return }
+  const fatos = await fatosDoRoteiro(sm, String(req.params.id))
+  if (!fatos) { res.status(404).json({ error: 'Pauta não encontrada' }); return }
+  const r = await gerarRoteiro(sm.usuarioId, fatos)
+  if (!r) { res.status(502).json({ error: 'Não consegui escrever agora. Tente de novo em instantes.' }); return }
+  res.json(r)
+})
+
 router.post('/sm/pautas/:id/republicar', ...autenticado, requireModuloSM('producao', 'COMPLETO'), async (req: Request, res: Response) => {
   const usuarioId = req.sm!.usuarioId
   const p = await carregar(usuarioId, String(req.params.id))

@@ -10,6 +10,8 @@ import { carregarConfig } from '../lib/smCalendario'
 import {
   estadoJanela, garantirPadroes, inicioDaSemana, processarEventosPendentes, proximoConsultor, responderConversa, tempoRespostaSemana, textoExpediente, transformarEmLead,
 } from '../lib/smAtendimento'
+import { iaLigada, sugerirResposta } from '../lib/smIA'
+import { fatosDaConversa } from '../lib/smPerguntas'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -112,6 +114,15 @@ router.post('/sm/conversas/:id/responder', ...autenticado, requireModuloSM('aten
   } catch (e) {
     res.status(409).json({ error: e instanceof Error ? e.message : 'Falha ao enviar' })
   }
+})
+
+// Resposta sugerida (seção 13.4 e 16.3): pela IA quando ligada, senão pelo tema
+// da pergunta. Vai para a caixa de texto; quem atende revisa e envia.
+router.post('/sm/conversas/:id/sugestao', ...autenticado, requireModuloSM('atendimento', 'COMPLETO'), async (req: Request, res: Response) => {
+  const c = await fatosDaConversa(req.sm!.usuarioId, String(req.params.id))
+  if (!c) { res.status(404).json({ error: 'Conversa não encontrada' }); return }
+  const ia = iaLigada() ? await sugerirResposta(req.sm!.usuarioId, c.fatos) : null
+  res.json({ texto: ia ?? c.semIA, ia: !!ia })
 })
 
 router.post('/sm/conversas/:id/arquivar', ...autenticado, requireModuloSM('atendimento', 'COMPLETO'), async (req: Request, res: Response) => {

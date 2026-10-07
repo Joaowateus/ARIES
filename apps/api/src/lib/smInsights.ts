@@ -280,7 +280,7 @@ async function insightsProducao(sm: ContextoSM, agora: Date, info: InfoAba = {})
 
 // ---------- Atendimento ----------
 
-const TEMAS: Array<{ tema: string; re: RegExp; resposta: string }> = [
+export const TEMAS: Array<{ tema: string; re: RegExp; resposta: string }> = [
   { tema: 'troca', re: /\btroca|aceita.{0,12}(moto|carro).{0,12}(entrada|parte)/i, resposta: 'Me conta o modelo, o ano e a quilometragem da sua moto que eu passo para o consultor avaliar a troca.' },
   { tema: 'financiamento', re: /financ|parcel|presta[çc]/i, resposta: 'Consigo simular para você. Me passa o valor de entrada que você pensa em dar e em quantas vezes prefere pagar.' },
   { tema: 'entrada', re: /\bentrada\b/i, resposta: 'A entrada depende da moto e da forma de pagamento. Me diz qual moto te interessou que eu simulo com você.' },
@@ -294,8 +294,8 @@ const TEMAS_INTENCAO: Array<[RegExp, string]> = [
   [/cons[óo]rcio/i, 'consórcio'], [/reserv/i, 'reservar a moto'], [/test.?drive/i, 'test drive'], [/visitar a loja/i, 'visitar a loja'],
   [/pre[çc]o|valor|quanto (custa|fica|sai)/i, 'preço'],
 ]
-function temaDaIntencao(texto: string): string { return TEMAS_INTENCAO.find(([re]) => re.test(texto))?.[1] ?? 'compra' }
-const INTENCAO = /simula|financ|parcel|entrada|[àa] vista|pre[çc]o|valor|quanto (custa|fica|sai)|cons[óo]rcio|reserv|test.?drive|visitar a loja/i
+export function temaDaIntencao(texto: string): string { return TEMAS_INTENCAO.find(([re]) => re.test(texto))?.[1] ?? 'compra' }
+export const INTENCAO = /simula|financ|parcel|entrada|[àa] vista|pre[çc]o|valor|quanto (custa|fica|sai)|cons[óo]rcio|reserv|test.?drive|visitar a loja/i
 
 async function insightsAtendimento(sm: ContextoSM, agora: Date, info: InfoAba = {}): Promise<Insight[]> {
   if (!sm.pode('atendimento', 'LEITURA')) return []
@@ -321,7 +321,7 @@ async function insightsAtendimento(sm: ContextoSM, agora: Date, info: InfoAba = 
       chave: `atd:resposta:${c.id}:${c.aguardandoDesde!.toISOString()}`, aba: 'atendimento', tipo: 'URGENTE', rotulo: `${espera(c.aguardandoDesde!)} sem resposta`,
       texto: `${nome(c)}${c.motoInteresse ? ` · ${c.motoInteresse}` : ''}${msg ? `: “${msg.length > 80 ? `${msg.slice(0, 77)}…` : msg}”` : ''}${atrasadas.length > 1 ? ` (e mais ${plural(atrasadas.length - 1, 'conversa', 'conversas')} acima da meta de ${config.metaRespostaMin} min)` : ''}`,
       confianca: 'alta', amostra: atrasadas.length, peso: 10,
-      acao: { rotulo: 'Responder agora', operacao: { tipo: 'ABRIR', href: `/pro-labore/sm/atendimento?conversa=${c.id}` } },
+      acao: { rotulo: 'Responder agora', operacao: { tipo: 'ABRIR', href: `/pro-labore/sm/atendimento?conversa=${c.id}&sugerir=1` } },
     }))
   }
 

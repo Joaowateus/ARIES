@@ -3,7 +3,8 @@
 // Tela 04 · Atendimento (seção 7 · Atendimento.html): direct e comentários
 // num lugar só, cada conversa com o post de origem, respostas rápidas,
 // janela de 24 h, automações e "Transformar em lead" com rodízio.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { proLaboreApi, urlArquivoApi, type SmAtendimento, type SmConversaDetalhe } from '@/lib/proLaboreApi'
 import { AssistenteAba, Banner, Botao, Card, CardEsqueleto, Chip, EstadoVazio, Modal, Rotulo, esperaDesde, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
@@ -13,7 +14,7 @@ type Filtro = 'TODOS' | 'DIRECT' | 'COMENTARIOS'
 export default function AtendimentoPage() {
   const { pode } = useEspacoSM()
   if (!pode('atendimento')) return <div className="sm-card"><EstadoVazio titulo="Sem acesso ao Atendimento">O gestor pode liberar em Equipe → Acessos e permissões.</EstadoVazio></div>
-  return <Atendimento />
+  return <Suspense fallback={<CardEsqueleto linhas={6} />}><Atendimento /></Suspense>
 }
 
 function Atendimento() {
@@ -25,18 +26,30 @@ function Atendimento() {
   const [selId, setSelId] = useState<string | null>(null)
   const [conversa, setConversa] = useState<SmConversaDetalhe | null>(null)
   const [config, setConfig] = useState(false)
+  // "Responder agora" do assistente chega com &sugerir=1: a conversa abre com a resposta sugerida.
+  const [sugerirEm, setSugerirEm] = useState<string | null>(null)
 
-  // Conversa pedida na URL (?conversa=, ex.: "Responder agora" do assistente): só na primeira carga.
-  const pedida = useRef<string | null | undefined>(undefined)
   const carregarLista = useCallback(() => {
     proLaboreApi.sm.atendimento.lista().then(d => {
       setDados(d); setErro(null)
-      if (pedida.current === undefined) pedida.current = new URLSearchParams(window.location.search).get('conversa')
-      const alvo = pedida.current && d.conversas.some(c => c.id === pedida.current) ? pedida.current : null
-      pedida.current = null
-      setSelId(id => alvo ?? (id && d.conversas.some(c => c.id === id) ? id : d.conversas[0]?.id ?? null))
+      setSelId(id => (id && d.conversas.some(c => c.id === id) ? id : d.conversas[0]?.id ?? null))
     }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
   }, [])
+
+  // Conversa pedida na URL (?conversa=, ex.: "Responder agora" do assistente), também
+  // quando a URL muda com a tela aberta: vale a cada nova URL, depois de a lista chegar.
+  const busca = useSearchParams()
+  const conversaURL = busca.get('conversa')
+  const sugerirURL = busca.get('sugerir') === '1'
+  const [urlAplicada, setUrlAplicada] = useState<string | null>(null)
+  const chaveURL = `${conversaURL ?? ''}|${sugerirURL}`
+  if (dados && chaveURL !== urlAplicada) {
+    setUrlAplicada(chaveURL)
+    if (conversaURL && dados.conversas.some(c => c.id === conversaURL)) {
+      setSelId(conversaURL)
+      if (sugerirURL) setSugerirEm(conversaURL)
+    }
+  }
   const carregarConversa = useCallback((id: string) => {
     proLaboreApi.sm.atendimento.conversa(id).then(setConversa).catch(() => setConversa(null))
   }, [])
@@ -117,7 +130,7 @@ function Atendimento() {
         </section>
 
         {selecionada
-          ? <Conversa key={selecionada.id} c={selecionada} dados={dados} aoMudar={aposMudanca} />
+          ? <Conversa key={selecionada.id} c={selecionada} dados={dados} aoMudar={aposMudanca} sugerirAoAbrir={sugerirEm === selecionada.id} aoSugerir={() => setSugerirEm(null)} />
           : <section className="sm-card sm-conversa" aria-label="Conversa"><EstadoVazio titulo={selId ? 'Carregando…' : 'Escolha uma conversa'}>A conversa abre aqui.</EstadoVazio></section>}
 
         <aside aria-label="Virar lead" className="sm-atend-lado">
@@ -145,13 +158,25 @@ function Atendimento() {
   )
 }
 
-function Conversa({ c, dados, aoMudar }: { c: SmConversaDetalhe; dados: SmAtendimento; aoMudar: () => void }) {
+function Conversa({ c, dados, aoMudar, sugerirAoAbrir, aoSugerir }: { c: SmConversaDetalhe; dados: SmAtendimento; aoMudar: () => void; sugerirAoAbrir: boolean; aoSugerir: () => void }) {
   const toast = useToast()
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
+  // Resposta sugerida (seção 13.4 e 16.3): pela IA quando ligada, senão pelo tema da pergunta.
+  const [sugestao, setSugestao] = useState<{ carregando: boolean; ia: boolean | null }>(() => ({ carregando: sugerirAoAbrir, ia: null }))
   const lista = useRef<HTMLDivElement>(null)
   const campo = useRef<HTMLTextAreaElement>(null)
   useEffect(() => { lista.current?.scrollTo({ top: lista.current.scrollHeight }) }, [c.mensagens.length])
+
+  const pedirSugestao = useCallback(() => proLaboreApi.sm.atendimento.sugestao(c.id)
+    .then(r => { setTexto(r.texto); setSugestao({ carregando: false, ia: r.ia }); campo.current?.focus() })
+    .catch(err => { setSugestao({ carregando: false, ia: null }); toast({ mensagem: err instanceof Error ? err.message : 'Não foi possível sugerir agora', tom: 'bad' }) }), [c.id, toast])
+  const podeSugerir = dados.podeResponder && c.janela.aberta && c.status !== 'ARQUIVADA' && c.mensagens.some(m => m.direcao === 'IN')
+  useEffect(() => {
+    if (!sugerirAoAbrir || !podeSugerir) return
+    aoSugerir()
+    pedirSugestao()
+  }, [sugerirAoAbrir, podeSugerir, aoSugerir, pedirSugestao])
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault()
@@ -210,17 +235,23 @@ function Conversa({ c, dados, aoMudar }: { c: SmConversaDetalhe; dados: SmAtendi
         {podeResponder && (
           <>
             <div className="sm-rapidas" role="group" aria-label="Respostas rápidas">
+              {podeSugerir && (
+                <button type="button" className="sm-chip sm-chip-sugerir" disabled={sugestao.carregando} onClick={() => { setSugestao({ carregando: true, ia: null }); pedirSugestao() }}>
+                  {sugestao.carregando ? 'Sugerindo…' : 'Sugerir resposta'}
+                </button>
+              )}
               {dados.respostasRapidas.map(r => (
                 <button key={r.id} type="button" className="sm-chip" title={r.texto} onClick={() => { setTexto(r.texto); campo.current?.focus() }}>{r.titulo}</button>
               ))}
             </div>
             <form onSubmit={enviar} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <label className="sm-sr" htmlFor="resposta">Responder</label>
-              <textarea id="resposta" ref={campo} className="sm-input" rows={2} style={{ minHeight: 44 }} value={texto} placeholder={c.canal === 'COMENTARIO' ? 'Responder no comentário…' : 'Escreva uma resposta…'}
+              <textarea id="resposta" ref={campo} className="sm-input" rows={Math.min(6, Math.max(2, Math.ceil(texto.length / 48)))} style={{ minHeight: 44 }} value={texto} placeholder={c.canal === 'COMENTARIO' ? 'Responder no comentário…' : 'Escreva uma resposta…'}
                 onChange={e => setTexto(e.target.value)} maxLength={1000}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.currentTarget.form as HTMLFormElement).requestSubmit() } }} />
               <Botao type="submit" variante="pri" disabled={enviando || !texto.trim()}>{enviando ? 'Enviando…' : 'Enviar'}</Botao>
             </form>
+            {sugestao.ia != null && texto && <span className="sm-legenda" role="status">{sugestao.ia ? 'Resposta sugerida pela IA' : 'Resposta sugerida pelo tema da pergunta'}: revise antes de enviar.</span>}
           </>
         )}
       </div>

@@ -5,12 +5,13 @@
 // (Trial Reel, enviar para aprovação, aprovar ou pedir ajuste). Cada campo
 // salva ao sair dele.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { proLaboreApi, urlArquivoApi, type SmTesteAB, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar } from '@/lib/proLaboreApi'
+import { proLaboreApi, urlArquivoApi, type SmTesteAB, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar, type SmRoteiroIA } from '@/lib/proLaboreApi'
 import {
   Banner, Botao, Chip, COLUNA_ROTULO, COLUNAS, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
   dataParaIso, isoParaData, isoParaLocal, localParaIso, quandoCurto, useToast,
 } from '../../_ui'
 import { BibliotecaGanchos } from './Ganchos'
+import { useEspacoSM } from '../EspacoSM'
 
 type Campo = 'titulo' | 'gancho' | 'retencao' | 'recompensa' | 'cta' | 'legenda'
 
@@ -40,6 +41,9 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
   const [manual, setManual] = useState<Record<string, boolean>>(() => ({ ...pauta.checklistManual }))
   const [linkVideo, setLinkVideo] = useState('')
   const [biblioteca, setBiblioteca] = useState(false)
+  // Ganchos e roteiro pela IA (seção 16.3), com a regra "Assistente de roteiro com IA" ligada.
+  const { eu } = useEspacoSM()
+  const [ia, setIa] = useState<{ carregando: boolean; r: SmRoteiroIA | null }>({ carregando: false, r: null })
   const [pedindoAjuste, setPedindoAjuste] = useState(false)
   const [comentario, setComentario] = useState('')
   const arquivo = useRef<HTMLInputElement>(null)
@@ -58,6 +62,19 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
     if (valor === atual) return
     if (campo === 'titulo' && valor.length < 3) { setTextos(t => ({ ...t, titulo: pauta.titulo })); return }
     salvar({ [campo]: valor || null })
+  }
+
+  async function gerarComIA() {
+    setIa({ carregando: true, r: null })
+    try { setIa({ carregando: false, r: await proLaboreApi.sm.pautas.roteiroIA(pauta.id) }) } catch (e) { avisar(e); setIa({ carregando: false, r: null }) }
+  }
+
+  function usarRoteiro(r: SmRoteiroIA) {
+    const antes = { retencao: textos.retencao, recompensa: textos.recompensa, cta: textos.cta }
+    const novo = { retencao: r.retencao || antes.retencao, recompensa: r.recompensa || antes.recompensa, cta: r.cta || antes.cta }
+    setTextos(t => ({ ...t, ...novo }))
+    salvar({ retencao: novo.retencao || null, recompensa: novo.recompensa || null, cta: novo.cta || null })
+    toast({ mensagem: 'Roteiro aplicado.', desfazer: async () => { setTextos(t => ({ ...t, ...antes })); await salvar({ retencao: antes.retencao || null, recompensa: antes.recompensa || null, cta: antes.cta || null }) } })
   }
 
   async function acao(fn: () => Promise<SmPauta>, mensagem?: string) {
@@ -142,10 +159,36 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
               onBlur={() => aoSairDoCampo(b.campo)}
             />
             {b.campo === 'gancho' && !travada && (
-              <button type="button" className="sm-link-botao" onClick={() => setBiblioteca(true)}>Usar um gancho da biblioteca</button>
+              <span className="sm-bloco-links">
+                <button type="button" className="sm-link-botao" onClick={() => setBiblioteca(true)}>Usar um gancho da biblioteca</button>
+                {eu.ia.roteiro && <button type="button" className="sm-link-botao" disabled={ia.carregando} onClick={gerarComIA}>{ia.carregando ? 'Escrevendo…' : 'Gerar ganchos com IA'}</button>}
+              </span>
             )}
           </div>
         ))}
+        {ia.r && (
+          <section className="sm-ia-roteiro" aria-label="Sugestões da IA">
+            <div className="sm-ia-roteiro-cab">
+              <span className="sm-mono">Sugestões da IA</span>
+              <button type="button" className="sm-link-botao" onClick={() => setIa({ carregando: false, r: null })}>Fechar</button>
+            </div>
+            {ia.r.ganchos.map(g => (
+              <div key={g} className="sm-ia-gancho">
+                <span>{g}</span>
+                <Botao variante="fantasma" disabled={travada} onClick={() => { setTextos(t => ({ ...t, gancho: g })); salvar({ gancho: g }) }}>Usar</Botao>
+              </div>
+            ))}
+            {(ia.r.retencao || ia.r.recompensa || ia.r.cta) && (
+              <div className="sm-ia-resto">
+                {ia.r.retencao && <p><b>Retenção:</b> {ia.r.retencao}</p>}
+                {ia.r.recompensa && <p><b>Recompensa:</b> {ia.r.recompensa}</p>}
+                {ia.r.cta && <p><b>Chamada:</b> {ia.r.cta}</p>}
+                <Botao disabled={travada} onClick={() => usarRoteiro(ia.r!)}>Usar no roteiro</Botao>
+              </div>
+            )}
+            <span className="sm-legenda">Escrito pela IA a partir da pauta e da ficha da moto, sem preço nem condição. Revise antes de gravar.</span>
+          </section>
+        )}
         {biblioteca && <BibliotecaGanchos aoFechar={() => setBiblioteca(false)} aoEscolher={texto => { setTextos(t => ({ ...t, gancho: texto })); salvar({ gancho: texto }) }} />}
         <div className="sm-bloco">
           <label className="sm-mono" htmlFor="briefing-legenda" style={{ display: 'flex', justifyContent: 'space-between' }}>
