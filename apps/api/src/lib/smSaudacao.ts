@@ -224,15 +224,17 @@ async function carregarDados(sm: ContextoSM, agora: Date, anteriorEm: Date | nul
   const posts = feed.map(m => ({ titulo: tituloDaLegenda(m.legenda), formato: formato(m), em: m.publicadoEm, dia: diaLocal(m.publicadoEm), hora: Number(horaLocal(m.publicadoEm).slice(0, 2)), multiplo: med > 0 && m.alcance > 0 ? m.alcance / med : null }))
   const diasComPostSemana = new Set(posts.filter(p => p.em >= iniSemana).map(p => p.dia))
   const agendadas = pautas.filter(p => p.agendadoPara && p.status === 'AGENDADO')
+  // Planejadas para uma data (agendadas ou ainda em produção), como na tela Hoje.
+  const planejadas = pautas.filter(p => p.agendadoPara)
   const planejadosSemana = new Set([...diasComPostSemana, ...agendadas.filter(p => p.agendadoPara! >= iniSemana && p.agendadoPara! < new Date(iniSemana.getTime() + 7 * DIA_MS)).map(p => diaLocal(p.agendadoPara!))])
   return {
     ve, agora, hoje, config, loja: conta?.nomeExibicao?.split(/\s+/)[0] ?? null,
     foraDoExpediente: !dentroDoExpediente(agora, config),
     anteriorEm,
     // Posts de hoje: agendados que ainda vão ao ar e os já publicados com a força contra a mediana.
-    postsHojeAgendados: agendadas.filter(p => p.agendadoPara! >= iniHoje && p.agendadoPara! < iniAmanha).sort((a, b) => a.agendadoPara!.getTime() - b.agendadoPara!.getTime()).map(p => ({ titulo: p.titulo, hora: horaLocal(p.agendadoPara!), em: p.agendadoPara! })),
+    postsHojeAgendados: planejadas.filter(p => p.agendadoPara! >= iniHoje && p.agendadoPara! < iniAmanha).sort((a, b) => a.agendadoPara!.getTime() - b.agendadoPara!.getTime()).map(p => ({ titulo: p.titulo, hora: horaLocal(p.agendadoPara!), em: p.agendadoPara! })),
     proximoPost: (() => { const p = agendadas.filter(x => x.agendadoPara! > agora).sort((a, b) => a.agendadoPara!.getTime() - b.agendadoPara!.getTime())[0]; return p ? { titulo: p.titulo, quando: `${SEMANA_CURTA[new Date(p.agendadoPara!.getTime() - OFF).getUTCDay()]} ${ddmm(diaLocal(p.agendadoPara!))}, ${horaLocal(p.agendadoPara!)}` } : null })(),
-    postsAmanha: agendadas.filter(p => p.agendadoPara! >= iniAmanha && p.agendadoPara! < fimAmanha).sort((a, b) => a.agendadoPara!.getTime() - b.agendadoPara!.getTime()).map(p => ({ titulo: p.titulo, hora: horaLocal(p.agendadoPara!) })),
+    postsAmanha: planejadas.filter(p => p.agendadoPara! >= iniAmanha && p.agendadoPara! < fimAmanha).sort((a, b) => a.agendadoPara!.getTime() - b.agendadoPara!.getTime()).map(p => ({ titulo: p.titulo, hora: horaLocal(p.agendadoPara!) })),
     publicadosHoje: posts.filter(p => p.dia === hoje),
     ultimos3: posts.filter(p => p.multiplo != null).slice(0, 3),
     posts,
