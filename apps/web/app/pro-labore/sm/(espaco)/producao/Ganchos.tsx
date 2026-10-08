@@ -5,19 +5,21 @@
 // (cabeçalho da Produção) ou para escolher (bloco Gancho do briefing).
 import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, type SmBibliotecaGanchos } from '@/lib/proLaboreApi'
-import { Botao, Chip, EstadoVazio, Modal, Rotulo, useToast } from '../../_ui'
+import { Botao, BotaoLink, Chip, EstadoVazio, Esqueleto, Modal, Rotulo, useToast } from '../../_ui'
+import { useEspacoSM } from '../EspacoSM'
 
 const pct = (v: number | null) => (v == null ? '—' : `${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`)
 const inteiro = (v: number) => v.toLocaleString('pt-BR')
 
 export function BibliotecaGanchos({ aoFechar, aoEscolher }: { aoFechar: () => void; aoEscolher?: (texto: string) => void }) {
+  const { pode } = useEspacoSM()
   const toast = useToast()
   const [dados, setDados] = useState<SmBibliotecaGanchos | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [novo, setNovo] = useState('')
 
   const carregar = useCallback(() => {
-    proLaboreApi.sm.ganchos.listar().then(setDados).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+    proLaboreApi.sm.ganchos.listar().then(setDados).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.'))
   }, [])
   useEffect(() => { carregar() }, [carregar])
 
@@ -45,7 +47,7 @@ export function BibliotecaGanchos({ aoFechar, aoEscolher }: { aoFechar: () => vo
           {escolhendo ? 'Escolha um gancho para a pauta. ' : ''}O pulo nos 3 primeiros segundos vem dos reels que usaram cada gancho: quanto menor, mais gente ficou.
         </p>
         {erro && <p className="sm-erro" role="alert">{erro}</p>}
-        {!dados && !erro && <p className="sm-legenda">Carregando…</p>}
+        {!dados && !erro && <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}><span className="sm-sr" role="status">Carregando a biblioteca</span><Esqueleto altura={40} /><Esqueleto altura={40} largura="85%" /><Esqueleto altura={40} largura="70%" /></div>}
         {dados && dados.podeEditar && !escolhendo && (
           <form className="sm-ganchos-novo" onSubmit={async e => { e.preventDefault(); if (novo.trim().length >= 3 && await salvar(novo.trim())) setNovo('') }}>
             <label className="sm-campo" style={{ flex: 1 }}>Novo gancho
@@ -55,7 +57,7 @@ export function BibliotecaGanchos({ aoFechar, aoEscolher }: { aoFechar: () => vo
           </form>
         )}
         {dados && (dados.ganchos.length === 0
-          ? <EstadoVazio titulo="Biblioteca vazia">Salve ganchos dos reels que foram bem (no diagnóstico do Desempenho) ou escreva um aqui.</EstadoVazio>
+          ? <EstadoVazio titulo="Biblioteca vazia" acao={pode('analise') ? <BotaoLink href="/pro-labore/sm/desempenho#reels">Ver os reels que foram bem</BotaoLink> : undefined}>Salve ganchos dos reels que foram bem (no diagnóstico do Desempenho) ou escreva um aqui.</EstadoVazio>
           : (
             <ul className="sm-ganchos-lista" aria-label="Ganchos salvos">
               {dados.ganchos.map(g => (

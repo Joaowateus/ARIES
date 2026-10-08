@@ -136,6 +136,8 @@ const FORMATO_NOME: Record<string, string> = { REELS: 'reel', CARROSSEL: 'carros
 const PILAR_NOME: Record<string, string> = { ESTOQUE: 'Estoque', PROVA: 'Prova social', EDUCACAO: 'Educação', BASTIDORES: 'Bastidores' }
 const num = (v: number, c = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: c })
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`
+// "3 de 4 dias com post"; passando da meta, "5 dias com post (meta 4)".
+const diasDaMeta = (n: number, meta: number) => (n > meta ? `${n} dias com post (meta ${meta})` : `${n} de ${meta} dias com post`)
 /** Contagem que lê bem também no zero: "nenhuma conversa nova" em vez de "0 conversas". */
 const conta = (n: number, s: string, p: string, nenhum: string) => (n ? plural(n, s, p) : nenhum)
 const lista = (l: string[]) => (l.length > 1 ? `${l.slice(0, -1).join(', ')} e ${l[l.length - 1]}` : l[0] ?? '')
@@ -306,7 +308,7 @@ function reservas(d: Dados): ItemRecepcao[] {
   if (d.postsAmanha[0]) r.push({ tom: 'info', rotulo: `Amanhã, ${d.postsAmanha[0].hora}`, texto: curto(d.postsAmanha[0].titulo, 50) })
   if (d.teste?.status === 'ATIVO') r.push({ tom: 'learn', rotulo: 'Teste A/B', texto: `${curto(d.teste.hipotese, 50)} (${d.teste.amostraAtual} de ${d.teste.amostraAlvo})` })
   if (d.proximoPost && !d.postsHojeAgendados.length && !d.postsAmanha.length) r.push({ tom: 'info', rotulo: 'Próximo post', texto: `${d.proximoPost.quando}: ${curto(d.proximoPost.titulo, 40)}` })
-  r.push({ tom: d.semana.diasComPost >= d.config.minDiasSemana ? 'ok' : 'neutro', rotulo: 'Semana', texto: `${d.semana.diasComPost} de ${d.config.minDiasSemana} dias com post${d.semana.planejados > d.semana.diasComPost ? `, ${d.semana.planejados} contando os agendados` : ''}` })
+  r.push({ tom: d.semana.diasComPost >= d.config.minDiasSemana ? 'ok' : 'neutro', rotulo: 'Semana', texto: `${diasDaMeta(d.semana.diasComPost, d.config.minDiasSemana)}${d.semana.planejados > d.semana.diasComPost ? `, ${d.semana.planejados} contando os agendados` : ''}` })
   return r
 }
 function completar(itens: ItemRecepcao[], d: Dados): ItemRecepcao[] {
@@ -394,7 +396,7 @@ function conteudo(m: Momento, d: Dados, bemvindo: string): Conteudo {
       if (d.leadsSemana != null) itens.push({ tom: d.leadsSemana >= d.config.metaLeadsSemana ? 'ok' : 'warn', rotulo: d.leadsSemana >= d.config.metaLeadsSemana ? 'Meta batida' : 'Leads da semana', texto: `${plural(d.leadsSemana, 'lead orgânico', 'leads orgânicos')} na semana (meta ${d.config.metaLeadsSemana})` })
       if (melhor) itens.push({ tom: 'info', rotulo: 'Post da semana', texto: `${melhor.titulo}, ${num(melhor.multiplo!, 1)}× a mediana` })
       if (d.teste?.status === 'CONCLUIDO' && d.teste.resultado) itens.push({ tom: 'learn', rotulo: 'Aprendizado', texto: curto(d.teste.resultado.texto, 70) })
-      return { kicker: 'Fechamento da semana', sub: `${d.semana.diasComPost} de ${d.config.minDiasSemana} dias com post na semana. Leva 5 minutos para ver.`, cta: { rotulo: 'Abrir a retrospectiva', href: '/pro-labore/sm/retrospectiva' }, listaTitulo: 'Destaques', itens: completar(itens, d), perguntas: ['atr:relatorio', 'des:alcance', 'des:horario'] }
+      return { kicker: 'Fechamento da semana', sub: `${diasDaMeta(d.semana.diasComPost, d.config.minDiasSemana)} na semana. Leva 5 minutos para ver.`, cta: { rotulo: 'Abrir a retrospectiva', href: '/pro-labore/sm/retrospectiva' }, listaTitulo: 'Destaques', itens: completar(itens, d), perguntas: ['atr:relatorio', 'des:alcance', 'des:horario'] }
     }
     case 'SEGUNDA': {
       const faltam = Math.max(0, d.config.minDiasSemana - d.semana.planejados)

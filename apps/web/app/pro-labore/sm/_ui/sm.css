@@ -836,3 +836,17 @@ select.sm-boas-hora { background: transparent; border: 1px solid var(--sm-border
 .sm-retro-export { position: fixed; left: -12000px; top: 0; width: 1080px; padding: 64px; box-sizing: border-box; background: var(--sm-bg-focus); color: var(--sm-text); display: flex; flex-direction: column; gap: 40px; font-family: var(--sm-font-text); }
 .sm-retro-export-parte { display: flex; flex-direction: column; gap: 20px; padding-top: 32px; border-top: 1px solid var(--sm-border); }
 .sm-retro-export .sm-retro-h1 { font-size: 40px; }
+
+/* ---------- Seção 15 · Comemoração discreta ---------- */
+.sm-comemora { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--sm-radius-card); border: 1px solid var(--sm-bn-ok-border); background: var(--sm-bn-ok-bg); animation: sm-comemora-entra .45s ease-out both; flex-wrap: wrap; }
+.sm-comemora.conquista { border-color: var(--sm-learn-bg); background: var(--sm-surface); }
+.sm-comemora-ic { width: 34px; height: 34px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; font: 800 16px var(--sm-font-title); background: var(--sm-ok-bg); color: var(--sm-ok-fg); position: relative; overflow: hidden; }
+.sm-comemora.conquista .sm-comemora-ic { background: var(--sm-learn-bg); color: var(--sm-learn-fg); }
+.sm-comemora-ic::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%); transform: translateX(-120%); animation: sm-comemora-brilho 1.2s .3s ease-out 1 both; }
+.sm-comemora-texto { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sm-comemora-texto b { color: var(--sm-text-strong); font-family: var(--sm-font-title); font-weight: 700; }
+.sm-comemora-texto span { color: var(--sm-text-muted); font-size: 13px; }
+.sm-comemora-acoes { display: flex; align-items: center; gap: 12px; }
+@keyframes sm-comemora-entra { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes sm-comemora-brilho { to { transform: translateX(120%); } }
+@media (prefers-reduced-motion: reduce) { .sm-comemora, .sm-comemora-ic::after { animation: none; } }

@@ -424,7 +424,7 @@ export async function montarRetrospectiva(sm: ContextoSM, semanaPedida: string |
 /** Resumo em texto (aviso ao gestor e e-mail de segunda). */
 function resumo(v: RetroDoPapel): string {
   const m = v.metas
-  const partes = [`${m.diasComPost.atual} de ${m.diasComPost.meta} dias com post`]
+  const partes = [m.diasComPost.atual > m.diasComPost.meta ? `${m.diasComPost.atual} dias com post (meta ${m.diasComPost.meta})` : `${m.diasComPost.atual} de ${m.diasComPost.meta} dias com post`]
   if (m.leads) partes.push(`${plural(m.leads.atual, 'lead orgânico', 'leads orgânicos')} (meta ${m.leads.meta})`)
   if (m.resposta?.atualMin != null) partes.push(`resposta em ${m.resposta.atualMin} min (meta ${m.resposta.meta})`)
   if (m.retencao?.pct != null) partes.push(`retenção dos reels em ${m.retencao.pct}%`)

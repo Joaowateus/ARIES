@@ -14,6 +14,8 @@ import { iaLigada } from '../lib/smIA'
 import { podeRoteiroIA } from '../lib/smPerguntas'
 import { MOMENTOS, generoDe, montarRecepcao, recolherVisita, simularRecepcao, type Momento } from '../lib/smSaudacao'
 import { preferenciaDe } from '../lib/smBoasVindas'
+import { marcarComemorado, marcosPendentes } from '../lib/smComemoracoes'
+import { atorDe } from '../lib/smInsights'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -85,6 +87,8 @@ router.get('/sm/eu', ...autenticado, async (req: Request, res: Response) => {
     ia: { ligada: iaLigada(), roteiro: podeRoteiroIA(sm) },
     // Primeiro acesso (tela 08) ainda por fazer: o espaço leva para as boas-vindas.
     onboardingPendente: papel === 'SOCIAL_MEDIA' && !!membro && !(await preferenciaDe(sm.usuarioId, membro.id)).onboardingConcluidoEm,
+    // Tema escolhido em Preferências (seção 15): segue a pessoa em qualquer aparelho.
+    tema: (await preferenciaDe(sm.usuarioId, atorDe(sm))).tema,
     conta: resumoConta(conta),
     contadores: { atendimento: sm.pode('atendimento', 'LEITURA') ? await prisma.smConversa.count({ where: { usuarioId: sm.usuarioId, aguardandoDesde: { not: null }, status: { not: 'ARQUIVADA' } } }) : 0 },
   })
@@ -99,11 +103,20 @@ router.get('/sm/hoje', ...autenticado, async (req: Request, res: Response) => {
     ? { nome: membro?.nome ?? 'Social Media', tratamento: membro?.tratamento ?? null }
     : { nome: req.proLaboreUser!.nome, tratamento: null }
   // Recepção (seção 14): ?retorno=1 quando a aba volta depois de 30 min escondida.
-  const [hoje, recepcao] = await Promise.all([
+  const [hoje, recepcao, marcos] = await Promise.all([
     montarHoje(sm, pessoa),
     montarRecepcao(sm, req.proLaboreUser!.nome, new Date(), { retorno: req.query.retorno === '1' }),
+    marcosPendentes(sm),
   ])
-  res.json({ ...hoje, cabecalho: { ...hoje.cabecalho, saudacao: recepcao.titulo, resumo: recepcao.sub }, recepcao })
+  res.json({ ...hoje, cabecalho: { ...hoje.cabecalho, saudacao: recepcao.titulo, resumo: recepcao.sub }, recepcao, marcos })
+})
+
+// Comemoração vista (seção 15, item 7): o marco não volta a aparecer.
+router.post('/sm/comemoracoes/visto', ...autenticado, async (req: Request, res: Response) => {
+  const parse = z.object({ chave: z.string().min(3).max(120) }).safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: 'Marco inválido' }); return }
+  await marcarComemorado(req.sm!, parse.data.chave)
+  res.json({ ok: true })
 })
 
 // Depois da primeira ação do dia, a recepção recolhe numa linha (seção 14.3, regra 4).

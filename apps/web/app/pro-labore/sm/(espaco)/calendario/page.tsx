@@ -49,7 +49,7 @@ function Calendario() {
         if (s && c.semanas.some(w => w[0].data === s)) return s
         return (c.semanas.find(w => w.some(d => d.hoje)) ?? c.semanas[0])[0].data
       })
-    }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+    }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.'))
   }, [])
   useEffect(() => { carregar(null) }, [carregar])
   useEffect(() => { if (pode('estoque')) proLaboreApi.sm.estoque.listar().then(setMotos).catch(() => setMotos(null)) }, [pode])

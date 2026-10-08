@@ -89,7 +89,7 @@ router.get('/sm/preferencias', ...autenticado, async (req: Request, res: Respons
   const sm = req.sm!
   const pref = await preferenciaDe(sm.usuarioId, atorDe(sm))
   const membro = sm.visao === 'SOCIAL_MEDIA' ? await prisma.smMembro.findUnique({ where: { usuarioId: sm.usuarioId }, select: { nome: true, tratamento: true } }) : null
-  res.json({ tratamento: membro ? membro.tratamento ?? membro.nome.split(' ')[0] : null, genero: pref.genero, focoHora: pref.focoHora, avisos: pref.avisos, padraoAvisos: AVISOS_PADRAO })
+  res.json({ tratamento: membro ? membro.tratamento ?? membro.nome.split(' ')[0] : null, genero: pref.genero, focoHora: pref.focoHora, avisos: pref.avisos, tema: pref.tema, padraoAvisos: AVISOS_PADRAO })
 })
 
 router.put('/sm/preferencias', ...autenticado, async (req: Request, res: Response) => {
@@ -98,6 +98,7 @@ router.put('/sm/preferencias', ...autenticado, async (req: Request, res: Respons
     tratamento: z.string().trim().min(1).max(40).optional(),
     focoHora: z.number().int().min(5).max(14).optional(),
     avisos: avisosSchema.optional(),
+    tema: z.enum(['CLARO', 'ESCURO']).nullable().optional(),
   }).safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Preferência inválida' }); return }
   const sm = req.sm!

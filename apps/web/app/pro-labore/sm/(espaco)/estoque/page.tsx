@@ -25,7 +25,7 @@ function Estoque() {
   const podeEditar = pode('estoque', 'COMPLETO') && !eu.somenteLeitura
 
   const carregar = useCallback(() => {
-    proLaboreApi.sm.estoque.listar().then(setMotos).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+    proLaboreApi.sm.estoque.listar().then(setMotos).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.'))
   }, [])
   useEffect(() => { if (pode('estoque')) carregar() }, [carregar, pode])
   // Vindo da paleta (tela 10): ?moto=<id> destaca a linha.
@@ -66,7 +66,7 @@ function Estoque() {
       {!motos && !erro && <CardEsqueleto linhas={4} />}
       {motos && (
         <section className="sm-card" aria-label="Motos em estoque">
-          {naLoja.length === 0 ? <EstadoVazio titulo="Nenhuma moto cadastrada">{podeEditar ? 'Cadastre as motos da loja para o Social Media saber o que precisa de conteúdo.' : 'O gestor ainda não cadastrou as motos.'}</EstadoVazio> : (
+          {naLoja.length === 0 ? <EstadoVazio titulo="Nenhuma moto cadastrada" acao={podeEditar ? <Botao variante="pri" onClick={() => setNovo(true)}>Cadastrar a primeira moto</Botao> : undefined}>{podeEditar ? 'Cadastre as motos da loja para o Social Media saber o que precisa de conteúdo.' : 'O gestor ainda não cadastrou as motos.'}</EstadoVazio> : (
             <div className="sm-tabela-rola">
               <table className="sm-tabela" style={{ minWidth: 720 }}>
                 <thead><tr><th>Moto</th><th>Entrada</th><th>Dias</th><th>Posts</th><th>Em produção</th><th>Situação</th>{podeEditar && <th><span className="sm-sr">Ações</span></th>}</tr></thead>

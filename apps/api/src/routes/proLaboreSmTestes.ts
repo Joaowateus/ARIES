@@ -3,6 +3,7 @@
 // a biblioteca pede Produção (leitura para ver, completo para mudar). Os
 // posts entram nos grupos pela própria pauta (PATCH testeId/testeGrupo).
 import { Router, Request, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
@@ -57,9 +58,23 @@ router.post('/sm/testes/:id/cancelar', ...autenticado, requireModuloSM('analise'
   const t = await prisma.smTeste.findFirst({ where: { id: String(req.params.id), usuarioId: req.sm!.usuarioId } })
   if (!t) { res.status(404).json({ error: 'Teste não encontrado' }); return }
   if (t.status !== 'ATIVO') { res.status(409).json({ error: 'Só dá para cancelar um teste em andamento' }); return }
+  // Desfazer em vez de confirmar (seção 15): guarda quem estava em cada grupo por 10 min.
+  const pautas = await prisma.smPauta.findMany({ where: { testeId: t.id }, select: { id: true, testeGrupo: true } })
   await prisma.$transaction([
     prisma.smPauta.updateMany({ where: { testeId: t.id }, data: { testeId: null, testeGrupo: null } }),
-    prisma.smTeste.update({ where: { id: t.id }, data: { status: 'CANCELADO' } }),
+    prisma.smTeste.update({ where: { id: t.id }, data: { status: 'CANCELADO', resultado: { desfazer: { em: new Date().toISOString(), pautas } } } }),
+  ])
+  res.json({ ok: true })
+})
+
+router.post('/sm/testes/:id/reativar', ...autenticado, requireModuloSM('analise', 'COMPLETO'), async (req: Request, res: Response) => {
+  const t = await prisma.smTeste.findFirst({ where: { id: String(req.params.id), usuarioId: req.sm!.usuarioId } })
+  if (!t) { res.status(404).json({ error: 'Teste não encontrado' }); return }
+  const desfazer = (t.resultado as { desfazer?: { em: string; pautas: Array<{ id: string; testeGrupo: string | null }> } } | null)?.desfazer
+  if (t.status !== 'CANCELADO' || !desfazer || Date.now() - Date.parse(desfazer.em) > 10 * 60_000) { res.status(409).json({ error: 'Não dá mais para desfazer o cancelamento' }); return }
+  await prisma.$transaction([
+    prisma.smTeste.update({ where: { id: t.id }, data: { status: 'ATIVO', resultado: Prisma.DbNull } }),
+    ...desfazer.pautas.map(p => prisma.smPauta.updateMany({ where: { id: p.id, usuarioId: t.usuarioId, testeId: null }, data: { testeId: t.id, testeGrupo: p.testeGrupo } })),
   ])
   res.json({ ok: true })
 })

@@ -31,6 +31,7 @@ export async function preferenciaDe(usuarioId: string, ator: string) {
     focoHora: p?.focoHora ?? 9,
     avisos: { ...AVISOS_PADRAO, ...((p?.avisos as Partial<Avisos> | null) ?? {}) },
     onboardingConcluidoEm: p?.onboardingConcluidoEm ?? null,
+    tema: (p?.tema ?? null) as 'CLARO' | 'ESCURO' | null,
   }
 }
 
