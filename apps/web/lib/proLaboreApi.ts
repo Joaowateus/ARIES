@@ -814,6 +814,30 @@ export const proLaboreApi = {
     comemoracoes: {
       visto: (chave: string) => request<{ ok: boolean }>('/pro-labore/sm/comemoracoes/visto', { method: 'POST', body: JSON.stringify({ chave }) }),
     },
+    push: {
+      chave: () => request<SmPushChave>('/pro-labore/sm/push/chave'),
+      inscrever: (inscricao: SmPushInscricao) => request<{ ok: boolean; aparelhos: number }>('/pro-labore/sm/push/inscrever', { method: 'POST', body: JSON.stringify(inscricao) }),
+      desinscrever: (endpoint: string) => request<{ ok: boolean; aparelhos: number }>('/pro-labore/sm/push/inscrever', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
+      teste: () => request<{ ok: boolean; enviados: number }>('/pro-labore/sm/push/teste', { method: 'POST' }),
+    },
+    captura: {
+      lista: () => request<SmCapturaItem[]>('/pro-labore/sm/captura'),
+      ver: (id: string) => request<SmCaptura>(`/pro-labore/sm/captura/${id}`),
+      enviarFoto: (id: string, n: number, arquivo: Blob) =>
+        request<SmCaptura>(`/pro-labore/sm/captura/${id}/tomadas/${n}/foto`, { method: 'POST', body: arquivo, headers: { 'Content-Type': 'application/octet-stream' } }),
+      tokenVideo: (id: string, n: number, extensao: string) =>
+        request<{ token: string; pathname: string }>(`/pro-labore/sm/captura/${id}/tomadas/${n}/token`, { method: 'POST', body: JSON.stringify({ extensao }) }),
+      registrarVideo: (id: string, n: number, url: string, origem: 'BLOB' | 'LINK') =>
+        request<SmCaptura>(`/pro-labore/sm/captura/${id}/tomadas/${n}/video`, { method: 'POST', body: JSON.stringify({ url, origem }) }),
+      refazer: (id: string, n: number) => request<SmCaptura>(`/pro-labore/sm/captura/${id}/tomadas/${n}`, { method: 'DELETE' }),
+    },
+    aprovar: {
+      fila: () => request<SmFilaAprovacao>('/pro-labore/sm/aprovar'),
+    },
+    avisos: {
+      listar: () => request<SmAvisosLista>('/pro-labore/sm/avisos'),
+      lidos: (ids?: string[]) => request<{ ok: boolean; marcados: number }>('/pro-labore/sm/avisos/lidos', { method: 'POST', body: JSON.stringify(ids ? { ids } : {}) }),
+    },
     foco: {
       fila: (iniciar = false) => request<SmFoco>(`/pro-labore/sm/foco${iniciar ? '?iniciar=1' : ''}`),
       executar: (tarefaId: string, d: { texto?: string; virarLead?: boolean; lead?: SmTarefaFoco['lead']; capaTexto?: boolean }) =>
@@ -1823,7 +1847,7 @@ export interface SmEu {
   /** Primeiro acesso (tela 08) ainda por fazer. */
   onboardingPendente: boolean
   conta: SmContaResumo | null
-  contadores: { atendimento: number }
+  contadores: { atendimento: number; aprovacao: number }
   /** Tema escolhido em Preferências (vazio = o que estiver no aparelho). */
   tema: SmTema | null
 }
@@ -1900,7 +1924,7 @@ export interface SmPautaEntrada {
 
 export interface SmItemChecklist { chave: string; rotulo: string; ok: boolean | null; automatico: boolean; detalhe?: string }
 
-export interface SmPautaMidia { id: string; tipo: 'IMAGEM' | 'VIDEO' | 'CAPA' | 'TERMO'; url: string; ordem: number }
+export interface SmPautaMidia { id: string; tipo: 'IMAGEM' | 'VIDEO' | 'CAPA' | 'TERMO' | 'TOMADA'; url: string; ordem: number; tomada?: number | null }
 
 export interface SmPauta {
   id: string
@@ -2004,6 +2028,38 @@ export interface SmSugestaoAudiencia { ref: string; titulo: string; pilar: SmPil
 
 // Modo foco (tela 09), primeiro acesso (tela 08) e preferências.
 export interface SmAvisos { whatsapp: boolean; celular: boolean; email: boolean }
+export type SmSituacaoTomada = 'ENVIADA' | 'AGORA' | 'PENDENTE'
+export interface SmTomada {
+  n: number
+  nome: string
+  instrucao: string
+  formato: string
+  duracaoMaxSeg: number | null
+  arquivo: 'VIDEO' | 'FOTO'
+  situacao: SmSituacaoTomada
+  midia: { id: string; url: string; tipo: string; enviadaEm: string } | null
+}
+export interface SmPautaCaptura {
+  id: string; titulo: string; pilar: SmPilar; formato: SmFormato; status: SmStatusPauta; origem: SmOrigem
+  prazo: string | null; agendadoPara: string | null; autorizacaoImagem: boolean; cta: string | null
+  moto: { id: string; modelo: string; ano: number | null; cor: string | null } | null
+}
+export interface SmCaptura { pauta: SmPautaCaptura; tomadas: SmTomada[]; enviadas: number; podeEnviar: boolean; videoPeloApp: boolean; avancou?: 'GRAVACAO' | 'EDICAO' | null }
+export interface SmCapturaItem extends SmPautaCaptura { total: number; enviadas: number; proxima: string | null }
+export interface SmPautaParaAprovar {
+  id: string; titulo: string; pilar: SmPilar; formato: SmFormato; formatoRotulo: string
+  agendadoPara: string | null; enviadaAprovacaoEm: string | null; codigo: string | null; trial: boolean
+  legenda: string | null; legendaCaracteres: number; moto: { id: string; modelo: string; ano: number | null; cor: string | null } | null
+  linkSlug: string | null; horario: 'PICO' | 'TESTE' | null
+  previa: { id: string; tipo: 'IMAGEM' | 'VIDEO'; url: string }[]; capa: { url: string } | null
+  pendencias: string[]
+}
+export interface SmFilaAprovacao { regraLigada: boolean; pautas: SmPautaParaAprovar[] }
+export interface SmPushChave { configurado: boolean; chave: string | null; aparelhos: number }
+export interface SmPushInscricao { endpoint: string; keys: { p256dh: string; auth: string }; navegador?: string }
+export type SmTipoAviso = 'DECOLANDO' | 'VENDA' | 'CLIENTE' | 'APROVACAO' | 'FALHA'
+export interface SmAvisoPulso { id: string; tipo: SmTipoAviso; titulo: string; texto: string; href: string | null; urgente: boolean; criadoEm: string; lido: boolean }
+export interface SmAvisosLista { naoLidos: number; avisos: SmAvisoPulso[] }
 export interface SmPreferencias { tratamento: string | null; genero: SmGenero | null; focoHora: number; avisos: SmAvisos; tema: SmTema | null; padraoAvisos: SmAvisos }
 export interface SmTarefaFoco {
   id: string

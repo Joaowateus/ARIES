@@ -2,12 +2,15 @@
 
 // Preferências da pessoa (seção 11.1: "Dá para mudar tudo depois em
 // Preferências"): como chamar, a concordância da saudação, o tema (seção 15),
-// a hora do modo foco e os canais de aviso. As metas da semana ficam com o gestor.
-import { useEffect, useState } from 'react'
+// a hora do modo foco, os canais de aviso e os avisos no celular (PWA, seção
+// 11.5). As metas da semana ficam com o gestor.
+import { useEffect, useReducer, useState } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, type SmAvisos, type SmGenero, type SmTema } from '@/lib/proLaboreApi'
+import { proLaboreApi, type SmAvisos, type SmGenero, type SmPushChave, type SmTema } from '@/lib/proLaboreApi'
 import { usePLTema } from '@/lib/proLaboreTheme'
-import { Botao, Card, CardEsqueleto, Rotulo, Segmentado, useToast } from '../../_ui'
+import {
+  Botao, Card, CardEsqueleto, Rotulo, Segmentado, ativarPush, desativarPush, ehIPhone, inscricaoAtual, instaladoComoApp, instalar, permissaoAvisos, podeInstalar, pushSuportado, useToast,
+} from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 
 const HORAS = [7, 8, 9, 10, 11]
@@ -96,6 +99,7 @@ export default function PreferenciasPage() {
               ))}
             </fieldset>
           </Card>
+          <AvisosNoCelular />
           <Card titulo="Metas da semana">
             <span className="sm-legenda">
               {souSM ? 'As metas combinadas no primeiro acesso ficam com o gestor, que pode ajustar nas regras do Calendário.' : 'As metas ficam nas regras do Calendário.'}
@@ -106,5 +110,86 @@ export default function PreferenciasPage() {
         </form>
       )}
     </>
+  )
+}
+
+// Avisos no celular (PWA + Web Push): ligar neste aparelho, testar, desligar e instalar o app.
+function AvisosNoCelular() {
+  const toast = useToast()
+  const [config, setConfig] = useState<SmPushChave | null>(null)
+  const [inscrito, setInscrito] = useState(false)
+  const [ocupado, setOcupado] = useState(false)
+  const [, atualizar] = useReducer((n: number) => n + 1, 0)
+  const suportado = pushSuportado()
+
+  useEffect(() => {
+    Promise.all([proLaboreApi.sm.push.chave(), inscricaoAtual().catch(() => null)])
+      .then(([c, sub]) => { setConfig(c); setInscrito(!!sub && c.aparelhos > 0) })
+      .catch(() => setConfig({ configurado: false, chave: null, aparelhos: 0 }))
+    window.addEventListener('sm:pode-instalar', atualizar)
+    return () => window.removeEventListener('sm:pode-instalar', atualizar)
+  }, [])
+
+  async function ativar() {
+    if (!config?.chave) return
+    setOcupado(true)
+    try {
+      const r = await proLaboreApi.sm.push.inscrever(await ativarPush(config.chave))
+      setInscrito(true); setConfig(c => c && { ...c, aparelhos: r.aparelhos })
+      toast({ mensagem: 'Avisos ligados neste aparelho.' })
+    } catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível ligar os avisos', tom: 'bad' }) } finally { setOcupado(false) }
+  }
+  async function desativar() {
+    setOcupado(true)
+    try {
+      const endpoint = await desativarPush()
+      const r = endpoint ? await proLaboreApi.sm.push.desinscrever(endpoint) : null
+      setInscrito(false); if (r) setConfig(c => c && { ...c, aparelhos: r.aparelhos })
+      toast({ mensagem: 'Avisos desligados neste aparelho.' })
+    } catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível desligar', tom: 'bad' }) } finally { setOcupado(false) }
+  }
+  async function testar() {
+    setOcupado(true)
+    try { await proLaboreApi.sm.push.teste(); toast({ mensagem: 'Aviso de teste enviado. Deve chegar em instantes.' }) }
+    catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível enviar o teste', tom: 'bad' }) } finally { setOcupado(false) }
+  }
+
+  const negado = permissaoAvisos() === 'denied'
+  let corpo: React.ReactNode
+  if (!config) corpo = <span className="sm-legenda">Verificando este aparelho…</span>
+  else if (!suportado) {
+    corpo = <span className="sm-legenda">{ehIPhone() && !instaladoComoApp()
+      ? 'No iPhone, os avisos chegam pelo app instalado: toque em Compartilhar, depois em “Adicionar à Tela de Início”, abra o app e ative aqui.'
+      : 'Este navegador não recebe avisos do app. Use o Chrome, o Edge, o Firefox ou o Safari atualizado.'}</span>
+  } else if (!config.configurado) {
+    corpo = <span className="sm-legenda">Os avisos no celular ainda não foram configurados no servidor. Enquanto isso, eles aparecem no sino do menu.</span>
+  } else if (inscrito) {
+    corpo = (
+      <>
+        <div className="sm-status ok" role="status">Ligado neste aparelho{config.aparelhos > 1 ? ` · ${config.aparelhos} aparelhos no total` : ''}</div>
+        <div className="sm-acoes-linha">
+          <Botao onClick={testar} disabled={ocupado}>Enviar um aviso de teste</Botao>
+          <Botao variante="fantasma" onClick={desativar} disabled={ocupado}>Desativar neste aparelho</Botao>
+        </div>
+      </>
+    )
+  } else {
+    corpo = (
+      <>
+        {negado && <div className="sm-status warn" role="status">O navegador bloqueou os avisos. Libere nas configurações do site e tente de novo.</div>}
+        <div className="sm-acoes-linha"><Botao variante="pri" onClick={ativar} disabled={ocupado}>{ocupado ? 'Ativando…' : 'Ativar neste aparelho'}</Botao></div>
+      </>
+    )
+  }
+  return (
+    <Card titulo="Avisos no celular">
+      <div className="sm-celular-push">
+        <span className="sm-legenda">Post decolando na 1ª hora, venda creditada a um post e cliente esperando além da meta. O cliente esperando chega na hora; o resto vem junto, no máximo um aviso a cada 30 min.</span>
+        {corpo}
+        {instaladoComoApp()
+          ? <span className="sm-legenda">App instalado neste aparelho.</span>
+          : podeInstalar() && <div className="sm-acoes-linha"><Botao onClick={() => instalar().then(ok => ok && toast({ mensagem: 'App instalado.' }))}>Instalar o app</Botao></div>}
+      </div>
+    </Card>
   )
 }

@@ -5,6 +5,7 @@
 // (Trial Reel, enviar para aprovação, aprovar ou pedir ajuste). Cada campo
 // salva ao sair dele.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import Link from 'next/link'
 import { proLaboreApi, urlArquivoApi, type SmTesteAB, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar, type SmRoteiroIA } from '@/lib/proLaboreApi'
 import {
   Banner, Botao, Chip, COLUNA_ROTULO, COLUNAS, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
@@ -95,6 +96,8 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
   }
 
   const imagensEVideos = pauta.midias.filter(m => m.tipo === 'IMAGEM' || m.tipo === 'VIDEO')
+  const tomadas = pauta.midias.filter(m => m.tipo === 'TOMADA').sort((a, b) => (a.tomada ?? 0) - (b.tomada ?? 0))
+  const naCaptura = ['IDEIA', 'ROTEIRO', 'GRAVACAO', 'EDICAO'].includes(pauta.status)
   const termos = pauta.midias.filter(m => m.tipo === 'TERMO')
   const aguardandoGestor = pauta.status === 'APROVACAO' && pauta.aprovacao === 'PENDENTE'
   const fechada = pauta.status === 'AGENDADO' || pauta.status === 'PUBLICADO'
@@ -123,6 +126,11 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
           {pauta.trial && <Chip tom="info">Trial Reel</Chip>}
           {pauta.codigo && <Chip tom="learn">{pauta.codigo}</Chip>}
         </div>
+        {naCaptura && (
+          <Link href={`/pro-labore/sm/captura?pauta=${pauta.id}`} className="sm-link-botao">
+            {pauta.status === 'GRAVACAO' || pauta.status === 'EDICAO' ? 'Abrir a captura (tomadas)' : 'Gravar na loja pela câmera'}
+          </Link>
+        )}
       </div>
 
       {pauta.aprovacao === 'AJUSTE' && pauta.comentarioAprovacao && (
@@ -235,6 +243,12 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <Rotulo>Arquivos</Rotulo>
+        {tomadas.length > 0 && (
+          <span className="sm-legenda">
+            Tomadas da captura (para a edição):{' '}
+            {tomadas.map((m, i) => <span key={m.id}>{i > 0 && ' · '}<a href={/^https?:/.test(m.url) ? m.url : urlArquivoApi(m.url)} target="_blank" rel="noreferrer">Tomada {m.tomada}</a></span>)}
+          </span>
+        )}
         {imagensEVideos.length > 0 && (
           <div className="sm-arquivos">
             {imagensEVideos.map(m => (

@@ -850,3 +850,96 @@ select.sm-boas-hora { background: transparent; border: 1px solid var(--sm-border
 @keyframes sm-comemora-entra { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes sm-comemora-brilho { to { transform: translateX(120%); } }
 @media (prefers-reduced-motion: reduce) { .sm-comemora, .sm-comemora-ic::after { animation: none; } }
+
+/* ---------- Fase 5 · Celular: o menu vira uma barra e empilha os itens ---------- */
+.sm-espaco { display: flex; flex-wrap: wrap; }
+.sm-espaco-menu { flex: 1 1 232px; display: flex; }
+.sm-espaco-main { flex: 999 1 560px; min-width: 0; padding: clamp(20px, 4vw, 32px) clamp(16px, 4vw, 40px) 56px; display: flex; flex-direction: column; gap: 24px; }
+.sm-sidebar-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sm-sidebar-acoes { display: flex; align-items: center; gap: 8px; }
+.sm-sidebar-acoes .sm-busca-botao { flex: 1; min-width: 0; }
+.sm-sidebar-movel { display: none; }
+.sm-sidebar-corpo { display: contents; }
+.sm-menu-botao { gap: 8px; }
+@media (max-width: 760px) {
+  .sm-espaco { flex-direction: column; flex-wrap: nowrap; }
+  .sm-espaco-menu { flex: none; position: sticky; top: 0; z-index: 60; }
+  .sm-sidebar { width: 100%; padding: 10px 12px; gap: 14px; border-right: 0; border-bottom: 1px solid var(--sm-divider); max-height: 100vh; overflow-y: auto; }
+  .sm-sidebar-movel { display: flex; align-items: center; gap: 8px; }
+  .sm-sidebar .sm-busca-botao, .sm-sidebar-acoes { display: none; }
+  .sm-sidebar .sm-marca-sub { display: none; }
+  .sm-sidebar .sm-marca { min-width: 0; padding: 4px 0; }
+  .sm-sidebar .sm-marca-nome { font-size: 15px; white-space: nowrap; }
+  .sm-sidebar:not(.aberto) .sm-sidebar-corpo { display: none; }
+  .sm-sidebar.aberto .sm-sidebar-corpo { display: flex; flex-direction: column; gap: 16px; padding-bottom: 6px; }
+  .sm-espaco-main { padding: 18px 16px 56px; gap: 20px; }
+}
+
+/* ---------- Fase 5 · Avisos "Pulso" (seção 11.5) ---------- */
+.sm-avisos-botao { position: relative; flex: none; }
+.sm-avisos-bolinha { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--sm-silver); color: var(--sm-on-silver); font: 700 11px/18px var(--sm-font-text); text-align: center; box-shadow: 0 0 0 2px var(--sm-bg-sidebar); }
+.sm-avisos-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: -6px; }
+.sm-avisos-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sm-aviso { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--sm-border); background: var(--sm-surface); cursor: pointer; font-size: 13px; color: var(--sm-text); line-height: 1.45; }
+.sm-aviso:hover { border-color: var(--sm-border-strong); background: var(--sm-surface-2); }
+.sm-aviso:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-aviso b { color: var(--sm-text-strong); font-size: 14px; }
+.sm-aviso.novo { background: var(--sm-surface-2); border-color: var(--sm-border-strong); }
+.sm-aviso-cab { display: flex; align-items: center; gap: 8px; }
+.sm-aviso-quando { font-size: 12px; color: var(--sm-text-faint); }
+.sm-aviso-ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--sm-silver); margin-left: auto; }
+.sm-celular-push { display: flex; flex-direction: column; gap: 12px; }
+.sm-celular-push .sm-acoes-linha { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- Fase 5 · Captura na loja (Celular.html) ---------- */
+.sm-captura-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+.sm-app a.sm-captura-item { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--sm-border); background: var(--sm-surface); color: var(--sm-text); text-decoration: none; font-size: 13px; }
+.sm-app a.sm-captura-item:hover { border-color: var(--sm-border-strong); }
+.sm-captura-item b { color: var(--sm-text-strong); font-size: 16px; }
+.sm-captura { display: flex; flex-direction: column; gap: 16px; max-width: 560px; width: 100%; }
+.sm-captura-cab { display: flex; flex-direction: column; gap: 4px; }
+.sm-captura-cab h1 { font-size: 22px; }
+.sm-tomada-palco { min-height: 260px; border-radius: 20px; background: var(--sm-surface); border: 1px solid var(--sm-border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; }
+.sm-tomada-palco b { font-size: 17px; font-weight: 600; color: var(--sm-text-strong); line-height: 1.4; max-width: 420px; }
+.sm-tomada-de { font-size: 13px; color: var(--sm-text-muted, var(--sm-text-faint)); }
+.sm-tomada-formato { font-size: 13px; color: var(--sm-text-faint); }
+.sm-tomada-previa { width: min(220px, 100%); max-height: 300px; border-radius: 12px; background: #000; object-fit: cover; }
+.sm-tomadas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sm-tomada-linha { all: unset; box-sizing: border-box; width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; min-height: 44px; align-items: center; border-radius: 10px; font-size: 14px; color: var(--sm-text); cursor: pointer; }
+.sm-tomada-linha:hover { background: var(--sm-surface-2); }
+.sm-tomada-linha.atual { background: var(--sm-surface-2); }
+.sm-tomada-linha:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-tomada-situacao { font-weight: 600; flex: none; }
+.sm-tomada-situacao.enviada { color: var(--sm-ok-fg); }
+.sm-tomada-situacao.agora { color: var(--sm-warn-fg); }
+.sm-tomada-situacao.pendente { color: var(--sm-text-faint); font-weight: 500; }
+.sm-captura-acoes { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sm-gravar { all: unset; box-sizing: border-box; width: 76px; height: 76px; border-radius: 50%; border: 4px solid var(--sm-silver); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.sm-gravar:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 3px; }
+.sm-gravar[disabled] { opacity: .5; cursor: progress; }
+.sm-gravar span { width: 54px; height: 54px; border-radius: 50%; background: #EF4444; }
+.sm-gravar span.foto { background: var(--sm-silver); }
+.sm-captura-link { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.sm-captura-rodape { display: flex; justify-content: center; }
+
+/* ---------- Fase 5 · Aprovação do gestor pelo celular (Celular.html) ---------- */
+.sm-aprovar { display: flex; flex-direction: column; gap: 14px; max-width: 520px; width: 100%; }
+.sm-aprovar-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.sm-app .sm-aprovar-titulo { font-family: var(--sm-font-mono); font-weight: 500; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--sm-text-faint); }
+.sm-aprovar-hora { font-size: 13px; color: var(--sm-warn-fg); font-weight: 600; }
+.sm-aprovar-hora.perto { color: var(--sm-bad-fg); }
+.sm-aprovar-cartao { border-radius: 20px; background: var(--sm-surface); border: 1px solid var(--sm-border); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sm-aprovar-previa { position: relative; min-height: 280px; border-radius: 14px; background: var(--sm-surface-2); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+.sm-aprovar-previa img, .sm-aprovar-previa video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sm-aprovar-previa-texto { position: relative; padding: 16px; display: flex; flex-direction: column; gap: 6px; background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0)); }
+.sm-aprovar-previa-texto span { font-size: 12px; color: #D4D4D8; }
+.sm-app .sm-aprovar-previa-texto b { font-size: 24px; line-height: 1.15; color: #F4F4F6; }
+.sm-aprovar-previa:not(:has(img, video)) .sm-aprovar-previa-texto { background: none; }
+.sm-aprovar-previa:not(:has(img, video)) .sm-aprovar-previa-texto span { color: var(--sm-text-faint); }
+.sm-app .sm-aprovar-previa:not(:has(img, video)) .sm-aprovar-previa-texto b { color: var(--sm-text-strong); }
+.sm-aprovar-telas { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+.sm-aprovar-meta { font-size: 13px; color: var(--sm-text-faint); line-height: 1.45; }
+.sm-aprovar-legenda { white-space: pre-wrap; font-size: 14px; line-height: 1.5; margin: 8px 0 0; color: var(--sm-text); }
+.sm-aprovar-botoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sm-aprovar-botoes .sm-btn { min-height: 48px; }
+.sm-aprovar-pager { display: flex; justify-content: space-between; align-items: center; }

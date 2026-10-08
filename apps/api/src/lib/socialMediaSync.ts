@@ -23,6 +23,7 @@ import {
 } from './instagramGraph'
 import { baixarEGuardarImagem } from './armazenamento'
 import { duracaoDoVideo } from './videoDuracao'
+import { pulsoDoAviso } from './smPulso'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 // Fuso fixo de Brasília (UTC-3, sem horário de verão desde 2019) — mesma
@@ -157,6 +158,7 @@ async function avisarFalha(conta: ContaParaSync, mensagem: string, proxima: Date
         data: { usuarioId: conta.usuarioId, destinatario, tipo: 'SYNC_FALHA', chave: chaveFalha(conta.id), titulo, texto, payload: { contaId: conta.id } },
       })
     }
+    await pulsoDoAviso(conta.usuarioId, destinatario, 'SYNC_FALHA', chaveFalha(conta.id), titulo, texto).catch(() => {})
   }
 }
 

@@ -3,15 +3,15 @@
 // Espaço do papel Social Media (seção 3.1): menu lateral só com Trabalho e
 // Resultado, cartão da conta da empresa e o nome do papel com Sair. O dono
 // também entra aqui, no modo "ver como" (só leitura) ou como gestor.
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { usePLTema } from '@/lib/proLaboreTheme'
-import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmAbaAssistente, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
+import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmAbaAssistente, type SmAvisoPulso, type SmAvisosLista, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
 import {
-  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAtendimento, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
-  ListaAtalhos, PaletaSM, SidebarSM, SmApp, haQuanto, type ComandoPaleta, type ItemMenu, type StatusConta,
+  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAprovar, IcAtendimento, IcCaptura, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
+  ListaAtalhos, PainelAvisos, PaletaSM, SidebarSM, SmApp, haQuanto, registrarSW, type ComandoPaleta, type ItemMenu, type StatusConta,
 } from '../_ui'
 import { EspacoSMCtx, atende } from './EspacoSM'
 
@@ -38,11 +38,27 @@ function textoConta(conta: NonNullable<SmEu['conta']>): { status: StatusConta; t
   return conta.status === 'warn' ? { status: 'warn', texto: `Última sincronização ${ha}` } : { status: 'ok', texto: ha === 'agora' ? 'Sincronizado agora' : `Sincronizado ${ha}` }
 }
 
+// ?avisos=1 (o resumo agrupado no celular abre aqui): abre o painel e limpa a URL.
+function AvisosPelaUrl({ aoPedir }: { aoPedir: () => void }) {
+  const busca = useSearchParams()
+  const router = useRouter()
+  const caminho = usePathname()
+  const pedido = busca.get('avisos') === '1'
+  useEffect(() => {
+    if (!pedido) return
+    aoPedir()
+    router.replace(caminho)
+  }, [pedido, aoPedir, router, caminho])
+  return null
+}
+
 // Subtítulo de cada tela na paleta de comandos.
 const SUB_TELA: Record<string, string> = {
   '/pro-labore/sm': 'Recepção e o que fazer agora',
   '/pro-labore/sm/calendario': 'A semana e as regras de publicação',
   '/pro-labore/sm/producao': 'Da ideia ao agendado',
+  '/pro-labore/sm/captura': 'Gravar as tomadas pela câmera',
+  '/pro-labore/sm/aprovar': 'A fila de aprovação, no celular',
   '/pro-labore/sm/atendimento': 'Direct e comentários',
   '/pro-labore/sm/estoque': 'Motos na loja',
   '/pro-labore/sm/desempenho': 'O que funcionou e por quê',
@@ -78,6 +94,33 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
     const t = setInterval(recarregar, 5 * 60 * 1000)
     return () => clearInterval(t)
   }, [recarregar])
+
+  // Avisos "Pulso" (seção 11.5): a lista do espaço, atualizada a cada minuto e
+  // na hora em que um push chega com o espaço aberto. O service worker é o do PWA.
+  const [avisos, setAvisos] = useState<SmAvisosLista | null>(null)
+  const [avisosAbertos, setAvisosAbertos] = useState(false)
+  const carregarAvisos = useCallback(() => { proLaboreApi.sm.avisos.listar().then(setAvisos).catch(() => undefined) }, [])
+  const abrirAvisos = useCallback(() => { setAvisosAbertos(true); carregarAvisos() }, [carregarAvisos])
+  useEffect(() => {
+    carregarAvisos()
+    const t = setInterval(carregarAvisos, 60 * 1000)
+    registrarSW()
+    const mensagem = (e: MessageEvent) => { if (e.data?.tipo === 'sm:aviso') carregarAvisos() }
+    navigator.serviceWorker?.addEventListener('message', mensagem)
+    return () => { clearInterval(t); navigator.serviceWorker?.removeEventListener('message', mensagem) }
+  }, [carregarAvisos])
+  function abrirAviso(a: SmAvisoPulso) {
+    setAvisosAbertos(false)
+    if (!a.lido && !eu?.somenteLeitura) {
+      setAvisos(l => l && { naoLidos: Math.max(0, l.naoLidos - 1), avisos: l.avisos.map(x => (x.id === a.id ? { ...x, lido: true } : x)) })
+      proLaboreApi.sm.avisos.lidos([a.id]).catch(() => undefined)
+    }
+    if (a.href) router.push(a.href)
+  }
+  function marcarTodos() {
+    setAvisos(l => l && { naoLidos: 0, avisos: l.avisos.map(x => ({ ...x, lido: true })) })
+    proLaboreApi.sm.avisos.lidos().then(carregarAvisos).catch(() => undefined)
+  }
 
   // Paleta de comandos (tela 10): aberta na tela em que foi chamada; mudar de tela fecha.
   const [paletaEm, setPaletaEm] = useState<string | null>(null)
@@ -158,7 +201,10 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
       ...(ctx.pode('producao') ? [
         { href: '/pro-labore/sm/calendario', rotulo: 'Calendário', icone: <IcCalendario />, atalho: 'G C' },
         { href: '/pro-labore/sm/producao', rotulo: 'Produção', icone: <IcProducao /> },
+        { href: '/pro-labore/sm/captura', rotulo: 'Captura na loja', icone: <IcCaptura /> },
       ] : []),
+      // Aprovação pelo celular (seção 11.5): a fila do gestor.
+      ...(eu.visao === 'GESTOR' && !verComo ? [{ href: '/pro-labore/sm/aprovar', rotulo: 'Para aprovar', icone: <IcAprovar />, contador: eu.contadores.aprovacao }] : []),
       ...(ctx.pode('atendimento') ? [{ href: '/pro-labore/sm/atendimento', rotulo: 'Atendimento', icone: <IcAtendimento />, contador: eu.contadores.atendimento, atalho: 'G A' }] : []),
       // O estoque é mantido pelo gestor (decisão P3). No menu do papel ele só
       // aparece quando o gestor libera o módulo como Completo.
@@ -196,6 +242,7 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
         if (!verComo) proLaboreApi.sm.preferencias.salvar({ tema: novo === 'light' ? 'CLARO' : 'ESCURO' }).then(recarregar).catch(() => undefined)
       },
     },
+    { id: 'avisos', ini: '!', tom: 'nav', titulo: 'Ver os avisos', sub: avisos?.naoLidos ? `${avisos.naoLidos} ${avisos.naoLidos === 1 ? 'novo' : 'novos'}` : 'Post decolando, vendas, clientes esperando', palavras: 'notificacoes pulso alertas', executar: abrirAvisos },
     { id: 'retro', ini: '★', tom: 'nav', titulo: 'Abrir a retrospectiva', sub: 'A semana em 5 partes: conquistas, metas, post, aprendizado e focos', palavras: 'semana relatorio conquistas', executar: () => router.push('/pro-labore/sm/retrospectiva') },
     ...(verComo ? [] : [{ id: 'preferencias', ini: '⚙', tom: 'nav' as const, titulo: 'Preferências', sub: 'Como te chamar, hora do ritual e avisos', palavras: 'configuracoes ajustes', executar: () => router.push('/pro-labore/sm/preferencias') }]),
     { id: 'atalhos', ini: '?', tom: 'nav', titulo: 'Ver todos os atalhos', sub: 'Atalhos do dia a dia', atalho: ['?'], palavras: 'teclado ajuda', executar: () => setVerAtalhos(true) },
@@ -210,6 +257,11 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
     <>
       {paletaAberta && <PaletaSM key={paletaEm} comandos={comandos} ia={eu.ia.ligada} abas={abas} aoFechar={() => setPaletaEm(null)} />}
       {verAtalhos && <ListaAtalhos aoFechar={() => setVerAtalhos(false)} />}
+      {avisosAbertos && (
+        <PainelAvisos lista={avisos} somenteLeitura={eu.somenteLeitura} preferencias={verComo ? undefined : '/pro-labore/sm/preferencias'}
+          aoAbrirAviso={abrirAviso} aoMarcarTodos={marcarTodos} aoFechar={() => setAvisosAbertos(false)} />
+      )}
+      <Suspense fallback={null}><AvisosPelaUrl aoPedir={abrirAvisos} /></Suspense>
     </>
   )
 
@@ -226,14 +278,15 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
           <Botao onClick={sairDoVerComo}>Sair da pré-visualização</Botao>
         </div>
       )}
-      <div style={{ display: 'flex', flexWrap: 'wrap', minHeight: verComo ? 'calc(100vh - 56px)' : '100vh' }}>
-        <div style={{ flex: '1 1 232px', display: 'flex' }}>
+      <div className="sm-espaco" style={{ minHeight: verComo ? 'calc(100vh - 56px)' : '100vh' }}>
+        <div className="sm-espaco-menu">
           <SidebarSM
             grupos={grupos}
             papel={eu.visao === 'GESTOR' ? 'Gestor' : 'Social Media'}
             subtitulo={eu.visao === 'GESTOR' ? 'Social Media · visão do gestor' : 'Social Media · acesso isolado'}
             aoSair={papel === 'SOCIAL_MEDIA' ? logout : undefined}
             aoBuscar={() => { setVerAtalhos(false); setPaletaEm(caminho) }}
+            avisos={{ naoLidos: avisos?.naoLidos ?? 0, aoAbrir: abrirAvisos }}
             preferencias={verComo ? undefined : '/pro-labore/sm/preferencias'}
             conta={
               <>
@@ -245,7 +298,7 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
             }
           />
         </div>
-        <main style={{ flex: '999 1 560px', minWidth: 0, padding: 'clamp(20px, 4vw, 32px) clamp(16px, 4vw, 40px) 56px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <main className="sm-espaco-main">
           {children}
         </main>
       </div>
