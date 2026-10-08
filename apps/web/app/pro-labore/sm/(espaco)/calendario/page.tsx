@@ -5,7 +5,7 @@
 // pilares e as melhores janelas de horário.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { proLaboreApi, type SmCalendario, type SmConfigCalendario, type SmDiaCalendario, type SmItemCalendario, type SmMoto, type SmPilar } from '@/lib/proLaboreApi'
+import { proLaboreApi, type SmCalendario, type SmConfigCalendario, type SmDiaCalendario, type SmItemCalendario, type SmMoto, type SmPilar, type SmPlanejamento } from '@/lib/proLaboreApi'
 import { AssistenteAba, Botao, Card, CardEsqueleto, Chip, EstadoVazio, IcMais, Modal, PILAR_CHIP, PILAR_ROTULO, Rotulo, Segmentado, localParaIso, useToast, type Tom } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { NovaPauta } from '../producao/Dialogos'
@@ -41,6 +41,10 @@ function Calendario() {
   const [novaEm, setNovaEm] = useState<string | null | false>(false) // false = fechado; null = sem data
   const [editarRegras, setEditarRegras] = useState(false)
   const [motos, setMotos] = useState<SmMoto[] | null>(null)
+  // Fase 6: datas comerciais na grade e o planejamento do mês seguinte (ritual do dia 25).
+  const [datas, setDatas] = useState<Record<string, { nome: string; dica: string }[]>>({})
+  const [plano, setPlano] = useState<SmPlanejamento | null>(null)
+  const [planejando, setPlanejando] = useState(false)
 
   const carregar = useCallback((alvo: string | null) => {
     proLaboreApi.sm.calendario.mes(alvo ?? undefined).then(c => {
@@ -53,6 +57,28 @@ function Calendario() {
   }, [])
   useEffect(() => { carregar(null) }, [carregar])
   useEffect(() => { if (pode('estoque')) proLaboreApi.sm.estoque.listar().then(setMotos).catch(() => setMotos(null)) }, [pode])
+  const primeiroDia = cal?.semanas[0]?.[0]?.data
+  const ultimoDia = cal?.semanas[cal.semanas.length - 1]?.[6]?.data
+  useEffect(() => {
+    if (!primeiroDia || !ultimoDia) return
+    proLaboreApi.sm.datasComerciais(primeiroDia, ultimoDia).then(l => {
+      const porDia: Record<string, { nome: string; dica: string }[]> = {}
+      for (const d of l) (porDia[d.data] ??= []).push({ nome: d.nome, dica: d.dica })
+      setDatas(porDia)
+    }).catch(() => setDatas({}))
+  }, [primeiroDia, ultimoDia])
+  const carregarPlano = useCallback(() => { proLaboreApi.sm.planejamento.ver().then(setPlano).catch(() => setPlano(null)) }, [])
+  useEffect(() => { carregarPlano() }, [carregarPlano])
+  async function planejar() {
+    if (!plano) return
+    setPlanejando(true)
+    try {
+      const r = await proLaboreApi.sm.planejamento.planejar(plano.mes)
+      setPlano(r)
+      toast({ mensagem: r.criadas ? `${r.criadas === 1 ? '1 data comercial entrou' : `${r.criadas} datas comerciais entraram`} no calendário de ${r.nomeMes}.` : `O planejamento de ${r.nomeMes} já estava feito.` })
+      carregar(mes)
+    } catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível pré-carregar', tom: 'bad' }) } finally { setPlanejando(false) }
+  }
 
   const semanas = useMemo(() => {
     if (!cal) return []
@@ -146,12 +172,29 @@ function Calendario() {
               modo={modo}
               filtro={filtro}
               aoAbrir={abrir}
+              datas={datas}
               aoSlot={d => setNovaEm(horaSugerida(d))}
               aoSoltar={soltar}
             />
           </section>
 
           <div className="sm-cal-lado">
+            {plano && plano.datas.length > 0 && (
+              <Card titulo={`Planejamento de ${plano.nomeMes}`}>
+                {plano.datas.map(d => (
+                  <div key={d.data} className="sm-regra">
+                    <Chip tom={d.pautaId ? 'ok' : 'neutro'}>{d.data.slice(8, 10)}/{d.data.slice(5, 7)}</Chip>
+                    <span>{d.nome}: {d.dica}{d.pautaId ? ' · no calendário' : ''}</span>
+                  </div>
+                ))}
+                <p className="sm-legenda" style={{ margin: 0 }}>
+                  {plano.planejadoEm ? `Pré-carregado em ${plano.planejadoEm.slice(8, 10)}/${plano.planejadoEm.slice(5, 7)}: as datas entram em Ideias, no dia e no horário da melhor janela.` : 'No dia 25, as datas comerciais entram sozinhas no calendário, em Ideias, no horário da melhor janela.'}
+                </p>
+                {plano.podePlanejar && !plano.planejadoEm && plano.datas.some(d => !d.pautaId) && (
+                  <div><Botao disabled={planejando} onClick={planejar}>{planejando ? 'Pré-carregando…' : 'Pré-carregar agora'}</Botao></div>
+                )}
+              </Card>
+            )}
             <Card titulo="Regras de cadência" acoes={cal.souGestor ? <Botao variante="fantasma" onClick={() => setEditarRegras(true)}>Editar</Botao> : undefined}>
               {cal.regras.map(r => (
                 <div key={r.chave} className="sm-regra"><Chip tom={STATUS_REGRA[r.status].tom}>{STATUS_REGRA[r.status].texto}</Chip><span>{r.texto}</span></div>

@@ -35,8 +35,10 @@ function Post({ it, arrastando, aoAbrir, aoIniciar }: {
   )
 }
 
-export function Grade({ semanas, modo, filtro, aoAbrir, aoSlot, aoSoltar }: {
+export function Grade({ semanas, modo, filtro, datas, aoAbrir, aoSlot, aoSoltar }: {
   semanas: SmDiaCalendario[][]
+  /** Datas comerciais por dia (AAAA-MM-DD): Fase 6, planejamento do mês. */
+  datas?: Record<string, { nome: string; dica: string }[]>
   modo: 'mes' | 'semana'
   filtro: Set<SmPilar>
   aoAbrir: (it: SmItemCalendario) => void
@@ -95,13 +97,14 @@ export function Grade({ semanas, modo, filtro, aoAbrir, aoSlot, aoSoltar }: {
               const classes = ['sm-dia', !d.doMes && 'fora', d.semPost && 'vazio', d.hoje && 'hoje', d.rajada && 'rajada', arrasto?.alvo === d.data && 'alvo'].filter(Boolean).join(' ')
               const num = Number(d.data.slice(8, 10))
               return (
-                <div key={d.data} className={classes} data-dia={d.data} role="gridcell" aria-label={`${num}/${d.data.slice(5, 7)}${d.hoje ? ', hoje' : ''}${d.rajada ? ', rajada' : ''}${d.semPost ? ', sem post' : ''}`}>
+                <div key={d.data} className={classes} data-dia={d.data} role="gridcell" aria-label={`${num}/${d.data.slice(5, 7)}${d.hoje ? ', hoje' : ''}${datas?.[d.data]?.length ? `, ${datas[d.data].map(x => x.nome).join(', ')}` : ''}${d.rajada ? ', rajada' : ''}${d.semPost ? ', sem post' : ''}`}>
                   <div className="sm-dia-cab">
                     <span className="sm-dia-num">{num}</span>
                     {d.hoje && <span className="sm-chip hoje">Hoje</span>}
                     {d.rajada && !d.hoje && <Chip tom="bad">Rajada</Chip>}
                   </div>
                   {d.hoje && d.rajada && <Chip tom="bad">Rajada</Chip>}
+                  {datas?.[d.data]?.map(dc => <span key={dc.nome} className="sm-data-comercial" title={`${dc.nome}: ${dc.dica}`}>{dc.nome}</span>)}
                   {d.semPost && <span className="sm-sem-post">sem post</span>}
                   {d.slotLivre && <button type="button" className="sm-slot" aria-label={`Criar pauta para ${num}/${d.data.slice(5, 7)}`} onClick={() => aoSlot(d)}>+ slot livre</button>}
                   {itens.map(it => (

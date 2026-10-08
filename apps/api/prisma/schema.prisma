@@ -963,6 +963,8 @@ model ProLaboreUsuario {
   smRespostasRapidas        SmRespostaRapida[]
   smPushInscricoes          SmPushInscricao[]
   smPulsos                  SmPulso[]
+  smConcorrentes            SmConcorrente[]
+  smPlanejamentos           SmPlanejamento[]
 
   @@map("pro_labore_usuarios")
 }
@@ -2920,4 +2922,56 @@ model SmPulso {
   @@index([usuarioId, ator, criadoEm])
   @@index([enviadoEm])
   @@map("pro_labore_sm_pulsos")
+}
+
+// Fase 6 · Concorrentes (decisão P12): perfis de outras revendas que o
+// gestor acompanha. Dados públicos pela Business Discovery API, com um
+// retrato por dia (seguidores, frequência e engajamento público).
+model SmConcorrente {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  usuario      String // @ sem a arroba, minúsculo
+  nome         String?
+  fotoUrl      String?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime? // último retrato com sucesso
+  ultimoErro   String?
+
+  dono     ProLaboreUsuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  retratos SmConcorrenteRetrato[]
+
+  @@unique([usuarioId, usuario])
+  @@map("pro_labore_sm_concorrentes")
+}
+
+model SmConcorrenteRetrato {
+  id               String    @id @default(cuid())
+  concorrenteId    String
+  data             String // AAAA-MM-DD em Belém
+  seguidores       Int
+  posts            Int // total de publicações do perfil
+  postsSemana      Float? // posts por semana nos últimos 28 dias (dos 25 mais recentes)
+  engajamentoMedio Float? // curtidas + comentários por post (posts dos últimos 28 dias)
+  ultimoPostEm     DateTime?
+  criadoEm         DateTime  @default(now())
+
+  concorrente SmConcorrente @relation(fields: [concorrenteId], references: [id], onDelete: Cascade)
+
+  @@unique([concorrenteId, data])
+  @@map("pro_labore_sm_concorrentes_retratos")
+}
+
+// Fase 6 · Planejamento do mês seguinte (dia 25): registra que o mês já foi
+// pré-carregado com as datas comerciais, para não recriar o que foi apagado.
+model SmPlanejamento {
+  id        String   @id @default(cuid())
+  usuarioId String
+  mes       String // AAAA-MM planejado
+  pautas    Int      @default(0)
+  criadoEm  DateTime @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, mes])
+  @@map("pro_labore_sm_planejamentos")
 }

@@ -89,6 +89,7 @@ export default function HojePage() {
         key={h.recepcao.visitaId ?? 'previa'}
         r={h.recepcao}
         ia={eu.ia.ligada}
+        calendario={pode('producao')}
         aoAgir={() => { if (h.recepcao.visitaId && !h.recepcao.recolhida) proLaboreApi.sm.recepcao.recolher(h.recepcao.visitaId).catch(() => undefined) }}
         acoes={h.podeCriarPauta && <BotaoLink href="/pro-labore/sm/producao?nova=1" icone={<IcMais tamanho={16} />} title="Nova pauta (atalho: N)" atalho="N">Nova pauta</BotaoLink>}
       />

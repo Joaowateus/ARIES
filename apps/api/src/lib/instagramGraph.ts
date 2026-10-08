@@ -733,3 +733,37 @@ export async function buscarPerfilRemetente(igsid: string, accessToken: string):
     return { nome: null, usuario: null }
   }
 }
+
+// Fase 6 · Concorrentes: perfil público de outra conta profissional pela
+// Business Discovery API (só pelo Graph do Facebook: chamar dentro de
+// `comApiDaEmpresa`). Traz seguidores, total de posts e os últimos posts
+// com curtidas e comentários públicos.
+export interface PerfilConcorrente {
+  usuario: string
+  nome: string | null
+  fotoUrl: string | null
+  seguidores: number
+  posts: number
+  ultimos: Array<{ publicadoEm: Date; curtidas: number | null; comentarios: number | null; formato: string | null }>
+}
+export async function buscarPerfilConcorrente(igUserId: string, accessToken: string, usuario: string): Promise<PerfilConcorrente> {
+  const r = await chamarGraphApi<{
+    business_discovery?: {
+      username: string; name?: string; profile_picture_url?: string; followers_count?: number; media_count?: number
+      media?: { data?: Array<{ timestamp: string; like_count?: number; comments_count?: number; media_product_type?: string }> }
+    }
+  }>(`/${igUserId}`, {
+    fields: `business_discovery.username(${usuario}){username,name,profile_picture_url,followers_count,media_count,media.limit(25){timestamp,like_count,comments_count,media_product_type}}`,
+    access_token: accessToken,
+  })
+  const b = r.business_discovery
+  if (!b) throw new ErroGraphApi('Perfil não encontrado ou não é uma conta profissional', 110)
+  return {
+    usuario: b.username,
+    nome: b.name ?? null,
+    fotoUrl: b.profile_picture_url ?? null,
+    seguidores: b.followers_count ?? 0,
+    posts: b.media_count ?? 0,
+    ultimos: (b.media?.data ?? []).map(m => ({ publicadoEm: new Date(m.timestamp), curtidas: m.like_count ?? null, comentarios: m.comments_count ?? null, formato: m.media_product_type ?? null })),
+  }
+}

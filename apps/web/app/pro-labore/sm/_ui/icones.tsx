@@ -30,4 +30,5 @@ export const IcEscudo = (p: P) => <Icone {...p}><path d="M12 3 4 6v6c0 4.5 3.4 8
 export const IcEstoque = (p: P) => <Icone {...p}><circle cx="6" cy="16" r="3" /><circle cx="18" cy="16" r="3" /><path d="M9 16h6l-3-7h4M6 16l3-7h3" /></Icone>
 export const IcCaptura = (p: P) => <Icone {...p}><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3z" /></Icone>
 export const IcAprovar = (p: P) => <Icone {...p}><rect x="4" y="4" width="16" height="16" rx="3" /><path d="m8.5 12 2.5 2.5 4.5-5" /></Icone>
+export const IcAcervo = (p: P) => <Icone {...p}><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="8" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /></Icone>
 export const IcAvisos = (p: P) => <Icone {...p}><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></Icone>

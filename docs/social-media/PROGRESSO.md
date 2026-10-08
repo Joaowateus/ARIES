@@ -4,9 +4,9 @@
 
 ## Situação atual
 
-- **Etapa:** Fase 5 · Celular (Fase 4 concluída: 4a #154, 4b #155, 4c #156, 4d #157, 4e #158).
-- **Entregue:** 5a (todas as telas responsivas, com o menu recolhido numa barra no celular), 5b (PWA instalável, Web Push e os avisos "Pulso" da seção 11.5 com agrupamento) e 5c (tela 12 · captura na loja e aprovação do gestor pelo celular).
-- **Próxima:** Fase 6 · concorrentes, acervo de mídia por moto e datas comerciais no planejamento do dia 25; depois, a verificação final.
+- **Etapa:** Fase 6 · itens da análise sem tela desenhada (Fase 4 concluída: 4a #154, 4b #155, 4c #156, 4d #157, 4e #158; Fase 5 concluída: #159, com 5a responsivo, 5b PWA e avisos e 5c captura e aprovação).
+- **Entregue:** concorrentes no Desempenho, acervo de mídia por moto e as datas comerciais no Calendário, com o planejamento do mês seguinte no dia 25.
+- **Verificação final:** feita ([VERIFICACAO_FINAL](VERIFICACAO_FINAL.md)). Todas as fases da seção 18 estão concluídas; o que falta é configuração fora do código (pendências externas abaixo) e as 5 confirmações do João.
 
 ## Checklist de aceite (seção 18)
 
@@ -63,14 +63,14 @@
 - [x] Aprovação do gestor pelo celular (5c: tela "Para aprovar" no menu do gestor, com o número de pendentes: o horário de publicação em destaque, a prévia do post com as telas do carrossel, legenda, link rastreado, pilar e horário (de pico ou em teste), comentário opcional, "Pedir ajuste" e "Aprovar". Pendências para publicar aparecem antes, com "Aprovar" desligado. O aviso de aprovação no celular abre esta tela)
 
 ### Fase 6 · Itens da análise sem tela desenhada (também obrigatórios)
-- [ ] **Concorrentes:** acompanhar seguidores, frequência e engajamento público de outras revendas da região pela Business Discovery API. Fazer uma subseção em Desempenho seguindo o mesmo design system. **[CONFIRMAR COM O JOÃO]** a lista de perfis.
-- [ ] **Acervo de mídia por moto:** todos os arquivos capturados, organizados por moto do estoque e reaproveitáveis em novas pautas.
-- [ ] **Datas comerciais** pré-carregadas no planejamento mensal (dia 25).
+- [x] **Concorrentes:** acompanhar seguidores, frequência e engajamento público de outras revendas da região pela Business Discovery API. Fazer uma subseção em Desempenho seguindo o mesmo design system. **[CONFIRMAR COM O JOÃO]** a lista de perfis. (Subseção "Concorrentes" no Desempenho: a loja na primeira linha e cada perfil com seguidores e a variação em 30 dias, posts por semana, curtidas + comentários por post (e a taxa sobre os seguidores) e o último post, tudo dos últimos 28 dias e pela mesma régua pública. A lista é do gestor (decisão P12): adicionar pelo @ ou pelo link, remover e "Atualizar agora", até 10 perfis; o Social Media vê com o módulo Análise. Um retrato por dia no job diário guarda a evolução. Funciona com a conta da empresa conectada; com a conta pessoal, a tela explica)
+- [x] **Acervo de mídia por moto:** todos os arquivos capturados, organizados por moto do estoque e reaproveitáveis em novas pautas. (Tela "Acervo" no menu: fotos, vídeos, tomadas da captura e capas de cada moto, com a pauta de origem; o mesmo arquivo usado em várias pautas aparece uma vez. "Usar numa pauta da moto" abre a pauta aberta da moto, ou cria uma com o roteiro sugerido, já com o arquivo. No briefing da Produção, "Usar do acervo" põe o arquivo em qualquer pauta. O termo de autorização de imagem não entra no acervo)
+- [x] **Datas comerciais** pré-carregadas no planejamento mensal (dia 25). (As datas comerciais aparecem marcadas nos dias do Calendário. Do dia 25 em diante, o job diário cria as pautas das datas do mês seguinte em Ideias, no dia e no horário da melhor janela, com prazo 3 dias antes e o código já gerado, e avisa o Social Media. O card "Planejamento de {mês}" mostra as datas e permite "Pré-carregar agora". Uma vez por mês: o que for apagado não volta)
 
 ### Verificação final
-- [ ] Percorrer cada arquivo de `referencia-visual/` e confirmar que **todo elemento visível** existe no produto
-- [ ] Percorrer este documento seção por seção e confirmar cada regra
-- [ ] Listar para o João tudo que ficou marcado como [CONFIRMAR COM O JOÃO] e o que foi decidido
+- [x] Percorrer cada arquivo de `referencia-visual/` e confirmar que **todo elemento visível** existe no produto (ver [VERIFICACAO_FINAL](VERIFICACAO_FINAL.md#1-protótipos-referencia-visual): os textos dos 14 arquivos conferidos no código; faltavam "Ver calendário" ao lado do CTA da Hoje e a barra "Pergunte ao assistente · Ctrl K" da recepção, feitos nesta verificação)
+- [x] Percorrer este documento seção por seção e confirmar cada regra ([VERIFICACAO_FINAL](VERIFICACAO_FINAL.md#2-especificação-seção-por-seção))
+- [x] Listar para o João tudo que ficou marcado como [CONFIRMAR COM O JOÃO] e o que foi decidido ([VERIFICACAO_FINAL](VERIFICACAO_FINAL.md#3-itens-confirmar-com-o-joão-e-o-que-foi-decidido))
 
 ## Seção 17 · Correções da aba atual
 
@@ -115,6 +115,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | Ajuste 1c | Janelas com 3 ou 4 posts aparecem como "Hipótese"; "Em teste" fica para quando houver teste A/B (Fase 3). A tela Desempenho ainda usa a meta semanal antiga (`metaPostagensSemanais`); na Fase 3 ela passa a usar as mesmas regras do calendário. | Encaixe |
 | Ajuste 1d | Metas da semana da Hoje (leads orgânicos, resposta a DMs, retenção) editáveis pelo gestor junto com as regras do calendário. Uma venda só vira pauta de entrega se o papel tiver acesso a Vendas. | Encaixe |
 | Ajuste 2a | Rodízio (P4): consultores ativos com login, na ordem de cadastro; vale para os leads criados pelo Atendimento. Forma de pagamento do lead vai na observação (o CRM não tem esse campo). Expediente configurável no diálogo de regras do calendário. | Decisão P4 / encaixe |
+| Ajuste 6 | Concorrentes pela régua pública (curtidas + comentários por post), porque a Business Discovery não entrega alcance, salvos nem envios de outras contas; a loja entra pela mesma régua para a comparação ser justa. A Business Discovery só funciona com a conta da empresa (Graph do Facebook). Acervo a partir dos arquivos das pautas com moto (fotos e capas no armazenamento próprio, vídeos pelo link ou pelo Blob). Datas comerciais com os pilares: Mães, Pais e Cliente em Prova social; Crianças e Trabalhador em Educação; Consumidor, Black Friday e Ano Novo em Estoque; Motociclista e Natal em Bastidores. | Encaixe / dados reais |
 | Ajuste 5c | As tomadas da captura vêm do roteiro da pauta (gancho, retenção, recompensa), sem campo novo para preencher; a entrega usa os nomes do protótipo. As tomadas de reel ficam como vídeo bruto (tipo TOMADA): a edição junta as três e o vídeo final continua sendo o que vai para a publicação. Foto (e story) já sai pronta para publicar. Sem o Vercel Blob configurado, o vídeo da tomada entra por link público, como no briefing. | Encaixe / decisão P8 |
 | Ajuste 5b | "Cliente esperando" vale só para o direct (a meta de resposta é do direct); comentário não interrompe. Os avisos de aprovação e de falha reaproveitam os avisos que já existiam. O limite de tentativas de login deixou de contar o "quem sou eu" de cada página aberta: com o app aberto pelo aviso do celular, a pessoa ficava bloqueada depois de 20 aberturas em 15 minutos. | Encaixe / correção |
 | Ajuste 5a | Telas cheias (primeiro acesso, modo foco e retrospectiva) continuam sem menu também no celular. Quadros largos rolam por dentro em vez de espremer as colunas. | Encaixe |
