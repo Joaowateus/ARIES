@@ -339,7 +339,7 @@ function conteudo(m: Momento, d: Dados, bemvindo: string): Conteudo {
       return {
         kicker: `${bemvindo} de volta`,
         sub: partes.length ? `Nos ${dias} dias fora: ${lista(partes)}.` : `Foram ${dias} dias fora. Vamos ver como está tudo.`,
-        cta: { rotulo: `Colocar em dia em ${minutosDaFila(d)} minutos`, href: hrefOu(d, ['atendimento', d.esperando.length ? '/pro-labore/sm/atendimento' : '/pro-labore/sm/producao'], ['producao', '/pro-labore/sm/producao']) },
+        cta: { rotulo: `Colocar em dia em ${minutosDaFila(d)} minutos`, href: '/pro-labore/sm/foco' },
         listaTitulo: 'Enquanto você esteve fora', itens: completar(itens, d),
         perguntas: ['atd:hoje', 'atd:quente', 'prod:destravar', 'cal:semana'],
       }
@@ -424,7 +424,7 @@ function conteudo(m: Momento, d: Dados, bemvindo: string): Conteudo {
         : d.ve.producao && !d.postsHojeAgendados.length ? 'Nenhum post agendado para hoje e nada urgente: uma boa manhã para criar.' : 'Nada urgente agora: uma boa manhã para criar.'
       return {
         kicker: `${d.loja ? `Café com a ${d.loja}` : 'Café da manhã'} · ${rotuloData(d)}`, sub,
-        cta: { rotulo: 'Começar o ritual da manhã', href: hrefOu(d, ['atendimento', d.esperando.length ? '/pro-labore/sm/atendimento' : '/pro-labore/sm/producao'], ['producao', '/pro-labore/sm/producao']) },
+        cta: { rotulo: 'Começar o ritual da manhã', href: '/pro-labore/sm/foco' },
         listaTitulo: 'O que temos para hoje', itens: completar([], d), perguntas: ['prod:estoque', 'prod:ganchos', 'atd:sugira', 'atd:quente', 'cal:semana', 'prod:destravar'],
       }
     }

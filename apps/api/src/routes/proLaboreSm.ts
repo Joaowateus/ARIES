@@ -13,7 +13,7 @@ import { montarHoje } from '../lib/smHoje'
 import { iaLigada } from '../lib/smIA'
 import { podeRoteiroIA } from '../lib/smPerguntas'
 import { MOMENTOS, generoDe, montarRecepcao, recolherVisita, simularRecepcao, type Momento } from '../lib/smSaudacao'
-import { atorDe } from '../lib/smInsights'
+import { preferenciaDe } from '../lib/smBoasVindas'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -83,6 +83,8 @@ router.get('/sm/eu', ...autenticado, async (req: Request, res: Response) => {
     regras: sm.permissoes.regras,
     // IA ligada (chave no ambiente) e ganchos/roteiros liberados para quem vê.
     ia: { ligada: iaLigada(), roteiro: podeRoteiroIA(sm) },
+    // Primeiro acesso (tela 08) ainda por fazer: o espaço leva para as boas-vindas.
+    onboardingPendente: papel === 'SOCIAL_MEDIA' && !!membro && !(await preferenciaDe(sm.usuarioId, membro.id)).onboardingConcluidoEm,
     conta: resumoConta(conta),
     contadores: { atendimento: sm.pode('atendimento', 'LEITURA') ? await prisma.smConversa.count({ where: { usuarioId: sm.usuarioId, aguardandoDesde: { not: null }, status: { not: 'ARQUIVADA' } } }) : 0 },
   })
@@ -108,16 +110,6 @@ router.get('/sm/hoje', ...autenticado, async (req: Request, res: Response) => {
 router.post('/sm/recepcao/:id/recolher', ...autenticado, async (req: Request, res: Response) => {
   await recolherVisita(req.sm!, String(req.params.id))
   res.json({ ok: true })
-})
-
-// Preferência da própria pessoa: concordância da saudação.
-router.put('/sm/preferencias', ...autenticado, async (req: Request, res: Response) => {
-  const parse = z.object({ genero: z.enum(['F', 'M']).nullable() }).safeParse(req.body)
-  if (!parse.success) { res.status(400).json({ error: 'Preferência inválida' }); return }
-  const sm = req.sm!
-  const chave = { usuarioId: sm.usuarioId, ator: atorDe(sm) }
-  await prisma.smPreferencia.upsert({ where: { usuarioId_ator: chave }, create: { ...chave, genero: parse.data.genero }, update: { genero: parse.data.genero } })
-  res.json({ genero: parse.data.genero })
 })
 
 // Simulador de momentos (tela 13): só o gestor, para revisar as frases com os dados reais.

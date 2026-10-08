@@ -808,7 +808,20 @@ export const proLaboreApi = {
         request<SmSimulacaoRecepcao>(`/pro-labore/sm/gestor/recepcao?momento=${q.momento}&para=${q.para}${q.genero ? `&genero=${q.genero}` : ''}${q.frase ? `&frase=${encodeURIComponent(q.frase)}` : ''}`),
     },
     preferencias: {
-      salvar: (data: { genero: SmGenero | null }) => request<{ genero: SmGenero | null }>('/pro-labore/sm/preferencias', { method: 'PUT', body: JSON.stringify(data) }),
+      ver: () => request<SmPreferencias>('/pro-labore/sm/preferencias'),
+      salvar: (data: Partial<Pick<SmPreferencias, 'genero' | 'focoHora' | 'avisos'>> & { tratamento?: string }) => request<{ ok: boolean }>('/pro-labore/sm/preferencias', { method: 'PUT', body: JSON.stringify(data) }),
+    },
+    foco: {
+      fila: (iniciar = false) => request<SmFoco>(`/pro-labore/sm/foco${iniciar ? '?iniciar=1' : ''}`),
+      executar: (tarefaId: string, d: { texto?: string; virarLead?: boolean; lead?: SmTarefaFoco['lead']; capaTexto?: boolean }) =>
+        request<{ ok: boolean; leadCriado: { leadId: string; consultor: string | null } | null }>('/pro-labore/sm/foco/acao', { method: 'POST', body: JSON.stringify({ tarefaId, ...d }) }),
+      adiar: (tarefaId: string) => request<{ ok: boolean }>('/pro-labore/sm/foco/adiar', { method: 'POST', body: JSON.stringify({ tarefaId }) }),
+      concluir: () => request<SmFocoConclusao>('/pro-labore/sm/foco/concluir', { method: 'POST' }),
+    },
+    boasVindas: {
+      ver: () => request<SmBoasVindas>('/pro-labore/sm/boas-vindas'),
+      salvar: (data: { tratamento: string | null; genero: SmGenero | null; metas: SmBoasVindas['metas']['sugerida']; focoHora: number; avisos: SmAvisos }) =>
+        request<{ ok: boolean }>('/pro-labore/sm/boas-vindas', { method: 'POST', body: JSON.stringify(data) }),
     },
     desempenho: (periodo: { inicio: string; fim: string }, origem: OrigemSocial = 'ORGANICO') =>
       request<SmDesempenho>(`/pro-labore/sm/desempenho?inicio=${periodo.inicio}&fim=${periodo.fim}&origem=${origem}`),
@@ -1793,6 +1806,8 @@ export interface SmEu {
   regras: SmRegras
   /** IA ligada (chave configurada) e ganchos/roteiros liberados para quem vê. */
   ia: { ligada: boolean; roteiro: boolean }
+  /** Primeiro acesso (tela 08) ainda por fazer. */
+  onboardingPendente: boolean
   conta: SmContaResumo | null
   contadores: { atendimento: number }
 }
@@ -1966,6 +1981,39 @@ export interface SmCalendario {
 }
 
 export interface SmSugestaoAudiencia { ref: string; titulo: string; pilar: SmPilar; formato: SmFormato; motivo: string; gancho: string }
+
+// Modo foco (tela 09), primeiro acesso (tela 08) e preferências.
+export interface SmAvisos { whatsapp: boolean; celular: boolean; email: boolean }
+export interface SmPreferencias { tratamento: string | null; genero: SmGenero | null; focoHora: number; avisos: SmAvisos; padraoAvisos: SmAvisos }
+export interface SmTarefaFoco {
+  id: string
+  ref: string
+  tipo: 'CLIENTE' | 'PUBLICAR' | 'ATRASADA' | 'APRENDER'
+  tag: string
+  tom: 'bad' | 'info' | 'warn' | 'ok' | 'learn'
+  minutos: number
+  titulo: string
+  porque: string
+  caixa: { rotulo: string; texto?: string | null; editavel?: boolean; itens?: Array<{ texto: string; ok: boolean | null; chave?: string; manual?: boolean; detalhe?: string }> }
+  acao: { rotulo: string } | null
+  link: { rotulo: string; href: string } | null
+  lead?: { nome: string; moto: string | null; pagamento: 'FINANCIAMENTO' | 'A_VISTA' | 'CONSORCIO' }
+}
+export interface SmFoco { titulo: string; tarefas: SmTarefaFoco[]; proximo: string; somenteLeitura: boolean }
+export interface SmFocoConclusao { minutos: number; tarefas: number; leads: number; sequencia: number; proximo: string; periodo: string }
+export interface SmBoasVindas {
+  pessoa: { nome: string | null; tratamento: string | null; genero: SmGenero | null }
+  loja: string | null
+  ponto: { seguidores: number | null; leads30: number | null; vendas30: number | null; diasSemPost: number | null; maiorIntervalo30: number | null }
+  metas: {
+    atual: { diasComPost: number; respostaMin: number; leadsSemana: number }
+    sugerida: { diasComPost: number; respostaMin: number; leadsSemana: number }
+    opcoes: { diasComPost: number[]; respostaMin: number[]; leadsSemana: number[] }
+    base: { diasPorSemana: number; respostaMediana: number | null; leadsPorSemana: number | null }
+  }
+  ritmo: { focoHora: number; avisos: SmAvisos }
+  concluidoEm: string | null
+}
 
 // Motor de saudação (seção 14).
 export type SmMomento = 'VOLTA' | 'VENDA' | 'DIFICIL' | 'SEXTA' | 'SEGUNDA' | 'MANHA' | 'TARDE' | 'NOITE'
