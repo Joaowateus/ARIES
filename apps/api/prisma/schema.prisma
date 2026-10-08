@@ -956,6 +956,7 @@ model ProLaboreUsuario {
   smVisitas                 SmVisita[]
   smSaudacoesExibidas       SmSaudacaoExibida[]
   smPreferencias            SmPreferencia[]
+  smRituais                 SmRitual[]
   smGanchos                 SmGancho[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
@@ -2812,9 +2813,34 @@ model SmPreferencia {
   usuarioId String
   ator      String
   genero    String? // F | M: concordância da saudação ("Bem-vinda", "Bem-vindo"); vazio = neutra
+  // Primeiro acesso (tela 08) e o ritmo: hora do modo foco e canais de aviso.
+  focoHora              Int       @default(9)
+  avisos                Json? // { whatsapp, celular, email }
+  onboardingConcluidoEm DateTime?
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([usuarioId, ator])
   @@map("pro_labore_sm_preferencias")
+}
+
+// Modo foco (tela 09): o ritual do dia de cada pessoa (ritual_execucao).
+model SmRitual {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  ator        String
+  data        String // AAAA-MM-DD em Brasília
+  iniciadoEm  DateTime  @default(now())
+  rodadaEm    DateTime  @default(now()) // início da rodada atual ("Rever o ritual" recomeça)
+  concluidoEm DateTime?
+  tarefas     Int       @default(0)
+  leads       Int       @default(0)
+  adiadas     Int       @default(0)
+  feitas      Json      @default("[]") // ids das tarefas feitas hoje
+  adiadasIds  Json      @default("[]")
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, ator, data])
+  @@map("pro_labore_sm_rituais")
 }

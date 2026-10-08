@@ -4,7 +4,7 @@
 // Resultado, cartão da conta da empresa e o nome do papel com Sair. O dono
 // também entra aqui, no modo "ver como" (só leitura) ou como gestor.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
@@ -37,9 +37,13 @@ function textoConta(conta: NonNullable<SmEu['conta']>): { status: StatusConta; t
   return conta.status === 'warn' ? { status: 'warn', texto: `Última sincronização ${ha}` } : { status: 'ok', texto: ha === 'agora' ? 'Sincronizado agora' : `Sincronizado ${ha}` }
 }
 
+// Telas cheias, sem o menu lateral: primeiro acesso (tela 08) e modo foco (tela 09).
+const TELA_CHEIA = ['/pro-labore/sm/boas-vindas', '/pro-labore/sm/foco']
+
 function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children: React.ReactNode }) {
   const { logout } = useProLaboreAuth()
   const router = useRouter()
+  const caminho = usePathname()
   const [eu, setEu] = useState<SmEu | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -52,6 +56,11 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
     const t = setInterval(recarregar, 5 * 60 * 1000)
     return () => clearInterval(t)
   }, [recarregar])
+
+  // Primeiro acesso do Social Media: as boas-vindas vêm antes de tudo (seção 3.1).
+  useEffect(() => {
+    if (eu?.onboardingPendente && caminho !== '/pro-labore/sm/boas-vindas') router.replace('/pro-labore/sm/boas-vindas')
+  }, [eu, caminho, router])
 
   const ctx = useMemo(() => eu && {
     eu,
@@ -95,6 +104,11 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
   const conta = eu.conta
   const statusConta = conta && textoConta(conta)
 
+  if (TELA_CHEIA.includes(caminho)) {
+    return <EspacoSMCtx.Provider value={ctx}>{children}</EspacoSMCtx.Provider>
+  }
+  if (eu.onboardingPendente) return <div style={{ padding: 32 }} className="sm-legenda" role="status">Carregando…</div>
+
   return (
     <EspacoSMCtx.Provider value={ctx}>
       {verComo && (
@@ -110,6 +124,7 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
             papel={eu.visao === 'GESTOR' ? 'Gestor' : 'Social Media'}
             subtitulo={eu.visao === 'GESTOR' ? 'Social Media · visão do gestor' : 'Social Media · acesso isolado'}
             aoSair={papel === 'SOCIAL_MEDIA' ? logout : undefined}
+            preferencias={verComo ? undefined : '/pro-labore/sm/preferencias'}
             conta={
               <>
                 {conta && statusConta

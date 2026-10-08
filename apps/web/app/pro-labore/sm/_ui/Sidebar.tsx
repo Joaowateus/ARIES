@@ -15,10 +15,12 @@ export interface ItemMenu {
   contador?: number
 }
 
-export function SidebarSM({ grupos, conta, aoSair, papel = 'Social Media', subtitulo = 'Social Media · acesso isolado' }: {
+export function SidebarSM({ grupos, conta, aoSair, preferencias, papel = 'Social Media', subtitulo = 'Social Media · acesso isolado' }: {
   grupos: Array<{ rotulo: string; itens: ItemMenu[] }>
   conta?: ReactNode
   aoSair?: () => void
+  /** Link para as preferências da pessoa (seção 11.1: "Dá para mudar tudo depois em Preferências"). */
+  preferencias?: string
   papel?: string
   subtitulo?: string
 }) {
@@ -51,7 +53,10 @@ export function SidebarSM({ grupos, conta, aoSair, papel = 'Social Media', subti
         {conta}
         <div className="sm-sidebar-sair">
           <Rotulo>{papel}</Rotulo>
-          {aoSair && <button type="button" onClick={aoSair}>Sair</button>}
+          <span style={{ display: 'flex', gap: 12 }}>
+            {preferencias && <Link href={preferencias} aria-current={caminho === preferencias ? 'page' : undefined}>Preferências</Link>}
+            {aoSair && <button type="button" onClick={aoSair}>Sair</button>}
+          </span>
         </div>
       </div>
     </aside>
