@@ -26,6 +26,7 @@ import { gerarPautasDeVendas } from '../lib/smPautasAuto'
 import { processarEventosPendentes } from '../lib/smAtendimento'
 import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialMediaSync'
 import { listarTestes } from '../lib/smTestes'
+import { rodarRetrospectivas } from '../lib/smRetrospectiva'
 
 const router = Router()
 
@@ -264,8 +265,17 @@ function cronAutorizado(req: Request, res: Response): boolean {
   return true
 }
 
+// O horário pode vir no cabeçalho só fora de produção (testes da sexta e da segunda).
+function agoraDoCron(req: Request): Date {
+  const pedido = process.env.NODE_ENV !== 'production' ? Date.parse(String(req.header('x-cron-agora') ?? '')) : NaN
+  return Number.isNaN(pedido) ? new Date() : new Date(pedido)
+}
+
 router.post('/sm/cron/hora', async (req: Request, res: Response) => {
-  if (cronAutorizado(req, res)) res.json(await rodarJobSocialMedia('HORA'))
+  if (!cronAutorizado(req, res)) return
+  const sincronizacao = await rodarJobSocialMedia('HORA')
+  // Sexta: a retrospectiva da semana. Segunda às 8h: o relatório ao gestor (seção 11.4).
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))) })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return

@@ -957,6 +957,7 @@ model ProLaboreUsuario {
   smSaudacoesExibidas       SmSaudacaoExibida[]
   smPreferencias            SmPreferencia[]
   smRituais                 SmRitual[]
+  smRetrospectivas          SmRetrospectiva[]
   smGanchos                 SmGancho[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
@@ -2843,4 +2844,26 @@ model SmRitual {
 
   @@unique([usuarioId, ator, data])
   @@map("pro_labore_sm_rituais")
+}
+
+// Tela 11 · Retrospectiva da semana (seção 11.4): gerada na sexta, fechada
+// na segunda (relatório ao gestor). `dados` guarda as 5 partes calculadas com
+// tudo; cada papel vê só o que o nível dos módulos libera.
+model SmRetrospectiva {
+  id              String    @id @default(cuid())
+  usuarioId       String
+  semana          String // segunda-feira da semana, AAAA-MM-DD em Brasília
+  ate             String // último dia coberto (sexta na geração; domingo quando fecha)
+  dados           Json
+  titulo          String
+  tituloIA        Boolean   @default(false)
+  geradaEm        DateTime  @default(now())
+  atualizadaEm    DateTime  @updatedAt
+  enviadaGestorEm DateTime?
+  relatorioEm     DateTime? // relatório de segunda enviado ao gestor
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, semana])
+  @@map("pro_labore_sm_retrospectivas")
 }

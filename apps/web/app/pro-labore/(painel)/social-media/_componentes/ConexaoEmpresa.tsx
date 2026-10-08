@@ -5,6 +5,7 @@
 // sincronização com nova tentativa automática, avisos ao gestor, histórico
 // e diagnóstico. Não depende do login pessoal de ninguém.
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import {
   proLaboreApi,
   type AvisoSocial,
@@ -181,6 +182,7 @@ export function AvisosSocial({ versao }: { versao: string }) {
             <b>{a.titulo}</b>{a.ocorrencias > 1 && <span className="pl-sv-rec-conf">{a.ocorrencias} tentativas</span>}
             <div>{a.texto}</div>
           </div>
+          {a.payload?.href && <Link href={a.payload.href} className="pl-link-action">Abrir</Link>}
           <button type="button" className="pl-link-action" onClick={() => { void proLaboreApi.socialMedia.marcarAvisoLido(a.id); setAvisos(l => l.filter(x => x.id !== a.id)) }}>Marcar como lido</button>
         </div>
       ))}

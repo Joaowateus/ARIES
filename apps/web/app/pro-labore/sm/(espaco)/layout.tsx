@@ -48,8 +48,8 @@ const SUB_TELA: Record<string, string> = {
   '/pro-labore/sm/vendas-por-post': 'Leads e vendas de cada post',
 }
 
-// Telas cheias, sem o menu lateral: primeiro acesso (tela 08) e modo foco (tela 09).
-const TELA_CHEIA = ['/pro-labore/sm/boas-vindas', '/pro-labore/sm/foco']
+// Telas cheias, sem o menu lateral: primeiro acesso (tela 08), modo foco (tela 09) e retrospectiva (tela 11).
+const TELA_CHEIA = ['/pro-labore/sm/boas-vindas', '/pro-labore/sm/foco', '/pro-labore/sm/retrospectiva']
 
 function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children: React.ReactNode }) {
   const { logout } = useProLaboreAuth()
@@ -177,6 +177,7 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
       sub: i.href === '/pro-labore/sm/atendimento' && esperando ? `${esperando} ${esperando === 1 ? 'conversa esperando' : 'conversas esperando'}` : SUB_TELA[i.href] ?? i.rotulo,
       atalho: i.atalho?.split(' '), palavras: i.href === '/pro-labore/sm' ? 'inicio recepcao' : undefined, executar: () => router.push(i.href),
     })),
+    { id: 'retro', ini: '★', tom: 'nav', titulo: 'Abrir a retrospectiva', sub: 'A semana em 5 partes: conquistas, metas, post, aprendizado e focos', palavras: 'semana relatorio conquistas', executar: () => router.push('/pro-labore/sm/retrospectiva') },
     ...(verComo ? [] : [{ id: 'preferencias', ini: '⚙', tom: 'nav' as const, titulo: 'Preferências', sub: 'Como te chamar, hora do ritual e avisos', palavras: 'configuracoes ajustes', executar: () => router.push('/pro-labore/sm/preferencias') }]),
     { id: 'atalhos', ini: '?', tom: 'nav', titulo: 'Ver todos os atalhos', sub: 'Atalhos do dia a dia', atalho: ['?'], palavras: 'teclado ajuda', executar: () => setVerAtalhos(true) },
   ]

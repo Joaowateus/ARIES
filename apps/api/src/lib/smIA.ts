@@ -162,6 +162,16 @@ export async function redigirFrase(usuarioId: string, aba: string, nomeAba: stri
   return nova
 }
 
+/** Título da retrospectiva da semana (seção 11.4), em cima do título-base e dos mesmos números. */
+export async function tituloDaSemana(usuarioId: string, base: string, fatos: unknown): Promise<string | null> {
+  const t = await texto(usuarioId,
+    'Tarefa: escrever o título da retrospectiva da semana de quem cuida do Instagram da loja. Uma frase curta (até 70 caracteres), sem emoji e sem aspas, honesta com os números: comemore só o que foi bom e trate o que faltou como próximo passo. Parta do título-base. Responda só com o título.',
+    [{ role: 'user', content: `${blocoFatos(fatos)}\n<titulo_base>${base}</titulo_base>` }], 3000)
+  const novo = t ? limpar(t).replace(/\s+/g, ' ').replace(/^["“']+|["”']+$/g, '') : null
+  if (!novo || novo.length > 90 || !numerosConferem(novo, numerosPermitidos(base, semDinheiro(fatos)))) return null
+  return novo
+}
+
 export interface Turno { pergunta: string; resposta: string }
 
 /** Pergunta em linguagem natural sobre a aba (linha "Pergunte:"). */
