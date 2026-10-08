@@ -771,7 +771,7 @@ export const proLaboreApi = {
       acesso: () => request<SmAcessoGestor>('/pro-labore/sm/gestor/acesso'),
       salvarPermissoes: (data: { niveis?: Partial<Record<SmModulo, SmNivel>>; regras?: Partial<SmRegras> }) =>
         request<{ niveis: Record<SmModulo, SmNivel>; regras: SmRegras }>('/pro-labore/sm/gestor/permissoes', { method: 'PUT', body: JSON.stringify(data) }),
-      convidar: (data: { nome: string; tratamento?: string | null; email: string }) =>
+      convidar: (data: { nome: string; tratamento?: string | null; genero?: SmGenero | null; email: string }) =>
         request<{ link: string; emailEnviado: boolean; erroEmail: string | null }>('/pro-labore/sm/gestor/convite', { method: 'POST', body: JSON.stringify(data) }),
       definirAtivo: (ativo: boolean) => request<{ ok: boolean; status: SmStatusMembro }>('/pro-labore/sm/gestor/membro/ativo', { method: 'POST', body: JSON.stringify({ ativo }) }),
       removerMembro: () => request<{ ok: boolean }>('/pro-labore/sm/gestor/membro', { method: 'DELETE' }),
@@ -801,7 +801,15 @@ export const proLaboreApi = {
         request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/link`, { method: 'POST', body: JSON.stringify({ tipo, url }) }),
       removerMidia: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/${midiaId}`, { method: 'DELETE' }),
     },
-    hoje: () => request<SmHoje>('/pro-labore/sm/hoje'),
+    hoje: (retorno = false) => request<SmHoje>(`/pro-labore/sm/hoje${retorno ? '?retorno=1' : ''}`),
+    recepcao: {
+      recolher: (visitaId: string) => request<{ ok: boolean }>(`/pro-labore/sm/recepcao/${visitaId}/recolher`, { method: 'POST' }),
+      simular: (q: { momento: SmMomento; genero: SmGenero | null; para: 'SOCIAL_MEDIA' | 'GESTOR'; frase?: string | null }) =>
+        request<SmSimulacaoRecepcao>(`/pro-labore/sm/gestor/recepcao?momento=${q.momento}&para=${q.para}${q.genero ? `&genero=${q.genero}` : ''}${q.frase ? `&frase=${encodeURIComponent(q.frase)}` : ''}`),
+    },
+    preferencias: {
+      salvar: (data: { genero: SmGenero | null }) => request<{ genero: SmGenero | null }>('/pro-labore/sm/preferencias', { method: 'PUT', body: JSON.stringify(data) }),
+    },
     desempenho: (periodo: { inicio: string; fim: string }, origem: OrigemSocial = 'ORGANICO') =>
       request<SmDesempenho>(`/pro-labore/sm/desempenho?inicio=${periodo.inicio}&fim=${periodo.fim}&origem=${origem}`),
     atendimento: {
@@ -1796,6 +1804,7 @@ export interface SmAcessoGestor {
   membro: {
     nome: string
     tratamento: string | null
+    genero: SmGenero | null
     email: string
     status: SmStatusMembro
     convidadoEm: string
@@ -1958,8 +1967,35 @@ export interface SmCalendario {
 
 export interface SmSugestaoAudiencia { ref: string; titulo: string; pilar: SmPilar; formato: SmFormato; motivo: string; gancho: string }
 
+// Motor de saudação (seção 14).
+export type SmMomento = 'VOLTA' | 'VENDA' | 'DIFICIL' | 'SEXTA' | 'SEGUNDA' | 'MANHA' | 'TARDE' | 'NOITE'
+export type SmGenero = 'F' | 'M'
+export interface SmRecepcao {
+  visitaId: string | null
+  momento: SmMomento
+  kicker: string
+  titulo: string
+  sub: string
+  cta: { rotulo: string; href: string } | null
+  listaTitulo: string
+  itens: Array<{ tom: 'bad' | 'info' | 'warn' | 'ok' | 'learn' | 'neutro'; rotulo: string; texto: string }>
+  perguntas: Array<{ aba: SmAbaAssistente; id: string; texto: string }>
+  recolhida: boolean
+  foraDoExpediente: boolean
+  fraseId: string | null
+}
+export interface SmSimulacaoRecepcao {
+  pessoa: string
+  momentos: Array<{ id: SmMomento; rotulo: string; quando: string; aplicaAgora: boolean }>
+  vence: SmMomento
+  recepcao: SmRecepcao | null
+  aviso: string | null
+  frases: Array<{ id: string; texto: string; ultimaVez: string | null }>
+}
+
 export interface SmHoje {
   cabecalho: { rotulo: string; saudacao: string; resumo: string }
+  recepcao: SmRecepcao
   retomada: { diasSemPost: number; feitos: number; meta: number; maxPostsDia: number } | null
   metas: {
     diasComPost: { valor: number; meta: number; planejados: number }

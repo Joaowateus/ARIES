@@ -953,6 +953,9 @@ model ProLaboreUsuario {
   smAssistenteEstados       SmAssistenteEstado[]
   smIATextos                SmIATexto[]
   smIAUsos                  SmIAUso[]
+  smVisitas                 SmVisita[]
+  smSaudacoesExibidas       SmSaudacaoExibida[]
+  smPreferencias            SmPreferencia[]
   smGanchos                 SmGancho[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
@@ -2751,4 +2754,67 @@ model SmIAUso {
 
   @@unique([usuarioId, dia])
   @@map("pro_labore_sm_ia_usos")
+}
+
+// Motor de saudação (seção 14). Uma visita começa a cada abertura do sistema
+// ou volta depois de 30 min sem atividade; guarda o momento e a frase da
+// saudação, e se a pessoa já começou o dia (o bloco recolhe numa linha).
+model SmVisita {
+  id                String   @id @default(cuid())
+  usuarioId         String
+  ator              String // GESTOR ou o id do membro Social Media
+  inicioEm          DateTime @default(now())
+  ultimaAtividadeEm DateTime @default(now())
+  anteriorEm        DateTime? // última atividade da visita anterior (para "volta de folga" e "venda desde o último acesso")
+  momento           String // VOLTA | VENDA | DIFICIL | SEXTA | SEGUNDA | MANHA | TARDE | NOITE
+  fraseId           String?
+  recolhida         Boolean  @default(false)
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, ator, inicioEm])
+  @@map("pro_labore_sm_visitas")
+}
+
+// Banco de frases da saudação (saudacao_frase): 8 a 10 por momento.
+model SmSaudacaoFrase {
+  id      String  @id // ex.: MANHA-01
+  momento String
+  texto   String // {nome}, {bemvindo}
+  ativa   Boolean @default(true)
+  ordem   Int     @default(0)
+
+  exibicoes SmSaudacaoExibida[]
+
+  @@index([momento])
+  @@map("pro_labore_sm_saudacao_frases")
+}
+
+// Quando cada frase apareceu para cada pessoa (saudacao_exibida): a mesma
+// frase não volta antes de 7 dias.
+model SmSaudacaoExibida {
+  id        String   @id @default(cuid())
+  usuarioId String
+  ator      String
+  fraseId   String
+  exibidaEm DateTime @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  frase   SmSaudacaoFrase  @relation(fields: [fraseId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, ator, exibidaEm])
+  @@map("pro_labore_sm_saudacoes_exibidas")
+}
+
+// Preferências de cada pessoa do espaço (gestor ou Social Media).
+model SmPreferencia {
+  id        String  @id @default(cuid())
+  usuarioId String
+  ator      String
+  genero    String? // F | M: concordância da saudação ("Bem-vinda", "Bem-vindo"); vazio = neutra
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, ator])
+  @@map("pro_labore_sm_preferencias")
 }

@@ -631,3 +631,37 @@ a.sm-row-link { color: inherit; text-decoration: none; }
 .sm-ia-resto { display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; }
 .sm-ia-resto p { margin: 0; }
 .sm-ia-resto .sm-btn { align-self: flex-start; }
+
+/* Recepção da tela Hoje (seção 14) */
+.sm-recepcao { display: flex; flex-direction: column; gap: 20px; }
+.sm-recepcao-topo { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.sm-recepcao-texto { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 10px; max-width: 780px; }
+.sm-recepcao-titulo { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; }
+.sm-recepcao-sub { margin: 0; font-size: 17px; line-height: 1.55; color: var(--sm-text-muted); }
+.sm-recepcao-cta { align-self: flex-start; margin-top: 4px; }
+.sm-recepcao-cta[aria-disabled="true"] { cursor: default; }
+.sm-recepcao-acoes { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.sm-recepcao-lista { display: flex; flex-direction: column; gap: 10px; }
+.sm-recepcao-itens { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.sm-recepcao-item { background: var(--sm-surface); border: 1px solid var(--sm-border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+.sm-recepcao-item .sm-chip { align-self: flex-start; }
+.sm-recepcao-perguntar { display: flex; flex-direction: column; gap: 12px; }
+.sm-recepcao.recolhida { flex-direction: row; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.sm-recepcao-linha { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sm-recepcao-linha-texto { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--sm-text-muted); }
+.sm-recepcao-linha-texto b { color: var(--sm-text); }
+.sm-hoje-corpo { display: contents; }
+
+/* Simulador de momentos (tela 13) */
+.sm-recepcao-sim { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.sm-recepcao-sim-nav { flex: 1 1 260px; min-width: 0; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+.sm-recepcao-sim-nav > .sm-mono { padding: 8px 14px 6px; }
+.sm-recepcao-mom { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; width: 100%; min-height: 52px; padding: 10px 14px; border-radius: 12px; cursor: pointer; color: var(--sm-text); }
+.sm-recepcao-mom[aria-pressed="true"] { background: var(--sm-surface-2, var(--sm-surface)); box-shadow: inset 0 0 0 1px var(--sm-border-strong); }
+.sm-recepcao-mom:focus-visible, .sm-recepcao-frase:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-recepcao-sim-previa { flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.sm-recepcao-sim-tela { background: var(--sm-bg-focus, var(--sm-surface)); border: 1px solid var(--sm-border); border-radius: 22px; padding: clamp(18px, 3vw, 36px); }
+.sm-recepcao-frases { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.sm-recepcao-frase { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+.sm-recepcao-frase:hover { border-color: var(--sm-border); }
+.sm-recepcao-frase[aria-pressed="true"] { border-color: var(--sm-border-strong); background: var(--sm-surface); }

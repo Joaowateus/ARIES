@@ -8,6 +8,7 @@
 //   valem exatamente os mesmos filtros, em modo só leitura.
 import { NextFunction, Request, Response } from 'express'
 import { prisma } from './prisma'
+import { marcarAtividade } from './smAtividade'
 import { verifyProLaboreToken } from './jwtProLabore'
 
 export const MODULOS_SM = ['analise', 'producao', 'atendimento', 'estoque', 'crm', 'vendas', 'trafego', 'financeiro', 'dashboard'] as const
@@ -80,6 +81,8 @@ declare global {
 const ROTAS_PUBLICAS_SM = /^\/sm\/(cron|webhook|convite)\//
 const ROTAS_DO_GESTOR_SM = /^\/sm\/gestor(\/|$)/
 // POST que só lê: perguntar ao assistente vale também no "ver como".
+// Páginas abertas (não as listas que se atualizam sozinhas) contam como uso.
+const ROTAS_DE_PAGINA_SM = /^\/sm\/(eu|hoje|assistente\/[a-z]+)$/
 const ROTAS_POST_LEITURA_SM = /^\/sm\/assistente\/[a-z]+\/perguntar$/
 
 /**
@@ -139,6 +142,7 @@ export async function contextoSM(req: Request, res: Response, next: NextFunction
     nivel,
     pode: (m, minimo) => PESO[nivel(m)] >= PESO[minimo],
   }
+  if (!verComo && (req.method !== 'GET' || ROTAS_DE_PAGINA_SM.test(req.path))) marcarAtividade(u.sub, visao === 'GESTOR' ? 'GESTOR' : u.smMembroId ?? 'GESTOR')
   next()
 }
 
@@ -161,4 +165,10 @@ export function requireGestorSM(req: Request, res: Response, next: NextFunction)
     return
   }
   next()
+}
+
+/** O mesmo contexto visto como o Social Media (só leitura): para prévias do gestor. */
+export function comoSocialMedia(sm: ContextoSM): ContextoSM {
+  const nivel = (m: ModuloSM): NivelSM => sm.permissoes.niveis[m]
+  return { ...sm, visao: 'SOCIAL_MEDIA', verComo: true, somenteLeitura: true, membroId: null, nivel, pode: (m, minimo) => PESO[nivel(m)] >= PESO[minimo] }
 }

@@ -3,11 +3,11 @@
 // Tela 01 · Hoje (seção 4 · Main.html): o cockpit do dia. Tudo vem de dados
 // reais; o que depende de uma fase ainda não entregue aparece como tal, sem
 // número inventado.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, type SmHoje } from '@/lib/proLaboreApi'
 import {
-  Banner, BarraProgresso, Botao, BotaoLink, Card, CardEsqueleto, Chip, EstadoVazio, FORMATO_ROTULO, IcMais, KpiCard, PILAR_CHIP, PILAR_ROTULO, Rotulo,
+  Banner, BarraProgresso, Botao, BotaoLink, Card, CardEsqueleto, Chip, EstadoVazio, FORMATO_ROTULO, IcMais, KpiCard, PILAR_CHIP, PILAR_ROTULO, Recepcao, Rotulo,
   esperaDesde, quandoCurto, useToast, type Tom,
 } from '../_ui'
 import { useEspacoSM } from './EspacoSM'
@@ -30,15 +30,36 @@ function statusPost(p: NonNullable<SmHoje['publicarHoje']>[number]): { texto: st
 
 export default function HojePage() {
   const toast = useToast()
-  const { pode } = useEspacoSM()
+  const { pode, eu } = useEspacoSM()
   const [h, setH] = useState<SmHoje | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [gerando, setGerando] = useState<string | null>(null)
 
-  const carregar = useCallback(() => {
-    proLaboreApi.sm.hoje().then(r => { setH(r); setErro(null) }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+  const carregar = useCallback((retorno = false) => {
+    proLaboreApi.sm.hoje(retorno).then(r => { setH(r); setErro(null) }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
   }, [])
   useEffect(() => { carregar() }, [carregar])
+
+  // Volta à aba depois de 30 min ou mais escondida: nova recepção (seção 14.1).
+  const escondidaEm = useRef<number | null>(null)
+  useEffect(() => {
+    const mudou = () => {
+      if (document.hidden) { escondidaEm.current = Date.now(); return }
+      if (escondidaEm.current && Date.now() - escondidaEm.current >= 30 * 60_000) carregar(true)
+      escondidaEm.current = null
+    }
+    document.addEventListener('visibilitychange', mudou)
+    return () => document.removeEventListener('visibilitychange', mudou)
+  }, [carregar])
+
+  // Primeira ação do dia (qualquer botão ou link fora da recepção): a recepção recolhe numa linha.
+  const recolhida = useRef<string | null>(null)
+  function marcarAcao(e: React.MouseEvent) {
+    const alvo = (e.target as HTMLElement).closest('button, a')
+    if (!alvo || !h?.recepcao.visitaId || h.recepcao.recolhida || recolhida.current === h.recepcao.visitaId) return
+    recolhida.current = h.recepcao.visitaId
+    proLaboreApi.sm.recepcao.recolher(h.recepcao.visitaId).catch(() => undefined)
+  }
 
   async function criarPauta(chave: string, dados: Parameters<typeof proLaboreApi.sm.pautas.criar>[0], mensagem: string) {
     setGerando(chave)
@@ -51,23 +72,20 @@ export default function HojePage() {
     } finally { setGerando(null) }
   }
 
-  if (erro) return <div className="sm-card"><EstadoVazio titulo="Não foi possível montar o dia" acao={<Botao onClick={carregar}>Tentar de novo</Botao>}>{erro}</EstadoVazio></div>
+  if (erro) return <div className="sm-card"><EstadoVazio titulo="Não foi possível montar o dia" acao={<Botao onClick={() => carregar()}>Tentar de novo</Botao>}>{erro}</EstadoVazio></div>
   if (!h) return <><CardEsqueleto linhas={3} /><div className="sm-grade">{[0, 1, 2, 3].map(i => <CardEsqueleto key={i} linhas={2} />)}</div></>
 
   const m = h.metas
   return (
     <>
-      <header className="sm-pagina-cab">
-        <div>
-          <Rotulo>{h.cabecalho.rotulo}</Rotulo>
-          <h1 className="sm-ttl sm-h1">{h.cabecalho.saudacao}</h1>
-          <p>{h.cabecalho.resumo}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {pode('producao') && <BotaoLink href="/pro-labore/sm/calendario">Ver calendário</BotaoLink>}
-          {h.podeCriarPauta && <BotaoLink href="/pro-labore/sm/producao?nova=1" variante="pri" icone={<IcMais tamanho={16} />}>Nova pauta</BotaoLink>}
-        </div>
-      </header>
+      <Recepcao
+        key={h.recepcao.visitaId ?? 'previa'}
+        r={h.recepcao}
+        ia={eu.ia.ligada}
+        aoAgir={() => { if (h.recepcao.visitaId && !h.recepcao.recolhida) proLaboreApi.sm.recepcao.recolher(h.recepcao.visitaId).catch(() => undefined) }}
+        acoes={h.podeCriarPauta && <BotaoLink href="/pro-labore/sm/producao?nova=1" icone={<IcMais tamanho={16} />}>Nova pauta</BotaoLink>}
+      />
+      <div className="sm-hoje-corpo" onClickCapture={marcarAcao}>
 
       {h.retomada && (
         <Banner
@@ -234,6 +252,7 @@ export default function HojePage() {
           )}
           {!pode('producao') && !h.insights && <EstadoVazio titulo="Seu acesso é limitado">O gestor define o que aparece aqui em Acessos e permissões.</EstadoVazio>}
         </div>
+      </div>
       </div>
     </>
   )

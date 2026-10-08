@@ -4,9 +4,9 @@
 
 ## Situação atual
 
-- **Etapa:** Fase 3 · Inteligência (Fase 2 concluída e aprovada: 2a #148, 2b #149).
-- **Entregue:** 3a #150 (tela 05 · Desempenho), 3b #151 (testes A/B e biblioteca de ganchos), 3c #152 (motor de insights e assistente da aba nas telas 02 a 07) e 3d (integração de IA: frase do momento, linha "Pergunte:", respostas sugeridas no Atendimento e ganchos/roteiro no briefing).
-- **Próxima:** apresentar a Fase 3 completa para aprovação; depois, Fase 4 · Experiência.
+- **Etapa:** Fase 4 · Experiência (Fase 3 concluída e aprovada: 3a #150, 3b #151, 3c #152, 3d #153).
+- **Entregue:** 4a (motor de saudação na tela Hoje e simulador de momentos para o gestor).
+- **Próxima:** 4b (tela 08 · Primeiro acesso e tela 09 · Modo foco), depois 4c (paleta Ctrl+K e atalhos), 4d (retrospectiva e relatório de segunda) e 4e (detalhes da seção 15).
 
 ## Checklist de aceite (seção 18)
 
@@ -51,8 +51,8 @@
 - [ ] Tela 09 · Modo foco, com fila real e ações reais
 - [ ] Tela 10 · Paleta Ctrl+K e atalhos
 - [ ] Tela 11 · Retrospectiva automática, conquistas, envio ao gestor, exportação PNG e relatório de segunda às 8h
-- [ ] Motor de saudação (seção 14) com banco de frases e rotação de 7 dias
-- [ ] Simulador de momentos (tela 13) em rota interna do gestor
+- [x] Motor de saudação (seção 14) com banco de frases e rotação de 7 dias (4a: recepção no cabeçalho da tela Hoje a cada abertura ou volta depois de 30 min sem atividade (páginas abertas e ações contam como uso; as listas que se atualizam sozinhas, não; a aba que volta depois de 30 min escondida pede uma recepção nova). Os 8 momentos na ordem da seção 14.2: volta de folga (mais de 2 dias), venda vinda de post desde o último acesso, semana difícil (3 últimos posts abaixo de 0,7× da mediana, ou, a partir de quarta, menos da metade do esperado até o dia em dias com post ou em leads), sexta com a retrospectiva pronta (liga na 4d), começo de semana, manhã, tarde e noite. Banco de 8 frases por momento; a mesma frase não volta antes de 7 dias para a mesma pessoa (no mesmo dia e momento, a saudação é a mesma; com todas usadas, volta a mais antiga). Kicker, frase com o que muda o dia, CTA, 3 cartões e 3 perguntas sugeridas para o assistente, tudo com dados reais e só do que a pessoa vê; sem valores em R$. Recolhe numa linha depois da primeira ação; fora do expediente, nada em vermelho ("Para amanhã"). Concordância "Bem-vinda / Bem-vindo / Boas-vindas" pelo cadastro: o gestor define no convite)
+- [x] Simulador de momentos (tela 13) em rota interna do gestor (4a: `/pro-labore/sm/recepcao`, aberto por "Revisar saudações" em Acessos. Os 8 momentos com qual vence agora, a prévia com os dados reais para o Social Media ou para o gestor, as três concordâncias, o banco de frases com a última vez que cada uma apareceu e as 5 regras. Nada é gravado ao simular)
 - [ ] Todos os detalhes da seção 15
 
 ### Fase 5 · Celular
@@ -115,6 +115,7 @@ Plano aprovado em 06/10/2026. As perguntas que ficaram sem resposta seguem a rec
 | Ajuste 1c | Janelas com 3 ou 4 posts aparecem como "Hipótese"; "Em teste" fica para quando houver teste A/B (Fase 3). A tela Desempenho ainda usa a meta semanal antiga (`metaPostagensSemanais`); na Fase 3 ela passa a usar as mesmas regras do calendário. | Encaixe |
 | Ajuste 1d | Metas da semana da Hoje (leads orgânicos, resposta a DMs, retenção) editáveis pelo gestor junto com as regras do calendário. Uma venda só vira pauta de entrega se o papel tiver acesso a Vendas. | Encaixe |
 | Ajuste 2a | Rodízio (P4): consultores ativos com login, na ordem de cadastro; vale para os leads criados pelo Atendimento. Forma de pagamento do lead vai na observação (o CRM não tem esse campo). Expediente configurável no diálogo de regras do calendário. | Decisão P4 / encaixe |
+| Ajuste 4a | Madrugada (0h às 5h) conta como noite: "Boa noite" à 0h30, em vez de "Bom dia". "Semana difícil" por metas usa a regra explicada acima (a partir de quarta, menos da metade do esperado até o dia). Enquanto o modo foco (4b) não existe, "Começar o ritual da manhã" e "Colocar em dia" levam ao Atendimento (com cliente esperando) ou à Produção; enquanto a retrospectiva (4d) não existe, a sexta não dispara sozinha. A saudação usa templates; o texto pode passar pela IA depois, sem mudar os números. | Encaixe |
 | Ajuste 3d | Pergunta do protótipo "Quanto vale um lead orgânico?" trocada por "Qual formato traz mais leads?": a IA não recebe valores em R$ (seção 16.3), nem quando o gestor mostra os valores na tela. Alcance de dois meses só é comparado com 15+ dias sincronizados em cada um. Perguntar ao assistente vale também no "ver como" (só leitura); sugerir resposta e gerar roteiro, não. Datas comerciais (lista fixa e móveis como Dias das Mães e dos Pais e Black Friday) entram já no contexto do calendário; o pré-carregamento no planejamento é da Fase 6. | Sem dado sensível / dados reais |
 | Ajuste 3c | "Ativar aviso no celular" (aprovações paradas) leva à fila de aprovação até o push chegar na Fase 5. O Social Media não edita as respostas rápidas: o insight "mesma pergunta 3 vezes" cria a pauta e manda a resposta sugerida para o gestor, que pode criá-la com um clique. Textos das respostas sugeridas sem prometer condição comercial (ex.: não diz "aceitamos troca"; pede os dados para o consultor avaliar). | Encaixe / sem número inventado |
 | Ajuste 3b | Ordem invertida dentro da Fase 3: testes A/B e biblioteca de ganchos (3b) antes do motor de insights (3c), porque regras da seção 13.4 criam testes e sugerem o gancho com menor pulo. Confiança do teste por regra simples e explicada na tela (sem teste estatístico), já que as amostras são de 6 a 20 posts. | Encaixe |
