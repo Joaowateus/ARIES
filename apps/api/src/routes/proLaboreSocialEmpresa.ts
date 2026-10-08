@@ -27,6 +27,7 @@ import { processarEventosPendentes } from '../lib/smAtendimento'
 import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialMediaSync'
 import { listarTestes } from '../lib/smTestes'
 import { rodarRetrospectivas } from '../lib/smRetrospectiva'
+import { rodarPulso } from '../lib/smPulso'
 
 const router = Router()
 
@@ -301,7 +302,9 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   // As imagens da pauta são servidas pela própria API: a Meta precisa da URL completa.
   const baseApi = process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`
   const [sincronizacao, publicacao, atendimento] = await Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi), processarEventosPendentes(100)])
-  res.json({ ...sincronizacao, publicacao, atendimento })
+  // Seção 11.5: gatilhos do Pulso e a entrega agrupada no celular.
+  const pulso = await rodarPulso(agoraDoCron(req)).catch(e => { console.error('[sm] pulso', e); return { pulsoNovos: 0, pulsoPush: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

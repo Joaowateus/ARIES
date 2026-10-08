@@ -961,6 +961,8 @@ model ProLaboreUsuario {
   smGanchos                 SmGancho[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
+  smPushInscricoes          SmPushInscricao[]
+  smPulsos                  SmPulso[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1569,6 +1571,9 @@ model SocialMediaMidia {
   // Cópia própria da miniatura (caminho servido pela API): as URLs da CDN
   // do Instagram expiram e quebravam as imagens da tela (seção 17.8).
   miniaturaLocal         String?
+  // Fase 5 (seção 11.5): alcance na 1ª hora no ar, guardado na primeira
+  // leitura de métricas depois de 50 min. Base do aviso "post decolando".
+  alcance1h              Int?
   insightsAtualizadoEm   DateTime?
   atualizadoEm           DateTime  @updatedAt
 
@@ -2483,9 +2488,11 @@ model SmPauta {
 model SmPautaMidia {
   id       String   @id @default(cuid())
   pautaId  String
-  tipo     String // IMAGEM | VIDEO | CAPA | TERMO
+  tipo     String // IMAGEM | VIDEO | CAPA | TERMO | TOMADA (vídeo bruto da captura, para a edição)
   url      String
   ordem    Int      @default(0)
+  // Fase 5 (seção 11.5): número da tomada da captura na loja (1, 2, 3...).
+  tomada   Int?
   criadoEm DateTime @default(now())
 
   pauta SmPauta @relation(fields: [pautaId], references: [id], onDelete: Cascade)
@@ -2869,4 +2876,48 @@ model SmRetrospectiva {
 
   @@unique([usuarioId, semana])
   @@map("pro_labore_sm_retrospectivas")
+}
+
+// Fase 5 (seção 11.5): aparelhos inscritos no Web Push (PWA). Uma linha por
+// navegador; o endpoint vencido (404/410) sai na primeira tentativa de envio.
+model SmPushInscricao {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  ator        String // GESTOR | id do membro
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  navegador   String?
+  criadoEm    DateTime  @default(now())
+  ultimoUsoEm DateTime?
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, ator])
+  @@map("pro_labore_sm_push_inscricoes")
+}
+
+// Fase 5 (seção 11.5): os avisos "Pulso" (post decolando, venda creditada,
+// cliente esperando, aprovação, falha). Uma vez por chave e por pessoa; a
+// entrega no celular agrupa o que chega em 30 min (só o urgente sai na hora).
+model SmPulso {
+  id        String    @id @default(cuid())
+  usuarioId String
+  ator      String
+  tipo      String // DECOLANDO | VENDA | CLIENTE | APROVACAO | FALHA
+  chave     String
+  titulo    String
+  texto     String
+  href      String?
+  urgente   Boolean   @default(false)
+  criadoEm  DateTime  @default(now())
+  enviadoEm DateTime?
+  lidoEm    DateTime?
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, ator, chave])
+  @@index([usuarioId, ator, criadoEm])
+  @@index([enviadoEm])
+  @@map("pro_labore_sm_pulsos")
 }

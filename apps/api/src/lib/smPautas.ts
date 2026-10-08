@@ -2,6 +2,7 @@
 // checklist antes de aprovar e o que a pauta precisa ter para ser publicada.
 import { Prisma, SmPauta, SmPautaMidia } from '@prisma/client'
 import { prisma } from './prisma'
+import { pulsoDoAviso } from './smPulso'
 import { dentroDaJanela, type JanelasResultado } from './smJanelas'
 
 export const PILARES = ['ESTOQUE', 'PROVA', 'EDUCACAO', 'BASTIDORES'] as const
@@ -90,6 +91,8 @@ export async function notificar(usuarioId: string, destinatario: 'GESTOR' | 'SOC
   } else {
     await prisma.smNotificacao.create({ data: { usuarioId, destinatario, tipo, chave, titulo, texto, payload } })
   }
+  // Seção 11.5: aprovação e falhas também vão para o celular (agrupadas).
+  await pulsoDoAviso(usuarioId, destinatario, tipo, chave, titulo, texto, payload).catch(e => console.error('[sm] pulso do aviso', e))
 }
 
 export async function marcarAvisosLidos(usuarioId: string, chave: string) {

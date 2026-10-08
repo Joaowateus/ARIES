@@ -53,6 +53,8 @@ import proLaboreSmAssistenteRoutes from './routes/proLaboreSmAssistente'
 import proLaboreSmFocoRoutes from './routes/proLaboreSmFoco'
 import proLaboreSmBuscaRoutes from './routes/proLaboreSmBusca'
 import proLaboreSmRetrospectivaRoutes from './routes/proLaboreSmRetrospectiva'
+import proLaboreSmPulsoRoutes from './routes/proLaboreSmPulso'
+import proLaboreSmCapturaRoutes from './routes/proLaboreSmCaptura'
 import { guardaPapelSocialMedia } from './lib/smAcesso'
 
 // Setup do Express isolado do listen() — assim o mesmo app serve tanto o
@@ -121,6 +123,10 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, code: 'RATE_LIMIT_AUTH', message: 'Muitas tentativas de login. Aguarde 15 minutos.' },
+  // "Quem sou eu" (GET /me) roda a cada página aberta, com o token já válido:
+  // não é tentativa de login. Contado aqui, quem abre o app pelo aviso do
+  // celular (PWA) ficava bloqueado depois de 20 aberturas em 15 minutos.
+  skip: req => req.method === 'GET' && req.path === '/me',
 })
 
 // Guarda o corpo cru junto: o webhook da Meta assina os bytes exatos que
@@ -199,6 +205,8 @@ app.use('/pro-labore', proLaboreSmAssistenteRoutes)
 app.use('/pro-labore', proLaboreSmFocoRoutes)
 app.use('/pro-labore', proLaboreSmBuscaRoutes)
 app.use('/pro-labore', proLaboreSmRetrospectivaRoutes)
+app.use('/pro-labore', proLaboreSmPulsoRoutes)
+app.use('/pro-labore', proLaboreSmCapturaRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)

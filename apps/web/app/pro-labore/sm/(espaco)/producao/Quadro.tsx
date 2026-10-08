@@ -35,6 +35,7 @@ function Cartao({ p, selecionada, arrastando, aoSelecionar, aoIniciar, aoTeclaMo
   aoTeclaMover?: (direcao: -1 | 1) => void
 }) {
   const prazo = prazoDoCartao(p)
+  const tomadas = p.midias.filter(m => m.tipo === 'TOMADA').length
   return (
     <button
       type="button"
@@ -52,9 +53,10 @@ function Cartao({ p, selecionada, arrastando, aoSelecionar, aoIniciar, aoTeclaMo
     >
       <Chip pilar={PILAR_CHIP[p.pilar]}>{PILAR_ROTULO[p.pilar]}</Chip>
       <span className="sm-kcard-titulo">{p.titulo}</span>
-      {(p.trial || p.aprovacao === 'AJUSTE' || (p.status === 'APROVACAO' && p.aprovacao === 'PENDENTE') || p.publicacaoStatus === 'FALHA') && (
+      {(p.trial || p.aprovacao === 'AJUSTE' || (p.status === 'APROVACAO' && p.aprovacao === 'PENDENTE') || p.publicacaoStatus === 'FALHA' || (tomadas > 0 && p.status === 'GRAVACAO')) && (
         <span className="sm-kcard-selos">
           {p.trial && <Chip tom="info">Trial</Chip>}
+          {tomadas > 0 && p.status === 'GRAVACAO' && <Chip tom="ok">{tomadas} {tomadas === 1 ? 'tomada' : 'tomadas'}</Chip>}
           {p.aprovacao === 'AJUSTE' && <Chip tom="bad">Ajuste pedido</Chip>}
           {p.status === 'APROVACAO' && p.aprovacao === 'PENDENTE' && <Chip tom="warn">Aguardando aprovação</Chip>}
           {p.publicacaoStatus === 'FALHA' && <Chip tom="bad">Falhou ao publicar</Chip>}

@@ -90,7 +90,11 @@ router.get('/sm/eu', ...autenticado, async (req: Request, res: Response) => {
     // Tema escolhido em Preferências (seção 15): segue a pessoa em qualquer aparelho.
     tema: (await preferenciaDe(sm.usuarioId, atorDe(sm))).tema,
     conta: resumoConta(conta),
-    contadores: { atendimento: sm.pode('atendimento', 'LEITURA') ? await prisma.smConversa.count({ where: { usuarioId: sm.usuarioId, aguardandoDesde: { not: null }, status: { not: 'ARQUIVADA' } } }) : 0 },
+    contadores: {
+      atendimento: sm.pode('atendimento', 'LEITURA') ? await prisma.smConversa.count({ where: { usuarioId: sm.usuarioId, aguardandoDesde: { not: null }, status: { not: 'ARQUIVADA' } } }) : 0,
+      // Fila "Para aprovar" (seção 11.5): só para o gestor.
+      aprovacao: sm.visao === 'GESTOR' && !sm.verComo ? await prisma.smPauta.count({ where: { usuarioId: sm.usuarioId, status: 'APROVACAO', aprovacao: 'PENDENTE' } }) : 0,
+    },
   })
 })
 
