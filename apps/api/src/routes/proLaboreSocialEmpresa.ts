@@ -28,6 +28,8 @@ import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialM
 import { listarTestes } from '../lib/smTestes'
 import { rodarRetrospectivas } from '../lib/smRetrospectiva'
 import { rodarPulso } from '../lib/smPulso'
+import { MENSAGEM_APP_BLOQUEADO, PASSOS_APP_BLOQUEADO, TITULO_APP_BLOQUEADO, causaDoErroMeta, lembretesAnuais } from '../lib/metaConexao'
+import { recuperarConexoesMeta } from '../lib/metaTeste'
 import { rodarConcorrentes } from '../lib/smConcorrentes'
 import { rodarPlanejamento } from '../lib/smPlanejamento'
 
@@ -51,6 +53,7 @@ const titularDono = (req: Request) => `dono:${req.proLaboreUser!.sub}`
 function mensagemGraph(e: unknown): string {
   if (e instanceof ErroGraphApi) {
     if (e.codigo === 190) return 'O token não é válido (expirou, foi revogado ou foi colado incompleto). Gere um novo no Business Manager.'
+    if (causaDoErroMeta(e.codigo, e.message) === 'APP_BLOQUEADO') return MENSAGEM_APP_BLOQUEADO
     if (e.codigo === 10 || e.codigo === 200) return `A Meta recusou o acesso: ${e.message} Confira as permissões do app e do usuário do sistema.`
     return `A Meta respondeu: ${e.message}`
   }
@@ -60,10 +63,13 @@ function mensagemGraph(e: unknown): string {
 // --- Conectar a conta da empresa ---
 
 const conectarSchema = z.object({
-  accessToken: z.string().min(20, 'Token inválido'),
+  accessToken: z.string().min(20, 'Token inválido').optional(),
+  // O mesmo token do usuário do sistema que o Tráfego já usa: um token só,
+  // que não expira, para os dois módulos (precisa das permissões do Instagram).
+  usarTokenDoTrafego: z.boolean().optional(),
   // Quando o usuário do sistema enxerga mais de uma conta do Instagram.
   instagramUserId: z.string().min(1).optional(),
-})
+}).refine(d => d.accessToken || d.usarTokenDoTrafego, 'Cole o token do usuário do sistema')
 
 router.post('/social-media/conectar-empresa', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const parse = conectarSchema.safeParse(req.body)
@@ -73,12 +79,19 @@ router.post('/social-media/conectar-empresa', requireProLaboreAuth, requireDono,
   }
   const usuarioId = req.proLaboreUser!.sub
   const titular = titularDono(req)
-  const token = parse.data.accessToken.trim()
+  let token = parse.data.accessToken?.trim() ?? ''
+  if (parse.data.usarTokenDoTrafego) {
+    const t = await prisma.trafegoConta.findUnique({ where: { usuarioId }, select: { accessToken: true } })
+    if (!t) { res.status(400).json({ error: 'O Tráfego ainda não está conectado: cole o token do usuário do sistema.' }); return }
+    token = t.accessToken
+  }
   try {
     const dono = await verificarTokenEmpresa(token)
     const faltando = PERMISSOES_EMPRESA_ESSENCIAIS.filter(p => !dono.concedidas.includes(p))
     if (faltando.length) {
-      res.status(400).json({ error: `O token não tem as permissões para ler o Instagram: falta ${faltando.join(', ')}. Gere um token novo marcando essas permissões.`, faltando })
+      res.status(400).json({ error: parse.data.usarTokenDoTrafego
+        ? `O token do Tráfego ainda não lê o Instagram: falta ${faltando.join(', ')}. No Business Manager, gere um token novo do usuário do sistema com ads_read e essas permissões, e troque nos dois lugares (Tráfego e aqui).`
+        : `O token não tem as permissões para ler o Instagram: falta ${faltando.join(', ')}. Gere um token novo marcando essas permissões.`, faltando })
       return
     }
     const contas = await listarContasInstagramDaEmpresa(token)
@@ -201,6 +214,7 @@ router.post('/social-media/diagnostico-empresa', requireProLaboreAuth, requireDo
 // Passo a passo para o primeiro problema encontrado.
 function resolver(passos: PassoDiagnostico[]): { titulo: string; passos: string[] } {
   const erro = passos.find(p => p.nivel === 'erro')
+  if (erro && causaDoErroMeta(undefined, erro.detalhe) === 'APP_BLOQUEADO') return { titulo: TITULO_APP_BLOQUEADO, passos: PASSOS_APP_BLOQUEADO }
   if (!erro) {
     const aviso = passos.find(p => p.nivel === 'aviso')
     return aviso
@@ -278,7 +292,9 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
   const sincronizacao = await rodarJobSocialMedia('HORA')
   // Sexta: a retrospectiva da semana. Segunda às 8h: o relatório ao gestor (seção 11.4).
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))) })
+  // App da Meta bloqueado: testa de novo e, liberado, o Tráfego e o Instagram voltam sozinhos.
+  const meta = await recuperarConexoesMeta(agoraDoCron(req)).catch(e => { console.error('[meta] recuperar', e); return { metaTestadas: 0, metaLiberadas: 0 } })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
@@ -299,7 +315,8 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const agora = agoraDoCron(req)
   const concorrentes = await rodarConcorrentes(agora).catch(e => { console.error('[sm] concorrentes', e); return { concorrentes: 0 } })
   const planejamento = await rodarPlanejamento(agora).catch(e => { console.error('[sm] planejamento', e); return { planejamento: 0 } })
-  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento })
+  const lembretes = await lembretesAnuais(agora).catch(e => { console.error('[meta] lembretes', e); return { lembretesMeta: 0 } })
+  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes })
 })
 // A cada 5 min: novas tentativas vencidas e a publicação das pautas
 // agendadas que já chegaram no horário.

@@ -1,6 +1,8 @@
 // Cliente da Marketing API da Meta (Gerenciador de Anúncios): contas de
 // anúncio acessíveis pelo token, insights diários por anúncio e alcance de
 // um período. Tudo "de leitura" (permissão ads_read).
+import { MENSAGEM_APP_BLOQUEADO, causaDoErroMeta } from './metaConexao'
+
 const GRAPH_BASE = process.env.META_GRAPH_BASE ?? 'https://graph.facebook.com'
 const VERSAO = process.env.META_GRAPH_VERSION ?? 'v23.0'
 
@@ -22,6 +24,9 @@ export function erroDeLimite(e: unknown): boolean {
 }
 
 function traduzir(msg: string, codigo?: number): string {
+  // O bloqueio do app pela Meta vem com código 10 ou 200, os mesmos de "sem
+  // permissão": a mensagem original é que separa os dois casos.
+  if (causaDoErroMeta(codigo, msg) === 'APP_BLOQUEADO') return MENSAGEM_APP_BLOQUEADO
   if (codigo === 190) return 'O token do Gerenciador de Anúncios expirou ou foi revogado. Gere um novo e conecte de novo.'
   if (codigo === 200 || codigo === 10) return 'A Meta recusou a leitura dessa conta de anúncios com o token salvo (falta a permissão ads_read ou o acesso do usuário do sistema à conta). Clique em "Diagnosticar conexão" pra ver o que está faltando.'
   if (erroDeLimite(new ErroMetaAds(msg, codigo))) return 'A Meta limitou as chamadas por agora. A próxima sincronização tenta de novo.'
@@ -386,6 +391,19 @@ export async function diagnosticarConexao(adAccountId: string, token: string): P
       return false
     }
   }
+  // 0. O app: com o app bloqueado pela Meta, todo o resto falha junto, e o
+  // conserto é no painel do app (não adianta trocar token nem permissão).
+  // Se a chamada falhar por outro motivo (token), o passo do token explica.
+  const sonda = await chamar('/me', { fields: 'id' }, token).then(() => null, (e: unknown) => e)
+  const bloqueado = sonda instanceof ErroMetaAds && causaDoErroMeta(sonda.codigo, sonda.original) === 'APP_BLOQUEADO'
+  if (bloqueado || !sonda) {
+    const appOk = await tentar('app', 'App da Meta liberado', async () => {
+      if (bloqueado) throw sonda
+      const info = await inspecionarToken(token)
+      return info?.app ? `App: ${info.app}${info.expiraEm ? '' : ' · token sem data para expirar'}` : 'A Meta respondeu normalmente'
+    })
+    if (!appOk) return passos
+  }
   const tokenOk = await tentar('token', 'Token válido', async () => {
     const me = await chamar<{ id: string; name?: string }>('/me', { fields: 'id,name' }, token)
     return `Usuário: ${me.name ?? me.id}`
@@ -434,4 +452,23 @@ export async function diagnosticarConexao(adAccountId: string, token: string): P
     return 'OK'
   })
   return passos
+}
+
+// ---------- Teste rápido da conexão (saúde compartilhada com o Social Media) ----------
+
+export interface InfoToken { valido: boolean; app: string | null; permissoes: string[]; expiraEm: Date | null; erro: string | null }
+
+/** O que a Meta diz do próprio token: app, validade, permissões e erro (debug_token com o próprio token). */
+export async function inspecionarToken(token: string): Promise<InfoToken | null> {
+  try {
+    const r = await chamar<{ data: { is_valid?: boolean; application?: string; scopes?: string[]; expires_at?: number; error?: { message?: string } } }>(
+      '/debug_token', { input_token: token }, token)
+    const d = r.data
+    return { valido: !!d.is_valid, app: d.application ?? null, permissoes: d.scopes ?? [], expiraEm: d.expires_at ? new Date(d.expires_at * 1000) : null, erro: d.error?.message ?? null }
+  } catch { return null }
+}
+
+/** Uma chamada leve que só passa se o app, o token e o acesso à conta estiverem certos. */
+export async function testarContaDeAnuncio(adAccountId: string, token: string): Promise<void> {
+  await chamar(`/${adAccountId}`, { fields: 'name,account_status' }, token)
 }

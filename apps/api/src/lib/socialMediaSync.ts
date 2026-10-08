@@ -24,6 +24,7 @@ import {
 import { baixarEGuardarImagem } from './armazenamento'
 import { duracaoDoVideo } from './videoDuracao'
 import { pulsoDoAviso } from './smPulso'
+import { MENSAGEM_APP_BLOQUEADO, causaDoErroMeta, registrarBloqueio, registrarLiberacao } from './metaConexao'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 // Fuso fixo de Brasília (UTC-3, sem horário de verão desde 2019) — mesma
@@ -56,7 +57,7 @@ export function inicioDoDiaBrasilia(dia: Date): Date {
 }
 
 type ContaParaSync = {
-  id: string; usuarioId: string; accessToken: string; tokenExpiraEm: Date
+  id: string; usuarioId: string; titular: string; accessToken: string; tokenExpiraEm: Date
   tipoConexao: string; instagramUserId: string; nomeUsuario: string; falhasSeguidas: number
 }
 
@@ -85,6 +86,7 @@ export interface ResultadoSync {
 }
 
 function mensagemAmigavel(e: unknown): string {
+  if (e instanceof ErroGraphApi && causaDoErroMeta(e.codigo, e.message) === 'APP_BLOQUEADO') return MENSAGEM_APP_BLOQUEADO
   if (erroDeTokenExpirado(e)) return 'A autorização do Instagram expirou ou foi revogada — desconecte e conecte a conta de novo.'
   if (e instanceof ErroGraphApi) return `O Instagram recusou a sincronização: ${e.message}`
   return e instanceof Error ? e.message : 'Falha desconhecida ao sincronizar com o Instagram'
@@ -107,9 +109,12 @@ export async function sincronizarContaSocialMedia(conta: ContaParaSync, modo: Mo
       prisma.smSincronizacao.update({ where: { id: registro.id }, data: { status: 'SUCESSO', terminadoEm: agora, resumo: resultado as unknown as Prisma.InputJsonValue } }),
       prisma.smNotificacao.updateMany({ where: { chave: chaveFalha(conta.id), lidaEm: null }, data: { lidaEm: agora } }),
     ])
+    // A saúde da conexão acompanha só o Instagram da loja (o do dono), o mesmo do aviso.
+    if (conta.titular.startsWith('dono:')) await registrarLiberacao(conta.usuarioId, agora, 'SOCIAL_MEDIA').catch(() => false)
     return resultado
   } catch (e) {
     const mensagem = mensagemAmigavel(e)
+    if (conta.titular.startsWith('dono:') && e instanceof ErroGraphApi && causaDoErroMeta(e.codigo, e.message) === 'APP_BLOQUEADO') await registrarBloqueio(conta.usuarioId, 'SOCIAL_MEDIA', e.message).catch(() => {})
     const falhas = conta.falhasSeguidas + 1
     const proxima = proximaTentativa(falhas)
     await prisma.$transaction([

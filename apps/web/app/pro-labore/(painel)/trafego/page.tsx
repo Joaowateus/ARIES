@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { proLaboreApi, type AnaliseTrafego, type ContaTrafego, type EtapaTrafego, type MetaEtapaTrafego, type ModoEtapaTrafego } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { AvisoConexaoMeta } from '../_conexaoMeta/AvisoConexaoMeta'
 import { PageHeader } from '../../PageHeader'
 import { FiltroPeriodo, periodoDoPreset, type Periodo } from '../social-media/_componentes/FiltroPeriodo'
 import Conectar from './_componentes/Conectar'
@@ -218,6 +219,7 @@ export default function ProLaboreTrafegoPage() {
         <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" onClick={() => setTrocando(true)}>Trocar token/conta</button>
         <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq pl-as-perigo" onClick={() => void desconectar()}>Desconectar</button>
       </div>
+      <AvisoConexaoMeta versao={conta.ultimoErroSync ?? ''} onLiberado={() => void sincronizar()} />
       {conta.ultimoErroSync && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{conta.ultimoErroSync}{/expirou|revogado/.test(conta.ultimoErroSync) && <> <button type="button" className="pl-link-action" onClick={() => setTrocando(true)}>Colar token novo</button></>}</div>}
       {aviso && aviso !== conta.ultimoErroSync && <div className="pl-alert" style={{ marginBottom: 12 }}>{aviso}</div>}
       {(verDiagnostico || conta.ultimoErroSync) && (

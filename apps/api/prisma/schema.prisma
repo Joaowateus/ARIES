@@ -965,6 +965,7 @@ model ProLaboreUsuario {
   smPulsos                  SmPulso[]
   smConcorrentes            SmConcorrente[]
   smPlanejamentos           SmPlanejamento[]
+  metaSaude                 MetaSaude?
 
   @@map("pro_labore_usuarios")
 }
@@ -2974,4 +2975,23 @@ model SmPlanejamento {
 
   @@unique([usuarioId, mes])
   @@map("pro_labore_sm_planejamentos")
+}
+
+// Saúde da conexão com a Meta, uma por operação, compartilhada pelo Tráfego e
+// pelo Social Media (mesmo app da Meta, decisão P1). Guarda o bloqueio do app
+// ("API access blocked") desde quando, para os dois módulos mostrarem o mesmo
+// aviso e o job de hora em hora testar sozinho até a Meta liberar.
+model MetaSaude {
+  id               String    @id @default(cuid())
+  usuarioId        String    @unique
+  bloqueadoDesde   DateTime?
+  bloqueioOrigem   String? // TRAFEGO | SOCIAL_MEDIA: quem percebeu primeiro
+  bloqueioMensagem String? // a mensagem original da Meta
+  verificadoEm     DateTime?
+  liberadoEm       DateTime? // último desbloqueio (base do lembrete anual)
+  lembreteEm       DateTime?
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("pro_labore_meta_saude")
 }

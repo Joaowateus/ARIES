@@ -575,8 +575,10 @@ export const proLaboreApi = {
     desconectar: () => request<void>('/pro-labore/social-media/conta', { method: 'DELETE' }),
     sincronizar: () => request<{ conta: SocialMediaConta; resultado: ResultadoSyncSocialMedia }>('/pro-labore/social-media/sincronizar', { method: 'POST' }),
     // Conta da empresa (usuário do sistema do Business Manager).
-    conectarEmpresa: (accessToken: string, instagramUserId?: string) =>
-      request<{ conta: SocialMediaConta; erroSync: string | null; permissoesFaltando: string[] }>('/pro-labore/social-media/conectar-empresa', { method: 'POST', body: JSON.stringify({ accessToken, instagramUserId }) }),
+    conectarEmpresa: (accessToken: string | null, instagramUserId?: string) =>
+      request<{ conta: SocialMediaConta; erroSync: string | null; permissoesFaltando: string[] }>('/pro-labore/social-media/conectar-empresa', {
+        method: 'POST', body: JSON.stringify(accessToken ? { accessToken, instagramUserId } : { usarTokenDoTrafego: true, instagramUserId }),
+      }),
     diagnosticoEmpresa: (accessToken?: string) =>
       request<DiagnosticoSocialEmpresa>('/pro-labore/social-media/diagnostico-empresa', { method: 'POST', body: JSON.stringify(accessToken ? { accessToken } : {}) }),
     sincronizacoes: () => request<SincronizacaoSocial[]>('/pro-labore/social-media/sincronizacoes'),
@@ -725,6 +727,10 @@ export const proLaboreApi = {
       request<PreferenciasProLabore>('/pro-labore/preferencias', { method: 'PUT', body: JSON.stringify(p) }),
   },
   // Aba Tráfego (Gerenciador de Anúncios da Meta) — só o dono.
+  metaConexao: {
+    estado: () => request<EstadoConexaoMeta>('/pro-labore/meta/conexao'),
+    testar: () => request<{ testes: TesteConexaoMeta[]; bloqueado: boolean; liberou: boolean; estado: EstadoConexaoMeta }>('/pro-labore/meta/conexao/testar', { method: 'POST' }),
+  },
   trafego: {
     conta: () => request<{ conectada: false } | { conectada: true; conta: ContaTrafego }>('/pro-labore/trafego/conta'),
     contasDisponiveis: (token: string) =>
@@ -2071,6 +2077,11 @@ export interface SmPautaParaAprovar {
   pendencias: string[]
 }
 export interface SmFilaAprovacao { regraLigada: boolean; pautas: SmPautaParaAprovar[] }
+export interface EstadoConexaoMeta {
+  bloqueado: boolean; bloqueadoDesde: string | null; origem: 'TRAFEGO' | 'SOCIAL_MEDIA' | null; mensagemMeta: string | null
+  verificadoEm: string | null; liberadoEm: string | null; titulo: string; passos: string[]
+}
+export interface TesteConexaoMeta { modulo: 'TRAFEGO' | 'SOCIAL_MEDIA'; nome: string; ok: boolean; causa: string | null; detalhe: string }
 export interface SmPerfilComparado {
   usuario: string; fotoUrl: string | null; seguidores: number | null; variacao30d: number | null
   postsSemana: number | null; engajamentoMedio: number | null; taxaEngajamento: number | null; ultimoPostEm: string | null

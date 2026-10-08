@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import { listarContasDeAnuncio, ErroMetaAds, erroDeToken, diagnosticarConexao, type PassoDiagnostico } from '../lib/metaAds'
+import { PASSOS_APP_BLOQUEADO, TITULO_APP_BLOQUEADO, causaDoErroMeta } from '../lib/metaConexao'
 import { sincronizarTrafego, DIAS_HISTORICO, VERSAO_DADOS, hojeNoFuso, somarDias } from '../lib/trafegoSync'
 import { analisarTrafego, ETAPAS_TRAFEGO, type ConfiguracaoTrafego } from '../lib/trafegoAnalytics'
 import { analisarPublicos } from '../lib/trafegoPublicos'
@@ -143,6 +144,7 @@ function comoResolver(passos: PassoDiagnostico[], nomeConta: string) {
     'Volte aqui e clique em "Atualizar agora". Se continuar, gere um token novo (mesmo caminho, "Gerar novo token" com ads_read) e cole em "Trocar token/conta".',
   ]
   if (!falha) return { titulo: 'A conexão com a Meta está funcionando', passos: ['Clique em "Atualizar agora". Se o erro voltar, provavelmente foi uma instabilidade momentânea da Meta.'] }
+  if (falha.chave === 'app' || causaDoErroMeta(falha.codigo, falha.detalhe) === 'APP_BLOQUEADO') return { titulo: TITULO_APP_BLOQUEADO, passos: PASSOS_APP_BLOQUEADO }
   switch (falha.chave) {
     case 'token': return { titulo: 'O token salvo não vale mais (expirou ou foi revogado)', passos: gerarToken }
     case 'permissoes': return { titulo: 'O token foi gerado sem a permissão ads_read', passos: gerarToken }
