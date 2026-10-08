@@ -17,6 +17,7 @@ import { testeEmDestaque } from './smTestes'
 import { atorDe, type Aba } from './smInsights'
 import { perguntasDaAba } from './smPerguntas'
 import { INATIVIDADE_MS } from './smAtividade'
+import { retrospectivaPronta } from './smRetrospectiva'
 
 export const MOMENTOS = ['VOLTA', 'VENDA', 'DIFICIL', 'SEXTA', 'SEGUNDA', 'MANHA', 'TARDE', 'NOITE'] as const
 export type Momento = (typeof MOMENTOS)[number]
@@ -274,7 +275,6 @@ function metasAtrasadas(d: Dados): string | null {
 function alcanceEmQueda(d: Dados) { return d.ultimos3.length === 3 && d.ultimos3.every(p => p.multiplo! < 0.7) }
 
 /** Retrospectiva pronta (tela 11, Fase 4d). Até lá, a sexta não dispara sozinha. */
-async function retrospectivaPronta(_sm: ContextoSM, _agora: Date): Promise<boolean> { return false }
 
 export async function momentosQueSeAplicam(sm: ContextoSM, d: Dados): Promise<Record<Momento, boolean>> {
   const periodo = periodoDoDia(d.agora)
@@ -394,7 +394,7 @@ function conteudo(m: Momento, d: Dados, bemvindo: string): Conteudo {
       if (d.leadsSemana != null) itens.push({ tom: d.leadsSemana >= d.config.metaLeadsSemana ? 'ok' : 'warn', rotulo: d.leadsSemana >= d.config.metaLeadsSemana ? 'Meta batida' : 'Leads da semana', texto: `${plural(d.leadsSemana, 'lead orgânico', 'leads orgânicos')} na semana (meta ${d.config.metaLeadsSemana})` })
       if (melhor) itens.push({ tom: 'info', rotulo: 'Post da semana', texto: `${melhor.titulo}, ${num(melhor.multiplo!, 1)}× a mediana` })
       if (d.teste?.status === 'CONCLUIDO' && d.teste.resultado) itens.push({ tom: 'learn', rotulo: 'Aprendizado', texto: curto(d.teste.resultado.texto, 70) })
-      return { kicker: 'Fechamento da semana', sub: `${d.semana.diasComPost} de ${d.config.minDiasSemana} dias com post na semana. Leva 5 minutos para ver.`, cta: { rotulo: 'Abrir a retrospectiva', href: hrefOu(d, ['analise', '/pro-labore/sm/desempenho']) }, listaTitulo: 'Destaques', itens: completar(itens, d), perguntas: ['atr:relatorio', 'des:alcance', 'des:horario'] }
+      return { kicker: 'Fechamento da semana', sub: `${d.semana.diasComPost} de ${d.config.minDiasSemana} dias com post na semana. Leva 5 minutos para ver.`, cta: { rotulo: 'Abrir a retrospectiva', href: '/pro-labore/sm/retrospectiva' }, listaTitulo: 'Destaques', itens: completar(itens, d), perguntas: ['atr:relatorio', 'des:alcance', 'des:horario'] }
     }
     case 'SEGUNDA': {
       const faltam = Math.max(0, d.config.minDiasSemana - d.semana.planejados)

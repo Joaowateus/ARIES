@@ -818,6 +818,11 @@ export const proLaboreApi = {
       adiar: (tarefaId: string) => request<{ ok: boolean }>('/pro-labore/sm/foco/adiar', { method: 'POST', body: JSON.stringify({ tarefaId }) }),
       concluir: () => request<SmFocoConclusao>('/pro-labore/sm/foco/concluir', { method: 'POST' }),
     },
+    retrospectiva: {
+      ver: (semana?: string) => request<SmRetrospectiva>(`/pro-labore/sm/retrospectiva${semana ? `?semana=${encodeURIComponent(semana)}` : ''}`),
+      enviar: (semana: string) => request<{ enviadaGestorEm: string }>('/pro-labore/sm/retrospectiva/enviar', { method: 'POST', body: JSON.stringify({ semana }) }),
+      salvarGancho: (semana: string) => request<{ ok: boolean }>('/pro-labore/sm/retrospectiva/gancho', { method: 'POST', body: JSON.stringify({ semana }) }),
+    },
     busca: {
       buscar: (q: string) => request<SmBusca>(`/pro-labore/sm/busca?q=${encodeURIComponent(q)}`),
       criarPauta: (motoId: string) => request<{ id: string; titulo: string; criada: boolean }>('/pro-labore/sm/busca/pauta', { method: 'POST', body: JSON.stringify({ motoId }) }),
@@ -1049,7 +1054,7 @@ export interface SincronizacaoSocial {
 }
 
 export interface AvisoSocial {
-  id: string; tipo: string; titulo: string; texto: string; ocorrencias: number
+  id: string; tipo: string; titulo: string; texto: string; ocorrencias: number; payload?: { href?: string } | null
   criadoEm: string; atualizadoEm: string; lidaEm: string | null
 }
 
@@ -2004,6 +2009,26 @@ export interface SmTarefaFoco {
   link: { rotulo: string; href: string } | null
   lead?: { nome: string; moto: string | null; pagamento: 'FINANCIAMENTO' | 'A_VISTA' | 'CONSORCIO' }
 }
+// Retrospectiva da semana (tela 11).
+export interface SmRetrospectiva {
+  semana: string; ate: string; rotulo: string; completa: boolean; titulo: string; tituloIA: boolean
+  conquistas: Array<{ chave: 'SEM_BURACOS' | 'GANCHO_OURO' | 'RESPOSTA_RELAMPAGO'; titulo: string; detalhe: string; desbloqueada: boolean }>
+  metas: {
+    diasComPost: { atual: number; meta: number; anterior: number; rajadas: number }
+    leads: { atual: number; meta: number; anterior: number } | null
+    resposta: { atualMin: number | null; meta: number; anteriorMin: number | null } | null
+    retencao: { pct: number | null; meta: number; anteriorPct: number | null; reels: number } | null
+  }
+  post: { midiaId: string; titulo: string; formato: string; dia: string; hora: number; multiplo: number; alcance: number; pulo: number | null; puloMenorDoMes: boolean; leads: number | null; gancho: string | null; ganchoSalvo: boolean; porque: string; permalink: string | null } | null
+  aprendizado: { tipo: 'TESTE' | 'FORMATO' | 'HORARIO'; titulo: string; barras: Array<{ rotulo: string; medida: number; texto: string }>; nota: string; menorMelhor: boolean } | null
+  focos: string[]
+  enviadaGestorEm: string | null
+  podeEnviar: boolean
+  podeSalvarGancho: boolean
+  anterior: string
+  proxima: string | null
+}
+
 // Paleta de comandos (tela 10).
 export interface SmAcaoBusca { rotulo: string; tipo: 'LINK' | 'CRIAR_PAUTA' | 'GANCHOS'; href?: string; externo?: boolean; motoId?: string; pautaId?: string }
 export interface SmItemBusca { id: string; ini: string; tom: 'pri' | 'ia' | 'estoque' | 'post' | 'conversa' | 'conversa-espera'; titulo: string; sub: string; acao: SmAcaoBusca; acoes: SmAcaoBusca[] }
