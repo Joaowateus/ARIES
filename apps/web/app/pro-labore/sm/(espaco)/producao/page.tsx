@@ -2,7 +2,8 @@
 
 // Tela 03 · Produção (seção 6 da especificação · Producao.html): da ideia
 // ao agendado. Quadro de 6 colunas à esquerda, briefing da pauta à direita.
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { proLaboreApi, type SmColuna, type SmMoto, type SmPauta, type SmQuadro, type SmSugestaoAudiencia } from '@/lib/proLaboreApi'
 import { AssistenteAba, Botao, CardEsqueleto, EstadoVazio, IcMais, Rotulo, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
@@ -18,7 +19,7 @@ export default function ProducaoPage() {
       <div className="sm-card"><EstadoVazio titulo="Sem acesso à Produção">O gestor pode liberar em Equipe → Acessos e permissões.</EstadoVazio></div>
     )
   }
-  return <Producao />
+  return <Suspense fallback={<CardEsqueleto linhas={6} />}><Producao /></Suspense>
 }
 
 function Producao() {
@@ -41,16 +42,33 @@ function Producao() {
       proLaboreApi.sm.sugestoesAudiencia().catch(() => []),
     ]).then(([q, sug, est, aud]) => {
       setQuadro(q); setSugestoes(sug); setMotos(est); setAudiencia(aud); setErro(null)
-      // Vindo do calendário (ou de um aviso): ?pauta=<id> abre direto o briefing.
-      const params = new URLSearchParams(window.location.search)
-      const pedida = params.get('pauta')
-      if (params.get('nova') === '1' && q.podeEditar) setDialogo(d => d ?? 'nova')
       setSelecionadaId(id => id && q.pautas.some(p => p.id === id) ? id
-        : pedida && q.pautas.some(p => p.id === pedida) ? pedida
-          : q.pautas.find(p => p.status === 'ROTEIRO')?.id ?? q.pautas.find(p => p.status !== 'PUBLICADO')?.id ?? null)
+        : q.pautas.find(p => p.status === 'ROTEIRO')?.id ?? q.pautas.find(p => p.status !== 'PUBLICADO')?.id ?? null)
     }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
   }, [veEstoque])
   useEffect(() => { carregar() }, [carregar])
+
+  // Atalho N com a Produção aberta e pauta criada pela paleta (tela 10).
+  useEffect(() => {
+    const nova = () => setDialogo(d => d ?? 'nova')
+    window.addEventListener('sm:nova-pauta', nova)
+    window.addEventListener('sm:pautas-mudaram', carregar)
+    return () => { window.removeEventListener('sm:nova-pauta', nova); window.removeEventListener('sm:pautas-mudaram', carregar) }
+  }, [carregar])
+
+  // Vindo do calendário, de um aviso ou da paleta: ?pauta=<id> abre o briefing e
+  // ?nova=1 o formulário, também quando a URL muda com a tela aberta.
+  const busca = useSearchParams()
+  const pautaURL = busca.get('pauta')
+  const novaURL = busca.get('nova') === '1'
+  const chaveURL = `${pautaURL ?? ''}|${novaURL}`
+  const [urlAplicada, setUrlAplicada] = useState<string | null>(null)
+  // A pauta recém-criada pode ainda não estar no quadro: espera o recarregamento.
+  if (quadro && chaveURL !== urlAplicada && (!pautaURL || quadro.pautas.some(p => p.id === pautaURL))) {
+    setUrlAplicada(chaveURL)
+    if (pautaURL) setSelecionadaId(pautaURL)
+    if (novaURL && quadro.podeEditar) setDialogo(d => d ?? 'nova')
+  }
 
   const atualizar = useCallback((p: SmPauta) => {
     setQuadro(q => q && { ...q, pautas: q.pautas.some(x => x.id === p.id) ? q.pautas.map(x => (x.id === p.id ? p : x)) : [...q.pautas, p] })
@@ -119,7 +137,7 @@ function Producao() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {(veEstoque || audiencia.length > 0) && <Botao onClick={() => setDialogo('sugestoes')}>{veEstoque ? `Sugestões do estoque (${sugestoes.length + audiencia.length})` : `Sugestões (${audiencia.length})`}</Botao>}
           <Botao onClick={() => setDialogo('ganchos')}>Biblioteca de ganchos</Botao>
-          {podeEditar && <Botao variante="pri" icone={<IcMais tamanho={16} />} onClick={() => setDialogo('nova')}>Nova pauta</Botao>}
+          {podeEditar && <Botao variante="pri" icone={<IcMais tamanho={16} />} title="Nova pauta (atalho: N)" aria-keyshortcuts="N" onClick={() => setDialogo('nova')}>Nova pauta</Botao>}
         </div>
       </header>
       <AssistenteAba aba="producao" aoMudar={carregar} />

@@ -83,7 +83,7 @@ const ROTAS_DO_GESTOR_SM = /^\/sm\/gestor(\/|$)/
 // POST que só lê: perguntar ao assistente vale também no "ver como".
 // Páginas abertas (não as listas que se atualizam sozinhas) contam como uso.
 const ROTAS_DE_PAGINA_SM = /^\/sm\/(eu|hoje|foco|assistente\/[a-z]+)$/
-const ROTAS_POST_LEITURA_SM = /^\/sm\/(assistente\/[a-z]+\/perguntar|foco\/concluir)$/
+const ROTAS_POST_LEITURA_SM = /^\/sm\/(assistente\/[a-z]+\/perguntar|foco\/concluir|busca\/ganchos)$/
 
 /**
  * Montado em app.use('/pro-labore', ...) antes de todas as rotas do

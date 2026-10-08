@@ -28,6 +28,8 @@ function Atendimento() {
   const [config, setConfig] = useState(false)
   // "Responder agora" do assistente chega com &sugerir=1: a conversa abre com a resposta sugerida.
   const [sugerirEm, setSugerirEm] = useState<string | null>(null)
+  // Atalho L e ?lead=1 (paleta): leva o foco ao "Transformar em lead".
+  const [focarLead, setFocarLead] = useState(0)
 
   const carregarLista = useCallback(() => {
     proLaboreApi.sm.atendimento.lista().then(d => {
@@ -41,15 +43,26 @@ function Atendimento() {
   const busca = useSearchParams()
   const conversaURL = busca.get('conversa')
   const sugerirURL = busca.get('sugerir') === '1'
+  const leadURL = busca.get('lead') === '1'
   const [urlAplicada, setUrlAplicada] = useState<string | null>(null)
-  const chaveURL = `${conversaURL ?? ''}|${sugerirURL}`
+  const chaveURL = `${conversaURL ?? ''}|${sugerirURL}|${leadURL}`
   if (dados && chaveURL !== urlAplicada) {
     setUrlAplicada(chaveURL)
     if (conversaURL && dados.conversas.some(c => c.id === conversaURL)) {
       setSelId(conversaURL)
       if (sugerirURL) setSugerirEm(conversaURL)
+    } else if (leadURL && !conversaURL) {
+      // Sem conversa pedida: a primeira esperando resposta que ainda não é lead.
+      const alvo = dados.conversas.find(c => c.aguardandoDesde && c.status !== 'LEAD') ?? dados.conversas.find(c => c.status !== 'LEAD' && c.status !== 'ARQUIVADA')
+      if (alvo) setSelId(alvo.id)
     }
+    if (leadURL) setFocarLead(n => n + 1)
   }
+  useEffect(() => {
+    const lead = () => setFocarLead(n => n + 1)
+    window.addEventListener('sm:virar-lead', lead)
+    return () => window.removeEventListener('sm:virar-lead', lead)
+  }, [])
   const carregarConversa = useCallback((id: string) => {
     proLaboreApi.sm.atendimento.conversa(id).then(setConversa).catch(() => setConversa(null))
   }, [])
@@ -134,7 +147,7 @@ function Atendimento() {
           : <section className="sm-card sm-conversa" aria-label="Conversa"><EstadoVazio titulo={selId ? 'Carregando…' : 'Escolha uma conversa'}>A conversa abre aqui.</EstadoVazio></section>}
 
         <aside aria-label="Virar lead" className="sm-atend-lado">
-          {selecionada && dados.podeCriarLead && <VirarLead key={selecionada.id} c={selecionada} aoCriar={r => { toast({ mensagem: r.consultor ? `Lead enviado ao CRM e entregue a ${r.consultor}.` : 'Lead enviado ao CRM (sem consultor ativo com login para o rodízio).' }); aposMudanca() }} />}
+          {selecionada && dados.podeCriarLead && <VirarLead key={selecionada.id} c={selecionada} focar={focarLead} aoCriar={r => { toast({ mensagem: r.consultor ? `Lead enviado ao CRM e entregue a ${r.consultor}.` : 'Lead enviado ao CRM (sem consultor ativo com login para o rodízio).' }); aposMudanca() }} />}
           <Card titulo="Automações">
             {dados.automacoes.map(a => (
               <div key={a.tipo} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -259,7 +272,9 @@ function Conversa({ c, dados, aoMudar, sugerirAoAbrir, aoSugerir }: { c: SmConve
   )
 }
 
-function VirarLead({ c, aoCriar }: { c: SmConversaDetalhe; aoCriar: (r: { leadId: string; consultor: string | null }) => void }) {
+function VirarLead({ c, focar, aoCriar }: { c: SmConversaDetalhe; focar: number; aoCriar: (r: { leadId: string; consultor: string | null }) => void }) {
+  const campoNome = useRef<HTMLInputElement>(null)
+  const aviso = useRef<HTMLDivElement>(null)
   const [nome, setNome] = useState(c.nome.startsWith('@') ? '' : c.nome)
   const [whatsapp, setWhatsapp] = useState('')
   const [moto, setMoto] = useState(c.moto ?? '')
@@ -267,8 +282,16 @@ function VirarLead({ c, aoCriar }: { c: SmConversaDetalhe; aoCriar: (r: { leadId
   const [erro, setErro] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
 
+  // Atalho L: o foco vai para o nome (ou para o aviso, se já virou lead).
+  useEffect(() => {
+    if (!focar) return
+    const alvo = campoNome.current ?? aviso.current
+    alvo?.scrollIntoView({ block: 'center' })
+    alvo?.focus()
+  }, [focar])
+
   if (c.leadId) {
-    return <Card titulo="Transformar em lead"><Banner tom="ok" titulo="Já está no CRM">Esta conversa virou lead. O consultor acompanha pelo CRM.</Banner></Card>
+    return <Card titulo="Transformar em lead"><div ref={aviso} tabIndex={-1}><Banner tom="ok" titulo="Já está no CRM">Esta conversa virou lead. O consultor acompanha pelo CRM.</Banner></div></Card>
   }
   return (
     <Card titulo="Transformar em lead">
@@ -276,7 +299,7 @@ function VirarLead({ c, aoCriar }: { c: SmConversaDetalhe; aoCriar: (r: { leadId
         e.preventDefault(); setEnviando(true); setErro(null)
         try { aoCriar(await proLaboreApi.sm.atendimento.criarLead(c.id, { nome, whatsapp: whatsapp || null, moto: moto || null, pagamento })) } catch (err) { setErro(err instanceof Error ? err.message : 'Não foi possível criar'); setEnviando(false) }
       }}>
-        <label className="sm-campo">Nome<input className="sm-input" value={nome} onChange={e => setNome(e.target.value)} required minLength={2} maxLength={120} placeholder={c.usuario ? `@${c.usuario}` : undefined} /></label>
+        <label className="sm-campo">Nome<input ref={campoNome} className="sm-input" value={nome} onChange={e => setNome(e.target.value)} required minLength={2} maxLength={120} placeholder={c.usuario ? `@${c.usuario}` : undefined} /></label>
         <label className="sm-campo">WhatsApp<input className="sm-input" type="tel" inputMode="tel" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="(91) 9 0000-0000" /></label>
         <label className="sm-campo">Moto de interesse<input className="sm-input" value={moto} onChange={e => setMoto(e.target.value)} maxLength={120} /></label>
         <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -292,7 +315,7 @@ function VirarLead({ c, aoCriar }: { c: SmConversaDetalhe; aoCriar: (r: { leadId
           Consultor: rodízio automático do CRM{c.proximoConsultor ? ` (próximo: ${c.proximoConsultor})` : ' (nenhum consultor ativo com login)'}
         </div>
         {erro && <p className="sm-erro" role="alert">{erro}</p>}
-        <Botao type="submit" variante="pri" disabled={enviando}>{enviando ? 'Enviando…' : 'Enviar ao CRM'}</Botao>
+        <Botao type="submit" variante="pri" disabled={enviando} title="Responder e virar lead (atalho: L)">{enviando ? 'Enviando…' : 'Enviar ao CRM'}</Botao>
       </form>
     </Card>
   )

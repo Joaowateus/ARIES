@@ -5,7 +5,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { Chip, Rotulo } from './componentes'
+import { Chip, Kbd, Rotulo } from './componentes'
+import { IcBusca } from './icones'
 
 export interface ItemMenu {
   href: string
@@ -13,12 +14,16 @@ export interface ItemMenu {
   icone: ReactNode
   /** Contador azul à direita (ex.: conversas esperando). Zero não aparece. */
   contador?: number
+  /** Atalho do teclado (tela 10), mostrado como dica ao passar o mouse. */
+  atalho?: string
 }
 
-export function SidebarSM({ grupos, conta, aoSair, preferencias, papel = 'Social Media', subtitulo = 'Social Media · acesso isolado' }: {
+export function SidebarSM({ grupos, conta, aoSair, aoBuscar, preferencias, papel = 'Social Media', subtitulo = 'Social Media · acesso isolado' }: {
   grupos: Array<{ rotulo: string; itens: ItemMenu[] }>
   conta?: ReactNode
   aoSair?: () => void
+  /** Abre a paleta de comandos (Ctrl/Cmd + K). */
+  aoBuscar?: () => void
   /** Link para as preferências da pessoa (seção 11.1: "Dá para mudar tudo depois em Preferências"). */
   preferencias?: string
   papel?: string
@@ -36,12 +41,18 @@ export function SidebarSM({ grupos, conta, aoSair, preferencias, papel = 'Social
         <div className="sm-marca-logo" aria-hidden="true">A</div>
         <div><div className="sm-marca-nome">Pró-Labore</div><div className="sm-marca-sub">{subtitulo}</div></div>
       </div>
+      {aoBuscar && (
+        <button type="button" className="sm-busca-botao" onClick={aoBuscar} aria-label="Buscar ou executar" title="Buscar ou executar (atalho: Ctrl K)" aria-keyshortcuts="Control+K Meta+K">
+          <IcBusca tamanho={16} /><span>Buscar</span><span aria-hidden="true" style={{ display: 'inline-flex', gap: 4 }}><Kbd>Ctrl</Kbd><Kbd>K</Kbd></span>
+        </button>
+      )}
       <nav aria-label="Principal" className="sm-nav-lista">
         {grupos.map((g, gi) => (
           <div key={g.rotulo} style={{ display: 'contents' }}>
             <Rotulo as="div" className={gi === 0 ? 'sm-nav-grupo primeiro' : 'sm-nav-grupo'}>{g.rotulo}</Rotulo>
             {g.itens.map(i => (
-              <Link key={i.href} href={i.href} className="sm-nav" aria-current={i.href === ativo ? 'page' : undefined}>
+              <Link key={i.href} href={i.href} className="sm-nav" aria-current={i.href === ativo ? 'page' : undefined}
+                title={i.atalho ? `${i.rotulo} (atalho: ${i.atalho})` : undefined}>
                 {i.icone}{i.rotulo}
                 {!!i.contador && <Chip contador titulo={`${i.contador} pendentes`}>{i.contador}</Chip>}
               </Link>

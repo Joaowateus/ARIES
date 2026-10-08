@@ -46,7 +46,8 @@ export function Recepcao({ r, acoes, ia, aoAgir, previa }: {
           <p className="sm-recepcao-sub">{r.sub}</p>
           {r.cta && (previa
             ? <span className="sm-btn pri sm-recepcao-cta" aria-disabled="true">{r.cta.rotulo}</span>
-            : <BotaoLink href={r.cta.href} variante="pri" className="sm-recepcao-cta" onClick={aoAgir}>{r.cta.rotulo}</BotaoLink>)}
+            : <BotaoLink href={r.cta.href} variante="pri" className="sm-recepcao-cta" onClick={aoAgir}
+              {...(r.cta.href === '/pro-labore/sm/foco' ? { title: `${r.cta.rotulo} (atalho: F)`, atalho: 'F' } : {})}>{r.cta.rotulo}</BotaoLink>)}
         </div>
         <div className="sm-recepcao-acoes">
           {acoes}
