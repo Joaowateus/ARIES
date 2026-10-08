@@ -61,12 +61,12 @@ export function ConectarEmpresa({ conversao, onConectado, onCancelar }: { conver
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
 
-  async function enviar(e: React.FormEvent) {
-    e.preventDefault()
+  async function enviar(e: React.FormEvent | null, doTrafego = false) {
+    e?.preventDefault()
     setErro('')
     setEnviando(true)
     try {
-      const r = await proLaboreApi.socialMedia.conectarEmpresa(token.trim(), escolhida || undefined)
+      const r = await proLaboreApi.socialMedia.conectarEmpresa(doTrafego ? null : token.trim(), escolhida || undefined)
       setToken('')
       onConectado(r)
     } catch (err) {
@@ -93,8 +93,11 @@ export function ConectarEmpresa({ conversao, onConectado, onCancelar }: { conver
       <form onSubmit={enviar}>
         <label className="pl-field">
           <span>Token do usuário do sistema</span>
-          <textarea className="pl-input" rows={3} style={{ fontFamily: 'monospace', fontSize: 12 }} value={token} onChange={e => setToken(e.target.value)} required placeholder="Cole aqui o token gerado no Business Manager" />
+          <textarea className="pl-input" rows={3} style={{ fontFamily: 'monospace', fontSize: 12 }} value={token} onChange={e => setToken(e.target.value)} placeholder="Cole aqui o token gerado no Business Manager" />
         </label>
+        <p className="pl-hint" style={{ marginTop: 6 }}>
+          Ou use o mesmo token do Tráfego: um token só, que não expira, para os dois. Ele precisa ter também as permissões do Instagram acima.
+        </p>
         {contas && (
           <fieldset className="pl-sv-empresa-contas">
             <legend>Qual é o Instagram da empresa?</legend>
@@ -108,7 +111,8 @@ export function ConectarEmpresa({ conversao, onConectado, onCancelar }: { conver
         )}
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 10 }}>{erro}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <button type="submit" className="pl-btn pl-btn-primary" disabled={enviando}>{enviando ? 'Conectando e sincronizando…' : 'Conectar pela empresa'}</button>
+          <button type="submit" className="pl-btn pl-btn-primary" disabled={enviando || token.trim().length < 20}>{enviando ? 'Conectando e sincronizando…' : 'Conectar pela empresa'}</button>
+          <button type="button" className="pl-btn pl-btn-ghost" disabled={enviando} onClick={() => void enviar(null, true)}>Usar o token do Tráfego</button>
           {onCancelar && <button type="button" className="pl-btn pl-btn-ghost" onClick={onCancelar}>Cancelar</button>}
         </div>
       </form>

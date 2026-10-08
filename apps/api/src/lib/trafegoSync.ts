@@ -6,6 +6,7 @@
 import { prisma } from './prisma'
 import { Prisma } from '@prisma/client'
 import { buscarEstrutura, buscarInsightsDiarios, erroDeToken, ErroMetaAds, type InsightAnuncioDia } from './metaAds'
+import { causaDoErroMeta, registrarBloqueio, registrarLiberacao } from './metaConexao'
 
 export const DIAS_HISTORICO = 90
 const DIAS_RECENTES = 4
@@ -24,7 +25,7 @@ export const hojeNoFuso = (fuso: string | null) =>
 export const somarDias = (data: string, n: number) => new Date(Date.parse(`${data}T00:00:00Z`) + n * DIA_MS).toISOString().slice(0, 10)
 const comoData = (data: string) => new Date(`${data}T00:00:00Z`)
 
-type ContaSync = { id: string; adAccountId: string; accessToken: string; fuso: string | null; historicoDesde: Date | null; versaoDados?: number; estruturaEm?: Date | null }
+type ContaSync = { id: string; usuarioId: string; adAccountId: string; accessToken: string; fuso: string | null; historicoDesde: Date | null; versaoDados?: number; estruturaEm?: Date | null }
 
 // Troca tudo de um intervalo de uma vez: anúncio que deixou de ter dado no
 // intervalo some junto, sem sobrar linha velha.
@@ -106,10 +107,12 @@ export async function sincronizarTrafego(conta: ContaSync, opcoes: { forcarEstru
       where: { id: conta.id },
       data: { ultimaSincronizacaoEm: new Date(), ultimoErroSync: null, ...(conta.historicoDesde ? {} : { historicoDesde: comoData(desdeGuardado) }) },
     })
+    await registrarLiberacao(conta.usuarioId, new Date(), 'TRAFEGO').catch(() => false)
     return { diasAtualizados: dias, historicoCompleto: desdeGuardado <= limiteHistorico, linhas: totalLinhas }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Falha ao sincronizar com o Gerenciador de Anúncios'
     await prisma.trafegoConta.update({ where: { id: conta.id }, data: { ultimoErroSync: msg } })
+    if (e instanceof ErroMetaAds && causaDoErroMeta(e.codigo, e.original) === 'APP_BLOQUEADO') await registrarBloqueio(conta.usuarioId, 'TRAFEGO', e.original ?? msg).catch(() => {})
     if (erroDeToken(e)) throw new ErroMetaAds(msg, 190)
     throw e
   }

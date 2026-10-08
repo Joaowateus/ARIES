@@ -20,6 +20,7 @@ import { Audiencia } from './_componentes/Audiencia'
 import { HashtagsELegendas, Recomendacoes, ReelsEStories } from './_componentes/Conteudo'
 import { fmtNum } from './_componentes/viz'
 import { BannerQualidade, Consistencia, FunilInstagram } from './_componentes/Consistencia'
+import { AvisoConexaoMeta } from '../_conexaoMeta/AvisoConexaoMeta'
 import { AvisosSocial, ConectarEmpresa, DiagnosticoEmpresa, HistoricoSincronizacoes, StatusSincronizacao } from './_componentes/ConexaoEmpresa'
 
 type Analise = Extract<AnaliseSocialMedia, { conectado: true }>
@@ -166,6 +167,7 @@ export default function ProLaboreSocialMediaPage() {
 
       {carregando && <div className="pl-hint">Carregando…</div>}
 
+      {isDono && <AvisoConexaoMeta versao={conta?.ultimoErroSync ?? ''} onLiberado={() => { if (conta) void sincronizar() }} />}
       {isDono && <AvisosSocial versao={`${conta?.ultimaSincronizacaoEm ?? ''}|${conta?.ultimoErroSync ?? ''}`} />}
       {avisoConexao && <div className="pl-sv-aviso info" role="status"><div>{avisoConexao}</div></div>}
 

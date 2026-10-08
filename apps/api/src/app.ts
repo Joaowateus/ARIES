@@ -58,6 +58,7 @@ import proLaboreSmCapturaRoutes from './routes/proLaboreSmCaptura'
 import proLaboreSmConcorrentesRoutes from './routes/proLaboreSmConcorrentes'
 import proLaboreSmAcervoRoutes from './routes/proLaboreSmAcervo'
 import proLaboreSmPlanejamentoRoutes from './routes/proLaboreSmPlanejamento'
+import proLaboreMetaConexaoRoutes from './routes/proLaboreMetaConexao'
 import { guardaPapelSocialMedia } from './lib/smAcesso'
 
 // Setup do Express isolado do listen() — assim o mesmo app serve tanto o
@@ -213,6 +214,7 @@ app.use('/pro-labore', proLaboreSmCapturaRoutes)
 app.use('/pro-labore', proLaboreSmConcorrentesRoutes)
 app.use('/pro-labore', proLaboreSmAcervoRoutes)
 app.use('/pro-labore', proLaboreSmPlanejamentoRoutes)
+app.use('/pro-labore', proLaboreMetaConexaoRoutes)
 
 // 404 and error handlers must be last
 app.use(notFound)
