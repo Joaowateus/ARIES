@@ -2818,6 +2818,9 @@ model SmPreferencia {
   focoHora              Int       @default(9)
   avisos                Json? // { whatsapp, celular, email }
   onboardingConcluidoEm DateTime?
+  // Seção 15: tema claro ou escuro (vazio = o do aparelho) e os marcos já comemorados.
+  tema                  String? // CLARO | ESCURO
+  comemorados           Json      @default("[]")
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 

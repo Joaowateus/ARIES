@@ -1,11 +1,12 @@
 'use client'
 
 // Preferências da pessoa (seção 11.1: "Dá para mudar tudo depois em
-// Preferências"): como chamar, a concordância da saudação, a hora do modo
-// foco e os canais de aviso. As metas da semana ficam com o gestor.
+// Preferências"): como chamar, a concordância da saudação, o tema (seção 15),
+// a hora do modo foco e os canais de aviso. As metas da semana ficam com o gestor.
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, type SmAvisos, type SmGenero } from '@/lib/proLaboreApi'
+import { proLaboreApi, type SmAvisos, type SmGenero, type SmTema } from '@/lib/proLaboreApi'
+import { usePLTema } from '@/lib/proLaboreTheme'
 import { Botao, Card, CardEsqueleto, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 
@@ -21,6 +22,18 @@ export default function PreferenciasPage() {
   const [avisos, setAvisos] = useState<SmAvisos>({ whatsapp: true, celular: true, email: false })
   const [salvando, setSalvando] = useState(false)
   const souSM = eu.visao === 'SOCIAL_MEDIA'
+  const plTema = usePLTema()
+  const tema: SmTema = plTema?.tema === 'light' ? 'CLARO' : 'ESCURO'
+
+  // O tema muda na hora e fica guardado para a pessoa (vale em qualquer aparelho).
+  async function mudarTema(t: SmTema) {
+    plTema?.setTema(t === 'CLARO' ? 'light' : 'dark')
+    try {
+      await proLaboreApi.sm.preferencias.salvar({ tema: t })
+      toast({ mensagem: t === 'CLARO' ? 'Tema claro ativado.' : 'Tema escuro ativado.' })
+      recarregar()
+    } catch (err) { toast({ mensagem: err instanceof Error ? err.message : 'Não foi possível guardar o tema', tom: 'bad' }) }
+  }
 
   useEffect(() => {
     proLaboreApi.sm.preferencias.ver().then(p => {
@@ -61,6 +74,13 @@ export default function PreferenciasPage() {
               <Segmentado rotulo="Concordância da saudação" valor={genero} aoMudar={v => setGenero(v)}
                 opcoes={[{ valor: 'F', rotulo: 'Bem-vinda' }, { valor: 'M', rotulo: 'Bem-vindo' }, { valor: 'N', rotulo: 'Boas-vindas' }]} />
             </div>
+          </Card>
+          <Card titulo="Aparência">
+            <div className="sm-campo"><span>Tema</span>
+              <Segmentado rotulo="Tema" valor={tema} aoMudar={v => mudarTema(v)}
+                opcoes={[{ valor: 'ESCURO', rotulo: 'Escuro' }, { valor: 'CLARO', rotulo: 'Claro' }]} />
+            </div>
+            <span className="sm-legenda">Muda na hora. A escolha vale em qualquer aparelho em que você entrar.</span>
           </Card>
           <Card titulo="Ritmo">
             <label className="sm-campo">Modo foco diário

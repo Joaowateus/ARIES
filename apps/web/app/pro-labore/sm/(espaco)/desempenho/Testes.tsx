@@ -5,7 +5,7 @@
 // O resultado só é declarado com a amostra completa.
 import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, type SmMetricaTeste, type SmTesteAB, type SmVariavelTeste } from '@/lib/proLaboreApi'
-import { BarraProgresso, Botao, Chip, EstadoVazio, Modal, Rotulo, useToast } from '../../_ui'
+import { BarraProgresso, Botao, Chip, EstadoVazio, Esqueleto, Modal, Rotulo, useToast } from '../../_ui'
 
 const VARIAVEIS: Array<{ valor: SmVariavelTeste; rotulo: string; metrica: SmMetricaTeste; dica: [string, string, string] }> = [
   { valor: 'HORARIO', rotulo: 'Horário', metrica: 'ALCANCE', dica: ['Posts às 17h alcançam mais que às 11h', '17h', '11h'] },
@@ -62,7 +62,7 @@ export function CartaoTeste({ teste, podeCriar, aoMudar }: { teste: SmTesteAB | 
         <Botao variante="fantasma" onClick={() => setLista(true)}>Ver todos os testes</Botao>
       </div>
       {novo && <NovoTeste aoFechar={() => setNovo(false)} aoCriar={() => { setNovo(false); aoMudar() }} />}
-      {lista && <ListaTestes aoFechar={() => { setLista(false); aoMudar() }} />}
+      {lista && <ListaTestes aoFechar={() => { setLista(false); aoMudar() }} aoNovo={podeCriar ? () => { setLista(false); setNovo(true) } : undefined} />}
     </section>
   )
 }
@@ -154,18 +154,22 @@ function NovoTeste({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: () =>
   )
 }
 
-function ListaTestes({ aoFechar }: { aoFechar: () => void }) {
+function ListaTestes({ aoFechar, aoNovo }: { aoFechar: () => void; aoNovo?: () => void }) {
   const toast = useToast()
   const [dados, setDados] = useState<{ ativos: SmTesteAB[]; concluidos: SmTesteAB[]; podeEditar: boolean } | null>(null)
   const carregar = useCallback(() => { proLaboreApi.sm.testes.listar().then(setDados).catch(() => setDados({ ativos: [], concluidos: [], podeEditar: false })) }, [])
   useEffect(() => { carregar() }, [carregar])
+  // Desfazer em vez de confirmar (seção 15): cancela na hora, com 5 s para voltar atrás.
   async function cancelar(t: SmTesteAB) {
-    if (!window.confirm(`Cancelar o teste "${t.hipotese}"? As pautas saem do teste.`)) return
-    try { await proLaboreApi.sm.testes.cancelar(t.id); toast({ mensagem: 'Teste cancelado.' }); carregar() } catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível cancelar', tom: 'bad' }) }
+    try {
+      await proLaboreApi.sm.testes.cancelar(t.id)
+      toast({ mensagem: 'Teste cancelado. As pautas saíram do teste.', desfazer: async () => { await proLaboreApi.sm.testes.reativar(t.id); carregar() } })
+      carregar()
+    } catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível cancelar', tom: 'bad' }) }
   }
   return (
     <Modal titulo="Testes A/B" aoFechar={aoFechar}>
-      {!dados ? <p className="sm-legenda">Carregando…</p> : dados.ativos.length + dados.concluidos.length === 0 ? <EstadoVazio titulo="Nenhum teste ainda">Os testes criados aparecem aqui, com o resultado quando a amostra completa.</EstadoVazio> : (
+      {!dados ? <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}><span className="sm-sr" role="status">Carregando os testes</span><Esqueleto altura={56} /><Esqueleto altura={56} largura="80%" /></div> : dados.ativos.length + dados.concluidos.length === 0 ? <EstadoVazio titulo="Nenhum teste ainda" acao={aoNovo ? <Botao variante="pri" onClick={aoNovo}>Criar o primeiro teste</Botao> : undefined}>Os testes criados aparecem aqui, com o resultado quando a amostra completa.</EstadoVazio> : (
         <div className="sm-form">
           {[...dados.ativos, ...dados.concluidos].map(t => (
             <article key={t.id} className="sm-teste-item">

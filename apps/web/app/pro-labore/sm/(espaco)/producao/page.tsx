@@ -44,7 +44,7 @@ function Producao() {
       setQuadro(q); setSugestoes(sug); setMotos(est); setAudiencia(aud); setErro(null)
       setSelecionadaId(id => id && q.pautas.some(p => p.id === id) ? id
         : q.pautas.find(p => p.status === 'ROTEIRO')?.id ?? q.pautas.find(p => p.status !== 'PUBLICADO')?.id ?? null)
-    }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+    }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.'))
   }, [veEstoque])
   useEffect(() => { carregar() }, [carregar])
 
@@ -164,7 +164,7 @@ function Producao() {
             )
             : (
               <aside className="sm-card sm-briefing" aria-label="Briefing">
-                <EstadoVazio titulo={noQuadro.length ? 'Escolha uma pauta' : 'Nenhuma pauta ainda'}>
+                <EstadoVazio titulo={noQuadro.length ? 'Escolha uma pauta' : 'Nenhuma pauta ainda'} acao={!noQuadro.length && podeEditar ? <Botao variante="pri" onClick={() => setDialogo('nova')}>Criar a primeira pauta</Botao> : undefined}>
                   {noQuadro.length ? 'O briefing aparece aqui.' : podeEditar ? 'Crie a primeira em “Nova pauta” ou gere uma pelas sugestões do estoque.' : 'Quando houver pautas, elas aparecem no quadro.'}
                 </EstadoVazio>
               </aside>

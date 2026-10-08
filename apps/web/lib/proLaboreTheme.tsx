@@ -30,6 +30,11 @@ export function PLThemeShell({ children }: { children: ReactNode }) {
   )
 }
 
+/** Tema atual e como trocar (o espaço do Social Media guarda a escolha nas Preferências). */
+export function usePLTema() {
+  return useContext(PLThemeContext)
+}
+
 export function PLThemeToggle() {
   const ctx = useContext(PLThemeContext)
   if (!ctx) return null

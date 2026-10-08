@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, type SmHoje } from '@/lib/proLaboreApi'
 import {
-  Banner, BarraProgresso, Botao, BotaoLink, Card, CardEsqueleto, Chip, EstadoVazio, FORMATO_ROTULO, IcMais, KpiCard, PILAR_CHIP, PILAR_ROTULO, Recepcao, Rotulo,
+  Banner, BarraProgresso, Botao, BotaoLink, Card, CardEsqueleto, Chip, Comemoracao, EstadoVazio, FORMATO_ROTULO, IcMais, KpiCard, PILAR_CHIP, PILAR_ROTULO, Recepcao, Rotulo,
   esperaDesde, quandoCurto, useToast, type Tom,
 } from '../_ui'
 import { useEspacoSM } from './EspacoSM'
@@ -34,9 +34,11 @@ export default function HojePage() {
   const [h, setH] = useState<SmHoje | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [gerando, setGerando] = useState<string | null>(null)
+  // Marcos já comemorados nesta tela (o servidor guarda para não repetir).
+  const [comemorados, setComemorados] = useState<string[]>([])
 
   const carregar = useCallback((retorno = false) => {
-    proLaboreApi.sm.hoje(retorno).then(r => { setH(r); setErro(null) }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+    proLaboreApi.sm.hoje(retorno).then(r => { setH(r); setErro(null) }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.'))
   }, [])
   useEffect(() => { carregar() }, [carregar])
 
@@ -76,6 +78,11 @@ export default function HojePage() {
   if (!h) return <><CardEsqueleto linhas={3} /><div className="sm-grade">{[0, 1, 2, 3].map(i => <CardEsqueleto key={i} linhas={2} />)}</div></>
 
   const m = h.metas
+  const marco = h.marcos.find(x => !comemorados.includes(x.chave)) ?? null
+  function comemorado(chave: string) {
+    setComemorados(l => [...l, chave])
+    if (!eu.somenteLeitura) proLaboreApi.sm.comemoracoes.visto(chave).catch(() => undefined)
+  }
   return (
     <>
       <Recepcao
@@ -83,8 +90,9 @@ export default function HojePage() {
         r={h.recepcao}
         ia={eu.ia.ligada}
         aoAgir={() => { if (h.recepcao.visitaId && !h.recepcao.recolhida) proLaboreApi.sm.recepcao.recolher(h.recepcao.visitaId).catch(() => undefined) }}
-        acoes={h.podeCriarPauta && <BotaoLink href="/pro-labore/sm/producao?nova=1" icone={<IcMais tamanho={16} />}>Nova pauta</BotaoLink>}
+        acoes={h.podeCriarPauta && <BotaoLink href="/pro-labore/sm/producao?nova=1" icone={<IcMais tamanho={16} />} title="Nova pauta (atalho: N)" atalho="N">Nova pauta</BotaoLink>}
       />
+      {marco && <Comemoracao key={marco.chave} marco={marco} aoFechar={() => comemorado(marco.chave)} />}
       <div className="sm-hoje-corpo" onClickCapture={marcarAcao}>
 
       {h.retomada && (
@@ -162,7 +170,7 @@ export default function HojePage() {
             <section className="sm-card">
               <div className="sm-card-cab-linha"><h2 className="sm-h-card">Estoque sem conteúdo</h2><Rotulo>Puxado do estoque</Rotulo></div>
               {h.estoqueSemConteudo.length === 0
-                ? <EstadoVazio titulo="Nenhuma moto cadastrada">O gestor cadastra as motos em Estoque.</EstadoVazio>
+                ? <EstadoVazio titulo="Nenhuma moto cadastrada" acao={eu.visao === 'GESTOR' && !eu.verComo ? <BotaoLink href="/pro-labore/sm/estoque">Cadastrar as motos</BotaoLink> : undefined}>{eu.visao === 'GESTOR' && !eu.verComo ? 'Cadastre as motos da loja para saber o que precisa de conteúdo.' : 'O gestor cadastra as motos em Estoque.'}</EstadoVazio>
                 : h.estoqueSemConteudo.map(mo => (
                   <div key={mo.id} className="sm-row">
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -185,7 +193,7 @@ export default function HojePage() {
             <section className="sm-card">
               <div className="sm-card-cab-linha"><h2 className="sm-h-card">Últimos posts vs. mediana</h2><Rotulo>Mediana {fmtNum(h.ultimosPosts.mediana)} contas</Rotulo></div>
               {h.ultimosPosts.posts.length === 0
-                ? <EstadoVazio titulo="Sem posts nos últimos 90 dias">Quando houver posts com alcance, eles aparecem aqui contra a mediana.</EstadoVazio>
+                ? <EstadoVazio titulo="Sem posts nos últimos 90 dias" acao={h.podeCriarPauta ? <BotaoLink href="/pro-labore/sm/calendario">Planejar o primeiro post</BotaoLink> : undefined}>Quando houver posts com alcance, eles aparecem aqui contra a mediana.</EstadoVazio>
                 : h.ultimosPosts.posts.map(p => (
                   <div key={p.id} className="sm-row">
                     <div style={{ flex: 1, minWidth: 0 }}>

@@ -809,7 +809,10 @@ export const proLaboreApi = {
     },
     preferencias: {
       ver: () => request<SmPreferencias>('/pro-labore/sm/preferencias'),
-      salvar: (data: Partial<Pick<SmPreferencias, 'genero' | 'focoHora' | 'avisos'>> & { tratamento?: string }) => request<{ ok: boolean }>('/pro-labore/sm/preferencias', { method: 'PUT', body: JSON.stringify(data) }),
+      salvar: (data: Partial<Pick<SmPreferencias, 'genero' | 'focoHora' | 'avisos' | 'tema'>> & { tratamento?: string }) => request<{ ok: boolean }>('/pro-labore/sm/preferencias', { method: 'PUT', body: JSON.stringify(data) }),
+    },
+    comemoracoes: {
+      visto: (chave: string) => request<{ ok: boolean }>('/pro-labore/sm/comemoracoes/visto', { method: 'POST', body: JSON.stringify({ chave }) }),
     },
     foco: {
       fila: (iniciar = false) => request<SmFoco>(`/pro-labore/sm/foco${iniciar ? '?iniciar=1' : ''}`),
@@ -861,6 +864,7 @@ export const proLaboreApi = {
       listar: () => request<{ ativos: SmTesteAB[]; concluidos: SmTesteAB[]; podeEditar: boolean }>('/pro-labore/sm/testes'),
       criar: (data: SmTesteEntrada) => request<{ id: string }>('/pro-labore/sm/testes', { method: 'POST', body: JSON.stringify(data) }),
       cancelar: (id: string) => request<{ ok: boolean }>(`/pro-labore/sm/testes/${id}/cancelar`, { method: 'POST' }),
+      reativar: (id: string) => request<{ ok: boolean }>(`/pro-labore/sm/testes/${id}/reativar`, { method: 'POST' }),
     },
     ganchos: {
       listar: () => request<SmBibliotecaGanchos>('/pro-labore/sm/ganchos'),
@@ -1820,7 +1824,13 @@ export interface SmEu {
   onboardingPendente: boolean
   conta: SmContaResumo | null
   contadores: { atendimento: number }
+  /** Tema escolhido em Preferências (vazio = o que estiver no aparelho). */
+  tema: SmTema | null
 }
+
+export type SmTema = 'CLARO' | 'ESCURO'
+/** Marco real para comemorar uma vez (seção 15, item 7). */
+export interface SmMarco { chave: string; tipo: 'META' | 'CONQUISTA' | 'VENDA'; titulo: string; texto: string; href: string | null }
 
 export interface SmAcessoGestor {
   niveis: Record<SmModulo, SmNivel>
@@ -1994,7 +2004,7 @@ export interface SmSugestaoAudiencia { ref: string; titulo: string; pilar: SmPil
 
 // Modo foco (tela 09), primeiro acesso (tela 08) e preferências.
 export interface SmAvisos { whatsapp: boolean; celular: boolean; email: boolean }
-export interface SmPreferencias { tratamento: string | null; genero: SmGenero | null; focoHora: number; avisos: SmAvisos; padraoAvisos: SmAvisos }
+export interface SmPreferencias { tratamento: string | null; genero: SmGenero | null; focoHora: number; avisos: SmAvisos; tema: SmTema | null; padraoAvisos: SmAvisos }
 export interface SmTarefaFoco {
   id: string
   ref: string
@@ -2080,6 +2090,7 @@ export interface SmSimulacaoRecepcao {
 export interface SmHoje {
   cabecalho: { rotulo: string; saudacao: string; resumo: string }
   recepcao: SmRecepcao
+  marcos: SmMarco[]
   retomada: { diasSemPost: number; feitos: number; meta: number; maxPostsDia: number } | null
   metas: {
     diasComPost: { valor: number; meta: number; planejados: number }

@@ -6,7 +6,7 @@
 // regra "Mostrar valores em R$" do gestor.
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { proLaboreApi, type SmLinhaAtribuicao, type SmVendasPorPost } from '@/lib/proLaboreApi'
-import { AssistenteAba, Banner, Botao, Card, CardEsqueleto, Chip, EstadoVazio, KpiCard, Rotulo, Segmentado, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, BotaoLink, Card, CardEsqueleto, Chip, EstadoVazio, KpiCard, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 
 type Dias = 7 | 30 | 90
@@ -49,7 +49,7 @@ export default function VendasPorPostPage() {
   const carregar = useCallback((d: Dias) => {
     proLaboreApi.sm.vendasPorPost.ver(d)
       .then(r => { setDados(r); setErro(null) })
-      .catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+      .catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.'))
   }, [])
   useEffect(() => { if (pode('vendas')) carregar(dias) }, [carregar, dias, pode])
 
@@ -147,8 +147,9 @@ function celula(n: number | null) {
 }
 
 function TabelaAtribuicao({ linhas, totais, cabecalho, valoresOcultos }: { linhas: SmLinhaAtribuicao[]; totais: SmLinhaAtribuicao; cabecalho: string; valoresOcultos: boolean }) {
+  const { pode, eu } = useEspacoSM()
   if (linhas.every(l => !l.leads && !l.vendas && !l.conversas && !l.toques)) {
-    return <EstadoVazio titulo="Sem atividade no período">Os toques no link, as conversas e os leads com código aparecem aqui.</EstadoVazio>
+    return <EstadoVazio titulo="Sem atividade no período" acao={pode('producao', 'COMPLETO') && !eu.somenteLeitura ? <BotaoLink href="/pro-labore/sm/producao?nova=1">Planejar um post com o link rastreado</BotaoLink> : undefined}>Os toques no link, as conversas e os leads com código aparecem aqui. Todo post agendado já sai com o link.</EstadoVazio>
   }
   return (
     <div className="sm-tabela-rola">

@@ -110,7 +110,7 @@ export async function buscar(sm: ContextoSM, q: string, agora = new Date()): Pro
     const achadas = motos.map(m => ({ m, p: pontuar(tokens, nomeMoto(m), [m.marca, m.cor].filter(Boolean).join(' ')) }))
       .filter((x): x is { m: typeof motos[number]; p: number } => x.p != null)
       .map(x => ({ p: x.p + (x.m.situacao === 'VENDIDA' ? -5 : 0), m: x.m }))
-      .sort((a, b) => b.p - a.p || a.m.emProducao - b.m.emProducao || a.m.posts - b.m.posts || b.m.diasEmEstoque - a.m.diasEmEstoque)
+      .sort((a, b) => b.p - a.p || a.m.emProducao - b.m.emProducao || a.m.posts - b.m.posts || b.m.diasEmEstoque - a.m.diasEmEstoque || a.m.entradaEm.getTime() - b.m.entradaEm.getTime() || a.m.id.localeCompare(b.m.id))
       .slice(0, POR_GRUPO).map(x => x.m)
     const verEstoque = sm.visao === 'GESTOR' || sm.pode('estoque', 'COMPLETO')
     for (const m of achadas) {

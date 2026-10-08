@@ -6,7 +6,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { proLaboreApi, urlArquivoApi, type SmAtendimento, type SmConversaDetalhe } from '@/lib/proLaboreApi'
-import { AssistenteAba, Banner, Botao, Card, CardEsqueleto, Chip, EstadoVazio, Modal, Rotulo, esperaDesde, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, BotaoLink, Card, CardEsqueleto, Chip, EstadoVazio, Esqueleto, Modal, Rotulo, esperaDesde, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 
 type Filtro = 'TODOS' | 'DIRECT' | 'COMENTARIOS'
@@ -19,7 +19,7 @@ export default function AtendimentoPage() {
 
 function Atendimento() {
   const toast = useToast()
-  const { recarregar: recarregarMenu } = useEspacoSM()
+  const { recarregar: recarregarMenu, pode, eu } = useEspacoSM()
   const [dados, setDados] = useState<SmAtendimento | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<Filtro>('TODOS')
@@ -35,7 +35,7 @@ function Atendimento() {
     proLaboreApi.sm.atendimento.lista().then(d => {
       setDados(d); setErro(null)
       setSelId(id => (id && d.conversas.some(c => c.id === id) ? id : d.conversas[0]?.id ?? null))
-    }).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
+    }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.'))
   }, [])
 
   // Conversa pedida na URL (?conversa=, ex.: "Responder agora" do assistente), também
@@ -123,7 +123,9 @@ function Atendimento() {
           </div>
           <div className="sm-atend-lista-itens">
             {visiveis.length === 0
-              ? <EstadoVazio titulo="Nenhuma conversa">As mensagens do direct e os comentários chegam aqui assim que o Instagram avisa.</EstadoVazio>
+              ? (filtro !== 'TODOS'
+                ? <EstadoVazio titulo={filtro === 'DIRECT' ? 'Nenhum direct' : 'Nenhum comentário'} acao={<Botao onClick={() => setFiltro('TODOS')}>Ver todas as conversas</Botao>}>Nada deste tipo por enquanto.</EstadoVazio>
+                : <EstadoVazio titulo="Nenhuma conversa" acao={pode('producao', 'COMPLETO') && !eu.somenteLeitura ? <BotaoLink href="/pro-labore/sm/producao?nova=1">Planejar um post</BotaoLink> : undefined}>As mensagens do direct e os comentários chegam aqui assim que o Instagram avisa. Post com chamada para o direct traz conversa.</EstadoVazio>)
               : visiveis.map(c => (
                 <button key={c.id} type="button" className="sm-conv" aria-current={c.id === selId} onClick={() => setSelId(c.id)}
                   aria-label={`${c.nome}, ${c.canalNome}${c.aguardandoDesde ? `, esperando ${esperaDesde(c.aguardandoDesde)}` : ''}`}>
@@ -144,7 +146,9 @@ function Atendimento() {
 
         {selecionada
           ? <Conversa key={selecionada.id} c={selecionada} dados={dados} aoMudar={aposMudanca} sugerirAoAbrir={sugerirEm === selecionada.id} aoSugerir={() => setSugerirEm(null)} />
-          : <section className="sm-card sm-conversa" aria-label="Conversa"><EstadoVazio titulo={selId ? 'Carregando…' : 'Escolha uma conversa'}>A conversa abre aqui.</EstadoVazio></section>}
+          : selId
+            ? <section className="sm-card sm-conversa" aria-label="Conversa" aria-busy="true" style={{ padding: 18, gap: 12 }}><span className="sm-sr" role="status">Abrindo a conversa</span><Esqueleto largura="40%" altura={18} /><Esqueleto largura="70%" /><Esqueleto largura="55%" altura={44} /><Esqueleto largura="62%" altura={44} /></section>
+            : <section className="sm-card sm-conversa" aria-label="Conversa"><EstadoVazio titulo="Escolha uma conversa">Clique numa conversa da lista e ela abre aqui, com o post de origem.</EstadoVazio></section>}
 
         <aside aria-label="Virar lead" className="sm-atend-lado">
           {selecionada && dados.podeCriarLead && <VirarLead key={selecionada.id} c={selecionada} focar={focarLead} aoCriar={r => { toast({ mensagem: r.consultor ? `Lead enviado ao CRM e entregue a ${r.consultor}.` : 'Lead enviado ao CRM (sem consultor ativo com login para o rodízio).' }); aposMudanca() }} />}

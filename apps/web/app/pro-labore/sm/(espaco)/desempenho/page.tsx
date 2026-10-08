@@ -7,7 +7,7 @@
 // análise do gestor, filtradas pelo que o papel pode ver.
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type AnaliseSocialConectada, type OrigemSocial, type SmDesempenho, type SmReelDiagnostico, type SmSinal } from '@/lib/proLaboreApi'
-import { AssistenteAba, Banner, Botao, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, BotaoLink, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { CartaoTeste } from './Testes'
 import { periodoDoPreset, type Periodo, type PresetPeriodo } from '../../../(painel)/social-media/_componentes/FiltroPeriodo'
@@ -67,7 +67,7 @@ export default function DesempenhoPage() {
     let ativo = true
     proLaboreApi.sm.desempenho(periodo, origem)
       .then(d => { if (ativo) { setCarregada({ chave, dados: d }); setErro(null) } })
-      .catch(e => { if (ativo) setErro(e instanceof Error ? e.message : 'Erro ao carregar') })
+      .catch(e => { if (ativo) setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora. Tente de novo em instantes.') })
     return () => { ativo = false }
   }, [chave, periodo, origem, pode])
 
@@ -101,7 +101,7 @@ export default function DesempenhoPage() {
 
       {erro && <p className="sm-erro" role="alert">{erro}</p>}
       {!dados && !erro && <><CardEsqueleto linhas={2} /><div className="sm-grade">{[0, 1, 2, 3, 4, 5].map(i => <CardEsqueleto key={i} linhas={2} />)}</div></>}
-      {dados && !dados.conectado && <div className="sm-card"><EstadoVazio titulo="Instagram não conectado">O gestor conecta a conta da empresa na aba Social Media do painel.</EstadoVazio></div>}
+      {dados && !dados.conectado && <div className="sm-card"><EstadoVazio titulo="Instagram não conectado" acao={eu.visao === 'GESTOR' && !eu.verComo ? <BotaoLink href="/pro-labore/social-media" variante="pri">Conectar a conta da empresa</BotaoLink> : undefined}>{eu.visao === 'GESTOR' && !eu.verComo ? 'Conecte a conta da empresa para ver o desempenho com os números do Instagram.' : 'O gestor conecta a conta da empresa na aba Social Media do painel.'}</EstadoVazio></div>}
       {dados?.conectado && (
         <div className={recarregando ? 'sm-desemp sm-recarregando' : 'sm-desemp'} aria-busy={recarregando}>
           <BannerQualidadeSM q={dados.qualidade} />
@@ -226,6 +226,7 @@ function FunilSM({ f, dias }: { f: Conectado['funil']; dias: number }) {
 }
 
 function DiagnosticoReels({ reels, podeSalvarGancho }: { reels: SmReelDiagnostico[]; podeSalvarGancho: boolean }) {
+  const { pode, eu } = useEspacoSM()
   const [salvando, setSalvando] = useState<SmReelDiagnostico | null>(null)
   return (
     <section id="reels" className="sm-card" aria-label="Diagnóstico dos reels">
@@ -233,7 +234,7 @@ function DiagnosticoReels({ reels, podeSalvarGancho }: { reels: SmReelDiagnostic
         <h2 className="sm-h-card">Diagnóstico dos reels</h2>
         <Rotulo>Gancho = pulo nos 3 primeiros segundos</Rotulo>
       </div>
-      {reels.length === 0 ? <EstadoVazio titulo="Nenhum reel no período">O diagnóstico aparece quando houver reels com métricas.</EstadoVazio> : (
+      {reels.length === 0 ? <EstadoVazio titulo="Nenhum reel no período" acao={pode('producao', 'COMPLETO') && !eu.somenteLeitura ? <BotaoLink href="/pro-labore/sm/producao?nova=1">Planejar um reel</BotaoLink> : undefined}>O diagnóstico aparece quando houver reels com métricas. Um reel nesta semana já entra na conta.</EstadoVazio> : (
         <div className="sm-tabela-rola">
           <table className="sm-tabela" style={{ minWidth: 720 }}>
             <thead><tr><th scope="col">Reel</th><th scope="col">Duração</th><th scope="col">Retenção</th><th scope="col">Pulo 3s</th><th scope="col">Envios / mil</th><th scope="col">vs. mediana</th><th scope="col">Veredito</th>{podeSalvarGancho && <th scope="col"><span className="sm-sr">Biblioteca</span></th>}</tr></thead>
