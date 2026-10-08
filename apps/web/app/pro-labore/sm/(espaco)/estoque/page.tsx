@@ -3,7 +3,8 @@
 // Estoque leve do Social Media (decisão P3): modelo, ano, cor e dias na loja,
 // sem custo nem margem. O gestor mantém; o Social Media só lê (ou edita, se
 // o gestor der Estoque "Completo").
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { proLaboreApi, type SmMoto } from '@/lib/proLaboreApi'
 import { Botao, CardEsqueleto, Chip, EstadoVazio, IcMais, Modal, Rotulo, dataParaIso, isoParaData, quandoCurto, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
@@ -12,6 +13,10 @@ const STATUS = { PARADA: { texto: 'Parada', tom: 'bad' as const }, ATENCAO: { te
 const SITUACAO = { DISPONIVEL: 'Disponível', RESERVADA: 'Reservada', VENDIDA: 'Vendida' } as const
 
 export default function EstoquePage() {
+  return <Suspense fallback={<CardEsqueleto linhas={4} />}><Estoque /></Suspense>
+}
+
+function Estoque() {
   const { pode, eu } = useEspacoSM()
   const toast = useToast()
   const [motos, setMotos] = useState<SmMoto[] | null>(null)
@@ -23,6 +28,11 @@ export default function EstoquePage() {
     proLaboreApi.sm.estoque.listar().then(setMotos).catch(e => setErro(e instanceof Error ? e.message : 'Erro ao carregar'))
   }, [])
   useEffect(() => { if (pode('estoque')) carregar() }, [carregar, pode])
+  // Vindo da paleta (tela 10): ?moto=<id> destaca a linha.
+  const motoURL = useSearchParams().get('moto')
+  useEffect(() => {
+    if (motos && motoURL) document.getElementById(`moto-${motoURL}`)?.scrollIntoView({ block: 'center' })
+  }, [motos, motoURL])
 
   if (!pode('estoque')) return <div className="sm-card"><EstadoVazio titulo="Sem acesso ao estoque">O gestor pode liberar em Equipe → Acessos e permissões.</EstadoVazio></div>
 
@@ -62,7 +72,7 @@ export default function EstoquePage() {
                 <thead><tr><th>Moto</th><th>Entrada</th><th>Dias</th><th>Posts</th><th>Em produção</th><th>Situação</th>{podeEditar && <th><span className="sm-sr">Ações</span></th>}</tr></thead>
                 <tbody>
                   {naLoja.sort((a, b) => b.diasEmEstoque - a.diasEmEstoque).map(m => (
-                    <tr key={m.id}>
+                    <tr key={m.id} id={`moto-${m.id}`} className={m.id === motoURL ? 'sm-estoque-destaque' : undefined} aria-current={m.id === motoURL ? 'true' : undefined}>
                       <td><b>{m.modelo}</b>{m.ano ? ` ${m.ano}` : ''}{m.cor ? <span className="sm-legenda"> · {m.cor}</span> : null} <Chip tom={STATUS[m.status].tom}>{STATUS[m.status].texto}</Chip></td>
                       <td>{quandoCurto(m.entradaEm, false)}</td>
                       <td>{m.diasEmEstoque}</td>

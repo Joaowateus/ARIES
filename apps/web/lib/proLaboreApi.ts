@@ -818,6 +818,11 @@ export const proLaboreApi = {
       adiar: (tarefaId: string) => request<{ ok: boolean }>('/pro-labore/sm/foco/adiar', { method: 'POST', body: JSON.stringify({ tarefaId }) }),
       concluir: () => request<SmFocoConclusao>('/pro-labore/sm/foco/concluir', { method: 'POST' }),
     },
+    busca: {
+      buscar: (q: string) => request<SmBusca>(`/pro-labore/sm/busca?q=${encodeURIComponent(q)}`),
+      criarPauta: (motoId: string) => request<{ id: string; titulo: string; criada: boolean }>('/pro-labore/sm/busca/pauta', { method: 'POST', body: JSON.stringify({ motoId }) }),
+      ganchos: (alvo: { motoId?: string; pautaId?: string }) => request<SmGanchosBusca>('/pro-labore/sm/busca/ganchos', { method: 'POST', body: JSON.stringify(alvo) }),
+    },
     boasVindas: {
       ver: () => request<SmBoasVindas>('/pro-labore/sm/boas-vindas'),
       salvar: (data: { tratamento: string | null; genero: SmGenero | null; metas: SmBoasVindas['metas']['sugerida']; focoHora: number; avisos: SmAvisos }) =>
@@ -1999,6 +2004,12 @@ export interface SmTarefaFoco {
   link: { rotulo: string; href: string } | null
   lead?: { nome: string; moto: string | null; pagamento: 'FINANCIAMENTO' | 'A_VISTA' | 'CONSORCIO' }
 }
+// Paleta de comandos (tela 10).
+export interface SmAcaoBusca { rotulo: string; tipo: 'LINK' | 'CRIAR_PAUTA' | 'GANCHOS'; href?: string; externo?: boolean; motoId?: string; pautaId?: string }
+export interface SmItemBusca { id: string; ini: string; tom: 'pri' | 'ia' | 'estoque' | 'post' | 'conversa' | 'conversa-espera'; titulo: string; sub: string; acao: SmAcaoBusca; acoes: SmAcaoBusca[] }
+export interface SmBusca { acoes: SmItemBusca[]; estoque: SmItemBusca[]; posts: SmItemBusca[]; conversas: SmItemBusca[] }
+export interface SmGanchosBusca { nome: string; ia: boolean; ganchos: Array<{ texto: string; pulo: string | null }> }
+
 export interface SmFoco { titulo: string; tarefas: SmTarefaFoco[]; proximo: string; somenteLeitura: boolean }
 export interface SmFocoConclusao { minutos: number; tarefas: number; leads: number; sequencia: number; proximo: string; periodo: string }
 export interface SmBoasVindas {

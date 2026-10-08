@@ -137,7 +137,7 @@ export function AssistenteAba({ aba, aoMudar }: { aba: SmAbaAssistente; aoMudar?
 type Turno = { pergunta: string; resposta: SmRespostaAssistente | null; erro?: string }
 
 /** Conversa com o assistente (seção 16.3): abre já com a pergunta clicada. */
-export function ConversaAssistente({ aba, inicial, livre, aoFechar }: { aba: SmAbaAssistente; inicial: { texto: string; id: string }; livre: boolean; aoFechar: () => void }) {
+export function ConversaAssistente({ aba, inicial, livre, aoFechar, rotuloFechar = 'Fechar' }: { aba: SmAbaAssistente; inicial: { texto: string; id: string | null }; livre: boolean; aoFechar: () => void; rotuloFechar?: string }) {
   const router = useRouter()
   // A conversa já abre com a pergunta clicada, esperando a resposta.
   const [turnos, setTurnos] = useState<Turno[]>(() => [{ pergunta: inicial.texto, resposta: null }])
@@ -171,7 +171,7 @@ export function ConversaAssistente({ aba, inicial, livre, aoFechar }: { aba: SmA
     <div className="sm-assist-conversa" ref={caixa} tabIndex={-1} aria-label="Conversa com o assistente">
       <div className="sm-assist-conversa-cab">
         <span className="sm-mono">Conversa com o assistente</span>
-        <button type="button" className="sm-link-botao" onClick={aoFechar}>Fechar</button>
+        <button type="button" className="sm-link-botao" onClick={aoFechar}>{rotuloFechar}</button>
       </div>
       <div role="log" aria-live="polite" className="sm-assist-turnos">
         {turnos.map((t, i) => (
