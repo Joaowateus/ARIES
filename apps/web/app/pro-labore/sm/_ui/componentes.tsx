@@ -84,9 +84,9 @@ export function Botao({ variante = 'sec', rotulo, icone, children, className, ty
   )
 }
 
-export function BotaoLink({ href, variante = 'sec', icone, children, className }: { href: string; variante?: Variante; icone?: ReactNode; children: ReactNode; className?: string }) {
+export function BotaoLink({ href, variante = 'sec', icone, children, className, onClick }: { href: string; variante?: Variante; icone?: ReactNode; children: ReactNode; className?: string; onClick?: () => void }) {
   return (
-    <Link href={href} className={juntar('sm-btn', variante !== 'sec' && variante, className)}>
+    <Link href={href} className={juntar('sm-btn', variante !== 'sec' && variante, className)} onClick={onClick}>
       {icone}{children}
     </Link>
   )

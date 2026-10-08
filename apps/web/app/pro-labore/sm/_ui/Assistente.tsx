@@ -137,7 +137,7 @@ export function AssistenteAba({ aba, aoMudar }: { aba: SmAbaAssistente; aoMudar?
 type Turno = { pergunta: string; resposta: SmRespostaAssistente | null; erro?: string }
 
 /** Conversa com o assistente (seção 16.3): abre já com a pergunta clicada. */
-function ConversaAssistente({ aba, inicial, livre, aoFechar }: { aba: SmAbaAssistente; inicial: { texto: string; id: string }; livre: boolean; aoFechar: () => void }) {
+export function ConversaAssistente({ aba, inicial, livre, aoFechar }: { aba: SmAbaAssistente; inicial: { texto: string; id: string }; livre: boolean; aoFechar: () => void }) {
   const router = useRouter()
   // A conversa já abre com a pergunta clicada, esperando a resposta.
   const [turnos, setTurnos] = useState<Turno[]>(() => [{ pergunta: inicial.texto, resposta: null }])

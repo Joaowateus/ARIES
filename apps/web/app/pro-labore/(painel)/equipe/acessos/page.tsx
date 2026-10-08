@@ -11,7 +11,7 @@ import {
   definirVerComoSocialMedia, proLaboreApi, SM_MODULOS,
   type SmAcessoGestor, type SmModulo, type SmNivel, type SmRegras, type SmStatusMembro,
 } from '@/lib/proLaboreApi'
-import { AssistenteAba, Botao, Card, CardEsqueleto, Chip, Rotulo, Segmentado, SmApp, Toggle, haQuanto, useToast, type Tom } from '../../../sm/_ui'
+import { AssistenteAba, Botao, BotaoLink, Card, CardEsqueleto, Chip, Rotulo, Segmentado, SmApp, Toggle, haQuanto, useToast, type Tom } from '../../../sm/_ui'
 
 const MODULOS: Record<SmModulo, { nome: string; nota: string }> = {
   analise: { nome: 'Social Media · análise', nota: 'Todos os indicadores da conta' },
@@ -98,7 +98,10 @@ function Acessos() {
           <h1 className="sm-ttl sm-h1">O que o Social Media enxerga</h1>
           <p>Acesso isolado: só o que ele precisa para produzir, atender e provar resultado.</p>
         </div>
-        <Botao variante="pri" onClick={verComo}>Ver como Social Media</Botao>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <BotaoLink href="/pro-labore/sm/recepcao">Revisar saudações</BotaoLink>
+          <Botao variante="pri" onClick={verComo}>Ver como Social Media</Botao>
+        </div>
       </header>
       <AssistenteAba aba="permissoes" aoMudar={carregar} />
 
@@ -159,6 +162,7 @@ function Responsavel({ dados, aoMudar }: { dados: SmAcessoGestor | null; aoMudar
   const [editando, setEditando] = useState(false)
   const [nome, setNome] = useState('')
   const [tratamento, setTratamento] = useState('')
+  const [genero, setGenero] = useState<'' | 'F' | 'M'>('')
   const [email, setEmail] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -170,6 +174,7 @@ function Responsavel({ dados, aoMudar }: { dados: SmAcessoGestor | null; aoMudar
   function abrirEdicao(reaproveitar: boolean) {
     setNome(reaproveitar && membro ? membro.nome : '')
     setTratamento(reaproveitar && membro ? membro.tratamento ?? '' : '')
+    setGenero(reaproveitar && membro ? membro.genero ?? '' : '')
     setEmail(reaproveitar && membro ? membro.email : '')
     setErro(null)
     setEditando(true)
@@ -179,7 +184,7 @@ function Responsavel({ dados, aoMudar }: { dados: SmAcessoGestor | null; aoMudar
     e.preventDefault()
     setEnviando(true); setErro(null)
     try {
-      const r = await proLaboreApi.sm.gestor.convidar({ nome, tratamento: tratamento || null, email })
+      const r = await proLaboreApi.sm.gestor.convidar({ nome, tratamento: tratamento || null, genero: genero || null, email })
       setConvite(r); setCopiado(false); setEditando(false)
       aoMudar()
     } catch (err) {
@@ -191,7 +196,7 @@ function Responsavel({ dados, aoMudar }: { dados: SmAcessoGestor | null; aoMudar
     if (!membro) return
     setEnviando(true)
     try {
-      const r = await proLaboreApi.sm.gestor.convidar({ nome: membro.nome, tratamento: membro.tratamento, email: membro.email })
+      const r = await proLaboreApi.sm.gestor.convidar({ nome: membro.nome, tratamento: membro.tratamento, genero: membro.genero, email: membro.email })
       setConvite(r); setCopiado(false); aoMudar()
     } catch (err) {
       toast({ mensagem: err instanceof Error ? err.message : 'Não foi possível gerar o convite', tom: 'bad' })
@@ -264,6 +269,13 @@ function Responsavel({ dados, aoMudar }: { dados: SmAcessoGestor | null; aoMudar
           </label>
           <label className="sm-campo">Como chamar (na saudação)
             <input className="sm-input" value={tratamento} onChange={e => setTratamento(e.target.value)} maxLength={40} placeholder="Ex.: Ana" autoComplete="off" />
+          </label>
+          <label className="sm-campo">Concordância da saudação
+            <select className="sm-input" value={genero} onChange={e => setGenero(e.target.value as '' | 'F' | 'M')}>
+              <option value="F">Feminina (“Bem-vinda de volta”)</option>
+              <option value="M">Masculina (“Bem-vindo de volta”)</option>
+              <option value="">Neutra (“Boas-vindas de volta”)</option>
+            </select>
           </label>
           <label className="sm-campo">E-mail de acesso
             <input className="sm-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="[e-mail do social media]" autoComplete="off" />

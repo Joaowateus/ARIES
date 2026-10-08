@@ -7,11 +7,13 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { signProLaboreToken } from '../lib/jwtProLabore'
-import { MODULOS_SM, NIVEIS_SM, NIVEIS_PADRAO, REGRAS_PADRAO, carregarPermissoes, contextoSM, niveisCompletos, requireGestorSM } from '../lib/smAcesso'
+import { MODULOS_SM, NIVEIS_SM, NIVEIS_PADRAO, REGRAS_PADRAO, carregarPermissoes, comoSocialMedia, contextoSM, niveisCompletos, requireGestorSM } from '../lib/smAcesso'
 import { emailConfigurado, enviarEmail, escaparHtml } from '../lib/email'
 import { montarHoje } from '../lib/smHoje'
 import { iaLigada } from '../lib/smIA'
 import { podeRoteiroIA } from '../lib/smPerguntas'
+import { MOMENTOS, generoDe, montarRecepcao, recolherVisita, simularRecepcao, type Momento } from '../lib/smSaudacao'
+import { atorDe } from '../lib/smInsights'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -94,7 +96,36 @@ router.get('/sm/hoje', ...autenticado, async (req: Request, res: Response) => {
   const pessoa = sm.visao === 'SOCIAL_MEDIA'
     ? { nome: membro?.nome ?? 'Social Media', tratamento: membro?.tratamento ?? null }
     : { nome: req.proLaboreUser!.nome, tratamento: null }
-  res.json(await montarHoje(sm, pessoa))
+  // Recepção (seção 14): ?retorno=1 quando a aba volta depois de 30 min escondida.
+  const [hoje, recepcao] = await Promise.all([
+    montarHoje(sm, pessoa),
+    montarRecepcao(sm, req.proLaboreUser!.nome, new Date(), { retorno: req.query.retorno === '1' }),
+  ])
+  res.json({ ...hoje, cabecalho: { ...hoje.cabecalho, saudacao: recepcao.titulo, resumo: recepcao.sub }, recepcao })
+})
+
+// Depois da primeira ação do dia, a recepção recolhe numa linha (seção 14.3, regra 4).
+router.post('/sm/recepcao/:id/recolher', ...autenticado, async (req: Request, res: Response) => {
+  await recolherVisita(req.sm!, String(req.params.id))
+  res.json({ ok: true })
+})
+
+// Preferência da própria pessoa: concordância da saudação.
+router.put('/sm/preferencias', ...autenticado, async (req: Request, res: Response) => {
+  const parse = z.object({ genero: z.enum(['F', 'M']).nullable() }).safeParse(req.body)
+  if (!parse.success) { res.status(400).json({ error: 'Preferência inválida' }); return }
+  const sm = req.sm!
+  const chave = { usuarioId: sm.usuarioId, ator: atorDe(sm) }
+  await prisma.smPreferencia.upsert({ where: { usuarioId_ator: chave }, create: { ...chave, genero: parse.data.genero }, update: { genero: parse.data.genero } })
+  res.json({ genero: parse.data.genero })
+})
+
+// Simulador de momentos (tela 13): só o gestor, para revisar as frases com os dados reais.
+router.get('/sm/gestor/recepcao', ...autenticado, requireGestorSM, async (req: Request, res: Response) => {
+  const momento = (MOMENTOS as readonly string[]).includes(String(req.query.momento)) ? String(req.query.momento) as Momento : 'MANHA'
+  const genero = req.query.genero === 'F' || req.query.genero === 'M' ? req.query.genero : null
+  const sm = req.query.para === 'GESTOR' ? req.sm! : comoSocialMedia(req.sm!)
+  res.json(await simularRecepcao(sm, req.proLaboreUser!.nome, momento, genero, typeof req.query.frase === 'string' ? req.query.frase : null))
 })
 
 // ---------- Tela 07 · Permissões (gestor) ----------
@@ -112,6 +143,7 @@ router.get('/sm/gestor/acesso', ...autenticado, requireGestorSM, async (req: Req
     membro: membro && {
       nome: membro.nome,
       tratamento: membro.tratamento,
+      genero: await generoDe(usuarioId, membro.id),
       email: membro.email,
       status: statusMembro(membro),
       convidadoEm: membro.convidadoEm,
@@ -152,6 +184,8 @@ router.put('/sm/gestor/permissoes', ...autenticado, requireGestorSM, async (req:
 const conviteSchema = z.object({
   nome: z.string().trim().min(2, 'Informe o nome').max(80),
   tratamento: z.string().trim().max(40).optional().nullable(),
+  // Concordância da saudação ("Bem-vinda", "Bem-vindo"); vazio = neutra.
+  genero: z.enum(['F', 'M']).nullish(),
   email: z.string().trim().toLowerCase().email('E-mail inválido'),
 })
 
@@ -190,7 +224,10 @@ router.post('/sm/gestor/convite', ...autenticado, requireGestorSM, async (req: R
     // mantém a senha; o link novo serve para trocá-la.
     ...(outraPessoa && { senhaHash: null, ativadoEm: null, primeiroAcessoEm: null, ultimoAcessoEm: null }),
   }
-  await prisma.smMembro.upsert({ where: { usuarioId }, create: { usuarioId, ...dados }, update: dados })
+  const salvo = await prisma.smMembro.upsert({ where: { usuarioId }, create: { usuarioId, ...dados }, update: dados })
+  if (parse.data.genero !== undefined) {
+    await prisma.smPreferencia.upsert({ where: { usuarioId_ator: { usuarioId, ator: salvo.id } }, create: { usuarioId, ator: salvo.id, genero: parse.data.genero }, update: { genero: parse.data.genero } })
+  }
 
   const link = linkDoConvite(req, token)
   const gestor = req.proLaboreUser!.nome
