@@ -800,6 +800,7 @@ export const proLaboreApi = {
       adicionarLink: (id: string, tipo: 'VIDEO' | 'IMAGEM', url: string) =>
         request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/link`, { method: 'POST', body: JSON.stringify({ tipo, url }) }),
       removerMidia: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/${midiaId}`, { method: 'DELETE' }),
+      usarDoAcervo: (id: string, midiaId: string) => request<SmPauta>(`/pro-labore/sm/pautas/${id}/midias/acervo`, { method: 'POST', body: JSON.stringify({ midiaId }) }),
     },
     hoje: (retorno = false) => request<SmHoje>(`/pro-labore/sm/hoje${retorno ? '?retorno=1' : ''}`),
     recepcao: {
@@ -834,6 +835,21 @@ export const proLaboreApi = {
     aprovar: {
       fila: () => request<SmFilaAprovacao>('/pro-labore/sm/aprovar'),
     },
+    concorrentes: {
+      ver: () => request<SmConcorrentes>('/pro-labore/sm/concorrentes'),
+      adicionar: (usuario: string) => request<SmConcorrentes>('/pro-labore/sm/concorrentes', { method: 'POST', body: JSON.stringify({ usuario }) }),
+      remover: (id: string) => request<SmConcorrentes>(`/pro-labore/sm/concorrentes/${id}`, { method: 'DELETE' }),
+      atualizar: () => request<SmConcorrentes>('/pro-labore/sm/concorrentes/atualizar', { method: 'POST' }),
+    },
+    acervo: {
+      ver: (motoId?: string) => request<SmAcervo>(`/pro-labore/sm/acervo${motoId ? `?moto=${encodeURIComponent(motoId)}` : ''}`),
+      novaPauta: (midiaId: string) => request<{ id: string; titulo: string; criada: boolean }>(`/pro-labore/sm/acervo/${midiaId}/nova-pauta`, { method: 'POST' }),
+    },
+    planejamento: {
+      ver: (mes?: string) => request<SmPlanejamento>(`/pro-labore/sm/planejamento${mes ? `?mes=${mes}` : ''}`),
+      planejar: (mes: string) => request<SmPlanejamento & { criadas: number; jaPlanejado: boolean }>('/pro-labore/sm/planejamento', { method: 'POST', body: JSON.stringify({ mes }) }),
+    },
+    datasComerciais: (de: string, ate: string) => request<SmDataComercial[]>(`/pro-labore/sm/datas-comerciais?de=${de}&ate=${ate}`),
     avisos: {
       listar: () => request<SmAvisosLista>('/pro-labore/sm/avisos'),
       lidos: (ids?: string[]) => request<{ ok: boolean; marcados: number }>('/pro-labore/sm/avisos/lidos', { method: 'POST', body: JSON.stringify(ids ? { ids } : {}) }),
@@ -2055,6 +2071,20 @@ export interface SmPautaParaAprovar {
   pendencias: string[]
 }
 export interface SmFilaAprovacao { regraLigada: boolean; pautas: SmPautaParaAprovar[] }
+export interface SmPerfilComparado {
+  usuario: string; fotoUrl: string | null; seguidores: number | null; variacao30d: number | null
+  postsSemana: number | null; engajamentoMedio: number | null; taxaEngajamento: number | null; ultimoPostEm: string | null
+}
+export interface SmConcorrente extends SmPerfilComparado { id: string; nome: string | null; atualizadoEm: string | null; erro: string | null; desde: string | null; serie: { data: string; seguidores: number }[] }
+export interface SmConcorrentes { disponivel: boolean; motivo: string | null; max: number; podeEditar: boolean; loja: SmPerfilComparado | null; perfis: SmConcorrente[] }
+export interface SmArquivoAcervo { id: string; tipo: 'IMAGEM' | 'VIDEO' | 'TOMADA' | 'CAPA'; url: string; tomada: number | null; criadoEm: string; pautas: { id: string; titulo: string; status: SmStatusPauta; permalink: string | null }[] }
+export interface SmAcervoMoto {
+  moto: { id: string; modelo: string; ano: number | null; cor: string | null; situacao: 'DISPONIVEL' | 'RESERVADA' | 'VENDIDA' | null; diasEmEstoque: number | null }
+  fotos: number; videos: number; ultimoEm: string | null; arquivos: SmArquivoAcervo[]
+}
+export interface SmAcervo { motos: SmAcervoMoto[]; podeUsar: boolean }
+export interface SmDataComercial { nome: string; dica: string; data: string }
+export interface SmPlanejamento { mes: string; nomeMes: string; planejadoEm: string | null; podePlanejar: boolean; datas: (SmDataComercial & { pautaId: string | null })[] }
 export interface SmPushChave { configurado: boolean; chave: string | null; aparelhos: number }
 export interface SmPushInscricao { endpoint: string; keys: { p256dh: string; auth: string }; navegador?: string }
 export type SmTipoAviso = 'DECOLANDO' | 'VENDA' | 'CLIENTE' | 'APROVACAO' | 'FALHA'

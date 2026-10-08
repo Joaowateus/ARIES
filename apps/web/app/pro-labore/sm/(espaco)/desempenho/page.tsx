@@ -10,6 +10,7 @@ import { proLaboreApi, type AnaliseSocialConectada, type OrigemSocial, type SmDe
 import { AssistenteAba, Banner, Botao, BotaoLink, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { CartaoTeste } from './Testes'
+import { Concorrentes } from './Concorrentes'
 import { periodoDoPreset, type Periodo, type PresetPeriodo } from '../../../(painel)/social-media/_componentes/FiltroPeriodo'
 import { KpisSocial } from '../../../(painel)/social-media/_componentes/KpisSocial'
 import { EvolucaoDiaria } from '../../../(painel)/social-media/_componentes/EvolucaoDiaria'
@@ -120,6 +121,8 @@ export default function DesempenhoPage() {
           <DiagnosticoReels reels={dados.reelsDiagnostico} podeSalvarGancho={pode('producao', 'COMPLETO') && !eu.somenteLeitura} />
 
           <CartaoTeste teste={dados.testeEmAndamento} podeCriar={dados.podeCriarTeste} aoMudar={() => setVersao(v => v + 1)} />
+
+          <Concorrentes />
 
           <section className="sm-desemp-completa" aria-label="Análise completa">
             <div className="sm-desemp-completa-cab">

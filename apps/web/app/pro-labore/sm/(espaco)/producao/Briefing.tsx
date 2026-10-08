@@ -12,6 +12,7 @@ import {
   dataParaIso, isoParaData, isoParaLocal, localParaIso, quandoCurto, useToast,
 } from '../../_ui'
 import { BibliotecaGanchos } from './Ganchos'
+import { UsarDoAcervo } from './UsarDoAcervo'
 import { useEspacoSM } from '../EspacoSM'
 
 type Campo = 'titulo' | 'gancho' | 'retencao' | 'recompensa' | 'cta' | 'legenda'
@@ -42,6 +43,7 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
   const [manual, setManual] = useState<Record<string, boolean>>(() => ({ ...pauta.checklistManual }))
   const [linkVideo, setLinkVideo] = useState('')
   const [biblioteca, setBiblioteca] = useState(false)
+  const [acervoAberto, setAcervoAberto] = useState(false)
   // Ganchos e roteiro pela IA (seção 16.3), com a regra "Assistente de roteiro com IA" ligada.
   const { eu } = useEspacoSM()
   const [ia, setIa] = useState<{ carregando: boolean; r: SmRoteiroIA | null }>({ carregando: false, r: null })
@@ -267,7 +269,12 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
             <div className="sm-linha-acoes">
               <input ref={arquivo} type="file" accept="image/jpeg" hidden onChange={e => { enviarArquivo(e.target.files, 'IMAGEM'); e.target.value = '' }} />
               <Botao disabled={ocupado} onClick={() => arquivo.current?.click()}>Enviar imagem (JPEG)</Botao>
+              <Botao variante="fantasma" disabled={ocupado} onClick={() => setAcervoAberto(true)}>Usar do acervo</Botao>
             </div>
+            {acervoAberto && (
+              <UsarDoAcervo motoId={pauta.motoId} jaNaPauta={pauta.midias.map(m => m.url)} aoFechar={() => setAcervoAberto(false)}
+                aoUsar={async a => { if (await acao(() => proLaboreApi.sm.pautas.usarDoAcervo(pauta.id, a.id), 'Arquivo do acervo na pauta.')) setAcervoAberto(false) }} />
+            )}
             <form className="sm-linha-acoes" onSubmit={async e => { e.preventDefault(); if (await acao(() => proLaboreApi.sm.pautas.adicionarLink(pauta.id, 'VIDEO', linkVideo), 'Vídeo adicionado.')) setLinkVideo('') }}>
               <label className="sm-sr" htmlFor="briefing-video">Link público do vídeo</label>
               <input id="briefing-video" className="sm-input" style={{ flex: '1 1 180px' }} type="url" placeholder="https:// link público do vídeo" value={linkVideo} onChange={e => setLinkVideo(e.target.value)} />

@@ -943,3 +943,42 @@ select.sm-boas-hora { background: transparent; border: 1px solid var(--sm-border
 .sm-aprovar-botoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .sm-aprovar-botoes .sm-btn { min-height: 48px; }
 .sm-aprovar-pager { display: flex; justify-content: space-between; align-items: center; }
+
+/* ---------- Fase 6 · Concorrentes (subseção do Desempenho) ---------- */
+.sm-tabela-rolagem { overflow-x: auto; }
+.sm-conc-tabela th[scope="row"] { text-align: left; font: inherit; letter-spacing: 0; text-transform: none; color: var(--sm-text); padding: 12px; }
+.sm-conc-tabela thead th:first-child { text-align: left; }
+.sm-conc-tabela td { white-space: nowrap; }
+.sm-conc-perfil { display: flex; align-items: center; gap: 10px; min-width: 200px; }
+.sm-conc-perfil img, .sm-conc-inicial { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex: none; background: var(--sm-surface-2); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--sm-text-muted); }
+.sm-conc-perfil > span:last-child { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.sm-conc-perfil b { color: var(--sm-text-strong); font-weight: 600; }
+.sm-conc-loja { background: var(--sm-surface-2); }
+.sm-conc-var { display: block; font-size: 12px; color: var(--sm-text-faint); }
+.sm-conc-var.sobe { color: var(--sm-ok-fg); }
+.sm-conc-var.desce { color: var(--sm-bad-fg); }
+
+/* ---------- Fase 6 · Acervo de mídia por moto ---------- */
+.sm-acervo-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.sm-acervo-grade { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.sm-acervo-item { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sm-app a.sm-acervo-miniatura { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: 12px; overflow: hidden; background: var(--sm-surface-2); border: 1px solid var(--sm-border); }
+.sm-acervo-miniatura img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sm-acervo-video { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--sm-text-muted); }
+.sm-acervo-tipo { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, .7); color: #fff; font-size: 11px; font-weight: 600; }
+.sm-acervo-origem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-acervo-item .sm-btn { align-self: flex-start; padding-left: 0; max-width: 100%; white-space: normal; text-align: left; height: auto; }
+.sm-acervo-modal { display: flex; flex-direction: column; gap: 16px; }
+.sm-acervo-modal .sm-acervo-grade { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+/* ---------- Fase 6 · Datas comerciais no Calendário ---------- */
+.sm-data-comercial { display: block; font-size: 11px; font-weight: 600; color: var(--sm-learn-fg, var(--sm-info-fg)); background: var(--sm-learn-bg, var(--sm-info-bg)); border-radius: 6px; padding: 2px 6px; margin: 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Recepção (verificação final, Recepcao.html e Main.html): "Ver calendário" ao lado do CTA e "Pergunte ao assistente · Ctrl K". */
+.sm-recepcao-ctas { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.sm-recepcao-paleta { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px; border-radius: var(--sm-radius-btn); border: 1px solid var(--sm-border); background: var(--sm-surface); color: var(--sm-text-faint); font: 500 13px var(--sm-font-text); cursor: pointer; }
+.sm-recepcao-paleta:hover { border-color: var(--sm-border-strong); color: var(--sm-text); }
+.sm-recepcao-paleta:focus-visible { outline: 2px solid var(--sm-focus); outline-offset: 2px; }
+.sm-recepcao-paleta[disabled] { cursor: default; }
+.sm-recepcao-paleta > span:nth-child(2) { flex: 1; }
+.sm-recepcao-paleta-a { width: 22px; height: 22px; border-radius: 6px; background: var(--sm-silver); color: var(--sm-on-silver); font: 800 11px var(--sm-font-title); display: flex; align-items: center; justify-content: center; }

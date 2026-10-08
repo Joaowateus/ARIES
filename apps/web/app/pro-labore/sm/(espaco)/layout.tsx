@@ -10,7 +10,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { usePLTema } from '@/lib/proLaboreTheme'
 import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmAbaAssistente, type SmAvisoPulso, type SmAvisosLista, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
 import {
-  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAprovar, IcAtendimento, IcCaptura, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
+  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAcervo, IcAprovar, IcAtendimento, IcCaptura, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
   ListaAtalhos, PainelAvisos, PaletaSM, SidebarSM, SmApp, haQuanto, registrarSW, type ComandoPaleta, type ItemMenu, type StatusConta,
 } from '../_ui'
 import { EspacoSMCtx, atende } from './EspacoSM'
@@ -58,6 +58,7 @@ const SUB_TELA: Record<string, string> = {
   '/pro-labore/sm/calendario': 'A semana e as regras de publicação',
   '/pro-labore/sm/producao': 'Da ideia ao agendado',
   '/pro-labore/sm/captura': 'Gravar as tomadas pela câmera',
+  '/pro-labore/sm/acervo': 'Fotos e vídeos de cada moto',
   '/pro-labore/sm/aprovar': 'A fila de aprovação, no celular',
   '/pro-labore/sm/atendimento': 'Direct e comentários',
   '/pro-labore/sm/estoque': 'Motos na loja',
@@ -165,8 +166,11 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
         if (caminho === '/pro-labore/sm/atendimento') avisar('sm:virar-lead'); else ir('/pro-labore/sm/atendimento?lead=1')
       }
     }
+    // "Pergunte ao assistente · Ctrl K" da recepção abre a mesma paleta.
+    const abrirPaleta = () => { setVerAtalhos(false); setPaletaEm(caminho) }
     window.addEventListener('keydown', tecla)
-    return () => window.removeEventListener('keydown', tecla)
+    window.addEventListener('sm:abrir-paleta', abrirPaleta)
+    return () => { window.removeEventListener('keydown', tecla); window.removeEventListener('sm:abrir-paleta', abrirPaleta) }
   }, [eu, caminho, router])
 
   // Primeiro acesso do Social Media: as boas-vindas vêm antes de tudo (seção 3.1).
@@ -202,6 +206,7 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
         { href: '/pro-labore/sm/calendario', rotulo: 'Calendário', icone: <IcCalendario />, atalho: 'G C' },
         { href: '/pro-labore/sm/producao', rotulo: 'Produção', icone: <IcProducao /> },
         { href: '/pro-labore/sm/captura', rotulo: 'Captura na loja', icone: <IcCaptura /> },
+        { href: '/pro-labore/sm/acervo', rotulo: 'Acervo', icone: <IcAcervo /> },
       ] : []),
       // Aprovação pelo celular (seção 11.5): a fila do gestor.
       ...(eu.visao === 'GESTOR' && !verComo ? [{ href: '/pro-labore/sm/aprovar', rotulo: 'Para aprovar', icone: <IcAprovar />, contador: eu.contadores.aprovacao }] : []),

@@ -28,6 +28,8 @@ import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialM
 import { listarTestes } from '../lib/smTestes'
 import { rodarRetrospectivas } from '../lib/smRetrospectiva'
 import { rodarPulso } from '../lib/smPulso'
+import { rodarConcorrentes } from '../lib/smConcorrentes'
+import { rodarPlanejamento } from '../lib/smPlanejamento'
 
 const router = Router()
 
@@ -293,7 +295,11 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
     await listarTestes(o.usuarioId)
     testesConcluidos += (await prisma.smTeste.count({ where: { usuarioId: o.usuarioId, status: 'CONCLUIDO' } })) - antes
   }
-  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos })
+  // Fase 6: o retrato do dia dos concorrentes e, do dia 25 em diante, o planejamento do mês seguinte.
+  const agora = agoraDoCron(req)
+  const concorrentes = await rodarConcorrentes(agora).catch(e => { console.error('[sm] concorrentes', e); return { concorrentes: 0 } })
+  const planejamento = await rodarPlanejamento(agora).catch(e => { console.error('[sm] planejamento', e); return { planejamento: 0 } })
+  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento })
 })
 // A cada 5 min: novas tentativas vencidas e a publicação das pautas
 // agendadas que já chegaram no horário.

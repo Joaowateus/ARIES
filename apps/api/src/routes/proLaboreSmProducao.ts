@@ -18,6 +18,7 @@ import {
 import { garantirLinkDaPauta, sincronizarLinks } from '../lib/smAtribuicao'
 import { gerarRoteiro, iaLigada } from '../lib/smIA'
 import { fatosDoRoteiro, podeRoteiroIA } from '../lib/smPerguntas'
+import { arquivoDoAcervo } from '../lib/smAcervo'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -466,6 +467,24 @@ router.post('/sm/pautas/:id/midias/link', ...autenticado, requireModuloSM('produ
   if (bloqueio) return erro(res, 409, bloqueio)
   await prisma.smPautaMidia.create({ data: { pautaId: p.id, tipo: parse.data.tipo, url: parse.data.url, ordem: p.midias.length } })
   await aposMudarMidia(req, p)
+  await responderPauta(res, usuarioId, p.id, 201)
+})
+
+// Fase 6 · "Usar do acervo": reaproveita um arquivo já enviado em outra pauta da mesma operação.
+router.post('/sm/pautas/:id/midias/acervo', ...autenticado, requireModuloSM('producao', 'COMPLETO'), async (req: Request, res: Response) => {
+  const parse = z.object({ midiaId: z.string().min(1).max(40) }).safeParse(req.body)
+  if (!parse.success) return erro(res, 400, 'Arquivo inválido')
+  const usuarioId = req.sm!.usuarioId
+  const p = await carregar(usuarioId, String(req.params.id))
+  if (!p) return erro(res, 404, 'Pauta não encontrada')
+  const bloqueio = bloqueadaParaEdicao(p)
+  if (bloqueio) return erro(res, 409, bloqueio)
+  const arquivo = await arquivoDoAcervo(usuarioId, parse.data.midiaId)
+  if (!arquivo) return erro(res, 404, 'Arquivo não encontrado no acervo')
+  if (!p.midias.some(m => m.url === arquivo.url)) {
+    await prisma.smPautaMidia.create({ data: { pautaId: p.id, tipo: arquivo.tipo, url: arquivo.url, ordem: p.midias.length } })
+    if (arquivo.tipo === 'IMAGEM' || arquivo.tipo === 'VIDEO') await aposMudarMidia(req, p)
+  }
   await responderPauta(res, usuarioId, p.id, 201)
 })
 

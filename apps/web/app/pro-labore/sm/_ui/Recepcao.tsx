@@ -6,11 +6,13 @@
 // ação, recolhe numa linha (com "Abrir" para ver de novo).
 import { useState, type ReactNode } from 'react'
 import type { SmAbaAssistente, SmRecepcao } from '@/lib/proLaboreApi'
-import { BotaoLink, Chip, Rotulo } from './componentes'
+import { BotaoLink, Chip, Kbd, Rotulo } from './componentes'
 import { ConversaAssistente } from './Assistente'
 
-export function Recepcao({ r, acoes, ia, aoAgir, previa }: {
+export function Recepcao({ r, acoes, ia, aoAgir, previa, calendario }: {
   r: SmRecepcao
+  /** "Ver calendário" ao lado do CTA (quem vê a Produção). */
+  calendario?: boolean
   /** Botões fixos do cabeçalho (ex.: "Nova pauta"). */
   acoes?: ReactNode
   /** IA ligada: a conversa aceita perguntas livres. */
@@ -44,10 +46,13 @@ export function Recepcao({ r, acoes, ia, aoAgir, previa }: {
           <Rotulo>{r.kicker}</Rotulo>
           <h1 className="sm-ttl sm-recepcao-titulo">{r.titulo}</h1>
           <p className="sm-recepcao-sub">{r.sub}</p>
-          {r.cta && (previa
-            ? <span className="sm-btn pri sm-recepcao-cta" aria-disabled="true">{r.cta.rotulo}</span>
-            : <BotaoLink href={r.cta.href} variante="pri" className="sm-recepcao-cta" onClick={aoAgir}
-              {...(r.cta.href === '/pro-labore/sm/foco' ? { title: `${r.cta.rotulo} (atalho: F)`, atalho: 'F' } : {})}>{r.cta.rotulo}</BotaoLink>)}
+          <div className="sm-recepcao-ctas">
+            {r.cta && (previa
+              ? <span className="sm-btn pri sm-recepcao-cta" aria-disabled="true">{r.cta.rotulo}</span>
+              : <BotaoLink href={r.cta.href} variante="pri" className="sm-recepcao-cta" onClick={aoAgir}
+                {...(r.cta.href === '/pro-labore/sm/foco' ? { title: `${r.cta.rotulo} (atalho: F)`, atalho: 'F' } : {})}>{r.cta.rotulo}</BotaoLink>)}
+            {calendario && !previa && <BotaoLink href="/pro-labore/sm/calendario" title="Ver calendário (atalho: G C)">Ver calendário</BotaoLink>}
+          </div>
         </div>
         <div className="sm-recepcao-acoes">
           {acoes}
@@ -78,6 +83,13 @@ export function Recepcao({ r, acoes, ia, aoAgir, previa }: {
           {pergunta && <ConversaAssistente key={pergunta.id} aba={pergunta.aba} inicial={pergunta} livre={ia} aoFechar={() => setPergunta(null)} />}
         </div>
       )}
+      {/* Protótipo: "Pergunte ao assistente · Ctrl K" abre a paleta, que também responde perguntas. */}
+      <button type="button" className="sm-recepcao-paleta" disabled={previa} aria-keyshortcuts="Control+K Meta+K"
+        onClick={() => window.dispatchEvent(new Event('sm:abrir-paleta'))}>
+        <span className="sm-recepcao-paleta-a" aria-hidden="true">A</span>
+        <span>Pergunte ao assistente</span>
+        <span aria-hidden="true" style={{ display: 'inline-flex', gap: 4 }}><Kbd>Ctrl</Kbd><Kbd>K</Kbd></span>
+      </button>
     </section>
   )
 }

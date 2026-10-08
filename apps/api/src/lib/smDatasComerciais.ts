@@ -36,3 +36,21 @@ export function proximasDatasComerciais(hoje: string, horizonteDias = 60) {
     .filter(d => d.emDias >= 0 && d.emDias <= horizonteDias)
     .sort((a, b) => a.emDias - b.emDias)
 }
+
+/** Datas comerciais de um mês (AAAA-MM), na ordem: base do planejamento do dia 25 e das marcas do Calendário. */
+export function datasComerciaisDoMes(mes: string) {
+  const ano = Number(mes.slice(0, 4))
+  return [ano - 1, ano]
+    .flatMap(a => DATAS.map(d => ({ nome: d.nome, dica: d.dica, data: d.data(a) })))
+    .filter(d => d.data.startsWith(mes))
+    .sort((a, b) => a.data.localeCompare(b.data))
+}
+
+/** Datas comerciais entre dois dias (AAAA-MM-DD, inclusive). */
+export function datasComerciaisEntre(de: string, ate: string) {
+  const anos = new Set([Number(de.slice(0, 4)), Number(ate.slice(0, 4))])
+  return [...anos].flatMap(a => [a - 1, a]).filter((a, i, l) => l.indexOf(a) === i)
+    .flatMap(a => DATAS.map(d => ({ nome: d.nome, dica: d.dica, data: d.data(a) })))
+    .filter(d => d.data >= de && d.data <= ate)
+    .sort((a, b) => a.data.localeCompare(b.data))
+}
