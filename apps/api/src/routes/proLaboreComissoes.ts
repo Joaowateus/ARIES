@@ -11,7 +11,8 @@ import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
-import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
+import { requireProLaboreAuth } from '../middleware/authProLabore'
+import { requireModulo, requireEscopoEquipe } from '../lib/acessos'
 import { recalcularPagamentoComissao, CAMPO_PAGAMENTO, TIPOS_PAGAMENTO, valorDoPagamento, type TipoPagamento } from '../lib/comissoes'
 
 const router = Router()
@@ -221,9 +222,9 @@ async function comprovante(req: Request, res: Response) {
   res.json({ ...resto, vendas: (tipo === 'PROLABORE' ? vendasProLabore : vendas).map(v => ({ ...v, valor: valorDoPagamento(tipo, v) })) })
 }
 
-router.post(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireDono, registrar)
-router.post(['/pagamentos-vendas/desmarcar', '/comissoes/desmarcar'], requireProLaboreAuth, requireDono, desmarcar)
-router.get(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireDono, listar)
-router.get(['/pagamentos-vendas/:id', '/comissoes/pagamentos/:id'], requireProLaboreAuth, requireDono, comprovante)
+router.post(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, registrar)
+router.post(['/pagamentos-vendas/desmarcar', '/comissoes/desmarcar'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, desmarcar)
+router.get(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireModulo('vendas', 'VER'), requireEscopoEquipe, listar)
+router.get(['/pagamentos-vendas/:id', '/comissoes/pagamentos/:id'], requireProLaboreAuth, requireModulo('vendas', 'VER'), requireEscopoEquipe, comprovante)
 
 export default router

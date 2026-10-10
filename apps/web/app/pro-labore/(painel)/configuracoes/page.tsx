@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { proLaboreApi, ParametroLiquidez } from '@/lib/proLaboreApi'
+import { temAcesso, proLaboreApi, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel === 'DONO'
+  // Dono ou acesso com o módulo liberado (Acessos e permissões).
+  const isDono = temAcesso(usuario, 'configuracoes')
   const [teto, setTeto] = useState('')
   const [tetoComissao, setTetoComissao] = useState('')
   const [tetoProLaboreR, setTetoProLaboreR] = useState('')
@@ -174,7 +175,7 @@ export default function ProLaboreConfiguracoesPage() {
     return (
       <div className="pl-empty pl-card">
         <div className="pl-emoji">🔒</div>
-        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
+        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Seu acesso não inclui essa área</h3>
         <p style={{ marginTop: 6 }}>Teto de pró-labore e meta anual são definidos pelo responsável pela conta.</p>
       </div>
     )

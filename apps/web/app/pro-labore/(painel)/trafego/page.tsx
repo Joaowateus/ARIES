@@ -5,7 +5,7 @@
 // resumo → jornada → indicadores → o que fazer → quem (públicos) → o quê
 // (criativos) → onde está a verba (campanhas) → quando (dia a dia).
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { proLaboreApi, type AnaliseTrafego, type ContaTrafego, type EtapaTrafego, type MetaEtapaTrafego, type ModoEtapaTrafego } from '@/lib/proLaboreApi'
+import { temAcesso, proLaboreApi, type AnaliseTrafego, type ContaTrafego, type EtapaTrafego, type MetaEtapaTrafego, type ModoEtapaTrafego } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { AvisoConexaoMeta } from '../_conexaoMeta/AvisoConexaoMeta'
 import { PageHeader } from '../../PageHeader'
@@ -157,8 +157,8 @@ export default function ProLaboreTrafegoPage() {
     setCampanhas([])
   }
 
-  if (usuario && usuario.papel !== 'DONO') {
-    return <div className="pl-empty pl-card"><div className="pl-emoji">🔒</div>A aba Tráfego é só do responsável pela conta.</div>
+  if (usuario && !temAcesso(usuario, 'trafego')) {
+    return <div className="pl-empty pl-card"><div className="pl-emoji">🔒</div>Seu acesso não inclui o Tráfego. Peça ao gestor para liberar.</div>
   }
 
   const cabecalho = (
@@ -216,8 +216,9 @@ export default function ProLaboreTrafegoPage() {
         </span>
         <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" disabled={sincronizando} onClick={() => void sincronizar()}>{sincronizando ? 'Atualizando…' : 'Atualizar agora'}</button>
         <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" onClick={() => setVerDiagnostico(v => !v)}>Diagnosticar conexão</button>
-        <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" onClick={() => setTrocando(true)}>Trocar token/conta</button>
-        <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq pl-as-perigo" onClick={() => void desconectar()}>Desconectar</button>
+        {/* Trocar ou desconectar a conta de anúncios continua só com o dono. */}
+        {usuario?.papel === 'DONO' && <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" onClick={() => setTrocando(true)}>Trocar token/conta</button>}
+        {usuario?.papel === 'DONO' && <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq pl-as-perigo" onClick={() => void desconectar()}>Desconectar</button>}
       </div>
       <AvisoConexaoMeta versao={conta.ultimoErroSync ?? ''} onLiberado={() => void sincronizar()} />
       {conta.ultimoErroSync && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{conta.ultimoErroSync}{/expirou|revogado/.test(conta.ultimoErroSync) && <> <button type="button" className="pl-link-action" onClick={() => setTrocando(true)}>Colar token novo</button></>}</div>}

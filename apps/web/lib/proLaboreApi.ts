@@ -39,11 +39,31 @@ export function definirVerComoSocialMedia(ligado: boolean) {
   try { if (ligado) sessionStorage.setItem(CHAVE_VER_COMO, '1'); else sessionStorage.removeItem(CHAVE_VER_COMO) } catch { /* sem storage: segue sem pré-visualização */ }
 }
 
+// Acessos da equipe: nível por módulo (ver lib/acessos.ts da API).
+export type NivelAcesso = 'NENHUM' | 'VER' | 'EDITAR'
+export type EscopoAcesso = 'PROPRIO' | 'EQUIPE'
+export interface ModuloAcesso { chave: string; rotulo: string; grupo: string; descricao: string; ver?: string; niveis: NivelAcesso[] }
+export interface PerfilAcesso { chave: string; rotulo: string; descricao: string; escopo: EscopoAcesso; vende: boolean; permissoes: Record<string, NivelAcesso> }
+export interface AcessoEquipe { id: string; nome: string; email: string | null; ativo: boolean; vende: boolean; escopo: EscopoAcesso; permissoes: Record<string, NivelAcesso>; perfil: string | null; criadoEm: string }
+export interface PainelAcessos { modulos: ModuloAcesso[]; perfis: PerfilAcesso[]; acessos: AcessoEquipe[]; semLogin: { id: string; nome: string }[] }
+export interface NovoAcesso { vendedorId?: string; nome?: string; email: string; senha: string; escopo: EscopoAcesso; vende: boolean; permissoes: Record<string, NivelAcesso> }
+
+/** O login abre o módulo nesse nível? O dono abre tudo; sem o mapa, nada além do básico. */
+export function temAcesso(u: Pick<ProLaboreUsuario, 'papel' | 'acessos'> | null | undefined, modulo: string, nivel: 'VER' | 'EDITAR' = 'VER'): boolean {
+  if (!u) return false
+  if (u.papel === 'DONO') return true
+  const n = u.acessos?.[modulo]
+  return nivel === 'VER' ? !!n && n !== 'NENHUM' : n === 'EDITAR'
+}
+
 export interface ProLaboreUsuario {
   id: string
   nome: string
   email: string
   papel: ProLaborePapel
+  // O que esse login enxerga, módulo a módulo (o dono recebe tudo liberado).
+  acessos?: Record<string, NivelAcesso>
+  escopo?: EscopoAcesso
   // Só existe pra quem loga como VENDEDOR/SUPERVISOR — meta mensal
   // individual, usada no lugar da meta anual no dashboard de um VENDEDOR.
   metaMensal?: number | null
@@ -114,6 +134,8 @@ export interface Vendedor {
   ativo: boolean
   email?: string | null
   papel: 'VENDEDOR' | 'SUPERVISOR'
+  // Falso para quem tem login mas não vende (fica fora dos seletores de venda).
+  vende?: boolean
   tetoComissaoPorVenda?: number | null
   metaMensal?: number | null
   criadoEm: string
@@ -727,6 +749,14 @@ export const proLaboreApi = {
       request<PreferenciasProLabore>('/pro-labore/preferencias', { method: 'PUT', body: JSON.stringify(p) }),
   },
   // Aba Tráfego (Gerenciador de Anúncios da Meta) — só o dono.
+  // Acessos e permissões da equipe — só o dono.
+  acessos: {
+    listar: () => request<PainelAcessos>('/pro-labore/acessos'),
+    criar: (dados: NovoAcesso) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
+    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>>) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    senha: (id: string, senha: string) => request<{ ok: true }>(`/pro-labore/acessos/${id}/senha`, { method: 'POST', body: JSON.stringify({ senha }) }),
+    remover: (id: string) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'DELETE' }),
+  },
   metaConexao: {
     estado: () => request<EstadoConexaoMeta>('/pro-labore/meta/conexao'),
     testar: () => request<{ testes: TesteConexaoMeta[]; bloqueado: boolean; liberou: boolean; estado: EstadoConexaoMeta }>('/pro-labore/meta/conexao/testar', { method: 'POST' }),

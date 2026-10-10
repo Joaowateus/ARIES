@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { proLaboreApi, Venda, ParametroLiquidez, Vendedor, type TipoPagamentoVenda } from '@/lib/proLaboreApi'
+import { temAcesso, proLaboreApi, Venda, ParametroLiquidez, Vendedor, type TipoPagamentoVenda } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
@@ -51,7 +51,10 @@ const TEXTO: Record<TipoPagamentoVenda, { nome: string; pago: string; doc: strin
 // funil em Leads.
 export default function ProLaboreVendasPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel === 'DONO'
+  // Dono ou acesso com o módulo Vendas liberado (Acessos e permissões).
+  const isDono = temAcesso(usuario, 'vendas')
+  // "Só ver": a lista aparece, o cadastro e a importação não.
+  const podeEditar = temAcesso(usuario, 'vendas', 'EDITAR')
 
   const [vendas, setVendas] = useState<Venda[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -84,7 +87,7 @@ export default function ProLaboreVendasPage() {
   const carregar = useCallback(() => {
     if (!isDono) { setLoading(false); return }
     Promise.all([proLaboreApi.vendas.listar(), proLaboreApi.parametros.get(), proLaboreApi.vendedores.listar()])
-      .then(([v, p, ven]) => { setVendas(v); setParametro(p); setVendedores(ven) })
+      .then(([v, p, ven]) => { setVendas(v); setParametro(p); setVendedores(ven.filter(x => x.vende !== false)) })
       .finally(() => setLoading(false))
   }, [isDono])
 
@@ -265,7 +268,7 @@ export default function ProLaboreVendasPage() {
         mapaVendedores.set(nomeLower, criado.id)
       }
     }
-    setVendedores(await proLaboreApi.vendedores.listar())
+    setVendedores((await proLaboreApi.vendedores.listar()).filter(x => x.vende !== false))
 
     const contadorPorMes = new Map<number, number>()
     const resultados: ResultadoImportacao[] = []
@@ -314,8 +317,8 @@ export default function ProLaboreVendasPage() {
     return (
       <div className="pl-empty pl-card">
         <div className="pl-emoji">🔒</div>
-        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
-        <p style={{ marginTop: 6 }}>O cadastro de vendas é feito só pelo dono. Use o Dashboard e o Leads pra acompanhar seu trabalho.</p>
+        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Seu acesso não inclui Vendas</h3>
+        <p style={{ marginTop: 6 }}>Peça ao gestor para liberar em Acessos e permissões. Use o Dashboard e o Leads pra acompanhar seu trabalho.</p>
       </div>
     )
   }
@@ -375,6 +378,7 @@ export default function ProLaboreVendasPage() {
     <div>
       <PageHeader eyebrow="Vendas" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} />
 
+      {podeEditar && <>
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-title" style={{ marginBottom: 14 }}>{editandoId ? 'Editar venda' : 'Nova venda'}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
@@ -487,6 +491,7 @@ export default function ProLaboreVendasPage() {
           </div>
         )}
       </div>
+      </>}
 
       {loading ? (
         <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>

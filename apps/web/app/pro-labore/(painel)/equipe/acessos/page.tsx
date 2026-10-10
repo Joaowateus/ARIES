@@ -11,6 +11,7 @@ import {
   definirVerComoSocialMedia, proLaboreApi, SM_MODULOS,
   type SmAcessoGestor, type SmModulo, type SmNivel, type SmRegras, type SmStatusMembro,
 } from '@/lib/proLaboreApi'
+import { AcessosEquipe } from './AcessosEquipe'
 import { AssistenteAba, Botao, BotaoLink, Card, CardEsqueleto, Chip, Rotulo, Segmentado, SmApp, Toggle, haQuanto, useToast, type Tom } from '../../../sm/_ui'
 
 const MODULOS: Record<SmModulo, { nome: string; nota: string }> = {
@@ -48,11 +49,21 @@ const STATUS_MEMBRO: Record<SmStatusMembro, { texto: string; tom: Tom }> = {
 export default function AcessosPermissoesPage() {
   const { usuario } = useProLaboreAuth()
   const router = useRouter()
+  // Duas áreas: os logins da equipe (módulo a módulo) e o papel Social Media.
+  const [area, setArea] = useState<'equipe' | 'social'>('equipe')
   useEffect(() => { if (usuario && usuario.papel !== 'DONO') router.replace('/pro-labore') }, [usuario, router])
   if (usuario?.papel !== 'DONO') return null
   return (
     <SmApp className="sm-embutido">
-      <Acessos />
+      <div className="pl-acessos-area">
+        <Segmentado
+          rotulo="Área de acessos"
+          opcoes={[{ valor: 'equipe' as const, rotulo: 'Equipe' }, { valor: 'social' as const, rotulo: 'Social Media' }]}
+          valor={area}
+          aoMudar={setArea}
+        />
+      </div>
+      {area === 'equipe' ? <AcessosEquipe /> : <Acessos />}
     </SmApp>
   )
 }

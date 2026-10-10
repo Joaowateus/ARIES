@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
@@ -6,6 +6,7 @@ import { recalcularPagamentoComissao } from '../lib/comissoes'
 import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
+import { requireModulo, requireAlgumModulo, requireEscopoEquipe, permissoesEfetivas, escopoDoPapel, TUDO } from '../lib/acessos'
 import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, comApiDaEmpresa } from '../lib/instagramGraph'
 import { sincronizarContaSocialMedia, rodarJobSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
 import { analisarContaSocialMedia } from '../lib/socialMediaResumo'
@@ -31,7 +32,7 @@ const TETO_PRO_LABORE_PADRAO = 900
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, tetoComissaoPorVenda: true, metaMensal: true, criadoEm: true, atualizadoEm: true } as const
+const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, vende: true, tetoComissaoPorVenda: true, metaMensal: true, criadoEm: true, atualizadoEm: true } as const
 
 // Pró-labore é sempre do dono — sacado de qualquer venda da operação,
 // independente de quem vendeu. O teto é um único valor por conta, exceto
@@ -169,11 +170,12 @@ router.post('/auth/login', async (req: Request, res: Response) => {
   const usuario = await prisma.proLaboreUsuario.findUnique({ where: { email } })
   if (usuario && (await bcrypt.compare(senha, usuario.senhaHash))) {
     const token = signProLaboreToken({ sub: usuario.id, email: usuario.email, nome: usuario.nome, papel: 'DONO' })
-    res.json({ token, usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: 'DONO' } })
+    res.json({ token, usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: 'DONO', acessos: TUDO } })
     return
   }
 
-  const vendedor = await prisma.vendedor.findUnique({ where: { email } })
+  // E-mail sem diferença de maiúsculas: os acessos novos são salvos em minúsculas.
+  const vendedor = await prisma.vendedor.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })
   if (vendedor?.senhaHash && vendedor.email && vendedor.ativo && (await bcrypt.compare(senha, vendedor.senhaHash))) {
     const papelVendedor = vendedor.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR'
     const token = signProLaboreToken({
@@ -183,7 +185,7 @@ router.post('/auth/login', async (req: Request, res: Response) => {
       papel: papelVendedor,
       vendedorId: vendedor.id,
     })
-    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: papelVendedor, metaMensal: vendedor.metaMensal, tetoComissaoPorVenda: vendedor.tetoComissaoPorVenda } })
+    res.json({ token, usuario: { id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel: papelVendedor, metaMensal: vendedor.metaMensal, tetoComissaoPorVenda: vendedor.tetoComissaoPorVenda, acessos: permissoesEfetivas(papelVendedor, vendedor.permissoes), escopo: escopoDoPapel(papelVendedor) } })
     return
   }
 
@@ -222,12 +224,9 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
       res.status(404).json({ error: 'Vendedor não encontrado' })
       return
     }
-    // Usa o papel do TOKEN, não uma busca nova no banco — é o token que
-    // autoriza cada requisição, então se ele mostrasse um papel mais novo
-    // que o que o resto das rotas está de fato aplicando, a pessoa veria a
-    // tela de supervisor mas os dados viriam escopados como vendedor. Uma
-    // promoção só entra em vigor no próximo login (novo token).
-    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel, metaMensal: vendedor.metaMensal, tetoComissaoPorVenda: vendedor.tetoComissaoPorVenda })
+    // Papel e permissões vêm do banco a cada pedido (requireProLaboreAuth),
+    // então a tela mostra exatamente o que as rotas estão aplicando agora.
+    res.json({ id: vendedor.id, nome: vendedor.nome, email: vendedor.email, papel, metaMensal: vendedor.metaMensal, tetoComissaoPorVenda: vendedor.tetoComissaoPorVenda, acessos: req.acessos, escopo: escopoDoPapel(papel) })
     return
   }
 
@@ -239,7 +238,7 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
     res.status(404).json({ error: 'Usuário não encontrado' })
     return
   }
-  res.json({ ...usuario, papel: 'DONO' })
+  res.json({ ...usuario, papel: 'DONO', acessos: TUDO })
 })
 
 const recuperarSchema = z.object({
@@ -326,7 +325,7 @@ const parametrosSchema = z.object({
   planoConcentracaoMaximaLiderPct: z.number().min(0).max(100).optional(),
 })
 
-router.put('/parametros', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.put('/parametros', requireProLaboreAuth, requireModulo('configuracoes', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = parametrosSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -375,7 +374,7 @@ const metaFunilProLaboreSchema = z.object({
   tipoMeta: z.enum(['MINIMO', 'MAXIMO_PERDA', 'MAXIMO_CUSTO']).optional(),
 })
 
-router.put('/funil-metas/:etapa', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.put('/funil-metas/:etapa', requireProLaboreAuth, requireModulo('configuracoes', 'EDITAR'), async (req: Request, res: Response) => {
   const etapa = String(req.params.etapa)
   if (!(ETAPAS_FUNIL_PL as readonly string[]).includes(etapa)) {
     res.status(400).json({ error: 'Etapa inválida' })
@@ -395,9 +394,19 @@ router.put('/funil-metas/:etapa', requireProLaboreAuth, requireDono, async (req:
   res.json(meta)
 })
 
-// --- Vendedores (leitura: dono e supervisor; gestão: exclusiva do dono) ---
+// --- Vendedores (leitura: quem vê a equipe ou escolhe pessoas; gestão: módulo Vendedores; login: só o dono) ---
 
-router.get('/vendedores', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+// A lista da equipe aparece em filtros e seletores (CRM, vendas, agenda,
+// ocorrências). Quem vê só os próprios dados não precisa dela, a não ser
+// que um módulo liberado peça para escolher pessoas.
+function requireListaDaEquipe(req: Request, res: Response, next: NextFunction): void {
+  const { papel } = req.proLaboreUser!
+  const a = req.acessos ?? {}
+  if (papel === 'DONO' || papel === 'SUPERVISOR' || ['vendedores', 'vendas', 'ocorrencias'].some(c => a[c] && a[c] !== 'NENHUM') || a.agenda === 'EDITAR') { next(); return }
+  res.status(403).json({ error: 'Seu acesso mostra só os seus dados.' })
+}
+
+router.get('/vendedores', requireProLaboreAuth, requireListaDaEquipe, async (req: Request, res: Response) => {
   const vendedores = await prisma.vendedor.findMany({
     where: { usuarioId: req.proLaboreUser!.sub },
     select: VENDEDOR_SELECT,
@@ -410,7 +419,7 @@ const criarVendedorSchema = z.object({
   nome: z.string().min(2, 'Nome muito curto'),
 })
 
-router.post('/vendedores', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/vendedores', requireProLaboreAuth, requireModulo('vendedores', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = criarVendedorSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -431,7 +440,7 @@ const editarVendedorSchema = z.object({
   metaMensal: z.number().positive('Meta deve ser positiva').nullable().optional(),
 })
 
-router.patch('/vendedores/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.patch('/vendedores/:id', requireProLaboreAuth, requireModulo('vendedores', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = editarVendedorSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -443,15 +452,23 @@ router.patch('/vendedores/:id', requireProLaboreAuth, requireDono, async (req: R
     res.status(404).json({ error: 'Vendedor não encontrado' })
     return
   }
+  if (req.proLaboreUser!.papel !== 'DONO' && (atual.id === req.proLaboreUser!.vendedorId || parse.data.papel !== undefined)) {
+    res.status(403).json({ error: atual.id === req.proLaboreUser!.vendedorId ? 'O seu próprio cadastro (meta e teto) só o gestor muda.' : 'Só o gestor muda o acesso de alguém.' })
+    return
+  }
   const vendedor = await prisma.vendedor.update({ where: { id: atual.id }, data: parse.data, select: VENDEDOR_SELECT })
   res.json(vendedor)
 })
 
-router.delete('/vendedores/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.delete('/vendedores/:id', requireProLaboreAuth, requireModulo('vendedores', 'EDITAR'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const atual = await prisma.vendedor.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
     res.status(404).json({ error: 'Vendedor não encontrado' })
+    return
+  }
+  if (req.proLaboreUser!.papel !== 'DONO' && atual.email) {
+    res.status(403).json({ error: 'Essa pessoa tem login no sistema: só o gestor pode excluir.' })
     return
   }
   const comprovantes = await prisma.pagamentoComissao.count({ where: { vendedorId: atual.id } })
@@ -527,9 +544,9 @@ const VENDA_INCLUDE = {
   pagamentoProLabore: { select: { id: true, numero: true, pagoEm: true } },
 } satisfies Prisma.VendaInclude
 
-router.get('/vendas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/vendas', requireProLaboreAuth, requireModulo('vendas', 'VER'), async (req: Request, res: Response) => {
   const { ano } = req.query
-  const where: { usuarioId: string; data?: { gte: Date; lte: Date } } = { usuarioId: req.proLaboreUser!.sub }
+  const where: { usuarioId: string; vendedorId?: string; data?: { gte: Date; lte: Date } } = vendaWhereBase(req)
   if (typeof ano === 'string' && /^\d{4}$/.test(ano)) {
     where.data = { gte: inicioDoAnoUTC(Number(ano)), lte: fimDoAnoUTC(Number(ano)) }
   }
@@ -551,7 +568,7 @@ const criarVendaSchema = z.object({
   observacao: z.string().optional(),
 })
 
-router.post('/vendas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/vendas', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = criarVendaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -559,7 +576,9 @@ router.post('/vendas', requireProLaboreAuth, requireDono, async (req: Request, r
   }
 
   const usuarioId = req.proLaboreUser!.sub
-  const { valorVenda, valorProLabore, vendedorId } = parse.data
+  const { valorVenda, valorProLabore } = parse.data
+  // Acesso "só os próprios dados": a venda é sempre de quem registra.
+  const vendedorId = req.proLaboreUser!.papel === 'VENDEDOR' ? req.proLaboreUser!.vendedorId : parse.data.vendedorId
   const valorComissao = vendedorId ? parse.data.valorComissao ?? 0 : undefined
 
   if (vendedorId) {
@@ -618,7 +637,7 @@ const editarVendaSchema = z.object({
   observacao: z.string().optional(),
 })
 
-router.patch('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = editarVendaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -626,9 +645,13 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Reque
   }
 
   const usuarioId = req.proLaboreUser!.sub
-  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), usuarioId } })
+  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), ...vendaWhereBase(req) } })
   if (!atual) {
     res.status(404).json({ error: 'Venda não encontrada' })
+    return
+  }
+  if (req.proLaboreUser!.papel === 'VENDEDOR' && parse.data.vendedorId !== undefined && parse.data.vendedorId !== req.proLaboreUser!.vendedorId) {
+    res.status(403).json({ error: 'Seu acesso registra só as suas vendas.' })
     return
   }
 
@@ -697,9 +720,8 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Reque
   res.json(venda)
 })
 
-router.delete('/vendas/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
-  const usuarioId = req.proLaboreUser!.sub
-  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), usuarioId } })
+router.delete('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
+  const atual = await prisma.venda.findFirst({ where: { id: String(req.params.id), ...vendaWhereBase(req) } })
   if (!atual) {
     res.status(404).json({ error: 'Venda não encontrada' })
     return
@@ -745,7 +767,7 @@ function leadWhereBase(req: Request, vendedorIdFiltro?: string): { usuarioId: st
   return { usuarioId }
 }
 
-router.get('/leads', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
   const { estagio, tipoLead } = req.query
   const where: { usuarioId: string; vendedorId?: string; estagio?: string; tipoLead?: string } = leadWhereBase(req)
   if (typeof estagio === 'string' && (ESTAGIOS_LEAD as readonly string[]).includes(estagio)) {
@@ -772,7 +794,7 @@ const criarLeadSchema = z.object({
   valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero'),
 })
 
-router.post('/leads', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/leads', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = criarLeadSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -833,7 +855,7 @@ const editarLeadSchema = z.object({
   valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero').optional(),
 })
 
-router.patch('/leads/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.patch('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = editarLeadSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -898,7 +920,7 @@ const estagioLeadSchema = z.object({
   estagio: z.enum(ESTAGIOS_LEAD),
 })
 
-router.post('/leads/:id/estagio', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = estagioLeadSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -940,7 +962,7 @@ const converterLeadSchema = z.object({
 // vendas divergirem. Marcar o estágio como FECHADO manualmente ainda é
 // possível (ex: negócio fechado fora da esteira), só não cria a venda.
 // Exclusivo do dono — é ele quem registra vendas e paga comissão.
-router.post('/leads/:id/converter', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = converterLeadSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1010,7 +1032,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireDono, async (re
   res.status(201).json({ lead, venda })
 })
 
-router.delete('/leads/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
   const atual = await prisma.lead.findFirst({ where: { id: String(req.params.id), ...leadWhereBase(req) } })
   if (!atual) {
     res.status(404).json({ error: 'Lead não encontrado' })
@@ -1027,7 +1049,7 @@ router.delete('/leads/:id', requireProLaboreAuth, async (req: Request, res: Resp
 
 // --- Funil comercial mensal (cadastro manual, mantido pro histórico anterior aos Leads) ---
 
-router.get('/funil', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/funil', requireProLaboreAuth, requireModulo('indicadores', 'VER'), async (req: Request, res: Response) => {
   const { ano } = req.query
   const usuarioId = req.proLaboreUser!.sub
   const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : new Date().getUTCFullYear()
@@ -1046,7 +1068,7 @@ const funilSchema = z.object({
   proposta: z.number().int().min(0),
 })
 
-router.put('/funil', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.put('/funil', requireProLaboreAuth, requireModulo('indicadores', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = funilSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1066,7 +1088,7 @@ router.put('/funil', requireProLaboreAuth, requireDono, async (req: Request, res
 
 // --- Gasto com anúncios mensal (cadastro manual, exclusivo do dono) ---
 
-router.get('/gastos-anuncios', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/gastos-anuncios', requireProLaboreAuth, requireModulo('indicadores', 'VER'), async (req: Request, res: Response) => {
   const { ano } = req.query
   const usuarioId = req.proLaboreUser!.sub
   const anoNum = typeof ano === 'string' && /^\d{4}$/.test(ano) ? Number(ano) : new Date().getUTCFullYear()
@@ -1082,7 +1104,7 @@ const gastoAnuncioSchema = z.object({
   valor: z.number().min(0),
 })
 
-router.put('/gastos-anuncios', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.put('/gastos-anuncios', requireProLaboreAuth, requireModulo('indicadores', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = gastoAnuncioSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1102,7 +1124,7 @@ router.put('/gastos-anuncios', requireProLaboreAuth, requireDono, async (req: Re
 
 // --- Painel: série mensal completa (KPIs, funil, ROAS, ranking de vendedores) ---
 
-router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const papel = req.proLaboreUser!.papel
   const agora = new Date()
@@ -1135,7 +1157,7 @@ router.get('/painel', requireProLaboreAuth, async (req: Request, res: Response) 
     papel === 'DONO'
       ? prisma.gastoAnuncioMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioAno, lte: fimAno } } })
       : Promise.resolve([]),
-    vejaEquipe ? prisma.vendedor.findMany({ where: { usuarioId } }) : Promise.resolve([]),
+    vejaEquipe ? prisma.vendedor.findMany({ where: { usuarioId, vende: true } }) : Promise.resolve([]),
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioAno, lte: fimAno } } }),
   ])
 
@@ -1350,7 +1372,7 @@ function parseDataDiaUTC(valor: string): Date | null {
 
 const HORARIO_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
 
-router.get('/agenda-itens', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/agenda-itens', requireProLaboreAuth, requireModulo('agenda', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const papel = req.proLaboreUser!.papel
   const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
@@ -1403,7 +1425,7 @@ const agendaItemSchema = z
     }
   })
 
-router.post('/agenda-itens', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.post('/agenda-itens', requireProLaboreAuth, requireModulo('agenda', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = agendaItemSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1457,7 +1479,7 @@ const agendaItemEditSchema = z.object({
   ativo: z.boolean().optional(),
 })
 
-router.patch('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.patch('/agenda-itens/:id', requireProLaboreAuth, requireModulo('agenda', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = agendaItemEditSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1495,7 +1517,7 @@ router.patch('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor,
   res.json(item)
 })
 
-router.delete('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.delete('/agenda-itens/:id', requireProLaboreAuth, requireModulo('agenda', 'EDITAR'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const atual = await prisma.agendaItem.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
@@ -1510,7 +1532,7 @@ router.delete('/agenda-itens/:id', requireProLaboreAuth, requireDonoOuSupervisor
 // Conclusões no intervalo pedido — vendedor só vê as próprias; dono/
 // supervisor vê de todo mundo (é a base do indicador de aderência da
 // equipe). Sempre filtrado por item.usuarioId, pra nunca vazar entre contas.
-router.get('/agenda-conclusoes', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/agenda-conclusoes', requireProLaboreAuth, requireModulo('agenda', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const papel = req.proLaboreUser!.papel
   const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
@@ -1564,7 +1586,7 @@ async function itemEAutorizacao(req: Request, itemId: string): Promise<{ item: N
 // quem pede, na data informada — cada pessoa só mexe na própria conclusão,
 // nunca na de outra (mesmo dono/supervisor não marcam "no lugar de"
 // ninguém: o valor da visão deles é acompanhar a aderência, não simulá-la).
-router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, requireModulo('agenda', 'VER'), async (req: Request, res: Response) => {
   const parse = concluirSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1609,7 +1631,7 @@ router.post('/agenda-itens/:id/concluir', requireProLaboreAuth, async (req: Requ
 // Início da atividade — sinal independente da conclusão (ver comentário do
 // model AgendaInicio), pra medir em que etapa a rotina "fura": previstas →
 // iniciadas → concluídas no prazo.
-router.post('/agenda-itens/:id/iniciar', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/agenda-itens/:id/iniciar', requireProLaboreAuth, requireModulo('agenda', 'VER'), async (req: Request, res: Response) => {
   const parse = concluirSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1646,7 +1668,7 @@ router.post('/agenda-itens/:id/iniciar', requireProLaboreAuth, async (req: Reque
 // Inícios no intervalo pedido — mesma regra de visibilidade de
 // /agenda-conclusoes (vendedor só vê o próprio, dono/supervisor vê a
 // equipe), pra alimentar o funil de aderência.
-router.get('/agenda-inicios', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/agenda-inicios', requireProLaboreAuth, requireModulo('agenda', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const papel = req.proLaboreUser!.papel
   const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
@@ -1674,7 +1696,7 @@ router.get('/agenda-inicios', requireProLaboreAuth, async (req: Request, res: Re
 // as duas métricas juntas é que diferenciam quem cumpre agenda mas não
 // converte de quem cumpre e converte. Não cria tabela nova: deriva de
 // LeadEstagioHistorico, que já registra cada transição de estágio.
-router.get('/agenda/efetividade', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.get('/agenda/efetividade', requireProLaboreAuth, requireModulo('agenda', 'VER'), requireEscopoEquipe, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const { inicio, fim } = req.query
   const inicioData = typeof inicio === 'string' ? parseDataDiaUTC(inicio) : null
@@ -1762,7 +1784,7 @@ async function garantirMotivoNaLista(usuarioId: string, motivo: string): Promise
   })
 }
 
-router.get('/ocorrencias', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.get('/ocorrencias', requireProLaboreAuth, requireModulo('ocorrencias', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const { vendedorId, tipo, gravidade, status, inicio, fim } = req.query
 
@@ -1791,7 +1813,7 @@ router.get('/ocorrencias', requireProLaboreAuth, requireDonoOuSupervisor, async 
 // Cards de resumo do topo da tela — calculados à parte da listagem pra não
 // dependerem dos filtros ativos na tabela. Precisa vir antes de '/:id' pra
 // não ser interpretada como um id de ocorrência.
-router.get('/ocorrencias/resumo', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.get('/ocorrencias/resumo', requireProLaboreAuth, requireModulo('ocorrencias', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const agora = new Date()
   const daqui7Dias = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -1832,7 +1854,7 @@ const REGUA_DISCIPLINAR_LABEL: Record<(typeof REGUA_DISCIPLINAR)[number], string
 }
 
 // Precisa vir antes de '/:id' pra não ser interpretada como um id de ocorrência.
-router.get('/ocorrencias/sugestao-medida', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.get('/ocorrencias/sugestao-medida', requireProLaboreAuth, requireModulo('ocorrencias', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const { vendedorId, tipo } = req.query
   if (typeof vendedorId !== 'string' || !vendedorId || typeof tipo !== 'string' || !tipo) {
@@ -1872,7 +1894,7 @@ const criarOcorrenciaSchema = z.object({
   ocorrenciaAnteriorId: z.string().optional(),
 })
 
-router.post('/ocorrencias', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.post('/ocorrencias', requireProLaboreAuth, requireModulo('ocorrencias', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = criarOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1942,7 +1964,7 @@ router.post('/ocorrencias', requireProLaboreAuth, requireDonoOuSupervisor, async
   res.status(201).json(comHistorico)
 })
 
-router.get('/ocorrencias/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.get('/ocorrencias/:id', requireProLaboreAuth, requireModulo('ocorrencias', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const ocorrencia = await prisma.ocorrencia.findFirst({
     where: { id: String(req.params.id), usuarioId },
@@ -1977,7 +1999,7 @@ const editarOcorrenciaSchema = z.object({
 // sobrescrito silenciosamente, preservando o rastro de auditoria exigido
 // pelo processo disciplinar. protocolo, vendedorId e dataRegistro nunca são
 // editáveis (por isso nem entram no schema acima).
-router.patch('/ocorrencias/:id', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.patch('/ocorrencias/:id', requireProLaboreAuth, requireModulo('ocorrencias', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = editarOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2090,7 +2112,7 @@ const desfechoOcorrenciaSchema = z.object({
 // em /sugestao-medida é só uma sugestão — a decisão final é sempre manual).
 // Se o gestor quiser abrir uma nova ocorrência vinculada (reincidência),
 // isso é feito num POST /ocorrencias normal passando ocorrenciaAnteriorId.
-router.post('/ocorrencias/:id/desfecho', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.post('/ocorrencias/:id/desfecho', requireProLaboreAuth, requireModulo('ocorrencias', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = desfechoOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2135,7 +2157,7 @@ router.post('/ocorrencias/:id/desfecho', requireProLaboreAuth, requireDonoOuSupe
 // (carimbo pra auditoria) e, se já tinha prazo de correção definido,
 // avança o status de Aberta pra "Em prazo de correção", como no fluxo
 // descrito: o prazo só passa a valer depois que o documento é emitido.
-router.post('/ocorrencias/:id/documento', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.post('/ocorrencias/:id/documento', requireProLaboreAuth, requireModulo('ocorrencias', 'EDITAR'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const atual = await prisma.ocorrencia.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) {
@@ -2173,7 +2195,7 @@ const assinaturaOcorrenciaSchema = z.object({
 // A assinatura em si acontece no papel — aqui só se registra que ela
 // aconteceu (checkbox + data), mantendo o sistema como fonte da verdade
 // mesmo sem armazenar o documento físico.
-router.post('/ocorrencias/:id/assinatura', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+router.post('/ocorrencias/:id/assinatura', requireProLaboreAuth, requireModulo('ocorrencias', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = assinaturaOcorrenciaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2225,7 +2247,7 @@ function titularSocialMedia(req: Request): { titular: string; vendedorId: string
   return { titular: `vendedor:${vendedorId}`, vendedorId }
 }
 
-router.get('/social-media/conta', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/social-media/conta', requireProLaboreAuth, requireModulo('socialMedia', 'VER'), async (req: Request, res: Response) => {
   const conta = await prisma.socialMediaConta.findUnique({
     where: { titular: titularSocialMedia(req).titular },
     select: SOCIAL_MEDIA_SELECT,
@@ -2280,7 +2302,7 @@ function redirectUriSocialMediaOAuth(): string {
   return `${process.env.FRONTEND_URL}/pro-labore/social-media/callback`
 }
 
-router.post('/social-media/conectar-oauth', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/social-media/conectar-oauth', requireProLaboreAuth, requireModulo('socialMedia', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = z.object({ code: z.string().min(1, 'Código de autorização inválido') }).safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2303,7 +2325,7 @@ router.post('/social-media/conectar-oauth', requireProLaboreAuth, async (req: Re
 
 const conectarSocialMediaSchema = z.object({ accessToken: z.string().min(20, 'Token inválido') })
 
-router.post('/social-media/conectar', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/social-media/conectar', requireProLaboreAuth, requireModulo('socialMedia', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = conectarSocialMediaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2323,7 +2345,7 @@ router.post('/social-media/conectar', requireProLaboreAuth, async (req: Request,
   }
 })
 
-router.delete('/social-media/conta', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/social-media/conta', requireProLaboreAuth, requireModulo('socialMedia', 'EDITAR'), async (req: Request, res: Response) => {
   const conta = await prisma.socialMediaConta.findUnique({ where: { titular: titularSocialMedia(req).titular } })
   if (!conta) {
     res.status(404).json({ error: 'Nenhuma conta conectada' })
@@ -2340,7 +2362,7 @@ router.delete('/social-media/conta', requireProLaboreAuth, async (req: Request, 
 // atualizada + um resumo do que foi sincronizado, pra tela avisar quando
 // ainda ficaram posts sem insight (o sync tem um teto de tempo e completa
 // o resto na próxima rodada).
-router.post('/social-media/sincronizar', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/social-media/sincronizar', requireProLaboreAuth, requireModulo('socialMedia', 'EDITAR'), async (req: Request, res: Response) => {
   const conta = await prisma.socialMediaConta.findUnique({ where: { titular: titularSocialMedia(req).titular } })
   if (!conta) {
     res.status(404).json({ error: 'Nenhuma conta do Instagram conectada' })
@@ -2369,7 +2391,7 @@ router.post('/social-media/sincronizar-cron', async (req: Request, res: Response
   res.json(await rodarJobSocialMedia('HORA'))
 })
 
-router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/social-media/resumo', requireProLaboreAuth, requireModulo('socialMedia', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const { titular, vendedorId: vendedorTitular } = titularSocialMedia(req)
   const conta = await prisma.socialMediaConta.findUnique({ where: { titular } })
@@ -2390,7 +2412,7 @@ router.get('/social-media/resumo', requireProLaboreAuth, async (req: Request, re
 // operação. Ver `lib/planoCrescimento.ts` pro motor de regras em si — esta
 // rota só busca e agrega os números reais. Exclusiva do dono, porque cruza
 // dado de anúncio/ROAS (já restrito a ele em qualquer outra rota).
-router.get('/plano-crescimento', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/plano-crescimento', requireProLaboreAuth, requireModulo('planoCrescimento', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const agora = new Date()
   const inicioMesAtual = primeiroDiaDoMesUTC(agora)
@@ -2560,7 +2582,7 @@ const acaoCrescimentoSchema = z.object({
   texto: z.string().trim().min(1, 'Texto não pode ser vazio').max(500, 'Texto muito longo'),
 })
 
-router.post('/plano-crescimento/acoes', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/plano-crescimento/acoes', requireProLaboreAuth, requireModulo('planoCrescimento', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = acaoCrescimentoSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2577,7 +2599,7 @@ const acaoCrescimentoUpdateSchema = z.object({
   texto: z.string().trim().min(1, 'Texto não pode ser vazio').max(500, 'Texto muito longo').optional(),
 })
 
-router.patch('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.patch('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireModulo('planoCrescimento', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = acaoCrescimentoUpdateSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2598,7 +2620,7 @@ router.patch('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireDono, 
   res.json({ id: atualizada.id, texto: atualizada.texto, concluida: atualizada.concluida, origem: atualizada.origem })
 })
 
-router.delete('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.delete('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireModulo('planoCrescimento', 'EDITAR'), async (req: Request, res: Response) => {
   const acao = await prisma.planoCrescimentoAcao.findFirst({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub } })
   if (!acao) { res.status(404).json({ error: 'Ação não encontrada' }); return }
   // Só item customizado pode ser apagado — uma sugestão apagada voltaria
@@ -2611,7 +2633,7 @@ router.delete('/plano-crescimento/acoes/:id', requireProLaboreAuth, requireDono,
 
 // Evolução mensal: retrato do estágio de cada pilar mês a mês (ver upsert em
 // GET /plano-crescimento) — alimenta a grade de histórico na tela.
-router.get('/plano-crescimento/historico', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/plano-crescimento/historico', requireProLaboreAuth, requireModulo('planoCrescimento', 'VER'), async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
   const mesesParam = Number(req.query.meses)
   const quantidadeMeses = Number.isInteger(mesesParam) && mesesParam >= 1 && mesesParam <= 24 ? mesesParam : 6
@@ -2685,7 +2707,7 @@ function mensagemErroWhatsapp(e: unknown): string {
   return e instanceof ErroWhatsapp ? e.message : 'Falha inesperada ao falar com o servidor do WhatsApp'
 }
 
-router.get('/assistente/config', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/assistente/config', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
   const vendedorIdAlvo = assistenteVendedorIdAlvo(req, req.query.vendedorId)
   if (!vendedorIdAlvo) {
     res.json({ assistente: null, vendedor: null, servidorConfigurado: evolutionConfigurada(), configuracaoPadrao: CONFIG_ASSISTENTE_PADRAO })
@@ -2725,7 +2747,7 @@ const salvarAssistenteSchema = z.object({
   configuracao: configAssistenteSchema.optional(),
 })
 
-router.put('/assistente/config', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.put('/assistente/config', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = salvarAssistenteSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2753,7 +2775,7 @@ const conectarAssistenteSchema = z.object({
   numeroPareamento: z.string().optional(),
 })
 
-router.post('/assistente/conectar', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/assistente/conectar', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = conectarAssistenteSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2798,7 +2820,7 @@ router.post('/assistente/conectar', requireProLaboreAuth, async (req: Request, r
 
 // Consultado a cada poucos segundos enquanto o QR está na tela — é o que
 // confirma a conexão mesmo se o webhook de conexão não chegar.
-router.get('/assistente/conexao', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/assistente/conexao', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
   const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
   if (!vendedor) return
   const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id } })
@@ -2824,7 +2846,7 @@ router.get('/assistente/conexao', requireProLaboreAuth, async (req: Request, res
   }
 })
 
-router.delete('/assistente/config', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/assistente/config', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
   if (!vendedor) return
   const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id } })
@@ -2885,7 +2907,7 @@ const CONVERSA_LISTA_INCLUDE = {
   _count: { select: { mensagens: true } },
 }
 
-router.get('/assistente/conversas', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/assistente/conversas', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
   const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
   if (!vendedor) return
   const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id } })
@@ -2914,7 +2936,7 @@ router.get('/assistente/conversas', requireProLaboreAuth, async (req: Request, r
   res.json(conversas)
 })
 
-router.get('/assistente/conversas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/assistente/conversas/:id', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
   const conversa = await carregarConversaAutorizada(req, res)
   if (!conversa) return
   const completa = await prisma.assistenteConversa.findUnique({
@@ -2937,7 +2959,7 @@ const enviarMensagemAssistenteSchema = z.object({ texto: z.string().trim().min(1
 
 // Vendedor/dono responde pela própria tela — sai pelo WhatsApp do vendedor
 // e conta como "assumiu a conversa" (o assistente para de responder).
-router.post('/assistente/conversas/:id/mensagens', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/assistente/conversas/:id/mensagens', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = enviarMensagemAssistenteSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -2973,7 +2995,7 @@ router.post('/assistente/conversas/:id/mensagens', requireProLaboreAuth, async (
 
 const acaoConversaSchema = z.object({ acao: z.enum(['ASSUMIR', 'DEVOLVER', 'ENCERRAR', 'NAO_E_LEAD', 'CRIAR_LEAD']) })
 
-router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = acaoConversaSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'Ação inválida' })
@@ -3019,7 +3041,7 @@ router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, async (req: 
   res.json(atualizada)
 })
 
-router.get('/assistente/ignorados', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/assistente/ignorados', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
   const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
   if (!vendedor) return
   const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { id: true } })
@@ -3030,7 +3052,7 @@ router.get('/assistente/ignorados', requireProLaboreAuth, async (req: Request, r
   res.json(await prisma.assistenteContatoIgnorado.findMany({ where: { assistenteId: assistente.id }, orderBy: { criadoEm: 'desc' }, take: 500 }))
 })
 
-router.delete('/assistente/ignorados/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/assistente/ignorados/:id', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const item = await prisma.assistenteContatoIgnorado.findUnique({
     where: { id: String(req.params.id) },
     include: { assistente: { include: { vendedor: { select: { usuarioId: true } } } } },
@@ -3054,7 +3076,7 @@ const simularAssistenteSchema = z.object({
   nomeContato: z.string().max(80).optional(),
 })
 
-router.post('/assistente/simular', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/assistente/simular', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = simularAssistenteSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -3078,7 +3100,7 @@ router.post('/assistente/simular', requireProLaboreAuth, async (req: Request, re
 
 // Painel de desempenho do assistente num período (dias corridos no horário
 // de Brasília, terminando hoje).
-router.get('/assistente/resumo', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/assistente/resumo', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
   const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
   if (!vendedor) return
   const dias = Math.min(365, Math.max(1, Number(req.query.dias) || 30))
@@ -3118,7 +3140,7 @@ function reuniaoWhereBase(req: Request): { usuarioId: string; vendedorId: string
   return { usuarioId, vendedorId }
 }
 
-router.get('/reunioes', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/reunioes', requireProLaboreAuth, requireModulo('reunioes', 'VER'), async (req: Request, res: Response) => {
   const { tipo } = req.query
   const reunioes = await prisma.reuniao.findMany({
     where: { ...reuniaoWhereBase(req), ...(typeof tipo === 'string' && (TIPOS_REUNIAO as readonly string[]).includes(tipo) ? { tipo } : {}) },
@@ -3140,7 +3162,7 @@ const reuniaoSchema = z.object({
   transcricao: z.string().max(50000, 'Transcrição muito longa').optional(),
 })
 
-router.post('/reunioes', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/reunioes', requireProLaboreAuth, requireModulo('reunioes', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = reuniaoSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   const reuniao = await prisma.reuniao.create({
@@ -3149,7 +3171,7 @@ router.post('/reunioes', requireProLaboreAuth, async (req: Request, res: Respons
   res.status(201).json(reuniao)
 })
 
-router.get('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/reunioes/:id', requireProLaboreAuth, requireModulo('reunioes', 'VER'), async (req: Request, res: Response) => {
   const reuniao = await prisma.reuniao.findFirst({
     where: { id: String(req.params.id), ...reuniaoWhereBase(req) },
     include: { notas: { orderBy: { criadoEm: 'asc' } } },
@@ -3158,7 +3180,7 @@ router.get('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Resp
   res.json(reuniao)
 })
 
-router.patch('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.patch('/reunioes/:id', requireProLaboreAuth, requireModulo('reunioes', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = reuniaoSchema.partial().safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   const existente = await prisma.reuniao.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
@@ -3170,14 +3192,14 @@ router.patch('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Re
   res.json(atualizada)
 })
 
-router.delete('/reunioes/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/reunioes/:id', requireProLaboreAuth, requireModulo('reunioes', 'EDITAR'), async (req: Request, res: Response) => {
   const existente = await prisma.reuniao.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Reunião não encontrada' }); return }
   await prisma.reuniao.delete({ where: { id: existente.id } })
   res.json({ ok: true })
 })
 
-router.get('/notas', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/notas', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'VER'), async (req: Request, res: Response) => {
   const { reuniaoId, categoria, pastaId } = req.query
   const notas = await prisma.nota.findMany({
     where: {
@@ -3222,7 +3244,7 @@ async function validarPastaDoUsuario(req: Request, pastaId: string): Promise<boo
   return !!pasta
 }
 
-router.post('/notas', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/notas', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = notaSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   if (parse.data.reuniaoId) {
@@ -3236,7 +3258,7 @@ router.post('/notas', requireProLaboreAuth, async (req: Request, res: Response) 
   res.status(201).json(nota)
 })
 
-router.patch('/notas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.patch('/notas/:id', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = notaSchema.omit({ reuniaoId: true }).partial().safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
@@ -3248,7 +3270,7 @@ router.patch('/notas/:id', requireProLaboreAuth, async (req: Request, res: Respo
   res.json(atualizada)
 })
 
-router.delete('/notas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/notas/:id', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const existente = await prisma.nota.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Nota não encontrada' }); return }
   await prisma.nota.delete({ where: { id: existente.id } })
@@ -3259,7 +3281,7 @@ router.delete('/notas/:id', requireProLaboreAuth, async (req: Request, res: Resp
 // pasta, subpasta — é tudo o mesmo conceito de container aninhável). Volta
 // sempre a lista inteira e achatada (ver comentário do modelo Pasta) —
 // dá pra montar a árvore/breadcrumb no cliente sem N chamadas.
-router.get('/pastas', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/pastas', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'VER'), async (req: Request, res: Response) => {
   const pastas = await prisma.pasta.findMany({ where: reuniaoWhereBase(req), orderBy: { nome: 'asc' } })
   res.json(pastas)
 })
@@ -3270,7 +3292,7 @@ const pastaSchema = z.object({
   paiId: z.string().nullable().optional(),
 })
 
-router.post('/pastas', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/pastas', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = pastaSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   if (parse.data.paiId && !(await validarPastaDoUsuario(req, parse.data.paiId))) {
@@ -3280,7 +3302,7 @@ router.post('/pastas', requireProLaboreAuth, async (req: Request, res: Response)
   res.status(201).json(pasta)
 })
 
-router.patch('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.patch('/pastas/:id', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = pastaSchema.partial().safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   const existente = await prisma.pasta.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
@@ -3296,7 +3318,7 @@ router.patch('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Resp
   res.json(atualizada)
 })
 
-router.delete('/pastas/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/pastas/:id', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const existente = await prisma.pasta.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Pasta não encontrada' }); return }
   await excluirPastasSubindoConteudo(req, [existente.id])
@@ -3349,7 +3371,7 @@ const loteAnotacoesSchema = z.object({
   mapas: z.array(z.string()).max(500).default([]),
 })
 
-router.post('/anotacoes/mover', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/anotacoes/mover', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = loteAnotacoesSchema.extend({ destinoPastaId: z.string().nullable() }).safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Seleção inválida' }); return }
   const { pastas, notas, mapas, destinoPastaId } = parse.data
@@ -3373,7 +3395,7 @@ router.post('/anotacoes/mover', requireProLaboreAuth, async (req: Request, res: 
 
 // Páginas são apagadas, mapas mentais vão pra lixeira e pastas somem
 // soltando o conteúdo pro nível de cima (mesmas regras das exclusões uma a uma).
-router.post('/anotacoes/excluir', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/anotacoes/excluir', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = loteAnotacoesSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Seleção inválida' }); return }
   const { pastas, notas, mapas } = parse.data
@@ -3445,7 +3467,7 @@ function criarBoardPadrao(texto: string) {
   }
 }
 
-router.get('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/mapas-mentais', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'VER'), async (req: Request, res: Response) => {
   const { pastaId } = req.query
   const mapas = await prisma.mapaMental.findMany({
     where: {
@@ -3465,7 +3487,7 @@ router.get('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Res
 // aproveita e apaga em definitivo o que passou do prazo, antes de listar.
 const DIAS_RETENCAO_LIXEIRA = 30
 
-router.get('/mapas-mentais/lixeira', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/mapas-mentais/lixeira', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'VER'), async (req: Request, res: Response) => {
   const base = reuniaoWhereBase(req)
   const limite = new Date(Date.now() - DIAS_RETENCAO_LIXEIRA * 24 * 60 * 60 * 1000)
   await prisma.mapaMental.deleteMany({ where: { ...base, excluidoEm: { lt: limite } } })
@@ -3506,7 +3528,7 @@ const mapaMentalSchema = z.object({
   pastaId: z.string().nullable().optional(),
 })
 
-router.post('/mapas-mentais', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/mapas-mentais', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = mapaMentalSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
@@ -3550,7 +3572,7 @@ async function talvezSalvarVersao(mapaMentalId: string, objetosAtuais: unknown, 
   if (excedentes.length > 0) await prisma.mapaMentalVersao.deleteMany({ where: { id: { in: excedentes.map(v => v.id) } } })
 }
 
-router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.patch('/mapas-mentais/:id', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const parse = mapaMentalSchema.partial().safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: parse.error.issues[0].message }); return }
   if (parse.data.pastaId && !(await validarPastaDoUsuario(req, parse.data.pastaId))) {
@@ -3575,7 +3597,7 @@ router.patch('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, re
   res.json(atualizado)
 })
 
-router.get('/mapas-mentais/:id/versoes', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.get('/mapas-mentais/:id/versoes', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'VER'), async (req: Request, res: Response) => {
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
   const versoes = await prisma.mapaMentalVersao.findMany({
@@ -3584,7 +3606,7 @@ router.get('/mapas-mentais/:id/versoes', requireProLaboreAuth, async (req: Reque
   res.json(versoes)
 })
 
-router.post('/mapas-mentais/:id/versoes/:versaoId/restaurar', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/mapas-mentais/:id/versoes/:versaoId/restaurar', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req) } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
   const versao = await prisma.mapaMentalVersao.findFirst({ where: { id: String(req.params.versaoId), mapaMentalId: existente.id } })
@@ -3602,21 +3624,21 @@ router.post('/mapas-mentais/:id/versoes/:versaoId/restaurar', requireProLaboreAu
   res.json(atualizado)
 })
 
-router.delete('/mapas-mentais/:id', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/mapas-mentais/:id', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req), excluidoEm: null } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado' }); return }
   await prisma.mapaMental.update({ where: { id: existente.id }, data: { excluidoEm: new Date() } })
   res.json({ ok: true })
 })
 
-router.post('/mapas-mentais/:id/restaurar', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.post('/mapas-mentais/:id/restaurar', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req), excluidoEm: { not: null } } })
   if (!existente) { res.status(404).json({ error: 'Mapa mental não encontrado na lixeira' }); return }
   const restaurado = await prisma.mapaMental.update({ where: { id: existente.id }, data: { excluidoEm: null } })
   res.json(restaurado)
 })
 
-router.delete('/mapas-mentais/:id/definitivo', requireProLaboreAuth, async (req: Request, res: Response) => {
+router.delete('/mapas-mentais/:id/definitivo', requireProLaboreAuth, requireAlgumModulo(['reunioes', 'anotacoes'], 'EDITAR'), async (req: Request, res: Response) => {
   // Só apaga de vez o que já está na lixeira — proteção contra excluir um
   // board inteiro sem passar pela confirmação em dois passos.
   const existente = await prisma.mapaMental.findFirst({ where: { id: String(req.params.id), ...reuniaoWhereBase(req), excluidoEm: { not: null } } })

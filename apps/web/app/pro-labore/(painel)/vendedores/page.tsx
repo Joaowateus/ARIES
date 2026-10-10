@@ -2,14 +2,15 @@
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, Vendedor, ParametroLiquidez, Ocorrencia, TIPO_OCORRENCIA_LABEL, GRAVIDADE_OCORRENCIA_LABEL, STATUS_OCORRENCIA_LABEL } from '@/lib/proLaboreApi'
+import { temAcesso, proLaboreApi, Vendedor, ParametroLiquidez, Ocorrencia, TIPO_OCORRENCIA_LABEL, GRAVIDADE_OCORRENCIA_LABEL, STATUS_OCORRENCIA_LABEL } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 
 export default function ProLaboreVendedoresPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel === 'DONO'
+  // Dono ou acesso com o módulo liberado (Acessos e permissões).
+  const isDono = temAcesso(usuario, 'vendedores')
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
@@ -195,7 +196,7 @@ export default function ProLaboreVendedoresPage() {
     return (
       <div className="pl-empty pl-card">
         <div className="pl-emoji">🔒</div>
-        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
+        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Seu acesso não inclui essa área</h3>
         <p style={{ marginTop: 6 }}>Fale com o responsável se precisar de alguma alteração no time.</p>
       </div>
     )
@@ -279,10 +280,12 @@ export default function ProLaboreVendedoresPage() {
                       <span className="pl-link-action" onClick={() => toggleOcorrencias(v)} style={{ marginRight: 14 }}>
                         {ocorrenciasAbertoId === v.id ? 'Ocultar ocorrências' : 'Ver ocorrências'}
                       </span>
-                      <span className="pl-link-action" onClick={() => (concedendoId === v.id ? fecharConcessao() : abrirConcessao(v))} style={{ marginRight: 14 }}>
-                        {v.email ? 'Trocar acesso' : 'Dar acesso'}
-                      </span>
-                      {v.email && <span className="pl-link-action" onClick={() => revogarAcesso(v.id)} style={{ marginRight: 14 }}>Revogar acesso</span>}
+                      {usuario?.papel === 'DONO' && <>
+                        <span className="pl-link-action" onClick={() => (concedendoId === v.id ? fecharConcessao() : abrirConcessao(v))} style={{ marginRight: 14 }}>
+                          {v.email ? 'Trocar acesso' : 'Dar acesso'}
+                        </span>
+                        {v.email && <span className="pl-link-action" onClick={() => revogarAcesso(v.id)} style={{ marginRight: 14 }}>Revogar acesso</span>}
+                      </>}
                       <span className="pl-link-action" onClick={() => alternarAtivo(v)} style={{ marginRight: 14 }}>{v.ativo ? 'Desativar' : 'Ativar'}</span>
                       <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
                     </td>

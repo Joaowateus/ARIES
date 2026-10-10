@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { proLaboreApi, FunilMensal, GastoAnuncioMensal } from '@/lib/proLaboreApi'
+import { temAcesso, proLaboreApi, FunilMensal, GastoAnuncioMensal } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 
@@ -12,7 +12,8 @@ function mesAtualStr() {
 
 export default function ProLaboreIndicadoresPage() {
   const { usuario } = useProLaboreAuth()
-  const isDono = usuario?.papel === 'DONO'
+  // Dono ou acesso com o módulo liberado (Acessos e permissões).
+  const isDono = temAcesso(usuario, 'indicadores')
   const [mesSelecionado, setMesSelecionado] = useState(mesAtualStr())
   const [funis, setFunis] = useState<FunilMensal[]>([])
   const [gastos, setGastos] = useState<GastoAnuncioMensal[]>([])
@@ -77,7 +78,7 @@ export default function ProLaboreIndicadoresPage() {
     return (
       <div className="pl-empty pl-card">
         <div className="pl-emoji">🔒</div>
-        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Área restrita ao dono da operação</h3>
+        <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Seu acesso não inclui essa área</h3>
         <p style={{ marginTop: 6 }}>Indicadores de funil e anúncios são visão geral do negócio.</p>
       </div>
     )
