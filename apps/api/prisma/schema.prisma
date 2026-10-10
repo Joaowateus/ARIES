@@ -966,6 +966,7 @@ model ProLaboreUsuario {
   smConcorrentes            SmConcorrente[]
   smPlanejamentos           SmPlanejamento[]
   metaSaude                 MetaSaude?
+  lancamentosFinanceiros    LancamentoFinanceiro[]
 
   @@map("pro_labore_usuarios")
 }
@@ -1002,6 +1003,8 @@ model Vendedor {
   // Falso para quem tem login mas não vende (gerente, financeiro,
   // marketing): fica fora do ranking e do rodízio de leads.
   vende                Boolean  @default(true)
+  // Salário lembrado pelo "Pagar salários" do Financeiro (vem preenchido).
+  salarioBase          Float?
   criadoEm             DateTime @default(now())
   atualizadoEm         DateTime @updatedAt
 
@@ -1012,6 +1015,7 @@ model Vendedor {
   ocorrencias         Ocorrencia[]
   assistenteComercial AssistenteComercial?
   socialMediaContas   SocialMediaConta[]
+  lancamentosFinanceiros LancamentoFinanceiro[]
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -1232,6 +1236,41 @@ model PagamentoComissao {
   @@unique([usuarioId, tipo, numero])
   @@index([vendedorId])
   @@map("pro_labore_pagamentos_comissao")
+}
+
+// Financeiro: pagamentos da operação que não saem das vendas (salário,
+// adiantamento, bonificação, reembolso, investimento, custo e outros gastos).
+// Cada um vira um recibo numerado por conta e por categoria, impresso e
+// assinado como o comprovante de comissão. Cancelar não apaga: o número
+// nunca é reaproveitado e o recibo aparece como cancelado.
+model LancamentoFinanceiro {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  categoria      String // SALARIO | ADIANTAMENTO | BONIFICACAO | REEMBOLSO | INVESTIMENTO | CUSTO | OUTRO
+  numero         Int
+  // Quando quem recebe é da equipe (salário, vale, bonificação, reembolso).
+  vendedorId     String?
+  favorecido     String // nome de quem recebe, como sai no recibo
+  documento      String? // CPF ou CNPJ de quem recebe (opcional)
+  pagador        String // quem paga (a empresa), como sai no recibo
+  descricao      String // "referente a…"
+  competencia    String? // AAAA-MM: mês a que o pagamento se refere
+  // Linhas do recibo: [{ descricao, valor, desconto }]. Descontos abatem do total.
+  itens          Json
+  valorTotal     Float
+  pagoEm         DateTime
+  formaPagamento String? // PIX | DINHEIRO | TRANSFERENCIA | BOLETO | CARTAO | OUTRO
+  observacao     String?
+  canceladoEm    DateTime?
+  criadoEm       DateTime  @default(now())
+
+  usuario  ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  vendedor Vendedor?        @relation(fields: [vendedorId], references: [id], onDelete: Restrict)
+
+  @@unique([usuarioId, categoria, numero])
+  @@index([usuarioId, pagoEm])
+  @@index([vendedorId])
+  @@map("pro_labore_lancamentos_financeiros")
 }
 
 // Lead/oportunidade da esteira comercial do Pró-Labore. Substitui a
