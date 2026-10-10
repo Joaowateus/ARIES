@@ -996,6 +996,12 @@ model Vendedor {
   // não vê a meta anual da operação (isso é visão de dono/supervisor); no
   // lugar, o dashboard dele mostra essa meta mensal própria.
   metaMensal           Float?
+  // Acessos da equipe (tela Acessos e permissões): nível por módulo
+  // escolhido pelo dono. Nulo = padrão do papel (lib/acessos.ts).
+  permissoes           Json?
+  // Falso para quem tem login mas não vende (gerente, financeiro,
+  // marketing): fica fora do ranking e do rodízio de leads.
+  vende                Boolean  @default(true)
   criadoEm             DateTime @default(now())
   atualizadoEm         DateTime @updatedAt
 

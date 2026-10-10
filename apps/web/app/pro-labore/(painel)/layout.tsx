@@ -9,43 +9,56 @@ import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
 
-interface NavItem { href: string; label: string; icon: NavIconName; donoOnly?: boolean; hideFromVendedor?: boolean }
+// `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
+interface NavItem { href: string; label: string; icon: NavIconName; modulo?: string; donoOnly?: boolean; hideFromVendedor?: boolean }
 interface NavGroup { label: string | null; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
   { label: null, items: [
-    { href: '/pro-labore', label: 'Dashboard', icon: 'home' },
+    { href: '/pro-labore', label: 'Dashboard', icon: 'home', modulo: 'painel' },
   ] },
   { label: 'Operação', items: [
-    { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban' },
-    { href: '/pro-labore/agenda', label: 'Agenda', icon: 'calendar' },
+    { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm' },
+    { href: '/pro-labore/agenda', label: 'Agenda', icon: 'calendar', modulo: 'agenda' },
     // Sem donoOnly/hideFromVendedor: bloco pessoal de reuniões/anotações,
     // cada um só vê o próprio (escopo feito no backend).
-    { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic' },
-    { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook' },
-    { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', donoOnly: true },
+    { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic', modulo: 'reunioes' },
+    { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook', modulo: 'anotacoes' },
+    { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', modulo: 'vendas', donoOnly: true },
     // Sem donoOnly: cada pessoa conecta o próprio Instagram e só vê o dela.
-    { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at' },
-    { href: '/pro-labore/trafego', label: 'Tráfego', icon: 'funnel', donoOnly: true },
+    { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', modulo: 'socialMedia' },
+    { href: '/pro-labore/trafego', label: 'Tráfego', icon: 'funnel', modulo: 'trafego', donoOnly: true },
     // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o
     // próprio assistente, ligado ao próprio número, então todo mundo
     // precisa enxergar a própria aba (o escopo por pessoa é feito no backend).
-    { href: '/pro-labore/assistente', label: 'Assistente Comercial', icon: 'chat' },
+    { href: '/pro-labore/assistente', label: 'Assistente Comercial', icon: 'chat', modulo: 'assistente' },
   ] },
   { label: 'Equipe', items: [
-    { href: '/pro-labore/vendedores', label: 'Vendedores', icon: 'users', donoOnly: true },
+    { href: '/pro-labore/vendedores', label: 'Vendedores', icon: 'users', modulo: 'vendedores', donoOnly: true },
     // Ocorrências é a única aba visível pra supervisor mas escondida de
     // vendedor comum — por isso usa hideFromVendedor em vez de donoOnly.
-    { href: '/pro-labore/ocorrencias', label: 'Ocorrências', icon: 'flag', hideFromVendedor: true },
+    { href: '/pro-labore/ocorrencias', label: 'Ocorrências', icon: 'flag', modulo: 'ocorrencias', hideFromVendedor: true },
     // Tela 07 da especificação do Social Media: o que o papel enxerga e o convite.
     { href: '/pro-labore/equipe/acessos', label: 'Acessos e permissões', icon: 'shield', donoOnly: true },
   ] },
   { label: 'Sistema', items: [
-    { href: '/pro-labore/indicadores', label: 'Indicadores', icon: 'chart', donoOnly: true },
-    { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', icon: 'compass', donoOnly: true },
-    { href: '/pro-labore/configuracoes', label: 'Configurações', icon: 'gear', donoOnly: true },
+    { href: '/pro-labore/indicadores', label: 'Indicadores', icon: 'chart', modulo: 'indicadores', donoOnly: true },
+    { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', icon: 'compass', modulo: 'planoCrescimento', donoOnly: true },
+    { href: '/pro-labore/configuracoes', label: 'Configurações', icon: 'gear', modulo: 'configuracoes', donoOnly: true },
   ] },
 ]
+
+// Aviso no topo quando o acesso à área é só para ver.
+const AVISO_SO_VER: Record<string, string> = {
+  agenda: 'Você pode ver e concluir as suas tarefas. Criar e mudar tarefas depende do gestor.',
+}
+
+// Módulo da página aberta: o item do menu com o caminho mais longo que bate.
+function itemDaPagina(pathname: string): NavItem | undefined {
+  return NAV_GROUPS.flatMap(g => g.items)
+    .filter(i => pathname === i.href || (i.href !== '/pro-labore' && pathname.startsWith(`${i.href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]
+}
 
 const CHAVE_SIDEBAR_COLAPSADA = 'pl_sidebar_colapsada'
 const CHAVE_GRUPOS_COLAPSADOS = 'pl_sidebar_grupos_colapsados'
@@ -114,6 +127,14 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     else if (usuario?.papel === 'SOCIAL_MEDIA') router.replace('/pro-labore/sm')
   }, [usuario, loading, router])
 
+  // Sem o Dashboard liberado, a entrada do sistema vira o primeiro módulo que a pessoa tem.
+  useEffect(() => {
+    const a = usuario && usuario.papel !== 'DONO' ? usuario.acessos : null
+    if (!a || pathname !== '/pro-labore' || (a.painel ?? 'NENHUM') !== 'NENHUM') return
+    const primeiro = NAV_GROUPS.flatMap(g => g.items).find(i => i.modulo && (a[i.modulo] ?? 'NENHUM') !== 'NENHUM')
+    if (primeiro) router.replace(primeiro.href)
+  }, [usuario, pathname, router])
+
   // fecha a gaveta (mobile) ao trocar de página
   useEffect(() => { setMenuAberto(false) }, [pathname])
 
@@ -139,7 +160,17 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
 
   const isDono = usuario.papel === 'DONO'
   const isVendedor = usuario.papel === 'VENDEDOR'
-  const podeVerItem = (item: NavItem) => (!item.donoOnly || isDono) && (!item.hideFromVendedor || !isVendedor)
+  // Acessos da equipe: o menu mostra só os módulos liberados para esse login.
+  // Sem o mapa (sessão antiga em cache), vale a regra fixa de antes.
+  const acessos = isDono ? null : usuario.acessos ?? null
+  const nivelDe = (item?: NavItem) => (!item?.modulo || !acessos ? null : acessos[item.modulo] ?? 'NENHUM')
+  const podeVerItem = (item: NavItem) => {
+    if (isDono) return true
+    if (acessos) return item.modulo ? nivelDe(item) !== 'NENHUM' : !item.donoOnly
+    return !item.donoOnly && (!item.hideFromVendedor || !isVendedor)
+  }
+  const itemAtual = itemDaPagina(pathname)
+  const nivelAtual = nivelDe(itemAtual)
   const grupos = NAV_GROUPS
     .map(grupo => ({ ...grupo, items: grupo.items.filter(podeVerItem) }))
     .filter(grupo => grupo.items.length > 0)
@@ -244,7 +275,19 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
         </div>
 
         <div className="pl-shell">
-          {children}
+          {nivelAtual === 'NENHUM' ? (
+            <div className="pl-card pl-sem-acesso" role="alert">
+              <div className="pl-card-title">Seu acesso não inclui {itemAtual?.label}</div>
+              <p className="pl-card-sub">Peça ao gestor para liberar essa área em Acessos e permissões.{grupos[0]?.items[0] ? <> Enquanto isso, você pode usar <Link href={grupos[0].items[0].href}>{grupos[0].items[0].label}</Link>.</> : null}</p>
+            </div>
+          ) : (
+            <>
+              {nivelAtual === 'VER' && itemAtual?.modulo !== 'painel' && (
+                <div className="pl-alert pl-so-ver" role="status">{AVISO_SO_VER[itemAtual!.modulo!] ?? `Seu acesso a ${itemAtual!.label} é só para ver: dá para consultar, mas não mudar nada.`}</div>
+              )}
+              {children}
+            </>
+          )}
 
           <div className="pl-footer">
             <span>Pró-Labore — módulo pessoal do ARIES.</span>

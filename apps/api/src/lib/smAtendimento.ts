@@ -361,7 +361,7 @@ export async function filaAtendimento(usuarioId: string) {
 
 export async function proximoConsultor(usuarioId: string): Promise<{ id: string; nome: string } | null> {
   const consultores = await prisma.vendedor.findMany({
-    where: { usuarioId, ativo: true, email: { not: null }, senhaHash: { not: null } },
+    where: { usuarioId, ativo: true, vende: true, email: { not: null }, senhaHash: { not: null } },
     select: { id: true, nome: true },
     orderBy: [{ criadoEm: 'asc' }, { id: 'asc' }],
   })

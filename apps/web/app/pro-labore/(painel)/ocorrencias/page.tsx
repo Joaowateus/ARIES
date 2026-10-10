@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import {
+import { temAcesso,
   proLaboreApi, Ocorrencia, ResumoOcorrencias, Vendedor, ParametroLiquidez,
   TIPOS_OCORRENCIA, TIPO_OCORRENCIA_LABEL, TipoOcorrencia,
   GRAVIDADES_OCORRENCIA, GRAVIDADE_OCORRENCIA_LABEL, GravidadeOcorrencia,
@@ -77,7 +77,7 @@ function OcorrenciasConteudo() {
   const { usuario } = useProLaboreAuth()
   // Aba disponível pro dono e pro supervisor — vendedor comum não deve
   // enxergar ocorrências disciplinares/feedback da equipe.
-  const podeAcessar = usuario?.papel === 'DONO' || usuario?.papel === 'SUPERVISOR'
+  const podeAcessar = temAcesso(usuario, 'ocorrencias')
   // Permite chegar aqui já filtrado por vendedor a partir do bloco "Histórico
   // de Ocorrências" no perfil dele, em Vendedores (?vendedorId=...).
   const searchParams = useSearchParams()

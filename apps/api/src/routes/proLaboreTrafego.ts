@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
+import { requireModulo } from '../lib/acessos'
 import { listarContasDeAnuncio, ErroMetaAds, erroDeToken, diagnosticarConexao, type PassoDiagnostico } from '../lib/metaAds'
 import { PASSOS_APP_BLOQUEADO, TITULO_APP_BLOQUEADO, causaDoErroMeta } from '../lib/metaConexao'
 import { sincronizarTrafego, DIAS_HISTORICO, VERSAO_DADOS, hojeNoFuso, somarDias } from '../lib/trafegoSync'
@@ -39,7 +40,7 @@ function erroMeta(res: Response, e: unknown) {
   res.status(e instanceof ErroMetaAds ? 400 : 502).json({ error: e instanceof Error ? e.message : 'Falha ao falar com a Meta' })
 }
 
-router.get('/trafego/conta', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/trafego/conta', requireProLaboreAuth, requireModulo('trafego', 'VER'), async (req: Request, res: Response) => {
   const c = await prisma.trafegoConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
   res.json(c ? { conectada: true, conta: resumoConta(c) } : { conectada: false })
 })
@@ -116,7 +117,7 @@ router.delete('/trafego/conta', requireProLaboreAuth, requireDono, async (req: R
   res.status(204).end()
 })
 
-router.post('/trafego/sincronizar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/trafego/sincronizar', requireProLaboreAuth, requireModulo('trafego', 'EDITAR'), async (req: Request, res: Response) => {
   const c = await prisma.trafegoConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
   if (!c) {
     res.status(404).json({ error: 'Nenhuma conta de anúncios conectada' })
@@ -156,7 +157,7 @@ function comoResolver(passos: PassoDiagnostico[], nomeConta: string) {
 }
 
 // Testa a conexão passo a passo e diz o que resolver.
-router.post('/trafego/diagnostico', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.post('/trafego/diagnostico', requireProLaboreAuth, requireModulo('trafego', 'EDITAR'), async (req: Request, res: Response) => {
   const c = await prisma.trafegoConta.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
   if (!c) {
     res.status(404).json({ error: 'Nenhuma conta de anúncios conectada' })
@@ -186,7 +187,7 @@ router.post('/trafego/sincronizar-cron', async (req: Request, res: Response) => 
 
 const dataSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
-router.get('/trafego/analise', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/trafego/analise', requireProLaboreAuth, requireModulo('trafego', 'VER'), async (req: Request, res: Response) => {
   const parse = z.object({
     inicio: dataSchema, fim: dataSchema,
     campanhaId: z.string().max(40).optional(), adsetId: z.string().max(40).optional(),
@@ -211,7 +212,7 @@ router.get('/trafego/analise', requireProLaboreAuth, requireDono, async (req: Re
 
 // Públicos (idade/gênero, região, posicionamento, dispositivo, horário):
 // vem da Meta sob demanda e fica guardado por período.
-router.get('/trafego/publicos', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.get('/trafego/publicos', requireProLaboreAuth, requireModulo('trafego', 'VER'), async (req: Request, res: Response) => {
   const parse = z.object({
     inicio: dataSchema, fim: dataSchema,
     campanhaId: z.string().max(40).optional(), adsetId: z.string().max(40).optional(), forcar: z.enum(['1']).optional(),
@@ -246,7 +247,7 @@ const configSchema = z.object({
 })
 
 // Ajustes do funil (etapas visíveis, metas, contagem do CRM) — mescla com o que já existe.
-router.put('/trafego/configuracao', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+router.put('/trafego/configuracao', requireProLaboreAuth, requireModulo('trafego', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = configSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'Configuração inválida' })

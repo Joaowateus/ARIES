@@ -3252,3 +3252,24 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-meta-bloqueio-testes { margin: 0; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.5; }
 .pl-meta-bloqueio-testes li.ok::marker { color: #34d399; }
 .pl-meta-bloqueio-testes li.erro::marker { color: #f87171; }
+
+/* Acessos da equipe (Equipe → Acessos e permissões) */
+.pl-acessos-area { display: flex; justify-content: flex-start; margin-bottom: 16px; }
+.pl-acessos-lista { padding: 4px 20px; gap: 0; }
+.pl-acesso.inativo { opacity: .6; }
+.pl-acesso-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pl-acesso-resumo { margin-top: 6px !important; line-height: 1.5; }
+.pl-acesso-editor { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.pl-acesso-col { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.pl-acesso-modulos { flex: 999 1 520px; min-width: 0; padding: 8px 20px; gap: 0; }
+.pl-acesso-grupo { padding-top: 10px; }
+.pl-acesso-grupo h3 { margin: 6px 0 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--sm-text-muted); }
+.pl-acesso-perfis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pl-acesso-perfil { text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--sm-border-strong); background: var(--sm-surface-2); color: var(--sm-text); cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-height: 44px; font: inherit; }
+.pl-acesso-perfil small { font-size: 11.5px; color: var(--sm-text-muted); line-height: 1.4; }
+.pl-acesso-perfil:hover { border-color: var(--sm-accent, var(--sm-border-strong)); }
+.pl-acesso-perfil.ativo { border-color: var(--sm-accent, #7c9cff); box-shadow: inset 0 0 0 1px var(--sm-accent, #7c9cff); }
+.pl-acesso-salvar { margin-top: 18px; }
+.pl-so-ver { margin-bottom: 14px; }
+.pl-sem-acesso { max-width: 640px; }
+.pl-sem-acesso a { text-decoration: underline; }

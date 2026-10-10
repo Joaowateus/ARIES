@@ -240,7 +240,7 @@ export default function ProLaboreLeadsPage() {
       proLaboreApi.parametros.get(),
       proLaboreApi.funilMetas.listar(),
     ])
-      .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v); setParametro(p); setMetasFunil(metas) })
+      .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v.filter(x => x.vende !== false)); setParametro(p); setMetasFunil(metas) })
       .finally(() => setLoading(false))
   }, [vejaEquipe])
 

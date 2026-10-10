@@ -139,7 +139,7 @@ export default function ProLaboreDashboardPage() {
   const [metasFunil, setMetasFunil] = useState<MetaFunilProLabore[]>([])
 
   useEffect(() => {
-    Promise.all([proLaboreApi.parametros.get(), proLaboreApi.leads.listar(), proLaboreApi.funilMetas.listar()]).then(([param, ls, metas]) => {
+    Promise.all([proLaboreApi.parametros.get(), proLaboreApi.leads.listar().catch(() => []), proLaboreApi.funilMetas.listar()]).then(([param, ls, metas]) => {
       setParametro(param)
       setLeads(ls)
       setMetasFunil(metas)
@@ -183,7 +183,7 @@ export default function ProLaboreDashboardPage() {
   }, [chavesNecessariasKey])
 
   useEffect(() => {
-    if (vejaEquipe) proLaboreApi.vendedores.listar().then(setVendedores)
+    if (vejaEquipe) proLaboreApi.vendedores.listar().then(setVendedores).catch(() => undefined)
   }, [vejaEquipe])
 
   // Card "Receita e pró-labore detalhados" — período curto (hoje/7 dias)
