@@ -471,7 +471,14 @@ router.delete('/vendedores/:id', requireProLaboreAuth, requireModulo('vendedores
     res.status(403).json({ error: 'Essa pessoa tem login no sistema: só o gestor pode excluir.' })
     return
   }
-  const comprovantes = await prisma.pagamentoComissao.count({ where: { vendedorId: atual.id } })
+  const [comprovantes, recibos] = await Promise.all([
+    prisma.pagamentoComissao.count({ where: { vendedorId: atual.id } }),
+    prisma.lancamentoFinanceiro.count({ where: { vendedorId: atual.id } }),
+  ])
+  if (recibos > 0) {
+    res.status(409).json({ error: `Essa pessoa tem ${recibos} recibo${recibos > 1 ? 's' : ''} no Financeiro (salário, vale…). Desative em vez de excluir, pra não perder o histórico.` })
+    return
+  }
   if (comprovantes > 0) {
     res.status(409).json({ error: `Esse vendedor tem ${comprovantes} comprovante${comprovantes > 1 ? 's' : ''} de comissão registrado${comprovantes > 1 ? 's' : ''}. Desative o vendedor em vez de excluir, pra não perder o histórico.` })
     return

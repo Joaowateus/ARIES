@@ -25,6 +25,8 @@ const NAV_GROUPS: NavGroup[] = [
     { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic', modulo: 'reunioes' },
     { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook', modulo: 'anotacoes' },
     { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', modulo: 'vendas', donoOnly: true },
+    // Salários, investimentos, custos e outros gastos, com recibo.
+    { href: '/pro-labore/financeiro', label: 'Financeiro', icon: 'wallet', modulo: 'financeiro', donoOnly: true },
     // Sem donoOnly: cada pessoa conecta o próprio Instagram e só vê o dela.
     { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', modulo: 'socialMedia' },
     { href: '/pro-labore/trafego', label: 'Tráfego', icon: 'funnel', modulo: 'trafego', donoOnly: true },

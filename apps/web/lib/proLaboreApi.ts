@@ -39,6 +39,30 @@ export function definirVerComoSocialMedia(ligado: boolean) {
   try { if (ligado) sessionStorage.setItem(CHAVE_VER_COMO, '1'); else sessionStorage.removeItem(CHAVE_VER_COMO) } catch { /* sem storage: segue sem pré-visualização */ }
 }
 
+// Financeiro: pagamentos fora das vendas, cada um com recibo numerado.
+export type CategoriaFinanceira = 'SALARIO' | 'ADIANTAMENTO' | 'BONIFICACAO' | 'REEMBOLSO' | 'INVESTIMENTO' | 'CUSTO' | 'OUTRO'
+export type FormaPagamentoFinanceiro = 'PIX' | 'DINHEIRO' | 'TRANSFERENCIA' | 'BOLETO' | 'CARTAO' | 'OUTRO'
+export interface CategoriaFinanceiraInfo { chave: CategoriaFinanceira; rotulo: string; plural: string; equipe: boolean; titulo: string; referente: string }
+export interface ItemRecibo { descricao: string; valor: number; desconto: boolean }
+export interface LancamentoFinanceiro {
+  id: string; categoria: CategoriaFinanceira; numero: number; vendedorId: string | null; favorecido: string; documento: string | null
+  pagador: string; descricao: string; competencia: string | null; itens: ItemRecibo[]; valorTotal: number; pagoEm: string
+  formaPagamento: FormaPagamentoFinanceiro | null; observacao: string | null; canceladoEm: string | null; criadoEm: string
+}
+export interface PessoaFinanceiro { id: string; nome: string; vende: boolean; salarioBase: number | null }
+export interface PainelFinanceiro {
+  mes: string; categorias: CategoriaFinanceiraInfo[]; formas: FormaPagamentoFinanceiro[]; lancamentos: LancamentoFinanceiro[]
+  totais: { porCategoria: Record<CategoriaFinanceira, number>; total: number }
+  vendas: { comissoes: number; proLabore: number } | null
+  equipe: PessoaFinanceiro[]; pagador: string; podeEditar: boolean
+}
+export interface SalariosDoMes { competencia: string; pagador: string; equipe: Array<PessoaFinanceiro & { pago: { id: string; numero: number; valorTotal: number } | null }> }
+export interface NovoLancamento {
+  categoria: CategoriaFinanceira; vendedorId?: string | null; favorecido?: string | null; documento?: string | null; descricao?: string | null
+  competencia?: string | null; itens: ItemRecibo[]; pagoEm: string; formaPagamento?: FormaPagamentoFinanceiro | null; pagador: string; observacao?: string | null
+}
+export type ReciboFinanceiro = LancamentoFinanceiro & { categoriaInfo: CategoriaFinanceiraInfo }
+
 // Acessos da equipe: nível por módulo (ver lib/acessos.ts da API).
 export type NivelAcesso = 'NENHUM' | 'VER' | 'EDITAR'
 export type EscopoAcesso = 'PROPRIO' | 'EQUIPE'
@@ -749,6 +773,16 @@ export const proLaboreApi = {
       request<PreferenciasProLabore>('/pro-labore/preferencias', { method: 'PUT', body: JSON.stringify(p) }),
   },
   // Aba Tráfego (Gerenciador de Anúncios da Meta) — só o dono.
+  // Financeiro: salários, investimentos, custos e outros gastos, com recibo.
+  financeiro: {
+    painel: (mes?: string) => request<PainelFinanceiro>(`/pro-labore/financeiro${mes ? `?mes=${mes}` : ''}`),
+    criar: (dados: NovoLancamento) => request<LancamentoFinanceiro>('/pro-labore/financeiro', { method: 'POST', body: JSON.stringify(dados) }),
+    salarios: (competencia: string) => request<SalariosDoMes>(`/pro-labore/financeiro/salarios?competencia=${competencia}`),
+    pagarSalarios: (dados: { competencia: string; pagoEm: string; formaPagamento?: FormaPagamentoFinanceiro | null; pagador: string; observacao?: string | null; lembrar: boolean; pagamentos: Array<{ vendedorId: string; valor: number }> }) =>
+      request<LancamentoFinanceiro[]>('/pro-labore/financeiro/salarios', { method: 'POST', body: JSON.stringify(dados) }),
+    recibo: (id: string) => request<ReciboFinanceiro>(`/pro-labore/financeiro/${id}`),
+    cancelar: (id: string) => request<LancamentoFinanceiro>(`/pro-labore/financeiro/${id}/cancelar`, { method: 'POST' }),
+  },
   // Acessos e permissões da equipe — só o dono.
   acessos: {
     listar: () => request<PainelAcessos>('/pro-labore/acessos'),
