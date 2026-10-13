@@ -7,7 +7,7 @@
 // análise do gestor, filtradas pelo que o papel pode ver.
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type AnaliseSocialConectada, type OrigemSocial, type SmDesempenho, type SmReelDiagnostico, type SmSinal } from '@/lib/proLaboreApi'
-import { AssistenteAba, Banner, Botao, BotaoLink, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, BotaoLink, CapaPost, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 import { CartaoTeste } from './Testes'
 import { Concorrentes } from './Concorrentes'
@@ -126,6 +126,8 @@ export default function DesempenhoPage() {
             <ConsistenciaSM c={dados.consistencia} />
             <FunilSM f={dados.funil} dias={dados.periodo.dias} />
           </div>
+
+          <div className="pl-sv-grid sm-desemp-legado"><TopPublicacoes posts={(dados as unknown as AnaliseSocialConectada).publicacoes} recarregando={recarregando} /></div>
 
           <DiagnosticoReels reels={dados.reelsDiagnostico} podeSalvarGancho={pode('producao', 'COMPLETO') && !eu.somenteLeitura} />
 
@@ -254,7 +256,7 @@ function DiagnosticoReels({ reels, podeSalvarGancho }: { reels: SmReelDiagnostic
             <tbody>
               {reels.map(r => (
                 <tr key={r.id}>
-                  <td><div className="sm-atrib-nome">{r.permalink ? <a href={r.permalink} target="_blank" rel="noreferrer">{r.nome}</a> : r.nome}</div><div className="sm-legenda">{ddmm(r.publicadoEm.slice(0, 10))} · {inteiro(r.alcance)} alcançados</div></td>
+                  <td><div className="sm-post-com-capa"><CapaPost src={r.miniatura} href={r.permalink} rotulo="Reel" /><div><div className="sm-atrib-nome">{r.permalink ? <a href={r.permalink} target="_blank" rel="noreferrer">{r.nome}</a> : r.nome}</div><div className="sm-legenda">{ddmm(r.publicadoEm.slice(0, 10))} · {inteiro(r.alcance)} alcançados</div></div></div></td>
                   <td>{r.duracaoSeg != null ? `${Math.round(r.duracaoSeg)}s` : '—'}</td>
                   <td>{pctFracao(r.retencao)}</td>
                   <td>{pctFracao(r.pulo)}</td>
@@ -295,7 +297,6 @@ function AnaliseCompleta({ dados, sub, recarregando }: { dados: Conectado; sub: 
             <FormatosComparativo porFormato={analise.porFormato} recarregando={recarregando} />
             <OrigemAlcance distribuicao={analise.distribuicaoAlcance} recarregando={recarregando} />
           </div>
-          <TopPublicacoes posts={analise.publicacoes} recarregando={recarregando} />
           <HashtagsELegendas analise={analise} recarregando={recarregando} />
           <ReelsEStories analise={analise} recarregando={recarregando} />
         </>

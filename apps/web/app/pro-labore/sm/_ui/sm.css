@@ -1195,3 +1195,17 @@ select.sm-boas-hora { background: transparent; border: 1px solid var(--sm-border
 }
 /* Botões de comando com texto longo quebram linha em vez de estourar a tela. */
 .ct-painel .sm-btn, .ct-mes .sm-btn, .ct-cal .sm-btn, .ct-dossie .sm-btn, .ct-bancos .sm-btn, .sm-modal.largo .sm-btn { white-space: normal; max-width: 100%; height: auto; min-height: 40px; text-align: center; }
+
+/* Capa do post (miniatura do Instagram que abre a publicação) */
+.sm-capa { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden; border-radius: 8px; background: var(--sm-surface-2); border: 1px solid var(--sm-border); color: var(--sm-text-faint); text-decoration: none; }
+.sm-capa.p { width: 44px; height: 56px; }
+.sm-capa.m { width: 72px; height: 96px; }
+.sm-capa.g { width: 150px; height: 200px; border-radius: 12px; }
+.sm-capa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sm-capa-sem { font-size: 10px; padding: 2px; text-align: center; }
+.sm-capa-play { position: absolute; right: 4px; bottom: 4px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 8px; display: grid; place-items: center; padding-left: 1px; }
+.sm-capa.g .sm-capa-play { width: 30px; height: 30px; font-size: 12px; right: 8px; bottom: 8px; }
+a.sm-capa:hover { outline: 2px solid var(--sm-focus); outline-offset: 1px; }
+.sm-post-com-capa { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sm-post-com-capa > div { min-width: 0; }
+.sm-desemp-legado .pl-card-title { font-family: inherit; font-size: 18px; font-weight: 700; }

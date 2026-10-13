@@ -6,6 +6,7 @@
 // botão só com ícone e alvo de toque de 44px.
 import Link from 'next/link'
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
+import { useState } from 'react'
 import { IcAtencao, IcInsight, IcSucesso, IcVazio } from './icones'
 
 export type Tom = 'ok' | 'warn' | 'bad' | 'info' | 'learn' | 'neutro'
@@ -241,4 +242,18 @@ export function CardEsqueleto({ linhas = 3, texto = 'Carregando' }: { linhas?: n
       {Array.from({ length: Math.max(0, linhas - 2) }, (_, i) => <Esqueleto key={i} largura={`${80 - i * 15}%`} />)}
     </div>
   )
+}
+
+/** Capa do post (miniatura guardada do Instagram) que abre a publicação. Sem capa, mostra o formato. */
+export function CapaPost({ src, href, rotulo, tamanho = 'p' }: { src?: string | null; href?: string | null; rotulo?: string; tamanho?: 'p' | 'm' | 'g' }) {
+  const [falhou, setFalhou] = useState(false)
+  const conteudo = (
+    <>
+      {src && !falhou ? <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFalhou(true)} /> : <span className="sm-capa-sem">{rotulo ?? 'Post'}</span>}
+      {href && <span className="sm-capa-play" aria-hidden="true">▶</span>}
+    </>
+  )
+  return href
+    ? <a className={`sm-capa ${tamanho}`} href={href} target="_blank" rel="noreferrer" title="Abrir no Instagram" aria-label="Abrir no Instagram">{conteudo}</a>
+    : <span className={`sm-capa ${tamanho}`}>{conteudo}</span>
 }

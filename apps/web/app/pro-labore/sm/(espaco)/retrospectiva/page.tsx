@@ -9,7 +9,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { proLaboreApi, type SmRetrospectiva } from '@/lib/proLaboreApi'
-import { Botao, EstadoVazio, Kbd, useToast } from '../../_ui'
+import { Botao, CapaPost, EstadoVazio, Kbd, useToast } from '../../_ui'
 
 const PARTES = ['Título e conquistas', 'Metas da semana', 'Post da semana', 'O que você aprendeu', 'Próxima semana']
 const TOM_CONQUISTA = ['ok', 'info', 'warn'] as const
@@ -238,6 +238,7 @@ function Parte({ r, n, exportando, aoSalvarGancho }: { r: SmRetrospectiva; n: nu
         {!exportando && (
           <div className="sm-retro-links">
             {r.podeSalvarGancho && aoSalvarGancho && <Botao onClick={aoSalvarGancho}>Salvar o gancho na biblioteca</Botao>}
+            {(p.miniatura || p.permalink) && <CapaPost src={p.miniatura} href={p.permalink} rotulo={p.formato} tamanho="m" />}
             {p.permalink && <a href={p.permalink} target="_blank" rel="noreferrer">Ver no Instagram</a>}
           </div>
         )}

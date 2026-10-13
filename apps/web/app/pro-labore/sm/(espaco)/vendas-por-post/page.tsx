@@ -6,7 +6,7 @@
 // regra "Mostrar valores em R$" do gestor.
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { proLaboreApi, type SmLinhaAtribuicao, type SmVendasPorPost } from '@/lib/proLaboreApi'
-import { AssistenteAba, Banner, Botao, BotaoLink, Card, CardEsqueleto, Chip, EstadoVazio, KpiCard, Rotulo, Segmentado, useToast } from '../../_ui'
+import { AssistenteAba, Banner, Botao, BotaoLink, CapaPost, Card, CardEsqueleto, Chip, EstadoVazio, KpiCard, Rotulo, Segmentado, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
 
 type Dias = 7 | 30 | 90
@@ -160,7 +160,7 @@ function TabelaAtribuicao({ linhas, totais, cabecalho, valoresOcultos }: { linha
         <tbody>
           {linhas.map(l => (
             <tr key={l.chave}>
-              <td><div className="sm-atrib-nome">{l.nome}</div><div className="sm-legenda">{l.sub}</div></td>
+              <td><div className="sm-post-com-capa">{(l.miniatura || l.permalink) && <CapaPost src={l.miniatura} href={l.permalink} />}<div><div className="sm-atrib-nome">{l.nome}</div><div className="sm-legenda">{l.sub}</div></div></div></td>
               <td>{celula(l.toques)}</td>
               <td>{celula(l.conversas)}</td>
               <td><b>{inteiro(l.leads)}</b></td>
