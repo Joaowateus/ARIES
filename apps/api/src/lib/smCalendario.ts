@@ -178,7 +178,7 @@ export function montarCalendario(e: EntradaCalendario) {
   }
 }
 
-const FORMATO_DO_INSTAGRAM = (formato: string | null, tipo: string): ItemCalendario['formato'] =>
+export const FORMATO_DO_INSTAGRAM = (formato: string | null, tipo: string): ItemCalendario['formato'] =>
   formato === 'REELS' ? 'REELS' : formato === 'STORY' ? 'STORY' : tipo === 'CAROUSEL_ALBUM' ? 'CARROSSEL' : 'FOTO'
 
 const horaLocal = (d: Date) => new Date(d.getTime() - OFFSET_MS).toISOString().slice(11, 16)

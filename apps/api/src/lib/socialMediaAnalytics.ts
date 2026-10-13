@@ -24,6 +24,8 @@ export const MAX_DIAS_SEM_POST = 2
 export const MAX_POSTS_POR_DIA = 2
 // Amostra mínima pra afirmar uma comparação (seção 13.2): 5+ posts por
 // grupo é fato; 3 ou 4 vira hipótese de confiança baixa; 1 ou 2, nada.
+// Lead qualificado (MQL): chegou a Negociação ou além no CRM.
+const ESTAGIOS_MQL = new Set(['NEGOCIACAO', 'PROPOSTA', 'FECHADO'])
 const AMOSTRA_FATO = 5
 const AMOSTRA_HIPOTESE = 3
 // Acima de 20% dos dias sem sincronizar, insights de alta/queda somem.
@@ -632,6 +634,8 @@ export function montarAnaliseSocialMedia(entrada: EntradaAnalise) {
     conversasIniciadas: null as number | null,
     conversasMotivo: 'Disponível quando o Atendimento do Instagram e os links rastreados estiverem ligados.',
     leads: leadsOrganicos.length,
+    // MQL: lead qualificado, que chegou a Negociação ou além.
+    mql: leadsOrganicos.filter(l => ESTAGIOS_MQL.has(l.estagio)).length,
     vendas: leadsGanhos.length,
   }
 

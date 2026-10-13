@@ -8,7 +8,7 @@ import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { contextoSM, requireModuloSM } from '../lib/smAcesso'
 import { carregarConfig } from '../lib/smCalendario'
 import { analisarContaSocialMedia } from '../lib/socialMediaResumo'
-import { diagnosticoDosReels, filtrarParaOPapel, sinaisDoPeriodo } from '../lib/smDesempenho'
+import { diagnosticoDosReels, filtrarParaOPapel, hierarquiaDasMetricas, sinaisDoPeriodo } from '../lib/smDesempenho'
 import { testeEmDestaque } from '../lib/smTestes'
 
 const router = Router()
@@ -29,8 +29,10 @@ router.get('/sm/desempenho', ...autenticado, requireModuloSM('analise', 'LEITURA
     carregarConfig(usuarioId),
     testeEmDestaque(usuarioId),
   ])
+  const filtrada = filtrarParaOPapel(analise, sm)
   res.json({
-    ...filtrarParaOPapel(analise, sm),
+    ...filtrada,
+    hierarquia: hierarquiaDasMetricas(filtrada),
     sinais: sinaisDoPeriodo(analise, config),
     reelsDiagnostico: diagnosticoDosReels(analise),
     testeEmAndamento: teste,

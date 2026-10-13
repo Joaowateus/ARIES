@@ -19,6 +19,7 @@ import { garantirLinkDaPauta, sincronizarLinks } from '../lib/smAtribuicao'
 import { gerarRoteiro, iaLigada } from '../lib/smIA'
 import { fatosDoRoteiro, podeRoteiroIA } from '../lib/smPerguntas'
 import { arquivoDoAcervo } from '../lib/smAcervo'
+import { ETAPAS_FUNIL } from '../lib/smMetodo'
 
 const router = Router()
 const autenticado = [requireProLaboreAuth, contextoSM]
@@ -159,6 +160,8 @@ const pautaSchema = z.object({
   titulo: z.string().trim().min(3, 'Dê um título à pauta').max(120),
   pilar: z.enum(PILARES),
   formato: z.enum(FORMATOS),
+  // Etapa do funil na cadência do método (Topo, Meio, Fundo).
+  etapaFunil: z.enum(ETAPAS_FUNIL).nullable().optional(),
   prazo: z.coerce.date().nullable().optional(),
   motoId: z.string().nullable().optional(),
   origem: z.enum(ORIGENS).optional(),
@@ -192,7 +195,7 @@ router.post('/sm/pautas', ...autenticado, requireModuloSM('producao', 'COMPLETO'
   const criada = await prisma.smPauta.create({
     data: {
       usuarioId,
-      titulo: d.titulo, pilar: d.pilar, formato: d.formato, prazo: d.prazo ?? null, motoId: moto?.id ?? null,
+      titulo: d.titulo, pilar: d.pilar, formato: d.formato, etapaFunil: d.etapaFunil ?? null, prazo: d.prazo ?? null, motoId: moto?.id ?? null,
       origem: d.origem ?? 'MANUAL', origemRef: d.origemRef ?? (d.origem === 'ESTOQUE' ? moto?.id ?? null : null),
       gancho: d.gancho, retencao: d.retencao, recompensa: d.recompensa, cta: d.cta, legenda: d.legenda,
       agendadoPara: d.agendadoPara ?? null, trial: d.trial ?? false, autorizacaoImagem: d.autorizacaoImagem ?? false,
@@ -255,6 +258,7 @@ router.patch('/sm/pautas/:id', ...autenticado, requireModuloSM('producao', 'COMP
   })
   const data: Prisma.SmPautaUpdateInput = {
     ...('titulo' in d && { titulo: d.titulo }), ...('pilar' in d && { pilar: d.pilar }), ...('formato' in d && { formato: d.formato }),
+    ...('etapaFunil' in d && { etapaFunil: d.etapaFunil }),
     ...('prazo' in d && { prazo: d.prazo }), ...('gancho' in d && { gancho: d.gancho }), ...('retencao' in d && { retencao: d.retencao }),
     ...('recompensa' in d && { recompensa: d.recompensa }), ...('cta' in d && { cta: d.cta }), ...('legenda' in d && { legenda: d.legenda }),
     ...('agendadoPara' in d && { agendadoPara: d.agendadoPara }), ...('trial' in d && { trial: d.trial }),

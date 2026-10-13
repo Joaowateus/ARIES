@@ -1,7 +1,7 @@
 // Nomes exibidos e conversões de data do espaço do Social Media. Datas no
 // horário de Brasília/Belém (UTC-3, sem horário de verão), como em toda a
 // especificação.
-import type { SmColuna, SmFormato, SmOrigem, SmPilar } from '@/lib/proLaboreApi'
+import type { SmColuna, SmEtapaFunil, SmFormato, SmOrigem, SmPilar, SmTurno } from '@/lib/proLaboreApi'
 import type { Pilar } from './componentes'
 
 export const PILAR_ROTULO: Record<SmPilar, string> = { ESTOQUE: 'Estoque', PROVA: 'Prova social', EDUCACAO: 'Educação', BASTIDORES: 'Bastidores' }
@@ -9,6 +9,16 @@ export const PILAR_CHIP: Record<SmPilar, Pilar> = { ESTOQUE: 'estoque', PROVA: '
 export const FORMATO_ROTULO: Record<SmFormato, string> = { REELS: 'Reels', CARROSSEL: 'Carrossel', FOTO: 'Foto', STORY: 'Story' }
 export const ORIGEM_ROTULO: Record<SmOrigem, string> = { MANUAL: 'Manual', ESTOQUE: 'Estoque', VENDA: 'Venda no CRM', INSIGHT: 'Insight', AUDIENCIA: 'Audiência', CALENDARIO: 'Calendário' }
 export const COLUNA_ROTULO: Record<SmColuna, string> = { IDEIA: 'Ideias', ROTEIRO: 'Roteiro', GRAVACAO: 'Gravação', EDICAO: 'Edição', APROVACAO: 'Aprovação', AGENDADO: 'Agendado' }
+// Método: cadência "três posts, três vezes ao dia".
+export const ETAPA_ROTULO: Record<SmEtapaFunil, string> = { TOPO: 'Topo', MEIO: 'Meio', FUNDO: 'Fundo' }
+export const ETAPA_MISSAO: Record<SmEtapaFunil, { titulo: string; chamada: string }> = {
+  TOPO: { titulo: 'Atrai gente nova', chamada: 'sem pedir nada' },
+  MEIO: { titulo: 'Mostra seu dia a dia', chamada: 'chama para a DM' },
+  FUNDO: { titulo: 'Mostra o que vende', chamada: 'chama para o link' },
+}
+/** Pauta sem etapa marcada: a mais provável pelo pilar (igual à API). */
+export const ETAPA_DO_PILAR: Record<SmPilar, SmEtapaFunil> = { EDUCACAO: 'TOPO', BASTIDORES: 'MEIO', PROVA: 'MEIO', ESTOQUE: 'FUNDO' }
+export const TURNO_ROTULO: Record<SmTurno, string> = { MANHA: 'Manhã', TARDE: 'Tarde', NOITE: 'Noite' }
 export const COLUNAS: SmColuna[] = ['IDEIA', 'ROTEIRO', 'GRAVACAO', 'EDICAO', 'APROVACAO', 'AGENDADO']
 
 const OFFSET_MS = 3 * 3600 * 1000
