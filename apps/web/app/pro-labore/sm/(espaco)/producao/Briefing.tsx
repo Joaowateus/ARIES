@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, urlArquivoApi, type SmTesteAB, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar, type SmEtapaFunil, type SmRoteiroIA } from '@/lib/proLaboreApi'
 import {
-  Banner, Botao, Chip, COLUNA_ROTULO, COLUNAS, ETAPA_DO_PILAR, ETAPA_MISSAO, ETAPA_ROTULO, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
+  Banner, Botao, CAPTURA_E_ACERVO_LIGADOS, Chip, COLUNA_ROTULO, COLUNAS, ETAPA_DO_PILAR, ETAPA_MISSAO, ETAPA_ROTULO, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
   dataParaIso, isoParaData, isoParaLocal, localParaIso, quandoCurto, useToast,
 } from '../../_ui'
 import { BibliotecaGanchos } from './Ganchos'
@@ -129,7 +129,7 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
           {pauta.trial && <Chip tom="info">Trial Reel</Chip>}
           {pauta.codigo && <Chip tom="learn">{pauta.codigo}</Chip>}
         </div>
-        {naCaptura && (
+        {CAPTURA_E_ACERVO_LIGADOS && naCaptura && (
           <Link href={`/pro-labore/sm/captura?pauta=${pauta.id}`} className="sm-link-botao">
             {pauta.status === 'GRAVACAO' || pauta.status === 'EDICAO' ? 'Abrir a captura (tomadas)' : 'Gravar na loja pela câmera'}
           </Link>
@@ -276,7 +276,7 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
             <div className="sm-linha-acoes">
               <input ref={arquivo} type="file" accept="image/jpeg" hidden onChange={e => { enviarArquivo(e.target.files, 'IMAGEM'); e.target.value = '' }} />
               <Botao disabled={ocupado} onClick={() => arquivo.current?.click()}>Enviar imagem (JPEG)</Botao>
-              <Botao variante="fantasma" disabled={ocupado} onClick={() => setAcervoAberto(true)}>Usar do acervo</Botao>
+              {CAPTURA_E_ACERVO_LIGADOS && <Botao variante="fantasma" disabled={ocupado} onClick={() => setAcervoAberto(true)}>Usar do acervo</Botao>}
             </div>
             {acervoAberto && (
               <UsarDoAcervo motoId={pauta.motoId} jaNaPauta={pauta.midias.map(m => m.url)} aoFechar={() => setAcervoAberto(false)}

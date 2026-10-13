@@ -88,6 +88,8 @@ export interface ProLaboreUsuario {
   // O que esse login enxerga, módulo a módulo (o dono recebe tudo liberado).
   acessos?: Record<string, NivelAcesso>
   escopo?: EscopoAcesso
+  // Social Media com ferramentas pessoais: o cadastro dele na equipe (Agenda).
+  vendedorId?: string | null
   // Só existe pra quem loga como VENDEDOR/SUPERVISOR — meta mensal
   // individual, usada no lugar da meta anual no dashboard de um VENDEDOR.
   metaMensal?: number | null

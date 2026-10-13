@@ -418,8 +418,10 @@ export default function ProLaboreAgendaPage() {
   // /auth/me e /auth/login devolvem pra esses papéis); pro DONO é o próprio
   // usuarioId da conta. Os dois casam exatamente com o `autorId` que o
   // backend calcula (vendedorId do token, ou o usuarioId quando é o dono).
-  const meuVendedorId = isDono ? null : usuario?.id ?? null
-  const meuAutorId = usuario?.id ?? ''
+  // O Social Media usa o cadastro dele na equipe (o id do login é o do acesso).
+  const meuId = usuario?.papel === 'SOCIAL_MEDIA' ? usuario.vendedorId ?? null : usuario?.id ?? null
+  const meuVendedorId = isDono ? null : meuId
+  const meuAutorId = meuId ?? ''
 
   const [itens, setItens] = useState<AgendaItem[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
