@@ -56,7 +56,7 @@ export interface DadosRetro {
   }
   post: {
     midiaId: string; titulo: string; formato: string; dia: string; hora: number; multiplo: number; alcance: number
-    pulo: number | null; puloMenorDoMes: boolean; leads: number; gancho: string | null; ganchoSalvo: boolean; porque: string; permalink: string | null
+    pulo: number | null; puloMenorDoMes: boolean; leads: number; gancho: string | null; ganchoSalvo: boolean; porque: string; permalink: string | null; miniatura?: string | null
   } | null
   aprendizado: { tipo: 'TESTE' | 'FORMATO' | 'HORARIO'; titulo: string; barras: Barra[]; nota: string; menorMelhor: boolean } | null
   focos: Array<{ texto: string; modulo: ModuloSM | null }>
@@ -97,7 +97,7 @@ export async function calcularRetrospectiva(usuarioId: string, semana: string, a
 
   const midias = conta ? await prisma.socialMediaMidia.findMany({
     where: { contaId: conta.id, publicadoEm: { gte: new Date(fim.getTime() - 90 * DIA_MS), lt: fim }, ...ehFeed },
-    select: { instagramMediaId: true, legenda: true, formato: true, tipo: true, publicadoEm: true, alcance: true, taxaPulo: true, tempoMedioAssistidoSeg: true, duracaoSeg: true, urlPermalink: true },
+    select: { instagramMediaId: true, legenda: true, formato: true, tipo: true, publicadoEm: true, alcance: true, taxaPulo: true, tempoMedioAssistidoSeg: true, duracaoSeg: true, urlPermalink: true, miniaturaLocal: true, thumbnailUrl: true },
   }) : []
   const daSemana = midias.filter(m => m.publicadoEm >= de && m.publicadoEm < fim)
   const daAnterior = midias.filter(m => m.publicadoEm >= deAnt && m.publicadoEm < de)
@@ -175,7 +175,7 @@ export async function calcularRetrospectiva(usuarioId: string, semana: string, a
       midiaId: m.instagramMediaId, titulo: tituloDoPost(m), formato: formatoDe(m), dia, hora, multiplo: Math.round(x * 10) / 10, alcance: m.alcance,
       pulo: m.taxaPulo != null ? Math.round(m.taxaPulo * 100) : null,
       puloMenorDoMes: m.taxaPulo != null && doMes.length >= 2 && doMes.every(r => r.taxaPulo! >= m.taxaPulo!),
-      leads: atrib.get(m.instagramMediaId)?.leads ?? 0, gancho, ganchoSalvo: !!salvo, porque: partes.join(' '), permalink: m.urlPermalink,
+      leads: atrib.get(m.instagramMediaId)?.leads ?? 0, gancho, ganchoSalvo: !!salvo, porque: partes.join(' '), permalink: m.urlPermalink, miniatura: m.miniaturaLocal ?? m.thumbnailUrl ?? null,
     }
   }
 

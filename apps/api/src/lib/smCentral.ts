@@ -157,6 +157,7 @@ export interface MetricasVideo {
   conversas?: number; leads?: number; vendas?: number
   manuais?: Record<string, number>
   permalink?: string | null
+  miniatura?: string | null
 }
 
 /** Métricas do post de cada vídeo publicado (pela pauta) e a atribuição pelo código/mídia. */
@@ -190,6 +191,7 @@ export async function metricasDosVideos(usuarioId: string, videos: Array<Pick<Sm
       compartilhamentos: m.compartilhamentos, visitasPerfil: m.visitasPerfil, tempoMedioSeg: m.tempoMedioAssistidoSeg, taxaPulo: m.taxaPulo, retencao, duracaoSeg: m.duracaoSeg,
       conversas: conversas.filter(c => doPost(c.postCode, c.midiaIgId)).length, leads: ls.length, vendas: ls.filter(l => l.estagio === 'FECHADO').length,
       manuais, permalink: m.urlPermalink ?? p?.permalink ?? v.permalink ?? null,
+      miniatura: m.miniaturaLocal ?? m.thumbnailUrl ?? (m.tipo !== 'VIDEO' ? m.urlMidia : null) ?? null,
     })
   }
   return out

@@ -146,6 +146,8 @@ export interface LinhaAtribuicao {
   vendas: number
   valor: number | null // null quando o gestor esconde os valores
   moto?: string | null // moto do estoque ligada à pauta do post
+  miniatura?: string | null
+  permalink?: string | null
 }
 
 interface Acumulador { toques: number; conversas: number; leads: number; vendas: number; valor: number }
@@ -224,7 +226,7 @@ export async function vendasPorPost(usuarioId: string, periodo: PeriodoAtribuica
       select: { codigo: true, titulo: true, formato: true, pilar: true, igMediaId: true, publicadaEm: true, agendadoPara: true, moto: { select: { modelo: true } } },
     }),
     conta && midiaIds.size
-      ? prisma.socialMediaMidia.findMany({ where: { contaId: conta.id, instagramMediaId: { in: [...midiaIds] } }, select: { instagramMediaId: true, tipo: true, formato: true, legenda: true, publicadoEm: true } })
+      ? prisma.socialMediaMidia.findMany({ where: { contaId: conta.id, instagramMediaId: { in: [...midiaIds] } }, select: { instagramMediaId: true, tipo: true, formato: true, legenda: true, publicadoEm: true, miniaturaLocal: true, thumbnailUrl: true, urlMidia: true, urlPermalink: true } })
       : Promise.resolve([]),
   ])
   const pautaPorCodigo = new Map(pautas.filter(p => p.codigo).map(p => [p.codigo!, p]))
@@ -302,6 +304,8 @@ export async function vendasPorPost(usuarioId: string, periodo: PeriodoAtribuica
     const nome = pauta?.titulo ?? (legenda ? (legenda.length > 60 ? `${legenda.slice(0, 57).trimEnd()}…` : legenda) : codigo ?? 'Post do Instagram')
     return {
       nome, formato, pilar: pauta?.pilar ?? null, moto: pauta?.moto?.modelo ?? null,
+      miniatura: midia ? midia.miniaturaLocal ?? midia.thumbnailUrl ?? (midia.tipo !== 'VIDEO' ? midia.urlMidia : null) ?? null : null,
+      permalink: midia?.urlPermalink ?? null,
       sub: [formato ? FORMATO_ROTULO[formato] : 'Post', data ? ddmm(data) : null, codigo].filter(Boolean).join(' · '),
     }
   }
@@ -315,7 +319,7 @@ export async function vendasPorPost(usuarioId: string, periodo: PeriodoAtribuica
   const MAX_POSTS = 6
   const visiveis = posts.slice(0, MAX_POSTS)
   const outros = posts.slice(MAX_POSTS)
-  const linhasPost: LinhaAtribuicao[] = visiveis.map(p => ({ ...linha(p.chave, p.info.nome, p.info.sub, p.a), moto: p.info.moto }))
+  const linhasPost: LinhaAtribuicao[] = visiveis.map(p => ({ ...linha(p.chave, p.info.nome, p.info.sub, p.a), moto: p.info.moto, miniatura: p.info.miniatura, permalink: p.info.permalink }))
   if (outros.length) {
     const soma = outros.reduce((s, p) => { s.toques += p.a.toques; s.conversas += p.a.conversas; s.leads += p.a.leads; s.vendas += p.a.vendas; s.valor += p.a.valor; return s }, vazio())
     linhasPost.push(linha('OUTROS', `Outros ${outros.length} ${outros.length === 1 ? 'post' : 'posts'}`, 'Com toques, conversas ou leads no período', soma))

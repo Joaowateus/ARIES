@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, type CtCiclo, type CtProva, type CtVideoCompleto } from '@/lib/proLaboreApi'
-import { Banner, Botao, Chip, Modal, useToast } from '../../_ui'
+import { Banner, Botao, CapaPost, Chip, Modal, useToast } from '../../_ui'
 import { ALVO_TIPO, ETAPA_NOME, ORIGEM_ROTEIRO, PERIODO_NOME, STATUS_ROTULO, STATUS_TOM, chegou, ddmm, diaSemana, num } from './rotulos'
 
 type Texto = 'titulo' | 'gancho' | 'contexto' | 'desenvolvimento' | 'valor' | 'cta' | 'gravacao' | 'legenda'
@@ -138,6 +138,7 @@ export function VideoModal({ id, dados, aoFechar, aoMudar, aoAbrir }: { id: stri
         </div>
         {!v.pautaId && pode && v.permalink && !chegou(v.status, 'PUBLICADO') && chegou(v.status, 'APROVADO') && <Botao onClick={() => acao(() => proLaboreApi.sm.central.statusVideo(v.id, 'PUBLICADO'), 'Marcado como publicado.').then(atualizar)}>Marcar como publicado</Botao>}
 
+        {(m?.miniatura || m?.permalink) && <div className="sm-post-com-capa"><CapaPost src={m.miniatura} href={m.permalink} rotulo="Vídeo" tamanho="g" />{m.permalink && <a href={m.permalink} target="_blank" rel="noreferrer">Ver o vídeo no Instagram</a>}</div>}
         <div className="ct-metricas">
           {m?.disponivel ? (
             <>

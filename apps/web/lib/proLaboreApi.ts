@@ -2235,7 +2235,7 @@ export interface SmRetrospectiva {
     resposta: { atualMin: number | null; meta: number; anteriorMin: number | null } | null
     retencao: { pct: number | null; meta: number; anteriorPct: number | null; reels: number } | null
   }
-  post: { midiaId: string; titulo: string; formato: string; dia: string; hora: number; multiplo: number; alcance: number; pulo: number | null; puloMenorDoMes: boolean; leads: number | null; gancho: string | null; ganchoSalvo: boolean; porque: string; permalink: string | null } | null
+  post: { midiaId: string; titulo: string; formato: string; dia: string; hora: number; multiplo: number; alcance: number; pulo: number | null; puloMenorDoMes: boolean; leads: number | null; gancho: string | null; ganchoSalvo: boolean; porque: string; permalink: string | null; miniatura?: string | null } | null
   aprendizado: { tipo: 'TESTE' | 'FORMATO' | 'HORARIO'; titulo: string; barras: Array<{ rotulo: string; medida: number; texto: string }>; nota: string; menorMelhor: boolean } | null
   focos: string[]
   enviadaGestorEm: string | null
@@ -2356,6 +2356,9 @@ export interface SmLinhaAtribuicao {
   leads: number
   vendas: number
   valor: number | null
+  moto?: string | null
+  miniatura?: string | null
+  permalink?: string | null
 }
 
 export interface SmVendasPorPost {
@@ -2395,6 +2398,7 @@ export interface SmReelDiagnostico {
   instagramMediaId: string
   nome: string
   permalink: string | null
+  miniatura: string | null
   publicadoEm: string
   duracaoSeg: number | null
   retencao: number | null
@@ -2490,7 +2494,7 @@ export interface CtVisao {
 export interface CtMetricas {
   disponivel: boolean; alcance?: number; visualizacoes?: number; curtidas?: number; comentarios?: number; salvamentos?: number; compartilhamentos?: number; visitasPerfil?: number
   tempoMedioSeg?: number | null; taxaPulo?: number | null; retencao?: number | null; duracaoSeg?: number | null; conversas?: number; leads?: number; vendas?: number
-  manuais?: Partial<Record<'mensagens' | 'visitasAgendadas' | 'avaliacoesSolicitadas' | 'propostas' | 'cliques', number>>; permalink?: string | null
+  manuais?: Partial<Record<'mensagens' | 'visitasAgendadas' | 'avaliacoesSolicitadas' | 'propostas' | 'cliques', number>>; permalink?: string | null; miniatura?: string | null
 }
 export interface CtEtapasVideo { roteiro: string; aprovacao: string; gravacao: string; edicao: string; publicacao: string }
 export interface CtVideo {

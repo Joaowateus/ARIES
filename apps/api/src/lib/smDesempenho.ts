@@ -108,6 +108,7 @@ export function diagnosticoDosReels(analise: Analise) {
         instagramMediaId: p.instagramMediaId,
         nome: tituloDoPost(p),
         permalink: p.permalink,
+        miniatura: p.thumbnail,
         publicadoEm: p.publicadoEm,
         duracaoSeg: p.duracaoSeg,
         retencao: p.retencao,

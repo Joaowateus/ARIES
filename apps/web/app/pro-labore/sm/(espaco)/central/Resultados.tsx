@@ -6,7 +6,7 @@
 // estimado; vendas só com código ou mídia do post.
 import { useState } from 'react'
 import type { CtCiclo, CtEtapa, CtVideo } from '@/lib/proLaboreApi'
-import { Card, Chip, EstadoVazio, Segmentado } from '../../_ui'
+import { CapaPost, Card, Chip, EstadoVazio, Segmentado } from '../../_ui'
 import { ETAPA_NOME, STATUS_ROTULO, ddmm, num } from './rotulos'
 import { VideoModal } from './VideoModal'
 
@@ -50,7 +50,7 @@ function Linha({ v, abrir }: { v: CtVideo; abrir: (id: string) => void }) {
   const m = v.metricas, man = v.metricasManuais ?? {}
   return (
     <tr>
-      <td><button type="button" className="ct-link-video" onClick={() => abrir(v.id)}><span className="sm-mono">{v.codigo}</span> {v.titulo}</button><span className="sm-legenda">{ddmm(v.data)} · {STATUS_ROTULO[v.status]}{!m.disponivel && ' · sem métricas do Instagram'}</span></td>
+      <td><div className="sm-post-com-capa">{(m.miniatura || m.permalink) && <CapaPost src={m.miniatura} href={m.permalink} rotulo="Vídeo" />}<div><button type="button" className="ct-link-video" onClick={() => abrir(v.id)}><span className="sm-mono">{v.codigo}</span> {v.titulo}</button><span className="sm-legenda">{ddmm(v.data)} · {STATUS_ROTULO[v.status]}{!m.disponivel && ' · sem métricas do Instagram'}</span></div></div></td>
       {v.etapa === 'TOPO' && <><td>{num(m.alcance)}</td><td>{num(m.compartilhamentos)}</td><td>{num(m.comentarios)}</td><td>{m.retencao != null ? `${Math.round(m.retencao * 100)}%` : '—'}</td></>}
       {v.etapa === 'MEIO' && <><td>{num(m.salvamentos)}</td><td>{num(m.comentarios)}</td><td>{num(m.compartilhamentos)}</td><td>{num(man.mensagens)}</td></>}
       {v.etapa === 'FUNDO' && <><td>{num(m.conversas)}</td><td>{num(m.leads)}</td><td>{num(m.vendas)}</td><td>{num(man.visitasAgendadas)} · {num(man.avaliacoesSolicitadas)} · {num(man.propostas)}</td></>}
