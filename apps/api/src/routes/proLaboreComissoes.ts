@@ -211,7 +211,7 @@ async function comprovante(req: Request, res: Response) {
   } satisfies Prisma.PagamentoComissao$vendasArgs
   const pagamento = await prisma.pagamentoComissao.findFirst({
     where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub },
-    include: { vendedor: { select: { id: true, nome: true } }, vendas: VENDA, vendasProLabore: VENDA },
+    include: { vendedor: { select: { id: true, nome: true, documento: true } }, vendas: VENDA, vendasProLabore: VENDA },
   })
   if (!pagamento) {
     res.status(404).json({ error: 'Comprovante não encontrado' })

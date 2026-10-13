@@ -22,6 +22,7 @@ interface Rascunho {
   vendedorId: string // novo acesso para alguém já cadastrado em Vendedores
   nome: string
   email: string
+  documento: string // CPF ou CNPJ
   senha: string
   escopo: EscopoAcesso
   vende: boolean
@@ -42,10 +43,10 @@ export function AcessosEquipe() {
   function novo() {
     if (!dados) return
     const p = dados.perfis[0]
-    setRascunho({ id: null, vendedorId: '', nome: '', email: '', senha: '', escopo: p.escopo, vende: p.vende, permissoes: { ...p.permissoes } })
+    setRascunho({ id: null, vendedorId: '', nome: '', email: '', documento: '', senha: '', escopo: p.escopo, vende: p.vende, permissoes: { ...p.permissoes } })
   }
   function editar(a: AcessoEquipe) {
-    setRascunho({ id: a.id, vendedorId: '', nome: a.nome, email: a.email ?? '', senha: '', escopo: a.escopo, vende: a.vende, permissoes: { ...a.permissoes } })
+    setRascunho({ id: a.id, vendedorId: '', nome: a.nome, email: a.email ?? '', documento: a.documento ?? '', senha: '', escopo: a.escopo, vende: a.vende, permissoes: { ...a.permissoes } })
   }
 
   if (rascunho && dados) {
@@ -119,12 +120,12 @@ function Editor({ dados, inicial, aoFechar, aoSalvar }: { dados: PainelAcessos; 
     setErro(null); setSalvando(true)
     try {
       if (r.id) {
-        const d = await proLaboreApi.acessos.editar(r.id, { nome: r.nome.trim(), email: r.email.trim(), escopo: r.escopo, vende: r.vende, permissoes: r.permissoes })
+        const d = await proLaboreApi.acessos.editar(r.id, { nome: r.nome.trim(), email: r.email.trim(), documento: r.documento.trim() || null, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes })
         aoSalvar(d, `Acesso de ${r.nome.trim()} atualizado. Já vale.`)
       } else {
         const d = await proLaboreApi.acessos.criar({
           ...(r.vendedorId ? { vendedorId: r.vendedorId } : { nome: r.nome.trim() }),
-          email: r.email.trim(), senha: r.senha, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes,
+          email: r.email.trim(), documento: r.documento.trim() || null, senha: r.senha, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes,
         })
         const nome = r.vendedorId ? dados.semLogin.find(p => p.id === r.vendedorId)?.nome : r.nome.trim()
         aoSalvar(d, `Acesso de ${nome} criado. Passe o e-mail e a senha para a pessoa.`)
@@ -171,6 +172,9 @@ function Editor({ dados, inicial, aoFechar, aoSalvar }: { dados: PainelAcessos; 
                 <input className="sm-input" value={r.nome} onChange={e => mudar({ nome: e.target.value })} autoComplete="off" />
               </label>
             )}
+            <label className="sm-campo">CPF ou CNPJ (opcional)
+              <input className="sm-input" value={r.documento} onChange={e => mudar({ documento: e.target.value })} inputMode="numeric" maxLength={20} placeholder="000.000.000-00" autoComplete="off" />
+            </label>
             <label className="sm-campo">E-mail de login
               <input className="sm-input" type="email" value={r.email} onChange={e => mudar({ email: e.target.value })} autoComplete="off" />
             </label>

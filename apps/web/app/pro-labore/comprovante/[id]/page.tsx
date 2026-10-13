@@ -67,7 +67,7 @@ function Via({ c, rotulo }: { c: ComprovanteComissao; rotulo: string | null }) {
       </div>
 
       <p className="pl-recibo-texto">
-        Eu, <b>{t.recebedor}</b>, declaro que recebi de <b>{c.pagador}</b> a importância
+        Eu, <b>{t.recebedor}</b>{!t.proLabore && c.vendedor?.documento ? <>, CPF/CNPJ <b>{c.vendedor.documento}</b></> : null}, declaro que recebi de <b>{c.pagador}</b> a importância
         de <b>{formatMoeda(total)}</b> (<i>{reaisPorExtenso(total)}</i>), referente {t.referente}{' '}
         sobre {c.vendas.length === 1 ? 'a venda listada' : `as ${c.vendas.length} vendas listadas`} abaixo,
         paga em {dataLonga(c.pagoEm)}{c.formaPagamento ? ` via ${FORMA[c.formaPagamento] ?? c.formaPagamento}` : ''}.
@@ -104,7 +104,7 @@ function Via({ c, rotulo }: { c: ComprovanteComissao; rotulo: string | null }) {
           <span className="linha" />
           <b>{t.recebedor}</b>
           <small>{t.papelRecebedor}</small>
-          <small>CPF: ____________________________</small>
+          {!t.proLabore && c.vendedor?.documento ? <small>CPF/CNPJ: {c.vendedor.documento}</small> : <small>CPF: ____________________________</small>}
         </div>
         <div>
           <span className="linha" />

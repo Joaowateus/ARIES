@@ -55,6 +55,7 @@ export function NovoPagamento({ dados, nomeDono, onFechar, onRegistrado }: {
   function escolherPessoa(id: string) {
     setPessoaId(id)
     const p = dados.equipe.find(x => x.id === id)
+    setDocumento(p?.documento ?? '')
     if (categoria === 'SALARIO' && p?.salarioBase && linhas.length === 1 && !linhas[0].valor) setLinhas([{ descricao: linhas[0].descricao || 'Salário base', valor: String(p.salarioBase), desconto: false }])
   }
   const mudarLinha = (i: number, m: Partial<Linha>) => setLinhas(ls => ls.map((l, j) => (j === i ? { ...l, ...m } : l)))
@@ -139,7 +140,7 @@ export function NovoPagamento({ dados, nomeDono, onFechar, onRegistrado }: {
               )}
               {daEquipe && pessoa && (
                 <div className="pl-field">
-                  <label htmlFor="fin-doc2">CPF (opcional)</label>
+                  <label htmlFor="fin-doc2">CPF ou CNPJ{pessoa.documento ? ' (do cadastro)' : ' (opcional)'}</label>
                   <input id="fin-doc2" className="pl-input" value={documento} onChange={e => setDocumento(e.target.value)} maxLength={30} />
                 </div>
               )}

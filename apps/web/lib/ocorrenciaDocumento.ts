@@ -22,7 +22,7 @@ function formatarData(iso?: string | null): string {
 // jsPDF só é importado aqui dentro (não no topo do arquivo) pra não entrar
 // no chunk inicial da aba Ocorrências — ele só é baixado quando alguém
 // realmente clica em "Gerar documento".
-export async function gerarDocumentoOcorrenciaPdf(o: Ocorrencia, vendedorNome: string, vendedorPapel?: string): Promise<void> {
+export async function gerarDocumentoOcorrenciaPdf(o: Ocorrencia, vendedorNome: string, vendedorPapel?: string, vendedorDocumento?: string | null): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const margemEsq = 56
@@ -54,6 +54,7 @@ export async function gerarDocumentoOcorrenciaPdf(o: Ocorrencia, vendedorNome: s
   linha(24)
 
   texto(`Colaborador(a): ${vendedorNome}${vendedorPapel ? ` — ${vendedorPapel === 'SUPERVISOR' ? 'Supervisor(a)' : 'Vendedor(a)'}` : ''}`, { negrito: true })
+  if (vendedorDocumento) texto(`CPF/CNPJ: ${vendedorDocumento}`)
   texto(`Data da ocorrência: ${formatarData(o.dataOcorrencia)}    Registrado por: ${o.registradoPor}    Registrado em: ${formatarData(o.dataRegistro)}`)
   linha(6)
 
@@ -101,7 +102,7 @@ export async function gerarDocumentoOcorrenciaPdf(o: Ocorrencia, vendedorNome: s
   linha(14)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9.5)
-  doc.text('Colaborador(a)', margemEsq, y)
+  doc.text(vendedorDocumento ? `Colaborador(a) · CPF/CNPJ ${vendedorDocumento}` : 'Colaborador(a)', margemEsq, y)
   doc.text('Gestor(a) responsável', margemEsq + colunaLargura + 20, y)
   linha(46)
 

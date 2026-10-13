@@ -1005,6 +1005,9 @@ model Vendedor {
   vende                Boolean  @default(true)
   // Salário lembrado pelo "Pagar salários" do Financeiro (vem preenchido).
   salarioBase          Float?
+  // CPF ou CNPJ, já formatado: identifica a pessoa nos comprovantes de
+  // comissão, recibos do Financeiro e documentos de ocorrência.
+  documento            String?
   criadoEm             DateTime @default(now())
   atualizadoEm         DateTime @updatedAt
 
