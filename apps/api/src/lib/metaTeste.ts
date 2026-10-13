@@ -1,6 +1,6 @@
 // Teste ativo das conexões com a Meta (Tráfego e Instagram) e a recuperação
-// automática: enquanto o app estiver bloqueado, o job de hora em hora testa
-// com uma chamada leve; quando a Meta libera, as duas sincronizações voltam.
+// automática: enquanto um app estiver bloqueado, o job de hora em hora testa
+// com uma chamada leve; quando a Meta libera, as sincronizações voltam.
 import { prisma } from './prisma'
 import { ErroMetaAds, testarContaDeAnuncio } from './metaAds'
 import { ErroGraphApi, buscarContaInstagram, buscarContaInstagramPorId, comApiDaEmpresa } from './instagramGraph'
@@ -32,9 +32,11 @@ export async function testarConexoesMeta(usuarioId: string, agora = new Date()) 
       ? comApiDaEmpresa(() => buscarContaInstagramPorId(conta.instagramUserId, conta.accessToken))
       : buscarContaInstagram(conta.accessToken))))
   }
-  const bloqueio = testes.find(t => t.causa === 'APP_BLOQUEADO')
+  const bloqueados = testes.filter(t => t.causa === 'APP_BLOQUEADO')
+  const bloqueio = bloqueados[0]
   let liberou = false
-  if (bloqueio) await registrarBloqueio(usuarioId, bloqueio.modulo, bloqueio.detalhe, agora)
+  // Teste das duas conexões: diz exatamente quem está parado agora.
+  if (bloqueio) await registrarBloqueio(usuarioId, bloqueados.length > 1 ? 'AMBOS' : bloqueio.modulo, bloqueio.detalhe, agora, true)
   // Se alguma chamada passou e nenhuma acusou bloqueio, o app está liberado.
   else if (testes.some(t => t.ok)) liberou = await registrarLiberacao(usuarioId, agora)
   return { testes, bloqueado: !!bloqueio, liberou }

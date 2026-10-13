@@ -220,7 +220,7 @@ export default function ProLaboreTrafegoPage() {
         {usuario?.papel === 'DONO' && <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq" onClick={() => setTrocando(true)}>Trocar token/conta</button>}
         {usuario?.papel === 'DONO' && <button type="button" className="pl-btn pl-btn-ghost pl-tf-btn-peq pl-as-perigo" onClick={() => void desconectar()}>Desconectar</button>}
       </div>
-      <AvisoConexaoMeta versao={conta.ultimoErroSync ?? ''} onLiberado={() => void sincronizar()} />
+      <AvisoConexaoMeta modulo="TRAFEGO" versao={conta.ultimoErroSync ?? ''} onLiberado={() => void sincronizar()} />
       {conta.ultimoErroSync && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{conta.ultimoErroSync}{/expirou|revogado/.test(conta.ultimoErroSync) && <> <button type="button" className="pl-link-action" onClick={() => setTrocando(true)}>Colar token novo</button></>}</div>}
       {aviso && aviso !== conta.ultimoErroSync && <div className="pl-alert" style={{ marginBottom: 12 }}>{aviso}</div>}
       {(verDiagnostico || conta.ultimoErroSync) && (

@@ -1,16 +1,19 @@
 'use client'
 
-// Aviso único do bloqueio do app pela Meta ("API access blocked"), igual no
-// Tráfego e no Social Media: os dois usam o mesmo app, então param juntos e
-// voltam juntos. Mostra o passo a passo e o "Já resolvi: testar agora"; sem
-// ninguém clicar, a API testa sozinha de hora em hora.
+// Aviso do bloqueio do app pela Meta ("API access blocked") no Tráfego e no
+// Social Media. Os dois podem usar apps diferentes: cada aba mostra o passo a
+// passo quando a conexão dela está parada e só uma nota quando é a outra.
+// "Já resolvi: testar agora" testa as duas; sem ninguém clicar, a API testa
+// sozinha de hora em hora.
 import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, type EstadoConexaoMeta, type TesteConexaoMeta } from '@/lib/proLaboreApi'
 
 const data = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Belem', day: '2-digit', month: '2-digit' })
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Belem', hour: '2-digit', minute: '2-digit' })
 
-export function AvisoConexaoMeta({ versao, onLiberado }: { versao?: string; onLiberado?: () => void }) {
+const NOME = { TRAFEGO: 'Tráfego', SOCIAL_MEDIA: 'Instagram' } as const
+
+export function AvisoConexaoMeta({ modulo, versao, onLiberado }: { modulo: 'TRAFEGO' | 'SOCIAL_MEDIA'; versao?: string; onLiberado?: () => void }) {
   const [estado, setEstado] = useState<EstadoConexaoMeta | null>(null)
   const [testando, setTestando] = useState(false)
   const [testes, setTestes] = useState<TesteConexaoMeta[] | null>(null)
@@ -29,16 +32,26 @@ export function AvisoConexaoMeta({ versao, onLiberado }: { versao?: string; onLi
   }
 
   if (liberado && !estado?.bloqueado) {
-    return <div className="pl-alert" role="status" style={{ marginBottom: 12 }}>A Meta liberou o app. O Tráfego e o Instagram voltam a sincronizar agora.</div>
+    return <div className="pl-alert" role="status" style={{ marginBottom: 12 }}>A Meta liberou o acesso. O Tráfego e o Instagram voltam a sincronizar agora.</div>
   }
   if (!estado?.bloqueado || !estado.bloqueadoDesde) return null
+  const outro = modulo === 'TRAFEGO' ? 'SOCIAL_MEDIA' : 'TRAFEGO'
+  // Parado só o outro módulo: esta aba funciona, fica uma nota.
+  if (estado.origem === outro) {
+    return (
+      <div className="pl-alert" role="status" style={{ marginBottom: 12 }}>
+        {NOME[modulo]} funcionando normalmente. O app da Meta usado pelo {NOME[outro]} continua bloqueado desde {data(estado.bloqueadoDesde)}: o passo a passo está na aba {outro === 'TRAFEGO' ? 'Tráfego' : 'Social Media'}.
+      </div>
+    )
+  }
+  const parado = estado.origem === 'AMBOS' ? 'o Tráfego e o Instagram pararam' : `o ${NOME[modulo]} parou`
   return (
     <section className="pl-card pl-meta-bloqueio" aria-label="Conexão com a Meta bloqueada">
       <div className="pl-card-head">
         <div>
           <div className="pl-card-title">{estado.titulo} desde {data(estado.bloqueadoDesde)}</div>
           <div className="pl-card-sub">
-            Por isso o Tráfego e o Instagram pararam juntos: os dois usam o mesmo app da Meta. Trocar ou gerar token não resolve; a pendência está no painel do app.
+            Por isso {parado}. Trocar ou gerar token não resolve; a pendência está no painel do app na Meta.
           </div>
         </div>
       </div>

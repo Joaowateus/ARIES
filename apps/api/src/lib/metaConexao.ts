@@ -1,10 +1,9 @@
 // Saúde da conexão com a Meta, compartilhada pelo Tráfego e pelo Social Media.
-// Os dois módulos usam o mesmo app da Meta (decisão P1). Quando a própria
-// Meta bloqueia o app ("API access blocked"), os dois param juntos e nenhum
-// token novo resolve: a pendência está no painel do app. Aqui o erro é
-// classificado do mesmo jeito nos dois módulos, o bloqueio fica registrado
-// uma vez só, e a conexão é testada sozinha de hora em hora até voltar,
-// quando as duas sincronizações retomam sem ninguém precisar clicar.
+// Quando a própria Meta bloqueia o app ("API access blocked"), nenhum token
+// novo resolve: a pendência está no painel do app. O Tráfego e o Instagram
+// podem usar apps diferentes, então o bloqueio guarda quem está parado
+// (TRAFEGO, SOCIAL_MEDIA ou AMBOS). A conexão é testada sozinha de hora em
+// hora até voltar, e as sincronizações retomam sem ninguém precisar clicar.
 import { prisma } from './prisma'
 import { notificar } from './smPautas'
 
@@ -21,22 +20,28 @@ export function causaDoErroMeta(codigo: number | undefined, mensagem = ''): Caus
   return 'OUTRO'
 }
 
-export const TITULO_APP_BLOQUEADO = 'A Meta bloqueou o app ARIES (não é o token nem a permissão)'
+export const TITULO_APP_BLOQUEADO = 'A Meta bloqueou o app do ARIES (não é o token nem a permissão)'
 export const MENSAGEM_APP_BLOQUEADO = 'A Meta bloqueou o acesso do app ARIES à API ("API access blocked"). Não é o token nem a permissão: é uma pendência no painel do app na Meta. O passo a passo está no aviso do topo.'
 export const PASSOS_APP_BLOQUEADO = [
-  'Entre em developers.facebook.com/apps com a conta que administra o app e abra o app usado pelo ARIES (o mesmo do Tráfego e do Instagram).',
-  'No Painel do app, procure o aviso em vermelho ou "Ação necessária". Os motivos mais comuns: a Verificação anual de uso de dados venceu, a verificação da empresa ficou pendente ou o app saiu do modo Ativo.',
-  'Conclua o que a Meta pedir. Na verificação de uso de dados: confirme para que o app usa cada permissão e aceite os termos. Confira também se o "Modo do app" está em Ativo.',
+  'Entre em developers.facebook.com/apps com a conta que administra o app e abra o app usado pela conexão que está parada (o Tráfego e o Instagram podem usar apps diferentes: o nome do app aparece no seletor do canto superior esquerdo).',
+  'No Painel do app, veja se o "Publicar" está como "Não publicado" e procure "Ações necessárias". Os motivos mais comuns: o app não está publicado, a verificação anual de uso de dados venceu ou a verificação da empresa ficou pendente.',
+  'Em Configurações do app → Básico, preencha a URL da Política de Privacidade (https://aries-xi-liard.vercel.app/privacidade) e a de exclusão de dados (https://aries-xi-liard.vercel.app/exclusao-de-dados), escolha a categoria e salve. Depois, em Publicar, publique o app e conclua o que mais a Meta pedir.',
   'Volte aqui e clique em "Já resolvi: testar agora". Os tokens continuam valendo: não precisa gerar outro. Se você não fizer nada aqui, o sistema testa sozinho de hora em hora e volta a sincronizar quando a Meta liberar.',
 ]
 
 export type OrigemMeta = 'TRAFEGO' | 'SOCIAL_MEDIA'
+export type OrigemBloqueio = OrigemMeta | 'AMBOS'
 
-/** O app foi bloqueado: guarda desde quando (a primeira vez) e a mensagem da Meta. */
-export async function registrarBloqueio(usuarioId: string, origem: OrigemMeta, mensagemMeta: string, agora = new Date()) {
+/**
+ * O app foi bloqueado: guarda desde quando (a primeira vez), quem está parado
+ * e a mensagem da Meta. Uma sincronização só acrescenta o módulo dela; o
+ * teste das duas conexões (exato) diz quem está parado agora.
+ */
+export async function registrarBloqueio(usuarioId: string, origem: OrigemBloqueio, mensagemMeta: string, agora = new Date(), exato = false) {
   const atual = await prisma.metaSaude.findUnique({ where: { usuarioId } })
   if (atual?.bloqueadoDesde) {
-    await prisma.metaSaude.update({ where: { usuarioId }, data: { verificadoEm: agora } })
+    const juntos = exato || !atual.bloqueioOrigem || atual.bloqueioOrigem === origem ? origem : 'AMBOS'
+    await prisma.metaSaude.update({ where: { usuarioId }, data: { verificadoEm: agora, bloqueioOrigem: juntos, bloqueioMensagem: mensagemMeta.slice(0, 500) } })
     return
   }
   await prisma.metaSaude.upsert({
@@ -55,6 +60,11 @@ export async function registrarBloqueio(usuarioId: string, origem: OrigemMeta, m
 export async function registrarLiberacao(usuarioId: string, agora = new Date(), origem?: OrigemMeta): Promise<boolean> {
   const atual = await prisma.metaSaude.findUnique({ where: { usuarioId }, select: { bloqueadoDesde: true, bloqueioOrigem: true } })
   if (!atual?.bloqueadoDesde) return false
+  // Os dois estavam parados e um voltou: fica parado só o outro.
+  if (origem && atual.bloqueioOrigem === 'AMBOS') {
+    await prisma.metaSaude.update({ where: { usuarioId }, data: { bloqueioOrigem: origem === 'TRAFEGO' ? 'SOCIAL_MEDIA' : 'TRAFEGO' } })
+    return false
+  }
   if (origem && atual.bloqueioOrigem !== origem) return false
   await prisma.metaSaude.update({ where: { usuarioId }, data: { bloqueadoDesde: null, liberadoEm: agora, verificadoEm: agora } })
   // O Instagram tenta de novo na próxima passada do job de 5 em 5 minutos.
@@ -94,7 +104,7 @@ export async function lembretesAnuais(agora = new Date()) {
     const data = vence.toLocaleDateString('pt-BR', { timeZone: 'America/Belem' })
     await notificar(s.usuarioId, 'GESTOR', 'META_REVISAO', `meta-revisao:${s.liberadoEm!.toISOString().slice(0, 10)}`,
       'Confira o painel do app na Meta antes de vencer',
-      `No ano passado a Meta bloqueou o app ARIES por uma pendência no painel (Tráfego e Instagram pararam juntos). A revisão anual costuma vencer perto de ${data}: abra developers.facebook.com/apps e conclua o que estiver em "Ação necessária".`,
+      `No ano passado a Meta bloqueou o app do ARIES por uma pendência no painel. A revisão anual costuma vencer perto de ${data}: abra developers.facebook.com/apps e conclua o que estiver em "Ação necessária".`,
       { href: '/pro-labore/trafego' })
     await prisma.metaSaude.update({ where: { id: s.id }, data: { lembreteEm: agora } })
     n++
