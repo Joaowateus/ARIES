@@ -2493,6 +2493,8 @@ model SmPauta {
   titulo                String
   pilar                 String // ESTOQUE | PROVA | EDUCACAO | BASTIDORES
   formato               String // REELS | CARROSSEL | FOTO | STORY
+  // Cadência "três posts, três vezes ao dia": etapa do funil do post.
+  etapaFunil            String? // TOPO | MEIO | FUNDO (sem valor: estimada pelo pilar)
   status                String    @default("IDEIA") // IDEIA | ROTEIRO | GRAVACAO | EDICAO | APROVACAO | AGENDADO | PUBLICADO
   ordem                 Float     @default(0)
   prazo                 DateTime?
@@ -2586,6 +2588,10 @@ model SmConfig {
   rodizioUltimoVendedorId String?
   // WhatsApp da loja (decisão P9): destino do link rastreado /r/{code}.
   whatsappLoja    String?
+  // Método (escada do desejo): degrau em que o perfil está hoje, de 1 a 6.
+  escadaDegrau    Int?
+  escadaNota      String?
+  escadaDefinidaEm DateTime?
   atualizadoEm    DateTime @default(now()) @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)

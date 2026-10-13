@@ -6,9 +6,9 @@
 // salva ao sair dele.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, urlArquivoApi, type SmTesteAB, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar, type SmRoteiroIA } from '@/lib/proLaboreApi'
+import { proLaboreApi, urlArquivoApi, type SmTesteAB, type SmColuna, type SmFormato, type SmMoto, type SmPauta, type SmPautaEntrada, type SmPilar, type SmEtapaFunil, type SmRoteiroIA } from '@/lib/proLaboreApi'
 import {
-  Banner, Botao, Chip, COLUNA_ROTULO, COLUNAS, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
+  Banner, Botao, Chip, COLUNA_ROTULO, COLUNAS, ETAPA_DO_PILAR, ETAPA_MISSAO, ETAPA_ROTULO, FORMATO_ROTULO, IcFechar, ORIGEM_ROTULO, PILAR_CHIP, PILAR_ROTULO, Rotulo,
   dataParaIso, isoParaData, isoParaLocal, localParaIso, quandoCurto, useToast,
 } from '../../_ui'
 import { BibliotecaGanchos } from './Ganchos'
@@ -124,6 +124,7 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Chip pilar={PILAR_CHIP[pauta.pilar]}>{PILAR_ROTULO[pauta.pilar]}</Chip>
           <Chip>{FORMATO_ROTULO[pauta.formato]}</Chip>
+          <Chip tom="info">{ETAPA_ROTULO[pauta.etapaFunil ?? ETAPA_DO_PILAR[pauta.pilar]]}{pauta.etapaFunil ? '' : ' (pelo pilar)'}</Chip>
           <Chip>Origem: {ORIGEM_ROTULO[pauta.origem]}</Chip>
           {pauta.trial && <Chip tom="info">Trial Reel</Chip>}
           {pauta.codigo && <Chip tom="learn">{pauta.codigo}</Chip>}
@@ -228,6 +229,12 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
         <label className="sm-campo">Formato
           <select className="sm-input" disabled={travada} value={pauta.formato} onChange={e => salvar({ formato: e.target.value as SmFormato })}>
             {(Object.keys(FORMATO_ROTULO) as SmFormato[]).map(f => <option key={f} value={f}>{FORMATO_ROTULO[f]}</option>)}
+          </select>
+        </label>
+        <label className="sm-campo" style={{ gridColumn: '1 / -1' }}>Etapa na cadência
+          <select className="sm-input" disabled={travada} value={pauta.etapaFunil ?? ''} onChange={e => salvar({ etapaFunil: (e.target.value || null) as SmEtapaFunil | null })}>
+            <option value="">Automática ({ETAPA_ROTULO[ETAPA_DO_PILAR[pauta.pilar]]})</option>
+            {(Object.keys(ETAPA_ROTULO) as SmEtapaFunil[]).map(et => <option key={et} value={et}>{ETAPA_ROTULO[et]}: {ETAPA_MISSAO[et].titulo.toLowerCase()}, {ETAPA_MISSAO[et].chamada}</option>)}
           </select>
         </label>
         {motos && (

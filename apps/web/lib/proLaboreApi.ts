@@ -950,6 +950,12 @@ export const proLaboreApi = {
     },
     desempenho: (periodo: { inicio: string; fim: string }, origem: OrigemSocial = 'ORGANICO') =>
       request<SmDesempenho>(`/pro-labore/sm/desempenho?inicio=${periodo.inicio}&fim=${periodo.fim}&origem=${origem}`),
+    metodo: {
+      ver: () => request<SmMetodo>('/pro-labore/sm/metodo'),
+      escada: (degrau: number | null, nota: string | null) =>
+        request<SmMetodo['escada']>('/pro-labore/sm/metodo/escada', { method: 'PUT', body: JSON.stringify({ degrau, nota }) }),
+      aplicarCadencia: () => request<{ maxPostsDia: number }>('/pro-labore/sm/metodo/aplicar-cadencia', { method: 'POST' }),
+    },
     atendimento: {
       lista: () => request<SmAtendimento>('/pro-labore/sm/atendimento'),
       conversa: (id: string) => request<SmConversaDetalhe>(`/pro-labore/sm/conversas/${id}`),
@@ -1350,7 +1356,7 @@ export type AnaliseSocialMedia =
         alcanceUnico: number | null; alcanceUnicoMotivo: string | null
         visitasPerfil: number | null
         conversasIniciadas: number | null; conversasMotivo: string
-        leads: number; vendas: number
+        leads: number; mql: number; vendas: number
       }
       consistencia: {
         dias: Array<{ data: string; posts: number; futuro: boolean }>
@@ -1993,6 +1999,7 @@ export interface SmPautaEntrada {
   titulo: string
   pilar: SmPilar
   formato: SmFormato
+  etapaFunil?: SmEtapaFunil | null
   prazo?: string | null
   motoId?: string | null
   origem?: SmOrigem
@@ -2019,6 +2026,7 @@ export interface SmPauta {
   titulo: string
   pilar: SmPilar
   formato: SmFormato
+  etapaFunil: SmEtapaFunil | null
   status: SmStatusPauta
   ordem: number
   prazo: string | null
@@ -2367,7 +2375,8 @@ export type SmDesempenho =
   | { conectado: false }
   | (Omit<AnaliseSocialConectada, 'relacaoVendas' | 'funil'> & {
       relacaoVendas: { leadsGerados: number; leadsGanhos: number | null; valorNegociadoTotal: number | null } | null
-      funil: Omit<AnaliseSocialConectada['funil'], 'leads' | 'vendas'> & { leads: number | null; vendas: number | null }
+      funil: Omit<AnaliseSocialConectada['funil'], 'leads' | 'mql' | 'vendas'> & { leads: number | null; mql: number | null; vendas: number | null }
+      hierarquia: SmMetricaHierarquia[]
       sinais: SmSinal[]
       reelsDiagnostico: SmReelDiagnostico[]
       testeEmAndamento: SmTesteAB | null
@@ -2377,6 +2386,54 @@ export type SmDesempenho =
       verCrm: boolean
       verVendas: boolean
     })
+
+/** Hierarquia das métricas do método: do centro (vendas) para fora (seguidores). */
+export interface SmMetricaHierarquia {
+  chave: 'vendas' | 'mql' | 'leads' | 'encaminhamentos' | 'alcance' | 'engajamento' | 'seguidores'
+  rotulo: string
+  valor: number | null
+  detalhe: string
+  motivo: string | null
+}
+
+export type SmEtapaFunil = 'TOPO' | 'MEIO' | 'FUNDO'
+export type SmTurno = 'MANHA' | 'TARDE' | 'NOITE'
+export interface SmPostCadencia {
+  id: string
+  tipo: 'PAUTA' | 'INSTAGRAM'
+  titulo: string
+  formato: SmFormato
+  status: string
+  hora: string
+  turno: SmTurno
+  etapa: SmEtapaFunil | null
+  estimada: boolean
+}
+export interface SmDiaCadencia {
+  data: string
+  hoje: boolean
+  passado: boolean
+  preenchidos: number
+  posts: number
+  turnos: Array<{ turno: SmTurno; etapas: Record<SmEtapaFunil, SmPostCadencia[]>; semEtapa: SmPostCadencia[] }>
+}
+export interface SmMetodo {
+  cadencia: {
+    hoje: string
+    dias: SmDiaCadencia[]
+    aderencia7d: { preenchidos: number; total: number; diasCompletos: number }
+    maxPostsDiaRegra: number
+    postsDiaMetodo: number
+  }
+  escada: {
+    degraus: ReadonlyArray<{ n: number; nome: string; texto: string }>
+    atual: number | null
+    nota: string | null
+    definidaEm: string | null
+  }
+  souGestor: boolean
+  podeEditarPauta: boolean
+}
 
 export type SmVariavelTeste = 'HORARIO' | 'GANCHO' | 'FORMATO' | 'CTA' | 'OUTRO'
 export type SmMetricaTeste = 'ALCANCE' | 'ENVIOS' | 'SALVOS' | 'PULO' | 'RETENCAO'

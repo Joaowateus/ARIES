@@ -982,3 +982,112 @@ select.sm-boas-hora { background: transparent; border: 1px solid var(--sm-border
 .sm-recepcao-paleta[disabled] { cursor: default; }
 .sm-recepcao-paleta > span:nth-child(2) { flex: 1; }
 .sm-recepcao-paleta-a { width: 22px; height: 22px; border-radius: 6px; background: var(--sm-silver); color: var(--sm-on-silver); font: 800 11px var(--sm-font-title); display: flex; align-items: center; justify-content: center; }
+
+/* ---------- Método: cadência 3×3, escada do desejo, hierarquia das métricas ---------- */
+.sm-metodo { display: flex; flex-direction: column; gap: 16px; }
+.sm-metodo .sm-card { display: flex; flex-direction: column; gap: 14px; }
+.sm-metodo-acento { color: var(--sm-data-blue); }
+.sm-metodo-destaque { margin: 0; font-weight: 700; color: var(--sm-text-strong); }
+.sm-metodo-citacao { margin: 4px 0 0; padding: 14px 18px; border-left: 3px solid var(--sm-data-blue); background: var(--sm-surface); border-radius: 0 var(--sm-radius-card) var(--sm-radius-card) 0; font-family: var(--sm-font-title); font-weight: 700; color: var(--sm-text-strong); }
+
+/* Etapas em ordem (Topo → Fundo): um só tom, do claro ao escuro. */
+.sm-metodo, .sm-desemp { --sm-etapa-topo: color-mix(in srgb, var(--sm-data-blue) 45%, var(--sm-surface)); --sm-etapa-meio: color-mix(in srgb, var(--sm-data-blue) 72%, var(--sm-surface)); --sm-etapa-fundo: var(--sm-data-blue); }
+
+.sm-cad-dias { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr); gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.sm-cad-dia { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--sm-border); background: var(--sm-surface-2); color: var(--sm-text); cursor: pointer; font: inherit; min-height: 44px; }
+.sm-cad-dia:hover { border-color: var(--sm-border-strong); }
+.sm-cad-dia.sel { border-color: var(--sm-data-blue); box-shadow: inset 0 0 0 1px var(--sm-data-blue); }
+.sm-cad-dia.hoje .sm-cad-dia-ttl { color: var(--sm-data-blue); }
+.sm-cad-dia-ttl { font-size: 12px; font-weight: 700; }
+.sm-cad-dia-num { font-size: 11px; color: var(--sm-text-muted); }
+.sm-cad-mini { display: grid; grid-template-columns: repeat(3, 8px); gap: 3px; }
+.sm-cad-mini i { width: 8px; height: 8px; border-radius: 50%; background: var(--sm-surface-3); }
+.sm-cad-mini i.on { background: var(--sm-data-blue); }
+
+.sm-cad-grade-rola { overflow-x: auto; position: relative; }
+.sm-cad-grade { width: 100%; min-width: 560px; border-collapse: separate; border-spacing: 8px; table-layout: fixed; }
+.sm-cad-grade thead th { text-align: center; vertical-align: bottom; font-weight: 400; }
+.sm-cad-grade thead th:first-child, .sm-cad-grade tbody th { width: 92px; }
+.sm-cad-grade tbody th { text-align: left; font-size: 13px; font-weight: 700; color: var(--sm-text-strong); white-space: nowrap; }
+.sm-cad-grade tbody th .sm-mono { color: var(--sm-text-muted); font-weight: 400; }
+.sm-cad-bola { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; color: #fff; font-weight: 800; font-family: var(--sm-font-title); margin-bottom: 6px; }
+.sm-cad-bola.e-topo, .sm-cad-ponto.e-topo { background: var(--sm-etapa-topo); }
+.sm-cad-bola.e-meio, .sm-cad-ponto.e-meio { background: var(--sm-etapa-meio); }
+.sm-cad-bola.e-fundo, .sm-cad-ponto.e-fundo { background: var(--sm-etapa-fundo); }
+.sm-cad-bola.e-topo, .sm-cad-bola.e-meio { color: var(--sm-text-strong); }
+.sm-cad-missao { display: block; font-size: 12px; font-weight: 700; color: var(--sm-text-strong); }
+.sm-cad-missao small, .sm-444 th small { display: block; font-weight: 400; color: var(--sm-text-muted); font-size: 11px; }
+.sm-cad-grade td { vertical-align: top; padding: 10px; border-radius: 10px; border: 1px solid var(--sm-border); background: var(--sm-surface-2); min-height: 64px; }
+.sm-cad-grade td.vazia { border-style: dashed; background: transparent; }
+.sm-cad-livre { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--sm-text-faint); }
+.sm-cad-planejar { font-size: 12px; font-weight: 600; color: var(--sm-link); }
+.sm-cad-post { font-size: 13px; line-height: 1.35; color: var(--sm-text); }
+.sm-cad-post + .sm-cad-post { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--sm-divider); }
+.sm-cad-post a { color: var(--sm-text-strong); font-weight: 600; }
+.sm-cad-post .sm-mono { color: var(--sm-text-muted); font-size: 12px; }
+.sm-cad-post-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sm-cad-rodape { display: flex; flex-direction: column; gap: 6px; }
+
+.sm-444 { width: 100%; min-width: 520px; border-collapse: collapse; }
+.sm-444 th, .sm-444 td { padding: 8px 6px; text-align: center; }
+.sm-444 thead th { font-size: 13px; color: var(--sm-text-strong); }
+.sm-444 tbody th { text-align: left; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.sm-444 tbody tr { background-image: linear-gradient(var(--sm-border), var(--sm-border)); background-size: 100% 2px; background-position: center; background-repeat: no-repeat; }
+.sm-444 tbody th { background: var(--sm-surface); }
+.sm-cad-ponto { display: inline-block; width: 20px; height: 20px; border-radius: 50%; box-shadow: 0 0 0 3px var(--sm-surface); }
+
+.sm-escada { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
+.sm-escada-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sm-escada-lista li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 10px; }
+.sm-escada-lista li > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.sm-escada-lista li > div .sm-legenda { flex-basis: 100%; }
+.sm-escada-lista li.atual { background: var(--sm-info-bg); }
+.sm-escada-lista li b { color: var(--sm-text-strong); }
+.sm-escada-n { font-size: 18px; font-weight: 700; color: var(--sm-text-muted); min-width: 26px; }
+.sm-escada-lista li.atual .sm-escada-n, .sm-escada-lista li.feito .sm-escada-n { color: var(--sm-data-blue); }
+.sm-escada-degraus { display: flex; align-items: flex-end; gap: 0; min-height: 220px; }
+.sm-escada-degraus span { position: relative; flex: 1; background: var(--sm-surface-3); border-top: 4px solid var(--sm-border-strong); }
+.sm-escada-degraus span.feito { background: color-mix(in srgb, var(--sm-data-blue) 40%, var(--sm-surface)); border-top-color: color-mix(in srgb, var(--sm-data-blue) 60%, var(--sm-surface)); }
+.sm-escada-degraus span.atual { background: var(--sm-data-blue); border-top-color: var(--sm-data-blue-dark); }
+.sm-escada-marca { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--sm-silver); color: var(--sm-on-silver); white-space: nowrap; }
+.sm-escada-resumo { margin: 0; color: var(--sm-text); }
+.sm-escada-form { display: flex; flex-direction: column; gap: 12px; }
+.sm-escada-seg { flex-wrap: wrap; }
+
+.sm-hier { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 20px; align-items: center; }
+.sm-hier-grafico { width: 100%; height: auto; overflow: visible; }
+.sm-hier-anel path { fill: color-mix(in srgb, var(--sm-data-blue) calc(10% + var(--i) * 3%), var(--sm-surface)); stroke: var(--sm-surface); stroke-width: 2; transition: fill .15s; }
+.sm-hier-anel.destaque path { fill: var(--sm-data-blue); }
+.sm-hier-anel.ativo path { fill: color-mix(in srgb, var(--sm-data-blue) 55%, var(--sm-surface)); }
+.sm-hier-anel.destaque.ativo path { fill: var(--sm-data-blue-dark); }
+.sm-hier-txt { font-size: 12px; font-weight: 700; fill: var(--sm-text-strong); paint-order: stroke; stroke: color-mix(in srgb, var(--sm-data-blue) 12%, var(--sm-surface)); stroke-width: 3px; pointer-events: none; }
+.sm-hier-txt.destaque { fill: #fff; stroke: none; }
+.sm-hier-eixo { fill: none; stroke: var(--sm-text-faint); stroke-width: 1.5; }
+.sm-hier-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sm-hier-lista li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; }
+.sm-hier-lista li > div { flex: 1; min-width: 0; }
+.sm-hier-lista li.ativo { background: var(--sm-surface-2); }
+.sm-hier-lista li.destaque { background: var(--sm-info-bg); }
+.sm-hier-n { color: var(--sm-text-muted); font-size: 12px; padding-top: 2px; }
+.sm-hier-linha { display: flex; justify-content: space-between; gap: 8px; }
+.sm-hier-linha b { color: var(--sm-text-strong); }
+.sm-hier-linha .sm-num { font-weight: 700; color: var(--sm-text-strong); }
+.sm-hier-rodape { grid-column: 1 / -1; margin: 0; }
+
+@media (max-width: 760px) {
+  .sm-escada, .sm-hier { grid-template-columns: minmax(0, 1fr); }
+  .sm-escada-degraus { min-height: 140px; }
+  .sm-hier-grafico { max-width: 320px; margin: 0 auto; }
+}
+@media (max-width: 760px) {
+  .sm-cad-grade { min-width: 0; border-spacing: 0; }
+  .sm-cad-grade thead { display: none; }
+  .sm-cad-grade, .sm-cad-grade tbody, .sm-cad-grade tr, .sm-cad-grade tbody th, .sm-cad-grade td { display: block; width: auto; }
+  .sm-cad-grade tr { margin-bottom: 14px; }
+  .sm-cad-grade tbody th { width: auto; margin-bottom: 6px; }
+  .sm-cad-grade td { margin-bottom: 6px; min-height: 0; }
+  .sm-cad-grade td::before { content: attr(data-etapa); display: block; font-size: 11px; font-weight: 700; color: var(--sm-text-muted); margin-bottom: 4px; }
+  .sm-444 { min-width: 0; }
+  .sm-444 thead th { font-size: 11px; }
+  .sm-444 th, .sm-444 td { padding: 6px 2px; }
+}

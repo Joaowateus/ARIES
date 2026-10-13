@@ -11,6 +11,7 @@ import { AssistenteAba, Banner, Botao, BotaoLink, CardEsqueleto, Chip, EstadoVaz
 import { useEspacoSM } from '../EspacoSM'
 import { CartaoTeste } from './Testes'
 import { Concorrentes } from './Concorrentes'
+import { Hierarquia } from '../metodo/Hierarquia'
 import { periodoDoPreset, type Periodo, type PresetPeriodo } from '../../../(painel)/social-media/_componentes/FiltroPeriodo'
 import { KpisSocial } from '../../../(painel)/social-media/_componentes/KpisSocial'
 import { EvolucaoDiaria } from '../../../(painel)/social-media/_componentes/EvolucaoDiaria'
@@ -113,6 +114,14 @@ export default function DesempenhoPage() {
           </section>
           {dados.souGestor && <div><Botao variante="fantasma" onClick={() => setMetasAbertas(true)}>Editar metas dos sinais</Botao></div>}
 
+          <section className="sm-card" aria-label="Hierarquia das métricas">
+            <div className="sm-card-cab">
+              <div><h2 className="sm-h-card">Hierarquia das métricas</h2><p>A ordem do método, do centro para fora: primeiro o que vende.</p></div>
+              <BotaoLink href="/pro-labore/sm/metodo" variante="fantasma">Ver o método</BotaoLink>
+            </div>
+            <Hierarquia metricas={dados.hierarquia} />
+          </section>
+
           <div className="sm-desemp-par">
             <ConsistenciaSM c={dados.consistencia} />
             <FunilSM f={dados.funil} dias={dados.periodo.dias} />
@@ -199,6 +208,7 @@ function FunilSM({ f, dias }: { f: Conectado['funil']; dias: number }) {
     { rotulo: 'Visitas ao perfil', valor: f.visitasPerfil },
     { rotulo: 'Conversas iniciadas', valor: f.conversasIniciadas, motivo: f.conversasMotivo },
     { rotulo: 'Leads no CRM', valor: f.leads, motivo: f.leads == null ? 'Sem acesso ao CRM.' : null },
+    { rotulo: 'MQL (Negociação ou além)', valor: f.mql, motivo: f.mql == null ? 'Sem acesso ao CRM.' : null },
     { rotulo: 'Vendas', valor: f.vendas, motivo: f.vendas == null ? 'Sem acesso a vendas.' : null },
   ]
   const topo = Math.max(1, ...etapas.map(e => e.valor ?? 0))

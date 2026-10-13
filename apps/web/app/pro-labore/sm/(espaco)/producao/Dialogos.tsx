@@ -2,8 +2,8 @@
 
 // "+ Nova pauta" e "Sugestões do estoque" (cabeçalho da Produção).
 import { useState } from 'react'
-import { proLaboreApi, type SmFormato, type SmMoto, type SmPauta, type SmPilar, type SmSugestaoAudiencia } from '@/lib/proLaboreApi'
-import { Botao, Chip, EstadoVazio, FORMATO_ROTULO, Modal, PILAR_ROTULO, dataParaIso } from '../../_ui'
+import { proLaboreApi, type SmFormato, type SmMoto, type SmPauta, type SmPilar, type SmEtapaFunil, type SmSugestaoAudiencia } from '@/lib/proLaboreApi'
+import { Botao, Chip, ETAPA_DO_PILAR, ETAPA_MISSAO, ETAPA_ROTULO, EstadoVazio, FORMATO_ROTULO, Modal, PILAR_ROTULO, dataParaIso } from '../../_ui'
 
 export function NovaPauta({ motos, inicial, aoCriar, aoFechar }: {
   motos: SmMoto[] | null
@@ -14,6 +14,7 @@ export function NovaPauta({ motos, inicial, aoCriar, aoFechar }: {
   const [titulo, setTitulo] = useState('')
   const [pilar, setPilar] = useState<SmPilar>('ESTOQUE')
   const [formato, setFormato] = useState<SmFormato>('REELS')
+  const [etapa, setEtapa] = useState<SmEtapaFunil | ''>('')
   const [prazo, setPrazo] = useState('')
   const [motoId, setMotoId] = useState('')
   const [erro, setErro] = useState<string | null>(null)
@@ -24,7 +25,7 @@ export function NovaPauta({ motos, inicial, aoCriar, aoFechar }: {
     setEnviando(true); setErro(null)
     try {
       const p = await proLaboreApi.sm.pautas.criar({
-        titulo, pilar, formato, prazo: dataParaIso(prazo), motoId: motoId || null,
+        titulo, pilar, formato, etapaFunil: etapa || null, prazo: dataParaIso(prazo), motoId: motoId || null,
         origem: inicial?.origem ?? 'MANUAL', agendadoPara: inicial?.agendadoPara ?? null,
       })
       aoCriar(p)
@@ -49,6 +50,12 @@ export function NovaPauta({ motos, inicial, aoCriar, aoFechar }: {
           <label className="sm-campo">Formato
             <select className="sm-input" value={formato} onChange={e => setFormato(e.target.value as SmFormato)}>
               {(Object.keys(FORMATO_ROTULO) as SmFormato[]).map(f => <option key={f} value={f}>{FORMATO_ROTULO[f]}</option>)}
+            </select>
+          </label>
+          <label className="sm-campo">Etapa na cadência
+            <select className="sm-input" value={etapa} onChange={e => setEtapa(e.target.value as SmEtapaFunil | '')}>
+              <option value="">Automática ({ETAPA_ROTULO[ETAPA_DO_PILAR[pilar]]})</option>
+              {(Object.keys(ETAPA_ROTULO) as SmEtapaFunil[]).map(et => <option key={et} value={et}>{ETAPA_ROTULO[et]}: {ETAPA_MISSAO[et].titulo.toLowerCase()}</option>)}
             </select>
           </label>
           <label className="sm-campo">Prazo da produção

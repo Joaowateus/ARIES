@@ -166,7 +166,27 @@ export function filtrarParaOPapel(analise: Analise, sm: ContextoSM) {
     funil: {
       ...analise.funil,
       leads: verCrm ? analise.funil.leads : null,
+      mql: verCrm ? analise.funil.mql : null,
       vendas: verCrm && verVendas ? analise.funil.vendas : null,
     },
   }
+}
+
+/**
+ * Hierarquia das métricas (método do Social Media): a ordem em que o perfil
+ * é lido, do centro para fora. Vendas primeiro, seguidores por último.
+ * Recebe a análise já filtrada pelo papel: sem CRM, leads/MQL/vendas vêm nulos.
+ */
+export function hierarquiaDasMetricas(a: ReturnType<typeof filtrarParaOPapel>) {
+  const encaminhamentos = a.publicacoes.length > 0 ? a.publicacoes.reduce((s, p) => s + (p.compartilhamentos ?? 0), 0) : null
+  const semCrm = 'Sem acesso ao CRM.'
+  return [
+    { chave: 'vendas', rotulo: 'Vendas', valor: a.funil.vendas, detalhe: 'Leads do Instagram que fecharam', motivo: a.funil.vendas == null ? 'Sem acesso a vendas.' : null },
+    { chave: 'mql', rotulo: 'MQL', valor: a.funil.leads == null ? null : a.funil.mql, detalhe: 'Leads qualificados: chegaram a Negociação ou além', motivo: a.funil.leads == null ? semCrm : null },
+    { chave: 'leads', rotulo: 'Lead', valor: a.funil.leads, detalhe: 'Leads do Instagram no CRM', motivo: a.funil.leads == null ? semCrm : null },
+    { chave: 'encaminhamentos', rotulo: 'Encaminhamentos', valor: encaminhamentos, detalhe: 'Envios dos posts do período (o sinal que mais distribui)', motivo: encaminhamentos == null ? 'Nenhum post no período.' : null },
+    { chave: 'alcance', rotulo: 'Alcance', valor: a.funil.alcanceUnico, detalhe: 'Contas únicas alcançadas no período', motivo: a.funil.alcanceUnicoMotivo },
+    { chave: 'engajamento', rotulo: 'Engajamento', valor: a.kpis.interacoes.atual, detalhe: 'Curtidas, comentários, salvos e envios', motivo: a.kpis.interacoes.atual == null ? 'Sem métricas diárias no período.' : null },
+    { chave: 'seguidores', rotulo: 'Seguidores', valor: a.kpis.seguidores.atual, detalhe: a.kpis.seguidores.variacao != null ? `${a.kpis.seguidores.variacao >= 0 ? '+' : ''}${a.kpis.seguidores.variacao.toLocaleString('pt-BR')} no período` : 'Total de seguidores', motivo: null },
+  ]
 }
