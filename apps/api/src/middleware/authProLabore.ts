@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { verifyProLaboreToken, ProLaboreJwtPayload } from '../lib/jwtProLabore'
 import { prisma } from '../lib/prisma'
 import { TUDO, permissoesEfetivas } from '../lib/acessos'
+import { acessosPessoaisSM, vendedorDoMembro } from '../lib/smAcesso'
 
 declare global {
   namespace Express {
@@ -29,6 +30,15 @@ export async function requireProLaboreAuth(req: Request, res: Response, next: Ne
   // Acessos da equipe: o estado vem do banco a cada pedido, então mudar o
   // escopo, as permissões ou desativar o login vale na hora, sem esperar
   // a pessoa sair e entrar de novo.
+  // Social Media fora do espaço dele (Agenda, Reuniões, Anotações): age como
+  // uma pessoa da equipe que vê só os próprios dados, com os módulos que o
+  // gestor liberou na tela do papel. O guardaPapelSocialMedia já barrou o resto.
+  if (payload.papel === 'SOCIAL_MEDIA' && payload.smMembroId && !req.path.startsWith('/sm/') && req.path !== '/auth/me') {
+    const vendedorId = await vendedorDoMembro(payload.smMembroId)
+    if (!vendedorId) { res.status(401).json({ error: 'Acesso do Social Media suspenso. Fale com o gestor.' }); return }
+    req.proLaboreUser = { ...payload, papel: 'VENDEDOR', vendedorId }
+    req.acessos = { ...Object.fromEntries(Object.keys(TUDO).map(k => [k, 'NENHUM'])), ...(await acessosPessoaisSM(payload.sub)) } as typeof TUDO
+  }
   if ((payload.papel === 'VENDEDOR' || payload.papel === 'SUPERVISOR') && payload.vendedorId) {
     const v = await prisma.vendedor.findUnique({ where: { id: payload.vendedorId }, select: { usuarioId: true, ativo: true, email: true, senhaHash: true, papel: true, permissoes: true } })
     if (!v || v.usuarioId !== payload.sub || !v.ativo || !v.email || !v.senhaHash) {

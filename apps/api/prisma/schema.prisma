@@ -1016,6 +1016,7 @@ model Vendedor {
   assistenteComercial AssistenteComercial?
   socialMediaContas   SocialMediaConta[]
   lancamentosFinanceiros LancamentoFinanceiro[]
+  smMembro               SmMembro?
 
   @@index([usuarioId])
   @@map("pro_labore_vendedores")
@@ -2427,10 +2428,15 @@ model SmMembro {
   ativadoEm        DateTime?
   primeiroAcessoEm DateTime?
   ultimoAcessoEm   DateTime?
+  // Cadastro na equipe (não vende, sem login próprio) criado na primeira vez
+  // que o Social Media usa Agenda, Reuniões ou Anotações: é ele que separa a
+  // agenda, as reuniões e as anotações dessa pessoa das do dono.
+  vendedorId       String?   @unique
   criadoEm         DateTime  @default(now())
   atualizadoEm     DateTime  @updatedAt
 
-  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario  ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  vendedor Vendedor?        @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
 
   @@map("pro_labore_sm_membros")
 }

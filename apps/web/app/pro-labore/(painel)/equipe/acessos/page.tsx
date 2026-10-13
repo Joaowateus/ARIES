@@ -24,6 +24,10 @@ const MODULOS: Record<SmModulo, { nome: string; nota: string }> = {
   trafego: { nome: 'Tráfego', nota: 'Só o gasto com impulsionamento de posts' },
   financeiro: { nome: 'Financeiro e pró-labore', nota: 'Liquidez, comissões e pró-labore' },
   dashboard: { nome: 'Dashboard geral e equipe', nota: 'Metas e desempenho dos consultores' },
+  // Ferramentas pessoais: o Social Media usa as telas do painel com os dados dele.
+  agenda: { nome: 'Agenda', nota: 'As tarefas dele; você também pode passar tarefas para ele. Leitura: ver e concluir' },
+  reunioes: { nome: 'Reuniões', nota: 'As reuniões dele e as apresentações da equipe' },
+  anotacoes: { nome: 'Anotações', nota: 'Notas, pastas e mapas mentais dele' },
 }
 
 const OPCOES_NIVEL = [
@@ -46,11 +50,29 @@ const STATUS_MEMBRO: Record<SmStatusMembro, { texto: string; tom: Tom }> = {
   SUSPENSO: { texto: 'Acesso suspenso', tom: 'bad' },
 }
 
+const CHAVE_AREA = 'pl_acessos_area'
+function areaGuardada(): 'equipe' | 'social' {
+  if (typeof window === 'undefined') return 'equipe'
+  if (window.location.hash === '#social') return 'social'
+  try { return window.sessionStorage.getItem(CHAVE_AREA) === 'social' ? 'social' : 'equipe' } catch { return 'equipe' }
+}
+function guardarArea(a: 'equipe' | 'social') {
+  try { window.sessionStorage.setItem(CHAVE_AREA, a) } catch { /* sem armazenamento: só não lembra */ }
+}
+
 export default function AcessosPermissoesPage() {
   const { usuario } = useProLaboreAuth()
   const router = useRouter()
   // Duas áreas: os logins da equipe (módulo a módulo) e o papel Social Media.
-  const [area, setArea] = useState<'equipe' | 'social'>('equipe')
+  // A escolhida fica no endereço (#social), para recarregar e voltar da
+  // pré-visualização sem cair na outra aba. A página só aparece depois do
+  // login carregar, então ler o endereço aqui não diverge do servidor.
+  const [area, setAreaEstado] = useState<'equipe' | 'social'>(areaGuardada)
+  const setArea = (a: 'equipe' | 'social') => {
+    setAreaEstado(a)
+    guardarArea(a)
+    window.history.replaceState(null, '', a === 'social' ? '#social' : window.location.pathname)
+  }
   useEffect(() => { if (usuario && usuario.papel !== 'DONO') router.replace('/pro-labore') }, [usuario, router])
   if (usuario?.papel !== 'DONO') return null
   return (

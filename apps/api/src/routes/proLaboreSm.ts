@@ -259,6 +259,10 @@ router.post('/sm/gestor/membro/ativo', ...autenticado, requireGestorSM, async (r
 })
 
 router.delete('/sm/gestor/membro', ...autenticado, requireGestorSM, async (req: Request, res: Response) => {
+  // O cadastro dela na equipe (agenda, reuniões e anotações) é desativado,
+  // não apagado: o histórico fica guardado.
+  const membro = await prisma.smMembro.findUnique({ where: { usuarioId: req.sm!.usuarioId }, select: { vendedorId: true } })
+  if (membro?.vendedorId) await prisma.vendedor.updateMany({ where: { id: membro.vendedorId, usuarioId: req.sm!.usuarioId }, data: { ativo: false } })
   await prisma.smMembro.deleteMany({ where: { usuarioId: req.sm!.usuarioId } })
   res.json({ ok: true })
 })

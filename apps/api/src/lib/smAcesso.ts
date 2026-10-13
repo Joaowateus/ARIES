@@ -11,7 +11,11 @@ import { prisma } from './prisma'
 import { marcarAtividade } from './smAtividade'
 import { verifyProLaboreToken } from './jwtProLabore'
 
-export const MODULOS_SM = ['analise', 'producao', 'atendimento', 'estoque', 'crm', 'vendas', 'trafego', 'financeiro', 'dashboard'] as const
+export const MODULOS_SM = ['analise', 'producao', 'atendimento', 'estoque', 'crm', 'vendas', 'trafego', 'financeiro', 'dashboard', 'agenda', 'reunioes', 'anotacoes'] as const
+// Ferramentas pessoais do painel que o gestor pode liberar para o papel: o
+// Social Media usa as telas de Agenda, Reuniões e Anotações com os dados
+// dele (um cadastro próprio na equipe, ver vendedorDoMembro).
+export const MODULOS_PESSOAIS_SM = ['agenda', 'reunioes', 'anotacoes'] as const
 export type ModuloSM = (typeof MODULOS_SM)[number]
 export const NIVEIS_SM = ['COMPLETO', 'LEITURA', 'SEM_ACESSO'] as const
 export type NivelSM = (typeof NIVEIS_SM)[number]
@@ -26,6 +30,9 @@ export const NIVEIS_PADRAO: Record<ModuloSM, NivelSM> = {
   trafego: 'LEITURA',
   financeiro: 'SEM_ACESSO',
   dashboard: 'SEM_ACESSO',
+  agenda: 'SEM_ACESSO',
+  reunioes: 'SEM_ACESSO',
+  anotacoes: 'SEM_ACESSO',
 }
 
 export interface RegrasSM {
@@ -80,6 +87,7 @@ declare global {
 
 const ROTAS_PUBLICAS_SM = /^\/sm\/(cron|webhook|convite)\//
 const ROTAS_DO_GESTOR_SM = /^\/sm\/gestor(\/|$)/
+const ROTAS_PESSOAIS_SM = /^\/(agenda-itens|agenda-conclusoes|agenda-inicios|agenda|reunioes|apresentacoes|reunioes-departamentos|reunioes-pastas|notas|pastas|anotacoes|mapas-mentais|imagens|preferencias)(\/|$)/
 // POST que só lê: perguntar ao assistente vale também no "ver como".
 // Páginas abertas (não as listas que se atualizam sozinhas) contam como uso.
 const ROTAS_DE_PAGINA_SM = /^\/sm\/(eu|hoje|foco|assistente\/[a-z]+)$/
@@ -98,12 +106,22 @@ export async function guardaPapelSocialMedia(req: Request, res: Response, next: 
   if (payload.papel !== 'SOCIAL_MEDIA') { next(); return }
 
   const caminho = req.path
+  // Fora do espaço do papel, só as rotas das ferramentas pessoais (o nível
+  // de cada módulo é conferido na própria rota, pelos acessos).
   const permitido = caminho === '/auth/me' || (caminho.startsWith('/sm/') && !ROTAS_DO_GESTOR_SM.test(caminho))
+    || ROTAS_PESSOAIS_SM.test(caminho) || (caminho === '/parametros' && req.method === 'GET')
   if (!permitido) {
     res.status(403).json({ error: 'Acesso restrito ao espaço do Social Media' })
     return
   }
   if (!payload.smMembroId) { res.status(401).json({ error: 'Token inválido ou expirado' }); return }
+  // Ferramenta pessoal: o módulo dela precisa estar liberado na tela do papel.
+  if (!caminho.startsWith('/sm/') && caminho !== '/auth/me') {
+    const acessos = await acessosPessoaisSM(payload.sub)
+    const modulos = modulosDaRota(caminho)
+    const liberado = (modulos ?? MODULOS_PESSOAIS_SM).some(m => acessos[m] !== 'NENHUM')
+    if (!liberado) { res.status(403).json({ error: 'Acesso restrito ao espaço do Social Media' }); return }
+  }
   const membro = await prisma.smMembro.findUnique({ where: { id: payload.smMembroId }, select: { ativo: true, usuarioId: true, senhaHash: true } })
   if (!membro || !membro.ativo || !membro.senhaHash || membro.usuarioId !== payload.sub) {
     res.status(401).json({ error: 'Acesso do Social Media suspenso. Fale com o gestor.' })
@@ -171,4 +189,40 @@ export function requireGestorSM(req: Request, res: Response, next: NextFunction)
 export function comoSocialMedia(sm: ContextoSM): ContextoSM {
   const nivel = (m: ModuloSM): NivelSM => sm.permissoes.niveis[m]
   return { ...sm, visao: 'SOCIAL_MEDIA', verComo: true, somenteLeitura: true, membroId: null, nivel, pode: (m, minimo) => PESO[nivel(m)] >= PESO[minimo] }
+}
+
+const NIVEL_DO_SM: Record<NivelSM, 'NENHUM' | 'VER' | 'EDITAR'> = { COMPLETO: 'EDITAR', LEITURA: 'VER', SEM_ACESSO: 'NENHUM' }
+
+/** Agenda, Reuniões e Anotações liberadas para o papel, no formato dos acessos da equipe. */
+export async function acessosPessoaisSM(usuarioId: string): Promise<Record<string, 'NENHUM' | 'VER' | 'EDITAR'>> {
+  const { niveis } = await carregarPermissoes(usuarioId)
+  return Object.fromEntries(MODULOS_PESSOAIS_SM.map(m => [m, NIVEL_DO_SM[niveis[m]]]))
+}
+
+/**
+ * O cadastro na equipe do Social Media (não vende, sem login próprio), criado
+ * na primeira vez que ele usa uma ferramenta pessoal. Com ele, a agenda, as
+ * reuniões e as anotações dessa pessoa ficam separadas das do dono, e o
+ * gestor pode passar tarefas para ela na Agenda.
+ */
+export async function vendedorDoMembro(membroId: string): Promise<string | null> {
+  const m = await prisma.smMembro.findUnique({ where: { id: membroId }, select: { id: true, usuarioId: true, nome: true, vendedorId: true } })
+  if (!m) return null
+  if (m.vendedorId) return m.vendedorId
+  const v = await prisma.vendedor.create({ data: { usuarioId: m.usuarioId, nome: m.nome, vende: false } })
+  const r = await prisma.smMembro.updateMany({ where: { id: m.id, vendedorId: null }, data: { vendedorId: v.id } })
+  if (r.count) return v.id
+  // Outro pedido criou ao mesmo tempo: fica o dele.
+  await prisma.vendedor.delete({ where: { id: v.id } })
+  return (await prisma.smMembro.findUnique({ where: { id: m.id }, select: { vendedorId: true } }))?.vendedorId ?? null
+}
+
+// Rota → módulos pessoais que a abrem. Reuniões e Anotações usam as rotas
+// uma da outra (copiar entre elas, pastas), então basta uma das duas. Sem
+// módulo (imagens, preferências, "ao vivo" do menu): alguma ferramenta liberada.
+function modulosDaRota(caminho: string): Array<(typeof MODULOS_PESSOAIS_SM)[number]> | null {
+  if (/^\/(agenda|parametros)/.test(caminho)) return ['agenda']
+  if (caminho === '/apresentacoes/ao-vivo') return null
+  if (/^\/(reunioes|apresentacoes|notas|pastas|anotacoes|mapas-mentais)/.test(caminho)) return ['reunioes', 'anotacoes']
+  return null
 }

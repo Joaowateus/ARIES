@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
@@ -62,14 +62,21 @@ function itemDaPagina(pathname: string): NavItem | undefined {
     .sort((a, b) => b.href.length - a.href.length)[0]
 }
 
+// O Social Media abre no painel só a Agenda, as Reuniões e as Anotações liberadas.
+function smPodeAbrir(acessos: Record<string, string> | undefined, pathname: string) {
+  const modulo = itemDaPagina(pathname)?.modulo
+  return !!modulo && ['agenda', 'reunioes', 'anotacoes'].includes(modulo) && !!acessos?.[modulo] && acessos[modulo] !== 'NENHUM'
+}
+
 const CHAVE_SIDEBAR_COLAPSADA = 'pl_sidebar_colapsada'
 const CHAVE_GRUPOS_COLAPSADOS = 'pl_sidebar_grupos_colapsados'
 
 export default function ProLaborePainelLayout({ children }: { children: React.ReactNode }) {
-  const { usuario, loading, logout } = useProLaboreAuth()
+  const { usuario, loading, logout, recarregar } = useProLaboreAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [menuAberto, setMenuAberto] = useState(false)
+  const smConferido = useRef<string | null>(null)
 
   // Colapso da sidebar inteira (vira uma trilha só de ícones) e colapso
   // independente de cada grupo (Operação/Equipe/Sistema) — cada um com a
@@ -125,9 +132,17 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
 
   useEffect(() => {
     if (!loading && !usuario) router.replace('/pro-labore/login')
-    // O papel Social Media tem espaço próprio; a API também barra o resto.
-    else if (usuario?.papel === 'SOCIAL_MEDIA') router.replace('/pro-labore/sm')
-  }, [usuario, loading, router])
+    // O papel Social Media tem espaço próprio; aqui ele só entra nas
+    // ferramentas pessoais que o gestor liberou (a API também barra o resto).
+    // Antes de mandar de volta, confere com a API: o gestor pode ter acabado
+    // de liberar o módulo e a sessão guardada no navegador ainda não sabe.
+    // Confere uma vez só por página (recarregar muda o usuário e roda isto de novo).
+    else if (usuario?.papel === 'SOCIAL_MEDIA' && !smPodeAbrir(usuario.acessos, pathname)) {
+      if (smConferido.current === pathname) { router.replace('/pro-labore/sm'); return }
+      smConferido.current = pathname
+      void recarregar().then(u => { if (!smPodeAbrir(u?.acessos, pathname)) router.replace('/pro-labore/sm') })
+    }
+  }, [usuario, loading, router, pathname, recarregar])
 
   // Sem o Dashboard liberado, a entrada do sistema vira o primeiro módulo que a pessoa tem.
   useEffect(() => {
@@ -158,7 +173,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
   }
 
-  if (!usuario || usuario.papel === 'SOCIAL_MEDIA') return null
+  if (!usuario || (usuario.papel === 'SOCIAL_MEDIA' && !smPodeAbrir(usuario.acessos, pathname))) return null
 
   const isDono = usuario.papel === 'DONO'
   const isVendedor = usuario.papel === 'VENDEDOR'
@@ -173,11 +188,13 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   }
   const itemAtual = itemDaPagina(pathname)
   const nivelAtual = nivelDe(itemAtual)
-  const grupos = NAV_GROUPS
-    .map(grupo => ({ ...grupo, items: grupo.items.filter(podeVerItem) }))
-    .filter(grupo => grupo.items.length > 0)
+  const grupos = [
+    // Social Media: volta para o espaço dele, acima das ferramentas liberadas.
+    ...(usuario.papel === 'SOCIAL_MEDIA' ? [{ label: null, items: [{ href: '/pro-labore/sm', label: 'Social Media', icon: 'at' as NavIconName }] }] : []),
+    ...NAV_GROUPS.map(grupo => ({ ...grupo, items: grupo.items.filter(podeVerItem) })),
+  ].filter(grupo => grupo.items.length > 0)
   const paginaAtual = grupos.flatMap(g => g.items).find(item => item.href === pathname)
-  const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : null
+  const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : usuario.papel === 'SOCIAL_MEDIA' ? 'social media' : null
 
   return (
     <div className="pl-app-shell">

@@ -35,7 +35,8 @@ async function emailEmUso(email: string, ignorarVendedorId?: string) {
 async function listar(usuarioId: string) {
   const [comLogin, semLogin] = await Promise.all([
     prisma.vendedor.findMany({ where: { usuarioId, email: { not: null }, senhaHash: { not: null } }, select: SELECT, orderBy: [{ ativo: 'desc' }, { nome: 'asc' }] }),
-    prisma.vendedor.findMany({ where: { usuarioId, ativo: true, OR: [{ email: null }, { senhaHash: null }] }, select: { id: true, nome: true }, orderBy: { nome: 'asc' } }),
+    // O cadastro do Social Media (ligado ao papel) não aparece para ganhar outro login.
+    prisma.vendedor.findMany({ where: { usuarioId, ativo: true, smMembro: null, OR: [{ email: null }, { senhaHash: null }] }, select: { id: true, nome: true }, orderBy: { nome: 'asc' } }),
   ])
   return { modulos: MODULOS, perfis: PERFIS, acessos: comLogin.map(resumo), semLogin }
 }
