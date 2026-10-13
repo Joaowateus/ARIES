@@ -36,3 +36,4 @@ export const IcReunioes = (p: P) => <Icone {...p}><rect x="9" y="3" width="6" he
 export const IcAnotacoes = (p: P) => <Icone {...p}><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 12h7M9 16h5" /></Icone>
 export const IcAvisos = (p: P) => <Icone {...p}><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></Icone>
 export const IcMetodo = (p: P) => <Icone {...p}><path d="M3 20h5v-5h5v-5h5V5h3" /><path d="M3 20h18" /></Icone>
+export const IcCentral = (p: P) => <Icone {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M8 13h3M8 16h6M15 13h1" /></Icone>

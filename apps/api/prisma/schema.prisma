@@ -959,6 +959,10 @@ model ProLaboreUsuario {
   smRituais                 SmRitual[]
   smRetrospectivas          SmRetrospectiva[]
   smGanchos                 SmGancho[]
+  smDossies                 SmDossie[]
+  smCiclos                  SmCiclo[]
+  smCentralItens            SmCentralItem[]
+  smProvas                  SmProva[]
   smAutomacoes              SmAutomacao[]
   smRespostasRapidas        SmRespostaRapida[]
   smPushInscricoes          SmPushInscricao[]
@@ -3054,4 +3058,157 @@ model MetaSaude {
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@map("pro_labore_meta_saude")
+}
+
+// ---------- Central Estratégica de Conteúdo ----------
+
+// Dossiê do AVATAR: a fonte da estratégia. Cada edição do gestor é uma versão
+// nova (as antigas ficam); o Social Media só propõe (status PROPOSTA).
+model SmDossie {
+  id         String    @id @default(cuid())
+  usuarioId  String
+  versao     Int
+  status     String    @default("VIGENTE") // VIGENTE | SUBSTITUIDO | PROPOSTA | RECUSADA
+  conteudo   Json // avatar, dores, desejos, objeções, emoções, crenças, lentes, personas, posicionamento, promessa
+  nota       String? // o que mudou e por quê
+  criadoPor  String    @default("GESTOR") // GESTOR | SOCIAL_MEDIA | SISTEMA
+  decididoEm DateTime?
+  criadoEm   DateTime  @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  ciclos  SmCiclo[]
+
+  @@unique([usuarioId, versao])
+  @@map("pro_labore_sm_dossies")
+}
+
+// Ciclo mensal de produção: 20 dias × 9 vídeos (3 manhã/topo, 3 tarde/meio,
+// 3 noite/fundo). Gerar de novo cria outra versão; nada é apagado.
+model SmCiclo {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  mes          String // YYYY-MM
+  versao       Int       @default(1)
+  status       String    @default("RASCUNHO") // RASCUNHO | APROVADO | FECHADO | ARQUIVADO
+  dossieId     String
+  dias         Json // ["2026-11-02", ...] dias de produção (meta-base 20)
+  horarios     Json // { MANHA: ["08:00",...], TARDE: [...], NOITE: [...] }
+  origem       String    @default("MANUAL") // MANUAL | AUTOMATICO
+  geradoPor    String    @default("GESTOR")
+  consideracoes Json? // aprendizados do mês anterior usados na geração
+  relatorio    Json? // fechamento do mês
+  aprovadoEm   DateTime?
+  fechadoEm    DateTime?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  dossie  SmDossie         @relation(fields: [dossieId], references: [id])
+  videos  SmVideo[]
+
+  @@unique([usuarioId, mes, versao])
+  @@index([usuarioId, status])
+  @@map("pro_labore_sm_ciclos")
+}
+
+model SmVideo {
+  id                String    @id @default(cuid())
+  cicloId           String
+  codigo            String // V-2026-11-S1D2-M3
+  semana            Int
+  diaCiclo          Int
+  data              String // YYYY-MM-DD
+  horario           String // HH:mm (Belém)
+  periodo           String // MANHA | TARDE | NOITE
+  ordem             Int // 1 a 3 dentro do período
+  etapa             String // TOPO | MEIO | FUNDO
+  tema              String
+  temaChave         String
+  pilar             String // pilar editorial da semana
+  formato           String
+  alvoTipo          String // DOR | DESEJO | OBJECAO | PERGUNTA
+  alvo              String
+  lente             String
+  lenteMotivo       String?
+  persona           String
+  objetivo          String
+  titulo            String
+  gancho            String
+  contexto          String
+  desenvolvimento   String
+  valor             String
+  cta               String
+  gravacao          String
+  cenas             String[]  @default([])
+  textosTela        String[]  @default([])
+  duracaoSeg        Int       @default(30)
+  legenda           String
+  provaNecessaria   String?
+  provaId           String?
+  pendenteConfirmacao String? // motivo (estoque, preço, taxa, garantia, condição): null = não depende
+  confirmadoEm      DateTime? // a informação pendente foi confirmada (quem e o quê, na nota)
+  confirmacaoNota   String?
+  ajusteComentario  String? // pedido de ajuste do gestor no roteiro
+  responsavel       String?
+  status            String    @default("PLANEJADO")
+  roteiroOrigem     String    @default("MODELO") // MODELO | IA | MANUAL
+  aprovadoEm        DateTime?
+  pautaId           String?   @unique
+  permalink         String?
+  metricasManuais   Json? // mensagens, visitas, avaliações, propostas
+  resultado         String?
+  aprendizado       String?
+  melhoria          String?
+  criadoEm          DateTime  @default(now())
+  atualizadoEm      DateTime  @updatedAt
+
+  ciclo SmCiclo @relation(fields: [cicloId], references: [id], onDelete: Cascade)
+
+  @@unique([cicloId, codigo])
+  @@index([cicloId, data])
+  @@map("pro_labore_sm_videos")
+}
+
+// Bancos da Central: ganchos, perguntas reais, objeções do atendimento,
+// aprendizados e sugestões (sempre marcadas como sugestão).
+model SmCentralItem {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  tipo       String // GANCHO | PERGUNTA | OBJECAO | APRENDIZADO | SUGESTAO
+  texto      String
+  natureza   String   @default("FATO") // FATO | HIPOTESE | SUGESTAO
+  tags       Json     @default("{}") // etapa, formato, alvo, persona, lente, origem
+  resultado  String?
+  ocorrencias Int     @default(1)
+  usadoEm    String? // id do vídeo que virou conteúdo
+  criadoPor  String   @default("SOCIAL_MEDIA")
+  criadoEm   DateTime @default(now())
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, tipo])
+  @@map("pro_labore_sm_central_itens")
+}
+
+// Provas e ativos autorizados: nada é publicado como prova sem estar aqui.
+model SmProva {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  titulo       String
+  tipo         String // FOTO_VIDEO | INFO_PRODUTO | CONDICAO_COMERCIAL | GARANTIA | DOCUMENTACAO | INSPECAO | AVALIACAO_CLIENTE | DEPOIMENTO | BASTIDORES | FAQ | POS_VENDA
+  origem       String?
+  link         String?
+  responsavel  String?
+  permissao    String? // como foi autorizado o uso
+  verificadoEm DateTime?
+  validoAte    DateTime?
+  situacao     String    @default("PENDENTE") // APROVADO | PENDENTE (vencido é calculado pela validade)
+  nota         String?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("pro_labore_sm_provas")
 }

@@ -10,7 +10,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { usePLTema } from '@/lib/proLaboreTheme'
 import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmAbaAssistente, type SmAvisoPulso, type SmAvisosLista, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
 import {
-  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAgenda, IcAnotacoes, IcAprovar, IcAtendimento, IcReunioes, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcMetodo, IcProducao, IcVendasPorPost,
+  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAgenda, IcAnotacoes, IcAprovar, IcAtendimento, IcReunioes, IcEstoque, IcCalendario, IcDesempenho, IcCentral, IcHoje, IcMetodo, IcProducao, IcVendasPorPost,
   ListaAtalhos, PainelAvisos, telaDesligada, PaletaSM, SidebarSM, SmApp, haQuanto, registrarSW, type ComandoPaleta, type ItemMenu, type StatusConta,
 } from '../_ui'
 import { EspacoSMCtx, atende } from './EspacoSM'
@@ -55,6 +55,7 @@ function AvisosPelaUrl({ aoPedir }: { aoPedir: () => void }) {
 // Subtítulo de cada tela na paleta de comandos.
 const SUB_TELA: Record<string, string> = {
   '/pro-labore/sm': 'Recepção e o que fazer agora',
+  '/pro-labore/sm/central': 'Calendário dos 180 vídeos, roteiros, produção, métricas e dossiê do AVATAR',
   '/pro-labore/sm/metodo': 'Cadência 3×3, escada do desejo e hierarquia das métricas',
   '/pro-labore/sm/calendario': 'A semana e as regras de publicação',
   '/pro-labore/sm/producao': 'Da ideia ao agendado',
@@ -208,6 +209,7 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
     { rotulo: 'Trabalho', itens: [
       { href: '/pro-labore/sm', rotulo: 'Hoje', icone: <IcHoje />, atalho: 'G H' },
       ...(ctx.pode('producao') ? [
+        { href: '/pro-labore/sm/central', rotulo: 'Central de conteúdo', icone: <IcCentral /> },
         { href: '/pro-labore/sm/metodo', rotulo: 'Método', icone: <IcMetodo /> },
         { href: '/pro-labore/sm/calendario', rotulo: 'Calendário', icone: <IcCalendario />, atalho: 'G C' },
         { href: '/pro-labore/sm/producao', rotulo: 'Produção', icone: <IcProducao /> },

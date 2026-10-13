@@ -952,6 +952,39 @@ export const proLaboreApi = {
     },
     desempenho: (periodo: { inicio: string; fim: string }, origem: OrigemSocial = 'ORGANICO') =>
       request<SmDesempenho>(`/pro-labore/sm/desempenho?inicio=${periodo.inicio}&fim=${periodo.fim}&origem=${origem}`),
+    central: {
+      visao: () => request<CtVisao>('/pro-labore/sm/central'),
+      ciclo: (id: string) => request<CtCiclo>(`/pro-labore/sm/central/ciclos/${id}`),
+      gerar: (mes: string, dias?: string[]) => request<{ id: string; mes: string; versao: number }>('/pro-labore/sm/central/ciclos', { method: 'POST', body: JSON.stringify({ mes, dias }) }),
+      atualizarCiclo: (id: string, data: { dias?: string[]; status?: 'APROVADO' | 'RASCUNHO' }) => request<{ ok: boolean }>(`/pro-labore/sm/central/ciclos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      fechamento: (id: string) => request<CtFechamento>(`/pro-labore/sm/central/ciclos/${id}/fechamento`),
+      fechar: (id: string) => request<CtFechamento>(`/pro-labore/sm/central/ciclos/${id}/fechar`, { method: 'POST' }),
+      proximo: (id: string, novaVersao = false) => request<{ id: string; mes: string; versao: number }>(`/pro-labore/sm/central/ciclos/${id}/proximo`, { method: 'POST', body: JSON.stringify({ novaVersao }) }),
+      paraRoteirizar: (id: string, dias = 5) => request<{ dias: string[]; ids: string[] }>(`/pro-labore/sm/central/ciclos/${id}/para-roteirizar?dias=${dias}`),
+      video: (id: string) => request<CtVideoCompleto>(`/pro-labore/sm/central/videos/${id}`),
+      editarVideo: (id: string, data: Partial<CtVideoEdicao>) => request<CtVideoCompleto>(`/pro-labore/sm/central/videos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      statusVideo: (id: string, status: CtStatus) => request<CtVideoCompleto>(`/pro-labore/sm/central/videos/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+      aprovar: (ids: string[], aprovar: boolean, comentario?: string) => request<{ feitos: number; ignorados: number }>('/pro-labore/sm/central/videos/aprovar', { method: 'POST', body: JSON.stringify({ ids, aprovar, comentario }) }),
+      confirmar: (id: string, nota: string) => request<CtVideoCompleto>(`/pro-labore/sm/central/videos/${id}/confirmar`, { method: 'POST', body: JSON.stringify({ nota }) }),
+      producao: (id: string) => request<{ pautaId: string }>(`/pro-labore/sm/central/videos/${id}/producao`, { method: 'POST' }),
+      roteiroIA: (id: string) => request<CtVideoCompleto>(`/pro-labore/sm/central/videos/${id}/roteiro-ia`, { method: 'POST' }),
+      trocar: (id: string, comId: string) => request<{ ok: boolean }>(`/pro-labore/sm/central/videos/${id}/trocar`, { method: 'POST', body: JSON.stringify({ comId }) }),
+      dossie: () => request<CtDossieTela>('/pro-labore/sm/central/dossie'),
+      versaoDossie: (id: string) => request<{ id: string; versao: number; status: string; nota: string | null; conteudo: CtDossie }>(`/pro-labore/sm/central/dossie/${id}`),
+      salvarDossie: (conteudo: CtDossie, nota: string) => request<{ versao: number }>('/pro-labore/sm/central/dossie', { method: 'PUT', body: JSON.stringify({ conteudo, nota }) }),
+      proporDossie: (conteudo: CtDossie, nota: string) => request<{ id: string; versao: number }>('/pro-labore/sm/central/dossie/propostas', { method: 'POST', body: JSON.stringify({ conteudo, nota }) }),
+      decidirProposta: (id: string, aceitar: boolean) => request<{ ok: boolean }>(`/pro-labore/sm/central/dossie/propostas/${id}/decidir`, { method: 'POST', body: JSON.stringify({ aceitar }) }),
+      banco: (tipo?: CtTipoItem) => request<CtBanco>(`/pro-labore/sm/central/banco${tipo ? `?tipo=${tipo}` : ''}`),
+      novoItem: (data: { tipo: CtTipoItem; texto: string; natureza?: 'FATO' | 'HIPOTESE' | 'SUGESTAO'; tags?: Record<string, string>; resultado?: string | null }) =>
+        request<CtItem>('/pro-labore/sm/central/banco', { method: 'POST', body: JSON.stringify(data) }),
+      editarItem: (id: string, data: { texto?: string; resultado?: string | null }) => request<{ ok: boolean }>(`/pro-labore/sm/central/banco/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      excluirItem: (id: string) => request<null>(`/pro-labore/sm/central/banco/${id}`, { method: 'DELETE' }),
+      sugestoes: (foco: string) => request<{ origem: 'IA' | 'MODELO'; ideias: CtItem[] }>('/pro-labore/sm/central/sugestoes', { method: 'POST', body: JSON.stringify({ foco }) }),
+      provas: () => request<CtProva[]>('/pro-labore/sm/central/provas'),
+      novaProva: (data: CtProvaEntrada) => request<CtProva>('/pro-labore/sm/central/provas', { method: 'POST', body: JSON.stringify(data) }),
+      editarProva: (id: string, data: Partial<CtProvaEntrada>) => request<CtProva>(`/pro-labore/sm/central/provas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      excluirProva: (id: string) => request<null>(`/pro-labore/sm/central/provas/${id}`, { method: 'DELETE' }),
+    },
     metodo: {
       ver: () => request<SmMetodo>('/pro-labore/sm/metodo'),
       escada: (degrau: number | null, nota: string | null) =>
@@ -2436,6 +2469,92 @@ export interface SmMetodo {
   souGestor: boolean
   podeEditarPauta: boolean
 }
+
+// ---------- Central Estratégica de Conteúdo ----------
+
+export type CtStatus = 'PLANEJADO' | 'ROTEIRIZADO' | 'AGUARDANDO_APROVACAO' | 'APROVADO' | 'PRONTO_GRAVAR' | 'GRAVADO' | 'EM_EDICAO' | 'PRONTO_PUBLICAR' | 'AGENDADO' | 'PUBLICADO' | 'ANALISADO'
+export type CtEtapa = 'TOPO' | 'MEIO' | 'FUNDO'
+export type CtPeriodo = 'MANHA' | 'TARDE' | 'NOITE'
+export type CtStatusCiclo = 'RASCUNHO' | 'APROVADO' | 'FECHADO' | 'ARQUIVADO'
+export type CtTipoItem = 'GANCHO' | 'PERGUNTA' | 'OBJECAO' | 'APRENDIZADO' | 'SUGESTAO'
+
+export interface CtCicloResumo {
+  id: string; mes: string; nomeMes: string; versao: number; status: CtStatusCiclo; origem: 'MANUAL' | 'AUTOMATICO'; criadoEm: string
+  aprovadoEm: string | null; fechadoEm: string | null; diasProducao: number; videos: number; dossieVersao: number
+}
+export interface CtVisao {
+  mesAtual: string; proximoMes: string; atualId: string | null; ciclos: CtCicloResumo[]; dossieVersao: number; ia: boolean
+  souGestor: boolean; podeEditar: boolean; podeAprovar: boolean
+  formatos: Record<CtEtapa, Array<{ chave: string; nome: string }>>; temas: Array<{ chave: string; nome: string; semana: number }>; status: CtStatus[]
+}
+export interface CtMetricas {
+  disponivel: boolean; alcance?: number; visualizacoes?: number; curtidas?: number; comentarios?: number; salvamentos?: number; compartilhamentos?: number; visitasPerfil?: number
+  tempoMedioSeg?: number | null; taxaPulo?: number | null; retencao?: number | null; duracaoSeg?: number | null; conversas?: number; leads?: number; vendas?: number
+  manuais?: Partial<Record<'mensagens' | 'visitasAgendadas' | 'avaliacoesSolicitadas' | 'propostas' | 'cliques', number>>; permalink?: string | null
+}
+export interface CtEtapasVideo { roteiro: string; aprovacao: string; gravacao: string; edicao: string; publicacao: string }
+export interface CtVideo {
+  id: string; codigo: string; semana: number; diaCiclo: number; data: string; horario: string; periodo: CtPeriodo; ordem: number; etapa: CtEtapa
+  tema: string; temaChave: string; pilar: string; formato: string; alvoTipo: string; alvo: string; lente: string; persona: string; objetivo: string
+  titulo: string; gancho: string; cta: string; status: CtStatus; roteiroOrigem: 'MODELO' | 'IA' | 'MANUAL'; pendenteConfirmacao: string | null; confirmadoEm: string | null
+  provaNecessaria: string | null; provaId: string | null; provaOk: boolean | null; pautaId: string | null; permalink: string | null; responsavel: string | null
+  metricasManuais: CtMetricas['manuais'] | null; resultado: string | null; aprendizado: string | null; ajusteComentario: string | null
+  etapas: CtEtapasVideo; metricas: CtMetricas; nota: number | null
+}
+export interface CtVideoEdicao {
+  titulo: string; gancho: string; contexto: string; desenvolvimento: string; valor: string; cta: string; gravacao: string; cenas: string[]; textosTela: string[]
+  legenda: string; duracaoSeg: number; lente: string; lenteMotivo: string; persona: string; objetivo: string; responsavel: string | null; provaId: string | null
+  permalink: string | null; resultado: string | null; aprendizado: string | null; melhoria: string | null; metricasManuais: CtMetricas['manuais'] | null
+}
+export interface CtVideoCompleto extends CtVideoEdicao {
+  id: string; cicloId: string; codigo: string; semana: number; diaCiclo: number; data: string; horario: string; periodo: CtPeriodo; ordem: number; etapa: CtEtapa
+  tema: string; temaChave: string; pilar: string; formato: string; formatoNome: string; alvoTipo: string; alvo: string; status: CtStatus; roteiroOrigem: 'MODELO' | 'IA' | 'MANUAL'
+  pendenteConfirmacao: string | null; confirmadoEm: string | null; confirmacaoNota: string | null; ajusteComentario: string | null; provaNecessaria: string | null
+  aprovadoEm: string | null; pautaId: string | null; etapas: CtEtapasVideo; metricas?: CtMetricas
+  pauta: { id: string; status: string; codigo: string | null; agendadoPara: string | null; publicadaEm: string | null; permalink: string | null } | null
+  prova: CtProva | null
+}
+export interface CtProgresso { total: number; publicados: number; roteirizados: number; aprovados: number }
+export interface CtPainel {
+  totais: Record<'planejado' | 'roteirizado' | 'aprovado' | 'gravado' | 'editado' | 'agendado' | 'publicado' | 'pendente' | 'analisado', number>
+  porSemana: Record<string, CtProgresso>; porPeriodo: Record<string, CtProgresso>; porEtapa: Record<string, CtProgresso>
+  semRoteiroRevisado: number; semProva: number; aguardandoAprovacao: number; pendentesComerciais: number; comResultado: number; atrasados: number; diasProducao: number
+  aprendizados: Array<{ codigo: string; texto: string | null }>; prioridades: string[]
+}
+export interface CtItemChecklist { chave: string; rotulo: string; ok: boolean; detalhe: string; essencial: boolean }
+export interface CtCiclo {
+  ciclo: { id: string; mes: string; versao: number; status: CtStatusCiclo; dias: string[]; origem: string; geradoPor: string; dossieVersao: number; criadoEm: string; aprovadoEm: string | null; fechadoEm: string | null; consideracoes: { temasContinuar: string[]; temasMudar: string[]; perguntas: number; aprendizados: string[] } | null }
+  videos: CtVideo[]; painel: CtPainel; checklist: CtItemChecklist[]; repetidos: Array<{ a: string; b: string; motivo: string; semelhanca: number }>
+  hoje: string; nomeMes: string; ia: boolean; souGestor: boolean; podeEditar: boolean; podeAprovar: boolean
+}
+export interface CtResumoVideo { id: string; codigo: string; titulo: string; tema: string; formato: string; metricas: CtMetricas }
+export interface CtFechamento {
+  geradoEm: string; mes: string; versao: number; guardado: boolean
+  fatos: { planejados: number; publicados: number; comMetricas: number; criterios: Record<CtEtapa, string> }
+  melhores: Record<CtEtapa, CtResumoVideo[]>; piores: Record<CtEtapa, CtResumoVideo[]>
+  temasContinuar: Array<{ tema: string; etapa: CtEtapa; videos: number }>; temasMudar: Array<{ tema: string; etapa: CtEtapa; videos: number }>
+  perguntas: Array<{ id: string; texto: string; ocorrencias: number }>; objecoes: Array<{ texto: string; ocorrencias: number }>
+  ganchosTestar: Array<{ texto: string; resultado: string | null }>; aprendizados: Array<{ texto: string; natureza: string }>
+  oportunidades: CtResumoVideo[]; hipotesesNaoValidadas: string[]; recomendacoes: Array<{ texto: string; natureza: 'FATO' | 'HIPOTESE' | 'SUGESTAO' }>; avisos: string[]
+}
+export interface CtDossie {
+  avatar: string; dores: string[]; desejos: string[]; objecoes: string[]; emocoes: string[]; crencas: string[]; lentes: string[]; personas: string[]; posicionamento: string[]; regras: string[]
+  promessa: { texto: string; aprovada: boolean; condicoes: string }
+}
+export interface CtDossieTela {
+  vigente: { id: string; versao: number; nota: string | null; criadoEm: string; conteudo: CtDossie }
+  versoes: Array<{ id: string; versao: number; status: 'VIGENTE' | 'SUBSTITUIDO' | 'PROPOSTA' | 'RECUSADA'; nota: string | null; criadoPor: string; criadoEm: string; decididoEm: string | null }>
+  souGestor: boolean; podeEditar: boolean
+}
+export interface CtItem { id: string; tipo: CtTipoItem; texto: string; natureza: 'FATO' | 'HIPOTESE' | 'SUGESTAO'; tags: Record<string, string>; resultado: string | null; ocorrencias: number; usadoEm: string | null; criadoPor: string; criadoEm: string }
+export interface CtBanco {
+  itens: CtItem[]
+  ganchosPublicados: Array<{ id: string; codigo: string; gancho: string; etapa: CtEtapa; formato: string; formatoNome: string; alvo: string; persona: string; lente: string; metricas: CtMetricas }>
+  biblioteca: Array<{ id: string; texto: string; exemplos: string[] }>
+}
+export type CtTipoProva = 'FOTO_VIDEO' | 'INFO_PRODUTO' | 'CONDICAO_COMERCIAL' | 'GARANTIA' | 'DOCUMENTACAO' | 'INSPECAO' | 'AVALIACAO_CLIENTE' | 'DEPOIMENTO' | 'BASTIDORES' | 'FAQ' | 'POS_VENDA'
+export interface CtProvaEntrada { titulo: string; tipo: CtTipoProva; origem?: string | null; link?: string | null; responsavel?: string | null; permissao?: string | null; verificadoEm?: string | null; validoAte?: string | null; situacao?: 'APROVADO' | 'PENDENTE'; nota?: string | null }
+export interface CtProva extends Required<Omit<CtProvaEntrada, 'situacao'>> { id: string; situacao: 'APROVADO' | 'PENDENTE'; situacaoEfetiva: 'APROVADO' | 'PENDENTE' | 'VENCIDO'; criadoEm: string }
 
 export type SmVariavelTeste = 'HORARIO' | 'GANCHO' | 'FORMATO' | 'CTA' | 'OUTRO'
 export type SmMetricaTeste = 'ALCANCE' | 'ENVIOS' | 'SALVOS' | 'PULO' | 'RETENCAO'
