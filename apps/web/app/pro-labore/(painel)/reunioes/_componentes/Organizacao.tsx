@@ -218,7 +218,7 @@ export function PermissoesEquipe({ onFechar }: { onFechar: () => void }) {
           <ul className="pl-rn-perm-lista">
             {lista.map(p => (
               <li key={p.vendedorId}>
-                <div className="pl-rn-perm-nome"><b>{p.nome}</b><small>{p.papel === 'SUPERVISOR' ? 'Supervisor' : 'Vendedor'}</small></div>
+                <div className="pl-rn-perm-nome"><b>{p.nome}</b><small>{p.papel === 'SUPERVISOR' ? 'Supervisor' : p.papel === 'SOCIAL_MEDIA' ? 'Social Media' : 'Vendedor'}</small></div>
                 <div className="pl-rn-perm-modos" role="radiogroup" aria-label={`Permissão de ${p.nome}`}>
                   {MODOS.map(m => (
                     <button

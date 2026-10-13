@@ -10,8 +10,8 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { usePLTema } from '@/lib/proLaboreTheme'
 import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmAbaAssistente, type SmAvisoPulso, type SmAvisosLista, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
 import {
-  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAcervo, IcAgenda, IcAnotacoes, IcAprovar, IcAtendimento, IcReunioes, IcCaptura, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcMetodo, IcProducao, IcVendasPorPost,
-  ListaAtalhos, PainelAvisos, PaletaSM, SidebarSM, SmApp, haQuanto, registrarSW, type ComandoPaleta, type ItemMenu, type StatusConta,
+  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAgenda, IcAnotacoes, IcAprovar, IcAtendimento, IcReunioes, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcMetodo, IcProducao, IcVendasPorPost,
+  ListaAtalhos, PainelAvisos, telaDesligada, PaletaSM, SidebarSM, SmApp, haQuanto, registrarSW, type ComandoPaleta, type ItemMenu, type StatusConta,
 } from '../_ui'
 import { EspacoSMCtx, atende } from './EspacoSM'
 
@@ -58,8 +58,6 @@ const SUB_TELA: Record<string, string> = {
   '/pro-labore/sm/metodo': 'Cadência 3×3, escada do desejo e hierarquia das métricas',
   '/pro-labore/sm/calendario': 'A semana e as regras de publicação',
   '/pro-labore/sm/producao': 'Da ideia ao agendado',
-  '/pro-labore/sm/captura': 'Gravar as tomadas pela câmera',
-  '/pro-labore/sm/acervo': 'Fotos e vídeos de cada moto',
   '/pro-labore/sm/aprovar': 'A fila de aprovação, no celular',
   '/pro-labore/sm/atendimento': 'Direct e comentários',
   '/pro-labore/sm/estoque': 'Motos na loja',
@@ -174,6 +172,11 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
     return () => { window.removeEventListener('keydown', tecla); window.removeEventListener('sm:abrir-paleta', abrirPaleta) }
   }, [eu, caminho, router])
 
+  // Captura na loja e Acervo estão desligados: o endereço antigo volta para o Hoje.
+  useEffect(() => {
+    if (telaDesligada(caminho)) router.replace('/pro-labore/sm')
+  }, [caminho, router])
+
   // Primeiro acesso do Social Media: as boas-vindas vêm antes de tudo (seção 3.1).
   useEffect(() => {
     if (eu?.onboardingPendente && caminho !== '/pro-labore/sm/boas-vindas') router.replace('/pro-labore/sm/boas-vindas')
@@ -208,8 +211,6 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
         { href: '/pro-labore/sm/metodo', rotulo: 'Método', icone: <IcMetodo /> },
         { href: '/pro-labore/sm/calendario', rotulo: 'Calendário', icone: <IcCalendario />, atalho: 'G C' },
         { href: '/pro-labore/sm/producao', rotulo: 'Produção', icone: <IcProducao /> },
-        { href: '/pro-labore/sm/captura', rotulo: 'Captura na loja', icone: <IcCaptura /> },
-        { href: '/pro-labore/sm/acervo', rotulo: 'Acervo', icone: <IcAcervo /> },
       ] : []),
       // Aprovação pelo celular (seção 11.5): a fila do gestor.
       ...(eu.visao === 'GESTOR' && !verComo ? [{ href: '/pro-labore/sm/aprovar', rotulo: 'Para aprovar', icone: <IcAprovar />, contador: eu.contadores.aprovacao }] : []),

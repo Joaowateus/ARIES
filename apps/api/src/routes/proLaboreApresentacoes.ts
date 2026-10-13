@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
+import { vendedorDoMembro } from '../lib/smAcesso'
 import {
   EventoTransmissao, SINAL_APRESENTADOR_MS, aoVivoEfetivo, inscreverEspectador, registrarPresenca, sinalizarMudanca,
 } from '../lib/apresentacaoTransmissao'
@@ -464,12 +465,20 @@ router.post('/apresentacoes/:id/decisao', requireProLaboreAuth, requireDono, asy
 // Lista da equipe com o modo de cada um (só o dono).
 router.get('/reunioes-permissoes', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const usuarioId = req.proLaboreUser!.sub
+  // O Social Media com acesso ativo entra na lista pelo cadastro dele na
+  // equipe (criado aqui, se ainda não usou Agenda, Reuniões ou Anotações).
+  const sm = await prisma.smMembro.findUnique({ where: { usuarioId }, select: { id: true, ativo: true, senhaHash: true } })
+  if (sm?.ativo && sm.senhaHash) await vendedorDoMembro(sm.id)
   const [equipe, permissoes] = await Promise.all([
-    prisma.vendedor.findMany({ where: { usuarioId, ativo: true, email: { not: null } }, select: { id: true, nome: true, papel: true }, orderBy: { nome: 'asc' } }),
+    prisma.vendedor.findMany({
+      where: { usuarioId, ativo: true, OR: [{ email: { not: null } }, { smMembro: { ativo: true, senhaHash: { not: null } } }] },
+      select: { id: true, nome: true, papel: true, smMembro: { select: { id: true } } },
+      orderBy: { nome: 'asc' },
+    }),
     prisma.reuniaoPermissao.findMany({ where: { usuarioId } }),
   ])
   const porPessoa = new Map(permissoes.map(p => [p.pessoa, p.modo]))
-  res.json(equipe.map(v => ({ vendedorId: v.id, nome: v.nome, papel: v.papel, modo: porPessoa.get(`vendedor:${v.id}`) ?? 'APROVACAO' })))
+  res.json(equipe.map(v => ({ vendedorId: v.id, nome: v.nome, papel: v.smMembro ? 'SOCIAL_MEDIA' : v.papel, modo: porPessoa.get(`vendedor:${v.id}`) ?? 'APROVACAO' })))
 })
 
 router.put('/reunioes-permissoes/:vendedorId', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {

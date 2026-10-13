@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import { requireModulo, requireAlgumModulo, requireEscopoEquipe, permissoesEfetivas, escopoDoPapel, TUDO } from '../lib/acessos'
-import { acessosPessoaisSM } from '../lib/smAcesso'
+import { acessosPessoaisSM, vendedorDoMembro } from '../lib/smAcesso'
 import { normalizarDocumento } from '../lib/documento'
 import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, comApiDaEmpresa } from '../lib/instagramGraph'
 import { sincronizarContaSocialMedia, rodarJobSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
@@ -197,12 +197,18 @@ router.post('/auth/login', async (req: Request, res: Response) => {
   if (membroSm?.senhaHash && membroSm.ativo && (await bcrypt.compare(senha, membroSm.senhaHash))) {
     await prisma.smMembro.update({ where: { id: membroSm.id }, data: { ultimoAcessoEm: new Date() } })
     const token = signProLaboreToken({ sub: membroSm.usuarioId, email: membroSm.email, nome: membroSm.nome, papel: 'SOCIAL_MEDIA', smMembroId: membroSm.id })
-    res.json({ token, usuario: { id: membroSm.id, nome: membroSm.nome, email: membroSm.email, papel: 'SOCIAL_MEDIA', acessos: await acessosPessoaisSM(membroSm.usuarioId) } })
+    const acessosSm = await acessosPessoaisSM(membroSm.usuarioId)
+    res.json({ token, usuario: { id: membroSm.id, nome: membroSm.nome, email: membroSm.email, papel: 'SOCIAL_MEDIA', acessos: acessosSm, vendedorId: await vendedorPessoalSM(membroSm.id, acessosSm) } })
     return
   }
 
   res.status(401).json({ error: 'Email ou senha incorretos' })
 })
+
+/** Social Media com Agenda, Reuniões ou Anotações liberadas: o cadastro dele na equipe. */
+async function vendedorPessoalSM(membroId: string, acessos: Record<string, string>): Promise<string | null> {
+  return Object.values(acessos).some(n => n !== 'NENHUM') ? vendedorDoMembro(membroId) : null
+}
 
 router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response) => {
   const { papel, vendedorId, sub, smMembroId } = req.proLaboreUser!
@@ -214,7 +220,9 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
       return
     }
     // Agenda, Reuniões e Anotações que o gestor liberou para o papel.
-    res.json({ ...membro, papel, acessos: await acessosPessoaisSM(sub) })
+    const acessos = await acessosPessoaisSM(sub)
+    // Cadastro dela na equipe: é com ele que a Agenda reconhece as tarefas passadas para ela.
+    res.json({ ...membro, papel, acessos, vendedorId: await vendedorPessoalSM(membro.id, acessos) })
     return
   }
 
