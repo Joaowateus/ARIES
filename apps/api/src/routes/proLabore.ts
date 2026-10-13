@@ -8,6 +8,7 @@ import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import { requireModulo, requireAlgumModulo, requireEscopoEquipe, permissoesEfetivas, escopoDoPapel, TUDO } from '../lib/acessos'
 import { acessosPessoaisSM } from '../lib/smAcesso'
+import { normalizarDocumento } from '../lib/documento'
 import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, comApiDaEmpresa } from '../lib/instagramGraph'
 import { sincronizarContaSocialMedia, rodarJobSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
 import { analisarContaSocialMedia } from '../lib/socialMediaResumo'
@@ -33,7 +34,7 @@ const TETO_PRO_LABORE_PADRAO = 900
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, vende: true, tetoComissaoPorVenda: true, metaMensal: true, criadoEm: true, atualizadoEm: true } as const
+const VENDEDOR_SELECT = { id: true, nome: true, ativo: true, email: true, papel: true, vende: true, documento: true, tetoComissaoPorVenda: true, metaMensal: true, criadoEm: true, atualizadoEm: true } as const
 
 // Pró-labore é sempre do dono — sacado de qualquer venda da operação,
 // independente de quem vendeu. O teto é um único valor por conta, exceto
@@ -419,6 +420,7 @@ router.get('/vendedores', requireProLaboreAuth, requireListaDaEquipe, async (req
 
 const criarVendedorSchema = z.object({
   nome: z.string().min(2, 'Nome muito curto'),
+  documento: z.string().max(30).nullable().optional(), // CPF ou CNPJ
 })
 
 router.post('/vendedores', requireProLaboreAuth, requireModulo('vendedores', 'EDITAR'), async (req: Request, res: Response) => {
@@ -427,8 +429,10 @@ router.post('/vendedores', requireProLaboreAuth, requireModulo('vendedores', 'ED
     res.status(400).json({ error: parse.error.issues[0].message })
     return
   }
+  const doc = normalizarDocumento(parse.data.documento)
+  if (!doc.ok) { res.status(400).json({ error: doc.erro }); return }
   const vendedor = await prisma.vendedor.create({
-    data: { usuarioId: req.proLaboreUser!.sub, nome: parse.data.nome },
+    data: { usuarioId: req.proLaboreUser!.sub, nome: parse.data.nome, documento: doc.valor },
     select: VENDEDOR_SELECT,
   })
   res.status(201).json(vendedor)
@@ -440,6 +444,7 @@ const editarVendedorSchema = z.object({
   papel: z.enum(['VENDEDOR', 'SUPERVISOR']).optional(),
   tetoComissaoPorVenda: z.number().positive('Teto deve ser positivo').nullable().optional(),
   metaMensal: z.number().positive('Meta deve ser positiva').nullable().optional(),
+  documento: z.string().max(30).nullable().optional(), // CPF ou CNPJ
 })
 
 router.patch('/vendedores/:id', requireProLaboreAuth, requireModulo('vendedores', 'EDITAR'), async (req: Request, res: Response) => {
@@ -458,7 +463,13 @@ router.patch('/vendedores/:id', requireProLaboreAuth, requireModulo('vendedores'
     res.status(403).json({ error: atual.id === req.proLaboreUser!.vendedorId ? 'O seu próprio cadastro (meta e teto) só o gestor muda.' : 'Só o gestor muda o acesso de alguém.' })
     return
   }
-  const vendedor = await prisma.vendedor.update({ where: { id: atual.id }, data: parse.data, select: VENDEDOR_SELECT })
+  let documento: string | null | undefined
+  if (parse.data.documento !== undefined) {
+    const doc = normalizarDocumento(parse.data.documento)
+    if (!doc.ok) { res.status(400).json({ error: doc.erro }); return }
+    documento = doc.valor
+  }
+  const vendedor = await prisma.vendedor.update({ where: { id: atual.id }, data: { ...parse.data, documento }, select: VENDEDOR_SELECT })
   res.json(vendedor)
 })
 
@@ -1753,7 +1764,7 @@ const STATUS_OCORRENCIA = ['ABERTA', 'EM_PRAZO', 'EM_VERIFICACAO', 'RESOLVIDA', 
 const MEDIDAS_DISCIPLINARES = ['NENHUMA', 'ADVERTENCIA_VERBAL', 'ADVERTENCIA_ESCRITA', 'SUSPENSAO', 'DESLIGAMENTO'] as const
 
 const OCORRENCIA_INCLUDE = {
-  vendedor: { select: { id: true, nome: true } },
+  vendedor: { select: { id: true, nome: true, documento: true } },
   historico: { orderBy: { criadoEm: 'asc' as const } },
 }
 

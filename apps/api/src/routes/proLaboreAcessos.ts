@@ -7,12 +7,13 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
+import { normalizarDocumento } from '../lib/documento'
 import { MODULOS, PERFIS, escopoDoPapel, limparPermissoes, papelDoEscopo, permissoesEfetivas, type Permissoes } from '../lib/acessos'
 
 const router = Router()
 
-const SELECT = { id: true, nome: true, email: true, ativo: true, vende: true, papel: true, permissoes: true, senhaHash: true, criadoEm: true } as const
-type Linha = { id: string; nome: string; email: string | null; ativo: boolean; vende: boolean; papel: string; permissoes: unknown; senhaHash: string | null; criadoEm: Date }
+const SELECT = { id: true, nome: true, email: true, documento: true, ativo: true, vende: true, papel: true, permissoes: true, senhaHash: true, criadoEm: true } as const
+type Linha = { id: string; nome: string; email: string | null; documento: string | null; ativo: boolean; vende: boolean; papel: string; permissoes: unknown; senhaHash: string | null; criadoEm: Date }
 
 const iguais = (a: Permissoes, b: Permissoes) => MODULOS.every(m => a[m.chave] === b[m.chave])
 
@@ -20,7 +21,7 @@ function resumo(v: Linha) {
   const escopo = escopoDoPapel(v.papel)
   const permissoes = permissoesEfetivas(v.papel, v.permissoes)
   const perfil = PERFIS.find(p => p.escopo === escopo && iguais(p.permissoes, permissoes))
-  return { id: v.id, nome: v.nome, email: v.email, ativo: v.ativo, vende: v.vende, escopo, permissoes, perfil: perfil?.chave ?? null, criadoEm: v.criadoEm }
+  return { id: v.id, nome: v.nome, email: v.email, documento: v.documento, ativo: v.ativo, vende: v.vende, escopo, permissoes, perfil: perfil?.chave ?? null, criadoEm: v.criadoEm }
 }
 
 async function emailEmUso(email: string, ignorarVendedorId?: string) {
@@ -51,6 +52,7 @@ const criarSchema = z.object({
   vendedorId: z.string().optional(), // dar login a alguém já cadastrado em Vendedores
   nome: z.string().trim().min(2, 'Informe o nome').max(80).optional(),
   email: z.string().trim().toLowerCase().email('E-mail inválido'),
+  documento: z.string().max(30).nullable().optional(), // CPF ou CNPJ
   senha: z.string().min(6, 'A senha precisa de ao menos 6 caracteres'),
   escopo: z.enum(['PROPRIO', 'EQUIPE']),
   vende: z.boolean().default(true),
@@ -63,7 +65,10 @@ router.post('/acessos', requireProLaboreAuth, requireDono, async (req: Request, 
   const usuarioId = req.proLaboreUser!.sub
   const d = parse.data
   if (await emailEmUso(d.email, d.vendedorId)) { res.status(409).json({ error: 'Esse e-mail já é usado por outro acesso.' }); return }
-  const dados = { email: d.email, senhaHash: await bcrypt.hash(d.senha, 10), papel: papelDoEscopo(d.escopo), vende: d.vende, permissoes: limparPermissoes(d.permissoes), ativo: true }
+  const doc = normalizarDocumento(d.documento)
+  if (!doc.ok) { res.status(400).json({ error: doc.erro }); return }
+  const dados = {
+    ...(doc.valor ? { documento: doc.valor } : {}), email: d.email, senhaHash: await bcrypt.hash(d.senha, 10), papel: papelDoEscopo(d.escopo), vende: d.vende, permissoes: limparPermissoes(d.permissoes), ativo: true }
   let id: string
   if (d.vendedorId) {
     const atual = await prisma.vendedor.findFirst({ where: { id: d.vendedorId, usuarioId } })
@@ -79,6 +84,7 @@ router.post('/acessos', requireProLaboreAuth, requireDono, async (req: Request, 
 const editarSchema = z.object({
   nome: z.string().trim().min(2).max(80).optional(),
   email: z.string().trim().toLowerCase().email('E-mail inválido').optional(),
+  documento: z.string().max(30).nullable().optional(), // CPF ou CNPJ
   escopo: z.enum(['PROPRIO', 'EQUIPE']).optional(),
   vende: z.boolean().optional(),
   ativo: z.boolean().optional(),
@@ -98,11 +104,14 @@ router.put('/acessos/:id', requireProLaboreAuth, requireDono, async (req: Reques
   if (!v) return
   const d = parse.data
   if (d.email && await emailEmUso(d.email, v.id)) { res.status(409).json({ error: 'Esse e-mail já é usado por outro acesso.' }); return }
+  const doc = normalizarDocumento(d.documento)
+  if (!doc.ok) { res.status(400).json({ error: doc.erro }); return }
   await prisma.vendedor.update({
     where: { id: v.id },
     data: {
       ...(d.nome ? { nome: d.nome } : {}),
       ...(d.email ? { email: d.email } : {}),
+      ...(d.documento !== undefined ? { documento: doc.valor } : {}),
       ...(d.escopo ? { papel: papelDoEscopo(d.escopo) } : {}),
       ...(d.vende !== undefined ? { vende: d.vende } : {}),
       ...(d.ativo !== undefined ? { ativo: d.ativo } : {}),

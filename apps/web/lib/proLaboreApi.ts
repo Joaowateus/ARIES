@@ -49,7 +49,7 @@ export interface LancamentoFinanceiro {
   pagador: string; descricao: string; competencia: string | null; itens: ItemRecibo[]; valorTotal: number; pagoEm: string
   formaPagamento: FormaPagamentoFinanceiro | null; observacao: string | null; canceladoEm: string | null; criadoEm: string
 }
-export interface PessoaFinanceiro { id: string; nome: string; vende: boolean; salarioBase: number | null }
+export interface PessoaFinanceiro { id: string; nome: string; vende: boolean; salarioBase: number | null; documento?: string | null }
 export interface PainelFinanceiro {
   mes: string; categorias: CategoriaFinanceiraInfo[]; formas: FormaPagamentoFinanceiro[]; lancamentos: LancamentoFinanceiro[]
   totais: { porCategoria: Record<CategoriaFinanceira, number>; total: number }
@@ -68,9 +68,9 @@ export type NivelAcesso = 'NENHUM' | 'VER' | 'EDITAR'
 export type EscopoAcesso = 'PROPRIO' | 'EQUIPE'
 export interface ModuloAcesso { chave: string; rotulo: string; grupo: string; descricao: string; ver?: string; niveis: NivelAcesso[] }
 export interface PerfilAcesso { chave: string; rotulo: string; descricao: string; escopo: EscopoAcesso; vende: boolean; permissoes: Record<string, NivelAcesso> }
-export interface AcessoEquipe { id: string; nome: string; email: string | null; ativo: boolean; vende: boolean; escopo: EscopoAcesso; permissoes: Record<string, NivelAcesso>; perfil: string | null; criadoEm: string }
+export interface AcessoEquipe { id: string; nome: string; email: string | null; documento: string | null; ativo: boolean; vende: boolean; escopo: EscopoAcesso; permissoes: Record<string, NivelAcesso>; perfil: string | null; criadoEm: string }
 export interface PainelAcessos { modulos: ModuloAcesso[]; perfis: PerfilAcesso[]; acessos: AcessoEquipe[]; semLogin: { id: string; nome: string }[] }
-export interface NovoAcesso { vendedorId?: string; nome?: string; email: string; senha: string; escopo: EscopoAcesso; vende: boolean; permissoes: Record<string, NivelAcesso> }
+export interface NovoAcesso { vendedorId?: string; nome?: string; email: string; documento?: string | null; senha: string; escopo: EscopoAcesso; vende: boolean; permissoes: Record<string, NivelAcesso> }
 
 /** O login abre o módulo nesse nível? O dono abre tudo; sem o mapa, nada além do básico. */
 export function temAcesso(u: Pick<ProLaboreUsuario, 'papel' | 'acessos'> | null | undefined, modulo: string, nivel: 'VER' | 'EDITAR' = 'VER'): boolean {
@@ -160,6 +160,8 @@ export interface Vendedor {
   papel: 'VENDEDOR' | 'SUPERVISOR'
   // Falso para quem tem login mas não vende (fica fora dos seletores de venda).
   vende?: boolean
+  // CPF ou CNPJ (formatado): sai nos comprovantes, recibos e ocorrências.
+  documento?: string | null
   tetoComissaoPorVenda?: number | null
   metaMensal?: number | null
   criadoEm: string
@@ -301,7 +303,7 @@ export interface PagamentoComissao {
   // Preenchido quando todas as vendas saíram do pagamento.
   canceladoEm: string | null
   criadoEm: string
-  vendedor: { id: string; nome: string } | null
+  vendedor: { id: string; nome: string; documento?: string | null } | null
   _count?: { vendas: number }
 }
 
@@ -438,8 +440,8 @@ export const proLaboreApi = {
   },
   vendedores: {
     listar: () => request<Vendedor[]>('/pro-labore/vendedores'),
-    criar: (nome: string) => request<Vendedor>('/pro-labore/vendedores', { method: 'POST', body: JSON.stringify({ nome }) }),
-    editar: (id: string, data: { nome?: string; ativo?: boolean; papel?: 'VENDEDOR' | 'SUPERVISOR'; tetoComissaoPorVenda?: number | null; metaMensal?: number | null }) =>
+    criar: (nome: string, documento?: string | null) => request<Vendedor>('/pro-labore/vendedores', { method: 'POST', body: JSON.stringify({ nome, documento: documento || null }) }),
+    editar: (id: string, data: { nome?: string; documento?: string | null; ativo?: boolean; papel?: 'VENDEDOR' | 'SUPERVISOR'; tetoComissaoPorVenda?: number | null; metaMensal?: number | null }) =>
       request<Vendedor>(`/pro-labore/vendedores/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendedores/${id}`, { method: 'DELETE' }),
     concederAcesso: (id: string, data: { email: string; senha: string }) =>
@@ -787,7 +789,7 @@ export const proLaboreApi = {
   acessos: {
     listar: () => request<PainelAcessos>('/pro-labore/acessos'),
     criar: (dados: NovoAcesso) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
-    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>>) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'documento' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>>) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
     senha: (id: string, senha: string) => request<{ ok: true }>(`/pro-labore/acessos/${id}/senha`, { method: 'POST', body: JSON.stringify({ senha }) }),
     remover: (id: string) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'DELETE' }),
   },
@@ -1089,7 +1091,7 @@ export interface Ocorrencia {
   id: string
   protocolo: string
   vendedorId: string
-  vendedor?: { id: string; nome: string } | null
+  vendedor?: { id: string; nome: string; documento?: string | null } | null
   tipo: TipoOcorrencia
   motivo: string
   gravidade: GravidadeOcorrencia

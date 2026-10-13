@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { nivelAtende, requireEscopoEquipe, requireModulo } from '../lib/acessos'
+import { normalizarDocumento } from '../lib/documento'
 
 const router = Router()
 
@@ -90,7 +91,7 @@ router.get('/financeiro', requireProLaboreAuth, requireModulo('financeiro', 'VER
     vendas = { comissoes: soma('COMISSAO'), proLabore: soma('PROLABORE') }
   }
   const equipe = proprio ? [] : await prisma.vendedor.findMany({
-    where: { usuarioId, ativo: true }, select: { id: true, nome: true, vende: true, salarioBase: true }, orderBy: { nome: 'asc' },
+    where: { usuarioId, ativo: true }, select: { id: true, nome: true, vende: true, salarioBase: true, documento: true }, orderBy: { nome: 'asc' },
   })
   res.json({
     mes, categorias: CATEGORIAS, formas: FORMAS, lancamentos, totais: { porCategoria, total }, vendas, equipe,
@@ -128,10 +129,15 @@ router.post('/financeiro', requireProLaboreAuth, requireModulo('financeiro', 'ED
   const usuarioId = req.proLaboreUser!.sub
   const cat = CATEGORIAS.find(c => c.chave === d.categoria)!
   let favorecido = d.favorecido?.trim() || ''
+  const doc = normalizarDocumento(d.documento)
+  if (!doc.ok) { res.status(400).json({ error: doc.erro }); return }
+  let documento = doc.valor
   if (d.vendedorId) {
-    const v = await prisma.vendedor.findFirst({ where: { id: d.vendedorId, usuarioId }, select: { nome: true } })
+    const v = await prisma.vendedor.findFirst({ where: { id: d.vendedorId, usuarioId }, select: { nome: true, documento: true } })
     if (!v) { res.status(404).json({ error: 'Pessoa da equipe não encontrada' }); return }
     favorecido ||= v.nome
+    // Sem documento no pagamento: vale o do cadastro da pessoa.
+    documento ||= v.documento
   }
   if (favorecido.length < 2) { res.status(400).json({ error: 'Informe quem recebe: é o nome que sai no recibo' }); return }
   const competencia = d.competencia ?? (cat.chave === 'SALARIO' || cat.chave === 'ADIANTAMENTO' ? d.pagoEm.slice(0, 7) : null)
@@ -145,7 +151,7 @@ router.post('/financeiro', requireProLaboreAuth, requireModulo('financeiro', 'ED
     if (ja) { res.status(409).json({ error: `${favorecido} já tem recibo de salário de ${mesExtenso(competencia!)} (nº ${ja.numero}). Cancele esse recibo antes de pagar de novo.` }); return }
   }
   const l = await criarNumerado({
-    usuarioId, categoria: cat.chave, vendedorId: d.vendedorId || null, favorecido, documento: d.documento?.trim() || null,
+    usuarioId, categoria: cat.chave, vendedorId: d.vendedorId || null, favorecido, documento,
     pagador: d.pagador, descricao, competencia, itens: d.itens as unknown as Prisma.InputJsonValue, valorTotal,
     pagoEm: new Date(`${d.pagoEm}T12:00:00Z`), formaPagamento: d.formaPagamento ?? null, observacao: d.observacao?.trim() || null,
   })
@@ -158,7 +164,7 @@ router.get('/financeiro/salarios', requireProLaboreAuth, requireModulo('financei
   const usuarioId = req.proLaboreUser!.sub
   const competencia = mesSchema.safeParse(req.query.competencia).success ? String(req.query.competencia) : mesAtual()
   const [equipe, pagos] = await Promise.all([
-    prisma.vendedor.findMany({ where: { usuarioId, ativo: true }, select: { id: true, nome: true, vende: true, salarioBase: true }, orderBy: { nome: 'asc' } }),
+    prisma.vendedor.findMany({ where: { usuarioId, ativo: true }, select: { id: true, nome: true, vende: true, salarioBase: true, documento: true }, orderBy: { nome: 'asc' } }),
     prisma.lancamentoFinanceiro.findMany({ where: { usuarioId, categoria: 'SALARIO', competencia, canceladoEm: null, vendedorId: { not: null } }, select: { id: true, numero: true, valorTotal: true, vendedorId: true } }),
   ])
   res.json({
@@ -181,7 +187,7 @@ router.post('/financeiro/salarios', requireProLaboreAuth, requireModulo('finance
   const usuarioId = req.proLaboreUser!.sub
   const ids = [...new Set(d.pagamentos.map(p => p.vendedorId))]
   if (ids.length !== d.pagamentos.length) { res.status(400).json({ error: 'A mesma pessoa aparece duas vezes' }); return }
-  const pessoas = await prisma.vendedor.findMany({ where: { id: { in: ids }, usuarioId }, select: { id: true, nome: true } })
+  const pessoas = await prisma.vendedor.findMany({ where: { id: { in: ids }, usuarioId }, select: { id: true, nome: true, documento: true } })
   if (pessoas.length !== ids.length) { res.status(404).json({ error: 'Alguma pessoa não foi encontrada na equipe' }); return }
   const ja = await prisma.lancamentoFinanceiro.findMany({ where: { usuarioId, categoria: 'SALARIO', competencia: d.competencia, vendedorId: { in: ids }, canceladoEm: null }, select: { numero: true, favorecido: true } })
   if (ja.length) {
@@ -194,7 +200,7 @@ router.post('/financeiro/salarios', requireProLaboreAuth, requireModulo('finance
     const pessoa = pessoas.find(x => x.id === p.vendedorId)!
     const valor = arred(p.valor)
     criados.push(await criarNumerado({
-      usuarioId, categoria: 'SALARIO', vendedorId: pessoa.id, favorecido: pessoa.nome, pagador: d.pagador, descricao, competencia: d.competencia,
+      usuarioId, categoria: 'SALARIO', vendedorId: pessoa.id, favorecido: pessoa.nome, documento: pessoa.documento, pagador: d.pagador, descricao, competencia: d.competencia,
       itens: [{ descricao, valor, desconto: false }] as unknown as Prisma.InputJsonValue, valorTotal: valor,
       pagoEm: new Date(`${d.pagoEm}T12:00:00Z`), formaPagamento: d.formaPagamento ?? null, observacao: d.observacao?.trim() || null,
     }))

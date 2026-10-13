@@ -15,6 +15,11 @@ export default function ProLaboreVendedoresPage() {
   const [parametro, setParametro] = useState<ParametroLiquidez | null>(null)
   const [loading, setLoading] = useState(true)
   const [nome, setNome] = useState('')
+  const [documento, setDocumento] = useState('')
+  // CPF/CNPJ editado direto na linha da pessoa.
+  const [editandoDocId, setEditandoDocId] = useState<string | null>(null)
+  const [docValor, setDocValor] = useState('')
+  const [docErro, setDocErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -52,8 +57,9 @@ export default function ProLaboreVendedoresPage() {
     setErro('')
     setSalvando(true)
     try {
-      await proLaboreApi.vendedores.criar(nome)
+      await proLaboreApi.vendedores.criar(nome, documento)
       setNome('')
+      setDocumento('')
       carregar()
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar vendedor')
@@ -148,6 +154,17 @@ export default function ProLaboreVendedoresPage() {
     }
   }
 
+  async function salvarDocumento(id: string) {
+    setDocErro('')
+    try {
+      await proLaboreApi.vendedores.editar(id, { documento: docValor.trim() || null })
+      setEditandoDocId(null)
+      carregar()
+    } catch (err: unknown) {
+      setDocErro(err instanceof Error ? err.message : 'Não deu pra salvar o CPF/CNPJ')
+    }
+  }
+
   function abrirEdicaoMeta(v: Vendedor) {
     setEditandoMetaId(v.id)
     setMetaValor(v.metaMensal != null ? String(v.metaMensal) : '')
@@ -213,6 +230,10 @@ export default function ProLaboreVendedoresPage() {
             <label>Nome</label>
             <input className="pl-input" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Rafael Souza" required minLength={2} />
           </div>
+          <div className="pl-field" style={{ flex: '0 1 230px', minWidth: 190 }}>
+            <label htmlFor="vend-novo-doc">CPF ou CNPJ (opcional)</label>
+            <input id="vend-novo-doc" className="pl-input" value={documento} onChange={e => setDocumento(e.target.value)} placeholder="000.000.000-00" inputMode="numeric" maxLength={20} />
+          </div>
           <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Adicionar'}</button>
         </div>
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }}>{erro}</div>}
@@ -231,6 +252,7 @@ export default function ProLaboreVendedoresPage() {
             <thead>
               <tr>
                 <th>Nome</th>
+                <th>CPF/CNPJ</th>
                 <th>Status</th>
                 <th>Papel</th>
                 <th>Comissão por venda</th>
@@ -244,6 +266,7 @@ export default function ProLaboreVendedoresPage() {
                 <Fragment key={v.id}>
                   <tr>
                     <td>{v.nome}</td>
+                    <td>{v.documento ? <span className="pl-mono">{v.documento}</span> : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Não informado</span>}</td>
                     <td>
                       <span className={`pl-delta ${v.ativo ? 'up' : 'down'}`} style={{ display: 'inline-flex' }}>{v.ativo ? 'Ativo' : 'Inativo'}</span>
                     </td>
@@ -271,6 +294,9 @@ export default function ProLaboreVendedoresPage() {
                       <span className="pl-link-action" onClick={() => alternarPapel(v)} style={{ marginRight: 14 }}>
                         {v.papel === 'SUPERVISOR' ? 'Tornar vendedor(a)' : 'Tornar supervisor(a)'}
                       </span>
+                      <span className="pl-link-action" onClick={() => { if (editandoDocId === v.id) setEditandoDocId(null); else { setEditandoDocId(v.id); setDocValor(v.documento ?? ''); setDocErro('') } }} style={{ marginRight: 14 }}>
+                        {v.documento ? 'Editar CPF/CNPJ' : 'Informar CPF/CNPJ'}
+                      </span>
                       <span className="pl-link-action" onClick={() => (editandoTetoId === v.id ? fecharEdicaoTeto() : abrirEdicaoTeto(v))} style={{ marginRight: 14 }}>
                         Editar comissão
                       </span>
@@ -292,7 +318,7 @@ export default function ProLaboreVendedoresPage() {
                   </tr>
                   {editandoTetoId === v.id && (
                     <tr>
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Comissão (teto por venda, R$)</label>
@@ -308,9 +334,25 @@ export default function ProLaboreVendedoresPage() {
                       </td>
                     </tr>
                   )}
+                  {editandoDocId === v.id && (
+                    <tr>
+                      <td colSpan={8}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
+                          <div className="pl-field" style={{ minWidth: 240 }}>
+                            <label htmlFor={`vend-doc-${v.id}`}>CPF ou CNPJ de {v.nome}</label>
+                            <input id={`vend-doc-${v.id}`} className="pl-input" value={docValor} onChange={e => setDocValor(e.target.value)} placeholder="000.000.000-00" inputMode="numeric" maxLength={20} autoFocus />
+                            <span className="pl-hint">Sai nos comprovantes de comissão, recibos do Financeiro e documentos de ocorrência. Em branco remove.</span>
+                          </div>
+                          <button type="button" className="pl-btn pl-btn-primary" onClick={() => void salvarDocumento(v.id)}>Salvar CPF/CNPJ</button>
+                          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setEditandoDocId(null)}>Cancelar</button>
+                        </div>
+                        {docErro && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{docErro}</div>}
+                      </td>
+                    </tr>
+                  )}
                   {editandoMetaId === v.id && (
                     <tr>
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Meta mensal (R$)</label>
@@ -328,7 +370,7 @@ export default function ProLaboreVendedoresPage() {
                   )}
                   {concedendoId === v.id && (
                     <tr>
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', padding: '10px 0' }}>
                           <div className="pl-field" style={{ minWidth: 220 }}>
                             <label>Email de acesso</label>
@@ -349,7 +391,7 @@ export default function ProLaboreVendedoresPage() {
                   )}
                   {ocorrenciasAbertoId === v.id && (
                     <tr>
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <div style={{ padding: '10px 0' }}>
                           {carregandoOcorrenciasId === v.id ? (
                             <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
