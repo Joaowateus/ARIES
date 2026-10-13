@@ -219,3 +219,69 @@ export async function gerarRoteiro(usuarioId: string, fatos: unknown): Promise<R
   if (!ganchos.length) return null
   return { ganchos, retencao: vale(r.retencao, 400) ?? '', recompensa: vale(r.recompensa, 400) ?? '', cta: vale(r.cta, 200) ?? '' }
 }
+
+// ---------- Central Estratégica de Conteúdo ----------
+
+const ESQUEMA_ROTEIRO_CENTRAL = z.object({
+  titulo: z.string(),
+  gancho: z.string(),
+  contexto: z.string(),
+  desenvolvimento: z.string(),
+  valor: z.string(),
+  cta: z.string(),
+  gravacao: z.string(),
+  cenas: z.array(z.string()),
+  textosTela: z.array(z.string()),
+  legenda: z.string(),
+  duracaoSeg: z.number(),
+  lenteMotivo: z.string(),
+  pendenteConfirmacao: z.string(),
+})
+export type RoteiroCentralIA = z.infer<typeof ESQUEMA_ROTEIRO_CENTRAL>
+
+const REGRAS_ETAPA: Record<string, string> = {
+  TOPO: 'Topo de funil (manhã): atrair gente nova e gerar identificação. Não é propaganda, não exige que a pessoa esteja pronta para comprar, não exagera riscos para provocar medo. CTA leve: comentar, compartilhar, seguir ou responder.',
+  MEIO: 'Meio de funil (tarde): educar e quebrar objeções. Ensine algo específico. Não apresente simulação hipotética como proposta real, não prometa aprovação de financiamento, não afirme que uma condição é a melhor. Incentive conferir documentos, termos e valores. CTA: salvar, mandar dúvida, comparar critérios.',
+  FUNDO: 'Fundo de funil (noite): aproximar de uma ação comercial. Estoque, preço, taxa, condição e garantia só como [PREENCHER] quando não estiverem nos fatos. Depoimento só autorizado. Não invente urgência nem escassez, não garanta financiamento, não omita limitações, não pressione. CTA: direct/WhatsApp, consultar disponibilidade, agendar visita, pedir avaliação.',
+}
+
+/** Roteiro completo de um vídeo da Central, a partir da ficha, do roteiro-base e do dossiê. */
+export async function gerarRoteiroCentral(usuarioId: string, fatos: { etapa: string } & Record<string, unknown>): Promise<RoteiroCentralIA | null> {
+  const r = await estruturado(usuarioId, [
+    'Tarefa: escrever o roteiro de um vídeo curto vertical (Reels) da loja de motos, pronto para a pessoa ler, ensaiar e gravar.',
+    'Siga o dossiê do AVATAR que vem nos fatos: dores, desejos e objeções são hipóteses de comunicação, nunca afirme que todos os compradores pensam assim.',
+    'Nunca invente estatísticas, pesquisas, depoimentos, histórias de clientes reais, vendas, preços, taxas, estoque ou resultados. Personas são ilustrativas. Situação ilustrativa deve ser dita como ilustrativa.',
+    'Não use humilhação, medo artificial, manipulação de inseguranças nem pressão financeira. Não responda objeção com desconto: explique com transparência e critério.',
+    REGRAS_ETAPA[fatos.etapa] ?? '',
+    'Estrutura: gancho (frase dos 1 a 3 primeiros segundos, específica, até 110 caracteres, sem clickbait), contexto, desenvolvimento (uma ideia central com explicação simples, exemplo ou critério prático), valor (o que a pessoa leva), CTA coerente com a etapa, gravação (enquadramento, movimento, recursos), cenas (3 a 5), textos na tela (2 a 5, curtos), legenda pronta (não repita o roteiro mecanicamente; até 600 caracteres) e duração estimada em segundos (15 a 90).',
+    'Mantenha o tema, o formato, a dor/desejo/objeção, a lente mental e a persona da ficha. Use o roteiro-base como ponto de partida, melhorando a naturalidade sem copiar. Evite repetir os ganchos listados em ganchos_existentes.',
+    'lenteMotivo: uma frase explicando por que a lente mental faz sentido para este vídeo.',
+    'pendenteConfirmacao: se o vídeo depende de estoque, preço, taxa, garantia, condição comercial, depoimento ou resposta da loja, diga o que precisa ser confirmado; senão, deixe vazio.',
+  ].join('\n'), blocoFatos(fatos), ESQUEMA_ROTEIRO_CENTRAL, 3500)
+  if (!r) return null
+  const ok = numerosPermitidos(semDinheiro(fatos))
+  const campos = [r.titulo, r.gancho, r.contexto, r.desenvolvimento, r.valor, r.cta, r.legenda, ...r.cenas, ...r.textosTela]
+  if (!campos.every(c => numerosConferem(c, ok))) { console.warn('[sm-ia] roteiro da Central com número fora dos fatos: descartado'); return null }
+  const t = (x: string, max: number) => limpar(x).slice(0, max)
+  if (!r.gancho.trim() || !r.desenvolvimento.trim()) return null
+  return {
+    titulo: t(r.titulo, 160), gancho: t(r.gancho, 200), contexto: t(r.contexto, 800), desenvolvimento: t(r.desenvolvimento, 1500), valor: t(r.valor, 600),
+    cta: t(r.cta, 200), gravacao: t(r.gravacao, 800), cenas: r.cenas.map(c => t(c, 200)).slice(0, 6), textosTela: r.textosTela.map(c => t(c, 100)).slice(0, 6),
+    legenda: limpar(r.legenda).slice(0, 2200), duracaoSeg: Math.min(120, Math.max(10, Math.round(r.duracaoSeg))), lenteMotivo: t(r.lenteMotivo, 300), pendenteConfirmacao: t(r.pendenteConfirmacao, 300),
+  }
+}
+
+const ESQUEMA_ANGULOS = z.object({ ideias: z.array(z.object({ etapa: z.string(), titulo: z.string(), gancho: z.string(), porque: z.string() })) })
+
+/** Novos ângulos (sugestões) sem alterar o AVATAR: para um tema, objeção ou aprendizado. */
+export async function sugerirAngulos(usuarioId: string, fatos: unknown): Promise<Array<{ etapa: string; titulo: string; gancho: string; porque: string }> | null> {
+  const r = await estruturado(usuarioId,
+    'Tarefa: sugerir de 3 a 6 novos ângulos de vídeo para o Instagram da loja de motos, sem alterar o AVATAR nem o posicionamento do dossiê. Cada ideia tem a etapa do funil (TOPO, MEIO ou FUNDO), um título, um gancho de até 110 caracteres e o porquê (uma frase ligando à dor, desejo, objeção ou aprendizado dos fatos). São sugestões, não fatos: não invente dados, preços, depoimentos nem resultados.',
+    blocoFatos(fatos), ESQUEMA_ANGULOS, 2500)
+  if (!r) return null
+  const ok = numerosPermitidos(semDinheiro(fatos))
+  return r.ideias
+    .filter(i => ['TOPO', 'MEIO', 'FUNDO'].includes(i.etapa) && numerosConferem(`${i.titulo} ${i.gancho} ${i.porque}`, ok))
+    .slice(0, 6)
+    .map(i => ({ etapa: i.etapa, titulo: limpar(i.titulo).slice(0, 160), gancho: limpar(i.gancho).slice(0, 200), porque: limpar(i.porque).slice(0, 300) }))
+}

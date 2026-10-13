@@ -5,7 +5,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { IcFechar } from './icones'
 
-export function Modal({ titulo, aoFechar, children, rotulo }: { titulo: string; aoFechar: () => void; children: ReactNode; rotulo?: string }) {
+export function Modal({ titulo, aoFechar, children, rotulo, largo }: { titulo: string; aoFechar: () => void; children: ReactNode; rotulo?: string; largo?: boolean }) {
   const caixa = useRef<HTMLDivElement>(null)
   const fechar = useRef(aoFechar)
   useEffect(() => { fechar.current = aoFechar })
@@ -31,7 +31,7 @@ export function Modal({ titulo, aoFechar, children, rotulo }: { titulo: string; 
 
   return (
     <div className="sm-modal-fundo" onMouseDown={e => { if (e.target === e.currentTarget) aoFechar() }}>
-      <div ref={caixa} className="sm-modal" role="dialog" aria-modal="true" aria-label={rotulo ?? titulo}>
+      <div ref={caixa} className={largo ? 'sm-modal largo' : 'sm-modal'} role="dialog" aria-modal="true" aria-label={rotulo ?? titulo}>
         <div className="sm-modal-cab">
           <h2 className="sm-ttl">{titulo}</h2>
           <button type="button" className="sm-btn fantasma icone" aria-label="Fechar" onClick={aoFechar}><IcFechar /></button>

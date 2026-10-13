@@ -25,6 +25,7 @@ import { publicarPautasVencidas } from '../lib/smPublicacao'
 import { gerarPautasDeVendas } from '../lib/smPautasAuto'
 import { processarEventosPendentes } from '../lib/smAtendimento'
 import { rodarJobSocialMedia, sincronizarContaSocialMedia } from '../lib/socialMediaSync'
+import { rodarCentral } from '../lib/smCentral'
 import { listarTestes } from '../lib/smTestes'
 import { rodarRetrospectivas } from '../lib/smRetrospectiva'
 import { rodarPulso } from '../lib/smPulso'
@@ -294,7 +295,9 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   // Sexta: a retrospectiva da semana. Segunda às 8h: o relatório ao gestor (seção 11.4).
   // App da Meta bloqueado: testa de novo e, liberado, o Tráfego e o Instagram voltam sozinhos.
   const meta = await recuperarConexoesMeta(agoraDoCron(req)).catch(e => { console.error('[meta] recuperar', e); return { metaTestadas: 0, metaLiberadas: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta })
+  // Central de Conteúdo: no começo do mês, o calendário novo (em rascunho, para aprovação).
+  const central = await rodarCentral(agoraDoCron(req)).catch(e => { console.error('[central] cron', e); return { centralGerados: 0 } })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return

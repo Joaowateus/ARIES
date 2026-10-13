@@ -49,6 +49,7 @@ import proLaboreSmAtendimentoRoutes from './routes/proLaboreSmAtendimento'
 import proLaboreSmAtribuicaoRoutes from './routes/proLaboreSmAtribuicao'
 import proLaboreSmDesempenhoRoutes from './routes/proLaboreSmDesempenho'
 import proLaboreSmMetodoRoutes from './routes/proLaboreSmMetodo'
+import proLaboreSmCentralRoutes from './routes/proLaboreSmCentral'
 import proLaboreSmTestesRoutes from './routes/proLaboreSmTestes'
 import proLaboreSmAssistenteRoutes from './routes/proLaboreSmAssistente'
 import proLaboreSmFocoRoutes from './routes/proLaboreSmFoco'
@@ -208,6 +209,7 @@ app.use('/pro-labore', proLaboreSmAtendimentoRoutes)
 app.use('/pro-labore', proLaboreSmAtribuicaoRoutes)
 app.use('/pro-labore', proLaboreSmDesempenhoRoutes)
 app.use('/pro-labore', proLaboreSmMetodoRoutes)
+app.use('/pro-labore', proLaboreSmCentralRoutes)
 app.use('/pro-labore', proLaboreSmTestesRoutes)
 app.use('/pro-labore', proLaboreSmAssistenteRoutes)
 app.use('/pro-labore', proLaboreSmFocoRoutes)
