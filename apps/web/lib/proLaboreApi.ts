@@ -2154,7 +2154,7 @@ export interface SmPautaParaAprovar {
 }
 export interface SmFilaAprovacao { regraLigada: boolean; pautas: SmPautaParaAprovar[] }
 export interface EstadoConexaoMeta {
-  bloqueado: boolean; bloqueadoDesde: string | null; origem: 'TRAFEGO' | 'SOCIAL_MEDIA' | null; mensagemMeta: string | null
+  bloqueado: boolean; bloqueadoDesde: string | null; origem: 'TRAFEGO' | 'SOCIAL_MEDIA' | 'AMBOS' | null; mensagemMeta: string | null
   verificadoEm: string | null; liberadoEm: string | null; titulo: string; passos: string[]
 }
 export interface TesteConexaoMeta { modulo: 'TRAFEGO' | 'SOCIAL_MEDIA'; nome: string; ok: boolean; causa: string | null; detalhe: string }

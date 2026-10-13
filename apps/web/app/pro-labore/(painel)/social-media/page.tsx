@@ -167,7 +167,7 @@ export default function ProLaboreSocialMediaPage() {
 
       {carregando && <div className="pl-hint">Carregando…</div>}
 
-      {isDono && <AvisoConexaoMeta versao={conta?.ultimoErroSync ?? ''} onLiberado={() => { if (conta) void sincronizar() }} />}
+      {isDono && <AvisoConexaoMeta modulo="SOCIAL_MEDIA" versao={conta?.ultimoErroSync ?? ''} onLiberado={() => { if (conta) void sincronizar() }} />}
       {isDono && <AvisosSocial versao={`${conta?.ultimaSincronizacaoEm ?? ''}|${conta?.ultimoErroSync ?? ''}`} />}
       {avisoConexao && <div className="pl-sv-aviso info" role="status"><div>{avisoConexao}</div></div>}
 
