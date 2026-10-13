@@ -1901,7 +1901,7 @@ export interface AnaliseTrafego {
 
 // ---------- Espaço do Social Media (papel isolado) ----------
 
-export const SM_MODULOS = ['analise', 'producao', 'atendimento', 'estoque', 'crm', 'vendas', 'trafego', 'financeiro', 'dashboard'] as const
+export const SM_MODULOS = ['analise', 'producao', 'atendimento', 'estoque', 'crm', 'vendas', 'trafego', 'financeiro', 'dashboard', 'agenda', 'reunioes', 'anotacoes'] as const
 export type SmModulo = (typeof SM_MODULOS)[number]
 export type SmNivel = 'COMPLETO' | 'LEITURA' | 'SEM_ACESSO'
 export interface SmRegras { aprovacaoGestor: boolean; mostrarValores: boolean; relatorioSemanal: boolean; assistenteIA: boolean }

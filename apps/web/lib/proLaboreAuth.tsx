@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { proLaboreApi, ProLaboreUsuario, getUsuario, setUsuario, setToken, clearToken } from './proLaboreApi'
 
@@ -10,6 +10,8 @@ interface ProLaboreAuthCtx {
   login: (email: string, senha: string) => Promise<void>
   /** Sessão já autenticada por outro caminho (ex.: aceitar o convite do Social Media). */
   entrar: (token: string, usuario: ProLaboreUsuario) => void
+  /** Busca de novo quem está logado (ex.: o gestor acabou de liberar um módulo). */
+  recarregar: () => Promise<ProLaboreUsuario | null>
   logout: () => void
 }
 
@@ -48,6 +50,15 @@ export function ProLaboreAuthProvider({ children }: { children: ReactNode }) {
     router.push(u.papel === 'SOCIAL_MEDIA' ? '/pro-labore/sm' : '/pro-labore')
   }
 
+  const recarregar = useCallback(async () => {
+    try {
+      const u = await proLaboreApi.auth.me()
+      setUsuario(u)
+      setUsuarioState(u)
+      return u
+    } catch { return null }
+  }, [])
+
   function logout() {
     clearToken()
     setUsuarioState(null)
@@ -55,7 +66,7 @@ export function ProLaboreAuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ProLaboreAuthContext.Provider value={{ usuario, loading, login, entrar, logout }}>
+    <ProLaboreAuthContext.Provider value={{ usuario, loading, login, entrar, recarregar, logout }}>
       {children}
     </ProLaboreAuthContext.Provider>
   )

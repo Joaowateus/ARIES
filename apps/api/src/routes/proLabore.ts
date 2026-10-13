@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import { requireModulo, requireAlgumModulo, requireEscopoEquipe, permissoesEfetivas, escopoDoPapel, TUDO } from '../lib/acessos'
+import { acessosPessoaisSM } from '../lib/smAcesso'
 import { trocarPorTokenLongo, trocarCodigoPorTokenCurto, buscarContaInstagram, comApiDaEmpresa } from '../lib/instagramGraph'
 import { sincronizarContaSocialMedia, rodarJobSocialMedia, diaBrasilia, inicioDoDiaBrasilia } from '../lib/socialMediaSync'
 import { analisarContaSocialMedia } from '../lib/socialMediaResumo'
@@ -195,7 +196,7 @@ router.post('/auth/login', async (req: Request, res: Response) => {
   if (membroSm?.senhaHash && membroSm.ativo && (await bcrypt.compare(senha, membroSm.senhaHash))) {
     await prisma.smMembro.update({ where: { id: membroSm.id }, data: { ultimoAcessoEm: new Date() } })
     const token = signProLaboreToken({ sub: membroSm.usuarioId, email: membroSm.email, nome: membroSm.nome, papel: 'SOCIAL_MEDIA', smMembroId: membroSm.id })
-    res.json({ token, usuario: { id: membroSm.id, nome: membroSm.nome, email: membroSm.email, papel: 'SOCIAL_MEDIA' } })
+    res.json({ token, usuario: { id: membroSm.id, nome: membroSm.nome, email: membroSm.email, papel: 'SOCIAL_MEDIA', acessos: await acessosPessoaisSM(membroSm.usuarioId) } })
     return
   }
 
@@ -211,7 +212,8 @@ router.get('/auth/me', requireProLaboreAuth, async (req: Request, res: Response)
       res.status(404).json({ error: 'Acesso não encontrado' })
       return
     }
-    res.json({ ...membro, papel })
+    // Agenda, Reuniões e Anotações que o gestor liberou para o papel.
+    res.json({ ...membro, papel, acessos: await acessosPessoaisSM(sub) })
     return
   }
 

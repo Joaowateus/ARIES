@@ -10,7 +10,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { usePLTema } from '@/lib/proLaboreTheme'
 import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmAbaAssistente, type SmAvisoPulso, type SmAvisosLista, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
 import {
-  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAcervo, IcAprovar, IcAtendimento, IcCaptura, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
+  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAcervo, IcAgenda, IcAnotacoes, IcAprovar, IcAtendimento, IcReunioes, IcCaptura, IcEstoque, IcCalendario, IcDesempenho, IcHoje, IcProducao, IcVendasPorPost,
   ListaAtalhos, PainelAvisos, PaletaSM, SidebarSM, SmApp, haQuanto, registrarSW, type ComandoPaleta, type ItemMenu, type StatusConta,
 } from '../_ui'
 import { EspacoSMCtx, atende } from './EspacoSM'
@@ -186,7 +186,8 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
 
   function sairDoVerComo() {
     definirVerComoSocialMedia(false)
-    router.push('/pro-labore/equipe/acessos')
+    try { sessionStorage.setItem('pl_acessos_area', 'social') } catch { /* sem armazenamento */ }
+    router.push('/pro-labore/equipe/acessos#social')
   }
 
   if (erro && !eu) {
@@ -219,6 +220,13 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
       ...(ctx.pode('analise') ? [{ href: '/pro-labore/sm/desempenho', rotulo: 'Desempenho', icone: <IcDesempenho /> }] : []),
       ...(ctx.pode('vendas') ? [{ href: '/pro-labore/sm/vendas-por-post', rotulo: 'Vendas por post', icone: <IcVendasPorPost /> }] : []),
     ] },
+    // Ferramentas pessoais liberadas pelo gestor: abrem as telas do painel
+    // com os dados da própria pessoa (o gestor já tem as dele no painel).
+    { rotulo: 'Organização', itens: eu.visao === 'SOCIAL_MEDIA' && !verComo ? [
+      ...(ctx.pode('agenda') ? [{ href: '/pro-labore/agenda', rotulo: 'Agenda', icone: <IcAgenda /> }] : []),
+      ...(ctx.pode('reunioes') ? [{ href: '/pro-labore/reunioes', rotulo: 'Reuniões', icone: <IcReunioes /> }] : []),
+      ...(ctx.pode('anotacoes') ? [{ href: '/pro-labore/anotacoes', rotulo: 'Anotações', icone: <IcAnotacoes /> }] : []),
+    ] : [] },
   ].filter(g => g.itens.length > 0)
 
   const conta = eu.conta
