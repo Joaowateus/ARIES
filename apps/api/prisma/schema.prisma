@@ -3212,3 +3212,156 @@ model SmProva {
   @@index([usuarioId])
   @@map("pro_labore_sm_provas")
 }
+
+// =====================================================================
+// COPILOTO COMERCIAL — assistente diário de performance de cada pessoa da
+// equipe (e do gestor, na visão "EQUIPE"). Lê a produção registrada no
+// sistema (CRM, agenda, vendas em quantidade, conversas de lead do
+// WhatsApp), entrega o relatório do dia, o plano de ações, estudos e
+// sugestões de resposta, e aprende com o que a pessoa faz e diz.
+// `pessoa` = id do Vendedor, ou "EQUIPE" para o gestor (visão do time).
+// =====================================================================
+model CopilotoPerfil {
+  id               String    @id @default(cuid())
+  usuarioId        String
+  pessoa           String
+  // INICIANTE | INTERMEDIARIO | AVANCADO — calibra o tom e os estudos.
+  nivel            String    @default("INTERMEDIARIO")
+  minutosEstudoDia Int       @default(15)
+  objetivo         String?
+  // Opt-in: o resumo do dia vai também para o WhatsApp da própria pessoa
+  // (pelo Assistente Comercial conectado).
+  whatsappDiario   Boolean   @default(false)
+  ativo            Boolean   @default(true)
+  ultimoAcessoEm   DateTime?
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+
+  @@unique([usuarioId, pessoa])
+  @@map("pro_labore_copiloto_perfis")
+}
+
+// Relatório de um dia: os fatos medidos, os achados das regras e o texto
+// (redigido pela IA quando ligada, ou pelo modelo).
+model CopilotoDia {
+  id                String    @id @default(cuid())
+  usuarioId         String
+  pessoa            String
+  dia               String // AAAA-MM-DD (Brasília)
+  fatos             Json
+  achados           Json
+  relatorio         Json
+  origem            String    @default("MODELO") // MODELO | IA
+  indice            Int? // índice do dia, 0 a 100, calculado pelas regras
+  geradoEm          DateTime  @default(now())
+  iaEm              DateTime?
+  lidoEm            DateTime?
+  whatsappEnviadoEm DateTime?
+  util              Boolean?
+  comentario        String?
+
+  @@unique([usuarioId, pessoa, dia])
+  @@index([usuarioId, pessoa])
+  @@map("pro_labore_copiloto_dias")
+}
+
+// Plano do dia: ações concretas (com o lead, a conversa ou a tarefa) e o
+// efeito verificado no dia seguinte — é daqui que sai o "o que funciona com você".
+model CopilotoAcao {
+  id            String    @id @default(cuid())
+  usuarioId     String
+  pessoa        String
+  dia           String
+  ordem         Int
+  tipo          String // RESPONDER | ABORDAR | FOLLOW_UP | REATIVAR | AGENDA | ESTUDO | EQUIPE | HABITO
+  texto         String
+  porque        String
+  refTipo       String? // LEAD | CONVERSA | AGENDA | VENDEDOR
+  refId         String?
+  estagioNaHora String?
+  status        String    @default("PENDENTE") // PENDENTE | FEITA | IGNORADA
+  feitaEm       DateTime?
+  resultado     String? // AVANCOU | SEM_EFEITO | RESPONDIDA | null (ainda não verificado)
+  verificadaEm  DateTime?
+  criadoEm      DateTime  @default(now())
+
+  @@index([usuarioId, pessoa, dia])
+  @@map("pro_labore_copiloto_acoes")
+}
+
+// Trilha de estudo: conteúdos reais (achados pela busca na web) ou da
+// biblioteca (livros conhecidos e links de busca), ligados à competência
+// que os números pedem.
+model CopilotoEstudo {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  pessoa      String
+  competencia String
+  titulo      String
+  tipo        String // VIDEO | ARTIGO | LIVRO | CURSO | PODCAST | BUSCA
+  url         String
+  fonte       String?
+  porque      String
+  origem      String // WEB | BIBLIOTECA
+  status      String    @default("SUGERIDO") // SUGERIDO | ESTUDANDO | CONCLUIDO | DESCARTADO
+  util        Boolean?
+  anotacao    String?
+  criadoEm    DateTime  @default(now())
+  concluidoEm DateTime?
+
+  @@index([usuarioId, pessoa])
+  @@map("pro_labore_copiloto_estudos")
+}
+
+// O que o copiloto sabe da pessoa: pedidos e objetivos ditos por ela,
+// hipóteses que ele levantou e aprendizados medidos. Visível e editável.
+model CopilotoMemoria {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  pessoa       String
+  tipo         String // OBJETIVO | PREFERENCIA | PONTO_FORTE | PONTO_FRACO | APRENDIZADO | ESTILO
+  texto        String
+  natureza     String   @default("FATO") // FATO | HIPOTESE | PEDIDO
+  origem       String // USUARIO | COPILOTO | RESULTADO
+  chave        String? // aprendizados medidos se atualizam pela chave
+  ativa        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([usuarioId, pessoa])
+  @@map("pro_labore_copiloto_memorias")
+}
+
+model CopilotoMensagem {
+  id        String   @id @default(cuid())
+  usuarioId String
+  pessoa    String
+  autor     String // USUARIO | COPILOTO
+  texto     String
+  origem    String? // IA | MODELO
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId, pessoa, criadoEm])
+  @@map("pro_labore_copiloto_mensagens")
+}
+
+// Sugestões de resposta para uma conversa de lead do WhatsApp e o que a
+// pessoa fez com elas (usou qual, mudou, o lead avançou depois).
+model CopilotoSugestao {
+  id            String    @id @default(cuid())
+  usuarioId     String
+  pessoa        String
+  conversaId    String
+  conteudo      Json
+  origem        String // IA | MODELO
+  usadaIndice   Int?
+  usadaEm       DateTime?
+  util          Boolean?
+  estagioNaHora String?
+  resultado     String? // AVANCOU | SEM_EFEITO
+  criadoEm      DateTime  @default(now())
+
+  @@index([usuarioId, pessoa])
+  @@index([conversaId])
+  @@map("pro_labore_copiloto_sugestoes")
+}

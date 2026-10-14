@@ -35,6 +35,7 @@ export const MODULOS: ModuloAcesso[] = [
   { chave: 'socialMedia', rotulo: 'Social Media', grupo: 'Operação', descricao: 'Instagram da própria pessoa.', niveis: TODOS },
   { chave: 'trafego', rotulo: 'Tráfego', grupo: 'Operação', descricao: 'Anúncios da Meta. Conectar ou trocar a conta continua só com o dono.', niveis: TODOS },
   { chave: 'assistente', rotulo: 'Assistente Comercial', grupo: 'Operação', descricao: 'Assistente do WhatsApp da própria pessoa.', niveis: TODOS },
+  { chave: 'copiloto', rotulo: 'Copiloto Comercial', grupo: 'Operação', descricao: 'Análise diária da própria produção: relatório, plano do dia, estudos e sugestões de resposta.', niveis: TODOS },
   { chave: 'vendedores', rotulo: 'Vendedores', grupo: 'Equipe', descricao: 'Cadastro da equipe, metas e tetos. Dar login continua só com o dono.', niveis: TODOS },
   { chave: 'ocorrencias', rotulo: 'Ocorrências', grupo: 'Equipe', descricao: 'Registro de ocorrências da equipe.', niveis: TODOS },
   { chave: 'indicadores', rotulo: 'Indicadores', grupo: 'Sistema', descricao: 'Funil mensal e gastos com anúncio.', niveis: TODOS },
@@ -48,7 +49,7 @@ const nada = (): Permissoes => Object.fromEntries(MODULOS.map(m => [m.chave, 'NE
 const com = (base: Permissoes, extra: Permissoes): Permissoes => ({ ...base, ...extra })
 
 // O mesmo que vendedor e supervisor já viam antes desta tela.
-const PADRAO_VENDEDOR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', socialMedia: 'EDITAR', assistente: 'EDITAR' })
+const PADRAO_VENDEDOR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', socialMedia: 'EDITAR', assistente: 'EDITAR', copiloto: 'EDITAR' })
 const PADRAO_SUPERVISOR = com(PADRAO_VENDEDOR, { agenda: 'EDITAR', ocorrencias: 'EDITAR' })
 
 export interface PerfilPronto { chave: string; rotulo: string; descricao: string; escopo: Escopo; vende: boolean; permissoes: Permissoes }
