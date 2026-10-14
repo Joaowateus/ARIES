@@ -12,8 +12,9 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { prisma } from './prisma'
+import { esforco, saidaSimples, modeloDa } from './iaModelo'
 
-const MODELO = process.env.SM_IA_MODELO?.trim() || 'claude-opus-5-5'
+const MODELO = modeloDa('SM')
 const LIMITE_DIA = Number(process.env.SM_IA_LIMITE_DIA) || 300
 const FRASE_VALIDADE_MS = 12 * 3600e3
 
@@ -110,7 +111,7 @@ async function texto(usuarioId: string, sistema: string, mensagens: Anthropic.Me
     const r = await anthropic().messages.create({
       model: MODELO, max_tokens: maxTokens, system: `${SISTEMA_BASE}\n\n${sistema}`, messages: mensagens,
       // Textos curtos sobre números prontos: pouco raciocínio basta.
-      output_config: { effort: 'low' },
+      ...saidaSimples(MODELO),
     })
     if (r.stop_reason === 'refusal' || r.stop_reason === 'max_tokens') { console.warn(`[sm-ia] resposta descartada (${r.stop_reason})`); return null }
     const t = r.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim()
@@ -124,7 +125,7 @@ async function estruturado<S extends z.ZodType>(usuarioId: string, sistema: stri
   try {
     const r = await anthropic().messages.parse({
       model: MODELO, max_tokens: maxTokens, system: `${SISTEMA_BASE}\n\n${sistema}`, messages: [{ role: 'user', content: usuario }],
-      output_config: { effort: 'low', format: zodOutputFormat(esquema) },
+      output_config: { ...esforco(MODELO), format: zodOutputFormat(esquema) },
     })
     if (r.stop_reason === 'refusal' || r.stop_reason === 'max_tokens') { console.warn(`[sm-ia] resposta descartada (${r.stop_reason})`); return null }
     return (r.parsed_output as z.infer<S> | null) ?? null
