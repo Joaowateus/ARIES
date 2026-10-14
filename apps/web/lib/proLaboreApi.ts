@@ -378,6 +378,8 @@ export interface ReceitaDetalhada {
 
 export interface ErroApi extends Error { status?: number; codigo?: string; dados?: unknown }
 
+const qp = (pessoa?: string) => (pessoa ? `?pessoa=${encodeURIComponent(pessoa)}` : '')
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
@@ -678,6 +680,33 @@ export const proLaboreApi = {
     ignorados: (vendedorId?: string) =>
       request<ContatoIgnoradoAssistente[]>(`/pro-labore/assistente/ignorados${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     removerIgnorado: (id: string) => request<{ ok: boolean }>(`/pro-labore/assistente/ignorados/${id}`, { method: 'DELETE' }),
+  },
+  // Copiloto Comercial: `pessoa` só vale para o dono (EQUIPE ou um vendedor).
+  copiloto: {
+    pessoas: () => request<CpPessoa[]>('/pro-labore/copiloto/pessoas'),
+    hoje: (pessoa?: string) => request<CpHoje>(`/pro-labore/copiloto/hoje${qp(pessoa)}`),
+    hojeIA: (pessoa?: string) => request<CpHoje>(`/pro-labore/copiloto/hoje/ia${qp(pessoa)}`, { method: 'POST' }),
+    atualizar: (pessoa?: string) => request<CpHoje>(`/pro-labore/copiloto/hoje/atualizar${qp(pessoa)}`, { method: 'POST', body: '{}' }),
+    lido: (pessoa?: string) => request<{ ok: boolean }>(`/pro-labore/copiloto/hoje/lido${qp(pessoa)}`, { method: 'POST' }),
+    feedback: (util: boolean, comentario?: string) => request<{ ok: boolean }>('/pro-labore/copiloto/hoje/feedback', { method: 'POST', body: JSON.stringify({ util, comentario }) }),
+    acao: (id: string, status: CpStatusAcao) => request<CpAcao>(`/pro-labore/copiloto/acoes/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    evolucao: (pessoa?: string, dias = 30) => request<CpEvolucao>(`/pro-labore/copiloto/evolucao?dias=${dias}${pessoa ? `&pessoa=${encodeURIComponent(pessoa)}` : ''}`),
+    estudos: (pessoa?: string) => request<CpEstudos>(`/pro-labore/copiloto/estudos${qp(pessoa)}`),
+    buscarEstudos: (competencia: string) => request<{ adicionados: number; origem: 'WEB' | 'BIBLIOTECA'; buscaWeb: boolean; webFalhou: boolean }>('/pro-labore/copiloto/estudos/buscar', { method: 'POST', body: JSON.stringify({ competencia }) }),
+    estudo: (id: string, data: { status?: CpStatusEstudo; util?: boolean | null; anotacao?: string | null }) => request<CpEstudo>(`/pro-labore/copiloto/estudos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    conversas: (pessoa?: string) => request<{ conectado: boolean; itens: CpConversaItem[] }>(`/pro-labore/copiloto/conversas${qp(pessoa)}`),
+    conversa: (id: string, pessoa?: string) => request<CpConversa>(`/pro-labore/copiloto/conversas/${id}${qp(pessoa)}`),
+    sugerir: (id: string, pessoa?: string) => request<CpSugestao & { conteudos: CpConteudo[] }>(`/pro-labore/copiloto/conversas/${id}/sugestao${qp(pessoa)}`, { method: 'POST' }),
+    usarSugestao: (id: string, indice: number, editada?: boolean) => request<CpSugestao>(`/pro-labore/copiloto/sugestoes/${id}/usar`, { method: 'POST', body: JSON.stringify({ indice, editada }) }),
+    avaliarSugestao: (id: string, util: boolean) => request<CpSugestao>(`/pro-labore/copiloto/sugestoes/${id}/feedback`, { method: 'POST', body: JSON.stringify({ util }) }),
+    chat: () => request<{ mensagens: CpMensagem[]; iaLigada: boolean }>('/pro-labore/copiloto/chat'),
+    enviarChat: (texto: string) => request<{ mensagem: CpMensagem; lembrados: string[] }>('/pro-labore/copiloto/chat', { method: 'POST', body: JSON.stringify({ texto }) }),
+    memoria: () => request<CpMemoria[]>('/pro-labore/copiloto/memoria'),
+    criarMemoria: (tipo: CpTipoMemoria, texto: string) => request<CpMemoria>('/pro-labore/copiloto/memoria', { method: 'POST', body: JSON.stringify({ tipo, texto }) }),
+    editarMemoria: (id: string, data: { texto?: string; ativa?: boolean }) => request<CpMemoria>(`/pro-labore/copiloto/memoria/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    apagarMemoria: (id: string) => request<{ ok: boolean }>(`/pro-labore/copiloto/memoria/${id}`, { method: 'DELETE' }),
+    perfil: () => request<CpPerfil & { whatsappDisponivel: boolean }>('/pro-labore/copiloto/perfil'),
+    salvarPerfil: (data: Partial<Pick<CpPerfil, 'nivel' | 'minutosEstudoDia' | 'objetivo' | 'whatsappDiario'>>) => request<CpPerfil>('/pro-labore/copiloto/perfil', { method: 'PUT', body: JSON.stringify(data) }),
   },
   planoCrescimento: {
     obter: () => request<PlanoCrescimento>('/pro-labore/plano-crescimento'),
@@ -2632,3 +2661,62 @@ export interface SmAssistente {
   recolhido: boolean
   somenteLeitura: boolean
 }
+
+
+// ---------- Copiloto Comercial ----------
+
+export type CpTipoAchado = 'FORTE' | 'ATENCAO' | 'ERRO'
+export type CpStatusAcao = 'PENDENTE' | 'FEITA' | 'IGNORADA'
+export type CpStatusEstudo = 'SUGERIDO' | 'ESTUDANDO' | 'CONCLUIDO' | 'DESCARTADO'
+export type CpTipoMemoria = 'OBJETIVO' | 'PREFERENCIA' | 'PONTO_FORTE' | 'PONTO_FRACO' | 'APRENDIZADO' | 'ESTILO'
+export interface CpPessoa { pessoa: string; nome: string; tipo: 'EQUIPE' | 'VENDEDOR' | 'EU'; indice?: number | null }
+export interface CpAchado { id: string; tipo: CpTipoAchado; natureza: 'FATO'; competencia: string; texto: string }
+export interface CpAcao { id: string; dia: string; ordem: number; tipo: string; texto: string; porque: string; refTipo: string | null; refId: string | null; status: CpStatusAcao; feitaEm: string | null; resultado: string | null }
+export interface CpRelatorio {
+  resumo: string; indoBem: string[]; atencao: string[]; erros: string[]
+  dica: { titulo: string; tecnica: string; exemplo: string }; estudoPorque: string; reflexao: string; hipoteses: string[]; foco: string
+}
+export interface CpLinhaEquipe { vendedorId: string; nome: string; carteira: number; parados: number; semAbordar: number; novos7d: number; movimentos7d: number; fechados7d: number; conversaoLeadAbordado: number | null; tempoAbordagemHoras: number | null; agendaPct: number | null; esperandoWhatsapp: number; indice: number }
+export interface CpFatos {
+  dia: string
+  pessoa: { tipo: 'VENDEDOR' | 'EQUIPE'; nome: string; temWhatsapp: boolean }
+  carteira: { LEAD: number; ABORDADO: number; NEGOCIACAO: number; PROPOSTA: number; total: number }
+  leadsNovos: { ontem: number; semana: number; semanaAnterior: number }
+  movimentos: { semana: Record<string, number>; semanaAnterior: Record<string, number> }
+  conversao: { leadParaAbordado: number | null; abordadoParaNegociacao: number | null; negociacaoParaProposta: number | null; propostaParaFechado: number | null; base: number }
+  conversaoEquipe: CpFatos['conversao'] | null
+  tempoAbordagemHoras: number | null; tempoAbordagemEquipeHoras: number | null
+  parados: { total: number; porEstagio: Record<string, number>; semAbordar: number; lista: Array<{ id: string; nome: string; estagio: string; dias: number; modelo: string | null; vendedor?: string | null }> }
+  vendas: { mes: number; mesAnteriorMesmoDia: number; semana: number; percentualMeta: number | null; percentualMesDecorrido: number }
+  agenda: { previstas7d: number; concluidas7d: number; percentual: number | null; hoje: Array<{ id: string; titulo: string; horario: string | null }> }
+  ocorrenciasAbertas: number
+  whatsapp: { conectado: boolean; esperandoAgora: number; esperaMaisAntigaHoras: number | null; semResposta: number; tempoAssumirMinutos: number | null; qualificados7d: number; qualificadosAvancaram: number; mensagensVendedor7d: number; percentualComPergunta: number | null; precoNaPrimeiraMensagem: number }
+  diasAtivos7d: number
+  equipe: CpLinhaEquipe[] | null
+}
+export interface CpPerfil { id: string; pessoa: string; nivel: 'INICIANTE' | 'INTERMEDIARIO' | 'AVANCADO'; minutosEstudoDia: number; objetivo: string | null; whatsappDiario: boolean }
+export interface CpHoje {
+  dia: string; origem: 'IA' | 'MODELO'; geradoEm: string; lidoEm: string | null; util: boolean | null; indice: number
+  fatos: CpFatos; achados: CpAchado[]; relatorio: CpRelatorio; foco: { chave: string; nome: string; descricao: string }
+  acoes: CpAcao[]; indices: Array<{ dia: string; indice: number | null }>
+  nome: string; pessoa: string; minha: boolean; somenteLeitura: boolean; iaLigada: boolean; iaPendente: boolean; perfil: CpPerfil
+}
+export interface CpEvolucao {
+  serie: Array<{ dia: string; indice: number | null; carteira: number | null; parados: number | null; semAbordar: number | null; tempoAbordagemHoras: number | null; conversaoLeadAbordado: number | null; agendaPct: number | null; esperandoWhatsapp: number | null; movimentos7d: number | null; acoes: number; acoesFeitas: number }>
+  porTipo: Record<string, { total: number; feitas: number; efeito: number }>
+  aprendizados: Array<{ texto: string; atualizadoEm: string }>
+  estudosConcluidos: number; sequencia: number
+}
+export interface CpEstudo { id: string; competencia: string; titulo: string; tipo: string; url: string; fonte: string | null; porque: string; origem: 'WEB' | 'BIBLIOTECA'; status: CpStatusEstudo; util: boolean | null; anotacao: string | null; criadoEm: string; concluidoEm: string | null }
+export interface CpEstudos { itens: CpEstudo[]; competencias: Array<{ chave: string; nome: string; descricao: string }>; buscaWeb: boolean }
+export interface CpConversaItem { id: string; nome: string; status: string; estagio: string | null; modelo: string | null; ultima: { remetente: string; texto: string; em: string } | null; esperando: boolean; esperaMin: number | null; vendedor: string | null; vendedorId: string | null }
+export interface CpConteudo { id: string; titulo: string; formato: string | null; link: string; miniatura: string | null; data: string }
+export interface CpSugestaoConteudo { leitura: string; etapa: string; tecnica: string; opcoes: Array<{ texto: string; quando: string }>; conteudoId: string | null; conteudoPorque: string | null; cuidado: string | null }
+export interface CpSugestao { id: string; conversaId: string; conteudo: CpSugestaoConteudo; origem: 'IA' | 'MODELO'; usadaIndice: number | null; usadaEm: string | null; util: boolean | null; criadoEm: string }
+export interface CpConversa {
+  id: string; nome: string; status: string; lead: { id: string; estagio: string; modeloInteresse: string | null; observacao: string | null } | null
+  vendedorId: string; vendedor: string; conectado: boolean
+  mensagens: Array<{ id: string; remetente: string; texto: string; criadoEm: string }>; sugestao: CpSugestao | null; conteudos: CpConteudo[]
+}
+export interface CpMensagem { id: string; autor: 'USUARIO' | 'COPILOTO'; texto: string; origem: string | null; criadoEm: string }
+export interface CpMemoria { id: string; tipo: CpTipoMemoria; texto: string; natureza: 'FATO' | 'HIPOTESE' | 'PEDIDO'; origem: 'USUARIO' | 'COPILOTO' | 'RESULTADO'; ativa: boolean; criadoEm: string; atualizadoEm: string }

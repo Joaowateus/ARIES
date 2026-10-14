@@ -18,6 +18,8 @@ const NAV_GROUPS: NavGroup[] = [
     { href: '/pro-labore', label: 'Dashboard', icon: 'home', modulo: 'painel' },
   ] },
   { label: 'Operação', items: [
+    // Cada pessoa tem o próprio copiloto (o escopo é feito no backend); o dono vê o da equipe.
+    { href: '/pro-labore/copiloto', label: 'Copiloto Comercial', icon: 'spark', modulo: 'copiloto' },
     { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm' },
     { href: '/pro-labore/agenda', label: 'Agenda', icon: 'calendar', modulo: 'agenda' },
     // Sem donoOnly/hideFromVendedor: bloco pessoal de reuniões/anotações,
