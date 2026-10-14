@@ -31,9 +31,11 @@ type Form = {
 }
 const n = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')))
 const s = (v: number | null | undefined) => (v == null ? '' : String(Math.round(v * 1000) / 1000))
-const curto = (v: unknown): string => {
+const EM_REAIS = ['metaFaturamentoMensal', 'ticketMedio', 'orcamentoMarketing', 'margemContribuicaoVenda']
+/** Valor do histórico no formato do campo (só as metas de conversão são %). */
+const curto = (campo: string | null, v: unknown): string => {
   if (v == null) return '—'
-  if (typeof v === 'number') return v <= 1 && v > 0 ? pct(v) : num(v, 2)
+  if (typeof v === 'number') return (CAMPOS_CONV as readonly string[]).includes(campo ?? '') ? pct(v) : EM_REAIS.includes(campo ?? '') ? brl(v) : num(v, 2)
   if (typeof v === 'string') return v
   return JSON.stringify(v).slice(0, 80)
 }
@@ -177,7 +179,7 @@ export function Premissas({ d, onSalvo }: { d: IntelCentral; onSalvo: () => void
           <div className="ic-rola">
             <table className="ic-tabela" style={{ minWidth: 560 }}>
               <thead><tr><th>Quando</th><th>Quem</th><th>Premissa</th><th>Antes</th><th>Depois</th></tr></thead>
-              <tbody>{historico.map(h => <tr key={h.id}><td>{dataHoraBR(h.em)}</td><td>{h.autorNome}</td><td>{NOME_CAMPO[h.campo ?? ''] ?? h.campo}</td><td className="fraco">{curto(h.antes)}</td><td>{curto(h.depois)}</td></tr>)}</tbody>
+              <tbody>{historico.map(h => <tr key={h.id}><td>{dataHoraBR(h.em)}</td><td>{h.autorNome}</td><td>{NOME_CAMPO[h.campo ?? ''] ?? h.campo}</td><td className="fraco">{curto(h.campo, h.antes)}</td><td>{curto(h.campo, h.depois)}</td></tr>)}</tbody>
             </table>
           </div>
         )}
