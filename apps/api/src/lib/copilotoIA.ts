@@ -11,10 +11,11 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { prisma } from './prisma'
+import { esforco, ferramentaBusca, saidaSimples, modeloDa } from './iaModelo'
 import { iaLigada, numerosConferem, numerosPermitidos, semDinheiro } from './smIA'
 import { COMPETENCIAS, COMPETENCIAS_LISTA, type Competencia } from './copilotoCompetencias'
 
-const MODELO = process.env.COPILOTO_IA_MODELO?.trim() || process.env.SM_IA_MODELO?.trim() || 'claude-opus-5-5'
+const MODELO = modeloDa('COPILOTO')
 const LIMITE_DIA = Number(process.env.COPILOTO_IA_LIMITE_DIA) || 400
 
 export { iaLigada }
@@ -58,7 +59,7 @@ async function estruturado<S extends z.ZodType>(usuarioId: string, sistema: stri
   try {
     const r = await anthropic().messages.parse({
       model: MODELO, max_tokens: maxTokens, system: `${SISTEMA_BASE}\n\n${sistema}`, messages: [{ role: 'user', content: usuario }],
-      output_config: { effort: 'low', format: zodOutputFormat(esquema) },
+      output_config: { ...esforco(MODELO), format: zodOutputFormat(esquema) },
     })
     if (r.stop_reason === 'refusal' || r.stop_reason === 'max_tokens') { console.warn(`[copiloto-ia] resposta descartada (${r.stop_reason})`); return null }
     return (r.parsed_output as z.infer<S> | null) ?? null
@@ -194,8 +195,8 @@ export async function buscarEstudosNaWeb(usuarioId: string, ctx: { competencia: 
     for (let volta = 0; volta < 2; volta++) {
       r = await anthropicBusca().messages.create({
         model: MODELO, max_tokens: 3000, system: SISTEMA_BASE, messages: mensagens,
-        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 3, allowed_callers: ['direct'], user_location: { type: 'approximate', country: 'BR' } }],
-        output_config: { effort: 'low' },
+        tools: [ferramentaBusca(MODELO)],
+        ...saidaSimples(MODELO),
       })
       for (const b of r.content) {
         if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) for (const res of b.content) vistos.set(normalizarUrl(res.url), res.url)
