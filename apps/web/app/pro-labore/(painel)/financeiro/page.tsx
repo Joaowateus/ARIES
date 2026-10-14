@@ -10,6 +10,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { proLaboreApi, type CategoriaFinanceira, type LancamentoFinanceiro, type PainelFinanceiro } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { PageHeader } from '../../PageHeader'
+import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
 import { NovoPagamento } from './NovoPagamento'
 import { PagarSalarios } from './PagarSalarios'
 import { abrirRecibo, dataCurta, mesAtualLocal, mesExtenso, ROTULO_FORMA, somarMes } from './util'
@@ -60,12 +61,15 @@ export default function FinanceiroPage() {
         eyebrow="Operação"
         title="Financeiro"
         subtitle="Salários, investimentos, custos e outros gastos. Cada pagamento gera um recibo pronto para imprimir e assinar."
-        actions={pode ? (
+        actions={
           <div className="pl-fin-acoes">
-            <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setModal('salarios')}>Pagar salários</button>
-            <button type="button" className="pl-btn pl-btn-primary" onClick={() => setModal('novo')}>Novo pagamento</button>
+            <FechamentoDiario modulo="FINANCEIRO" />
+            {pode && <>
+              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setModal('salarios')}>Pagar salários</button>
+              <button type="button" className="pl-btn pl-btn-primary" onClick={() => setModal('novo')}>Novo pagamento</button>
+            </>}
           </div>
-        ) : undefined}
+        }
       />
 
       <div className="pl-fin-mes" role="group" aria-label="Mês">

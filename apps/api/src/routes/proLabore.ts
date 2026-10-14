@@ -27,6 +27,7 @@ import {
   casaGatilho as casaGatilhoAssistente,
 } from '../lib/assistenteRoteiro'
 import { montarResumoAssistente } from '../lib/assistenteResumo'
+import { funilDoMesDashboard } from '../lib/jornada'
 
 const router = Router()
 
@@ -764,16 +765,10 @@ router.delete('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDIT
 // --- Leads / funil de vendas (esteira comercial) ---
 
 const ESTAGIOS_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO', 'PERDIDO'] as const
-const ORDEM_ESTAGIO_LEAD = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO'] as const
 const TIPOS_LEAD = ['TRAFEGO', 'ORGANICO'] as const
 // P = pagamento integral (tetos normais da conta) | R = renegociação (tetos
 // reduzidos, ver ParametroLiquidez.tetoProLaboreRenegociacao/tetoComissaoRenegociacao).
 const TIPOS_NEGOCIACAO = ['P', 'R'] as const
-
-function estagioAtingiu(estagioAtual: string, alvo: (typeof ORDEM_ESTAGIO_LEAD)[number]): boolean {
-  if (estagioAtual === 'PERDIDO') return false
-  return ORDEM_ESTAGIO_LEAD.indexOf(estagioAtual as (typeof ORDEM_ESTAGIO_LEAD)[number]) >= ORDEM_ESTAGIO_LEAD.indexOf(alvo)
-}
 
 // `historico` vai junto pro cliente poder saber QUANDO um lead alcançou
 // cada etapa (não só em que etapa ele está agora) — necessário pra filtrar
@@ -1224,22 +1219,8 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     // manual não guarda o vendedor, então não dá pra atribuir a um só.
     const leadsDoMes = leads.filter(l => l.criadoEm.getUTCMonth() === mes)
     const funilRegistro = vendedorIdFiltro ? undefined : funilRegistros.find(f => f.mesReferencia.getUTCMonth() === mes)
-    const funil =
-      leadsDoMes.length > 0
-        ? {
-            leads: leadsDoMes.length,
-            abordados: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'ABORDADO')).length,
-            negociacao: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'NEGOCIACAO')).length,
-            proposta: leadsDoMes.filter(l => estagioAtingiu(l.estagio, 'PROPOSTA')).length,
-            fechamento: quantidadeVendas,
-          }
-        : {
-            leads: funilRegistro?.leads ?? 0,
-            abordados: funilRegistro?.abordados ?? 0,
-            negociacao: funilRegistro?.negociacao ?? 0,
-            proposta: funilRegistro?.proposta ?? 0,
-            fechamento: quantidadeVendas,
-          }
+    // Regra oficial da Jornada de compra (lib/jornada.ts), a mesma que o Assistente Comercial usa.
+    const { fonte: _fonte, ...funil } = funilDoMesDashboard(leadsDoMes, quantidadeVendas, funilRegistro)
     const conversaoLeadVenda = funil.leads > 0 ? (quantidadeVendas / funil.leads) * 100 : 0
 
     // Ranking sempre da equipe inteira (vendasTodasDoMes) — comparar

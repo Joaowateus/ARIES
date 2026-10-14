@@ -9,6 +9,7 @@ import { temAcesso, proLaboreApi, type AnaliseTrafego, type ContaTrafego, type E
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { AvisoConexaoMeta } from '../_conexaoMeta/AvisoConexaoMeta'
 import { PageHeader } from '../../PageHeader'
+import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
 import { FiltroPeriodo, periodoDoPreset, type Periodo } from '../social-media/_componentes/FiltroPeriodo'
 import Conectar from './_componentes/Conectar'
 import FunilTrafego from './_componentes/FunilTrafego'
@@ -166,6 +167,7 @@ export default function ProLaboreTrafegoPage() {
       eyebrow="Marketing"
       title="Tráfego"
       subtitle="Auditoria do tráfego pago: do anúncio ao lead no CRM, por público, criativo e campanha — atualizado todo dia a partir do Gerenciador de Anúncios"
+      actions={<FechamentoDiario modulo="TRAFEGO" />}
     />
   )
 

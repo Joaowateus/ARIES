@@ -1,0 +1,41 @@
+/* Fechamento diário: botão "Enviar relatório para o Assistente Comercial"
+   e a janela de conferência. Usa as variáveis do painel (--pl-*). */
+.fd-botao { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.fd-botao.compacto { padding: 7px 12px; font-size: 12.5px; }
+.fd-janela { max-width: 720px !important; display: flex; flex-direction: column; gap: 14px; }
+.fd-janela > * { flex-shrink: 0; }
+.fd-cab { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.fd-cab h2 { margin: 4px 0 0; font-family: 'Sora', system-ui, sans-serif; font-size: 18px; color: var(--pl-ink-1); }
+.fd-sub { margin: 4px 0 0; font-size: 13px; color: var(--pl-ink-muted); line-height: 1.5; }
+.fd-fechar { border: none; background: transparent; font-size: 24px; line-height: 1; color: var(--pl-ink-muted); cursor: pointer; padding: 2px 6px; border-radius: 8px; }
+.fd-fechar:hover { color: var(--pl-ink-1); background: var(--pl-surface-2); }
+.fd-dia { display: flex; align-items: center; gap: 10px; }
+.fd-dia label { font-size: 12.5px; font-weight: 600; color: var(--pl-ink-2); }
+.fd-dia .pl-input { max-width: 180px; }
+.fd-ultimo { border: 1px solid var(--pl-border-strong); border-radius: var(--pl-radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.fd-ultimo.igual { border-color: color-mix(in srgb, var(--pl-good) 45%, transparent); }
+.fd-ultimo.mudou { border-color: color-mix(in srgb, var(--pl-accent-4) 55%, transparent); }
+.fd-ultimo span { color: var(--pl-ink-2); line-height: 1.45; }
+.fd-incompleto { border: 1px solid color-mix(in srgb, var(--pl-accent-4) 50%, transparent); background: color-mix(in srgb, var(--pl-accent-4) 7%, var(--pl-surface)); border-radius: var(--pl-radius-sm); padding: 10px 12px; font-size: 13px; }
+.fd-incompleto ul { margin: 4px 0 0; padding-left: 18px; color: var(--pl-ink-1); line-height: 1.5; }
+.fd-rola { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.fd-tabela { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 520px; }
+.fd-tabela th { text-align: left; font-size: 11px; font-weight: 600; color: var(--pl-ink-muted); text-transform: uppercase; letter-spacing: .03em; padding: 7px 8px; border-bottom: 1px solid var(--pl-border); white-space: nowrap; }
+.fd-tabela td { padding: 8px; border-bottom: 1px solid var(--pl-border); color: var(--pl-ink-1); vertical-align: top; font-variant-numeric: tabular-nums; }
+.fd-tabela tr:last-child td { border-bottom: none; }
+.fd-tabela .num { text-align: right; white-space: nowrap; }
+.fd-tabela small { display: block; font-size: 11px; color: var(--pl-ink-muted); line-height: 1.35; margin-top: 2px; }
+.fd-natureza { font-size: 11px; font-weight: 700; color: var(--pl-ink-2); }
+.fd-rotulo { font-size: 12px; font-weight: 600; color: var(--pl-ink-2); margin-bottom: 6px; }
+.fd-alertas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.45; color: var(--pl-ink-1); }
+.fd-alertas li { display: flex; gap: 8px; align-items: baseline; }
+.fd-sev { flex: none; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--pl-border-strong); color: var(--pl-ink-2); }
+.fd-sev.CRITICO, .fd-sev.ALTO { color: var(--pl-critical); border-color: color-mix(in srgb, var(--pl-critical) 40%, transparent); }
+.fd-sev.MODERADO { color: var(--pl-accent-4); border-color: color-mix(in srgb, var(--pl-accent-4) 50%, transparent); }
+.fd-confere { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; color: var(--pl-ink-1); cursor: pointer; }
+.fd-confere input { width: 16px; height: 16px; }
+.fd-alerta-aviso { background: color-mix(in srgb, var(--pl-accent-4) 12%, transparent); color: var(--pl-ink-1); }
+.fd-rodape { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .fd-botao:not(.compacto) { white-space: normal; text-align: left; }
+}

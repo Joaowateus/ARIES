@@ -3365,3 +3365,163 @@ model CopilotoSugestao {
   @@index([conversaId])
   @@map("pro_labore_copiloto_sugestoes")
 }
+
+// =====================================================================
+// ASSISTENTE COMERCIAL — CENTRAL DE INTELIGÊNCIA OPERACIONAL (RevOps)
+// Camada de análise por cima das abas: cada aba continua dona dos seus
+// dados (Jornada no Dashboard, Tráfego, Social Media, Vendas, Financeiro);
+// aqui ficam só as premissas de planejamento, os fechamentos diários
+// confirmados (instantâneos versionados), os diagnósticos, os planos de
+// ação, as reuniões e a trilha de auditoria.
+// =====================================================================
+
+// Premissas editáveis de planejamento (uma por conta). Toda mudança vai
+// para IntelAuditoria com o valor anterior e o novo.
+model IntelPlanejamento {
+  id                      String   @id @default(cuid())
+  usuarioId               String   @unique
+  metaFaturamentoMensal   Float    @default(500000)
+  ticketMedio             Float    @default(20000)
+  orcamentoMarketing      Float    @default(8000)
+  // Nulo = usa os vendedores ativos que vendem no cadastro.
+  vendedoresPlanejados    Int?
+  // Metas gerenciais de conversão entre etapas (0 a 1), hipóteses de planejamento.
+  metaLeadAbordado        Float    @default(0.9)
+  metaAbordadoNegociacao  Float    @default(0.7)
+  metaNegociacaoProposta  Float    @default(0.25)
+  metaPropostaFechamento  Float    @default(0.2)
+  // Cenário personalizado do usuário (conversões, ticket, orçamento).
+  cenarioPersonalizado    Json?
+  // Margem de contribuição por venda (R$), quando a gestão definir.
+  margemContribuicaoVenda Float?
+  // Dias da semana que contam como úteis (0 = domingo ... 6 = sábado).
+  diasUteisSemana         String   @default("1,2,3,4,5,6")
+  // Critérios de priorização (amostra mínima, desvios, limites).
+  criterios               Json?
+  atualizadoEm            DateTime @updatedAt
+  atualizadoPor           String?
+
+  @@map("pro_labore_intel_planejamento")
+}
+
+// Fechamento diário de uma aba, confirmado por uma pessoa. Reenviar o mesmo
+// módulo e dia cria uma versão nova e marca a anterior como SUBSTITUIDO:
+// nada soma duas vezes. A análise usa os dados ao vivo; o fechamento é o
+// registro validado para comparação e auditoria.
+model IntelRelatorio {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  modulo        String // JORNADA | TRAFEGO | SOCIAL_MEDIA | VENDAS | FINANCEIRO
+  dia           String // AAAA-MM-DD (Brasília) de referência
+  periodoInicio String
+  periodoFim    String
+  versao        Int
+  status        String   @default("VALIDO") // VALIDO | SUBSTITUIDO
+  indicadores   Json // [{ chave, nome, valor, unidade, meta, desvio, formula, fonte, natureza }]
+  alertas       Json
+  origem        Json // contagens e ids dos registros de origem
+  hash          String
+  geradoPorId   String
+  geradoPorNome String
+  confirmadoEm  DateTime @default(now())
+  observacao    String?
+
+  @@unique([usuarioId, modulo, dia, versao])
+  @@index([usuarioId, modulo, dia])
+  @@map("pro_labore_intel_relatorios")
+}
+
+// Diagnóstico estruturado (por regra), guardado pela chave estável para
+// formar o histórico: quando apareceu, quantas vezes, se foi resolvido.
+model IntelDiagnostico {
+  id                 String   @id @default(cuid())
+  usuarioId          String
+  chave              String
+  periodo            String // AAAA-MM
+  departamento       String // TRAFEGO | SOCIAL_MEDIA | COMERCIAL | GESTAO | FINANCEIRO
+  severidade         String // CRITICO | ALTO | MODERADO | MONITORAMENTO
+  problema           String
+  dados              Json // evidência, meta, atual, diferença, hipóteses, confiança, impacto, ação, prazo, indicador
+  status             String   @default("ATIVO") // ATIVO | RESOLVIDO
+  ocorrencias        Int      @default(1)
+  primeiraVezEm      DateTime @default(now())
+  ultimaVezEm        DateTime @default(now())
+  resolvidoEm        DateTime?
+
+  @@unique([usuarioId, chave, periodo])
+  @@index([usuarioId, status])
+  @@map("pro_labore_intel_diagnosticos")
+}
+
+// Plano de ação: nasce de um diagnóstico (ou à mão), passa por aprovação,
+// execução e validação pelo indicador — concluir a tarefa não basta.
+model IntelAcao {
+  id               String    @id @default(cuid())
+  usuarioId        String
+  diagnosticoId    String?
+  titulo           String
+  problema         String
+  evidencias       String?
+  objetivo         String?
+  departamento     String
+  responsavelId    String? // id do Vendedor, ou "DONO"
+  responsavelNome  String?
+  colaboradores    Json?
+  prazo            DateTime?
+  prioridade       String // CRITICO | ALTO | MODERADO | MONITORAMENTO
+  indicadorChave   String?
+  indicadorNome    String?
+  valorInicial     Float?
+  metaEsperada     Float?
+  melhorQuando     String? // MAIOR | MENOR
+  status           String    @default("IDENTIFICADA")
+  justificativa    String?
+  comentarios      Json?
+  evidenciasExecucao String?
+  resultadoValor   Float?
+  resultadoEm      DateTime?
+  criadoPor        String
+  aprovadoPor      String?
+  aprovadoEm       DateTime?
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+
+  @@index([usuarioId, status])
+  @@map("pro_labore_intel_acoes")
+}
+
+// Reunião de gestão (tráfego, comercial ou integrada): o retrato dos números
+// no momento, as notas e as ações acordadas.
+model IntelReuniao {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  tipo       String // TRAFEGO | COMERCIAL | INTEGRADA
+  data       DateTime @default(now())
+  titulo     String
+  notas      String?
+  retrato    Json
+  acoesIds   Json?
+  criadoPor  String
+
+  @@index([usuarioId, data])
+  @@map("pro_labore_intel_reunioes")
+}
+
+// Trilha de auditoria da Central: quem mudou o quê, quando, antes e depois.
+model IntelAuditoria {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  entidade   String // PLANEJAMENTO | RELATORIO | ACAO | DIAGNOSTICO | REUNIAO
+  entidadeId String?
+  acao       String
+  campo      String?
+  antes      Json?
+  depois     Json?
+  autorId    String
+  autorNome  String
+  em         DateTime @default(now())
+
+  @@index([usuarioId, em])
+  @@index([usuarioId, entidade, entidadeId])
+  @@map("pro_labore_intel_auditoria")
+}
