@@ -34,7 +34,7 @@ export const MODULOS: ModuloAcesso[] = [
   { chave: 'financeiro', rotulo: 'Financeiro', grupo: 'Operação', descricao: 'Salários, investimentos, custos e outros gastos, com recibo. Quem vê só os próprios dados vê só os recibos dele.', niveis: TODOS },
   { chave: 'socialMedia', rotulo: 'Social Media', grupo: 'Operação', descricao: 'Instagram da própria pessoa.', niveis: TODOS },
   { chave: 'trafego', rotulo: 'Tráfego', grupo: 'Operação', descricao: 'Anúncios da Meta. Conectar ou trocar a conta continua só com o dono.', niveis: TODOS },
-  { chave: 'assistente', rotulo: 'Assistente Comercial', grupo: 'Operação', descricao: 'Assistente do WhatsApp da própria pessoa.', niveis: TODOS },
+  { chave: 'assistente', rotulo: 'Assistente Comercial', grupo: 'Operação', descricao: 'Assistente do WhatsApp da pessoa; para dono e supervisor, também a Central de Inteligência da operação.', niveis: TODOS },
   { chave: 'copiloto', rotulo: 'Copiloto Comercial', grupo: 'Operação', descricao: 'Análise diária da própria produção: relatório, plano do dia, estudos e sugestões de resposta.', niveis: TODOS },
   { chave: 'vendedores', rotulo: 'Vendedores', grupo: 'Equipe', descricao: 'Cadastro da equipe, metas e tetos. Dar login continua só com o dono.', niveis: TODOS },
   { chave: 'ocorrencias', rotulo: 'Ocorrências', grupo: 'Equipe', descricao: 'Registro de ocorrências da equipe.', niveis: TODOS },

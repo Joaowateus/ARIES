@@ -378,6 +378,7 @@ export interface ReceitaDetalhada {
 
 export interface ErroApi extends Error { status?: number; codigo?: string; dados?: unknown }
 
+const qpPeriodo = (inicio?: string, fim?: string) => (inicio || fim ? `?${[inicio ? `inicio=${inicio}` : '', fim ? `fim=${fim}` : ''].filter(Boolean).join('&')}` : '')
 const qp = (pessoa?: string) => (pessoa ? `?pessoa=${encodeURIComponent(pessoa)}` : '')
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -680,6 +681,27 @@ export const proLaboreApi = {
     ignorados: (vendedorId?: string) =>
       request<ContatoIgnoradoAssistente[]>(`/pro-labore/assistente/ignorados${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     removerIgnorado: (id: string) => request<{ ok: boolean }>(`/pro-labore/assistente/ignorados/${id}`, { method: 'DELETE' }),
+  },
+  // Assistente Comercial — Central de Inteligência (gestão).
+  intel: {
+    central: (inicio?: string, fim?: string) => request<IntelCentral>(`/pro-labore/intel/central${qpPeriodo(inicio, fim)}`),
+    salvarPremissas: (data: Partial<IntelPremissasEdicao>) => request<{ ok: boolean; mudancas: number }>('/pro-labore/intel/planejamento', { method: 'PUT', body: JSON.stringify(data) }),
+    auditoria: (entidade?: string, entidadeId?: string) => request<IntelAuditoria[]>(`/pro-labore/intel/auditoria${entidade ? `?entidade=${entidade}${entidadeId ? `&entidadeId=${entidadeId}` : ''}` : ''}`),
+    diagnosticosHistorico: () => request<IntelDiagnosticoHistorico[]>('/pro-labore/intel/diagnosticos'),
+    responsaveis: () => request<{ responsaveis: Array<{ id: string; nome: string }>; indicadores: Array<{ chave: string; nome: string; melhorQuando: 'MAIOR' | 'MENOR'; unidade: string }>; departamentos: Record<IntelDepartamento, string> }>('/pro-labore/intel/responsaveis'),
+    acoes: () => request<IntelAcao[]>('/pro-labore/intel/acoes'),
+    criarAcao: (data: IntelAcaoNova) => request<IntelAcao>('/pro-labore/intel/acoes', { method: 'POST', body: JSON.stringify(data) }),
+    editarAcao: (id: string, data: Partial<{ status: IntelStatusAcao; justificativa: string; responsavelId: string | null; prazo: string | null; prioridade: IntelSeveridade; metaEsperada: number | null; evidenciasExecucao: string | null; objetivo: string | null }>) =>
+      request<IntelAcao>(`/pro-labore/intel/acoes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    comentarAcao: (id: string, texto: string) => request<IntelAcao>(`/pro-labore/intel/acoes/${id}/comentarios`, { method: 'POST', body: JSON.stringify({ texto }) }),
+    validarAcao: (id: string) => request<IntelAcao>(`/pro-labore/intel/acoes/${id}/validar`, { method: 'POST' }),
+    previaRelatorio: (modulo: IntelModuloRelatorio, dia?: string) => request<IntelPrevia>(`/pro-labore/intel/relatorios/previa?modulo=${modulo}${dia ? `&dia=${dia}` : ''}`),
+    confirmarRelatorio: (data: { modulo: IntelModuloRelatorio; dia: string; hash: string; observacao?: string }) => request<{ relatorio: IntelRelatorio; duplicado: boolean }>('/pro-labore/intel/relatorios', { method: 'POST', body: JSON.stringify(data) }),
+    relatorios: (dias = 31) => request<IntelRelatorio[]>(`/pro-labore/intel/relatorios?dias=${dias}`),
+    reuniao: (tipo: IntelTipoReuniao, inicio?: string, fim?: string) => request<IntelReuniaoPauta>(`/pro-labore/intel/reuniao?tipo=${tipo}${inicio ? `&inicio=${inicio}` : ''}${fim ? `&fim=${fim}` : ''}`),
+    reunioes: () => request<IntelReuniaoRegistro[]>('/pro-labore/intel/reunioes'),
+    registrarReuniao: (data: { tipo: IntelTipoReuniao; titulo: string; notas?: string; acoesIds?: string[] }) => request<IntelReuniaoRegistro>('/pro-labore/intel/reunioes', { method: 'POST', body: JSON.stringify(data) }),
+    leitura: (inicio?: string, fim?: string) => request<IntelLeitura>(`/pro-labore/intel/leitura${qpPeriodo(inicio, fim)}`, { method: 'POST' }),
   },
   // Copiloto Comercial: `pessoa` só vale para o dono (EQUIPE ou um vendedor).
   copiloto: {
@@ -2720,3 +2742,121 @@ export interface CpConversa {
 }
 export interface CpMensagem { id: string; autor: 'USUARIO' | 'COPILOTO'; texto: string; origem: string | null; criadoEm: string }
 export interface CpMemoria { id: string; tipo: CpTipoMemoria; texto: string; natureza: 'FATO' | 'HIPOTESE' | 'PEDIDO'; origem: 'USUARIO' | 'COPILOTO' | 'RESULTADO'; ativa: boolean; criadoEm: string; atualizadoEm: string }
+
+
+// ---------- Assistente Comercial — Central de Inteligência ----------
+
+export type IntelSeveridade = 'CRITICO' | 'ALTO' | 'MODERADO' | 'MONITORAMENTO'
+export type IntelDepartamento = 'TRAFEGO' | 'SOCIAL_MEDIA' | 'COMERCIAL' | 'GESTAO' | 'FINANCEIRO'
+export type IntelEtapa = 'LEAD' | 'ABORDADO' | 'NEGOCIACAO' | 'PROPOSTA' | 'FECHADO'
+export type IntelStatusAcao = 'IDENTIFICADA' | 'AGUARDANDO_APROVACAO' | 'PLANEJADA' | 'EM_EXECUCAO' | 'AGUARDANDO_VALIDACAO' | 'CONCLUIDA' | 'NAO_ATINGIU' | 'CANCELADA'
+export type IntelModuloRelatorio = 'JORNADA' | 'TRAFEGO' | 'SOCIAL_MEDIA' | 'VENDAS' | 'FINANCEIRO'
+export type IntelTipoReuniao = 'TRAFEGO' | 'COMERCIAL' | 'INTEGRADA'
+type Contagens = Record<IntelEtapa, number>
+type Num = number | null
+export interface IntelCenario { nome: string; conversoes: Num[]; conversaoTotal: Num; leadsNecessarios: Num; volumes: Record<IntelEtapa, Num>; vendasEsperadas: Num; investimento: number; cplMaximo: Num; custoPorVenda: Num; faturamentoProjetado: Num }
+export interface IntelProjecao { suficiente: boolean; motivo: string | null; ritmoMes: Num; ritmoRecente: Num; conservador: Num; base: Num; otimista: Num; formula: string }
+export interface IntelCriterios { amostraMinima: number; desvioAltoPP: number; desvioModeradoPP: number; atingimentoCriticoPct: number; ritmoInvestimentoAltoPct: number; cplToleranciaPct: number; impactoCriticoPctMeta: number }
+export interface IntelFonte { modulo: string; nome: string; status: 'OK' | 'ATRASADO' | 'ERRO' | 'SEM_CONEXAO' | 'MANUAL' | 'SEM_DADOS'; ultimaAtualizacao: string | null; detalhe: string; fechamento: { modulo: string; dia: string; versao: number; confirmadoEm: string; geradoPorNome: string } | null }
+export interface IntelDiagnostico {
+  chave: string; departamento: IntelDepartamento; departamentoNome: string; severidade: IntelSeveridade; problema: string; evidencia: string; meta: string | null; atual: string | null; diferenca: string | null
+  hipoteses: string[]; confianca: 'ALTA' | 'MEDIA' | 'BAIXA'; impacto: { vendas: Num; faturamento: Num; texto: string }; acao: string; prazoDias: number
+  indicador: { chave: string; nome: string; atual: Num; meta: Num; melhorQuando: 'MAIOR' | 'MENOR'; unidade: string }
+  id: string | null; ocorrencias: number; desde: string | null; acoes: Array<{ id: string; status: IntelStatusAcao }>
+}
+export interface IntelLinhaScore { nome: string; valor: string; meta: string | null; status: 'OK' | 'ATENCAO' | 'CRITICO' | 'SEM_DADOS' | 'INFO'; nota?: string }
+export interface IntelScorecard { departamento: IntelDepartamento; nome: string; controla: string; linhas: IntelLinhaScore[]; diagnosticos: number }
+export interface IntelCentral {
+  geradoEm: string
+  periodo: { inicio: string; fim: string; mes: string; hoje: string; mesInteiro: boolean }
+  acesso: { verInvestimento: boolean; verFinanceiro: boolean; verProLabore: boolean }
+  premissas: {
+    metaFaturamentoMensal: number; ticketMedio: number; orcamentoMarketing: number; metaVendas: Num; tetoCustoMarketingVenda: Num
+    vendedores: { planejados: number | null; cadastrados: number }; metasConversao: [number, number, number, number]; margemContribuicaoVenda: Num
+    diasUteisSemana: number[]; criterios: IntelCriterios; personalizado: { conversoes?: number[]; ticket?: number; orcamento?: number } | null; atualizadoEm: string; atualizadoPor: string | null
+  }
+  resumo: {
+    faturamento: { meta: number; realizado: number; atingimento: Num; falta: number; mesAnteriorMesmoPonto: number; projecaoBase: Num }
+    vendas: { meta: Num; realizado: number; previstasBase: Num; falta: Num; ticketReal: Num }
+    investimento: { orcamento: number; realizado: Num; disponivel: number; proporcional: Num; fonte: string | null } | null
+    leadsMes: number; cplMes: Num; custoMarketingPorVenda: Num; conversaoTotalRef: Num; atingimentoPrevisto: Num
+  }
+  metas: {
+    calendario: { total: number; decorridos: number; restantes: number }
+    ritmoVendas: { falta: Num; porDia: Num }; ritmoFaturamento: { falta: Num; porDia: Num }
+    leadsNecessarios: { comConversaoAtual: Num; comMetas: Num; faltamComConversaoAtual: Num; geradosNoMes: number }
+    cplMaximo: { comConversaoAtual: Num; comMetas: Num } | null; custoMaximoPorVenda: Num
+    projecao: IntelProjecao; pipeline: { propostasAbertas: number; vendasEsperadas: Num; formula: string }
+  }
+  cenarios: IntelCenario[]
+  funil: {
+    oficial: { contagens: Contagens; fonte: 'LEADS' | 'MANUAL'; conversoes: Num[]; acumulada: Num[]; metasOficiais: Array<{ etapa: string; tipoMeta: string; metaPct: number; metaCusto: Num }> }
+    porAvanco: { contagens: Contagens }
+    coorte: { contagens: Contagens; conversoes: Num[] }
+    referencia: { contagens: Contagens; conversoes: Num[]; conversaoTotal: Num; tempoMedioDias: Num[]; perdas: Array<{ absoluta: Num; taxa: Num }>; impactoVendas: Num[]; periodo: { inicio: string; fim: string } }
+    metasConversao: number[]
+    custoAcumulado: Record<IntelEtapa, Num> | null
+    gargalo: { passagem: string; indice: number; vendasPerdidas: number; faturamento: Num } | null
+  }
+  trafego: null | {
+    conectado: boolean; conta: string | null
+    plataforma: { gasto: number; impressoes: number; alcanceSomado: number; cliques: number; cliquesLink: number; conversas: number; leads: number; ctr: Num; cpc: Num; cpm: Num; custoResultado: Num } | null
+    crm: { leadsTrafego: number; cplCrm: Num; leadsTodos: number; custoPorLeadTodos: Num }
+    qualidade: { trafego: { leads: number; negociacao: number; taxaNegociacao: Num }; outros: { leads: number; negociacao: number; taxaNegociacao: Num } }
+    atribuicao: { regra: string; vendas: number; faturamento: number; custoPorVenda: Num; roas: Num }
+    ritmo: { gastoMes: Num; orcamentoProporcional: Num; pct: Num; projecaoMes: Num }
+    campanhas: Array<{ id: string; nome: string; gasto: number; impressoes: number; cliquesLink: number; conversas: number; leads: number; ctr: Num; cpc: Num; custoResultado: Num }>
+  }
+  social: null | { conectado: boolean; erro?: string; conta?: string; ultimaSincronizacaoEm?: string | null; qualidade?: string
+    producao?: { planejadas: number; publicadasPelaProducao: number; publicacoesNoFeed: number; metaPublicacoes: number; diasComPost: number; maiorIntervalo: number }
+    distribuicao?: { alcanceMedioDia: Num; alcanceMedioDiaAnterior: Num; visualizacoes: Num; visualizacoesAnterior: Num; shareNaoSeguidores: Num }
+    atencao?: { reels: number; tempoMedioAssistidoSeg: Num }
+    interesse?: { interacoes: Num; interacoesAnterior: Num; taxaEngajamento: Num; visitasPerfil: Num; visitasPerfilAnterior: Num; toquesLinks: Num; cliquesLinksRastreados: number }
+    conversao?: { novosSeguidores: number; crescimentoLiquido: number; taxaVisitaSeguidor: Num; leadsOrganicos: number; vendasAtribuidas: number; faturamentoAtribuido: number }
+  }
+  equipe: null | { linhas: Array<{ vendedorId: string; nome: string; carteira: number; parados: number; semAbordar: number; novos7d: number; movimentos7d: number; fechados7d: number; conversaoLeadAbordado: Num; tempoAbordagemHoras: Num; agendaPct: Num; esperandoWhatsapp: number; indice: number }>; tempoAbordagemHoras: Num; parados: number; semAbordar: number; whatsapp: { esperando: number; semResposta: number; tempoAssumirMinutos: Num }; agendaPct: Num }
+  financeiro: null | { faturamentoBruto: number; comissoes: number; proLabore: Num; investimentoMarketing: Num; despesasLancadas: Record<string, number>; totalLancado: number; margemContribuicao: Num; margemConfigurada: boolean; roasGeral: Num; avisos: string[] }
+  estoque: { disponiveis: number; reservadas: number; diasMedio: Num; maisAntigas: Array<{ modelo: string; dias: number }> }
+  fontes: IntelFonte[]
+  inconsistencias: Array<{ titulo: string; detalhe: string; validar: string }>
+  vendedoresAtivos: number
+  serieMes: Array<{ dia: string; vendas: number; leads: number; gasto: Num }>
+  diagnosticos: IntelDiagnostico[]
+  departamentos: IntelScorecard[]
+  acoesResumo: { abertas: number; atrasadas: number; concluidas: number; concluidasNoPrazo: number; proximas: IntelAcao[] }
+  podeEditarPremissas: boolean; dono: boolean
+}
+export interface IntelPremissasEdicao {
+  metaFaturamentoMensal: number; ticketMedio: number; orcamentoMarketing: number; vendedoresPlanejados: number | null
+  metaLeadAbordado: number; metaAbordadoNegociacao: number; metaNegociacaoProposta: number; metaPropostaFechamento: number
+  margemContribuicaoVenda: number | null; diasUteisSemana: string; cenarioPersonalizado: { conversoes: number[]; ticket?: number; orcamento?: number } | null; criterios: Partial<IntelCriterios>
+}
+export interface IntelAcao {
+  id: string; diagnosticoId: string | null; titulo: string; problema: string; evidencias: string | null; objetivo: string | null; departamento: IntelDepartamento
+  responsavelId: string | null; responsavelNome: string | null; colaboradores: string[] | null; prazo: string | null; prioridade: IntelSeveridade
+  indicadorChave: string | null; indicadorNome: string | null; valorInicial: Num; metaEsperada: Num; melhorQuando: 'MAIOR' | 'MENOR' | null
+  status: IntelStatusAcao; justificativa: string | null; comentarios: Array<{ autor: string; texto: string; em: string }> | null; evidenciasExecucao: string | null
+  resultadoValor: Num; resultadoEm: string | null; criadoPor: string; aprovadoPor: string | null; aprovadoEm: string | null; criadoEm: string
+  indicadorAtual?: Num; atingiu?: boolean | null; atrasada?: boolean
+}
+export interface IntelAcaoNova {
+  diagnosticoId?: string | null; titulo: string; problema: string; evidencias?: string | null; objetivo?: string | null; departamento: IntelDepartamento
+  responsavelId?: string | null; prazo?: string | null; prioridade: IntelSeveridade; indicadorChave?: string | null; metaEsperada?: number | null
+}
+export interface IntelIndicadorRelatorio { chave: string; nome: string; valor: Num; unidade: 'BRL' | 'PCT' | 'NUM'; meta: Num; desvio: Num; formula: string; fonte: string; natureza: string }
+export interface IntelPrevia {
+  modulo: IntelModuloRelatorio; nome: string; dia: string; indicadores: IntelIndicadorRelatorio[]; alertas: Array<{ severidade: IntelSeveridade; problema: string; evidencia: string }>
+  incompletos: string[]; hash: string
+  ultimo: { id: string; versao: number; confirmadoEm: string; geradoPorNome: string; igual: boolean; diferencas: Array<{ chave: string; nome: string; confirmado: Num; aoVivo: Num }> } | null
+}
+export interface IntelRelatorio { id: string; modulo: IntelModuloRelatorio; dia: string; versao: number; status: 'VALIDO' | 'SUBSTITUIDO'; indicadores: IntelIndicadorRelatorio[]; alertas: IntelPrevia['alertas']; geradoPorNome: string; confirmadoEm: string; observacao: string | null; hash: string }
+export interface IntelAuditoria { id: string; entidade: string; entidadeId: string | null; acao: string; campo: string | null; antes: unknown; depois: unknown; autorNome: string; em: string }
+export interface IntelDiagnosticoHistorico { id: string; chave: string; periodo: string; departamento: IntelDepartamento; severidade: IntelSeveridade; problema: string; status: 'ATIVO' | 'RESOLVIDO'; ocorrencias: number; primeiraVezEm: string; ultimaVezEm: string; resolvidoEm: string | null }
+export interface IntelResposta { pergunta: string; resposta: string; status: 'OK' | 'ATENCAO' | 'CRITICO' | 'SEM_DADOS' }
+export interface IntelReuniaoPauta {
+  tipo: IntelTipoReuniao; periodo: IntelCentral['periodo']; pauta: IntelResposta[]; diagnosticos: IntelDiagnostico[]; resumo: IntelCentral['resumo']; retrato: Record<string, unknown>
+  anterior: { id: string; data: string; titulo: string; notas: string | null; retrato: Record<string, unknown>; acoes: IntelAcao[] } | null
+  pendentes: IntelAcao[]
+}
+export interface IntelReuniaoRegistro { id: string; tipo: IntelTipoReuniao; data: string; titulo: string; notas: string | null; retrato: Record<string, unknown>; acoesIds: string[]; criadoPor: string }
+export interface IntelLeitura { origem: 'IA' | 'MODELO'; resumo: string; prioridades: string[]; perguntas: string[] }

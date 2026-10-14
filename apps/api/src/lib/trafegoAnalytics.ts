@@ -42,7 +42,7 @@ const CAMPOS: Array<keyof Metricas> = [
   'conversasProf2', 'conversasProf3', 'conversasProf5', 'bloqueios',
 ]
 const zero = (): Metricas => Object.fromEntries(CAMPOS.map(c => [c, 0])) as unknown as Metricas
-function somar(linhas: Array<Partial<Metricas>>): Metricas {
+export function somar(linhas: Array<Partial<Metricas>>): Metricas {
   const t = zero()
   for (const l of linhas) for (const c of CAMPOS) t[c] += Number(l[c] ?? 0)
   t.gasto = Math.round(t.gasto * 100) / 100

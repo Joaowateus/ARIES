@@ -8,6 +8,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { useCountUp } from '@/lib/useCountUp'
 import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
 import { PageHeader } from '../PageHeader'
+import { FechamentoDiario } from './_fechamento/FechamentoDiario'
 
 // --pl-accent fica de fora da rotação: ele inverte de claro pra escuro (e
 // vice-versa) entre os temas, e o texto do avatar é sempre branco fixo —
@@ -489,7 +490,8 @@ export default function ProLaboreDashboardPage() {
           <div className="pl-eyebrow">Funil comercial</div>
           <h2 className="pl-section-title">Jornada de compra do cliente</h2>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <FechamentoDiario modulo="JORNADA" compacto />
           <div className="pl-section-note">
             {rotuloPeriodoJornada}
             {filtroFunilAtivo && ' · filtrado'}

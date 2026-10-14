@@ -5,6 +5,7 @@ import { temAcesso, proLaboreApi, Venda, ParametroLiquidez, Vendedor, type TipoP
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
+import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
 import RegistrarPagamento, { abrirComprovante, valorPago } from './RegistrarPagamento'
 
 const MESES_MAP: Record<string, number> = {
@@ -376,7 +377,7 @@ export default function ProLaboreVendasPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Vendas" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} />
+      <PageHeader eyebrow="Vendas" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} actions={<FechamentoDiario modulo="VENDAS" />} />
 
       {podeEditar && <>
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
