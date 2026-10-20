@@ -3327,3 +3327,12 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .pl-fin-busca { width: 100%; }
   .pl-fin-mes b { min-width: 0; }
 }
+
+/* Aviso do tamanho do banco (layout do painel, só para o dono). */
+.pl-sv-aviso.atencao { border-color: color-mix(in srgb, var(--pl-accent-4) 55%, transparent); background: color-mix(in srgb, var(--pl-accent-4) 7%, var(--pl-surface)); }
+.pl-sv-aviso.atencao svg { color: var(--pl-accent-4); }
+.pl-aviso-banco { align-items: center; flex-wrap: wrap; }
+.pl-aviso-banco-texto { flex: 1 1 240px; min-width: 0; }
+.pl-aviso-banco-barra { height: 5px; border-radius: 999px; background: var(--pl-surface-2); margin-top: 8px; overflow: hidden; max-width: 360px; }
+.pl-aviso-banco-barra > span { display: block; height: 100%; border-radius: 999px; background: var(--pl-accent-4); }
+.pl-sv-aviso.erro .pl-aviso-banco-barra > span { background: var(--pl-critical); }

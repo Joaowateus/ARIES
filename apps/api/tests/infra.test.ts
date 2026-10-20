@@ -47,3 +47,22 @@ test('reconhece banco fora do ar e dá o motivo sem dados sensíveis', () => {
   assert.equal(bancoIndisponivel(new Error('Falha qualquer')), false)
   assert.equal(bancoIndisponivel(null), false)
 })
+
+test('nível do banco: alerta a partir de 400 MB e crítico a partir de 95% de 500 MB', async () => {
+  const { nivelDoBanco, tamanhoDoBanco, limparCacheDoBanco } = await import('../src/lib/bancoDisponivel')
+  assert.equal(nivelDoBanco(120, 500, 400), 'OK')
+  assert.equal(nivelDoBanco(400, 500, 400), 'ALERTA')
+  assert.equal(nivelDoBanco(474.9, 500, 400), 'ALERTA')
+  assert.equal(nivelDoBanco(475, 500, 400), 'CRITICO')
+  limparCacheDoBanco()
+  let consultas = 0
+  const medir = async () => { consultas++; return 412 * 1024 * 1024 }
+  const r1 = await tamanhoDoBanco(medir, 1_000_000)
+  assert.equal(r1.usadoMB, 412)
+  assert.equal(r1.nivel, 'ALERTA')
+  await tamanhoDoBanco(medir, 1_000_000 + 5 * 60_000)
+  assert.equal(consultas, 1, 'a medida fica guardada por 10 minutos')
+  await tamanhoDoBanco(medir, 1_000_000 + 11 * 60_000)
+  assert.equal(consultas, 2)
+  limparCacheDoBanco()
+})
