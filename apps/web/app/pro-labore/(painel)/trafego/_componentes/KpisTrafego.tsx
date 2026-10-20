@@ -54,6 +54,7 @@ export default function KpisTrafego({ analise }: { analise: AnaliseTrafego }) {
       <Kpi rotulo="CTR (link)" valor={pct(d.ctr, 2)} nota={`CTR todos os cliques: ${pct(d.ctrTodos, 2)}`} atual={d.ctr} anterior={da.ctr} bom="sobe" pontos />
       <Kpi rotulo="CPC (link)" valor={moeda(d.cpc, c)} nota={`${num(t.cliquesLink)} cliques no link`} atual={d.cpc} anterior={da.cpc} bom="desce" />
       {cr && <Kpi rotulo="Connect rate" valor={pct(cr.convAnterior)} nota={`${cr.nome} ÷ cliques no link`} atual={cr.convAnterior} anterior={crAnt} bom="sobe" pontos destaque />}
+      {(t.novosContatos ?? 0) > 0 && <Kpi rotulo="Novos contatos (Meta)" valor={num(t.novosContatos)} nota={`Custo por novo contato: ${moeda(t.gasto / (t.novosContatos ?? 1), c)}`} atual={t.novosContatos ?? null} anterior={ta.novosContatos ?? null} bom="sobe" />}
       {t.conversas > 0 && <Kpi rotulo="Custo por conversa" valor={moeda(d.custoConversa, c)} nota={`${num(t.conversas)} conversas no WhatsApp`} atual={d.custoConversa} anterior={da.custoConversa} bom="desce" />}
       {t.lpv > 0 && <Kpi rotulo="Custo por visualização" valor={moeda(d.custoLpv, c)} nota={`${num(t.lpv)} visualizações da página`} atual={d.custoLpv} anterior={da.custoLpv} bom="desce" />}
       {t.leads > 0 && <Kpi rotulo="CPL (Meta)" valor={moeda(d.cpl, c)} nota={`${num(t.leads)} leads de formulário/site`} atual={d.cpl} anterior={da.cpl} bom="desce" />}

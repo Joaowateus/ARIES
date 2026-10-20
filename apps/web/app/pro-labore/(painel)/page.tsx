@@ -1446,7 +1446,8 @@ function RoasBars({ meses, selectedIdx }: { meses: MesPainel[]; selectedIdx: num
         const hpct = (m.roas / maxV) * 100
         return (
           <div key={m.mes} className="pl-roas-col">
-            <span className="pl-roas-val">{m.roas.toFixed(1)}×</span>
+            {/* Mês sem gasto com anúncios não tem ROAS (não é "0×"). */}
+            <span className="pl-roas-val">{m.gastoAnuncios > 0 ? `${m.roas.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}×` : '—'}</span>
             <div className={`pl-roas-bar ${i === selectedIdx ? 'current' : ''}`} style={{ height: `${hpct}%`, opacity: i === selectedIdx ? 1 : 0.55 }} />
             <span className="pl-roas-lbl">{m.label}</span>
           </div>

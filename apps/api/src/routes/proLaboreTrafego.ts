@@ -20,7 +20,10 @@ function resumoConta(c: NonNullable<Awaited<ReturnType<typeof prisma.trafegoCont
     adAccountId: c.adAccountId, nome: c.nome, moeda: c.moeda, fuso: c.fuso,
     conectadoEm: c.conectadoEm, ultimaSincronizacaoEm: c.ultimaSincronizacaoEm, ultimoErroSync: c.ultimoErroSync,
     historicoDesde: c.historicoDesde ? c.historicoDesde.toISOString().slice(0, 10) : null,
-    historicoCompleto: !!c.historicoDesde && c.historicoDesde.toISOString().slice(0, 10) <= somarDias(hoje, -(DIAS_HISTORICO - 1)),
+    historicoCompleto: !!c.historicoDesde && c.versaoDados >= VERSAO_DADOS && c.historicoDesde.toISOString().slice(0, 10) <= somarDias(hoje, -(DIAS_HISTORICO - 1)),
+    // Totais diários da conta (iguais ao Gerenciador): desde quando e a última leitura.
+    totaisDesde: c.totaisDesde ? c.totaisDesde.toISOString().slice(0, 10) : null,
+    totaisEm: c.totaisEm,
     hoje,
     configuracao: (c.configuracao ?? {}) as ConfiguracaoTrafego,
     acoesMeta: (c.acoesMeta ?? null) as { desde: string; ate: string; totais: Record<string, number> } | null,

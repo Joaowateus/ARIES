@@ -487,6 +487,7 @@
 .pl-alert { border-radius: var(--pl-radius-sm); padding: 10px 13px; font-size: 13px; }
 .pl-alert-error { background: color-mix(in srgb, var(--pl-critical) 12%, transparent); color: var(--pl-critical); }
 .pl-alert-success { background: color-mix(in srgb, var(--pl-good) 12%, transparent); color: var(--pl-good); }
+.pl-alert-info { background: color-mix(in srgb, var(--pl-info) 10%, transparent); color: var(--pl-ink-1); border: 1px solid color-mix(in srgb, var(--pl-info) 35%, transparent); line-height: 1.5; }
 
 /* ============ TABLE ============ */
 /* overflow-x: auto (não hidden) — em telas estreitas a tabela é mais larga

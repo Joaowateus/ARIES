@@ -13,6 +13,11 @@ export class ErroMetaAds extends Error {
   }
 }
 
+// A Meta não respondeu a tempo (código nosso, não vem da Meta).
+export const CODIGO_DEMOROU = -1
+const MENSAGEM_DEMOROU = 'A Meta demorou demais pra responder. Tente de novo em instantes.'
+export const erroDeDemora = (e: unknown) => e instanceof ErroMetaAds && e.codigo === CODIGO_DEMOROU
+
 // 190 = token inválido/expirado/sem permissão de acesso.
 export function erroDeToken(e: unknown): boolean {
   return e instanceof ErroMetaAds && (e.codigo === 190 || e.codigo === 102)
@@ -33,9 +38,17 @@ function traduzir(msg: string, codigo?: number): string {
   return `A Meta recusou: ${msg}`
 }
 
-async function chamar<T>(caminho: string, params: Record<string, string>, token: string): Promise<T> {
+// Tempo máximo de cada chamada: com prazo, nunca passa muito dele (a função
+// da Vercel tem limite de 30 s).
+const tempoDaChamada = (prazoEm?: number) => (prazoEm ? Math.min(20_000, Math.max(3_000, prazoEm - Date.now() + 4_000)) : 20_000)
+
+async function chamar<T>(caminho: string, params: Record<string, string>, token: string, prazoEm?: number): Promise<T> {
   const url = caminho.startsWith('http') ? caminho : `${GRAPH_BASE}/${VERSAO}${caminho}?${new URLSearchParams({ ...params, access_token: token })}`
-  const res = await fetch(url, { signal: AbortSignal.timeout(20_000) })
+  const res = await fetch(url, { signal: AbortSignal.timeout(tempoDaChamada(prazoEm)) }).catch((e: unknown) => {
+    const nome = (e as { name?: string })?.name
+    if (nome === 'TimeoutError' || nome === 'AbortError') throw new ErroMetaAds(MENSAGEM_DEMOROU, CODIGO_DEMOROU)
+    throw e
+  })
   const body = await res.json().catch(() => null) as { error?: { message?: string; code?: number; error_subcode?: number } } | null
   if (!res.ok || body?.error) {
     const e = body?.error
@@ -97,6 +110,7 @@ export interface InsightAnuncioDia {
   videoP95: number; videoPlays: number; videoTempoTotal: number
   cliquesSaida: number; engajamento: number; reacoes: number; comentarios: number; compartilhamentos: number; salvamentos: number
   conversasProf2: number; conversasProf3: number; conversasProf5: number; bloqueios: number
+  novosContatos: number
 }
 
 const num = (v: string | undefined) => (v ? Number(v) || 0 : 0)
@@ -143,6 +157,8 @@ export function metricasDeAcoes(l: Record<string, unknown>) {
     conversasProf3: acao(acoes, 'onsite_conversion.messaging_user_depth_3_message_send'),
     conversasProf5: acao(acoes, 'onsite_conversion.messaging_user_depth_5_message_send'),
     bloqueios: acao(acoes, 'onsite_conversion.messaging_block'),
+    // "Novos contatos de mensagem" do Gerenciador.
+    novosContatos: acao(acoes, 'onsite_conversion.messaging_first_reply'),
   }
 }
 
@@ -159,6 +175,12 @@ export function converterLinha(l: Record<string, unknown>): InsightAnuncioDia {
   }
 }
 
+// Por padrão a Meta deixa de fora, no nível do anúncio, os anúncios
+// arquivados e excluídos, mas o gasto deles está no total do Gerenciador.
+// O filtro pede todos os status.
+const TODOS_STATUS_ANUNCIO = ['ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES']
+const FILTRO_TODOS_ANUNCIOS = JSON.stringify([{ field: 'ad.effective_status', operator: 'IN', value: TODOS_STATUS_ANUNCIO }])
+
 // Insights diários, por anúncio, de um intervalo (datas no fuso da conta).
 // Pagina até o fim ou até o prazo; devolve também se terminou.
 export async function buscarInsightsDiarios(
@@ -172,30 +194,78 @@ export async function buscarInsightsDiarios(
   let primeira = true
   while (primeira || url) {
     if (Date.now() > prazoEm) return { linhas, completo: false, acoes }
-    const params = (fields: string) => ({
+    const params = (fields: string, todos: boolean): Record<string, string> => ({
       level: 'ad', fields, time_increment: '1', limit: '500',
       time_range: JSON.stringify({ since: desde, until: ate }),
       // Mesmo critério de atribuição configurado no Gerenciador — os números
       // batem com o que aparece lá.
       use_unified_attribution_setting: 'true',
+      ...(todos ? { filtering: FILTRO_TODOS_ANUNCIOS } : {}),
     })
-    let body: { data: Array<Record<string, unknown>>; paging?: { next?: string } }
-    if (!primeira) body = await chamar(url!, {}, token)
-    else {
-      try {
-        body = await chamar(`/${adAccountId}/insights`, params(CAMPOS_INSIGHT), token)
-      } catch (e) {
-        // Campo extra recusado (permissão/versão): tenta com os básicos.
-        if (!(e instanceof ErroMetaAds) || ![100, 200, 10, 3].includes(e.codigo ?? 0)) throw e
-        body = await chamar(`/${adAccountId}/insights`, params(CAMPOS_INSIGHT_BASICOS), token)
-      }
-    }
+    const body: { data: Array<Record<string, unknown>>; paging?: { next?: string } } =
+      primeira ? await primeiraPagina(adAccountId, token, params, prazoEm) : await chamar(url!, {}, token, prazoEm)
     primeira = false
     linhas.push(...body.data.map(converterLinha))
     for (const l of body.data) for (const a of (l.actions as Acao[] | undefined) ?? []) acoes[a.action_type] = (acoes[a.action_type] ?? 0) + num(a.value)
     url = body.paging?.next ?? null
   }
   return { linhas, completo: true, acoes }
+}
+
+// Primeira página com as alternativas, nesta ordem: todos os anúncios e os
+// campos completos; sem o filtro de status (se a Meta recusar o filtro); só
+// os campos básicos (se recusar algum campo extra).
+async function primeiraPagina(
+  adAccountId: string, token: string, params: (fields: string, todos: boolean) => Record<string, string>, prazoEm: number,
+): Promise<{ data: Array<Record<string, unknown>>; paging?: { next?: string } }> {
+  const recusado = (e: unknown) => e instanceof ErroMetaAds && [100, 200, 10, 3].includes(e.codigo ?? 0)
+  const tentativas: Array<[string, boolean]> = [[CAMPOS_INSIGHT, true], [CAMPOS_INSIGHT, false], [CAMPOS_INSIGHT_BASICOS, true], [CAMPOS_INSIGHT_BASICOS, false]]
+  let ultimo: unknown
+  for (const [campos, todos] of tentativas) {
+    try { return await chamar(`/${adAccountId}/insights`, params(campos, todos), token, prazoEm) } catch (e) {
+      if (!recusado(e)) throw e
+      ultimo = e
+    }
+  }
+  throw ultimo
+}
+
+// Totais por dia da conta inteira (nível "conta"): é o número do rodapé do
+// Gerenciador de Anúncios, com tudo (pausados, arquivados, excluídos). Uma
+// linha por dia com veiculação; pagina até o fim ou até o prazo.
+export type TotaisContaDia = Omit<InsightAnuncioDia, 'adId' | 'adNome' | 'adsetId' | 'adsetNome' | 'campanhaId' | 'campanhaNome' | 'objetivo'>
+const semIdentificacao = (campos: string) => campos.split(',').filter(c => !/^(ad_|adset_|campaign_|objective$)/.test(c)).join(',')
+export async function buscarTotaisDiariosConta(
+  adAccountId: string, token: string, desde: string, ate: string, prazoEm: number,
+): Promise<{ dias: TotaisContaDia[]; completo: boolean }> {
+  const params = (fields: string) => ({
+    level: 'account', fields, time_increment: '1', limit: '500',
+    time_range: JSON.stringify({ since: desde, until: ate }),
+    use_unified_attribution_setting: 'true',
+  })
+  const dias: TotaisContaDia[] = []
+  let url: string | null = null
+  let primeira = true
+  while (primeira || url) {
+    if (Date.now() > prazoEm) return { dias, completo: false }
+    let body: { data: Array<Record<string, unknown>>; paging?: { next?: string } }
+    if (!primeira) body = await chamar(url!, {}, token, prazoEm)
+    else {
+      try {
+        body = await chamar(`/${adAccountId}/insights`, params(semIdentificacao(CAMPOS_INSIGHT)), token, prazoEm)
+      } catch (e) {
+        if (!(e instanceof ErroMetaAds) || ![100, 200, 10, 3].includes(e.codigo ?? 0)) throw e
+        body = await chamar(`/${adAccountId}/insights`, params(semIdentificacao(CAMPOS_INSIGHT_BASICOS)), token, prazoEm)
+      }
+    }
+    primeira = false
+    for (const l of body.data) {
+      const { adId: _a, adNome: _b, adsetId: _c, adsetNome: _d, campanhaId: _e, campanhaNome: _f, objetivo: _g, ...totais } = converterLinha(l)
+      dias.push(totais)
+    }
+    url = body.paging?.next ?? null
+  }
+  return { dias, completo: true }
 }
 
 // Alcance e frequência do período: da conta e de cada campanha.
@@ -219,7 +289,7 @@ async function paginar<T>(caminho: string, params: Record<string, string>, token
   let primeira = true
   while (primeira || url) {
     if (Date.now() > prazoEm || itens.length >= maximo) return { itens, completo: false }
-    const body: { data: T[]; paging?: { next?: string } } = primeira ? await chamar(caminho, params, token) : await chamar(url!, {}, token)
+    const body: { data: T[]; paging?: { next?: string } } = primeira ? await chamar(caminho, params, token, prazoEm) : await chamar(url!, {}, token, prazoEm)
     primeira = false
     itens.push(...body.data)
     url = body.paging?.next ?? null
@@ -349,10 +419,14 @@ export interface LinhaPublico {
 export async function buscarPublico(adAccountId: string, token: string, tipo: TipoPublico, desde: string, ate: string, prazoEm: number): Promise<LinhaPublico[]> {
   const quebras = QUEBRAS_PUBLICO[tipo]
   const campos = ['campaign_id', 'adset_id', 'spend', 'impressions', 'inline_link_clicks', 'actions', ...(tipo === 'hora' ? [] : ['reach'])]
-  const r = await paginar<Record<string, unknown>>(`/${adAccountId}/insights`, {
+  const params = {
     level: 'adset', fields: campos.join(','), breakdowns: quebras, limit: '500',
     time_range: JSON.stringify({ since: desde, until: ate }), use_unified_attribution_setting: 'true',
-  }, token, prazoEm, 20000)
+  }
+  // Com anúncios arquivados/excluídos (a soma bate com o total da conta);
+  // sem o filtro se a Meta recusar.
+  const r = await paginar<Record<string, unknown>>(`/${adAccountId}/insights`, { ...params, filtering: FILTRO_TODOS_ANUNCIOS }, token, prazoEm, 20000)
+    .catch(e => (e instanceof ErroMetaAds && e.codigo === 100 ? paginar<Record<string, unknown>>(`/${adAccountId}/insights`, params, token, prazoEm, 20000) : Promise.reject(e)))
   if (!r.completo) throw new ErroMetaAds('A Meta demorou demais pra responder os públicos. Tente de novo em instantes.')
   return r.itens.map(l => {
     const a = metricasDeAcoes(l)

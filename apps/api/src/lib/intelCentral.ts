@@ -12,6 +12,7 @@
 import { prisma } from './prisma'
 import { diaBrasilia } from './socialMediaSync'
 import { somar, derivadas } from './trafegoAnalytics'
+import { gastoPorDia } from './gastoAnuncios'
 import { analisarContaSocialMedia } from './socialMediaResumo'
 import { coletarFatos, EQUIPE } from './copilotoFatos'
 import { dataAlcancouEtapa, funilDaCoorte, funilDoMesDashboard, funilPorDataDeAvanco, maiorEstagio, type EstagioFunil } from './jornada'
@@ -136,13 +137,17 @@ export async function montarCentral(usuarioId: string, periodo: { inicio: string
   let trafegoPeriodo: ReturnType<typeof somar> | null = null
   const linhasPorCampanha = new Map<string, { nome: string; linhas: Array<Record<string, unknown>> }>()
   if (contaTrafego) {
-    const [mesLinhas, perLinhas] = await Promise.all([
-      prisma.trafegoInsightDiario.findMany({ where: { contaId: contaTrafego.id, data: { gte: new Date(`${mes}-01T00:00:00Z`), lte: new Date(`${hoje}T00:00:00Z`) } }, select: { gasto: true } }),
+    // Totais oficiais da conta (iguais ao Gerenciador); o detalhe por anúncio
+    // fica só para as campanhas.
+    const comTotais = await prisma.trafegoConta.findUnique({ where: { id: contaTrafego.id }, select: { totaisEm: true } })
+    const [mesDias, perLinhas, perTotais] = await Promise.all([
+      gastoPorDia(contaTrafego.id, new Date(`${mes}-01T00:00:00Z`), new Date(`${hoje}T00:00:00Z`)),
       prisma.trafegoInsightDiario.findMany({ where: { contaId: contaTrafego.id, data: { gte: new Date(`${inicio}T00:00:00Z`), lte: new Date(`${fim}T00:00:00Z`) } } }),
+      comTotais?.totaisEm ? prisma.trafegoContaDiario.findMany({ where: { contaId: contaTrafego.id, data: { gte: new Date(`${inicio}T00:00:00Z`), lte: new Date(`${fim}T00:00:00Z`) } } }) : null,
     ])
-    if (mesLinhas.length) gastoApiMes = arred(mesLinhas.reduce((s, l) => s + l.gasto, 0))
-    if (perLinhas.length) {
-      trafegoPeriodo = somar(perLinhas as never)
+    if (mesDias.length) gastoApiMes = arred(mesDias.reduce((s, l) => s + l.gasto, 0))
+    if (perTotais?.length || perLinhas.length) {
+      trafegoPeriodo = somar((perTotais?.length ? perTotais : perLinhas) as never)
       gastoApiPeriodo = trafegoPeriodo.gasto
       for (const l of perLinhas) {
         const c = linhasPorCampanha.get(l.campanhaId) ?? { nome: l.campanhaNome, linhas: [] }
@@ -275,10 +280,9 @@ export async function montarCentral(usuarioId: string, periodo: { inicio: string
   }
 
   // Série diária do mês: vendas (data da venda), leads (criação, Brasília) e investimento (Tráfego).
-  const gastoPorDia = new Map<string, number>()
+  const gastoDoDia = new Map<string, number>()
   if (contaTrafego) {
-    const g = await prisma.trafegoInsightDiario.groupBy({ by: ['data'], where: { contaId: contaTrafego.id, data: { gte: new Date(`${mes}-01T00:00:00Z`), lte: new Date(`${hoje}T00:00:00Z`) } }, _sum: { gasto: true } })
-    for (const x of g) gastoPorDia.set(ch(x.data), x._sum.gasto ?? 0)
+    for (const x of await gastoPorDia(contaTrafego.id, new Date(`${mes}-01T00:00:00Z`), new Date(`${hoje}T00:00:00Z`))) gastoDoDia.set(x.data, x.gasto)
   }
   const ultimoDiaSerie = hoje.slice(0, 7) === mes ? Number(hoje.slice(8, 10)) : new Date(Date.UTC(ano, mesN, 0)).getUTCDate()
   const serieMes = Array.from({ length: ultimoDiaSerie }, (_, i) => {
@@ -288,7 +292,7 @@ export async function montarCentral(usuarioId: string, periodo: { inicio: string
       dia: diaS,
       vendas: vendasMes.filter(v => ch(v.data) === diaS).length,
       leads: leads.filter(l => l.criadoEm >= ini && l.criadoEm < fimD).length,
-      gasto: acesso.verInvestimento ? (contaTrafego ? arred(gastoPorDia.get(diaS) ?? 0) : null) : null,
+      gasto: acesso.verInvestimento ? (contaTrafego ? arred(gastoDoDia.get(diaS) ?? 0) : null) : null,
     }
   })
 

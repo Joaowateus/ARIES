@@ -1944,6 +1944,8 @@ export interface ContaTrafego {
   adAccountId: string; nome: string; moeda: string; fuso: string | null
   conectadoEm: string; ultimaSincronizacaoEm: string | null; ultimoErroSync: string | null
   historicoDesde: string | null; historicoCompleto: boolean; hoje: string
+  // Totais diários da conta inteira (iguais ao Gerenciador).
+  totaisDesde?: string | null; totaisEm?: string | null
   configuracao: { etapas?: Partial<Record<EtapaTrafego, ModoEtapaTrafego>>; metas?: Partial<Record<EtapaTrafego, MetaEtapaTrafego | null>>; crmSomenteTrafego?: boolean }
   // Tipos de ação que a Meta mandou nos últimos dias (com o total de cada).
   acoesMeta: { desde: string; ate: string; totais: Record<string, number> } | null
@@ -1955,6 +1957,7 @@ export interface MetricasTrafego {
   videoP95: number; videoPlays: number; videoTempoTotal: number
   cliquesSaida: number; engajamento: number; reacoes: number; comentarios: number; compartilhamentos: number; salvamentos: number
   conversasProf2: number; conversasProf3: number; conversasProf5: number; bloqueios: number
+  novosContatos?: number
 }
 export interface DerivadasTrafego {
   cpm: number | null; ctr: number | null; ctrTodos: number | null; cpc: number | null
@@ -2037,6 +2040,8 @@ export interface AnaliseTrafego {
   diagnostico: ItemDiagnosticoTrafego[]
   auditoria: { nota: number | null; itens: CheckAuditoriaTrafego[] }
   temEstrutura: boolean
+  /** De onde vêm os totais e quanto deles já tem detalhe por campanha. */
+  cobertura?: { fonte: 'CONTA' | 'ANUNCIOS'; gastoConta: number | null; gastoDetalhado: number; diferenca: number | null; diasSemDetalhe: number; completo: boolean }
 }
 
 // ---------- Espaço do Social Media (papel isolado) ----------
