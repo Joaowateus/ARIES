@@ -164,9 +164,12 @@ export default function ProLaboreTrafegoPage() {
   // PDF do dia: o período da tela + o resultado de hoje (buscado na hora).
   async function montarPdf() {
     const hoje = hojeBR()
-    const dia = await proLaboreApi.trafego.analise({ inicio: hoje, fim: hoje, ...filtro }).catch(() => null)
+    const [dia, publicos] = await Promise.all([
+      proLaboreApi.trafego.analise({ inicio: hoje, fim: hoje, ...filtro }).catch(() => null),
+      proLaboreApi.trafego.publicos({ inicio: periodo.inicio, fim: periodo.fim, ...filtro }).catch(() => null),
+    ])
     const filtroNome = filtro.campanhaId ? campanhas.find(c => c.id === filtro.campanhaId)?.nome ?? 'campanha selecionada' : null
-    return relatorioTrafego(analise!, dia, filtroNome)
+    return relatorioTrafego(analise!, dia, filtroNome, publicos)
   }
 
   if (usuario && !temAcesso(usuario, 'trafego')) {

@@ -62,9 +62,9 @@ export function Central() {
   const criticos = atual?.diagnosticos.filter(x => x.severidade === 'CRITICO' || x.severidade === 'ALTO').length ?? 0
   const meses = ultimosMeses(12)
   // PDF do dia: sempre o mês corrente, com os números de agora.
-  async function montarPdf() {
+  async function montarPdf(gestao: boolean) {
     const { inicio, fim } = periodoDoMes(mesAtual())
-    return relatorioCentral(await proLaboreApi.intel.central(inicio, fim))
+    return relatorioCentral(await proLaboreApi.intel.central(inicio, fim), { gestao })
   }
 
   return (
@@ -73,7 +73,10 @@ export function Central() {
         eyebrow="Operação · Central de Inteligência"
         title="Assistente Comercial"
         subtitle="O cérebro analítico da operação: lê a Jornada de compra, Tráfego, Social Media, Vendas, Financeiro e Equipe, compara com as metas, explica onde está o gargalo e acompanha o plano de ação até o resultado"
-        actions={<BotaoPdf montar={montarPdf} />}
+        actions={<BotaoPdf versoes={[
+          { rotulo: 'Completo (gestão)', descricao: 'Tudo, com o financeiro do mês', montar: () => montarPdf(true) },
+          { rotulo: 'Para a equipe', descricao: 'Sem o financeiro e o pró-labore', montar: () => montarPdf(false) },
+        ]} />}
       />
 
       <div className="ic-topo">
