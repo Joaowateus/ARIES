@@ -27,7 +27,7 @@ import Publicos from './_componentes/Publicos'
 import Criativos from './_componentes/Criativos'
 import DiasSemana from './_componentes/DiasSemana'
 import { ConjuntosConfigurados, DistribuicaoVerba, TreemapCampanhas } from './_componentes/Estrutura'
-import { tempoDesde } from './_componentes/formato'
+import { moeda, tempoDesde } from './_componentes/formato'
 
 const SECOES = [
   ['tf-resumo', 'Resumo'],
@@ -266,6 +266,12 @@ export default function ProLaboreTrafegoPage() {
       {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
       {!analise ? <div className="pl-hint" style={{ marginTop: 20 }}>{carregando ? 'Montando a análise…' : ''}</div> : (
         <div className={carregando ? 'pl-tf-recarregando' : ''}>
+          {analise.cobertura && !analise.cobertura.completo && (
+            <div className="pl-alert pl-alert-info" role="status" data-cobertura-trafego style={{ marginTop: 14 }}>
+              Os totais desta aba já batem com o Gerenciador de Anúncios ({moeda(analise.cobertura.gastoConta, analise.conta.moeda)} no período, conta inteira).
+              O detalhe por campanha e anúncio ainda está sendo puxado: {moeda(analise.cobertura.gastoDetalhado, analise.conta.moeda)} até agora{analise.cobertura.diasSemDetalhe ? `, faltam ${analise.cobertura.diasSemDetalhe} ${analise.cobertura.diasSemDetalhe === 1 ? 'dia' : 'dias'}` : ''}. Completa sozinho a cada 15 minutos.
+            </div>
+          )}
           <Secao id="tf-resumo" eyebrow="Auditoria" titulo="Resumo" nota="Checagens objetivas do período, o que atacar primeiro e o ritmo do mês.">
             <Resumo analise={analise} />
           </Secao>
@@ -279,7 +285,7 @@ export default function ProLaboreTrafegoPage() {
             /></div>
             <QualidadeConversas analise={analise} />
           </Secao>
-          <Secao id="tf-indicadores" eyebrow="Gerenciador de Anúncios" titulo="Indicadores" nota="Comparados com o período anterior de mesmo tamanho.">
+          <Secao id="tf-indicadores" eyebrow="Gerenciador de Anúncios" titulo="Indicadores" nota={analise.cobertura?.fonte === 'CONTA' && !filtro.campanhaId && !filtro.adsetId ? 'Totais da conta inteira, iguais ao rodapé do Gerenciador. Comparados com o período anterior de mesmo tamanho.' : 'Comparados com o período anterior de mesmo tamanho.'}>
             <KpisTrafego analise={analise} />
           </Secao>
           <Secao id="tf-melhorar" eyebrow="Diagnóstico" titulo="Onde melhorar">

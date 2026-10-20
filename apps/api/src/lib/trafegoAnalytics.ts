@@ -35,11 +35,12 @@ export interface Metricas {
   videoP95: number; videoPlays: number; videoTempoTotal: number
   cliquesSaida: number; engajamento: number; reacoes: number; comentarios: number; compartilhamentos: number; salvamentos: number
   conversasProf2: number; conversasProf3: number; conversasProf5: number; bloqueios: number
+  novosContatos: number
 }
 const CAMPOS: Array<keyof Metricas> = [
   'gasto', 'impressoes', 'alcance', 'cliques', 'cliquesLink', 'lpv', 'conversas', 'leads', 'videoViews', 'thruplays', 'videoP25', 'videoP50', 'videoP75', 'videoP100',
   'videoP95', 'videoPlays', 'videoTempoTotal', 'cliquesSaida', 'engajamento', 'reacoes', 'comentarios', 'compartilhamentos', 'salvamentos',
-  'conversasProf2', 'conversasProf3', 'conversasProf5', 'bloqueios',
+  'conversasProf2', 'conversasProf3', 'conversasProf5', 'bloqueios', 'novosContatos',
 ]
 const zero = (): Metricas => Object.fromEntries(CAMPOS.map(c => [c, 0])) as unknown as Metricas
 export function somar(linhas: Array<Partial<Metricas>>): Metricas {
@@ -318,7 +319,7 @@ function faixa(v: number | null, bom: number, ruim: number, maiorMelhor = true):
 }
 
 // ---------- Análise completa ----------
-type ContaAnalise = { id: string; usuarioId: string; adAccountId: string; accessToken: string; fuso: string | null; configuracao: unknown }
+type ContaAnalise = { id: string; usuarioId: string; adAccountId: string; accessToken: string; fuso: string | null; configuracao: unknown; totaisDesde?: Date | null; totaisEm?: Date | null }
 const NOME_DIA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
 export async function analisarTrafego(conta: ContaAnalise, inicio: string, fim: string, filtro: { campanhaId?: string; adsetId?: string }) {
@@ -350,12 +351,37 @@ export async function analisarTrafego(conta: ContaAnalise, inicio: string, fim: 
     leadsCrmPorDia(conta.usuarioId, inicioMes, hoje, somenteTrafego),
   ])
   const estruturaDe = new Map(estrutura.map(e => [`${e.tipo}:${e.objetoId}`, e]))
-
-  const total = somar(linhas)
-  const totalAnt = somar(linhasAnt)
   // Leads do CRM não sabem de qual campanha vieram: com filtro de campanha
   // a etapa some (senão o custo por lead ficaria errado).
   const comFiltro = !!(filtroSql.campanhaId || filtroSql.adsetId)
+
+  // Totais oficiais: sem filtro, vêm dos totais diários da conta (iguais ao
+  // rodapé do Gerenciador, com anúncios arquivados e excluídos), quando eles
+  // cobrem o período. O detalhe por anúncio fica para as tabelas.
+  const desdeTotais = conta.totaisEm && conta.totaisDesde ? conta.totaisDesde.toISOString().slice(0, 10) : null
+  const cobre = (dia: string) => !comFiltro && !!desdeTotais && desdeTotais <= dia
+  const inicioRitmo = [inicioMes, somarDias(hoje, -7)].sort()[0]
+  const [totaisPer, totaisAnt, totaisMes] = await Promise.all([
+    cobre(inicio) ? prisma.trafegoContaDiario.findMany({ where: { contaId: conta.id, data: { gte: d(inicio), lte: d(fim) } } }) : null,
+    cobre(antInicio) ? prisma.trafegoContaDiario.findMany({ where: { contaId: conta.id, data: { gte: d(antInicio), lte: d(antFim) } } }) : null,
+    cobre(inicioRitmo) ? prisma.trafegoContaDiario.findMany({ where: { contaId: conta.id, data: { gte: d(inicioRitmo), lte: d(hoje) } } }) : null,
+  ])
+  const detalhe = somar(linhas)
+  const total = totaisPer ? somar(totaisPer) : detalhe
+  const totalAnt = totaisAnt ? somar(totaisAnt) : somar(linhasAnt)
+  // Conferência: quanto do total da conta já tem detalhe por campanha.
+  const gastoDetalheDia = new Map<string, number>()
+  for (const l of linhas) { const k = l.data.toISOString().slice(0, 10); gastoDetalheDia.set(k, (gastoDetalheDia.get(k) ?? 0) + l.gasto) }
+  const diasSemDetalhe = (totaisPer ?? []).filter(t => t.gasto >= 1 && (gastoDetalheDia.get(t.data.toISOString().slice(0, 10)) ?? 0) < t.gasto * 0.5).length
+  const diferencaDetalhe = Math.round((total.gasto - detalhe.gasto) * 100) / 100
+  const cobertura = {
+    fonte: totaisPer ? 'CONTA' as const : 'ANUNCIOS' as const,
+    gastoConta: totaisPer ? total.gasto : null,
+    gastoDetalhado: detalhe.gasto,
+    diferenca: totaisPer ? diferencaDetalhe : null,
+    diasSemDetalhe,
+    completo: !totaisPer || Math.abs(diferencaDetalhe) <= Math.max(1, total.gasto * 0.01),
+  }
   const crmTotal = comFiltro ? null : [...crmDia.values()].reduce((s, v) => s + v, 0)
   const crmTotalAnt = comFiltro ? null : [...crmDiaAnt.values()].reduce((s, v) => s + v, 0)
 
@@ -374,9 +400,9 @@ export async function analisarTrafego(conta: ContaAnalise, inicio: string, fim: 
 
   const { etapas, tipo } = montarFunil(total, totalAnt, crmTotal, crmTotalAnt, cfg)
 
-  // Evolução diária
+  // Evolução diária (dos totais da conta, quando valem para o período)
   const porDia = new Map<string, Metricas>()
-  for (const l of linhas) {
+  for (const l of totaisPer ?? linhas) {
     const k = l.data.toISOString().slice(0, 10)
     porDia.set(k, somar([porDia.get(k) ?? zero(), l]))
   }
@@ -440,9 +466,9 @@ export async function analisarTrafego(conta: ContaAnalise, inicio: string, fim: 
   const anuncios = agrupar('adId')
   const ROTULO_RESULTADO: Record<string, string> = { conversas: 'conversas', leads: 'leads', lpv: 'visualizações', cliquesLink: 'cliques' }
 
-  // Ritmo do mês
-  const gastoDia = new Map(linhasMes.map(r => [r.data.toISOString().slice(0, 10), r._sum.gasto ?? 0]))
-  const contatosDia = new Map(linhasMes.map(r => [r.data.toISOString().slice(0, 10), (r._sum.conversas ?? 0) + (r._sum.leads ?? 0)]))
+  // Ritmo do mês (totais da conta quando cobrem o mês; senão, o detalhe guardado)
+  const gastoDia = totaisMes ? new Map(totaisMes.map(r => [r.data.toISOString().slice(0, 10), r.gasto])) : new Map(linhasMes.map(r => [r.data.toISOString().slice(0, 10), r._sum.gasto ?? 0]))
+  const contatosDia = totaisMes ? new Map(totaisMes.map(r => [r.data.toISOString().slice(0, 10), r.conversas + r.leads])) : new Map(linhasMes.map(r => [r.data.toISOString().slice(0, 10), (r._sum.conversas ?? 0) + (r._sum.leads ?? 0)]))
   const diasMes = Number(new Date(Date.UTC(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)), 0)).getUTCDate())
   const diaHoje = Number(hoje.slice(8, 10))
   let gastoMes = 0, contatosMes = 0
@@ -498,6 +524,7 @@ export async function analisarTrafego(conta: ContaAnalise, inicio: string, fim: 
       const custoOutros = div(outros.reduce((s2, c) => s2 + c.metricas.gasto, 0), outros.reduce((s2, c) => s2 + c.metricas[c.resultado as keyof Metricas], 0))
       if (custoOutros && maior.custoResultado > custoOutros * 1.3) extra.push({ secao: 'tf-campanhas', nivel: 'atencao', titulo: `${pct(maior.metricas.gasto / total.gasto)} da verba numa campanha mais cara`, texto: `"${maior.nome}" leva a maior parte do investimento, mas custa ${brl(maior.custoResultado)} por resultado contra ${brl(custoOutros)} nas demais. Rebalanceie.` })
     }
+    if (!cobertura.completo) extra.push({ secao: 'tf-campanhas', nivel: 'info', titulo: 'Detalhe por campanha ainda sendo puxado', texto: `Os totais desta aba vêm direto da conta de anúncios, iguais ao Gerenciador: ${brl(total.gasto)} no período. A soma das campanhas já guardadas é ${brl(detalhe.gasto)}${diasSemDetalhe ? ` (faltam ${diasSemDetalhe} ${diasSemDetalhe === 1 ? 'dia' : 'dias'} no detalhe)` : ''}. O sistema completa sozinho a cada 15 minutos.` })
     if (!comFiltro && ritmoMes.mediaDiaria7 > 0) extra.push({ secao: 'tf-dia', nivel: 'info', titulo: `No ritmo atual, o mês fecha em ${brl(ritmoMes.projecao)}`, texto: `Já foram ${brl(ritmoMes.gasto)} até o dia ${diaHoje}, com média de ${brl(ritmoMes.mediaDiaria7)}/dia nos últimos 7 dias${ritmoMes.projecaoLeadsCrm ? ` — cerca de ${ritmoMes.projecaoLeadsCrm} leads no CRM no mês` : ''}.` })
   }
   const ordem = { critico: 0, atencao: 1, info: 2, positivo: 3 }
@@ -542,5 +569,6 @@ export async function analisarTrafego(conta: ContaAnalise, inicio: string, fim: 
     diagnostico,
     auditoria: { nota, itens: auditoria },
     temEstrutura: estrutura.length > 0,
+    cobertura,
   }
 }

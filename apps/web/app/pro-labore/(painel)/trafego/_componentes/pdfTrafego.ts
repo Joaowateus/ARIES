@@ -33,6 +33,7 @@ function kpisPrincipais(a: AnaliseTrafego, rotuloComparacao: string): KpiPdf[] {
     { rotulo: 'Contatos', valor: num(cont), detalhe: `${num(t.conversas)} conversas · ${num(t.leads)} leads Meta`, variacao: v(cont, contAnt) },
     { rotulo: 'Custo por contato', valor: moeda(custoContato(t.gasto, cont), c), variacao: v(custoContato(t.gasto, cont), custoContato(ta.gasto, contAnt), 'MENOR') },
   ]
+  if ((t.novosContatos ?? 0) > 0) itens.push({ rotulo: 'Novos contatos (Meta)', valor: num(t.novosContatos), detalhe: `custo por novo contato ${moeda(t.gasto / (t.novosContatos ?? 1), c)}`, variacao: v(t.novosContatos ?? null, ta.novosContatos ?? null) })
   if (crm.leads != null) {
     itens.push({ rotulo: 'Leads no CRM', valor: num(crm.leads), detalhe: crm.somenteTrafego ? 'marcados como Tráfego' : 'todos os cadastrados', variacao: v(crm.leads, crm.leadsAnterior) })
     itens.push({ rotulo: 'Custo por lead (CRM)', valor: moeda(crm.leads > 0 ? t.gasto / crm.leads : null, c), variacao: v(crm.leads > 0 ? t.gasto / crm.leads : null, crm.leadsAnterior ? ta.gasto / crm.leadsAnterior : null, 'MENOR') })

@@ -35,6 +35,7 @@ import { recuperarConexoesMeta } from '../lib/metaTeste'
 import { rodarConcorrentes } from '../lib/smConcorrentes'
 import { rodarPlanejamento } from '../lib/smPlanejamento'
 import { pularHora, pularMinuto } from '../lib/cronEconomia'
+import { sincronizarTrafegoPendentes } from '../lib/trafegoSync'
 
 const router = Router()
 
@@ -342,7 +343,9 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const [sincronizacao, publicacao, atendimento] = await Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi), processarEventosPendentes(100)])
   // Seção 11.5: gatilhos do Pulso e a entrega agrupada no celular.
   const pulso = await rodarPulso(agoraDoCron(req)).catch(e => { console.error('[sm] pulso', e); return { pulsoNovos: 0, pulsoPush: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso })
+  // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
+  const trafego = await sincronizarTrafegoPendentes(10_000).catch(e => { console.error('[trafego] cron', e); return { trafegoSincronizadas: 0, trafegoFalhas: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

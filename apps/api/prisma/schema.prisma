@@ -2291,9 +2291,14 @@ model TrafegoConta {
   // Tipos de ação que a Meta mandou nos últimos dias, com o total de cada
   // ({ desde, ate, totais }) — pra saber quais métricas a conta tem.
   acoesMeta             Json?
+  // Totais diários da conta inteira (TrafegoContaDiario): desde quando já
+  // foram puxados e a última leitura.
+  totaisDesde           DateTime?
+  totaisEm              DateTime?
   atualizadoEm          DateTime  @updatedAt
 
   insights TrafegoInsightDiario[]
+  totaisDiarios TrafegoContaDiario[]
 
   @@map("pro_labore_trafego_contas")
 }
@@ -2342,6 +2347,8 @@ model TrafegoInsightDiario {
   conversasProf3 Int     @default(0)
   conversasProf5 Int     @default(0)
   bloqueios     Int      @default(0)
+  // Novos contatos de mensagem (onsite_conversion.messaging_first_reply).
+  novosContatos Int      @default(0)
   atualizadoEm  DateTime @updatedAt
 
   conta TrafegoConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
@@ -2349,6 +2356,50 @@ model TrafegoInsightDiario {
   @@unique([contaId, data, adId])
   @@index([contaId, data])
   @@map("pro_labore_trafego_insights")
+}
+
+// Totais do dia da conta inteira (nível "conta" da Meta): é o mesmo número do
+// rodapé do Gerenciador, com anúncios pausados, arquivados e excluídos. É a
+// fonte oficial do gasto e dos totais; o detalhe por anúncio fica em
+// TrafegoInsightDiario. Uma linha por dia, guardada por até 13 meses.
+model TrafegoContaDiario {
+  id                String   @id @default(cuid())
+  contaId           String
+  data              DateTime @db.Date
+  gasto             Float    @default(0)
+  impressoes        Int      @default(0)
+  alcance           Int      @default(0)
+  cliques           Int      @default(0)
+  cliquesLink       Int      @default(0)
+  lpv               Int      @default(0)
+  conversas         Int      @default(0)
+  leads             Int      @default(0)
+  novosContatos     Int      @default(0)
+  videoViews        Int      @default(0)
+  thruplays         Int      @default(0)
+  videoP25          Int      @default(0)
+  videoP50          Int      @default(0)
+  videoP75          Int      @default(0)
+  videoP100         Int      @default(0)
+  videoP95          Int      @default(0)
+  videoPlays        Int      @default(0)
+  videoTempoTotal   Float    @default(0)
+  cliquesSaida      Int      @default(0)
+  engajamento       Int      @default(0)
+  reacoes           Int      @default(0)
+  comentarios       Int      @default(0)
+  compartilhamentos Int      @default(0)
+  salvamentos       Int      @default(0)
+  conversasProf2    Int      @default(0)
+  conversasProf3    Int      @default(0)
+  conversasProf5    Int      @default(0)
+  bloqueios         Int      @default(0)
+  atualizadoEm      DateTime @updatedAt
+
+  conta TrafegoConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  @@unique([contaId, data])
+  @@map("pro_labore_trafego_conta_diario")
 }
 
 // Alcance/frequência de um período (conta inteira ou por campanha): não dá
