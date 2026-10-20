@@ -66,6 +66,7 @@ import proLaboreMetaConexaoRoutes from './routes/proLaboreMetaConexao'
 import proLaboreAcessosRoutes from './routes/proLaboreAcessos'
 import proLaboreFinanceiroRoutes from './routes/proLaboreFinanceiro'
 import { guardaPapelSocialMedia } from './lib/smAcesso'
+import { motivoDoBanco } from './lib/bancoDisponivel'
 
 // Setup do Express isolado do listen() — assim o mesmo app serve tanto o
 // servidor tradicional (src/index.ts, usado localmente e em hosts sempre
@@ -156,10 +157,11 @@ app.get('/health', async (_req, res) => {
       uptime: Math.floor((Date.now() - START_TIME) / 1000),
       ts: new Date().toISOString(),
     })
-  } catch {
+  } catch (e) {
     res.status(503).json({
       status: 'degraded',
       database: 'error',
+      motivo: motivoDoBanco(e),
       version: process.env.npm_package_version ?? '1.0.0',
       uptime: Math.floor((Date.now() - START_TIME) / 1000),
       ts: new Date().toISOString(),

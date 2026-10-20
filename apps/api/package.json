@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "node --require ts-node/register src/index.ts",
     "build": "tsc && npx tsc --project tsconfig.seed.json",
-    "vercel-build": "(prisma migrate deploy || (sleep 20 && prisma migrate deploy)) && tsc && npx tsc --project tsconfig.seed.json",
+    "vercel-build": "node scripts/migrar.js && tsc && npx tsc --project tsconfig.seed.json",
     "start": "node dist/index.js",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
@@ -12,7 +12,8 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:reset": "prisma migrate reset --force && ts-node prisma/seed.ts",
     "db:studio": "prisma studio",
-    "test:intel": "node --require ts-node/register --test tests/intelMotor.test.ts"
+    "test:intel": "node --require ts-node/register --test tests/intelMotor.test.ts",
+    "test:infra": "node --require ts-node/register --test tests/infra.test.ts"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"

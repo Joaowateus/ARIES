@@ -34,6 +34,7 @@ import { MENSAGEM_APP_BLOQUEADO, PASSOS_APP_BLOQUEADO, TITULO_APP_BLOQUEADO, cau
 import { recuperarConexoesMeta } from '../lib/metaTeste'
 import { rodarConcorrentes } from '../lib/smConcorrentes'
 import { rodarPlanejamento } from '../lib/smPlanejamento'
+import { pularHora, pularMinuto } from '../lib/cronEconomia'
 
 const router = Router()
 
@@ -292,6 +293,9 @@ function agoraDoCron(req: Request): Date {
 
 router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
+  // Madrugada: o banco descansa (ver lib/cronEconomia.ts).
+  const pausa = pularHora(agoraDoCron(req))
+  if (pausa) { res.json({ pausado: pausa }); return }
   const sincronizacao = await rodarJobSocialMedia('HORA')
   // Sexta: a retrospectiva da semana. Segunda às 8h: o relatório ao gestor (seção 11.4).
   // App da Meta bloqueado: testa de novo e, liberado, o Tráfego e o Instagram voltam sozinhos.
@@ -299,7 +303,7 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   // Central de Conteúdo: no começo do mês, o calendário novo (em rascunho, para aprovação).
   const central = await rodarCentral(agoraDoCron(req)).catch(e => { console.error('[central] cron', e); return { centralGerados: 0 } })
   // Copiloto Comercial: o dia de cada pessoa (regras para todos; a IA no tempo que sobrar).
-  const copiloto = await rodarCopiloto(agoraDoCron(req), 6000).catch(e => { console.error('[copiloto] cron', e); return { copilotoDias: 0, copilotoIA: 0, copilotoWhatsapp: 0 } })
+  const copiloto = await rodarCopiloto(agoraDoCron(req), 10000).catch(e => { console.error('[copiloto] cron', e); return { copilotoDias: 0, copilotoIA: 0, copilotoWhatsapp: 0 } })
   res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
@@ -324,18 +328,21 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const lembretes = await lembretesAnuais(agora).catch(e => { console.error('[meta] lembretes', e); return { lembretesMeta: 0 } })
   res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes })
 })
-// A cada 5 min: novas tentativas vencidas e a publicação das pautas
-// agendadas que já chegaram no horário.
+// Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
+// agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em
+// produção trabalha a cada 15 min e descansa de madrugada, para o banco
+// poder desligar entre as rodadas (lib/cronEconomia.ts). O Copiloto roda só
+// no job da hora.
 router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
+  const pausa = pularMinuto(agoraDoCron(req))
+  if (pausa) { res.json({ pausado: pausa }); return }
   // As imagens da pauta são servidas pela própria API: a Meta precisa da URL completa.
   const baseApi = process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`
   const [sincronizacao, publicacao, atendimento] = await Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi), processarEventosPendentes(100)])
   // Seção 11.5: gatilhos do Pulso e a entrega agrupada no celular.
   const pulso = await rodarPulso(agoraDoCron(req)).catch(e => { console.error('[sm] pulso', e); return { pulsoNovos: 0, pulsoPush: 0 } })
-  // Copiloto: o que a rodada da hora não terminou (IA dos relatórios, WhatsApp do dia).
-  const copiloto = await rodarCopiloto(agoraDoCron(req), 10000).catch(e => { console.error('[copiloto] cron', e); return { copilotoDias: 0, copilotoIA: 0, copilotoWhatsapp: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...copiloto })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
