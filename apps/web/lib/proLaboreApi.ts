@@ -682,6 +682,11 @@ export const proLaboreApi = {
       request<ContatoIgnoradoAssistente[]>(`/pro-labore/assistente/ignorados${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     removerIgnorado: (id: string) => request<{ ok: boolean }>(`/pro-labore/assistente/ignorados/${id}`, { method: 'DELETE' }),
   },
+  // Saúde do sistema (dono): tamanho do banco contra o limite do plano.
+  sistema: {
+    banco: () => request<SaudeBanco>('/pro-labore/sistema/banco'),
+  },
+
   // Assistente Comercial — Central de Inteligência (gestão).
   intel: {
     central: (inicio?: string, fim?: string) => request<IntelCentral>(`/pro-labore/intel/central${qpPeriodo(inicio, fim)}`),
@@ -2860,3 +2865,5 @@ export interface IntelReuniaoPauta {
 }
 export interface IntelReuniaoRegistro { id: string; tipo: IntelTipoReuniao; data: string; titulo: string; notas: string | null; retrato: Record<string, unknown>; acoesIds: string[]; criadoPor: string }
 export interface IntelLeitura { origem: 'IA' | 'MODELO'; resumo: string; prioridades: string[]; perguntas: string[] }
+
+export interface SaudeBanco { usadoMB: number; limiteMB: number; alertaMB: number; nivel: 'OK' | 'ALERTA' | 'CRITICO'; medidoEm: string }

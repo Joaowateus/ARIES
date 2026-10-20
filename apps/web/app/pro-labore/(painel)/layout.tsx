@@ -8,6 +8,7 @@ import { proLaboreApi } from '@/lib/proLaboreApi'
 import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
+import { AvisoBanco } from './_banco/AvisoBanco'
 
 // `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
 interface NavItem { href: string; label: string; icon: NavIconName; modulo?: string; donoOnly?: boolean; hideFromVendedor?: boolean }
@@ -303,6 +304,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             </div>
           ) : (
             <>
+              {isDono && <AvisoBanco />}
               {nivelAtual === 'VER' && itemAtual?.modulo !== 'painel' && (
                 <div className="pl-alert pl-so-ver" role="status">{AVISO_SO_VER[itemAtual!.modulo!] ?? `Seu acesso a ${itemAtual!.label} é só para ver: dá para consultar, mas não mudar nada.`}</div>
               )}
