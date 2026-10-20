@@ -7,6 +7,8 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { iniciarLoginInstagram, instagramAppIdConfigurado } from '@/lib/socialMediaOAuth'
 import { PageHeader } from '../../PageHeader'
 import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
+import { BotaoPdf } from '../_pdf/BotaoPdf'
+import { relatorioSocial } from './_componentes/pdfSocial'
 import { FiltroPeriodo, Periodo, periodoDoPreset } from './_componentes/FiltroPeriodo'
 import { KpisSocial } from './_componentes/KpisSocial'
 import { EvolucaoDiaria } from './_componentes/EvolucaoDiaria'
@@ -156,6 +158,7 @@ export default function ProLaboreSocialMediaPage() {
           : 'Desempenho, conteúdo, audiência e crescimento do seu Instagram, puxados direto da conta. Cada pessoa da equipe conecta o próprio e só vê o dela.'}
         actions={conta && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {analise && <BotaoPdf montar={() => relatorioSocial(analise)} />}
             <FechamentoDiario modulo="SOCIAL_MEDIA" />
             {isDono && conta.tipoConexao === 'EMPRESA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setVerDiagnostico(v => !v)}>Diagnosticar conexão</button>}
             {isDono && conta.tipoConexao === 'EMPRESA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setConectandoEmpresa(true)}>Trocar token</button>}

@@ -13,23 +13,7 @@ import { temAcesso,
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { gerarDocumentoOcorrenciaPdf } from '@/lib/ocorrenciaDocumento'
 import { PageHeader } from '../../PageHeader'
-
-const STATUS_BADGE_CLASS: Record<StatusOcorrencia, string> = {
-  ABERTA: 'atencao',
-  EM_PRAZO: 'atencao',
-  EM_VERIFICACAO: 'atencao',
-  RESOLVIDA: 'bom',
-  REINCIDENTE: 'critico',
-  ESCALONADA: 'critico',
-  ENCERRADA: 'neutro',
-}
-
-const GRAVIDADE_BADGE_CLASS: Record<GravidadeOcorrencia, string> = {
-  LEVE: 'leve',
-  MODERADA: 'moderada',
-  GRAVE: 'grave',
-  GRAVISSIMA: 'gravissima',
-}
+import { MinhasOcorrencias, STATUS_BADGE_CLASS, GRAVIDADE_BADGE_CLASS } from './_minhas/MinhasOcorrencias'
 
 function toDateInputValue(iso?: string | null): string {
   return iso ? iso.slice(0, 10) : ''
@@ -78,6 +62,10 @@ function OcorrenciasConteudo() {
   // Aba disponível pro dono e pro supervisor — vendedor comum não deve
   // enxergar ocorrências disciplinares/feedback da equipe.
   const podeAcessar = temAcesso(usuario, 'ocorrencias')
+  // Quem é da equipe (tem cadastro) também vê as próprias ocorrências; o
+  // supervisor alterna entre a gestão da equipe e as dele.
+  const temCadastro = usuario?.papel === 'VENDEDOR' || usuario?.papel === 'SUPERVISOR'
+  const [visao, setVisao] = useState<'EQUIPE' | 'MINHAS'>('EQUIPE')
   // Permite chegar aqui já filtrado por vendedor a partir do bloco "Histórico
   // de Ocorrências" no perfil dele, em Vendedores (?vendedorId=...).
   const searchParams = useSearchParams()
@@ -324,6 +312,23 @@ function OcorrenciasConteudo() {
     carregar()
   }
 
+  if (!podeAcessar && temCadastro) return <MinhasOcorrencias />
+  const abasVisao = podeAcessar && temCadastro && (
+    <div className="mo-abas" role="tablist" aria-label="Visão">
+      <button type="button" role="tab" aria-selected={visao === 'EQUIPE'} className={`pl-chip ${visao === 'EQUIPE' ? 'active' : ''}`} onClick={() => setVisao('EQUIPE')}>Ocorrências da equipe</button>
+      <button type="button" role="tab" aria-selected={visao === 'MINHAS'} className={`pl-chip ${visao === 'MINHAS' ? 'active' : ''}`} onClick={() => setVisao('MINHAS')}>Minhas ocorrências</button>
+    </div>
+  )
+  if (abasVisao && visao === 'MINHAS') {
+    return (
+      <div>
+        <PageHeader eyebrow="Equipe" title="Ocorrências" subtitle="Seus registros de feedback e disciplina: o que aconteceu, o que foi combinado e os prazos" />
+        {abasVisao}
+        <MinhasOcorrencias comoAba />
+      </div>
+    )
+  }
+
   if (!podeAcessar) {
     return (
       <div className="pl-empty pl-card">
@@ -342,6 +347,7 @@ function OcorrenciasConteudo() {
         subtitle="Registro disciplinar e de feedback da equipe comercial — protocolo, prazos e histórico de correção"
         actions={<button type="button" className="pl-btn pl-btn-primary" onClick={() => abrirModal()}>Nova Ocorrência</button>}
       />
+      {abasVisao}
 
       {resumo && (
         <div className="pl-kpi-grid" style={{ marginBottom: 20 }}>

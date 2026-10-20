@@ -18,6 +18,8 @@ import { Reuniao } from './Reuniao'
 import { Fechamentos } from './Fechamentos'
 import { Premissas } from './Premissas'
 import { mesAtual, nomeMes, periodoDoMes, ultimosMeses } from './fmt'
+import { BotaoPdf } from '../../_pdf/BotaoPdf'
+import { relatorioCentral } from './pdfCentral'
 
 export type AbaCentral = 'visao' | 'metas' | 'aquisicao' | 'departamentos' | 'plano' | 'reuniao' | 'fechamentos' | 'premissas' | 'whatsapp'
 const ABAS: Array<{ valor: AbaCentral; rotulo: string }> = [
@@ -59,6 +61,11 @@ export function Central() {
   const atualizar = () => setVersao(v => v + 1)
   const criticos = atual?.diagnosticos.filter(x => x.severidade === 'CRITICO' || x.severidade === 'ALTO').length ?? 0
   const meses = ultimosMeses(12)
+  // PDF do dia: sempre o mês corrente, com os números de agora.
+  async function montarPdf() {
+    const { inicio, fim } = periodoDoMes(mesAtual())
+    return relatorioCentral(await proLaboreApi.intel.central(inicio, fim))
+  }
 
   return (
     <div className="ic">
@@ -66,6 +73,7 @@ export function Central() {
         eyebrow="Operação · Central de Inteligência"
         title="Assistente Comercial"
         subtitle="O cérebro analítico da operação: lê a Jornada de compra, Tráfego, Social Media, Vendas, Financeiro e Equipe, compara com as metas, explica onde está o gargalo e acompanha o plano de ação até o resultado"
+        actions={<BotaoPdf montar={montarPdf} />}
       />
 
       <div className="ic-topo">

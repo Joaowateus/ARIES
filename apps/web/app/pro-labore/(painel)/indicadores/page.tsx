@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { temAcesso, proLaboreApi, FunilMensal, GastoAnuncioMensal } from '@/lib/proLaboreApi'
+import { temAcesso, proLaboreApi, FunilMensal, GastoAnuncioMensal, type GastoDoMes } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 
@@ -17,6 +17,7 @@ export default function ProLaboreIndicadoresPage() {
   const [mesSelecionado, setMesSelecionado] = useState(mesAtualStr())
   const [funis, setFunis] = useState<FunilMensal[]>([])
   const [gastos, setGastos] = useState<GastoAnuncioMensal[]>([])
+  const [resumoGastos, setResumoGastos] = useState<GastoDoMes[]>([])
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -29,8 +30,8 @@ export default function ProLaboreIndicadoresPage() {
   const carregar = useCallback(() => {
     if (!isDono) { setLoading(false); return }
     setLoading(true)
-    Promise.all([proLaboreApi.funil.listar(ano), proLaboreApi.gastosAnuncios.listar(ano)])
-      .then(([f, g]) => { setFunis(f); setGastos(g) })
+    Promise.all([proLaboreApi.funil.listar(ano), proLaboreApi.gastosAnuncios.listar(ano), proLaboreApi.gastosAnuncios.resumo(ano).catch(() => [] as GastoDoMes[])])
+      .then(([f, g, r]) => { setFunis(f); setGastos(g); setResumoGastos(r) })
       .finally(() => setLoading(false))
   }, [ano, isDono])
 
@@ -48,6 +49,11 @@ export default function ProLaboreIndicadoresPage() {
     })
   }, [mesSelecionado, funis, gastos])
 
+  // Com o Tráfego sincronizado no mês, o gasto vem sozinho das campanhas e o
+  // digitado fica só de reserva (vale quando o Tráfego não tem dados do mês).
+  const gastoAuto = resumoGastos.find(g => g.mes === mesSelecionado)
+  const automatico = gastoAuto?.fonte === 'TRAFEGO'
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
@@ -63,7 +69,7 @@ export default function ProLaboreIndicadoresPage() {
           negociacao: Number(form.negociacao),
           proposta: Number(form.proposta),
         }),
-        proLaboreApi.gastosAnuncios.salvar({ mesReferencia, valor: Number(form.gastoAnuncios) }),
+        ...(automatico ? [] : [proLaboreApi.gastosAnuncios.salvar({ mesReferencia, valor: Number(form.gastoAnuncios) })]),
       ])
       setSucesso(true)
       carregar()
@@ -89,7 +95,7 @@ export default function ProLaboreIndicadoresPage() {
       <PageHeader
         eyebrow="Funil &amp; anúncios"
         title="Indicadores mensais"
-        subtitle="Cadastro manual — o Fechamento do funil e o ROAS são calculados automaticamente a partir das vendas"
+        subtitle="Funil manual dos meses antigos e gasto com anúncios: com o Tráfego conectado, o gasto vem sozinho das campanhas. Fechamento, ROAS, CAC e custo por lead são calculados automaticamente"
       />
 
       <form onSubmit={handleSubmit} className="pl-card">
@@ -120,11 +126,19 @@ export default function ProLaboreIndicadoresPage() {
         </div>
 
         <div className="pl-card-title" style={{ marginBottom: 4 }}>Investimento em anúncios</div>
-        <div className="pl-card-sub" style={{ marginBottom: 14 }}>Base para o cálculo de ROAS e CAC no dashboard</div>
-        <div className="pl-field" style={{ maxWidth: 220, marginBottom: 20 }}>
-          <label>Gasto com anúncios (R$)</label>
-          <input type="number" min="0" step="0.01" className="pl-input" value={form.gastoAnuncios} onChange={e => setForm(f => ({ ...f, gastoAnuncios: e.target.value }))} required />
-        </div>
+        <div className="pl-card-sub" style={{ marginBottom: 14 }}>Base para ROAS, CAC e custo por lead no Dashboard e na Central</div>
+        {automatico && gastoAuto ? (
+          <div className="pl-alert pl-alert-success" style={{ marginBottom: 20 }} data-gasto-automatico>
+            <b>{gastoAuto.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</b> gastos em {mesSelecionado.split('-').reverse().join('/')}, somados automaticamente das campanhas do Tráfego (Meta Ads, {gastoAuto.diasComDados} {gastoAuto.diasComDados === 1 ? 'dia' : 'dias'} com dados{gastoAuto.atualizadoEm ? `, atualizado ${new Date(gastoAuto.atualizadoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}).
+            {gastoAuto.manual != null && <> O valor digitado antes ({gastoAuto.manual.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) não é mais usado.</>}
+          </div>
+        ) : (
+          <div className="pl-field" style={{ maxWidth: 320, marginBottom: 20 }}>
+            <label>Gasto com anúncios (R$)</label>
+            <input type="number" min="0" step="0.01" className="pl-input" value={form.gastoAnuncios} onChange={e => setForm(f => ({ ...f, gastoAnuncios: e.target.value }))} required />
+            <span className="pl-hint" style={{ fontSize: 12 }}>Conecte a conta de anúncios na aba Tráfego e este valor passa a vir sozinho das campanhas.</span>
+          </div>
+        )}
 
         {erro && <div className="pl-alert pl-alert-error" style={{ marginBottom: 14 }}>{erro}</div>}
         {sucesso && <div className="pl-alert pl-alert-success" style={{ marginBottom: 14 }}>Indicadores de {mesSelecionado} salvos.</div>}
