@@ -11,7 +11,8 @@ import { NavIcon, NavIconName } from '../icons'
 import { AvisoBanco } from './_banco/AvisoBanco'
 
 // `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
-interface NavItem { href: string; label: string; icon: NavIconName; modulo?: string; donoOnly?: boolean; hideFromVendedor?: boolean }
+// paraEquipe: aparece para toda a equipe mesmo sem o módulo (a página mostra a versão pessoal).
+interface NavItem { href: string; label: string; icon: NavIconName; modulo?: string; donoOnly?: boolean; hideFromVendedor?: boolean; paraEquipe?: boolean }
 interface NavGroup { label: string | null; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
@@ -22,6 +23,7 @@ const NAV_GROUPS: NavGroup[] = [
     // Cada pessoa tem o próprio copiloto (o escopo é feito no backend); o dono vê o da equipe.
     { href: '/pro-labore/copiloto', label: 'Copiloto Comercial', icon: 'spark', modulo: 'copiloto' },
     { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm' },
+    { href: '/pro-labore/reativacao', label: 'Reativação', icon: 'refresh', modulo: 'crm' },
     { href: '/pro-labore/agenda', label: 'Agenda', icon: 'calendar', modulo: 'agenda' },
     // Sem donoOnly/hideFromVendedor: bloco pessoal de reuniões/anotações,
     // cada um só vê o próprio (escopo feito no backend).
@@ -40,9 +42,9 @@ const NAV_GROUPS: NavGroup[] = [
   ] },
   { label: 'Equipe', items: [
     { href: '/pro-labore/vendedores', label: 'Vendedores', icon: 'users', modulo: 'vendedores', donoOnly: true },
-    // Ocorrências é a única aba visível pra supervisor mas escondida de
-    // vendedor comum — por isso usa hideFromVendedor em vez de donoOnly.
-    { href: '/pro-labore/ocorrencias', label: 'Ocorrências', icon: 'flag', modulo: 'ocorrencias', hideFromVendedor: true },
+    // Ocorrências: a gestão é do dono e de quem tem o módulo; o resto da
+    // equipe abre a mesma aba e vê só as próprias (Minhas ocorrências).
+    { href: '/pro-labore/ocorrencias', label: 'Ocorrências', icon: 'flag', modulo: 'ocorrencias', paraEquipe: true },
     // Tela 07 da especificação do Social Media: o que o papel enxerga e o convite.
     { href: '/pro-labore/equipe/acessos', label: 'Acessos e permissões', icon: 'shield', donoOnly: true },
   ] },
@@ -95,12 +97,15 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   // abertos: selo no menu, visível de qualquer tela. Some sozinho quando a
   // sincronização volta a funcionar.
   const [avisosSocial, setAvisosSocial] = useState<string[]>([])
+  // Follows do CRM atrasados ou marcados para hoje: lembrete no menu.
+  const [followsDia, setFollowsDia] = useState({ atrasados: 0, hoje: 0 })
   useEffect(() => {
     if (!usuario) return
     let cancelado = false
     const buscar = () => {
       proLaboreApi.apresentacoes.aoVivo().then(l => { if (!cancelado) setReunioesAoVivo(l.length) }).catch(() => undefined)
       if (usuario.papel === 'DONO') proLaboreApi.apresentacoes.pendencias().then(r => { if (!cancelado) setPedidosReuniao(r.pedidos) }).catch(() => undefined)
+      if (usuario.papel !== 'SOCIAL_MEDIA') proLaboreApi.follows.contagem().then(r => { if (!cancelado) setFollowsDia(r) }).catch(() => undefined)
       if (usuario.papel === 'DONO') proLaboreApi.socialMedia.avisos().then(l => { if (!cancelado) setAvisosSocial(l.filter(a => !a.lidaEm).map(a => a.titulo)) }).catch(() => undefined)
     }
     void buscar()
@@ -184,13 +189,17 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   // Sem o mapa (sessão antiga em cache), vale a regra fixa de antes.
   const acessos = isDono ? null : usuario.acessos ?? null
   const nivelDe = (item?: NavItem) => (!item?.modulo || !acessos ? null : acessos[item.modulo] ?? 'NENHUM')
+  const daEquipe = usuario.papel === 'VENDEDOR' || usuario.papel === 'SUPERVISOR'
   const podeVerItem = (item: NavItem) => {
     if (isDono) return true
+    if (item.paraEquipe && daEquipe) return true
     if (acessos) return item.modulo ? nivelDe(item) !== 'NENHUM' : !item.donoOnly
     return !item.donoOnly && (!item.hideFromVendedor || !isVendedor)
   }
   const itemAtual = itemDaPagina(pathname)
-  const nivelAtual = nivelDe(itemAtual)
+  const nivelModulo = nivelDe(itemAtual)
+  // Sem o módulo, a aba "para a equipe" abre na versão pessoal em vez de bloquear.
+  const nivelAtual = nivelModulo === 'NENHUM' && itemAtual?.paraEquipe && daEquipe ? null : nivelModulo
   const grupos = [
     // Social Media: volta para o espaço dele, acima das ferramentas liberadas.
     ...(usuario.papel === 'SOCIAL_MEDIA' ? [{ label: null, items: [{ href: '/pro-labore/sm', label: 'Social Media', icon: 'at' as NavIconName }] }] : []),
@@ -256,6 +265,9 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                     )}
                     {item.href === '/pro-labore/social-media' && avisosSocial.length > 0 && (
                       <span className="pl-nav-alerta" title={avisosSocial.join(' · ')} aria-label={`${avisosSocial.length} ${avisosSocial.length === 1 ? 'aviso' : 'avisos'} do Instagram`}>!</span>
+                    )}
+                    {item.href === '/pro-labore/leads' && followsDia.atrasados + followsDia.hoje > 0 && (
+                      <span className={`pl-nav-pedidos ${followsDia.atrasados > 0 ? 'pl-nav-follow-atrasado' : ''}`} title={[followsDia.atrasados && `${followsDia.atrasados} follow${followsDia.atrasados > 1 ? 's' : ''} atrasado${followsDia.atrasados > 1 ? 's' : ''}`, followsDia.hoje && `${followsDia.hoje} para hoje`].filter(Boolean).join(' · ')} data-follows-menu>{followsDia.atrasados + followsDia.hoje}</span>
                     )}
                     {item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 && pedidosReuniao > 0 && (
                       <span className="pl-nav-pedidos" title={`${pedidosReuniao} ${pedidosReuniao === 1 ? 'pedido' : 'pedidos'} da equipe pra apresentar`}>{pedidosReuniao}</span>

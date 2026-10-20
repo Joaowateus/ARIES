@@ -51,7 +51,7 @@ function DeltaChip({ curr, prev, invert }: { curr: number; prev: number | undefi
 // Extraído do .map() do grid de KPIs porque useCountUp é um hook — teria que
 // ser chamado dentro de um componente próprio pra cada card, não solto num
 // callback de array (regra dos hooks).
-function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel }: {
+function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel, nota }: {
   label: string
   format: (n: number) => React.ReactNode
   color: string
@@ -59,6 +59,7 @@ function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel }: {
   prev: number | undefined
   invert?: boolean
   anteriorLabel?: string
+  nota?: string
 }) {
   const animated = useCountUp(curr)
   return (
@@ -69,8 +70,16 @@ function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel }: {
         <DeltaChip curr={curr} prev={prev} invert={invert} />
         {anteriorLabel && <span className="pl-kpi-vs">vs. {anteriorLabel}</span>}
       </div>
+      {nota && <div className="pl-kpi-nota">{nota}</div>}
     </div>
   )
+}
+
+/** De onde vem o gasto com anúncios do mês (aparece embaixo dos cards de gasto, ROAS e CAC). */
+function notaGasto(m: MesPainel): string {
+  if (m.gastoFonte === 'TRAFEGO') return `Automático · Meta Ads${m.gastoAtualizadoEm ? `, atualizado ${new Date(m.gastoAtualizadoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}`
+  if (m.gastoFonte === 'MANUAL') return 'Digitado em Indicadores · conecte o Tráfego para ficar automático'
+  return 'Sem gasto no mês · conecte o Tráfego para ficar automático'
 }
 
 export default function ProLaboreDashboardPage() {
@@ -312,8 +321,9 @@ export default function ProLaboreDashboardPage() {
     ...(isDono
       ? [
           { label: 'Comissões pagas', format: formatMoeda, color: 'var(--pl-accent-4)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
-          { label: 'Gasto com anúncios', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true },
-          { label: 'ROAS', format: formatRoas, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas },
+          { label: 'Gasto com anúncios', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true, nota: notaGasto(atual) },
+          { label: 'ROAS', format: formatRoas, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas, nota: 'Receita do mês ÷ gasto com anúncios' },
+          ...(atual.custoPorLead != null ? [{ label: 'Custo por lead', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.custoPorLead, prev: anterior?.custoPorLead ?? undefined, invert: true, nota: 'Gasto do mês ÷ leads do mês (CRM)' }] : []),
         ]
       : []),
     { label: 'Conversão lead→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
@@ -356,7 +366,7 @@ export default function ProLaboreDashboardPage() {
 
       <div className="pl-kpi-grid" style={{ marginTop: 16 }}>
         {kpis.map(k => (
-          <KpiCard key={k.label} label={k.label} format={k.format} color={k.color} curr={k.curr} prev={k.prev} invert={k.invert} anteriorLabel={anterior?.label} />
+          <KpiCard key={k.label} label={k.label} format={k.format} color={k.color} curr={k.curr} prev={k.prev} invert={k.invert} anteriorLabel={anterior?.label} nota={'nota' in k ? k.nota : undefined} />
         ))}
       </div>
 
@@ -545,7 +555,8 @@ export default function ProLaboreDashboardPage() {
         <FunilJourney
           funil={funilFiltrado ?? atual.funil}
           metas={metasFunil}
-          custoPorLeadTopo={parametro?.custoPorLeadTopo ?? 0}
+          custoPorLeadTopo={atual.custoPorLead ?? parametro?.custoPorLeadTopo ?? 0}
+          custoAutomatico={atual.custoPorLead != null ? (atual.gastoFonte === 'TRAFEGO' ? 'Meta Ads' : 'gasto digitado') : null}
           isDono={isDono}
           onMetaSalva={m => setMetasFunil(atual => atual.map(x => (x.etapa === m.etapa ? m : x)))}
           onCustoLeadSalvo={custoPorLeadTopo => setParametro(p => (p ? { ...p, custoPorLeadTopo } : p))}
@@ -585,6 +596,9 @@ export default function ProLaboreDashboardPage() {
                 <div className="pl-stat-strip">
                   <div className="pl-s"><div className="pl-l">Gasto em {atual.label}</div><div className="pl-v">{formatMoeda(atual.gastoAnuncios)}</div></div>
                   <div className="pl-s"><div className="pl-l">CAC (custo/venda)</div><div className="pl-v">{formatMoeda(atual.cac)}</div></div>
+                  <div className="pl-s"><div className="pl-l">Custo por lead</div><div className="pl-v">{atual.custoPorLead != null ? formatMoeda(atual.custoPorLead) : '—'}</div></div>
+                </div>
+                <div className="pl-hint" style={{ marginTop: 8, fontSize: 12 }}>{notaGasto(atual)}
                 </div>
               </div>
             )}
@@ -1161,11 +1175,13 @@ function FunilTrapezio({ valores, cores }: { valores: number[]; cores: string[] 
 }
 
 function FunilJourney({
-  funil, metas, custoPorLeadTopo, isDono, onMetaSalva, onCustoLeadSalvo,
+  funil, metas, custoPorLeadTopo, custoAutomatico, isDono, onMetaSalva, onCustoLeadSalvo,
 }: {
   funil: MesPainel['funil']
   metas: MetaFunilProLabore[]
   custoPorLeadTopo: number
+  // Fonte do custo calculado sozinho (gasto do mês ÷ leads do mês); null = usa o digitado.
+  custoAutomatico: string | null
   isDono: boolean
   onMetaSalva: (m: MetaFunilProLabore) => void
   onCustoLeadSalvo: (v: number) => void
@@ -1267,7 +1283,11 @@ function FunilJourney({
       {isDono && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <span className="pl-hint">Custo por lead (topo da jornada):</span>
-          {editandoCustoLead ? (
+          {custoAutomatico ? (
+            <span style={{ fontWeight: 600 }} title="Gasto com anúncios do mês ÷ leads do mês. Atualiza sozinho.">
+              {formatMoeda(custoPorLeadTopo)} <span className="pl-hint" style={{ fontWeight: 500 }}>· automático ({custoAutomatico} ÷ leads do mês)</span>
+            </span>
+          ) : editandoCustoLead ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <input
                 type="number" step="0.01" min="0" autoFocus

@@ -1,8 +1,23 @@
 // Ícones da navegação — mesmo estilo Feather (stroke, 24x24) já usado no
 // botão de hambúrguer/fechar da gaveta antiga, só que num só lugar agora.
-export type NavIconName = 'home' | 'kanban' | 'calendar' | 'cart' | 'users' | 'flag' | 'at' | 'chart' | 'gear' | 'chat' | 'compass' | 'mic' | 'notebook' | 'funnel' | 'shield' | 'wallet' | 'spark'
+export type NavIconName = 'home' | 'kanban' | 'calendar' | 'cart' | 'users' | 'flag' | 'at' | 'chart' | 'gear' | 'chat' | 'compass' | 'mic' | 'notebook' | 'funnel' | 'shield' | 'wallet' | 'spark' | 'refresh' | 'file'
 
 const PATHS: Record<NavIconName, React.ReactNode> = {
+  refresh: (
+    <>
+      <path d="M23 4v6h-6" />
+      <path d="M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <line x1="12" y1="18" x2="12" y2="12" />
+      <path d="M9 15l3 3 3-3" />
+    </>
+  ),
   spark: (
     <>
       <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />

@@ -267,6 +267,15 @@ export interface Lead {
   // pra filtrar o funil por período corretamente (ver dataAlcancouEtapa em
   // proLaboreFunilFiltro.tsx).
   historico?: { estagioNovo: EstagioLead; criadoEm: string }[]
+  // Próximo follow pendente (botão Follow do card); vem no máximo um.
+  follows?: FollowLead[]
+  // Perdido: motivo, nota e temperatura (vão com o lead para a Reativação).
+  motivoPerda?: MotivoPerda | null
+  notaPerda?: string | null
+  perdidoEm?: string | null
+  temperatura?: Temperatura | null
+  reativadoEm?: string | null
+  reativacoes?: number
 }
 
 export interface Venda {
@@ -323,6 +332,9 @@ export interface FunilMensal {
   proposta: number
 }
 
+export type FonteGasto = 'TRAFEGO' | 'MANUAL' | 'NENHUM'
+export interface GastoDoMes { mes: string; valor: number; fonte: FonteGasto; trafego: number | null; manual: number | null; diasComDados: number; atualizadoEm: string | null }
+
 export interface GastoAnuncioMensal {
   id: string
   mesReferencia: string
@@ -348,8 +360,14 @@ export interface MesPainel {
   quantidadeVendas: number
   ticketMedio: number
   gastoAnuncios: number
+  // De onde veio o gasto: TRAFEGO (soma real das campanhas, automático),
+  // MANUAL (digitado em Indicadores) ou NENHUM.
+  gastoFonte: FonteGasto
+  gastoAtualizadoEm: string | null
   roas: number
   cac: number
+  // Gasto do mês ÷ leads do mês (null sem gasto ou sem leads).
+  custoPorLead: number | null
   funil: { leads: number; abordados: number; negociacao: number; proposta: number; fechamento: number }
   conversaoLeadVenda: number
   vendedores: VendedorRanking[]
@@ -477,6 +495,7 @@ export const proLaboreApi = {
   },
   gastosAnuncios: {
     listar: (ano?: number) => request<GastoAnuncioMensal[]>(`/pro-labore/gastos-anuncios${ano ? `?ano=${ano}` : ''}`),
+    resumo: (ano?: number) => request<GastoDoMes[]>(`/pro-labore/gastos-anuncios/resumo${ano ? `?ano=${ano}` : ''}`),
     salvar: (data: { mesReferencia: string; valor: number }) =>
       request<GastoAnuncioMensal>('/pro-labore/gastos-anuncios', { method: 'PUT', body: JSON.stringify(data) }),
   },
@@ -486,11 +505,26 @@ export const proLaboreApi = {
       request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
     editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; tipoNegociacao?: TipoNegociacao | null; valorNegociacao?: number }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    mudarEstagio: (id: string, estagio: EstagioLead) =>
-      request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio }) }),
+    mudarEstagio: (id: string, estagio: EstagioLead, perda?: { motivoPerda: MotivoPerda; notaPerda?: string; temperatura?: Temperatura }) =>
+      request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio, ...perda }) }),
     converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; valorComissao?: number; observacao?: string }) =>
       request<{ lead: Lead; venda: Venda }>(`/pro-labore/leads/${id}/converter`, { method: 'POST', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/leads/${id}`, { method: 'DELETE' }),
+  },
+  // Follow-up agendado no card do CRM (e na Reativação).
+  follows: {
+    contagem: () => request<{ atrasados: number; hoje: number }>('/pro-labore/follows/contagem'),
+    pendentes: () => request<FollowComLead[]>('/pro-labore/follows'),
+    doLead: (leadId: string) => request<FollowLead[]>(`/pro-labore/leads/${leadId}/follows`),
+    agendar: (leadId: string, data: NovoFollow) => request<FollowLead>(`/pro-labore/leads/${leadId}/follows`, { method: 'POST', body: JSON.stringify(data) }),
+    encerrar: (id: string, data: { status: 'FEITO' | 'CANCELADO'; resultado?: string; proximo?: NovoFollow }) =>
+      request<{ feito: FollowLead; proximo: FollowLead | null }>(`/pro-labore/follows/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  // Perdidos fora do funil: motivo, temperatura, follows e reativação.
+  reativacao: {
+    listar: (vendedorId?: string) => request<Reativacao>(`/pro-labore/reativacao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
+    editar: (leadId: string, data: { motivoPerda?: MotivoPerda; notaPerda?: string | null; temperatura?: Temperatura | null }) =>
+      request<Lead>(`/pro-labore/leads/${leadId}/reativacao`, { method: 'PATCH', body: JSON.stringify(data) }),
   },
   painel: {
     get: (ano?: number, vendedorId?: string) => {
@@ -582,6 +616,7 @@ export const proLaboreApi = {
       return request<Ocorrencia[]>(`/pro-labore/ocorrencias${qs ? `?${qs}` : ''}`)
     },
     resumo: () => request<ResumoOcorrencias>('/pro-labore/ocorrencias/resumo'),
+    minhas: () => request<MinhasOcorrencias>('/pro-labore/ocorrencias/minhas'),
     sugestaoMedida: (vendedorId: string, tipo: TipoOcorrencia) =>
       request<SugestaoMedidaOcorrencia>(`/pro-labore/ocorrencias/sugestao-medida?vendedorId=${vendedorId}&tipo=${tipo}`),
     obter: (id: string) => request<Ocorrencia>(`/pro-labore/ocorrencias/${id}`),
@@ -1213,6 +1248,12 @@ export interface Ocorrencia {
   historico: OcorrenciaHistoricoItem[]
   criadoEm: string
   atualizadoEm: string
+}
+
+export interface MinhasOcorrencias {
+  pessoa: { id: string; nome: string; email: string | null; papel: string; documento: string | null; ativo: boolean; criadoEm: string }
+  resumo: { total: number; emAberto: number; resolvidas: number; positivas: number; comMedida: number; prazoMaisProximo: string | null }
+  ocorrencias: Ocorrencia[]
 }
 
 export interface ResumoOcorrencias {
@@ -2867,3 +2908,19 @@ export interface IntelReuniaoRegistro { id: string; tipo: IntelTipoReuniao; data
 export interface IntelLeitura { origem: 'IA' | 'MODELO'; resumo: string; prioridades: string[]; perguntas: string[] }
 
 export interface SaudeBanco { usadoMB: number; limiteMB: number; alertaMB: number; nivel: 'OK' | 'ALERTA' | 'CRITICO'; medidoEm: string }
+
+// ---------- Follow e Reativação ----------
+export type CanalFollow = 'WHATSAPP' | 'LIGACAO' | 'VISITA' | 'EMAIL' | 'OUTRO'
+export type MotivoPerda = 'SEM_MOMENTO' | 'SEM_CREDITO' | 'PRECO' | 'SEM_RESPOSTA' | 'CONCORRENCIA' | 'SEM_ESTOQUE' | 'DESISTIU' | 'OUTRO'
+export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE'
+export interface FollowLead { id: string; agendadoPara: string; canal: CanalFollow | null; nota: string | null; status?: 'PENDENTE' | 'FEITO' | 'CANCELADO'; feitoEm?: string | null; resultado?: string | null; criadoPor?: string | null; criadoEm?: string }
+export interface NovoFollow { agendadoPara: string; canal?: CanalFollow; nota?: string }
+export interface FollowComLead extends FollowLead { lead: { id: string; nomeCliente: string; telefone: string | null; estagio: EstagioLead; modeloInteresse: string | null; vendedor: { id: string; nome: string } | null } }
+export interface LeadPerdido extends Omit<Lead, 'historico'> {
+  historico: Array<{ estagioAnterior: EstagioLead | null; estagioNovo: EstagioLead; criadoEm: string }>
+  perdidoEm: string; estagioAntesDaPerda: EstagioLead | null; contatosFeitos: number; proximoFollow: FollowLead | null
+}
+export interface Reativacao {
+  leads: LeadPerdido[]
+  resumo: { total: number; followsPendentes: number; reativados30d: number; porMotivo: Array<{ motivo: MotivoPerda | 'SEM_MOTIVO'; n: number }>; porTemperatura: Array<{ temperatura: Temperatura | 'SEM_TEMPERATURA'; n: number }> }
+}

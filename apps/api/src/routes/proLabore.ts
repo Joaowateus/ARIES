@@ -28,6 +28,8 @@ import {
 } from '../lib/assistenteRoteiro'
 import { montarResumoAssistente } from '../lib/assistenteResumo'
 import { funilDoMesDashboard } from '../lib/jornada'
+import { gastoDoMes, gastosDoPeriodo, type GastoDoMes } from '../lib/gastoAnuncios'
+import { MOTIVOS_PERDA, TEMPERATURAS, leadWhereBase } from '../lib/escopoLead'
 
 const router = Router()
 
@@ -779,16 +781,10 @@ const TIPOS_NEGOCIACAO = ['P', 'R'] as const
 const LEAD_INCLUDE = {
   vendedor: { select: { id: true, nome: true } },
   historico: { select: { estagioNovo: true, criadoEm: true }, orderBy: { criadoEm: 'asc' } },
+  // O próximo follow pendente (botão Follow do card).
+  follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 1, select: { id: true, agendadoPara: true, canal: true, nota: true } },
 } as const
 
-function leadWhereBase(req: Request, vendedorIdFiltro?: string): { usuarioId: string; vendedorId?: string } {
-  const usuarioId = req.proLaboreUser!.sub
-  if (req.proLaboreUser!.papel === 'VENDEDOR') {
-    return { usuarioId, vendedorId: req.proLaboreUser!.vendedorId! }
-  }
-  if (vendedorIdFiltro) return { usuarioId, vendedorId: vendedorIdFiltro }
-  return { usuarioId }
-}
 
 router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
   const { estagio, tipoLead } = req.query
@@ -941,6 +937,10 @@ router.patch('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR'),
 
 const estagioLeadSchema = z.object({
   estagio: z.enum(ESTAGIOS_LEAD),
+  // Ao marcar como perdido: por quê e quão perto o cliente está de voltar.
+  motivoPerda: z.enum(MOTIVOS_PERDA).optional(),
+  notaPerda: z.string().trim().max(2000).optional(),
+  temperatura: z.enum(TEMPERATURAS).optional(),
 })
 
 router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
@@ -961,9 +961,13 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
   }
 
   const fechadoEm = parse.data.estagio === 'FECHADO' || parse.data.estagio === 'PERDIDO' ? new Date() : null
+  // Perdido sai do funil para a Reativação; voltar de lá conta como reativação.
+  const perda = parse.data.estagio === 'PERDIDO'
+    ? { perdidoEm: new Date(), motivoPerda: parse.data.motivoPerda ?? null, notaPerda: parse.data.notaPerda || null, temperatura: parse.data.temperatura ?? null }
+    : atual.estagio === 'PERDIDO' ? { reativadoEm: new Date(), reativacoes: { increment: 1 } } : {}
   const lead = await prisma.lead.update({
     where: { id: atual.id },
-    data: { estagio: parse.data.estagio, fechadoEm },
+    data: { estagio: parse.data.estagio, fechadoEm, ...perda },
     include: LEAD_INCLUDE,
   })
   await prisma.leadEstagioHistorico.create({
@@ -1122,6 +1126,12 @@ router.get('/gastos-anuncios', requireProLaboreAuth, requireModulo('indicadores'
   res.json(registros)
 })
 
+// Gasto de cada mês do ano com a fonte: Tráfego (automático) ou digitado.
+router.get('/gastos-anuncios/resumo', requireProLaboreAuth, requireModulo('indicadores', 'VER'), async (req: Request, res: Response) => {
+  const anoNum = typeof req.query.ano === 'string' && /^\d{4}$/.test(req.query.ano) ? Number(req.query.ano) : new Date().getUTCFullYear()
+  res.json([...(await gastosDoPeriodo(req.proLaboreUser!.sub, `${anoNum}-01`, `${anoNum}-12`)).values()])
+})
+
 const gastoAnuncioSchema = z.object({
   mesReferencia: z.string().min(1, 'Mês de referência obrigatório'),
   valor: z.number().min(0),
@@ -1178,8 +1188,8 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
       ? prisma.funilMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioAno, lte: fimAno } } })
       : Promise.resolve([]),
     papel === 'DONO'
-      ? prisma.gastoAnuncioMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioAno, lte: fimAno } } })
-      : Promise.resolve([]),
+      ? gastosDoPeriodo(usuarioId, `${anoNum}-01`, `${anoNum}-12`)
+      : Promise.resolve(new Map<string, GastoDoMes>()),
     vejaEquipe ? prisma.vendedor.findMany({ where: { usuarioId, vende: true } }) : Promise.resolve([]),
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioAno, lte: fimAno } } }),
   ])
@@ -1208,8 +1218,10 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     // ROAS/CAC usam sempre o total da equipe (vendasTodasDoMes), nunca o
     // recorte do filtro — ver comentário acima sobre `vendas`.
     const vendasTodasDoMes = vendasTodas.filter(v => v.data.getUTCMonth() === mes)
-    const gastoRegistro = gastosRegistros.find(g => g.mesReferencia.getUTCMonth() === mes)
-    const gastoAnuncios = papel === 'DONO' ? gastoRegistro?.valor ?? 0 : 0
+    // Gasto real das campanhas (Tráfego) quando sincronizado; senão o digitado (lib/gastoAnuncios.ts).
+    const gastoMes = gastosRegistros.get(`${anoNum}-${String(mes + 1).padStart(2, '0')}`)
+    const gastoAnuncios = papel === 'DONO' ? gastoMes?.valor ?? 0 : 0
+    const gastoFonte = papel === 'DONO' ? gastoMes?.fonte ?? 'NENHUM' : 'NENHUM'
     const roas = gastoAnuncios > 0 ? vendasTodasDoMes.reduce((s, v) => s + v.valorVenda, 0) / gastoAnuncios : 0
     const cac = gastoAnuncios > 0 && vendasTodasDoMes.length > 0 ? gastoAnuncios / vendasTodasDoMes.length : 0
 
@@ -1222,6 +1234,8 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     // Regra oficial da Jornada de compra (lib/jornada.ts), a mesma que o Assistente Comercial usa.
     const { fonte: _fonte, ...funil } = funilDoMesDashboard(leadsDoMes, quantidadeVendas, funilRegistro)
     const conversaoLeadVenda = funil.leads > 0 ? (quantidadeVendas / funil.leads) * 100 : 0
+    // Custo por lead automático: gasto do mês ÷ leads do mês (os mesmos do funil).
+    const custoPorLead = gastoAnuncios > 0 && funil.leads > 0 ? gastoAnuncios / funil.leads : null
 
     // Ranking sempre da equipe inteira (vendasTodasDoMes) — comparar
     // vendedores é o próprio propósito do card, então o filtro universal
@@ -1244,7 +1258,7 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     return {
       mes, label, ano: anoNum,
       receita, proLaboreSacado, comissaoPaga, quantidadeVendas, ticketMedio,
-      gastoAnuncios, roas, cac,
+      gastoAnuncios, gastoFonte, gastoAtualizadoEm: papel === 'DONO' ? gastoMes?.atualizadoEm ?? null : null, roas, cac, custoPorLead,
       funil, conversaoLeadVenda,
       vendedores: rankingVendedores,
     }
@@ -1817,6 +1831,51 @@ router.get('/ocorrencias', requireProLaboreAuth, requireModulo('ocorrencias', 'V
 
   const ocorrencias = await prisma.ocorrencia.findMany({ where, include: OCORRENCIA_INCLUDE, orderBy: { dataRegistro: 'desc' } })
   res.json(ocorrencias)
+})
+
+// Minhas ocorrências: cada pessoa da equipe vê as próprias (só leitura),
+// com os dados dela, mesmo sem acesso ao módulo de gestão. Vem antes de
+// '/:id' pra não ser lida como um id.
+router.get('/ocorrencias/minhas', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const { sub: usuarioId, vendedorId } = req.proLaboreUser!
+  if (!vendedorId) {
+    res.status(403).json({ error: 'Minhas ocorrências é para quem faz parte da equipe.' })
+    return
+  }
+  const [pessoa, ocorrencias] = await Promise.all([
+    prisma.vendedor.findFirst({
+      where: { id: vendedorId, usuarioId },
+      select: { id: true, nome: true, email: true, papel: true, documento: true, ativo: true, criadoEm: true },
+    }),
+    prisma.ocorrencia.findMany({
+      where: { usuarioId, vendedorId },
+      include: {
+        ...OCORRENCIA_INCLUDE,
+        ocorrenciaAnterior: { select: { id: true, protocolo: true, status: true, dataOcorrencia: true } },
+      },
+      orderBy: { dataOcorrencia: 'desc' },
+    }),
+  ])
+  if (!pessoa) {
+    res.status(404).json({ error: 'Cadastro não encontrado' })
+    return
+  }
+  const emAberto = ['ABERTA', 'EM_PRAZO', 'EM_VERIFICACAO', 'REINCIDENTE', 'ESCALONADA']
+  res.json({
+    pessoa,
+    resumo: {
+      total: ocorrencias.length,
+      emAberto: ocorrencias.filter(o => emAberto.includes(o.status)).length,
+      resolvidas: ocorrencias.filter(o => o.status === 'RESOLVIDA' || o.status === 'ENCERRADA').length,
+      positivas: ocorrencias.filter(o => o.tipo === 'FEEDBACK_POSITIVO').length,
+      comMedida: ocorrencias.filter(o => o.medidaAplicada !== 'NENHUMA').length,
+      prazoMaisProximo: ocorrencias
+        .filter(o => o.prazoCorrecao && emAberto.includes(o.status))
+        .map(o => o.prazoCorrecao!.toISOString())
+        .sort()[0] ?? null,
+    },
+    ocorrencias,
+  })
 })
 
 // Cards de resumo do topo da tela — calculados à parte da listagem pra não
@@ -2431,7 +2490,7 @@ router.get('/plano-crescimento', requireProLaboreAuth, requireModulo('planoCresc
     prisma.venda.findMany({ where: { ...vendaWhereBase(req), data: { gte: inicioMesAnterior } } }),
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioMesAtual } } }),
     prisma.vendedor.findMany({ where: { usuarioId } }),
-    prisma.gastoAnuncioMensal.findMany({ where: { usuarioId, mesReferencia: { gte: inicioMesAnterior } } }),
+    gastoDoMes(usuarioId, inicioMesAtual.toISOString().slice(0, 7)),
     prisma.socialMediaConta.findUnique({ where: { titular: `dono:${usuarioId}` } }),
     prisma.parametroLiquidez.upsert({ where: { usuarioId }, update: {}, create: { usuarioId } }),
   ])
@@ -2441,8 +2500,7 @@ router.get('/plano-crescimento', requireProLaboreAuth, requireModulo('planoCresc
   const receitaAtual = vendasMesAtual.reduce((s, v) => s + v.valorVenda, 0)
   const receitaAnterior = vendasMesAnterior.reduce((s, v) => s + v.valorVenda, 0)
 
-  const gastoAtualRegistro = gastosRegistros.find(g => g.mesReferencia.getTime() === inicioMesAtual.getTime())
-  const gastoAtual = gastoAtualRegistro?.valor ?? 0
+  const gastoAtual = gastosRegistros.valor
   const roas = gastoAtual > 0 ? receitaAtual / gastoAtual : 0
 
   // Concentração de receita no vendedor líder: sinal de risco de depender

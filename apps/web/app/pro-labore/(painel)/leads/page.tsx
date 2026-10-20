@@ -7,6 +7,10 @@ import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
 import { PageHeader } from '../../PageHeader'
+import Link from 'next/link'
+import { FollowModal } from '../_follow/FollowModal'
+import { PerdaModal } from '../_follow/PerdaModal'
+import { situacaoFollow } from '../_follow/follow'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
@@ -172,7 +176,13 @@ export default function ProLaboreLeadsPage() {
   const [filtroPeriodo, setFiltroPeriodo] = useState<{ inicio: string; fim: string } | null>(null)
   const [filtroCustomInicio, setFiltroCustomInicio] = useState('')
   const [filtroCustomFim, setFiltroCustomFim] = useState('')
-  const [mostrarPerdidos, setMostrarPerdidos] = useState(false)
+  // Follow (botão do card) e perda (o cliente vai para a Reativação).
+  const [followAberto, setFollowAberto] = useState<Lead | null>(null)
+  const [perdaAberta, setPerdaAberta] = useState<Lead | null>(null)
+  const [filtroFollow, setFiltroFollow] = useState<'' | 'ATRASADO' | 'HOJE'>('')
+  // Custo por lead automático: gasto do mês (Tráfego/Indicadores) ÷ leads do mês.
+  const [gastoMes, setGastoMes] = useState<number | null>(null)
+  const [mesCorrente] = useState(() => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7))
 
   function aplicarFiltroPeriodo() {
     if (!filtroCustomInicio || !filtroCustomFim) return
@@ -242,7 +252,11 @@ export default function ProLaboreLeadsPage() {
     ])
       .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v.filter(x => x.vende !== false)); setParametro(p); setMetasFunil(metas) })
       .finally(() => setLoading(false))
-  }, [vejaEquipe])
+    if (isDono) {
+      const mes = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7)
+      proLaboreApi.gastosAnuncios.resumo(Number(mes.slice(0, 4))).then(r => setGastoMes(r.find(g => g.mes === mes)?.valor ?? null)).catch(() => setGastoMes(null))
+    }
+  }, [vejaEquipe, isDono])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -300,13 +314,8 @@ export default function ProLaboreLeadsPage() {
     carregar()
   }
 
-  async function marcarPerdido(lead: Lead) {
-    if (!confirm(`Marcar o lead de ${lead.nomeCliente} como perdido?`)) return
-    await mudarEstagio(lead, 'PERDIDO')
-  }
-
-  async function reabrir(lead: Lead) {
-    await mudarEstagio(lead, 'LEAD')
+  function marcarPerdido(lead: Lead) {
+    setPerdaAberta(lead)
   }
 
   async function remover(lead: Lead) {
@@ -572,8 +581,14 @@ export default function ProLaboreLeadsPage() {
     .filter(passaFiltrosBase)
     .filter(l => !filtroPeriodo || dentroDoPeriodo(l.criadoEm, filtroPeriodo))
   const leadsAtivos = leadsFiltrados.filter(l => l.estagio !== 'PERDIDO')
-  const leadsPerdidos = leadsFiltrados.filter(l => l.estagio === 'PERDIDO')
-  const leadsAtivosOrdenados = [...leadsAtivos].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
+  const totalPerdidos = leads.filter(l => l.estagio === 'PERDIDO').length
+  // Follows pendentes dos leads em andamento: atrasados e de hoje viram atalhos de filtro.
+  const situacaoDe = (l: Lead) => (l.follows?.[0] ? situacaoFollow(l.follows[0]).tipo : null)
+  const followsAtrasados = leadsAtivos.filter(l => situacaoDe(l) === 'ATRASADO').length
+  const followsHoje = leadsAtivos.filter(l => situacaoDe(l) === 'HOJE').length
+  const leadsAtivosOrdenados = [...leadsAtivos]
+    .filter(l => !filtroFollow || situacaoDe(l) === filtroFollow)
+    .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
   // População de cada etapa do funil (pros indicadores de conversão/perda/R$
   // abaixo, NÃO pros cards do Kanban acima) — cada etapa contada pela data
@@ -608,7 +623,9 @@ export default function ProLaboreLeadsPage() {
   // meta/custo da Jornada de compra do Painel (FunilJourney), só que
   // calculada em cima da contagem por estágio do próprio Kanban (respeitando
   // os filtros de canal/vendedor/período/busca já aplicados acima).
-  const custoPorLeadTopo = parametro?.custoPorLeadTopo ?? 0
+  const leadsDoMes = leads.filter(l => l.criadoEm.slice(0, 7) === mesCorrente).length
+  const custoAutomatico = isDono && gastoMes != null && gastoMes > 0 && leadsDoMes > 0 ? gastoMes / leadsDoMes : null
+  const custoPorLeadTopo = custoAutomatico ?? parametro?.custoPorLeadTopo ?? 0
   const metaPorEtapa = new Map<EstagioLead, MetaFunilProLabore>(metasFunil.map(m => [m.etapa, m]))
   const populacaoPorEtapa: Lead[][] = COLUNAS.map(col => populacaoFunilPorEtapa[col.estagio])
   const valoresPorEtapa = populacaoPorEtapa.map(pop => pop.length)
@@ -718,8 +735,8 @@ export default function ProLaboreLeadsPage() {
         <span>
           {totalFiltrado} lead{totalFiltrado !== 1 ? 's' : ''} · {fechadosFiltrado} fechamento{fechadosFiltrado !== 1 ? 's' : ''} · {conversaoFiltrado.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% de conversão
         </span>
-        {leadsPerdidos.length > 0 && (
-          <span className="pl-link-action pl-leads-textlink" onClick={() => setMostrarPerdidos(m => !m)}>{mostrarPerdidos ? 'Ocultar' : 'Ver'} perdidos ({leadsPerdidos.length})</span>
+        {totalPerdidos > 0 && (
+          <Link className="pl-link-action pl-leads-textlink" href="/pro-labore/reativacao">Perdidos na Reativação ({totalPerdidos}) →</Link>
         )}
         {filtroTextualAtivo && (
           <span className="pl-link-action pl-leads-textlink" onClick={limparFiltros}>Limpar filtros</span>
@@ -731,7 +748,11 @@ export default function ProLaboreLeadsPage() {
           {isDono && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <span className="pl-hint">Custo por lead (topo do funil):</span>
-              {editandoCustoLead ? (
+              {custoAutomatico != null ? (
+                <span style={{ fontWeight: 600 }} title="Gasto com anúncios do mês ÷ leads criados no mês. Atualiza sozinho.">
+                  {formatMoeda(custoAutomatico)} <span className="pl-hint" style={{ fontWeight: 500 }}>· automático (gasto do mês ÷ {leadsDoMes} leads do mês)</span>
+                </span>
+              ) : editandoCustoLead ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input
                     type="number" step="0.01" min="0" autoFocus
@@ -852,6 +873,14 @@ export default function ProLaboreLeadsPage() {
         </div>
       ) : (
         <>
+          {(followsAtrasados > 0 || followsHoje > 0 || filtroFollow) && (
+            <div className="fw-faixa" role="group" aria-label="Follows do dia">
+              <span className="pl-hint">Follows:</span>
+              {followsAtrasados > 0 && <button type="button" className={`pl-chip atrasado ${filtroFollow === 'ATRASADO' ? 'active' : ''}`} aria-pressed={filtroFollow === 'ATRASADO'} onClick={() => setFiltroFollow(f => (f === 'ATRASADO' ? '' : 'ATRASADO'))}>{followsAtrasados} atrasado{followsAtrasados > 1 ? 's' : ''}</button>}
+              {followsHoje > 0 && <button type="button" className={`pl-chip hoje ${filtroFollow === 'HOJE' ? 'active' : ''}`} aria-pressed={filtroFollow === 'HOJE'} onClick={() => setFiltroFollow(f => (f === 'HOJE' ? '' : 'HOJE'))}>{followsHoje} para hoje</button>}
+              {filtroFollow && <span className="pl-link-action pl-leads-textlink" onClick={() => setFiltroFollow('')}>Ver todos os cards</span>}
+            </div>
+          )}
           <div className="pl-kanban">
             {COLUNAS.map(col => {
               const leadsDaColuna = leadsAtivosOrdenados.filter(l => l.estagio === col.estagio)
@@ -885,6 +914,7 @@ export default function ProLaboreLeadsPage() {
                         onConverter={() => abrirConversao(lead)}
                         onEditar={() => abrirEdicao(lead)}
                         onPerdido={() => marcarPerdido(lead)}
+                        onFollow={() => setFollowAberto(lead)}
                         onRemover={() => remover(lead)}
                         onDefinirTipoNegociacao={tipo => definirTipoNegociacao(lead, tipo)}
                       />
@@ -895,34 +925,18 @@ export default function ProLaboreLeadsPage() {
             })}
           </div>
 
-          {mostrarPerdidos && leadsPerdidos.length > 0 && (
-            <div className="pl-table-wrap" style={{ marginTop: 20 }}>
-              <table className="pl-table">
-                <thead>
-                  <tr>
-                    <th>Cliente</th>
-                    <th>Canal</th>
-                    {vejaEquipe && <th>Vendedor</th>}
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {leadsPerdidos.map(l => (
-                    <tr key={l.id}>
-                      <td>{l.nomeCliente}</td>
-                      <td>{l.tipoLead ? TIPO_LABEL[l.tipoLead] : '—'}</td>
-                      {vejaEquipe && <td>{l.vendedor?.nome ?? '—'}</td>}
-                      <td className="pl-right">
-                        <span className="pl-link-action" onClick={() => reabrir(l)} style={{ marginRight: 14 }}>Reabrir</span>
-                        <span className="pl-link-action pl-danger" onClick={() => remover(l)}>Remover</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </>
+      )}
+
+      {followAberto && (
+        <FollowModal lead={followAberto} pendente={followAberto.follows?.[0] ?? null} onFechar={() => setFollowAberto(null)} onMudou={carregar} />
+      )}
+      {perdaAberta && (
+        <PerdaModal
+          nomeCliente={perdaAberta.nomeCliente}
+          onFechar={() => setPerdaAberta(null)}
+          onConfirmar={async perda => { await proLaboreApi.leads.mudarEstagio(perdaAberta.id, 'PERDIDO', perda); carregar() }}
+        />
       )}
 
       {novoLeadAberto && (
@@ -1112,7 +1126,7 @@ export default function ProLaboreLeadsPage() {
 
 /* ============ CARD DO KANBAN ============ */
 function KanbanCard({
-  lead, estagio, isDono, vejaEquipe, dragging, onPointerDown, onMudarEstagio, onConverter, onEditar, onPerdido, onRemover, onDefinirTipoNegociacao,
+  lead, estagio, isDono, vejaEquipe, dragging, onPointerDown, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onRemover, onDefinirTipoNegociacao,
 }: {
   lead: Lead
   estagio: EstagioLead
@@ -1124,9 +1138,12 @@ function KanbanCard({
   onConverter: () => void
   onEditar: () => void
   onPerdido: () => void
+  onFollow: () => void
   onRemover: () => void
   onDefinirTipoNegociacao: (tipo: TipoNegociacao) => void
 }) {
+  const proximoFollow = lead.follows?.[0] ?? null
+  const sitFollow = proximoFollow ? situacaoFollow(proximoFollow) : null
   const movivel = !lead.vendaId
   const proxima = proximaEtapaSimples(estagio)
   const proximaTitulo = proxima ? COLUNAS.find(c => c.estagio === proxima)?.titulo : null
@@ -1170,6 +1187,12 @@ function KanbanCard({
           {lead.tipoNegociacao}
         </span>
       )}
+      {sitFollow && (
+        <button type="button" className={`fw-selo ${sitFollow.tipo.toLowerCase()}`} onClick={onFollow} onPointerDown={e => e.stopPropagation()} title={proximoFollow?.nota ?? 'Ver o follow'} data-follow={sitFollow.tipo}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+          {sitFollow.texto}
+        </button>
+      )}
       {lead.vendaId ? (
         <div className="pl-kanban-card-badge">✓ Convertido em venda</div>
       ) : (
@@ -1203,6 +1226,9 @@ function KanbanCard({
           )}
           <div className="pl-kanban-card-actions-row">
             <MoverEtapaMenu estagioAtual={estagio} isDono={isDono} onMover={moverParaEtapa} />
+            <button type="button" className="pl-kanban-icon-btn" onClick={onFollow} title={proximoFollow ? 'Ver o follow' : 'Agendar follow'} aria-label={proximoFollow ? 'Ver o follow' : 'Agendar follow'} data-acao="follow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+            </button>
             <button type="button" className="pl-kanban-icon-btn" onClick={onEditar} title="Editar" aria-label="Editar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
             </button>

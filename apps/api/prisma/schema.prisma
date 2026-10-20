@@ -1325,11 +1325,21 @@ model Lead {
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   fechadoEm       DateTime?
+  // Perdido: o lead sai do funil e vai para a Reativação com o motivo e a
+  // temperatura (FRIO | MORNO | QUENTE). Reativar devolve ao funil e conta
+  // em `reativacoes`; o motivo fica guardado como histórico.
+  motivoPerda     String?
+  notaPerda       String?
+  perdidoEm       DateTime?
+  temperatura     String?
+  reativadoEm     DateTime?
+  reativacoes     Int       @default(0)
 
   usuario             ProLaboreUsuario       @relation(fields: [usuarioId], references: [id])
   vendedor            Vendedor?              @relation(fields: [vendedorId], references: [id])
   venda               Venda?                 @relation(fields: [vendaId], references: [id])
   historico           LeadEstagioHistorico[]
+  follows             LeadFollow[]
   assistenteConversas AssistenteConversa[]
 
   @@index([usuarioId])
@@ -3529,4 +3539,29 @@ model IntelAuditoria {
   @@index([usuarioId, em])
   @@index([usuarioId, entidade, entidadeId])
   @@map("pro_labore_intel_auditoria")
+}
+
+// Follow-up agendado de um lead (botão Follow do card do CRM e da
+// Reativação): quando fazer, por onde e o que falar. Feito, guarda o
+// resultado (é o histórico de contatos do lead).
+model LeadFollow {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  leadId       String
+  vendedorId   String? // quem deve fazer (o vendedor do lead quando foi agendado)
+  agendadoPara DateTime
+  canal        String? // WHATSAPP | LIGACAO | VISITA | EMAIL | OUTRO
+  nota         String?
+  status       String    @default("PENDENTE") // PENDENTE | FEITO | CANCELADO
+  feitoEm      DateTime?
+  resultado    String?
+  criadoPor    String?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, status, agendadoPara])
+  @@index([leadId, status])
+  @@map("pro_labore_lead_follows")
 }

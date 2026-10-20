@@ -10,6 +10,9 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { AvisoConexaoMeta } from '../_conexaoMeta/AvisoConexaoMeta'
 import { PageHeader } from '../../PageHeader'
 import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
+import { AcoesCabecalho, BotaoPdf } from '../_pdf/BotaoPdf'
+import { hojeBR } from '@/lib/relatorioPdf'
+import { relatorioTrafego } from './_componentes/pdfTrafego'
 import { FiltroPeriodo, periodoDoPreset, type Periodo } from '../social-media/_componentes/FiltroPeriodo'
 import Conectar from './_componentes/Conectar'
 import FunilTrafego from './_componentes/FunilTrafego'
@@ -158,6 +161,14 @@ export default function ProLaboreTrafegoPage() {
     setCampanhas([])
   }
 
+  // PDF do dia: o período da tela + o resultado de hoje (buscado na hora).
+  async function montarPdf() {
+    const hoje = hojeBR()
+    const dia = await proLaboreApi.trafego.analise({ inicio: hoje, fim: hoje, ...filtro }).catch(() => null)
+    const filtroNome = filtro.campanhaId ? campanhas.find(c => c.id === filtro.campanhaId)?.nome ?? 'campanha selecionada' : null
+    return relatorioTrafego(analise!, dia, filtroNome)
+  }
+
   if (usuario && !temAcesso(usuario, 'trafego')) {
     return <div className="pl-empty pl-card"><div className="pl-emoji">🔒</div>Seu acesso não inclui o Tráfego. Peça ao gestor para liberar.</div>
   }
@@ -167,7 +178,12 @@ export default function ProLaboreTrafegoPage() {
       eyebrow="Marketing"
       title="Tráfego"
       subtitle="Auditoria do tráfego pago: do anúncio ao lead no CRM, por público, criativo e campanha — atualizado todo dia a partir do Gerenciador de Anúncios"
-      actions={<FechamentoDiario modulo="TRAFEGO" />}
+      actions={(
+        <AcoesCabecalho>
+          {analise && <BotaoPdf montar={montarPdf} />}
+          <FechamentoDiario modulo="TRAFEGO" />
+        </AcoesCabecalho>
+      )}
     />
   )
 

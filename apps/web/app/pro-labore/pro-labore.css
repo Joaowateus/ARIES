@@ -2304,6 +2304,7 @@
 @media (prefers-reduced-motion: reduce) { .pl-ap-pulso { animation: none; } }
 
 .pl-nav-pedidos { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800; background: #e0a83e; color: #1a1300; }
+.pl-nav-pedidos.pl-nav-follow-atrasado { background: var(--pl-critical); color: #fff; }
 .pl-nav-aovivo { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: #ff3b30; font-family: 'IBM Plex Mono', monospace; }
 
 /* Biblioteca */
@@ -3336,3 +3337,6 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-aviso-banco-barra { height: 5px; border-radius: 999px; background: var(--pl-surface-2); margin-top: 8px; overflow: hidden; max-width: 360px; }
 .pl-aviso-banco-barra > span { display: block; height: 100%; border-radius: 999px; background: var(--pl-accent-4); }
 .pl-sv-aviso.erro .pl-aviso-banco-barra > span { background: var(--pl-critical); }
+
+/* Nota de origem embaixo de um card de KPI (ex.: gasto com anúncios automático do Tráfego). */
+.pl-kpi-nota { margin-top: 6px; font-size: 11px; line-height: 1.4; color: var(--pl-ink-muted); }
