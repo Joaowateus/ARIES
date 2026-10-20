@@ -10,9 +10,13 @@ const { spawnSync } = require('child_process')
 
 const BANCO_FORA = /P1001|P1002|P1017|quota|Can't reach database server|Timed out|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|endpoint (is|has been) (disabled|suspended)/i
 
+// Sem DIRECT_URL (ex.: Neon), as migrações usam a própria DATABASE_URL.
+const env = { ...process.env }
+if (!env.DIRECT_URL && env.DATABASE_URL) env.DIRECT_URL = env.DATABASE_URL
+
 function migrar() {
   // O CLI do Prisma instalado no projeto, sem depender do PATH.
-  const r = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'], { encoding: 'utf8' })
+  const r = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'], { encoding: 'utf8', env })
   process.stdout.write(r.stdout ?? '')
   process.stderr.write(r.stderr ?? '')
   return { ok: r.status === 0, saida: `${r.stdout ?? ''}\n${r.stderr ?? ''}\n${r.error?.message ?? ''}` }
