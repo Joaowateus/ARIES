@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
+import { proLaboreApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { FollowModal } from '../_follow/FollowModal'
 import { PerdaModal } from '../_follow/PerdaModal'
 import { situacaoFollow } from '../_follow/follow'
+import { FaixaWhatsapp } from './_whatsapp/FaixaWhatsapp'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
@@ -260,6 +261,16 @@ export default function ProLaboreLeadsPage() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Lead do WhatsApp entra sozinho: a lista se atualiza enquanto a aba está
+  // aberta (fora de um arrasto, pra não mexer no card que está na mão).
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.hidden || dragRef.current) return
+      proLaboreApi.leads.listar().then(setLeads).catch(() => undefined)
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   // Limpa os listeners de arrastar se a página desmontar no meio de um
   // gesto (ex: trocou de rota durante o drag) — lê a gaveta ATUAL (ref),
   // então funciona não importa em qual render o drag começou.
@@ -285,19 +296,28 @@ export default function ProLaboreLeadsPage() {
       return
     }
     setSalvando(true)
-    try {
-      await proLaboreApi.leads.criar({
-        nomeCliente: form.nomeCliente,
-        telefone: form.telefone || undefined,
-        email: form.email || undefined,
-        cpf: form.cpf || undefined,
-        endereco: form.endereco || undefined,
-        modeloInteresse: form.modeloInteresse || undefined,
-        observacao: form.observacao || undefined,
-        vendedorId: form.vendedorId || undefined,
-        tipoLead: form.tipoLead || undefined,
-        valorNegociacao,
+    const enviar = (forcarDuplicado?: boolean) => proLaboreApi.leads.criar({
+      forcarDuplicado,
+      nomeCliente: form.nomeCliente,
+      telefone: form.telefone || undefined,
+      email: form.email || undefined,
+      cpf: form.cpf || undefined,
+      endereco: form.endereco || undefined,
+      modeloInteresse: form.modeloInteresse || undefined,
+      observacao: form.observacao || undefined,
+      vendedorId: form.vendedorId || undefined,
+      tipoLead: form.tipoLead || undefined,
+      valorNegociacao,
       })
+    try {
+      try {
+        await enviar()
+      } catch (err) {
+        // Lead que chamou no WhatsApp já entra sozinho: confirma antes de duplicar.
+        if ((err as ErroApi).status !== 409) throw err
+        if (!confirm(`${(err as Error).message}\n\nCadastrar outro mesmo assim?`)) return
+        await enviar(true)
+      }
       setForm(FORM_VAZIO)
       setNovoLeadAberto(false)
       carregar()
@@ -319,7 +339,8 @@ export default function ProLaboreLeadsPage() {
   }
 
   async function remover(lead: Lead) {
-    if (!confirm(`Remover o lead de ${lead.nomeCliente}?`)) return
+    const aviso = lead.origemCadastro === 'WHATSAPP' ? '\n\nEle entrou sozinho pelo WhatsApp: esse número não será mais cadastrado automaticamente.' : ''
+    if (!confirm(`Remover o lead de ${lead.nomeCliente}?${aviso}`)) return
     try {
       await proLaboreApi.leads.remover(lead.id)
       carregar()
@@ -702,6 +723,8 @@ export default function ProLaboreLeadsPage() {
           </button>
         }
       />
+
+      <FaixaWhatsapp gestao={vejaEquipe} versao={leads.length} />
 
       <div className="pl-leads-toolbar">
         <div className="pl-search-wrap">
@@ -1159,6 +1182,10 @@ function KanbanCard({
   // mais valioso conforme o CRM acumula leads: com muita coisa na coluna,
   // é fácil um lead parado passar despercebido rolando a lista.
   const parado = dias >= 7 && !lead.vendaId
+  // Lead que entrou sozinho: a 1ª linha da observação vira o selo "WhatsApp".
+  const viaWhatsapp = lead.origemCadastro === 'WHATSAPP'
+  const linhaOrigem = viaWhatsapp ? lead.observacao?.match(/^Cadastrado automaticamente pelo WhatsApp[^\n]*/)?.[0] : undefined
+  const obsCard = linhaOrigem ? lead.observacao!.slice(linhaOrigem.length).trim() : lead.observacao
 
   return (
     <div
@@ -1179,9 +1206,10 @@ function KanbanCard({
         </div>
       )}
       {lead.modeloInteresse && <div className="pl-kanban-card-meta">Interesse: {lead.modeloInteresse}</div>}
-      {lead.observacao && <div className="pl-kanban-card-meta">{lead.observacao}</div>}
+      {obsCard && <div className="pl-kanban-card-meta">{obsCard}</div>}
       {lead.tipoLead && <span className={`pl-kanban-card-tag ${TIPO_CLASS[lead.tipoLead]}`}>{TIPO_LABEL[lead.tipoLead]}</span>}
       {lead.postCode && <span className="pl-kanban-card-tag organico" title="Post do Instagram que trouxe o lead" style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>Instagram · {lead.postCode}</span>}
+      {viaWhatsapp && <span className="pl-kanban-card-tag whatsapp" title={linhaOrigem ?? 'Entrou sozinho quando o contato chamou no WhatsApp'} style={{ marginLeft: lead.tipoLead || lead.postCode ? 6 : 0 }} data-tag-whatsapp>WhatsApp</span>}
       {lead.tipoNegociacao && (
         <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]} style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>
           {lead.tipoNegociacao}

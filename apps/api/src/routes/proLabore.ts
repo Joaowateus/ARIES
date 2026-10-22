@@ -799,6 +799,31 @@ router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (r
   res.json(leads)
 })
 
+// Faixa do CRM: o WhatsApp de quem já está conectado (leads entram sozinhos)
+// e quantos entraram hoje por ele.
+router.get('/leads/captura-whatsapp', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
+  const { papel, vendedorId } = req.proLaboreUser!
+  const usuarioId = req.proLaboreUser!.sub
+  const verEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
+  const vendedores = await prisma.vendedor.findMany({
+    where: verEquipe ? { usuarioId, ativo: true, vende: true } : { id: vendedorId ?? '-', usuarioId },
+    select: { id: true, nome: true, assistenteComercial: { select: { status: true, cadastroAutomatico: true } } },
+    orderBy: { nome: 'asc' },
+  })
+  const cadastradosHoje = await prisma.lead.count({
+    where: { ...leadWhereBase(req), origemCadastro: 'WHATSAPP', criadoEm: { gte: inicioDoDiaBrasilia(diaBrasilia(new Date())) } },
+  })
+  res.json({
+    servidorConfigurado: evolutionConfigurada(),
+    cadastradosHoje,
+    vendedores: vendedores.map(v => ({
+      id: v.id, nome: v.nome, proprio: v.id === vendedorId,
+      conectado: v.assistenteComercial?.status === 'CONECTADO',
+      cadastroAutomatico: v.assistenteComercial?.cadastroAutomatico ?? true,
+    })),
+  })
+})
+
 const criarLeadSchema = z.object({
   nomeCliente: z.string().min(2, 'Nome muito curto'),
   telefone: z.string().optional(),
@@ -811,6 +836,8 @@ const criarLeadSchema = z.object({
   tipoLead: z.enum(TIPOS_LEAD).optional(),
   tipoNegociacao: z.enum(TIPOS_NEGOCIACAO).optional(),
   valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero'),
+  // Cadastra mesmo havendo lead aberto com o mesmo telefone (o vendedor confirmou).
+  forcarDuplicado: z.boolean().optional(),
 })
 
 router.post('/leads', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
@@ -830,6 +857,29 @@ router.post('/leads', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), asyn
     const vendedor = await prisma.vendedor.findFirst({ where: { id: vendedorId, usuarioId } })
     if (!vendedor) {
       res.status(400).json({ error: 'Vendedor não encontrado' })
+      return
+    }
+  }
+
+  // Com o cadastro automático pelo WhatsApp o lead costuma já estar no CRM:
+  // avisa antes de duplicar.
+  const final8 = (parse.data.telefone ?? '').replace(/\D/g, '').slice(-8)
+  if (final8.length === 8 && !parse.data.forcarDuplicado) {
+    const [existente] = await prisma.$queryRaw<Array<{ id: string; nomeCliente: string; estagio: string; vendedorId: string | null; vendedor: string | null; origemCadastro: string | null }>>`
+      SELECT l.id, l."nomeCliente", l.estagio, l."vendedorId", v.nome AS vendedor, l."origemCadastro" FROM "pro_labore_leads" l
+      LEFT JOIN "pro_labore_vendedores" v ON v.id = l."vendedorId"
+      WHERE l."usuarioId" = ${usuarioId} AND l.estagio NOT IN ('FECHADO', 'PERDIDO')
+        AND right(regexp_replace(coalesce(l."telefone", ''), '\\D', '', 'g'), 8) = ${final8}
+      ORDER BY l."criadoEm" DESC LIMIT 1`
+    if (existente) {
+      // Vendedor não vê os leads dos colegas: diz só com quem está.
+      const deOutro = papel !== 'DONO' && existente.vendedorId !== req.proLaboreUser!.vendedorId
+      res.status(409).json({
+        error: deOutro
+          ? `Já existe um lead aberto com esse telefone${existente.vendedor ? `, com ${existente.vendedor}` : ''}.`
+          : `Já existe um lead aberto com esse telefone: ${existente.nomeCliente.replace(/\.+$/, '')}${existente.vendedor ? ` (${existente.vendedor})` : ''}.`,
+        duplicado: deOutro ? { vendedor: existente.vendedor } : { id: existente.id, nomeCliente: existente.nomeCliente, estagio: existente.estagio, vendedor: existente.vendedor, origemCadastro: existente.origemCadastro },
+      })
       return
     }
   }
@@ -1071,6 +1121,19 @@ router.delete('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR')
   }
   await prisma.leadEstagioHistorico.deleteMany({ where: { leadId: atual.id } })
   await prisma.lead.delete({ where: { id: atual.id } })
+  // Lead que entrou sozinho pelo WhatsApp e foi excluído = não era lead
+  // (amigo, fornecedor...): o número não volta a ser cadastrado.
+  const numero = (atual.telefone ?? '').replace(/\D/g, '')
+  if (atual.origemCadastro === 'WHATSAPP' && atual.vendedorId && numero.length >= 8) {
+    const assistente = await prisma.assistenteComercial.findUnique({ where: { vendedorId: atual.vendedorId }, select: { id: true } })
+    if (assistente) {
+      await prisma.assistenteContatoIgnorado.upsert({
+        where: { assistenteId_numero: { assistenteId: assistente.id, numero } },
+        update: { motivo: 'NAO_E_LEAD' },
+        create: { assistenteId: assistente.id, numero, motivo: 'NAO_E_LEAD' },
+      })
+    }
+  }
   res.json({ ok: true })
 })
 
@@ -2734,7 +2797,7 @@ router.get('/plano-crescimento/historico', requireProLaboreAuth, requireModulo('
 
 const ASSISTENTE_SELECT = {
   id: true, vendedorId: true, numeroWhatsapp: true, nomeExibicao: true, status: true, criadoEm: true,
-  fotoPerfilUrl: true, conectadoEm: true, ultimoEventoEm: true, atendimentoAutomatico: true, configuracao: true,
+  fotoPerfilUrl: true, conectadoEm: true, ultimoEventoEm: true, atendimentoAutomatico: true, cadastroAutomatico: true, configuracao: true,
 } as const
 
 function assistenteParaResposta<T extends { configuracao: Prisma.JsonValue }>(a: T | null) {
@@ -2811,6 +2874,7 @@ const configAssistenteSchema = z.object({
 const salvarAssistenteSchema = z.object({
   vendedorId: z.string().optional(),
   atendimentoAutomatico: z.boolean().optional(),
+  cadastroAutomatico: z.boolean().optional(),
   configuracao: configAssistenteSchema.optional(),
 })
 
@@ -2824,6 +2888,7 @@ router.put('/assistente/config', requireProLaboreAuth, requireModulo('assistente
   if (!vendedor) return
   const dados = {
     ...(parse.data.atendimentoAutomatico !== undefined && { atendimentoAutomatico: parse.data.atendimentoAutomatico }),
+    ...(parse.data.cadastroAutomatico !== undefined && { cadastroAutomatico: parse.data.cadastroAutomatico }),
     ...(parse.data.configuracao && { configuracao: parse.data.configuracao as Prisma.InputJsonValue }),
   }
   const assistente = await prisma.assistenteComercial.upsert({
@@ -3089,8 +3154,17 @@ router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, requireModul
   } else if (acao === 'ENCERRAR') {
     await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', encerradaEm: agora } })
   } else if (acao === 'NAO_E_LEAD') {
+    // O lead que entrou sozinho na 1ª mensagem sai do CRM junto, se ninguém
+    // mexeu nele ainda (continua na etapa Lead e sem venda).
+    const automatico = conversa.leadId
+      ? await prisma.lead.findFirst({ where: { id: conversa.leadId, origemCadastro: 'WHATSAPP', estagio: 'LEAD', vendaId: null }, select: { id: true } })
+      : null
     await prisma.$transaction([
-      prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', resultado: 'NAO_E_LEAD', encerradaEm: agora } }),
+      prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', resultado: 'NAO_E_LEAD', encerradaEm: agora, ...(automatico && { leadId: null }) } }),
+      ...(automatico ? [
+        prisma.leadEstagioHistorico.deleteMany({ where: { leadId: automatico.id } }),
+        prisma.lead.delete({ where: { id: automatico.id } }),
+      ] : []),
       prisma.assistenteContatoIgnorado.upsert({
         where: { assistenteId_numero: { assistenteId: conversa.assistenteId, numero: conversa.numeroContato } },
         update: { motivo: 'MARCADO_PELO_VENDEDOR' },

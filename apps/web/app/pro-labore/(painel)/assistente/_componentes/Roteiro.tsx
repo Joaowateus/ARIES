@@ -166,7 +166,7 @@ export function Roteiro({ vendedorId, salva, padrao, nomeVendedor, onSalvo }: {
               titulo="Responder também contatos novos sem sinal de campanha"
               descricao="Quem chama pela primeira vez sem vir de anúncio nem usar uma frase abaixo (ex.: achou o número no Instagram). Desligado = só anúncio e frases."
             />
-            <Interruptor ligado={rascunho.criarLeadNoCrm} onChange={v => mudar('criarLeadNoCrm', v)} titulo="Criar o lead no CRM ao fim do roteiro" descricao="Com as respostas nas observações. Se já existir lead aberto com o mesmo telefone, liga a conversa a ele." />
+            <Interruptor ligado={rascunho.criarLeadNoCrm} onChange={v => mudar('criarLeadNoCrm', v)} titulo="Levar as respostas para o CRM" descricao="Com o cadastro automático ligado (na conexão), o lead já entra na 1ª mensagem e as respostas são acrescentadas a ele. Sem ele, o lead é criado ao fim do roteiro. Telefone com lead aberto não duplica." />
             <Interruptor ligado={rascunho.avisarVendedor} onChange={v => mudar('avisarVendedor', v)} titulo="Avisar o vendedor no WhatsApp" descricao="Manda o resumo no chat “Você” do próprio vendedor quando um lead fica pronto." />
           </div>
           <Campo rotulo="Frases de campanha (uma por linha)" dica="Se a primeira mensagem contém uma delas, o assistente atende mesmo que o contato não seja novo. Use o texto pronto dos seus anúncios e links.">
@@ -220,7 +220,7 @@ function ContatosIgnorados({ vendedorId }: { vendedorId?: string }) {
           {itens.map(i => (
             <li key={i.id}>
               <span className="pl-mono">{fmtTelefone(i.numero)}</span>
-              <small>{i.motivo === 'CONVERSA_PESSOAL' ? 'conversa pessoal' : 'marcado como não é lead'} · {tempoRelativo(i.criadoEm)}</small>
+              <small>{i.motivo === 'CONVERSA_PESSOAL' ? 'conversa pessoal' : i.motivo === 'NAO_E_LEAD' ? 'lead excluído do CRM' : 'marcado como não é lead'} · {tempoRelativo(i.criadoEm)}</small>
               <button type="button" className="pl-btn pl-btn-ghost" onClick={() => remover(i.id)}>Liberar</button>
             </li>
           ))}

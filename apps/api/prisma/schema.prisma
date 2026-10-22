@@ -1322,6 +1322,9 @@ model Lead {
   midiaId         String? // id da mídia no Instagram
   canalEntrada    String? // DIRECT | COMENTARIO | COMENTE_QUERO | RESPOSTA_STORY | LINK_WHATSAPP
   conversaId      String?
+  // Como o lead entrou no CRM: null = cadastro manual; WHATSAPP = criado
+  // sozinho quando o contato mandou a 1ª mensagem no WhatsApp do vendedor.
+  origemCadastro  String?
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   fechadoEm       DateTime?
@@ -1804,6 +1807,9 @@ model AssistenteComercial {
   ultimoEventoEm        DateTime?
   // Liga/desliga as respostas automáticas sem derrubar a conexão.
   atendimentoAutomatico Boolean   @default(true)
+  // Cadastra no CRM (etapa Lead) todo contato novo que chama o vendedor,
+  // mesmo com as respostas automáticas desligadas.
+  cadastroAutomatico    Boolean   @default(true)
   // Roteiro e regras (ver ConfigAssistente em lib/assistenteRoteiro.ts).
   configuracao          Json?
   criadoEm              DateTime  @default(now())
@@ -1879,7 +1885,7 @@ model AssistenteContatoIgnorado {
   id           String   @id @default(cuid())
   assistenteId String
   numero       String
-  motivo       String // CONVERSA_PESSOAL | MARCADO_PELO_VENDEDOR
+  motivo       String // CONVERSA_PESSOAL | MARCADO_PELO_VENDEDOR | NAO_E_LEAD (lead automático excluído do CRM)
   criadoEm     DateTime @default(now())
 
   assistente AssistenteComercial @relation(fields: [assistenteId], references: [id])

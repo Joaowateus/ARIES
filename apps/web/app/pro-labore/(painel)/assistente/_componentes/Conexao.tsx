@@ -84,11 +84,11 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
     }
   }
 
-  async function alternarAtendimento() {
+  async function alternar(campo: 'atendimentoAutomatico' | 'cadastroAutomatico') {
     if (!assistente) return
     setSalvandoToggle(true)
     try {
-      await proLaboreApi.assistente.salvar({ vendedorId, atendimentoAutomatico: !assistente.atendimentoAutomatico })
+      await proLaboreApi.assistente.salvar({ vendedorId, [campo]: !assistente[campo] })
       atualizar.current()
     } catch (e) {
       setErro((e as Error).message)
@@ -142,13 +142,29 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
             role="switch"
             aria-checked={assistente.atendimentoAutomatico}
             className={`pl-as-switch ${assistente.atendimentoAutomatico ? 'on' : ''}`}
-            onClick={alternarAtendimento}
+            onClick={() => alternar('atendimentoAutomatico')}
             disabled={salvandoToggle}
           >
             <span className="pl-as-switch-trilho" aria-hidden="true"><span /></span>
             <span>
               <b>{assistente.atendimentoAutomatico ? 'Respondendo leads novos' : 'Respostas pausadas'}</b>
               <small>{assistente.atendimentoAutomatico ? 'Toque pra pausar' : 'Toque pra voltar a responder'}</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={assistente.cadastroAutomatico}
+            className={`pl-as-switch ${assistente.cadastroAutomatico ? 'on' : ''}`}
+            onClick={() => alternar('cadastroAutomatico')}
+            disabled={salvandoToggle}
+            title="Todo contato novo que chamar este WhatsApp entra no CRM, na etapa Lead — mesmo com as respostas pausadas"
+            data-cadastro-automatico
+          >
+            <span className="pl-as-switch-trilho" aria-hidden="true"><span /></span>
+            <span>
+              <b>{assistente.cadastroAutomatico ? 'Cadastrando leads no CRM' : 'Cadastro no CRM pausado'}</b>
+              <small>{assistente.cadastroAutomatico ? 'Contato novo entra sozinho em Leads' : 'Toque pra cadastrar sozinho de novo'}</small>
             </span>
           </button>
           <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar} disabled={carregando}>Desconectar</button>
@@ -167,7 +183,7 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
         <div className="pl-card-sub" style={{ lineHeight: 1.55, marginTop: 4 }}>
           {status === 'DESCONECTADO'
             ? `O aparelho foi desconectado pelo celular ou ficou tempo demais sem internet. Leia o QR Code de novo pra ${quem === 'você' ? 'voltar' : `${nomeVendedor} voltar`} a ter o assistente.`
-            : 'Funciona igual ao WhatsApp Web: o número continua normal no celular, e o assistente passa a responder só os leads novos.'}
+            : 'Funciona igual ao WhatsApp Web: o número continua normal no celular. Todo contato novo que chamar entra sozinho no CRM, na etapa Lead, e o assistente pode responder os leads novos por você.'}
         </div>
 
         {!codigo ? (

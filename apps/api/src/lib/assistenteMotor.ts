@@ -2,6 +2,11 @@
 // eventos do servidor Evolution (webhook), decide se a mensagem é de um lead
 // novo, conduz o roteiro, passa a conversa pro vendedor e cria o Lead no CRM.
 //
+// Cadastro automático (independe das respostas): o contato novo que chama o
+// vendedor entra no CRM, etapa Lead, já na primeira mensagem. Telefone que já
+// tem lead aberto não duplica; lead perdido que volta a chamar vira follow
+// pra hoje. Lead excluído do CRM nunca mais é cadastrado sozinho.
+//
 // Regras de segurança (o número é o WhatsApp pessoal/comercial do vendedor):
 // - Só responde contato NOVO: veio de anúncio, usou uma frase de campanha,
 //   ou nunca conversou com o vendedor (nem aqui, nem no histórico do
@@ -38,6 +43,9 @@ export interface MensagemWhatsapp {
   nomePerfil: string | null
   instanteMs: number | null
   veioDeAnuncio: boolean
+  tituloAnuncio: string | null
+  // Endereço "@lid" sem o telefone ao lado: `numero` é só um identificador.
+  semTelefone: boolean
 }
 
 export function soDigitos(v: string | null | undefined): string {
@@ -81,13 +89,26 @@ function extrairTexto(message: Obj): { texto: string; ehTexto: boolean } {
 
 // Clique em anúncio "enviar mensagem pelo WhatsApp" chega com o anúncio de
 // origem anexado (externalAdReply / conversionSource).
-function veioDeAnuncio(dados: Obj, message: Obj): boolean {
-  const contextos = [obj(dados.contextInfo), ...Object.values(message).map(v => obj(obj(v).contextInfo))]
+function contextosDaMensagem(dados: Obj, message: Obj): Obj[] {
+  return [obj(dados.contextInfo), ...Object.values(message).map(v => obj(obj(v).contextInfo))]
+}
+
+function veioDeAnuncio(contextos: Obj[]): boolean {
   return contextos.some(c => {
     const ad = obj(c.externalAdReply)
     const fonte = `${str(c.conversionSource) ?? ''} ${str(c.entryPointConversionSource) ?? ''}`
     return str(ad.sourceType) === 'ad' || !!str(ad.sourceId) || /\bads?\b|ctwa|fb_ads/i.test(fonte)
   })
+}
+
+// Título do anúncio do clique para WhatsApp (ex.: "Onix 2020") — vai pra observação do lead.
+function tituloDoAnuncio(contextos: Obj[]): string | null {
+  for (const c of contextos) {
+    const ad = obj(c.externalAdReply)
+    const titulo = (str(ad.title) ?? str(ad.body))?.trim()
+    if (titulo) return titulo.slice(0, 120)
+  }
+  return null
 }
 
 export function lerMensagens(dadosBrutos: unknown): MensagemWhatsapp[] {
@@ -109,6 +130,7 @@ export function lerMensagens(dadosBrutos: unknown): MensagemWhatsapp[] {
     const numero = soDigitos(jidTelefone.split('@')[0].split(':')[0])
     if (!numero) continue
     const { texto, ehTexto } = extrairTexto(message)
+    const contextos = contextosDaMensagem(dados, message)
     const ts = Number(dados.messageTimestamp)
     saida.push({
       id: str(key.id),
@@ -119,7 +141,9 @@ export function lerMensagens(dadosBrutos: unknown): MensagemWhatsapp[] {
       ehTexto,
       nomePerfil: str(dados.pushName),
       instanteMs: Number.isFinite(ts) && ts > 0 ? (ts > 1e12 ? ts : ts * 1000) : null,
-      veioDeAnuncio: veioDeAnuncio(dados, message),
+      veioDeAnuncio: veioDeAnuncio(contextos),
+      tituloAnuncio: tituloDoAnuncio(contextos),
+      semTelefone: jidTelefone.endsWith('@lid'),
     })
   }
   return saida
@@ -262,11 +286,14 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     select: { id: true },
   })
   let origem: string | null = null
-  if (!aberta && a.atendimentoAutomatico) {
+  if (!aberta && (a.atendimentoAutomatico || a.cadastroAutomatico)) {
     if (m.veioDeAnuncio) origem = 'ANUNCIO'
     else if (casaGatilho(m.texto, cfg.gatilhos)) origem = 'GATILHO'
-    else if (cfg.responderContatosNovos && await contatoSemHistorico(a, m)) origem = 'CONTATO_NOVO'
+    else if ((a.cadastroAutomatico || cfg.responderContatosNovos) && await contatoSemHistorico(a, m)) origem = 'CONTATO_NOVO'
   }
+  // O roteiro só roda com as respostas ligadas; o cadastro no CRM acontece
+  // mesmo com elas pausadas (aí o vendedor atende sozinho, sem conversa aqui).
+  const roboAtende = !!origem && a.atendimentoAutomatico && (origem !== 'CONTATO_NOVO' || cfg.responderContatosNovos)
 
   const acao = await comTrava(`${a.id}:${m.numero}`, async (tx): Promise<AcaoPendente | null> => {
     if (m.id && await tx.assistenteMensagem.findUnique({ where: { providerId: m.id }, select: { id: true } })) return null
@@ -302,14 +329,19 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
       return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo, mensagensAvulsas: [], nomeContato, origem: conversa.origem }
     }
 
-    if (!origem) return null
+    if (!origem && !a.cadastroAutomatico) return null
     const ignorado = await tx.assistenteContatoIgnorado.findUnique({ where: { assistenteId_numero: { assistenteId: a.id, numero: m.numero } } })
-    if (ignorado) return null
+    // Conversa pessoal não ganha lead novo nem robô, mas um lead perdido
+    // que volta a chamar (o vendedor já tinha falado com ele) é sinalizado.
+    const leadId = a.cadastroAutomatico && (!ignorado || ignorado.motivo === 'CONVERSA_PESSOAL')
+      ? await capturarLead(tx, a, m, ignorado ? null : origem)
+      : null
+    if (!roboAtende || ignorado) return null
     const nomeContato = m.nomePerfil ?? formatarTelefone(m.numero)
     const passo = iniciarRoteiro(cfg, contexto(a, cfg, nomeContato), m.texto)
     const criada = await tx.assistenteConversa.create({
       data: {
-        assistenteId: a.id, tipo: 'LEAD', nomeContato, numeroContato: m.numero, jid: m.jid, origem,
+        assistenteId: a.id, tipo: 'LEAD', nomeContato, numeroContato: m.numero, jid: m.jid, origem, leadId,
         ...dadosDoPasso(passo),
         mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
       },
@@ -320,7 +352,9 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
   if (!acao) return
   const textos = acao.passo ? acao.passo.mensagens : acao.mensagensAvulsas
   await enviarDoAssistente(a, cfg, acao.conversaId, acao.jid, textos)
-  if (acao.passo?.desfecho && acao.passo.desfecho !== 'DESISTIU') {
+  if (acao.passo?.desfecho === 'DESISTIU') {
+    await anotarDesistencia(acao.conversaId).catch(e => logger.error({ err: e }, 'assistente: falha ao anotar desistência no lead'))
+  } else if (acao.passo?.desfecho) {
     await concluirAtendimento(a, cfg, acao.conversaId)
   }
 }
@@ -396,7 +430,9 @@ async function concluirAtendimento(a: AssistenteCompleto, cfg: ConfigAssistente,
   const conversa = await prisma.assistenteConversa.findUnique({ where: { id: conversaId } })
   if (!conversa) return
   let leadId = conversa.leadId
-  if (cfg.criarLeadNoCrm && !leadId) {
+  if (leadId) {
+    await completarLead(leadId, cfg, conversa).catch(e => logger.error({ err: e, conversaId }, 'assistente: falha ao completar lead no CRM'))
+  } else if (cfg.criarLeadNoCrm) {
     try {
       leadId = await vincularOuCriarLead(a.vendedor.usuarioId, a.vendedorId, cfg, conversa)
       await prisma.assistenteConversa.update({ where: { id: conversaId }, data: { leadId } })
@@ -456,6 +492,7 @@ export async function vincularOuCriarLead(
       telefone: formatarTelefone(conversa.numeroContato),
       modeloInteresse: respostaDoCampo(cfg, respostas, 'modeloInteresse'),
       observacao,
+      origemCadastro: 'WHATSAPP',
       // Anúncio e frase de campanha = tráfego pago. Contato novo sem sinal
       // de campanha fica sem canal — o vendedor classifica.
       tipoLead: origemPost ? 'ORGANICO' : conversa.origem === 'ANUNCIO' || conversa.origem === 'GATILHO' ? 'TRAFEGO' : null,
@@ -463,6 +500,117 @@ export async function vincularOuCriarLead(
   })
   await prisma.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
   return lead.id
+}
+
+// ---------- Cadastro automático no CRM ----------
+
+interface LeadDoTelefone { id: string; estagio: string; vendedorId: string | null; nomeCliente: string; fechadoEm: Date | null }
+
+const trecho = (t: string, max: number) => (t.length > max ? `${t.slice(0, max - 1)}…` : t)
+const dataBR = (d: Date) => d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+const DIAS_ENTRE_SINAIS_DE_RETORNO = 7
+const primeiroNome = (nome: string) => { const n = nome.trim().split(/\s+/)[0] ?? ''; return n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() }
+
+/**
+ * Chamado na 1ª mensagem de um contato sem conversa aberta. Devolve o lead
+ * ligado ao telefone (aberto, perdido que voltou ou recém-criado) ou null.
+ * `origem` null = não é contato novo: só procura o que já existe.
+ */
+async function capturarLead(tx: Prisma.TransactionClient, a: AssistenteCompleto, m: MensagemWhatsapp, origem: string | null): Promise<string | null> {
+  const usuarioId = a.vendedor.usuarioId
+  const doTelefone = m.semTelefone ? [] : await tx.$queryRaw<LeadDoTelefone[]>`
+    SELECT id, estagio, "vendedorId", "nomeCliente", "fechadoEm" FROM "pro_labore_leads"
+    WHERE "usuarioId" = ${usuarioId}
+      AND right(regexp_replace(coalesce("telefone", ''), '\\D', '', 'g'), 8) = ${m.numero.slice(-8)}
+    ORDER BY "criadoEm" DESC LIMIT 10`
+  const aberto = doTelefone.find(l => l.estagio !== 'FECHADO' && l.estagio !== 'PERDIDO')
+  if (aberto) return aberto.id
+  const perdido = doTelefone.find(l => l.estagio === 'PERDIDO')
+  if (perdido) {
+    await sinalizarRetorno(tx, a, perdido, m)
+    return perdido.id
+  }
+  if (!origem) return null
+
+  const cliente = doTelefone.find(l => l.estagio === 'FECHADO')
+  // Link rastreado do Instagram ("Vi a XRE 300 (#P-0917-XRE)") liga o lead ao post.
+  const origemPost = origem === 'ANUNCIO' ? null : await origemPorCodigo(usuarioId, m.texto)
+  const nomePerfil = m.nomePerfil?.trim()
+  const observacao = [
+    `Cadastrado automaticamente pelo WhatsApp de ${primeiroNome(a.vendedor.nome)} (origem: ${ROTULO_ORIGEM[origem] ?? origem}${m.tituloAnuncio ? ` "${m.tituloAnuncio}"` : ''}).`,
+    m.texto ? `Primeira mensagem: "${trecho(m.texto, 300)}"` : null,
+    cliente ? `Já é cliente: comprou${cliente.fechadoEm ? ` em ${dataBR(cliente.fechadoEm)}` : ''}.` : null,
+    m.semTelefone ? 'O WhatsApp não mostrou o número deste contato (privacidade): pegue o telefone na conversa.' : null,
+  ].filter(Boolean).join('\n')
+  const lead = await tx.lead.create({
+    data: {
+      usuarioId,
+      vendedorId: a.vendedorId,
+      ...origemPost,
+      nomeCliente: nomePerfil && nomePerfil.length >= 2 ? nomePerfil.slice(0, 120) : m.semTelefone ? 'Contato do WhatsApp' : formatarTelefone(m.numero),
+      telefone: m.semTelefone ? null : formatarTelefone(m.numero),
+      observacao,
+      origemCadastro: 'WHATSAPP',
+      tipoLead: origemPost ? 'ORGANICO' : origem === 'ANUNCIO' || origem === 'GATILHO' ? 'TRAFEGO' : null,
+    },
+  })
+  await tx.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
+  logger.info({ leadId: lead.id, vendedorId: a.vendedorId, origem }, 'assistente: lead cadastrado automaticamente pelo WhatsApp')
+  return lead.id
+}
+
+// Lead perdido escreveu de novo: fica quente na Reativação com um follow pra
+// hoje. No máximo um aviso por semana, e nada se já houver follow pendente.
+async function sinalizarRetorno(tx: Prisma.TransactionClient, a: AssistenteCompleto, lead: LeadDoTelefone, m: MensagemWhatsapp) {
+  const recente = await tx.leadFollow.findFirst({
+    where: { leadId: lead.id, OR: [{ status: 'PENDENTE' }, { criadoEm: { gte: new Date(Date.now() - DIAS_ENTRE_SINAIS_DE_RETORNO * 86_400_000) } }] },
+    select: { id: true },
+  })
+  if (recente) return
+  const outroVendedor = lead.vendedorId && lead.vendedorId !== a.vendedorId ? ` de ${primeiroNome(a.vendedor.nome)}` : ''
+  await tx.lead.update({ where: { id: lead.id }, data: { temperatura: 'QUENTE' } })
+  await tx.leadFollow.create({
+    data: {
+      usuarioId: a.vendedor.usuarioId,
+      leadId: lead.id,
+      vendedorId: lead.vendedorId ?? a.vendedorId,
+      agendadoPara: new Date(),
+      canal: 'WHATSAPP',
+      nota: `Voltou a chamar no WhatsApp${outroVendedor}: "${trecho(m.texto, 160)}"`,
+      criadoPor: 'WhatsApp (automático)',
+    },
+  })
+}
+
+// Fim do roteiro com o lead já no CRM: acrescenta o que o assistente apurou
+// sem apagar o que o vendedor já tenha preenchido.
+async function completarLead(leadId: string, cfg: ConfigAssistente, conversa: { numeroContato: string; nomeContato: string; respostas: Prisma.JsonValue }) {
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { nomeCliente: true, modeloInteresse: true, observacao: true } })
+  if (!lead) return
+  const respostas = (conversa.respostas ?? {}) as Record<string, string>
+  const resumo = linhasResumo(cfg, respostas).map(l => `${l.rotulo}: ${l.valor}`)
+  const nome = respostaDoCampo(cfg, respostas, 'nomeCompleto')
+  const nomeAutomatico = [conversa.nomeContato, formatarTelefone(conversa.numeroContato)].includes(lead.nomeCliente)
+  const jaTemResumo = lead.observacao?.includes('Pré-atendido pelo Assistente Comercial')
+  await prisma.lead.update({
+    where: { id: leadId },
+    data: {
+      ...(nome && nomeAutomatico && { nomeCliente: nome }),
+      ...(!lead.modeloInteresse && { modeloInteresse: respostaDoCampo(cfg, respostas, 'modeloInteresse') }),
+      ...(!jaTemResumo && resumo.length && {
+        observacao: [lead.observacao, 'Pré-atendido pelo Assistente Comercial no WhatsApp:', ...resumo].filter(Boolean).join('\n'),
+      }),
+    },
+  })
+}
+
+// Pediu pra parar no meio do roteiro: o lead (já cadastrado na 1ª mensagem)
+// fica no CRM, mas o vendedor sabe o que aconteceu antes de abordar.
+async function anotarDesistencia(conversaId: string) {
+  const c = await prisma.assistenteConversa.findUnique({ where: { id: conversaId }, select: { lead: { select: { id: true, observacao: true } } } })
+  const NOTA = 'Pediu para parar o atendimento automático do WhatsApp.'
+  if (!c?.lead || c.lead.observacao?.includes(NOTA)) return
+  await prisma.lead.update({ where: { id: c.lead.id }, data: { observacao: [c.lead.observacao, NOTA].filter(Boolean).join('\n') } })
 }
 
 // ---------- Suporte ao vendedor pelo chat "Você" ----------
