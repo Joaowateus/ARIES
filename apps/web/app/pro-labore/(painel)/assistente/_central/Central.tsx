@@ -37,7 +37,11 @@ const ABAS: Array<{ valor: AbaCentral; rotulo: string }> = [
 const USA_CENTRAL: AbaCentral[] = ['visao', 'metas', 'aquisicao', 'departamentos', 'plano', 'premissas']
 
 export function Central() {
-  const [aba, setAba] = useState<AbaCentral>('visao')
+  // ?aba=whatsapp (link "Conectar WhatsApp" do CRM) abre direto na aba.
+  const [aba, setAba] = useState<AbaCentral>(() => {
+    const pedida = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('aba')
+    return ABAS.find(a => a.valor === pedida)?.valor ?? 'visao'
+  })
   const [mes, setMes] = useState(mesAtual())
   const [versao, setVersao] = useState(0)
   const [dados, setDados] = useState<{ chave: string; d: IntelCentral } | null>(null)

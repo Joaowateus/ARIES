@@ -630,6 +630,7 @@
 }
 .pl-kanban-card-tag.trafego { background: var(--pl-accent-soft); color: var(--pl-accent); }
 .pl-kanban-card-tag.organico { background: var(--pl-accent-3-soft); color: var(--pl-accent-3); }
+.pl-kanban-card-tag.whatsapp { background: color-mix(in srgb, var(--pl-good) 14%, transparent); color: var(--pl-good); }
 /* Selo só com a abreviação (P/R) — o significado completo fica no title
    (hover), nunca escrito por extenso na tela. */
 .pl-tipo-negociacao-tag {

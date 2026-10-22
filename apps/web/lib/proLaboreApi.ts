@@ -259,6 +259,8 @@ export interface Lead {
   origem?: string | null
   postCode?: string | null
   canalEntrada?: string | null
+  // WHATSAPP = entrou sozinho quando o contato chamou o vendedor; null = manual.
+  origemCadastro?: 'WHATSAPP' | null
   criadoEm: string
   atualizadoEm: string
   fechadoEm?: string | null
@@ -501,8 +503,9 @@ export const proLaboreApi = {
   },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
-    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; tipoNegociacao?: TipoNegociacao; valorNegociacao: number }) =>
+    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; tipoNegociacao?: TipoNegociacao; valorNegociacao: number; forcarDuplicado?: boolean }) =>
       request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
+    capturaWhatsapp: () => request<CapturaWhatsappCrm>('/pro-labore/leads/captura-whatsapp'),
     editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; tipoNegociacao?: TipoNegociacao | null; valorNegociacao?: number }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     mudarEstagio: (id: string, estagio: EstagioLead, perda?: { motivoPerda: MotivoPerda; notaPerda?: string; temperatura?: Temperatura }) =>
@@ -687,7 +690,7 @@ export const proLaboreApi = {
   assistente: {
     config: (vendedorId?: string) =>
       request<ConfigAssistenteResposta>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
-    salvar: (data: { vendedorId?: string; atendimentoAutomatico?: boolean; configuracao?: ConfigRoteiroAssistente }) =>
+    salvar: (data: { vendedorId?: string; atendimentoAutomatico?: boolean; cadastroAutomatico?: boolean; configuracao?: ConfigRoteiroAssistente }) =>
       request<AssistenteComercial>('/pro-labore/assistente/config', { method: 'PUT', body: JSON.stringify(data) }),
     conectar: (data: { vendedorId?: string; numeroPareamento?: string }) =>
       request<ConexaoAssistente>('/pro-labore/assistente/conectar', { method: 'POST', body: JSON.stringify(data) }),
@@ -1548,9 +1551,17 @@ export interface AssistenteComercial {
   conectadoEm?: string | null
   ultimoEventoEm?: string | null
   atendimentoAutomatico: boolean
+  // Contato novo entra sozinho no CRM (etapa Lead), com ou sem as respostas.
+  cadastroAutomatico: boolean
   configuracao: ConfigRoteiroAssistente
   criadoEm: string
   _count?: { ignorados: number }
+}
+
+export interface CapturaWhatsappCrm {
+  servidorConfigurado: boolean
+  cadastradosHoje: number
+  vendedores: { id: string; nome: string; proprio: boolean; conectado: boolean; cadastroAutomatico: boolean }[]
 }
 
 export interface ConfigAssistenteResposta {
@@ -1606,7 +1617,7 @@ export interface SimulacaoAssistente {
   gatilho: string | null
 }
 
-export interface ContatoIgnoradoAssistente { id: string; numero: string; motivo: 'CONVERSA_PESSOAL' | 'MARCADO_PELO_VENDEDOR'; criadoEm: string }
+export interface ContatoIgnoradoAssistente { id: string; numero: string; motivo: 'CONVERSA_PESSOAL' | 'MARCADO_PELO_VENDEDOR' | 'NAO_E_LEAD'; criadoEm: string }
 
 export interface ResumoAssistente {
   periodo: { dias: number; inicio: string | null; fim: string | null }
