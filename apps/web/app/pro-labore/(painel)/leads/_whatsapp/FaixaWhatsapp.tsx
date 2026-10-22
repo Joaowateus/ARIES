@@ -18,10 +18,29 @@ export function FaixaWhatsapp({ gestao, versao }: { gestao: boolean; versao: num
     proLaboreApi.leads.capturaWhatsapp().then(r => { if (!cancelado) setD(r) }).catch(() => undefined)
     return () => { cancelado = true }
   }, [versao])
-  if (!d || !d.servidorConfigurado || !d.vendedores.length) return null
+  if (!d || !d.vendedores.length) return null
+  const linkConectar = gestao ? '/pro-labore/assistente?aba=whatsapp' : '/pro-labore/assistente'
+
+  // Sem o servidor do WhatsApp (Evolution) ninguém consegue conectar: diz o
+  // que falta em vez de esconder a faixa.
+  if (!d.servidorConfigurado) {
+    return gestao ? (
+      <div className="pl-alert pl-alert-info" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }} data-faixa-whatsapp="sem-servidor">
+        <IconeWhats />
+        <span style={{ flex: '1 1 300px' }}>
+          <b>Cadastro automático pelo WhatsApp:</b> falta ligar o servidor do WhatsApp (um só para a equipe toda). Depois disso, cada vendedor conecta o próprio número por QR Code e os leads passam a entrar sozinhos aqui.
+        </span>
+        <Link className="pl-btn pl-btn-ghost" href={linkConectar}>Ver o que falta</Link>
+      </div>
+    ) : (
+      <div className="pl-section-note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }} data-faixa-whatsapp="sem-servidor">
+        <span className="pl-status-badge atencao">Em ativação</span>
+        <span>Cadastro automático pelo WhatsApp: quando o gestor ligar, você conecta seu WhatsApp e os leads passam a entrar sozinhos aqui.</span>
+      </div>
+    )
+  }
 
   const hoje = d.cadastradosHoje > 0 ? ` · ${d.cadastradosHoje} ${d.cadastradosHoje === 1 ? 'entrou' : 'entraram'} hoje` : ''
-  const linkConectar = gestao ? '/pro-labore/assistente?aba=whatsapp' : '/pro-labore/assistente'
 
   if (!gestao) {
     const eu = d.vendedores[0]
