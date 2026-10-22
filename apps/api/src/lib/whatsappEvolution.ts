@@ -84,26 +84,48 @@ export async function estadoInstancia(instancia: string): Promise<EstadoConexao 
 // Cria a instância (se ainda não existe) já com o webhook apontado pra cá,
 // e devolve o QR / código de pareamento pra abrir a sessão.
 export async function prepararConexao(instancia: string, webhookUrl: string, numeroPareamento?: string): Promise<CodigoConexao> {
-  const estado = await estadoInstancia(instancia)
-  if (estado === 'inexistente') {
-    await chamar('POST', '/instance/create', {
-      instanceName: instancia,
-      integration: 'WHATSAPP-BAILEYS',
-      qrcode: false,
-      // Sem histórico antigo e sem grupos: o assistente só precisa das
-      // mensagens novas que chegarem depois de conectado.
-      syncFullHistory: false,
-      groupsIgnore: true,
-      readMessages: false,
-      alwaysOnline: false,
-      webhook: { url: webhookUrl, byEvents: false, base64: false, events: EVENTOS_WEBHOOK },
-    })
-  } else {
-    await configurarWebhook(instancia, webhookUrl)
+  // Logo depois de desconectar, o servidor ainda está apagando a sessão
+  // antiga e recusa mexer nela por uns segundos: espera e tenta de novo.
+  for (let tentativa = 0; ; tentativa++) {
+    try {
+      await garantirInstancia(instancia, webhookUrl)
+      break
+    } catch (e) {
+      if (tentativa >= 3 || !(e instanceof ErroWhatsapp) || e.status === 401) throw e
+      await new Promise(r => setTimeout(r, 2000))
+    }
   }
   const numero = numeroPareamento?.replace(/\D/g, '')
-  const r = await chamar<Parameters<typeof normalizarQr>[0]>('GET', `/instance/connect/${encodeURIComponent(instancia)}${numero ? `?number=${numero}` : ''}`)
-  return normalizarQr(r)
+  const caminho = `/instance/connect/${encodeURIComponent(instancia)}${numero ? `?number=${numero}` : ''}`
+  // A sessão leva alguns segundos para receber o QR do WhatsApp (sobretudo
+  // na primeira conexão do servidor): pergunta de novo antes de devolver
+  // vazio, senão a tela ficaria sem imagem até a próxima renovação.
+  let codigo = normalizarQr(await chamar<Parameters<typeof normalizarQr>[0]>('GET', caminho))
+  for (let tentativa = 0; tentativa < 3 && !codigo.qrBase64 && !codigo.pairingCode; tentativa++) {
+    await new Promise(r => setTimeout(r, 1500))
+    if ((await estadoInstancia(instancia)) === 'open') break
+    codigo = normalizarQr(await chamar<Parameters<typeof normalizarQr>[0]>('GET', caminho))
+  }
+  return codigo
+}
+
+async function garantirInstancia(instancia: string, webhookUrl: string): Promise<void> {
+  if ((await estadoInstancia(instancia)) !== 'inexistente') {
+    await configurarWebhook(instancia, webhookUrl)
+    return
+  }
+  await chamar('POST', '/instance/create', {
+    instanceName: instancia,
+    integration: 'WHATSAPP-BAILEYS',
+    qrcode: false,
+    // Sem histórico antigo e sem grupos: o assistente só precisa das
+    // mensagens novas que chegarem depois de conectado.
+    syncFullHistory: false,
+    groupsIgnore: true,
+    readMessages: false,
+    alwaysOnline: false,
+    webhook: { url: webhookUrl, byEvents: false, base64: false, events: EVENTOS_WEBHOOK },
+  })
 }
 
 export async function configurarWebhook(instancia: string, webhookUrl: string): Promise<void> {
