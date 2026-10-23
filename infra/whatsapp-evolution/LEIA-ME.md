@@ -6,6 +6,9 @@ cadastro automático de leads e o Assistente Comercial não funcionam.
 
 Tempo total: uns 40 minutos. O instalador faz a parte técnica sozinho.
 
+Conta do Oracle demorando a ser liberada? Use o Google Cloud, que ativa na
+hora: [LEIA-ME-GOOGLE.md](LEIA-ME-GOOGLE.md).
+
 ## 1. Criar a conta
 
 1. Acesse **oracle.com/br/cloud/free** e clique em **Comece gratuitamente**.
