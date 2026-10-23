@@ -55,6 +55,7 @@ import proLaboreIntelRoutes from './routes/proLaboreIntel'
 import proLaboreSistemaRoutes from './routes/proLaboreSistema'
 import proLaboreFollowRoutes from './routes/proLaboreFollow'
 import proLaboreAssistenteConhecimentoRoutes from './routes/proLaboreAssistenteConhecimento'
+import proLaboreAssistenteVitrineRoutes from './routes/proLaboreAssistenteVitrine'
 import proLaboreSmTestesRoutes from './routes/proLaboreSmTestes'
 import proLaboreSmAssistenteRoutes from './routes/proLaboreSmAssistente'
 import proLaboreSmFocoRoutes from './routes/proLaboreSmFoco'
@@ -222,6 +223,7 @@ app.use('/pro-labore', proLaboreIntelRoutes)
 app.use('/pro-labore', proLaboreSistemaRoutes)
 app.use('/pro-labore', proLaboreFollowRoutes)
 app.use('/pro-labore', proLaboreAssistenteConhecimentoRoutes)
+app.use('/pro-labore', proLaboreAssistenteVitrineRoutes)
 app.use('/pro-labore', proLaboreSmTestesRoutes)
 app.use('/pro-labore', proLaboreSmAssistenteRoutes)
 app.use('/pro-labore', proLaboreSmFocoRoutes)

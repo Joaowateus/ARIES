@@ -153,14 +153,25 @@ export function casaGatilho(texto: string, gatilhos: string[]): string | null {
 
 export type Desfecho = 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU'
 export interface EstadoRoteiro { etapa: number; respostas: Record<string, string> }
-export interface PassoRoteiro { mensagens: string[]; estado: EstadoRoteiro; desfecho: Desfecho | null; conhecimentoUsado?: string | null }
+// Foto (vitrine do estoque) enviada antes de mensagens[antesDe], com a ficha na legenda.
+export interface MidiaPasso { url: string; legenda: string; antesDe: number }
+export interface PassoRoteiro {
+  mensagens: string[]
+  estado: EstadoRoteiro
+  desfecho: Desfecho | null
+  conhecimentoUsado?: string | null
+  motoUsada?: string | null
+  midias?: MidiaPasso[]
+}
 
 // Respostas aprovadas da base de conhecimento: quando o cliente pergunta
 // algo no meio do roteiro, o assistente responde com o texto da loja e
 // volta para a pergunta em que estava. `usados` evita repetir a mesma;
 // `resto` é o que a mensagem tem além da pergunta ("A CG 160, aceita
 // troca?" → "A CG 160"), que ainda vale como resposta do roteiro.
-export interface RespostaDaBase { id: string; texto: string; resto: string }
+// Da vitrine: `motoId`, a `foto` de capa e `valeComo` (a moto pedida já
+// responde "Qual veículo te interessou?").
+export interface RespostaDaBase { id: string; texto: string; resto: string; motoId?: string; foto?: string | null; valeComo?: { campo: CampoLead; valor: string } }
 export interface BaseRespostas { responder: (texto: string, usados: string[]) => RespostaDaBase | null }
 const usadosDaBase = (respostas: Record<string, string>) => (respostas._kb ?? '').split(',').filter(Boolean)
 
@@ -169,6 +180,16 @@ const usadosDaBase = (respostas: Record<string, string>) => (respostas._kb ?? ''
 export function semPerguntaFinal(texto: string): string {
   const t = texto.trim()
   return t.match(/^([\s\S]*[.!])\s+[^.!?\n]*\?$/)?.[1].trim() ?? t
+}
+
+// Resposta da base na frente da próxima mensagem do roteiro: no mesmo balão,
+// ou como legenda da foto enviada antes dela.
+function comResposta(daBase: RespostaDaBase | null, mensagens: string[], antesDe = 0): Pick<PassoRoteiro, 'mensagens' | 'midias' | 'conhecimentoUsado' | 'motoUsada'> {
+  const usado = { conhecimentoUsado: daBase && !daBase.motoId ? daBase.id : null, motoUsada: daBase?.motoId ?? null }
+  if (!daBase) return { mensagens, ...usado }
+  if (daBase.foto) return { mensagens, midias: [{ url: daBase.foto, legenda: daBase.texto, antesDe }], ...usado }
+  const i = Math.min(antesDe, mensagens.length - 1)
+  return { mensagens: mensagens.map((m, j) => (j === i ? `${semPerguntaFinal(daBase.texto)}\n\n${m}` : m)), ...usado }
 }
 
 function tambemResponde(p: PerguntaRoteiro, texto: string, daBase: RespostaDaBase): boolean {
@@ -183,16 +204,27 @@ export function iniciarRoteiro(cfg: ConfigAssistente, ctx: ContextoRoteiro, text
   if (pedeAtendente(textoInicial)) {
     return { mensagens: [preencher(cfg.mensagemAtendente, ctx)], estado, desfecho: 'PEDIU_ATENDENTE' }
   }
-  // Primeira mensagem já com uma dúvida ("Aceita troca?"): responde junto.
+  // Primeira mensagem já com uma dúvida ("Aceita troca?", "Tem a XRE?"): responde junto.
   const daBase = base?.responder(textoInicial, []) ?? null
   if (daBase) estado.respostas._kb = daBase.id
-  const abertura = daBase ? `${boasVindas}\n\n${semPerguntaFinal(daBase.texto)}` : boasVindas
-  if (cfg.perguntas.length === 0) {
-    return { mensagens: [abertura, preencher(cfg.mensagemEncerramento, ctx)], estado, desfecho: 'QUALIFICADO', conhecimentoUsado: daBase?.id ?? null }
+  // A moto pedida já responde a primeira pergunta ("Qual veículo te interessou?").
+  const p0 = cfg.perguntas[0]
+  if (p0 && daBase?.valeComo?.campo === p0.campo) {
+    estado.respostas[p0.id] = daBase.valeComo.valor
+    estado.etapa = 1
   }
+  const proxima = cfg.perguntas[estado.etapa]
+  const fim = proxima ? null : preencher(cfg.mensagemEncerramento, ctx)
+  if (daBase?.foto) {
+    // Com foto: boas-vindas, a foto com a ficha e, depois, a pergunta.
+    return { ...comResposta(daBase, [boasVindas, proxima ? textoPergunta(proxima, ctx) : fim!], 1), estado, desfecho: proxima ? null : 'QUALIFICADO' }
+  }
+  const abertura = daBase ? `${boasVindas}\n\n${semPerguntaFinal(daBase.texto)}` : boasVindas
+  const usado = comResposta(daBase, [])
+  if (!proxima) return { mensagens: [abertura, fim!], estado, desfecho: 'QUALIFICADO', conhecimentoUsado: usado.conhecimentoUsado, motoUsada: usado.motoUsada }
   // Boas-vindas e primeira pergunta num balão só: se fossem dois, uma
   // resposta rápida no meio viraria resposta de uma pergunta ainda não feita.
-  return { mensagens: [`${abertura}\n\n${textoPergunta(cfg.perguntas[0], ctx)}`], estado, desfecho: null, conhecimentoUsado: daBase?.id ?? null }
+  return { mensagens: [`${abertura}\n\n${textoPergunta(proxima, ctx)}`], estado, desfecho: null, conhecimentoUsado: usado.conhecimentoUsado, motoUsada: usado.motoUsada }
 }
 
 export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string, ctx: ContextoRoteiro, base?: BaseRespostas): PassoRoteiro {
@@ -202,22 +234,21 @@ export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, text
   const usados = usadosDaBase(estado.respostas)
   const daBase = base?.responder(texto, usados) ?? null
   if (daBase) estado.respostas._kb = [...usados, daBase.id].join(',')
-  const comBase = (msg: string) => daBase ? `${semPerguntaFinal(daBase.texto)}\n\n${msg}` : msg
-  const usado = { conhecimentoUsado: daBase?.id ?? null }
+  const valeComo = pergunta && daBase?.valeComo?.campo === pergunta.campo ? daBase.valeComo.valor : null
   // O cliente só perguntou, sem responder: resposta da loja e a mesma
   // pergunta de novo (a etapa não anda).
-  if (pergunta && daBase && !pedeAtendente(texto) && !tambemResponde(pergunta, texto, daBase)) {
-    return { mensagens: [comBase(textoPergunta(pergunta, ctx))], estado, desfecho: null, ...usado }
+  if (pergunta && daBase && !valeComo && !pedeAtendente(texto) && !tambemResponde(pergunta, texto, daBase)) {
+    return { ...comResposta(daBase, [textoPergunta(pergunta, ctx)]), estado, desfecho: null }
   }
   // "Pode me ligar às 18h" responde a pergunta E pede atendimento — guarda
   // a resposta antes de passar a conversa pro vendedor.
-  if (pergunta) estado.respostas[pergunta.id] = interpretarResposta(pergunta, texto)
-  if (pedeAtendente(texto)) return { mensagens: [comBase(preencher(cfg.mensagemAtendente, ctx))], estado, desfecho: 'PEDIU_ATENDENTE', ...usado }
+  if (pergunta) estado.respostas[pergunta.id] = valeComo ?? interpretarResposta(pergunta, texto)
+  if (pedeAtendente(texto)) return { ...comResposta(daBase, [preencher(cfg.mensagemAtendente, ctx)]), estado, desfecho: 'PEDIU_ATENDENTE' }
 
   estado.etapa += 1
   const proxima = cfg.perguntas[estado.etapa]
-  if (proxima) return { mensagens: [comBase(textoPergunta(proxima, ctx))], estado, desfecho: null, ...usado }
-  return { mensagens: [comBase(preencher(cfg.mensagemEncerramento, ctx))], estado, desfecho: 'QUALIFICADO', ...usado }
+  if (proxima) return { ...comResposta(daBase, [textoPergunta(proxima, ctx)]), estado, desfecho: null }
+  return { ...comResposta(daBase, [preencher(cfg.mensagemEncerramento, ctx)]), estado, desfecho: 'QUALIFICADO' }
 }
 
 // Contato mandou mais de uma mensagem antes do assistente responder a

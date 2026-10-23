@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { proLaboreApi, type AcaoConversaAssistente, type AssistenteConversa, type AssistenteConversaDetalhe, type StatusConversaAssistente, type TipoConversaAssistente } from '@/lib/proLaboreApi'
+import { proLaboreApi, urlArquivoApi, type AcaoConversaAssistente, type AssistenteConversa, type AssistenteConversaDetalhe, type StatusConversaAssistente, type TipoConversaAssistente } from '@/lib/proLaboreApi'
 import { ORIGEM, RESULTADO, ROTULO_ESTAGIO, STATUS_CONVERSA, fmtTelefone, horaCurta, iniciais, tempoRelativo } from './util'
 import { ChipNota, NotaDoLead, SugestoesConversa } from './SugestoesConversa'
+import { BotaoEnviarMoto } from './EnviarMoto'
 
 const ATUALIZAR_MS = 8000
 
@@ -103,6 +104,18 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
       setErro((e as Error).message)
     } finally {
       setEnviando(false)
+    }
+  }
+
+  async function enviarMoto(motoId: string) {
+    if (!conversa) return
+    setErro('')
+    try {
+      await proLaboreApi.assistente.enviarMoto(conversa.id, motoId)
+      setVersao(v => v + 1)
+      onMudou?.()
+    } catch (e) {
+      setErro((e as Error).message)
     }
   }
 
@@ -209,6 +222,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                   : conversa.status !== 'ENCERRADA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => executar('CRIAR_LEAD')}>Criar lead no CRM</button>}
                 {conversa.status !== 'ENCERRADA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => executar('ENCERRAR')}>Encerrar</button>}
                 {conversa.status !== 'ENCERRADA' && <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" onClick={() => executar('NAO_E_LEAD')}>Não é lead</button>}
+                {conversa.status !== 'ENCERRADA' && conectado && <BotaoEnviarMoto key={conversa.id} onEnviar={enviarMoto} />}
               </div>
             )}
 
@@ -221,7 +235,9 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                     <div key={m.id} className={`pl-as-bolha-linha ${direita ? 'direita' : ''}`}>
                       <div className={`pl-as-bolha ${lado}`}>
                         {m.remetente !== 'CONTATO' && conversa.tipo === 'LEAD' && <span className="pl-as-bolha-autor">{m.remetente === 'ASSISTENTE' ? 'Assistente' : nomeVendedor}</span>}
-                        <div className="pl-as-bolha-texto"><TextoWhats texto={m.texto} /></div>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {m.midiaUrl && <img className="pl-as-bolha-foto" src={urlArquivoApi(m.midiaUrl)} alt="Foto enviada" loading="lazy" />}
+                        {!(m.midiaUrl && m.texto === '[imagem]') && <div className="pl-as-bolha-texto"><TextoWhats texto={m.texto} /></div>}
                         <span className="pl-as-bolha-hora">{horaCurta(m.criadoEm)}</span>
                       </div>
                     </div>
@@ -259,7 +275,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
 
             {erro && <div className="pl-alert pl-alert-error" style={{ margin: '0 16px 10px' }}>{erro}</div>}
             {conversa.tipo === 'LEAD' && conversa.status !== 'ENCERRADA' && conectado && (
-              <SugestoesConversa conversaId={conversa.id} versao={qtdMensagens} onUsar={(t, id) => { setTexto(t); setConhecimentoId(id) }} />
+              <SugestoesConversa conversaId={conversa.id} versao={qtdMensagens} onUsar={(t, id) => { setTexto(t); setConhecimentoId(id) }} onEnviarMoto={enviarMoto} />
             )}
             {conversa.status !== 'ENCERRADA' && (
               <form className="pl-as-composer" onSubmit={e => { e.preventDefault(); enviar() }}>

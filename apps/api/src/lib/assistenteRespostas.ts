@@ -5,8 +5,9 @@
 import { prisma } from './prisma'
 import { logger } from './logger'
 import { semDinheiro } from './smIA'
-import { ItemResposta, acharConhecimento, parteAfirmativa, preencherResposta, respostaDaBase } from './assistenteConhecimento'
-import { BaseRespostas, ContextoRoteiro } from './assistenteRoteiro'
+import { ItemResposta, MAX_RESPOSTAS_DA_BASE, acharConhecimento, parteAfirmativa, preencherResposta, respostaDaBase } from './assistenteConhecimento'
+import { BaseRespostas, ContextoRoteiro, primeiroNome } from './assistenteRoteiro'
+import { MotoVitrine, lerFicha, nomeDaMoto, perguntaDeEstoque, respostaDeEstoque } from './assistenteVitrine'
 
 const DIA = 86_400_000
 const CACHE_MS = 60_000
@@ -35,12 +36,65 @@ export function esquecerRespostasAtivas(usuarioId: string) {
   cache.delete(usuarioId)
 }
 
-/** O robô só responde dúvidas e objeções; argumentos e gatilhos são para o vendedor. */
-export function baseParaRobo(itens: ItemAtivo[], ctx: ContextoRoteiro & { moto?: string | null }): BaseRespostas | undefined {
+// ---------- Vitrine (estoque) ----------
+
+export interface VitrineLoja { motos: MotoVitrine[]; mostrarPreco: boolean; vitrineRobo: boolean }
+const cacheVitrine = new Map<string, { em: number; v: VitrineLoja }>()
+// Vendida há pouco ainda entra: o cliente pergunta dela e recebe as parecidas.
+const VENDIDA_RECENTE_MS = 60 * DIA
+
+export const SELECT_MOTO_VITRINE = {
+  id: true, modelo: true, marca: true, ano: true, cor: true, situacao: true, versao: true, km: true, cilindrada: true,
+  preco: true, destaques: true, ficha: true, fotos: true, videoUrl: true,
+} as const
+
+export function paraVitrine(m: { ficha: unknown } & Omit<MotoVitrine, 'ficha'>): MotoVitrine {
+  return { ...m, ficha: lerFicha(m.ficha) }
+}
+
+export async function vitrineDaLoja(usuarioId: string): Promise<VitrineLoja> {
+  const c = cacheVitrine.get(usuarioId)
+  if (c && Date.now() - c.em < CACHE_MS) return c.v
+  const [motos, loja] = await Promise.all([
+    prisma.smMotoEstoque.findMany({
+      where: { usuarioId, OR: [{ situacao: { in: ['DISPONIVEL', 'RESERVADA'] } }, { situacao: 'VENDIDA', saidaEm: { gte: new Date(Date.now() - VENDIDA_RECENTE_MS) } }] },
+      select: SELECT_MOTO_VITRINE,
+      orderBy: { entradaEm: 'desc' },
+    }),
+    prisma.assistenteLoja.findUnique({ where: { usuarioId } }),
+  ])
+  const v = { motos: motos.map(paraVitrine), mostrarPreco: loja?.mostrarPreco ?? false, vitrineRobo: loja?.vitrineRobo ?? true }
+  cacheVitrine.set(usuarioId, { em: Date.now(), v })
+  return v
+}
+
+export function esquecerVitrine(usuarioId: string) {
+  cacheVitrine.delete(usuarioId)
+}
+
+/**
+ * O que o robô responde sozinho: "tem a XRE?" com a ficha e a foto do
+ * estoque; dúvidas e objeções com a resposta aprovada (argumentos e
+ * gatilhos ficam para o vendedor).
+ */
+export function baseParaRobo(itens: ItemAtivo[], ctx: ContextoRoteiro & { moto?: string | null }, vitrine?: VitrineLoja): BaseRespostas | undefined {
   const doRobo = itens.filter(i => i.tipo === 'DUVIDA' || i.tipo === 'OBJECAO')
-  if (!doRobo.length) return undefined
+  const motos = vitrine?.vitrineRobo ? vitrine.motos : []
+  if (!doRobo.length && !motos.length) return undefined
   return {
     responder: (texto, usados) => {
+      // O limite de respostas automáticas por conversa vale para as duas.
+      if (usados.length >= MAX_RESPOSTAS_DA_BASE) return null
+      const alvo = motos.length ? perguntaDeEstoque(texto, motos) : null
+      if (alvo && !usados.includes(`moto:${alvo.id}`)) {
+        const r = respostaDeEstoque(alvo, motos, { mostrarPreco: vitrine!.mostrarPreco, nome: primeiroNome(ctx.nomeContato) })
+        if (r) {
+          return {
+            id: `moto:${alvo.id}`, motoId: alvo.id, texto: r.texto, foto: r.foto, resto: parteAfirmativa(texto),
+            ...(r.disponivel && { valeComo: { campo: 'modeloInteresse' as const, valor: nomeDaMoto(alvo) } }),
+          }
+        }
+      }
       const item = respostaDaBase(texto, doRobo, usados)
       return item ? { id: item.id, texto: preencherResposta(item.resposta, ctx), resto: parteAfirmativa(texto) } : null
     },

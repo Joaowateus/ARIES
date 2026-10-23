@@ -20,13 +20,14 @@ import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { logger } from './logger'
 import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
-import { contarMensagensComContato, enviarTexto, perfilInstancia } from './whatsappEvolution'
+import { contarMensagensComContato, enviarImagem, enviarTexto, perfilInstancia } from './whatsappEvolution'
+import { lerImagem } from './armazenamento'
 import { origemPorCodigo } from './smAtribuicao'
 import {
-  ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, PassoRoteiro, TEXTO_MENU,
+  ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, MidiaPasso, PassoRoteiro, TEXTO_MENU,
   avancarRoteiro, casaGatilho, complementarResposta, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
 } from './assistenteRoteiro'
-import { ItemAtivo, baseParaRobo, registrarUso, respostasAtivas } from './assistenteRespostas'
+import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, vitrineDaLoja } from './assistenteRespostas'
 import { calcularNota } from './assistenteNota'
 
 export const STATUS_ABERTOS = ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA']
@@ -255,7 +256,7 @@ async function tratarMensagemDoVendedor(a: AssistenteCompleto, m: MensagemWhatsa
   // O eco da mensagem do assistente às vezes chega antes de o envio
   // terminar de gravar o ID — reconhece pelo texto recente.
   const eco = await prisma.assistenteMensagem.findFirst({
-    where: { conversaId: conversa.id, remetente: 'ASSISTENTE', providerId: null, texto: m.texto, criadoEm: { gte: new Date(Date.now() - 2 * 60_000) } },
+    where: { conversaId: conversa.id, remetente: { in: ['ASSISTENTE', 'VENDEDOR'] }, providerId: null, texto: m.texto, criadoEm: { gte: new Date(Date.now() - 2 * 60_000) } },
   })
   if (eco) {
     if (m.id) await prisma.assistenteMensagem.update({ where: { id: eco.id }, data: { providerId: m.id, criadoEm: new Date() } }).catch(() => undefined)
@@ -298,11 +299,14 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
   const roboAtende = !!origem && a.atendimentoAutomatico && (origem !== 'CONTATO_NOVO' || cfg.responderContatosNovos)
   // Respostas aprovadas da base (dúvidas no meio do roteiro). Base fora do
   // ar não para o atendimento: o roteiro segue sem elas.
-  const ativos: ItemAtivo[] = a.atendimentoAutomatico
-    ? await respostasAtivas(a.vendedor.usuarioId).catch(e => { logger.warn({ err: e }, 'assistente: base de respostas indisponível'); return [] })
-    : []
+  const [ativos, vitrine]: [ItemAtivo[], VitrineLoja | undefined] = a.atendimentoAutomatico
+    ? await Promise.all([
+      respostasAtivas(a.vendedor.usuarioId).catch(e => { logger.warn({ err: e }, 'assistente: base de respostas indisponível'); return [] }),
+      vitrineDaLoja(a.vendedor.usuarioId).catch(e => { logger.warn({ err: e }, 'assistente: vitrine indisponível'); return undefined }),
+    ])
+    : [[], undefined]
   const baseDoRobo = (nomeContato: string, respostas: Record<string, string>) =>
-    baseParaRobo(ativos, { ...contexto(a, cfg, nomeContato), moto: respostaDoCampo(cfg, respostas, 'modeloInteresse') })
+    baseParaRobo(ativos, { ...contexto(a, cfg, nomeContato), moto: respostaDoCampo(cfg, respostas, 'modeloInteresse') }, vitrine)
   let conversaTocada: string | null = null
 
   const acao = await comTrava(`${a.id}:${m.numero}`, async (tx): Promise<AcaoPendente | null> => {
@@ -378,11 +382,14 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
 
   if (acao) {
     const textos = acao.passo ? acao.passo.mensagens : acao.mensagensAvulsas
-    await enviarDoAssistente(a, cfg, acao.conversaId, acao.jid, textos)
+    await enviarDoAssistente(a, cfg, acao.conversaId, acao.jid, textos, acao.passo?.midias)
     if (acao.passo?.desfecho === 'DESISTIU') {
       await anotarDesistencia(acao.conversaId).catch(e => logger.error({ err: e }, 'assistente: falha ao anotar desistência no lead'))
     } else if (acao.passo?.desfecho) {
       await concluirAtendimento(a, cfg, acao.conversaId)
+    }
+    if (acao.passo?.motoUsada) {
+      await prisma.smMotoEstoque.updateMany({ where: { id: acao.passo.motoUsada }, data: { enviosWhatsapp: { increment: 1 } } }).catch(() => undefined)
     }
     if (acao.passo?.conhecimentoUsado) {
       const usada = await prisma.assistenteConversa.findUnique({ where: { id: acao.conversaId }, select: { leadId: true } })
@@ -457,8 +464,15 @@ function tempoDigitando(cfg: ConfigAssistente, texto: string): number {
   return Math.min(cfg.atrasoSegundos * 1000, 800 + texto.length * 30)
 }
 
-export async function enviarDoAssistente(a: { id: string; instancia: string | null }, cfg: ConfigAssistente, conversaId: string, destino: string, textos: string[]) {
-  for (const texto of textos) {
+export async function enviarDoAssistente(a: { id: string; instancia: string | null }, cfg: ConfigAssistente, conversaId: string, destino: string, textos: string[], midias: MidiaPasso[] = []) {
+  const fotosAntes = async (i: number) => {
+    for (const f of midias.filter(x => x.antesDe === i || (i === textos.length && x.antesDe > i))) {
+      await enviarFotoNaConversa(a.instancia, conversaId, destino, f, 'ASSISTENTE', tempoDigitando(cfg, f.legenda))
+        .catch(e => logger.error({ err: e, conversaId }, 'assistente: falha ao enviar foto'))
+    }
+  }
+  for (const [i, texto] of textos.entries()) {
+    await fotosAntes(i)
     // Grava antes de enviar: o eco (fromMe) pode chegar antes da resposta
     // do envio e precisa ser reconhecido como mensagem do assistente.
     const registro = await prisma.assistenteMensagem.create({ data: { conversaId, remetente: 'ASSISTENTE', texto } })
@@ -472,7 +486,29 @@ export async function enviarDoAssistente(a: { id: string; instancia: string | nu
       logger.error({ err: e, conversaId }, 'assistente: falha ao enviar mensagem')
     }
   }
+  await fotosAntes(textos.length)
   await prisma.assistenteConversa.update({ where: { id: conversaId }, data: { ultimaMensagemEm: new Date() } })
+}
+
+/**
+ * Foto do estoque na conversa (robô ou botão "Enviar moto"). Grava antes de
+ * enviar, como o texto, para o eco ser reconhecido; sem foto válida, vai só
+ * a legenda. Falhou o envio: apaga o registro e repassa o erro.
+ */
+export async function enviarFotoNaConversa(instancia: string | null, conversaId: string, destino: string, foto: { url: string; legenda: string }, remetente: 'ASSISTENTE' | 'VENDEDOR', digitandoMs = 0) {
+  const img = await lerImagem(foto.url)
+  const valida = !!img && (img.mime === 'image/jpeg' || img.mime === 'image/png')
+  if (!valida && !foto.legenda) return null
+  const registro = await prisma.assistenteMensagem.create({ data: { conversaId, remetente, texto: foto.legenda || '[imagem]', midiaUrl: valida ? foto.url : null } })
+  try {
+    if (!instancia) throw new Error('Assistente sem instância conectada')
+    const id = valida ? await enviarImagem(instancia, destino, img!, foto.legenda, digitandoMs) : await enviarTexto(instancia, destino, foto.legenda, digitandoMs)
+    if (id) await prisma.assistenteMensagem.update({ where: { id: registro.id }, data: { providerId: id, criadoEm: new Date() } }).catch(() => undefined)
+    return registro.id
+  } catch (e) {
+    await prisma.assistenteMensagem.delete({ where: { id: registro.id } }).catch(() => undefined)
+    throw e
+  }
 }
 
 // ---------- Fim do roteiro: CRM + aviso ----------
