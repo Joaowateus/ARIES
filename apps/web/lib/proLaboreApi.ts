@@ -719,6 +719,18 @@ export const proLaboreApi = {
     ignorados: (vendedorId?: string) =>
       request<ContatoIgnoradoAssistente[]>(`/pro-labore/assistente/ignorados${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     removerIgnorado: (id: string) => request<{ ok: boolean }>(`/pro-labore/assistente/ignorados/${id}`, { method: 'DELETE' }),
+    // Base de conhecimento (aba Conhecimento): da conta inteira.
+    conhecimento: (dias = 7) => request<BaseConhecimento>(`/pro-labore/assistente/conhecimento?dias=${dias}`),
+    criarConhecimento: (data: { tipo: TipoConhecimento; titulo: string; resposta?: string; palavrasChave?: string[]; modelo?: string; etapa?: EtapaConhecimento }) =>
+      request<ItemConhecimento>('/pro-labore/assistente/conhecimento', { method: 'POST', body: JSON.stringify(data) }),
+    editarConhecimento: (id: string, data: Partial<{ tipo: TipoConhecimento; titulo: string; resposta: string | null; rascunho: string | null; palavrasChave: string[]; modelo: string | null; etapa: EtapaConhecimento | null; status: StatusConhecimento }>) =>
+      request<ItemConhecimento>(`/pro-labore/assistente/conhecimento/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    juntarConhecimento: (id: string, destinoId: string) =>
+      request<{ ok: boolean; destinoId: string; ocorrencias: number }>(`/pro-labore/assistente/conhecimento/${id}/juntar`, { method: 'POST', body: JSON.stringify({ destinoId }) }),
+    moverOcorrencia: (data: { texto: string; deId: string; paraId: string }) =>
+      request<{ movidas: number }>('/pro-labore/assistente/conhecimento/ocorrencias/mover', { method: 'POST', body: JSON.stringify(data) }),
+    excluirConhecimento: (id: string) => request<{ ok?: boolean; arquivado?: boolean }>(`/pro-labore/assistente/conhecimento/${id}`, { method: 'DELETE' }),
+    analisarConversas: () => request<{ lidas: number; reconhecidas: number; novasNaBase: number; semAssunto: number; ia: boolean }>('/pro-labore/assistente/conhecimento/analisar', { method: 'POST' }),
   },
   // Saúde do sistema (dono): tamanho do banco contra o limite do plano.
   sistema: {
@@ -1590,6 +1602,8 @@ export interface AssistenteConversa {
   status: StatusConversaAssistente
   resultado: ResultadoConversaAssistente | null
   origem: OrigemConversaAssistente | null
+  // false = lead do cadastro automático que o robô não atendeu (registrado só para o vendedor).
+  robo?: boolean
   etapaRoteiro: number
   leadId?: string | null
   lead?: { id: string; nomeCliente: string; estagio: EstagioLead } | null
@@ -1618,6 +1632,46 @@ export interface SimulacaoAssistente {
 }
 
 export interface ContatoIgnoradoAssistente { id: string; numero: string; motivo: 'CONVERSA_PESSOAL' | 'MARCADO_PELO_VENDEDOR' | 'NAO_E_LEAD'; criadoEm: string }
+
+export type TipoConhecimento = 'DUVIDA' | 'OBJECAO' | 'ARGUMENTO' | 'GATILHO'
+export type StatusConhecimento = 'PARA_REVISAR' | 'ATIVO' | 'ARQUIVADO'
+export type EtapaConhecimento = 'LEAD' | 'ABORDADO' | 'NEGOCIACAO' | 'PROPOSTA'
+export interface ItemConhecimento {
+  id: string
+  tipo: TipoConhecimento
+  titulo: string
+  resposta: string | null
+  rascunho: string | null
+  rascunhoOrigem: 'VENDEDOR' | 'IA' | 'MODELO' | null
+  palavrasChave: string[]
+  respostasEquipe: Array<{ texto: string; vendedor: string | null; em: string }> | null
+  modelo: string | null
+  etapa: EtapaConhecimento | null
+  status: StatusConhecimento
+  origem: 'MANUAL' | 'APRENDIDO' | 'MODELO_PRONTO'
+  chave: string | null
+  ocorrencias: number
+  usos: number
+  avancos: number
+  ultimaOcorrenciaEm: string | null
+  criadoPor: string | null
+  aprovadoPor: string | null
+  aprovadoEm: string | null
+  criadoEm: string
+  // Calculados na listagem:
+  outras?: boolean
+  noPeriodo?: number
+  exemplos?: Array<{ texto: string; em: string }>
+}
+export interface BaseConhecimento {
+  itens: ItemConhecimento[]
+  dias: number
+  totais: { paraRevisar: number; ativos: number; arquivados: number; captadasNoPeriodo: number; semRespostaNoPeriodo: number }
+  ranking: Array<{ id: string; titulo: string; tipo: TipoConhecimento; status: StatusConhecimento; total: number }>
+  ultimaAnalise: string | null
+  iaLigada: boolean
+  podeAprovar: boolean
+}
 
 export interface ResumoAssistente {
   periodo: { dias: number; inicio: string | null; fim: string | null }

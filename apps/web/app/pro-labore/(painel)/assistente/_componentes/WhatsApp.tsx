@@ -10,12 +10,14 @@ import { Conexao } from './Conexao'
 import { AtendimentosPorDia, DesfechoEOrigem, FunilCrm, FunilRoteiro, HorarioChegada, KpisAssistente } from './Desempenho'
 import { Conversas } from './Conversas'
 import { Roteiro } from './Roteiro'
+import { Conhecimento } from './Conhecimento'
 import { nomeProprio } from './util'
 
-type Aba = 'visao' | 'conversas' | 'roteiro'
+type Aba = 'visao' | 'conversas' | 'conhecimento' | 'roteiro'
 const ABAS: Array<{ valor: Aba; rotulo: string }> = [
   { valor: 'visao', rotulo: 'Desempenho' },
   { valor: 'conversas', rotulo: 'Conversas' },
+  { valor: 'conhecimento', rotulo: 'Conhecimento' },
   { valor: 'roteiro', rotulo: 'Roteiro e teste' },
 ]
 const PERIODOS = [7, 30, 90] as const
@@ -188,6 +190,8 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
               onMudou={atualizar}
             />
           )}
+
+          {aba === 'conhecimento' && <Conhecimento />}
 
           {aba === 'roteiro' && (
             <Roteiro

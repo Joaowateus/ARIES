@@ -7,6 +7,7 @@
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
 import { Router, Request, Response } from 'express'
+import { aprenderTodas } from '../lib/assistenteAprendizado'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
@@ -305,7 +306,9 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   const central = await rodarCentral(agoraDoCron(req)).catch(e => { console.error('[central] cron', e); return { centralGerados: 0 } })
   // Copiloto Comercial: o dia de cada pessoa (regras para todos; a IA no tempo que sobrar).
   const copiloto = await rodarCopiloto(agoraDoCron(req), 10000).catch(e => { console.error('[copiloto] cron', e); return { copilotoDias: 0, copilotoIA: 0, copilotoWhatsapp: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto })
+  // Assistente Comercial: aprende com as conversas da última hora (dúvidas e objeções dos clientes).
+  const aprendizado = await aprenderTodas(5000).catch(e => { console.error('[assistente] aprendizado', e); return { aprendizadoContas: 0, aprendizadoReconhecidas: 0 } })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return

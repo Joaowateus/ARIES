@@ -336,7 +336,21 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     const leadId = a.cadastroAutomatico && (!ignorado || ignorado.motivo === 'CONVERSA_PESSOAL')
       ? await capturarLead(tx, a, m, ignorado ? null : origem)
       : null
-    if (!roboAtende || ignorado) return null
+    if (!roboAtende || ignorado) {
+      // Lead sem o robô: a conversa fica registrada (aprendizado, sugestões,
+      // follow), já com o vendedor. Conversa pessoal continua de fora.
+      if (leadId && !ignorado) {
+        await tx.assistenteConversa.create({
+          data: {
+            assistenteId: a.id, tipo: 'LEAD', robo: false, status: 'ASSUMIDA', leadId, origem,
+            nomeContato: m.nomePerfil ?? formatarTelefone(m.numero), numeroContato: m.numero, jid: m.jid,
+            respostas: { _inicial: m.texto } as Prisma.InputJsonValue,
+            mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
+          },
+        })
+      }
+      return null
+    }
     const nomeContato = m.nomePerfil ?? formatarTelefone(m.numero)
     const passo = iniciarRoteiro(cfg, contexto(a, cfg, nomeContato), m.texto)
     const criada = await tx.assistenteConversa.create({
@@ -665,7 +679,7 @@ async function responderComando(a: AssistenteCompleto, comando: NonNullable<Retu
   // RESUMO — dia corrente no horário de Brasília
   const inicio = inicioDoDiaBrasilia(diaBrasilia(new Date()))
   const [novos, qualificados, aguardando, assumidos] = await Promise.all([
-    prisma.assistenteConversa.count({ where: { assistenteId: a.id, tipo: 'LEAD', criadoEm: { gte: inicio } } }),
+    prisma.assistenteConversa.count({ where: { assistenteId: a.id, tipo: 'LEAD', robo: true, criadoEm: { gte: inicio } } }),
     prisma.assistenteConversa.count({ where: { assistenteId: a.id, tipo: 'LEAD', aguardandoVendedorEm: { gte: inicio } } }),
     prisma.assistenteConversa.count({ where: { assistenteId: a.id, tipo: 'LEAD', status: 'AGUARDANDO_VENDEDOR' } }),
     prisma.assistenteConversa.count({ where: { assistenteId: a.id, tipo: 'LEAD', assumidaEm: { gte: inicio } } }),

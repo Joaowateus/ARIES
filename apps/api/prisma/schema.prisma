@@ -1838,6 +1838,11 @@ model AssistenteConversa {
   // concluído ou contato pediu atendente) | ASSUMIDA (vendedor respondeu)
   // | ENCERRADA
   status               String    @default("ATIVA")
+  // false = lead que entrou pelo cadastro automático sem o robô responder
+  // (respostas pausadas ou contato novo fora da regra): a conversa fica
+  // registrada para aprendizado, sugestões e follow, mas não conta nas
+  // métricas do robô (atendidos, conclusão do roteiro).
+  robo                 Boolean   @default(true)
   // QUALIFICADO | PEDIU_ATENDENTE | DESISTIU | NAO_E_LEAD
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
@@ -1881,6 +1886,74 @@ model AssistenteMensagem {
 // vendedor já conversa (detectado quando ele manda mensagem pra um chat que
 // não é de lead) ou marcados como "não é lead" no painel. Só o número é
 // guardado, nunca o conteúdo da conversa pessoal.
+// Base de conhecimento do Assistente Comercial (uma por conta): dúvidas,
+// objeções, argumentos e gatilhos com a resposta aprovada pela loja. Item
+// aprendido das conversas ou modelo pronto nasce PARA_REVISAR e só vai para
+// o cliente depois de aprovado (ATIVO). O rascunho nunca é enviado sozinho.
+model AssistenteConhecimento {
+  id                 String    @id @default(cuid())
+  usuarioId          String
+  tipo               String // DUVIDA | OBJECAO | ARGUMENTO | GATILHO
+  titulo             String // a dúvida/objeção típica, do jeito que o cliente fala
+  resposta           String? // texto aprovado ({nome}, {vendedor}, {empresa}, {moto})
+  rascunho           String? // sugestão (do que o vendedor respondeu ou da IA) para revisar
+  rascunhoOrigem     String? // VENDEDOR | IA | MODELO
+  palavrasChave      String[]  @default([])
+  // Como a equipe respondeu de verdade: [{ texto, vendedor, em }] (até 5).
+  respostasEquipe    Json?
+  modelo             String? // moto específica (opcional)
+  etapa              String? // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA (onde costuma aparecer)
+  status             String    @default("PARA_REVISAR") // PARA_REVISAR | ATIVO | ARQUIVADO
+  origem             String    @default("MANUAL") // MANUAL | APRENDIDO | MODELO_PRONTO
+  chave              String? // modelos prontos e grupos aprendidos (não duplica)
+  ocorrencias        Int       @default(0)
+  usos               Int       @default(0)
+  avancos            Int       @default(0)
+  ultimaOcorrenciaEm DateTime?
+  criadoPor          String?
+  aprovadoPor        String?
+  aprovadoEm         DateTime?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  ocorrenciasLista AssistenteConhecimentoOcorrencia[]
+
+  @@unique([usuarioId, chave])
+  @@index([usuarioId, status])
+  @@map("pro_labore_assistente_conhecimento")
+}
+
+// Cada vez que um cliente perguntou/objetou algo que a base reconhece (ou
+// que ficou sem resposta, em "Outras dúvidas"). Uma mensagem conta uma vez.
+model AssistenteConhecimentoOcorrencia {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  conhecimentoId String
+  mensagemId     String   @unique
+  conversaId     String
+  leadId         String?
+  vendedorId     String?
+  texto          String
+  estagioNaHora  String?
+  criadoEm       DateTime @default(now())
+
+  conhecimento AssistenteConhecimento @relation(fields: [conhecimentoId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, criadoEm])
+  @@index([conhecimentoId, criadoEm])
+  @@map("pro_labore_assistente_conhecimento_ocorrencias")
+}
+
+// Até onde o aprendizado já leu as mensagens dos clientes de cada conta.
+model AssistenteAprendizadoEstado {
+  usuarioId    String   @id
+  lidoAte      DateTime
+  rodadaEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@map("pro_labore_assistente_aprendizado_estado")
+}
+
 model AssistenteContatoIgnorado {
   id           String   @id @default(cuid())
   assistenteId String

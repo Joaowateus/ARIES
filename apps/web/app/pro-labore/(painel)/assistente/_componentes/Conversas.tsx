@@ -161,6 +161,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                       <div className="pl-as-item-tags">
                         <span className={`pl-status-badge ${STATUS_CONVERSA[c.status].classe}`}>{STATUS_CONVERSA[c.status].rotulo}</span>
                         {c.lead && <span className="pl-as-tag">No CRM</span>}
+                        {c.robo === false && <span className="pl-as-tag" title="Entrou pelo cadastro automático sem o robô responder">Sem robô</span>}
                       </div>
                     )}
                   </div>
