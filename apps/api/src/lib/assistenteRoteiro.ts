@@ -153,36 +153,71 @@ export function casaGatilho(texto: string, gatilhos: string[]): string | null {
 
 export type Desfecho = 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU'
 export interface EstadoRoteiro { etapa: number; respostas: Record<string, string> }
-export interface PassoRoteiro { mensagens: string[]; estado: EstadoRoteiro; desfecho: Desfecho | null }
+export interface PassoRoteiro { mensagens: string[]; estado: EstadoRoteiro; desfecho: Desfecho | null; conhecimentoUsado?: string | null }
 
-export function iniciarRoteiro(cfg: ConfigAssistente, ctx: ContextoRoteiro, textoInicial: string): PassoRoteiro {
+// Respostas aprovadas da base de conhecimento: quando o cliente pergunta
+// algo no meio do roteiro, o assistente responde com o texto da loja e
+// volta para a pergunta em que estava. `usados` evita repetir a mesma;
+// `resto` é o que a mensagem tem além da pergunta ("A CG 160, aceita
+// troca?" → "A CG 160"), que ainda vale como resposta do roteiro.
+export interface RespostaDaBase { id: string; texto: string; resto: string }
+export interface BaseRespostas { responder: (texto: string, usados: string[]) => RespostaDaBase | null }
+const usadosDaBase = (respostas: Record<string, string>) => (respostas._kb ?? '').split(',').filter(Boolean)
+
+// Resposta da base seguida de outra mensagem do roteiro: a pergunta do fim
+// da resposta sai, pra não chegarem duas perguntas no mesmo balão.
+export function semPerguntaFinal(texto: string): string {
+  const t = texto.trim()
+  return t.match(/^([\s\S]*[.!])\s+[^.!?\n]*\?$/)?.[1].trim() ?? t
+}
+
+function tambemResponde(p: PerguntaRoteiro, texto: string, daBase: RespostaDaBase): boolean {
+  if (p.opcoes?.length) return p.opcoes.includes(interpretarResposta(p, texto))
+  return !!daBase.resto
+}
+
+export function iniciarRoteiro(cfg: ConfigAssistente, ctx: ContextoRoteiro, textoInicial: string, base?: BaseRespostas): PassoRoteiro {
   const estado: EstadoRoteiro = { etapa: 0, respostas: { _inicial: textoInicial.trim() } }
   if (desiste(textoInicial)) return { mensagens: [preencher(cfg.mensagemDespedida, ctx)], estado, desfecho: 'DESISTIU' }
   const boasVindas = preencher(cfg.mensagemBoasVindas, ctx)
   if (pedeAtendente(textoInicial)) {
     return { mensagens: [preencher(cfg.mensagemAtendente, ctx)], estado, desfecho: 'PEDIU_ATENDENTE' }
   }
+  // Primeira mensagem já com uma dúvida ("Aceita troca?"): responde junto.
+  const daBase = base?.responder(textoInicial, []) ?? null
+  if (daBase) estado.respostas._kb = daBase.id
+  const abertura = daBase ? `${boasVindas}\n\n${semPerguntaFinal(daBase.texto)}` : boasVindas
   if (cfg.perguntas.length === 0) {
-    return { mensagens: [boasVindas, preencher(cfg.mensagemEncerramento, ctx)], estado, desfecho: 'QUALIFICADO' }
+    return { mensagens: [abertura, preencher(cfg.mensagemEncerramento, ctx)], estado, desfecho: 'QUALIFICADO', conhecimentoUsado: daBase?.id ?? null }
   }
   // Boas-vindas e primeira pergunta num balão só: se fossem dois, uma
   // resposta rápida no meio viraria resposta de uma pergunta ainda não feita.
-  return { mensagens: [`${boasVindas}\n\n${textoPergunta(cfg.perguntas[0], ctx)}`], estado, desfecho: null }
+  return { mensagens: [`${abertura}\n\n${textoPergunta(cfg.perguntas[0], ctx)}`], estado, desfecho: null, conhecimentoUsado: daBase?.id ?? null }
 }
 
-export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string, ctx: ContextoRoteiro): PassoRoteiro {
+export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string, ctx: ContextoRoteiro, base?: BaseRespostas): PassoRoteiro {
   const estado: EstadoRoteiro = { etapa: atual.etapa, respostas: { ...atual.respostas } }
   if (desiste(texto)) return { mensagens: [preencher(cfg.mensagemDespedida, ctx)], estado, desfecho: 'DESISTIU' }
   const pergunta = cfg.perguntas[estado.etapa]
+  const usados = usadosDaBase(estado.respostas)
+  const daBase = base?.responder(texto, usados) ?? null
+  if (daBase) estado.respostas._kb = [...usados, daBase.id].join(',')
+  const comBase = (msg: string) => daBase ? `${semPerguntaFinal(daBase.texto)}\n\n${msg}` : msg
+  const usado = { conhecimentoUsado: daBase?.id ?? null }
+  // O cliente só perguntou, sem responder: resposta da loja e a mesma
+  // pergunta de novo (a etapa não anda).
+  if (pergunta && daBase && !pedeAtendente(texto) && !tambemResponde(pergunta, texto, daBase)) {
+    return { mensagens: [comBase(textoPergunta(pergunta, ctx))], estado, desfecho: null, ...usado }
+  }
   // "Pode me ligar às 18h" responde a pergunta E pede atendimento — guarda
   // a resposta antes de passar a conversa pro vendedor.
   if (pergunta) estado.respostas[pergunta.id] = interpretarResposta(pergunta, texto)
-  if (pedeAtendente(texto)) return { mensagens: [preencher(cfg.mensagemAtendente, ctx)], estado, desfecho: 'PEDIU_ATENDENTE' }
+  if (pedeAtendente(texto)) return { mensagens: [comBase(preencher(cfg.mensagemAtendente, ctx))], estado, desfecho: 'PEDIU_ATENDENTE', ...usado }
 
   estado.etapa += 1
   const proxima = cfg.perguntas[estado.etapa]
-  if (proxima) return { mensagens: [textoPergunta(proxima, ctx)], estado, desfecho: null }
-  return { mensagens: [preencher(cfg.mensagemEncerramento, ctx)], estado, desfecho: 'QUALIFICADO' }
+  if (proxima) return { mensagens: [comBase(textoPergunta(proxima, ctx))], estado, desfecho: null, ...usado }
+  return { mensagens: [comBase(preencher(cfg.mensagemEncerramento, ctx))], estado, desfecho: 'QUALIFICADO', ...usado }
 }
 
 // Contato mandou mais de uma mensagem antes do assistente responder a

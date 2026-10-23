@@ -12,6 +12,7 @@ import { FollowModal } from '../_follow/FollowModal'
 import { PerdaModal } from '../_follow/PerdaModal'
 import { situacaoFollow } from '../_follow/follow'
 import { FaixaWhatsapp } from './_whatsapp/FaixaWhatsapp'
+import { ChipNota } from '../assistente/_componentes/SugestoesConversa'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
@@ -1210,6 +1211,11 @@ function KanbanCard({
       {lead.tipoLead && <span className={`pl-kanban-card-tag ${TIPO_CLASS[lead.tipoLead]}`}>{TIPO_LABEL[lead.tipoLead]}</span>}
       {lead.postCode && <span className="pl-kanban-card-tag organico" title="Post do Instagram que trouxe o lead" style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>Instagram · {lead.postCode}</span>}
       {viaWhatsapp && <span className="pl-kanban-card-tag whatsapp" title={linhaOrigem ?? 'Entrou sozinho quando o contato chamou no WhatsApp'} style={{ marginLeft: lead.tipoLead || lead.postCode ? 6 : 0 }} data-tag-whatsapp>WhatsApp</span>}
+      {typeof lead.pontuacao === 'number' && !lead.vendaId && (
+        <span style={{ display: 'inline-block', marginLeft: lead.tipoLead || lead.postCode || viaWhatsapp ? 6 : 0, verticalAlign: 'middle' }}>
+          <ChipNota nota={lead.pontuacao} titulo={`Nota do Assistente pela conversa do WhatsApp: ${lead.pontuacao} de 100`} />
+        </span>
+      )}
       {lead.tipoNegociacao && (
         <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]} style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>
           {lead.tipoNegociacao}

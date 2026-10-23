@@ -12,8 +12,14 @@ import { requireModulo } from '../lib/acessos'
 import { ETAPAS_CONHECIMENTO, STATUS_CONHECIMENTO, TIPOS_CONHECIMENTO, normalizarPalavraChave } from '../lib/assistenteConhecimento'
 import { CHAVE_OUTRAS, aprenderConta, garantirModelosProntos } from '../lib/assistenteAprendizado'
 import { iaLigada } from '../lib/assistenteIA'
+import { esquecerRespostasAtivas } from '../lib/assistenteRespostas'
 
 const router = Router()
+// Qualquer mudança na base vale na próxima mensagem do robô (sem esperar o cache).
+router.use('/assistente/conhecimento', (req: Request, res: Response, next) => {
+  if (req.method !== 'GET') res.on('finish', () => { if (req.proLaboreUser) esquecerRespostasAtivas(req.proLaboreUser.sub) })
+  next()
+})
 const DIA = 86_400_000
 const ver = [requireProLaboreAuth, requireModulo('assistente', 'VER')]
 const editar = [requireProLaboreAuth, requireModulo('assistente', 'EDITAR')]

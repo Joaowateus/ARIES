@@ -14,6 +14,7 @@ import { fatosParaIA, garantirPerfil, gerarDia, hojeChave, memoriaParaIA, telaDo
 import { buscarEstudosNaWeb, competenciaValida, iaLigada, responderChat, sugerirResposta, type SugestaoIA } from '../lib/copilotoIA'
 import { DICAS, pedidoDeMemoria, sugestaoModelo } from '../lib/copilotoModelos'
 import { semDinheiro } from '../lib/smIA'
+import { respostasAtivas, respostasDaLojaParaIA, sugestoesDaBase, ultimasDoCliente } from '../lib/assistenteRespostas'
 import { Prisma } from '@prisma/client'
 
 const router = Router()
@@ -290,7 +291,12 @@ router.post('/copiloto/conversas/:id/sugestao', ...base, async (req: Request, re
   let origem = 'MODELO'
   if (iaLigada()) {
     const memoria = (await memoriaParaIA(c.usuarioId, cv.assistente.vendedorId)).filter(m => ['ESTILO', 'PREFERENCIA', 'APRENDIZADO'].includes(m.tipo))
+    const daBase = sugestoesDaBase(await respostasAtivas(c.usuarioId), {
+      textosDoCliente: ultimasDoCliente(cv.mensagens), estagio: cv.lead?.estagio ?? null,
+      ctx: { nomeContato: cv.nomeContato, vendedor: cv.assistente.vendedor.nome, empresa: '', moto: cv.lead?.modeloInteresse ?? null },
+    })
     sugestao = await sugerirResposta(c.usuarioId, {
+      respostasDaLoja: respostasDaLojaParaIA(daBase),
       cliente: { nome: cliente, estagioNoCrm: cv.lead?.estagio ?? null, motoDeInteresse: cv.lead?.modeloInteresse ?? null, respostasDoPreAtendimento: cv.respostas ?? null },
       conversa: mensagens.map(m => ({ de: m.remetente === 'CONTATO' ? 'CLIENTE' : m.remetente === 'VENDEDOR' ? 'VENDEDOR' : 'ASSISTENTE_AUTOMATICO', texto: m.texto.slice(0, 600), quando: m.criadoEm.toISOString().slice(0, 16) })),
       conteudos: conteudos.map(x => ({ id: x.id, titulo: x.titulo, formato: x.formato, data: x.data })), memoria, vendedor: primeiroNome(cv.assistente.vendedor.nome),

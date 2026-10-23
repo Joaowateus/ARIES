@@ -261,6 +261,8 @@ export interface Lead {
   canalEntrada?: string | null
   // WHATSAPP = entrou sozinho quando o contato chamou o vendedor; null = manual.
   origemCadastro?: 'WHATSAPP' | null
+  // Nota do Assistente (0–100) pela conversa do WhatsApp.
+  pontuacao?: number | null
   criadoEm: string
   atualizadoEm: string
   fechadoEm?: string | null
@@ -708,8 +710,10 @@ export const proLaboreApi = {
       return request<AssistenteConversa[]>(`/pro-labore/assistente/conversas${s ? `?${s}` : ''}`)
     },
     conversa: (id: string) => request<AssistenteConversaDetalhe>(`/pro-labore/assistente/conversas/${id}`),
-    enviar: (id: string, texto: string) =>
-      request<AssistenteMensagem>(`/pro-labore/assistente/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto }) }),
+    enviar: (id: string, texto: string, conhecimentoId?: string) =>
+      request<AssistenteMensagem>(`/pro-labore/assistente/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto, conhecimentoId }) }),
+    sugestoes: (id: string) => request<SugestoesConversa>(`/pro-labore/assistente/conversas/${id}/sugestoes`),
+    sugestaoIA: (id: string) => request<SugestaoIAConversa>(`/pro-labore/assistente/conversas/${id}/sugestao-ia`, { method: 'POST' }),
     acao: (id: string, acao: AcaoConversaAssistente) =>
       request<AssistenteConversa>(`/pro-labore/assistente/conversas/${id}/acao`, { method: 'POST', body: JSON.stringify({ acao }) }),
     resumo: (params: { vendedorId?: string; dias: number }) =>
@@ -1604,6 +1608,9 @@ export interface AssistenteConversa {
   origem: OrigemConversaAssistente | null
   // false = lead do cadastro automático que o robô não atendeu (registrado só para o vendedor).
   robo?: boolean
+  // Nota do lead (0–100) e o motivo de cada ponto.
+  nota?: number | null
+  sinais?: SinalNotaLead[] | null
   etapaRoteiro: number
   leadId?: string | null
   lead?: { id: string; nomeCliente: string; estagio: EstagioLead } | null
@@ -1623,12 +1630,20 @@ export interface AssistenteConversaDetalhe extends Omit<AssistenteConversa, 'men
 
 export interface EstadoRoteiroAssistente { etapa: number; respostas: Record<string, string> }
 
+export interface SinalNotaLead { chave: string; rotulo: string; pontos: number }
+export type FaixaNotaLead = 'QUENTE' | 'MORNO' | 'FRIO'
+export interface SugestaoDaBase { id: string; tipo: TipoConhecimento; titulo: string; texto: string; motivo: string; usos: number; avancos: number }
+export interface SugestoesConversa { sugestoes: SugestaoDaBase[]; nota: number | null; faixa: FaixaNotaLead | null; sinais: SinalNotaLead[]; iaLigada: boolean }
+export interface SugestaoIAConversa { origem: 'IA' | 'MODELO'; leitura: string; opcoes: Array<{ texto: string; quando: string }> }
+
 export interface SimulacaoAssistente {
   mensagens: string[]
   estado: EstadoRoteiroAssistente
   desfecho: 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU' | null
   resumo: Array<{ rotulo: string; valor: string }>
   gatilho: string | null
+  // Resposta da base de conhecimento usada nesse passo.
+  conhecimento?: { id: string; titulo: string } | null
 }
 
 export interface ContatoIgnoradoAssistente { id: string; numero: string; motivo: 'CONVERSA_PESSOAL' | 'MARCADO_PELO_VENDEDOR' | 'NAO_E_LEAD'; criadoEm: string }

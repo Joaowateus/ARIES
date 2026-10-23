@@ -24,9 +24,14 @@ import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectad
 import {
   CAMPOS_LEAD as CAMPOS_LEAD_ASSISTENTE, CONFIG_PADRAO as CONFIG_ASSISTENTE_PADRAO, lerConfig as lerConfigAssistente,
   linhasResumo as linhasResumoAssistente, iniciarRoteiro as iniciarRoteiroAssistente, avancarRoteiro as avancarRoteiroAssistente,
-  casaGatilho as casaGatilhoAssistente,
+  casaGatilho as casaGatilhoAssistente, primeiroNome as primeiroNomeAssistente, respostaDoCampo as respostaDoCampoAssistente,
 } from '../lib/assistenteRoteiro'
 import { montarResumoAssistente } from '../lib/assistenteResumo'
+import { baseParaRobo, registrarUso, respostasAtivas, respostasDaLojaParaIA, sugestoesDaBase, ultimasDoCliente } from '../lib/assistenteRespostas'
+import { faixaNota } from '../lib/assistenteNota'
+import { iaLigada as copilotoIaLigada, sugerirResposta, type SugestaoIA } from '../lib/copilotoIA'
+import { sugestaoModelo } from '../lib/copilotoModelos'
+import { memoriaParaIA } from '../lib/copiloto'
 import { funilDoMesDashboard } from '../lib/jornada'
 import { gastoDoMes, gastosDoPeriodo, type GastoDoMes } from '../lib/gastoAnuncios'
 import { MOTIVOS_PERDA, TEMPERATURAS, leadWhereBase } from '../lib/escopoLead'
@@ -3087,7 +3092,7 @@ router.get('/assistente/conversas/:id', requireProLaboreAuth, requireModulo('ass
   })
 })
 
-const enviarMensagemAssistenteSchema = z.object({ texto: z.string().trim().min(1, 'Mensagem vazia').max(4000) })
+const enviarMensagemAssistenteSchema = z.object({ texto: z.string().trim().min(1, 'Mensagem vazia').max(4000), conhecimentoId: z.string().max(40).optional() })
 
 // Vendedor/dono responde pela própria tela — sai pelo WhatsApp do vendedor
 // e conta como "assumiu a conversa" (o assistente para de responder).
@@ -3122,7 +3127,65 @@ router.post('/assistente/conversas/:id/mensagens', requireProLaboreAuth, require
       ...(conversa.tipo === 'LEAD' && (conversa.status === 'ATIVA' || conversa.status === 'AGUARDANDO_VENDEDOR') && { status: 'ASSUMIDA', assumidaEm: agora }),
     },
   })
+  // Mandou uma sugestão da base (mesmo editada): entra no placar da resposta.
+  const usuarioId = conversa.assistente.vendedor.usuarioId
+  if (parse.data.conhecimentoId && conversa.tipo === 'LEAD' && await prisma.assistenteConhecimento.count({ where: { id: parse.data.conhecimentoId, usuarioId, status: 'ATIVO' } })) {
+    await registrarUso({ usuarioId, conhecimentoId: parse.data.conhecimentoId, conversaId: conversa.id, leadId: conversa.leadId, canal: 'SUGESTAO' })
+      .catch(e => logger.warn({ err: e }, 'assistente: falha ao registrar uso da sugestão'))
+  }
   res.status(201).json(await prisma.assistenteMensagem.findUnique({ where: { id: registro.id } }))
+})
+
+// Sugestões para o vendedor responder: o que a loja aprovou para as últimas
+// mensagens do cliente e os argumentos da etapa do lead, mais a nota.
+async function contextoDeSugestao(conversa: NonNullable<Awaited<ReturnType<typeof carregarConversaAutorizada>>>) {
+  const [mensagens, lead, itens] = await Promise.all([
+    prisma.assistenteMensagem.findMany({ where: { conversaId: conversa.id }, orderBy: { criadoEm: 'desc' }, take: 30, select: { remetente: true, texto: true, criadoEm: true } }),
+    conversa.leadId ? prisma.lead.findUnique({ where: { id: conversa.leadId }, select: { estagio: true, modeloInteresse: true } }) : null,
+    respostasAtivas(conversa.assistente.vendedor.usuarioId),
+  ])
+  const cfg = lerConfigAssistente(conversa.assistente.configuracao)
+  const respostas = (conversa.respostas ?? {}) as Record<string, string>
+  const moto = lead?.modeloInteresse ?? respostaDoCampoAssistente(cfg, respostas, 'modeloInteresse')
+  const ctx = { nomeContato: conversa.nomeContato, vendedor: conversa.assistente.vendedor.nome, empresa: cfg.nomeEmpresa, moto }
+  const sugestoes = sugestoesDaBase(itens, { textosDoCliente: ultimasDoCliente(mensagens), estagio: lead?.estagio ?? null, ctx })
+  return { mensagens, lead, respostas, moto, sugestoes }
+}
+
+router.get('/assistente/conversas/:id/sugestoes', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
+  const conversa = await carregarConversaAutorizada(req, res)
+  if (!conversa) return
+  if (conversa.tipo !== 'LEAD') { res.json({ sugestoes: [], nota: null, faixa: null, sinais: [], iaLigada: false }); return }
+  const { sugestoes } = await contextoDeSugestao(conversa)
+  res.json({ sugestoes, nota: conversa.nota, faixa: conversa.nota === null ? null : faixaNota(conversa.nota), sinais: conversa.sinais ?? [], iaLigada: copilotoIaLigada() })
+})
+
+// "Sugerir com IA": a sugestão do Copiloto, já enxergando as respostas da
+// loja. Sem IA (ou se ela errar um número), cai no modelo pronto.
+router.post('/assistente/conversas/:id/sugestao-ia', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
+  const conversa = await carregarConversaAutorizada(req, res)
+  if (!conversa) return
+  if (conversa.tipo !== 'LEAD') { res.status(400).json({ error: 'Só conversas de lead têm sugestão' }); return }
+  const { mensagens, lead, respostas, moto, sugestoes } = await contextoDeSugestao(conversa)
+  const usuarioId = conversa.assistente.vendedor.usuarioId
+  const cliente = primeiroNomeAssistente(conversa.nomeContato)
+  const emOrdem = [...mensagens].reverse()
+  let sugestao: SugestaoIA | null = null
+  let origem = 'MODELO'
+  if (copilotoIaLigada()) {
+    const memoria = (await memoriaParaIA(usuarioId, conversa.assistente.vendedorId)).filter(m => ['ESTILO', 'PREFERENCIA', 'APRENDIZADO'].includes(m.tipo))
+    sugestao = await sugerirResposta(usuarioId, {
+      cliente: { nome: cliente, estagioNoCrm: lead?.estagio ?? null, motoDeInteresse: moto, respostasDoPreAtendimento: respostas },
+      conversa: emOrdem.map(m => ({ de: m.remetente === 'CONTATO' ? 'CLIENTE' : m.remetente === 'VENDEDOR' ? 'VENDEDOR' : 'ASSISTENTE_AUTOMATICO', texto: m.texto.slice(0, 600), quando: m.criadoEm.toISOString().slice(0, 16) })),
+      conteudos: [], memoria, vendedor: primeiroNomeAssistente(conversa.assistente.vendedor.nome),
+      respostasDaLoja: respostasDaLojaParaIA(sugestoes),
+    }).catch(e => { logger.warn({ err: e }, 'assistente: sugestão por IA falhou'); return null })
+    if (sugestao) origem = 'IA'
+  }
+  sugestao ??= sugestaoModelo(ultimasDoCliente(mensagens, 1)[0] ?? '', cliente, null)
+  await prisma.copilotoSugestao.create({ data: { usuarioId, pessoa: conversa.assistente.vendedorId, conversaId: conversa.id, conteudo: sugestao as unknown as Prisma.InputJsonValue, origem, estagioNaHora: lead?.estagio ?? null } })
+    .catch(e => logger.warn({ err: e }, 'assistente: falha ao guardar a sugestão'))
+  res.json({ origem, leitura: sugestao.leitura, opcoes: sugestao.opcoes })
 })
 
 const acaoConversaSchema = z.object({ acao: z.enum(['ASSUMIR', 'DEVOLVER', 'ENCERRAR', 'NAO_E_LEAD', 'CRIAR_LEAD']) })
@@ -3229,11 +3292,16 @@ router.post('/assistente/simular', requireProLaboreAuth, requireModulo('assisten
   if (!salva) salva = (await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { configuracao: true } }))?.configuracao
   const cfg = lerConfigAssistente(salva)
   const ctx = { nomeContato: parse.data.nomeContato ?? 'Cliente Teste', vendedor: vendedor.nome, empresa: cfg.nomeEmpresa }
+  // As respostas aprovadas da base entram no teste como na conversa de verdade.
+  const itens = await respostasAtivas(req.proLaboreUser!.sub)
+  const base = baseParaRobo(itens, { ...ctx, moto: parse.data.estado ? respostaDoCampoAssistente(cfg, parse.data.estado.respostas, 'modeloInteresse') : null })
   const passo = parse.data.estado
-    ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx)
-    : iniciarRoteiroAssistente(cfg, ctx, parse.data.texto)
+    ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx, base)
+    : iniciarRoteiroAssistente(cfg, ctx, parse.data.texto, base)
+  const usado = passo.conhecimentoUsado ? itens.find(i => i.id === passo.conhecimentoUsado) : null
   res.json({
     ...passo,
+    conhecimento: usado ? { id: usado.id, titulo: usado.titulo } : null,
     resumo: passo.desfecho ? linhasResumoAssistente(cfg, passo.estado.respostas) : [],
     gatilho: parse.data.estado ? null : casaGatilhoAssistente(parse.data.texto, cfg.gatilhos),
   })
