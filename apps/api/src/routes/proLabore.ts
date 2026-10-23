@@ -20,7 +20,7 @@ import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
 } from '../lib/whatsappEvolution'
-import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa } from '../lib/assistenteMotor'
+import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa, avaliarJornada } from '../lib/assistenteMotor'
 import {
   CAMPOS_LEAD as CAMPOS_LEAD_ASSISTENTE, CONFIG_PADRAO as CONFIG_ASSISTENTE_PADRAO, lerConfig as lerConfigAssistente,
   linhasResumo as linhasResumoAssistente, iniciarRoteiro as iniciarRoteiroAssistente, avancarRoteiro as avancarRoteiroAssistente,
@@ -786,7 +786,7 @@ const TIPOS_NEGOCIACAO = ['P', 'R'] as const
 // ter sido criado fora do período filtrado.
 const LEAD_INCLUDE = {
   vendedor: { select: { id: true, nome: true } },
-  historico: { select: { estagioNovo: true, criadoEm: true }, orderBy: { criadoEm: 'asc' } },
+  historico: { select: { estagioNovo: true, criadoEm: true, origem: true, motivo: true }, orderBy: { criadoEm: 'asc' } },
   // O próximo follow pendente (botão Follow do card).
   follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 1, select: { id: true, agendadoPara: true, canal: true, nota: true } },
 } as const
@@ -1030,6 +1030,28 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
     data: { leadId: atual.id, estagioAnterior: atual.estagio, estagioNovo: parse.data.estagio },
   })
   res.json(lead)
+})
+
+// "Desfazer" do card: volta o último avanço automático do Assistente (se
+// o lead ainda está na etapa para onde ele foi) e o assistente não tenta
+// aquela etapa de novo nesse lead.
+router.post('/leads/:id/desfazer-avanco', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
+  const lead = await prisma.lead.findFirst({ where: { id: String(req.params.id), ...leadWhereBase(req) }, select: { id: true, estagio: true } })
+  if (!lead) {
+    res.status(404).json({ error: 'Lead não encontrado' })
+    return
+  }
+  const ultimo = await prisma.leadEstagioHistorico.findFirst({ where: { leadId: lead.id }, orderBy: { criadoEm: 'desc' } })
+  if (!ultimo || ultimo.origem !== 'ASSISTENTE' || ultimo.estagioNovo !== lead.estagio || !ultimo.estagioAnterior) {
+    res.status(409).json({ error: 'Esse lead não tem avanço automático para desfazer' })
+    return
+  }
+  // O registro do avanço sai do histórico: o funil não conta uma etapa que o lead não alcançou.
+  await prisma.$transaction([
+    prisma.lead.update({ where: { id: lead.id }, data: { estagio: ultimo.estagioAnterior, avancosDesfeitos: { push: ultimo.estagioNovo } } }),
+    prisma.leadEstagioHistorico.delete({ where: { id: ultimo.id } }),
+  ])
+  res.json(await prisma.lead.findUnique({ where: { id: lead.id }, include: LEAD_INCLUDE }))
 })
 
 const converterLeadSchema = z.object({
@@ -3040,7 +3062,7 @@ async function carregarConversaAutorizada(req: Request, res: Response) {
 }
 
 const CONVERSA_LISTA_INCLUDE = {
-  lead: { select: { id: true, nomeCliente: true, estagio: true } },
+  lead: { select: { id: true, nomeCliente: true, estagio: true, etiquetas: true } },
   mensagens: { orderBy: { criadoEm: 'desc' as const }, take: 1 },
   _count: { select: { mensagens: true } },
 }
@@ -3081,7 +3103,7 @@ router.get('/assistente/conversas/:id', requireProLaboreAuth, requireModulo('ass
     where: { id: conversa.id },
     include: {
       mensagens: { orderBy: { criadoEm: 'asc' } },
-      lead: { select: { id: true, nomeCliente: true, estagio: true } },
+      lead: { select: { id: true, nomeCliente: true, estagio: true, etiquetas: true } },
     },
   })
   const cfg = lerConfigAssistente(conversa.assistente.configuracao)
@@ -3128,12 +3150,14 @@ router.post('/assistente/conversas/:id/mensagens', requireProLaboreAuth, require
       ...(conversa.tipo === 'LEAD' && (conversa.status === 'ATIVA' || conversa.status === 'AGUARDANDO_VENDEDOR') && { status: 'ASSUMIDA', assumidaEm: agora }),
     },
   })
-  // Mandou uma sugestão da base (mesmo editada): entra no placar da resposta.
+  // Mandou uma sugestão da base (mesmo editada): entra no placar da resposta,
+  // com a etapa de antes desta mensagem.
   const usuarioId = conversa.assistente.vendedor.usuarioId
   if (parse.data.conhecimentoId && conversa.tipo === 'LEAD' && await prisma.assistenteConhecimento.count({ where: { id: parse.data.conhecimentoId, usuarioId, status: 'ATIVO' } })) {
     await registrarUso({ usuarioId, conhecimentoId: parse.data.conhecimentoId, conversaId: conversa.id, leadId: conversa.leadId, canal: 'SUGESTAO' })
       .catch(e => logger.warn({ err: e }, 'assistente: falha ao registrar uso da sugestão'))
   }
+  if (conversa.tipo === 'LEAD') await avaliarJornada(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
   res.status(201).json(await prisma.assistenteMensagem.findUnique({ where: { id: registro.id } }))
 })
 
@@ -3208,6 +3232,7 @@ router.post('/assistente/conversas/:id/enviar-moto', requireProLaboreAuth, requi
     // Moto de interesse do lead, se ainda não tinha.
     ...(conversa.leadId ? [prisma.lead.updateMany({ where: { id: conversa.leadId, modeloInteresse: null }, data: { modeloInteresse: nomeDaMoto(moto) } })] : []),
   ])
+  await avaliarJornada(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
   res.status(201).json({ ok: true, fotos: fotos.length })
 })
 
@@ -3270,9 +3295,16 @@ router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, requireModul
     await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', encerradaEm: agora } })
   } else if (acao === 'NAO_E_LEAD') {
     // O lead que entrou sozinho na 1ª mensagem sai do CRM junto, se ninguém
-    // mexeu nele ainda (continua na etapa Lead e sem venda).
+    // mexeu nele à mão (continua em Lead, ou em Abordado só pelo avanço
+    // automático de quando o vendedor respondeu) e sem venda.
     const automatico = conversa.leadId
-      ? await prisma.lead.findFirst({ where: { id: conversa.leadId, origemCadastro: 'WHATSAPP', estagio: 'LEAD', vendaId: null }, select: { id: true } })
+      ? await prisma.lead.findFirst({
+        where: {
+          id: conversa.leadId, origemCadastro: 'WHATSAPP', estagio: { in: ['LEAD', 'ABORDADO'] }, vendaId: null,
+          historico: { none: { origem: null, estagioAnterior: { not: null } } },
+        },
+        select: { id: true },
+      })
       : null
     await prisma.$transaction([
       prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', resultado: 'NAO_E_LEAD', encerradaEm: agora, ...(automatico && { leadId: null }) } }),

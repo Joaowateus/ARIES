@@ -263,6 +263,8 @@ export interface Lead {
   origemCadastro?: 'WHATSAPP' | null
   // Nota do Assistente (0–100) pela conversa do WhatsApp.
   pontuacao?: number | null
+  // Etiquetas da jornada calculadas pelo Assistente (QUENTE, FINANCIAMENTO...).
+  etiquetas?: string[]
   criadoEm: string
   atualizadoEm: string
   fechadoEm?: string | null
@@ -270,7 +272,8 @@ export interface Lead {
   // lead alcançou cada etapa (não só em que etapa está agora), necessário
   // pra filtrar o funil por período corretamente (ver dataAlcancouEtapa em
   // proLaboreFunilFiltro.tsx).
-  historico?: { estagioNovo: EstagioLead; criadoEm: string }[]
+  // origem ASSISTENTE = avanço automático (com o motivo), que dá para desfazer.
+  historico?: { estagioNovo: EstagioLead; criadoEm: string; origem?: 'ASSISTENTE' | null; motivo?: string | null }[]
   // Próximo follow pendente (botão Follow do card); vem no máximo um.
   follows?: FollowLead[]
   // Perdido: motivo, nota e temperatura (vão com o lead para a Reativação).
@@ -510,6 +513,7 @@ export const proLaboreApi = {
     capturaWhatsapp: () => request<CapturaWhatsappCrm>('/pro-labore/leads/captura-whatsapp'),
     editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; tipoNegociacao?: TipoNegociacao | null; valorNegociacao?: number }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    desfazerAvanco: (id: string) => request<Lead>(`/pro-labore/leads/${id}/desfazer-avanco`, { method: 'POST' }),
     mudarEstagio: (id: string, estagio: EstagioLead, perda?: { motivoPerda: MotivoPerda; notaPerda?: string; temperatura?: Temperatura }) =>
       request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio, ...perda }) }),
     converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; valorComissao?: number; observacao?: string }) =>
@@ -717,6 +721,8 @@ export const proLaboreApi = {
     enviarMoto: (id: string, motoId: string) =>
       request<{ ok: boolean; fotos: number }>(`/pro-labore/assistente/conversas/${id}/enviar-moto`, { method: 'POST', body: JSON.stringify({ motoId }) }),
     vitrine: () => request<DadosVitrine>('/pro-labore/assistente/vitrine'),
+    loja: () => request<PreferenciasLojaAssistente>('/pro-labore/assistente/loja'),
+    salvarLoja: (data: Partial<Omit<PreferenciasLojaAssistente, 'podeEditar'>>) => request<PreferenciasLojaAssistente>('/pro-labore/assistente/loja', { method: 'PUT', body: JSON.stringify(data) }),
     // Foto da vitrine (já comprimida no navegador): devolve o caminho relativo que fica na moto.
     enviarFotoMoto: (foto: Blob) =>
       request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: foto, headers: { 'Content-Type': 'application/octet-stream' } }).then(r => r.caminho),
@@ -1624,7 +1630,7 @@ export interface AssistenteConversa {
   sinais?: SinalNotaLead[] | null
   etapaRoteiro: number
   leadId?: string | null
-  lead?: { id: string; nomeCliente: string; estagio: EstagioLead } | null
+  lead?: { id: string; nomeCliente: string; estagio: EstagioLead; etiquetas?: string[] } | null
   ultimaMensagemEm: string
   aguardandoVendedorEm?: string | null
   assumidaEm?: string | null
@@ -1672,6 +1678,7 @@ export interface MotoVitrine {
   previa: string
 }
 export interface ConfigVitrine { mostrarPreco: boolean; vitrineRobo: boolean }
+export interface PreferenciasLojaAssistente extends ConfigVitrine { avancoAutomatico: boolean; podeEditar: boolean }
 export interface DadosVitrine { motos: MotoVitrine[]; config: ConfigVitrine; podeEditar: boolean }
 export type MotoVitrineEntrada = Partial<Pick<MotoVitrine, 'marca' | 'ano' | 'cor' | 'situacao' | 'versao' | 'km' | 'cilindrada' | 'preco' | 'destaques' | 'ficha' | 'fotos' | 'videoUrl'>> & { modelo?: string }
 

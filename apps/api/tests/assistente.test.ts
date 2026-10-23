@@ -201,3 +201,37 @@ test('robô: estoque no meio do roteiro', () => {
   assert.match(q.midias![0].legenda, /já foi vendida/)
   assert.match(q.mensagens[0], /^Como você pensa em pagar\?/)
 })
+
+// ---------- Jornada: etiquetas + avanço ----------
+import { etiquetasDoLead, proximaEtapa, rebaixadoHaPouco } from '../src/lib/assistenteJornada'
+
+const agora = new Date('2026-10-23T15:00:00Z')
+const horas = (h: number) => new Date(agora.getTime() - h * 3600e3)
+const etq = (respostas: Record<string, string>, textos: string[], extra: Partial<Parameters<typeof etiquetasDoLead>[0]> = {}) =>
+  etiquetasDoLead({ cfg: CONFIG_PADRAO, respostas, textosDoContato: textos, nota: null, ultimaDoContatoEm: horas(1), ultimaNossaEm: horas(2), agora, ...extra })
+
+test('etiquetas pela conversa', () => {
+  assert.deepEqual(etq({ pagamento: 'Financiado', entrada: 'Não' }, ['Quanto fica a parcela?']), ['FINANCIAMENTO', 'SEM_ENTRADA', 'PEDIU_SIMULACAO'])
+  assert.deepEqual(etq({ pagamento: 'À vista' }, ['Achei caro, tem desconto?', 'Posso passar aí amanhã?']), ['A_VISTA', 'OBJECAO_PRECO', 'PEDIU_VISITA'])
+  assert.deepEqual(etq({ pagamento: 'Tenho um veículo pra dar na troca' }, []), ['TEM_TROCA'])
+  assert.deepEqual(etq({}, ['oi'], { nota: 80 }), ['QUENTE'])
+  assert.deepEqual(etq({}, ['oi'], { ultimaDoContatoEm: horas(30), ultimaNossaEm: horas(26) }), ['SUMIU_24H'])
+  assert.deepEqual(etq({}, ['oi'], { ultimaDoContatoEm: horas(20), ultimaNossaEm: horas(26) }), [], 'o cliente respondeu depois: não sumiu')
+})
+
+test('avanço: só para frente, uma etapa, e respeita o desfazer', () => {
+  const base = { vendedorRespondeu: false, textosDoContato: [] as string[], textosDoVendedor: [] as string[], etiquetas: [] as never[], nota: null, desfeitos: [] as string[] }
+  assert.deepEqual(proximaEtapa({ ...base, estagio: 'LEAD', vendedorRespondeu: true }), { para: 'ABORDADO', motivo: 'o vendedor respondeu' })
+  assert.equal(proximaEtapa({ ...base, estagio: 'LEAD', etiquetas: ['PEDIU_SIMULACAO'] }), null, 'sem o vendedor responder, não pula para Negociação')
+  assert.equal(proximaEtapa({ ...base, estagio: 'ABORDADO', etiquetas: ['PEDIU_SIMULACAO'] })?.para, 'NEGOCIACAO')
+  assert.equal(proximaEtapa({ ...base, estagio: 'ABORDADO', textosDoContato: ['Quais documentos preciso levar?'] })?.motivo, 'perguntou da documentação')
+  assert.equal(proximaEtapa({ ...base, estagio: 'ABORDADO', nota: 75 })?.motivo, 'nota 75 na conversa')
+  assert.equal(proximaEtapa({ ...base, estagio: 'ABORDADO', nota: 60 }), null)
+  assert.equal(proximaEtapa({ ...base, estagio: 'NEGOCIACAO', textosDoVendedor: ['Segue a proposta, Ana!'] })?.para, 'PROPOSTA')
+  assert.equal(proximaEtapa({ ...base, estagio: 'NEGOCIACAO', textosDoContato: ['me manda a proposta'] }), null, 'proposta precisa vir do vendedor')
+  assert.equal(proximaEtapa({ ...base, estagio: 'PROPOSTA', textosDoVendedor: ['Segue a proposta'] }), null, 'nunca vai para Fechado')
+  assert.equal(proximaEtapa({ ...base, estagio: 'ABORDADO', etiquetas: ['PEDIU_SIMULACAO'], desfeitos: ['NEGOCIACAO'] }), null, 'avanço desfeito não volta')
+  assert.ok(rebaixadoHaPouco([{ estagioAnterior: 'NEGOCIACAO', estagioNovo: 'ABORDADO', origem: null, criadoEm: horas(5) }], agora))
+  assert.ok(!rebaixadoHaPouco([{ estagioAnterior: 'LEAD', estagioNovo: 'ABORDADO', origem: null, criadoEm: horas(5) }], agora))
+  assert.ok(!rebaixadoHaPouco([{ estagioAnterior: 'PERDIDO', estagioNovo: 'LEAD', origem: null, criadoEm: horas(5) }], agora), 'reativação não conta como rebaixar')
+})

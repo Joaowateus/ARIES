@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express'
 import { aprenderTodas } from '../lib/assistenteAprendizado'
 import { verificarAvancos } from '../lib/assistenteRespostas'
+import { atualizarEtiquetasRecentes } from '../lib/assistenteMotor'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
@@ -311,7 +312,9 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   const aprendizado = await aprenderTodas(5000).catch(e => { console.error('[assistente] aprendizado', e); return { aprendizadoContas: 0, aprendizadoReconhecidas: 0 } })
   // Placar da base: a resposta usada fez o lead andar no funil?
   const avancos = await verificarAvancos().catch(e => { console.error('[assistente] avanços', e); return { usosVerificados: 0, usosComAvanco: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos })
+  // Etiquetas que mudam com o tempo ("sumiu há 24h").
+  const etiquetas = await atualizarEtiquetasRecentes(300, agoraDoCron(req)).catch(e => { console.error('[assistente] etiquetas', e); return { etiquetasConversas: 0 } })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return

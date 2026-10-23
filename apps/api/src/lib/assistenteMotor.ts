@@ -29,6 +29,7 @@ import {
 } from './assistenteRoteiro'
 import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, vitrineDaLoja } from './assistenteRespostas'
 import { calcularNota } from './assistenteNota'
+import { Avanco, Etiqueta, ROTULO_ETAPA, etiquetasDoLead, proximaEtapa, rebaixadoHaPouco } from './assistenteJornada'
 
 export const STATUS_ABERTOS = ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA']
 const MAX_IDADE_MENSAGEM_MS = 10 * 60_000
@@ -273,6 +274,7 @@ async function tratarMensagemDoVendedor(a: AssistenteCompleto, m: MensagemWhatsa
       },
     }),
   ])
+  await avaliarJornada(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
 }
 
 // ---------- Contato escreveu ----------
@@ -397,7 +399,78 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
         .catch(e => logger.warn({ err: e }, 'assistente: falha ao registrar uso da base'))
     }
   }
-  if (conversaTocada) await atualizarNota(cfg, conversaTocada).catch(e => logger.warn({ err: e }, 'assistente: falha ao calcular a nota do lead'))
+  if (conversaTocada) {
+    await atualizarNota(cfg, conversaTocada).catch(e => logger.warn({ err: e }, 'assistente: falha ao calcular a nota do lead'))
+    await avaliarJornada(conversaTocada).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
+  }
+}
+
+// ---------- Jornada: etiquetas + avanço no funil ----------
+
+const DIA_MS = 86_400_000
+
+/**
+ * Recalcula as etiquetas do lead pela conversa e, se a loja deixou ligado,
+ * avança uma etapa quando há sinal claro (ver proximaEtapa). Avanço vai
+ * para o histórico com o motivo e pode ser desfeito no card do CRM; o
+ * vendedor recebe aviso no chat "Você" (menos o Lead → Abordado, que é ele
+ * mesmo respondendo).
+ */
+export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boolean; agora?: Date } = {}): Promise<{ etiquetas: Etiqueta[]; avanco: Avanco | null } | null> {
+  const agora = opcoes.agora ?? new Date()
+  const conversa = await prisma.assistenteConversa.findUnique({
+    where: { id: conversaId },
+    select: {
+      tipo: true, leadId: true, respostas: true, nota: true,
+      assistente: { select: { id: true, instancia: true, numeroWhatsapp: true, configuracao: true, vendedor: { select: { nome: true, usuarioId: true } } } },
+      mensagens: { orderBy: { criadoEm: 'desc' }, take: 80, select: { remetente: true, texto: true, criadoEm: true } },
+    },
+  })
+  if (!conversa || conversa.tipo !== 'LEAD' || !conversa.leadId) return null
+  const lead = await prisma.lead.findUnique({ where: { id: conversa.leadId }, select: { id: true, nomeCliente: true, estagio: true, etiquetas: true, avancosDesfeitos: true, vendaId: true } })
+  if (!lead) return null
+  const cfg = lerConfig(conversa.assistente.configuracao)
+  const doContato = conversa.mensagens.filter(m => m.remetente === 'CONTATO')
+  const doVendedor = conversa.mensagens.filter(m => m.remetente === 'VENDEDOR')
+  const nossa = conversa.mensagens.find(m => m.remetente !== 'CONTATO')
+  const etiquetas = etiquetasDoLead({
+    cfg, respostas: (conversa.respostas ?? {}) as Record<string, string>, textosDoContato: doContato.map(m => m.texto), nota: conversa.nota,
+    ultimaDoContatoEm: doContato[0]?.criadoEm ?? null, ultimaNossaEm: nossa?.criadoEm ?? null, agora,
+  })
+  if (etiquetas.join() !== lead.etiquetas.join()) await prisma.lead.update({ where: { id: lead.id }, data: { etiquetas } })
+
+  if (opcoes.avancar === false || lead.vendaId || lead.estagio === 'FECHADO' || lead.estagio === 'PERDIDO') return { etiquetas, avanco: null }
+  const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId: conversa.assistente.vendedor.usuarioId }, select: { avancoAutomatico: true } })
+  if (loja && !loja.avancoAutomatico) return { etiquetas, avanco: null }
+  const historico = await prisma.leadEstagioHistorico.findMany({ where: { leadId: lead.id, criadoEm: { gte: new Date(agora.getTime() - 7 * DIA_MS) } } })
+  if (rebaixadoHaPouco(historico, agora)) return { etiquetas, avanco: null }
+  const avanco = proximaEtapa({
+    estagio: lead.estagio, vendedorRespondeu: doVendedor.length > 0, textosDoContato: doContato.map(m => m.texto),
+    textosDoVendedor: doVendedor.slice(0, 10).map(m => m.texto), etiquetas, nota: conversa.nota, desfeitos: lead.avancosDesfeitos,
+  })
+  if (!avanco) return { etiquetas, avanco: null }
+  // Só move se ninguém mexeu no lead nesse meio-tempo.
+  const movido = await prisma.lead.updateMany({ where: { id: lead.id, estagio: lead.estagio }, data: { estagio: avanco.para } })
+  if (!movido.count) return { etiquetas, avanco: null }
+  await prisma.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: lead.estagio, estagioNovo: avanco.para, origem: 'ASSISTENTE', motivo: avanco.motivo } })
+  const a = conversa.assistente
+  if (avanco.para !== 'ABORDADO' && cfg.avisarVendedor && a.numeroWhatsapp) {
+    const texto = `➡️ Movi *${lead.nomeCliente}* para *${ROTULO_ETAPA[avanco.para]}* no CRM: ${avanco.motivo}.\nSe não for isso, toque em "Desfazer" no card do lead.`
+    const suporte = await conversaDeSuporte({ ...a, vendedor: { nome: a.vendedor.nome } })
+    await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, suporte.id, a.numeroWhatsapp, [texto])
+      .catch(e => logger.warn({ err: e }, 'assistente: falha ao avisar o avanço do lead'))
+  }
+  return { etiquetas, avanco }
+}
+
+/** Rodada do cron: "sumiu há 24h" muda com o tempo, sem mensagem nova. */
+export async function atualizarEtiquetasRecentes(limite = 300, agora = new Date()): Promise<{ etiquetasConversas: number }> {
+  const conversas = await prisma.assistenteConversa.findMany({
+    where: { tipo: 'LEAD', leadId: { not: null }, ultimaMensagemEm: { gte: new Date(agora.getTime() - 3 * DIA_MS), lte: new Date(agora.getTime() - 23 * 3600e3) } },
+    select: { id: true }, take: limite, orderBy: { ultimaMensagemEm: 'desc' },
+  })
+  for (const c of conversas) await avaliarJornada(c.id, { avancar: false, agora }).catch(e => logger.warn({ err: e }, 'assistente: falha nas etiquetas'))
+  return { etiquetasConversas: conversas.length }
 }
 
 // Nota do lead recalculada a cada mensagem do cliente: fica na conversa

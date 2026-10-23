@@ -6,6 +6,7 @@ import { proLaboreApi, urlArquivoApi, type AcaoConversaAssistente, type Assisten
 import { ORIGEM, RESULTADO, ROTULO_ESTAGIO, STATUS_CONVERSA, fmtTelefone, horaCurta, iniciais, tempoRelativo } from './util'
 import { ChipNota, NotaDoLead, SugestoesConversa } from './SugestoesConversa'
 import { BotaoEnviarMoto } from './EnviarMoto'
+import { EtiquetasLead } from './jornada'
 
 const ATUALIZAR_MS = 8000
 
@@ -248,6 +249,12 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
               {conversa.tipo === 'LEAD' && (
                 <aside className="pl-as-respostas">
                   <NotaDoLead nota={conversa.nota} sinais={conversa.sinais} />
+                  {(conversa.lead?.etiquetas?.length ?? 0) > 0 && (
+                    <div className="pl-as-etiquetas-quadro">
+                      <div className="pl-as-subtitulo">Etiquetas</div>
+                      <EtiquetasLead etiquetas={conversa.lead!.etiquetas} />
+                    </div>
+                  )}
                   <div className="pl-as-subtitulo">Respostas do roteiro</div>
                   {conversa.resultado && <div className="pl-as-resultado">{RESULTADO[conversa.resultado]}</div>}
                   {!conversa.resultado && conversa.totalPerguntas > 0 && (
