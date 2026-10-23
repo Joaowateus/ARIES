@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Instala o servidor do WhatsApp (Evolution API) numa máquina Ubuntu do
-# Oracle Cloud (Always Free). Um servidor atende a equipe toda: cada vendedor
-# vira uma "instância" quando lê o QR Code no sistema.
+# Instala o servidor do WhatsApp (Evolution API) numa máquina Ubuntu na
+# nuvem: Oracle Cloud (Always Free) ou Google Cloud (e2-micro). Um servidor
+# atende a equipe toda: cada vendedor vira uma "instância" quando lê o QR Code
+# no sistema.
 #
 # Uso, já conectado na máquina por SSH:
 #   curl -fsSL https://raw.githubusercontent.com/Joaowateus/ARIES/claude/soe-project-setup-sqgryt/infra/whatsapp-evolution/instalar-oracle.sh -o instalar.sh
 #   sudo bash instalar.sh
 #
 # Pode rodar de novo sem medo: reaproveita a chave e os dados já criados.
-# Antes, libere as portas 80 e 443 na Security List da rede (ver LEIA-ME.md).
+# Antes, libere as portas 80 e 443 na rede da máquina (ver LEIA-ME.md).
 set -euo pipefail
 
 # A 2.4 passou a exigir ativação de licença: fica fixo na última 2.3 estável.
@@ -157,12 +158,18 @@ $DOMINIO {
 EOF
 
 passo "Baixando e ligando os serviços (leva uns 2 a 5 minutos na primeira vez)"
-docker compose pull -q
+if ! docker compose pull -q; then
+  # Docker Hub limita downloads por IP: tenta pelo espelho público do Google.
+  echo "O Docker Hub recusou o download; usando o espelho do Google."
+  sed -i -E -e 's#image: evoapicloud/#image: mirror.gcr.io/evoapicloud/#' \
+    -e 's#image: (postgres|redis|caddy):#image: mirror.gcr.io/library/\1:#' docker-compose.yml
+  docker compose pull -q
+fi
 docker compose up -d --remove-orphans
 
-passo "Esperando a Evolution responder"
+passo "Esperando a Evolution responder (em máquina pequena a primeira vez leva até 10 minutos)"
 pronto=""
-for _ in $(seq 1 90); do
+for _ in $(seq 1 160); do
   if curl -fsS -m 5 http://127.0.0.1:8080 2>/dev/null | grep -qi "welcome"; then pronto=1; break; fi
   sleep 4
 done
