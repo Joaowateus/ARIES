@@ -3252,7 +3252,7 @@ router.get('/assistente/resumo', requireProLaboreAuth, requireModulo('assistente
   const [conversas, aguardandoAgora] = assistente
     ? await Promise.all([
       prisma.assistenteConversa.findMany({
-        where: { assistenteId: assistente.id, tipo: 'LEAD', criadoEm: { gte: inicio } },
+        where: { assistenteId: assistente.id, tipo: 'LEAD', robo: true, criadoEm: { gte: inicio } },
         select: {
           criadoEm: true, status: true, resultado: true, origem: true, etapaRoteiro: true, ultimaMensagemEm: true,
           aguardandoVendedorEm: true, assumidaEm: true, leadId: true, lead: { select: { estagio: true } },
