@@ -5,11 +5,31 @@
 // precisa conectar e quantos entraram hoje.
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, type CapturaWhatsappCrm } from '@/lib/proLaboreApi'
+import { proLaboreApi, type CapturaWhatsappCrm, type PreferenciasLojaAssistente } from '@/lib/proLaboreApi'
 
 const IconeWhats = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none' }}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
 )
+
+// Chave da gestão: o Assistente move o lead no funil sozinho (só para
+// frente, com aviso no WhatsApp do vendedor e "Desfazer" no card).
+function ChaveAvanco() {
+  const [p, setP] = useState<PreferenciasLojaAssistente | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  useEffect(() => { proLaboreApi.assistente.loja().then(setP).catch(() => undefined) }, [])
+  if (!p?.podeEditar) return null
+  async function alternar() {
+    setSalvando(true)
+    try { setP(await proLaboreApi.assistente.salvarLoja({ avancoAutomatico: !p!.avancoAutomatico })) } finally { setSalvando(false) }
+  }
+  return (
+    <button type="button" role="switch" aria-checked={p.avancoAutomatico} className={`pl-as-switch ${p.avancoAutomatico ? 'on' : ''}`} onClick={alternar} disabled={salvando} data-chave-avanco
+      title="Lead → Abordado quando o vendedor responde; Abordado → Negociação com pedido de simulação, visita ou documentos (ou nota alta); Negociação → Proposta quando o vendedor manda a proposta. Nunca para Fechado ou Perdido.">
+      <span className="pl-as-switch-trilho" aria-hidden="true"><span /></span>
+      <span><b>{p.avancoAutomatico ? 'Avanço automático ligado' : 'Avanço automático desligado'}</b><small>O assistente move o lead e avisa o vendedor</small></span>
+    </button>
+  )
+}
 
 export function FaixaWhatsapp({ gestao, versao }: { gestao: boolean; versao: number }) {
   const [d, setD] = useState<CapturaWhatsappCrm | null>(null)
@@ -72,6 +92,7 @@ export function FaixaWhatsapp({ gestao, versao }: { gestao: boolean; versao: num
         {faltam.length > 0 && <> Falta{faltam.length > 1 ? 'm' : ''}: {faltam.map(v => `${v.nome}${v.conectado ? ' (pausado)' : ''}`).join(', ')}.</>}
       </span>
       {faltam.length > 0 && <Link className="pl-btn pl-btn-ghost" href={linkConectar}>Conectar WhatsApp</Link>}
+      {conectados.length > 0 && <ChaveAvanco />}
     </div>
   )
 }

@@ -1328,6 +1328,13 @@ model Lead {
   // Nota do Assistente (0–100) pela conversa do WhatsApp: quanto mais alta,
   // mais pronto para comprar. Só leitura; quem calcula é o assistente.
   pontuacao       Int?
+  // Etiquetas da jornada, calculadas pelo Assistente a cada mensagem
+  // (QUENTE, FINANCIAMENTO, A_VISTA, TEM_TROCA, SEM_ENTRADA, PEDIU_SIMULACAO,
+  // OBJECAO_PRECO, PEDIU_VISITA, SUMIU_24H).
+  etiquetas       String[]  @default([])
+  // Etapas para as quais um avanço automático foi desfeito: o assistente
+  // não tenta de novo.
+  avancosDesfeitos String[] @default([])
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   fechadoEm       DateTime?
@@ -1361,6 +1368,9 @@ model LeadEstagioHistorico {
   leadId          String
   estagioAnterior String?
   estagioNovo     String
+  // ASSISTENTE = avanço automático (com o motivo); null = mudança manual.
+  origem          String?
+  motivo          String?
   criadoEm        DateTime @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id])
@@ -1964,6 +1974,9 @@ model AssistenteLoja {
   mostrarPreco Boolean  @default(false)
   // O robô responde "tem a XRE?" com a ficha e a foto do estoque.
   vitrineRobo  Boolean  @default(true)
+  // O assistente move o lead no funil (só para frente, nunca para
+  // Fechado/Perdido, com aviso e "desfazer").
+  avancoAutomatico Boolean @default(true)
   atualizadoEm DateTime @default(now()) @updatedAt
 
   @@map("pro_labore_assistente_loja")

@@ -13,6 +13,7 @@ import { PerdaModal } from '../_follow/PerdaModal'
 import { situacaoFollow } from '../_follow/follow'
 import { FaixaWhatsapp } from './_whatsapp/FaixaWhatsapp'
 import { ChipNota } from '../assistente/_componentes/SugestoesConversa'
+import { EtiquetasLead, ORDEM_ETIQUETAS, ROTULO_ETIQUETA } from '../assistente/_componentes/jornada'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
@@ -182,6 +183,8 @@ export default function ProLaboreLeadsPage() {
   const [followAberto, setFollowAberto] = useState<Lead | null>(null)
   const [perdaAberta, setPerdaAberta] = useState<Lead | null>(null)
   const [filtroFollow, setFiltroFollow] = useState<'' | 'ATRASADO' | 'HOJE'>('')
+  // Etiqueta da jornada (posta pelo Assistente): filtra só os cards do Kanban.
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState('')
   // Custo por lead automático: gasto do mês (Tráfego/Indicadores) ÷ leads do mês.
   const [gastoMes, setGastoMes] = useState<number | null>(null)
   const [mesCorrente] = useState(() => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7))
@@ -333,6 +336,15 @@ export default function ProLaboreLeadsPage() {
     if (estagio === lead.estagio) return
     await proLaboreApi.leads.mudarEstagio(lead.id, estagio)
     carregar()
+  }
+
+  async function desfazerAvanco(lead: Lead) {
+    try {
+      await proLaboreApi.leads.desfazerAvanco(lead.id)
+      carregar()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Não deu para desfazer')
+    }
   }
 
   function marcarPerdido(lead: Lead) {
@@ -608,8 +620,10 @@ export default function ProLaboreLeadsPage() {
   const situacaoDe = (l: Lead) => (l.follows?.[0] ? situacaoFollow(l.follows[0]).tipo : null)
   const followsAtrasados = leadsAtivos.filter(l => situacaoDe(l) === 'ATRASADO').length
   const followsHoje = leadsAtivos.filter(l => situacaoDe(l) === 'HOJE').length
+  const contagemEtiquetas = ORDEM_ETIQUETAS.map(e => ({ e, n: leadsAtivos.filter(l => l.etiquetas?.includes(e)).length })).filter(x => x.n > 0)
   const leadsAtivosOrdenados = [...leadsAtivos]
     .filter(l => !filtroFollow || situacaoDe(l) === filtroFollow)
+    .filter(l => !filtroEtiqueta || l.etiquetas?.includes(filtroEtiqueta))
     .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
   // População de cada etapa do funil (pros indicadores de conversão/perda/R$
@@ -905,6 +919,15 @@ export default function ProLaboreLeadsPage() {
               {filtroFollow && <span className="pl-link-action pl-leads-textlink" onClick={() => setFiltroFollow('')}>Ver todos os cards</span>}
             </div>
           )}
+          {(contagemEtiquetas.length > 0 || filtroEtiqueta) && (
+            <div className="fw-faixa" role="group" aria-label="Etiquetas da jornada" data-filtro-etiquetas>
+              <span className="pl-hint" title="Postas pelo Assistente a partir da conversa do WhatsApp">Etiquetas:</span>
+              {contagemEtiquetas.map(({ e, n }) => (
+                <button key={e} type="button" className={`pl-chip ${filtroEtiqueta === e ? 'active' : ''}`} aria-pressed={filtroEtiqueta === e} onClick={() => setFiltroEtiqueta(f => (f === e ? '' : e))}>{ROTULO_ETIQUETA[e]} · {n}</button>
+              ))}
+              {filtroEtiqueta && <span className="pl-link-action pl-leads-textlink" onClick={() => setFiltroEtiqueta('')}>Ver todos os cards</span>}
+            </div>
+          )}
           <div className="pl-kanban">
             {COLUNAS.map(col => {
               const leadsDaColuna = leadsAtivosOrdenados.filter(l => l.estagio === col.estagio)
@@ -939,6 +962,7 @@ export default function ProLaboreLeadsPage() {
                         onEditar={() => abrirEdicao(lead)}
                         onPerdido={() => marcarPerdido(lead)}
                         onFollow={() => setFollowAberto(lead)}
+                        onDesfazer={() => desfazerAvanco(lead)}
                         onRemover={() => remover(lead)}
                         onDefinirTipoNegociacao={tipo => definirTipoNegociacao(lead, tipo)}
                       />
@@ -1148,9 +1172,16 @@ export default function ProLaboreLeadsPage() {
   )
 }
 
+// Último avanço foi do Assistente e o lead continua lá: dá para desfazer (aviso por 3 dias).
+function avancoAutomaticoRecente(lead: Lead) {
+  const ultimo = lead.historico?.[lead.historico.length - 1]
+  if (!ultimo || ultimo.origem !== 'ASSISTENTE' || ultimo.estagioNovo !== lead.estagio || lead.vendaId) return null
+  return Date.now() - new Date(ultimo.criadoEm).getTime() < 3 * 86_400_000 ? ultimo : null
+}
+
 /* ============ CARD DO KANBAN ============ */
 function KanbanCard({
-  lead, estagio, isDono, vejaEquipe, dragging, onPointerDown, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onRemover, onDefinirTipoNegociacao,
+  lead, estagio, isDono, vejaEquipe, dragging, onPointerDown, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
 }: {
   lead: Lead
   estagio: EstagioLead
@@ -1163,11 +1194,13 @@ function KanbanCard({
   onEditar: () => void
   onPerdido: () => void
   onFollow: () => void
+  onDesfazer: () => void
   onRemover: () => void
   onDefinirTipoNegociacao: (tipo: TipoNegociacao) => void
 }) {
   const proximoFollow = lead.follows?.[0] ?? null
   const sitFollow = proximoFollow ? situacaoFollow(proximoFollow) : null
+  const avancoAuto = avancoAutomaticoRecente(lead)
   const movivel = !lead.vendaId
   const proxima = proximaEtapaSimples(estagio)
   const proximaTitulo = proxima ? COLUNAS.find(c => c.estagio === proxima)?.titulo : null
@@ -1215,6 +1248,13 @@ function KanbanCard({
         <span style={{ display: 'inline-block', marginLeft: lead.tipoLead || lead.postCode || viaWhatsapp ? 6 : 0, verticalAlign: 'middle' }}>
           <ChipNota nota={lead.pontuacao} titulo={`Nota do Assistente pela conversa do WhatsApp: ${lead.pontuacao} de 100`} />
         </span>
+      )}
+      {!lead.vendaId && <div className="pl-kanban-card-etiquetas"><EtiquetasLead etiquetas={lead.etiquetas?.filter(e => e !== 'QUENTE')} max={3} /></div>}
+      {avancoAuto && (
+        <div className="pl-kanban-card-auto" data-avanco-auto>
+          <span title={`Em ${new Date(avancoAuto.criadoEm).toLocaleString('pt-BR')}`}>Movido pelo assistente: {avancoAuto.motivo}</span>
+          <button type="button" className="pl-link-action" onClick={onDesfazer} onPointerDown={e => e.stopPropagation()} data-desfazer>Desfazer</button>
+        </div>
       )}
       {lead.tipoNegociacao && (
         <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]} style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>

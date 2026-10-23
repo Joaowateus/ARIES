@@ -57,6 +57,21 @@ router.put('/assistente/vitrine/config', ...editar, async (req: Request, res: Re
   res.json({ mostrarPreco: loja.mostrarPreco, vitrineRobo: loja.vitrineRobo })
 })
 
+// Preferências da loja para o Assistente (valem para todos os vendedores).
+router.get('/assistente/loja', ...ver, async (req: Request, res: Response) => {
+  const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId: req.proLaboreUser!.sub } })
+  res.json({ mostrarPreco: loja?.mostrarPreco ?? false, vitrineRobo: loja?.vitrineRobo ?? true, avancoAutomatico: loja?.avancoAutomatico ?? true, podeEditar: daGestao(req) })
+})
+router.put('/assistente/loja', ...editar, async (req: Request, res: Response) => {
+  if (!daGestao(req)) return erro(res, 403, 'Só o dono ou o supervisor muda as preferências da loja')
+  const p = z.object({ mostrarPreco: z.boolean().optional(), vitrineRobo: z.boolean().optional(), avancoAutomatico: z.boolean().optional() }).safeParse(req.body)
+  if (!p.success) return erro(res, 400, 'Preferência inválida')
+  const usuarioId = req.proLaboreUser!.sub
+  const loja = await prisma.assistenteLoja.upsert({ where: { usuarioId }, update: p.data, create: { usuarioId, ...p.data } })
+  esquecerVitrine(usuarioId)
+  res.json({ mostrarPreco: loja.mostrarPreco, vitrineRobo: loja.vitrineRobo, avancoAutomatico: loja.avancoAutomatico, podeEditar: true })
+})
+
 const texto = (max: number) => z.string().trim().max(max).transform(v => v || null).nullable().optional()
 const motoSchema = z.object({
   modelo: z.string().trim().min(2, 'Informe o modelo').max(80),

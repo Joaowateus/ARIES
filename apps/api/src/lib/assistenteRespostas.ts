@@ -122,7 +122,9 @@ export async function verificarAvancos(limite = 500): Promise<{ usosVerificados:
   let verificados = 0, comAvanco = 0
   for (const u of pendentes) {
     const atual = u.leadId ? leads.get(u.leadId) : undefined
-    const antes = RANK_ESTAGIO[u.estagioNaHora ?? 'LEAD'] ?? 0
+    // Lead → Abordado é só o vendedor respondendo (e o assistente move sozinho):
+    // avanço de verdade é chegar a Negociação ou além.
+    const antes = Math.max(RANK_ESTAGIO[u.estagioNaHora ?? 'LEAD'] ?? 0, RANK_ESTAGIO.ABORDADO)
     const avancou = atual !== undefined && (RANK_ESTAGIO[atual] ?? -1) > antes
     if (!avancou && agora - u.criadoEm.getTime() < PRAZO_AVANCO_MS) continue
     try {
