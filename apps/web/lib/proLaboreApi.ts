@@ -722,6 +722,8 @@ export const proLaboreApi = {
       request<{ ok: boolean; fotos: number }>(`/pro-labore/assistente/conversas/${id}/enviar-moto`, { method: 'POST', body: JSON.stringify({ motoId }) }),
     vitrine: () => request<DadosVitrine>('/pro-labore/assistente/vitrine'),
     loja: () => request<PreferenciasLojaAssistente>('/pro-labore/assistente/loja'),
+    follow: () => request<DadosFollow>('/pro-labore/assistente/follow'),
+    salvarFollow: (data: { ativo?: boolean; config?: ConfigFollow }) => request<{ ativo: boolean; config: ConfigFollow }>('/pro-labore/assistente/follow', { method: 'PUT', body: JSON.stringify(data) }),
     salvarLoja: (data: Partial<Omit<PreferenciasLojaAssistente, 'podeEditar'>>) => request<PreferenciasLojaAssistente>('/pro-labore/assistente/loja', { method: 'PUT', body: JSON.stringify(data) }),
     // Foto da vitrine (já comprimida no navegador): devolve o caminho relativo que fica na moto.
     enviarFotoMoto: (foto: Blob) =>
@@ -1547,7 +1549,7 @@ export type StatusConversaAssistente = 'ATIVA' | 'AGUARDANDO_VENDEDOR' | 'ASSUMI
 export type ResultadoConversaAssistente = 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU' | 'NAO_E_LEAD'
 export type OrigemConversaAssistente = 'ANUNCIO' | 'GATILHO' | 'CONTATO_NOVO'
 export type RemetenteMensagemAssistente = 'CONTATO' | 'ASSISTENTE' | 'VENDEDOR'
-export type AcaoConversaAssistente = 'ASSUMIR' | 'DEVOLVER' | 'ENCERRAR' | 'NAO_E_LEAD' | 'CRIAR_LEAD'
+export type AcaoConversaAssistente = 'ASSUMIR' | 'DEVOLVER' | 'ENCERRAR' | 'NAO_E_LEAD' | 'CRIAR_LEAD' | 'PARAR_FOLLOW' | 'RETOMAR_FOLLOW'
 export type CampoLeadAssistente = 'modeloInteresse' | 'formaPagamento' | 'valorEntrada' | 'veiculoTroca' | 'cidade' | 'melhorHorario' | 'nomeCompleto' | 'outro'
 
 export interface PerguntaRoteiroAssistente {
@@ -1611,6 +1613,8 @@ export interface AssistenteMensagem {
   texto: string
   // Foto enviada junto (vitrine do estoque): /pro-labore/imagens/<chave>.
   midiaUrl?: string | null
+  // FOLLOW = mensagem do follow automático.
+  origem?: 'FOLLOW' | null
   criadoEm: string
 }
 
@@ -1628,6 +1632,9 @@ export interface AssistenteConversa {
   // Nota do lead (0–100) e o motivo de cada ponto.
   nota?: number | null
   sinais?: SinalNotaLead[] | null
+  // Follow automático: passos enviados desde a última resposta do cliente e por que parou.
+  followPasso?: number
+  followParado?: 'PEDIU_PARAR' | 'VENDEDOR' | null
   etapaRoteiro: number
   leadId?: string | null
   lead?: { id: string; nomeCliente: string; estagio: EstagioLead; etiquetas?: string[] } | null
@@ -1679,6 +1686,19 @@ export interface MotoVitrine {
 }
 export interface ConfigVitrine { mostrarPreco: boolean; vitrineRobo: boolean }
 export interface PreferenciasLojaAssistente extends ConfigVitrine { avancoAutomatico: boolean; podeEditar: boolean }
+export type MidiaFollow = 'NENHUMA' | 'FOTO_MOTO' | 'VIDEO_MOTO'
+export interface PassoFollow { dias: number; texto: string; midia: MidiaFollow }
+export interface ConfigFollow { passos: PassoFollow[]; tetoDiario: number; horaInicio: number; horaFim: number }
+export interface ItemFilaFollow { conversaId: string; nome: string; vendedor: string; passo: number; total: number; devidoEm: string; texto: string; foto: string | null }
+export interface DadosFollow {
+  ativo: boolean
+  config: ConfigFollow
+  podeEditar: boolean
+  noHorario: boolean
+  enviadosHoje: number
+  fila: ItemFilaFollow[]
+  ultimos: Array<{ id: string; texto: string; midiaUrl: string | null; criadoEm: string; conversa: { id: string; nomeContato: string } }>
+}
 export interface DadosVitrine { motos: MotoVitrine[]; config: ConfigVitrine; podeEditar: boolean }
 export type MotoVitrineEntrada = Partial<Pick<MotoVitrine, 'marca' | 'ano' | 'cor' | 'situacao' | 'versao' | 'km' | 'cilindrada' | 'preco' | 'destaques' | 'ficha' | 'fotos' | 'videoUrl'>> & { modelo?: string }
 

@@ -235,7 +235,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                   return (
                     <div key={m.id} className={`pl-as-bolha-linha ${direita ? 'direita' : ''}`}>
                       <div className={`pl-as-bolha ${lado}`}>
-                        {m.remetente !== 'CONTATO' && conversa.tipo === 'LEAD' && <span className="pl-as-bolha-autor">{m.remetente === 'ASSISTENTE' ? 'Assistente' : nomeVendedor}</span>}
+                        {m.remetente !== 'CONTATO' && conversa.tipo === 'LEAD' && <span className="pl-as-bolha-autor">{m.remetente === 'ASSISTENTE' ? (m.origem === 'FOLLOW' ? 'Follow automático' : 'Assistente') : nomeVendedor}</span>}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         {m.midiaUrl && <img className="pl-as-bolha-foto" src={urlArquivoApi(m.midiaUrl)} alt="Foto enviada" loading="lazy" />}
                         {!(m.midiaUrl && m.texto === '[imagem]') && <div className="pl-as-bolha-texto"><TextoWhats texto={m.texto} /></div>}
@@ -271,6 +271,17 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                         ))}
                       </dl>
                     )}
+                  {conversa.status === 'ASSUMIDA' && (
+                    <div className="pl-as-follow-quadro" data-follow-conversa>
+                      <div className="pl-as-subtitulo">Follow automático</div>
+                      {conversa.followParado === 'PEDIU_PARAR' ? <div className="pl-hint">O cliente pediu para parar: não recebe mais.</div>
+                        : conversa.followParado === 'VENDEDOR' ? (
+                          <><div className="pl-hint">Parado nesta conversa.</div><button type="button" className="pl-vt-link" onClick={() => executar('RETOMAR_FOLLOW')} data-retomar-follow>Retomar</button></>
+                        ) : (
+                          <><div className="pl-hint">{conversa.followPasso ? `${conversa.followPasso} enviado${conversa.followPasso > 1 ? 's' : ''} desde a última resposta.` : 'Nenhum enviado desde a última resposta.'}</div><button type="button" className="pl-vt-link" onClick={() => executar('PARAR_FOLLOW')} data-parar-follow>Parar nesta conversa</button></>
+                        )}
+                    </div>
+                  )}
                   {conversa.assumidaEm && conversa.aguardandoVendedorEm && (
                     <div className="pl-hint" style={{ fontSize: 11.5, marginTop: 10 }}>
                       Respondido {Math.max(0, Math.round((new Date(conversa.assumidaEm).getTime() - new Date(conversa.aguardandoVendedorEm).getTime()) / 60_000))} min depois de ficar pronto.

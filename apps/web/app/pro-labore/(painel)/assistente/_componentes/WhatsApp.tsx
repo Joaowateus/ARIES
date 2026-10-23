@@ -12,14 +12,16 @@ import { Conversas } from './Conversas'
 import { Roteiro } from './Roteiro'
 import { Conhecimento } from './Conhecimento'
 import { Vitrine } from './Vitrine'
+import { Follow } from './Follow'
 import { nomeProprio } from './util'
 
-type Aba = 'visao' | 'conversas' | 'conhecimento' | 'estoque' | 'roteiro'
+type Aba = 'visao' | 'conversas' | 'conhecimento' | 'estoque' | 'follow' | 'roteiro'
 const ABAS: Array<{ valor: Aba; rotulo: string }> = [
   { valor: 'visao', rotulo: 'Desempenho' },
   { valor: 'conversas', rotulo: 'Conversas' },
   { valor: 'conhecimento', rotulo: 'Conhecimento' },
   { valor: 'estoque', rotulo: 'Estoque' },
+  { valor: 'follow', rotulo: 'Follow' },
   { valor: 'roteiro', rotulo: 'Roteiro e teste' },
 ]
 const PERIODOS = [7, 30, 90] as const
@@ -196,6 +198,8 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
           {aba === 'conhecimento' && <Conhecimento />}
 
           {aba === 'estoque' && <Vitrine />}
+
+          {aba === 'follow' && <Follow />}
 
           {aba === 'roteiro' && (
             <Roteiro

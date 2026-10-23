@@ -25,11 +25,14 @@ import { lerImagem } from './armazenamento'
 import { origemPorCodigo } from './smAtribuicao'
 import {
   ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, MidiaPasso, PassoRoteiro, TEXTO_MENU,
-  avancarRoteiro, casaGatilho, complementarResposta, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
+  avancarRoteiro, casaGatilho, complementarResposta, desiste, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
 } from './assistenteRoteiro'
 import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, vitrineDaLoja } from './assistenteRespostas'
 import { calcularNota } from './assistenteNota'
 import { Avanco, Etiqueta, ROTULO_ETAPA, etiquetasDoLead, proximaEtapa, rebaixadoHaPouco } from './assistenteJornada'
+import { PassoFollow, baseDoFollow, dentroDoHorario, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido } from './assistenteFollow'
+import { preencherResposta } from './assistenteConhecimento'
+import { MotoVitrine, acharMotos, nomeDaMoto } from './assistenteVitrine'
 
 export const STATUS_ABERTOS = ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA']
 const MAX_IDADE_MENSAGEM_MS = 10 * 60_000
@@ -323,7 +326,12 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
       conversaTocada = conversa.id
       const esperandoResposta = perguntaJaEntregue(conversa.mensagens)
       await tx.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id } })
-      const base = { ultimaMensagemEm: new Date(), ...(m.nomePerfil && conversa.nomeContato === formatarTelefone(m.numero) && { nomeContato: m.nomePerfil }) }
+      const base = {
+        ultimaMensagemEm: new Date(), ...(m.nomePerfil && conversa.nomeContato === formatarTelefone(m.numero) && { nomeContato: m.nomePerfil }),
+        // Cliente respondeu: o follow automático recomeça do zero; pediu para parar (com o vendedor), para de vez.
+        ...(conversa.followPasso > 0 && { followPasso: 0 }),
+        ...(conversa.status !== 'ATIVA' && !conversa.followParado && desiste(m.texto) && { followParado: 'PEDIU_PARAR' }),
+      }
       const estado: EstadoRoteiro = { etapa: conversa.etapaRoteiro, respostas: (conversa.respostas ?? {}) as Record<string, string> }
       if (conversa.status !== 'ATIVA' || !a.atendimentoAutomatico) {
         await tx.assistenteConversa.update({ where: { id: conversa.id }, data: base })
@@ -463,6 +471,120 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
   return { etiquetas, avanco }
 }
 
+// ---------- Follow automático (ver assistenteFollow.ts) ----------
+
+const SELECT_CONVERSA_FOLLOW = {
+  id: true, assistenteId: true, nomeContato: true, jid: true, numeroContato: true, respostas: true, followPasso: true, followUltimoEm: true,
+  lead: { select: { modeloInteresse: true } },
+  mensagens: { orderBy: { criadoEm: 'desc' as const }, take: 40, select: { remetente: true, criadoEm: true } },
+} satisfies Prisma.AssistenteConversaSelect
+type ConversaFollow = Prisma.AssistenteConversaGetPayload<{ select: typeof SELECT_CONVERSA_FOLLOW }>
+
+function conversasDoFollow(assistenteIds: string[], agora: Date) {
+  return prisma.assistenteConversa.findMany({
+    where: {
+      assistenteId: { in: assistenteIds }, tipo: 'LEAD', status: 'ASSUMIDA', followParado: null,
+      ultimaMensagemEm: { gte: new Date(agora.getTime() - 40 * DIA_MS) },
+      lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null } },
+    },
+    select: SELECT_CONVERSA_FOLLOW,
+    orderBy: { ultimaMensagemEm: 'asc' },
+    take: 400,
+  })
+}
+
+// A moto de interesse no estoque (disponível), para a foto/vídeo e o {moto}.
+function motoDoFollow(cfg: ConfigAssistente, c: Pick<ConversaFollow, 'respostas' | 'lead'>, motos: MotoVitrine[]): { nome: string | null; moto: MotoVitrine | null } {
+  const interesse = c.lead?.modeloInteresse ?? respostaDoCampo(cfg, (c.respostas ?? {}) as Record<string, string>, 'modeloInteresse')
+  const moto = interesse ? acharMotos(interesse, motos.filter(m => m.situacao === 'DISPONIVEL'))[0] ?? null : null
+  return { nome: moto ? nomeDaMoto(moto) : interesse, moto }
+}
+
+export function textoDoFollow(passo: PassoFollow, cfg: ConfigAssistente, ctx: { nomeContato: string; vendedor: string }, alvo: { nome: string | null; moto: MotoVitrine | null }): { texto: string; foto: string | null } {
+  let texto = preencherResposta(passo.texto, { ...ctx, empresa: cfg.nomeEmpresa, moto: alvo.nome })
+  if (passo.midia === 'VIDEO_MOTO' && alvo.moto?.videoUrl) texto += `\n🎬 ${alvo.moto.videoUrl}`
+  return { texto, foto: passo.midia === 'FOTO_MOTO' ? alvo.moto?.fotos[0] ?? null : null }
+}
+
+/**
+ * Rodada do cron (a cada 15 min): manda o passo devido de cada conversa,
+ * dentro do horário e do teto diário de cada número. Marca a conversa antes
+ * de enviar, para duas rodadas juntas não mandarem em dobro.
+ */
+export async function rodarFollows(agora = new Date(), prazoMs = 8000): Promise<{ followsEnviados: number }> {
+  const inicio = Date.now()
+  let enviados = 0
+  for (const loja of await prisma.assistenteLoja.findMany({ where: { followAtivo: true } })) {
+    const cfgF = lerConfigFollow(loja.followConfig)
+    if (!dentroDoHorario(agora, cfgF)) continue
+    const assistentes = await prisma.assistenteComercial.findMany({
+      where: { vendedor: { usuarioId: loja.usuarioId }, status: 'CONECTADO', instancia: { not: null } },
+      include: { vendedor: { select: { id: true, nome: true, usuarioId: true } } },
+    })
+    if (!assistentes.length) continue
+    const { motos } = await vitrineDaLoja(loja.usuarioId).catch(() => ({ motos: [] as MotoVitrine[] }))
+    for (const a of assistentes) {
+      const cfg = lerConfig(a.configuracao)
+      let hoje = await prisma.assistenteMensagem.count({ where: { origem: 'FOLLOW', criadoEm: { gte: inicioDoDiaBrt(agora) }, conversa: { assistenteId: a.id } } })
+      for (const c of await conversasDoFollow([a.id], agora)) {
+        if (hoje >= cfgF.tetoDiario || Date.now() - inicio > prazoMs) break
+        const passo = proximoFollow({ cfg: cfgF, passo: c.followPasso, parado: null, baseEm: baseDoFollow(c.mensagens), ultimoFollowEm: c.followUltimoEm, agora })
+        if (!passo) continue
+        const marcado = await prisma.assistenteConversa.updateMany({ where: { id: c.id, followPasso: c.followPasso, followParado: null }, data: { followPasso: c.followPasso + 1, followUltimoEm: agora } })
+        if (!marcado.count) continue
+        const { texto, foto } = textoDoFollow(passo, cfg, { nomeContato: c.nomeContato, vendedor: a.vendedor.nome }, motoDoFollow(cfg, c, motos))
+        const destino = c.jid ?? c.numeroContato
+        try {
+          if (foto) await enviarFotoNaConversa(a.instancia, c.id, destino, { url: foto, legenda: texto }, 'ASSISTENTE', 1500, 'FOLLOW')
+          else {
+            const registro = await prisma.assistenteMensagem.create({ data: { conversaId: c.id, remetente: 'ASSISTENTE', texto, origem: 'FOLLOW' } })
+            try {
+              const id = await enviarTexto(a.instancia!, destino, texto, 1500)
+              if (id) await prisma.assistenteMensagem.update({ where: { id: registro.id }, data: { providerId: id, criadoEm: new Date() } }).catch(() => undefined)
+            } catch (e) {
+              await prisma.assistenteMensagem.delete({ where: { id: registro.id } }).catch(() => undefined)
+              throw e
+            }
+          }
+          await prisma.assistenteConversa.update({ where: { id: c.id }, data: { ultimaMensagemEm: new Date() } })
+          hoje += 1
+          enviados += 1
+        } catch (e) {
+          // Não saiu: devolve o passo para a próxima rodada tentar de novo.
+          await prisma.assistenteConversa.updateMany({ where: { id: c.id, followPasso: c.followPasso + 1 }, data: { followPasso: c.followPasso, followUltimoEm: c.followUltimoEm } })
+          logger.warn({ err: e, conversaId: c.id }, 'assistente: follow automático não saiu')
+        }
+      }
+    }
+  }
+  return { followsEnviados: enviados }
+}
+
+export interface ItemFilaFollow { conversaId: string; nome: string; vendedor: string; passo: number; total: number; devidoEm: Date; texto: string; foto: string | null }
+
+/** Próximos follows (para a tela), sem enviar nada. */
+export async function filaDeFollow(usuarioId: string, vendedorId: string | null, agora = new Date()): Promise<ItemFilaFollow[]> {
+  const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId } })
+  const cfgF = lerConfigFollow(loja?.followConfig)
+  const assistentes = await prisma.assistenteComercial.findMany({
+    where: { vendedor: { usuarioId, ...(vendedorId && { id: vendedorId }) } },
+    include: { vendedor: { select: { id: true, nome: true, usuarioId: true } } },
+  })
+  if (!assistentes.length) return []
+  const { motos } = await vitrineDaLoja(usuarioId)
+  const porId = new Map(assistentes.map(a => [a.id, a]))
+  const fila: ItemFilaFollow[] = []
+  for (const c of await conversasDoFollow(assistentes.map(a => a.id), agora)) {
+    const devidoEm = quandoDevido({ cfg: cfgF, passo: c.followPasso, parado: null, baseEm: baseDoFollow(c.mensagens), ultimoFollowEm: c.followUltimoEm })
+    if (!devidoEm) continue
+    const a = porId.get(c.assistenteId)!
+    const cfg = lerConfig(a.configuracao)
+    const { texto, foto } = textoDoFollow(cfgF.passos[c.followPasso], cfg, { nomeContato: c.nomeContato, vendedor: a.vendedor.nome }, motoDoFollow(cfg, c, motos))
+    fila.push({ conversaId: c.id, nome: c.nomeContato, vendedor: a.vendedor.nome, passo: c.followPasso + 1, total: cfgF.passos.length, devidoEm, texto, foto })
+  }
+  return fila.sort((x, y) => x.devidoEm.getTime() - y.devidoEm.getTime()).slice(0, 40)
+}
+
 /** Rodada do cron: "sumiu há 24h" muda com o tempo, sem mensagem nova. */
 export async function atualizarEtiquetasRecentes(limite = 300, agora = new Date()): Promise<{ etiquetasConversas: number }> {
   const conversas = await prisma.assistenteConversa.findMany({
@@ -568,11 +690,11 @@ export async function enviarDoAssistente(a: { id: string; instancia: string | nu
  * enviar, como o texto, para o eco ser reconhecido; sem foto válida, vai só
  * a legenda. Falhou o envio: apaga o registro e repassa o erro.
  */
-export async function enviarFotoNaConversa(instancia: string | null, conversaId: string, destino: string, foto: { url: string; legenda: string }, remetente: 'ASSISTENTE' | 'VENDEDOR', digitandoMs = 0) {
+export async function enviarFotoNaConversa(instancia: string | null, conversaId: string, destino: string, foto: { url: string; legenda: string }, remetente: 'ASSISTENTE' | 'VENDEDOR', digitandoMs = 0, origem: string | null = null) {
   const img = await lerImagem(foto.url)
   const valida = !!img && (img.mime === 'image/jpeg' || img.mime === 'image/png')
   if (!valida && !foto.legenda) return null
-  const registro = await prisma.assistenteMensagem.create({ data: { conversaId, remetente, texto: foto.legenda || '[imagem]', midiaUrl: valida ? foto.url : null } })
+  const registro = await prisma.assistenteMensagem.create({ data: { conversaId, remetente, texto: foto.legenda || '[imagem]', midiaUrl: valida ? foto.url : null, origem } })
   try {
     if (!instancia) throw new Error('Assistente sem instância conectada')
     const id = valida ? await enviarImagem(instancia, destino, img!, foto.legenda, digitandoMs) : await enviarTexto(instancia, destino, foto.legenda, digitandoMs)

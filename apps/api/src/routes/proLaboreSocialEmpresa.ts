@@ -9,7 +9,7 @@
 import { Router, Request, Response } from 'express'
 import { aprenderTodas } from '../lib/assistenteAprendizado'
 import { verificarAvancos } from '../lib/assistenteRespostas'
-import { atualizarEtiquetasRecentes } from '../lib/assistenteMotor'
+import { atualizarEtiquetasRecentes, rodarFollows } from '../lib/assistenteMotor'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
@@ -354,7 +354,9 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const pulso = await rodarPulso(agoraDoCron(req)).catch(e => { console.error('[sm] pulso', e); return { pulsoNovos: 0, pulsoPush: 0 } })
   // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
   const trafego = await sincronizarTrafegoPendentes(10_000).catch(e => { console.error('[trafego] cron', e); return { trafegoSincronizadas: 0, trafegoFalhas: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego })
+  // Assistente Comercial: follow automático (só quando a loja ligou; horário e teto conferidos lá dentro).
+  const follow = await rodarFollows(agoraDoCron(req), 8000).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
