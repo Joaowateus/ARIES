@@ -26,6 +26,8 @@ import {
   ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, PassoRoteiro, TEXTO_MENU,
   avancarRoteiro, casaGatilho, complementarResposta, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
 } from './assistenteRoteiro'
+import { ItemAtivo, baseParaRobo, registrarUso, respostasAtivas } from './assistenteRespostas'
+import { calcularNota } from './assistenteNota'
 
 export const STATUS_ABERTOS = ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA']
 const MAX_IDADE_MENSAGEM_MS = 10 * 60_000
@@ -294,6 +296,14 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
   // O roteiro só roda com as respostas ligadas; o cadastro no CRM acontece
   // mesmo com elas pausadas (aí o vendedor atende sozinho, sem conversa aqui).
   const roboAtende = !!origem && a.atendimentoAutomatico && (origem !== 'CONTATO_NOVO' || cfg.responderContatosNovos)
+  // Respostas aprovadas da base (dúvidas no meio do roteiro). Base fora do
+  // ar não para o atendimento: o roteiro segue sem elas.
+  const ativos: ItemAtivo[] = a.atendimentoAutomatico
+    ? await respostasAtivas(a.vendedor.usuarioId).catch(e => { logger.warn({ err: e }, 'assistente: base de respostas indisponível'); return [] })
+    : []
+  const baseDoRobo = (nomeContato: string, respostas: Record<string, string>) =>
+    baseParaRobo(ativos, { ...contexto(a, cfg, nomeContato), moto: respostaDoCampo(cfg, respostas, 'modeloInteresse') })
+  let conversaTocada: string | null = null
 
   const acao = await comTrava(`${a.id}:${m.numero}`, async (tx): Promise<AcaoPendente | null> => {
     if (m.id && await tx.assistenteMensagem.findUnique({ where: { providerId: m.id }, select: { id: true } })) return null
@@ -304,6 +314,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     })
 
     if (conversa) {
+      conversaTocada = conversa.id
       const esperandoResposta = perguntaJaEntregue(conversa.mensagens)
       await tx.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id } })
       const base = { ultimaMensagemEm: new Date(), ...(m.nomePerfil && conversa.nomeContato === formatarTelefone(m.numero) && { nomeContato: m.nomePerfil }) }
@@ -324,7 +335,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
         await tx.assistenteConversa.update({ where: { id: conversa.id }, data: base })
         return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo: null, mensagensAvulsas: [TEXTO_SO_TEXTO], nomeContato, origem: conversa.origem }
       }
-      const passo = avancarRoteiro(cfg, estado, m.texto, contexto(a, cfg, nomeContato))
+      const passo = avancarRoteiro(cfg, estado, m.texto, contexto(a, cfg, nomeContato), baseDoRobo(nomeContato, estado.respostas))
       await tx.assistenteConversa.update({ where: { id: conversa.id }, data: { ...base, ...dadosDoPasso(passo) } })
       return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo, mensagensAvulsas: [], nomeContato, origem: conversa.origem }
     }
@@ -340,19 +351,20 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
       // Lead sem o robô: a conversa fica registrada (aprendizado, sugestões,
       // follow), já com o vendedor. Conversa pessoal continua de fora.
       if (leadId && !ignorado) {
-        await tx.assistenteConversa.create({
+        conversaTocada = (await tx.assistenteConversa.create({
           data: {
             assistenteId: a.id, tipo: 'LEAD', robo: false, status: 'ASSUMIDA', leadId, origem,
             nomeContato: m.nomePerfil ?? formatarTelefone(m.numero), numeroContato: m.numero, jid: m.jid,
             respostas: { _inicial: m.texto } as Prisma.InputJsonValue,
             mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
           },
-        })
+          select: { id: true },
+        })).id
       }
       return null
     }
     const nomeContato = m.nomePerfil ?? formatarTelefone(m.numero)
-    const passo = iniciarRoteiro(cfg, contexto(a, cfg, nomeContato), m.texto)
+    const passo = iniciarRoteiro(cfg, contexto(a, cfg, nomeContato), m.texto, baseDoRobo(nomeContato, {}))
     const criada = await tx.assistenteConversa.create({
       data: {
         assistenteId: a.id, tipo: 'LEAD', nomeContato, numeroContato: m.numero, jid: m.jid, origem, leadId,
@@ -360,16 +372,43 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
         mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
       },
     })
+    conversaTocada = criada.id
     return { conversaId: criada.id, jid: m.jid, passo, mensagensAvulsas: [], nomeContato, origem }
   })
 
-  if (!acao) return
-  const textos = acao.passo ? acao.passo.mensagens : acao.mensagensAvulsas
-  await enviarDoAssistente(a, cfg, acao.conversaId, acao.jid, textos)
-  if (acao.passo?.desfecho === 'DESISTIU') {
-    await anotarDesistencia(acao.conversaId).catch(e => logger.error({ err: e }, 'assistente: falha ao anotar desistência no lead'))
-  } else if (acao.passo?.desfecho) {
-    await concluirAtendimento(a, cfg, acao.conversaId)
+  if (acao) {
+    const textos = acao.passo ? acao.passo.mensagens : acao.mensagensAvulsas
+    await enviarDoAssistente(a, cfg, acao.conversaId, acao.jid, textos)
+    if (acao.passo?.desfecho === 'DESISTIU') {
+      await anotarDesistencia(acao.conversaId).catch(e => logger.error({ err: e }, 'assistente: falha ao anotar desistência no lead'))
+    } else if (acao.passo?.desfecho) {
+      await concluirAtendimento(a, cfg, acao.conversaId)
+    }
+    if (acao.passo?.conhecimentoUsado) {
+      const usada = await prisma.assistenteConversa.findUnique({ where: { id: acao.conversaId }, select: { leadId: true } })
+      await registrarUso({ usuarioId: a.vendedor.usuarioId, conhecimentoId: acao.passo.conhecimentoUsado, conversaId: acao.conversaId, leadId: usada?.leadId ?? null, canal: 'ROBO' })
+        .catch(e => logger.warn({ err: e }, 'assistente: falha ao registrar uso da base'))
+    }
+  }
+  if (conversaTocada) await atualizarNota(cfg, conversaTocada).catch(e => logger.warn({ err: e }, 'assistente: falha ao calcular a nota do lead'))
+}
+
+// Nota do lead recalculada a cada mensagem do cliente: fica na conversa
+// (com os motivos) e no card do CRM.
+export async function atualizarNota(cfg: ConfigAssistente, conversaId: string) {
+  const conversa = await prisma.assistenteConversa.findUnique({
+    where: { id: conversaId },
+    select: { origem: true, respostas: true, resultado: true, leadId: true, mensagens: { where: { remetente: 'CONTATO' }, orderBy: { criadoEm: 'desc' }, take: 40, select: { texto: true } } },
+  })
+  if (!conversa) return
+  const { nota, sinais } = calcularNota({
+    cfg, origem: conversa.origem, resultado: conversa.resultado,
+    respostas: (conversa.respostas ?? {}) as Record<string, string>,
+    textosDoContato: conversa.mensagens.map(m => m.texto),
+  })
+  await prisma.assistenteConversa.update({ where: { id: conversaId }, data: { nota, sinais: sinais as unknown as Prisma.InputJsonValue } })
+  if (conversa.leadId) {
+    await prisma.lead.updateMany({ where: { id: conversa.leadId, OR: [{ pontuacao: null }, { pontuacao: { not: nota } }] }, data: { pontuacao: nota } })
   }
 }
 

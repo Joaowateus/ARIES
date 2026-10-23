@@ -230,7 +230,7 @@ function ContatosIgnorados({ vendedorId }: { vendedorId?: string }) {
   )
 }
 
-interface MsgSimulada { de: 'contato' | 'assistente'; texto: string }
+interface MsgSimulada { de: 'contato' | 'assistente'; texto: string; daBase?: string }
 
 function Simulador({ vendedorId, configuracao, nomeVendedor }: { vendedorId?: string; configuracao: ConfigRoteiroAssistente; nomeVendedor: string }) {
   const [mensagens, setMensagens] = useState<MsgSimulada[]>([])
@@ -262,7 +262,7 @@ function Simulador({ vendedorId, configuracao, nomeVendedor }: { vendedorId?: st
     try {
       const r = await proLaboreApi.assistente.simular({ vendedorId, configuracao, estado, texto: t, nomeContato: nome })
       if (estado === null) setGatilho(r.gatilho)
-      setMensagens(m => [...m, ...r.mensagens.map(x => ({ de: 'assistente' as const, texto: x }))])
+      setMensagens(m => [...m, ...r.mensagens.map((x, i) => ({ de: 'assistente' as const, texto: x, daBase: i === 0 ? r.conhecimento?.titulo : undefined }))])
       setEstado(r.estado)
       if (r.desfecho) setFinal(r)
     } catch (e) {
@@ -298,6 +298,7 @@ function Simulador({ vendedorId, configuracao, nomeVendedor }: { vendedorId?: st
                 <div className="pl-as-bolha-texto">{m.texto}</div>
               </div>
             </div>
+            {m.daBase && <div className="pl-as-sim-nota" data-sim-base>Respondeu com a base de conhecimento: “{m.daBase}”.</div>}
             {i === 0 && gatilho !== undefined && (
               <div className="pl-as-sim-nota">
                 {gatilho ? <>Frase de campanha reconhecida: “{gatilho}” — no WhatsApp real o assistente atenderia mesmo contato antigo.</> : 'Sem frase de campanha: no WhatsApp real ele só atende se vier de anúncio ou for um contato novo.'}

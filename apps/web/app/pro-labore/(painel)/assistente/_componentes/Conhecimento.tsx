@@ -32,7 +32,7 @@ type Filtro = StatusConhecimento | 'TODOS'
 const FILTROS: Array<{ valor: Filtro; rotulo: string }> = [
   { valor: 'PARA_REVISAR', rotulo: 'Para revisar' }, { valor: 'ATIVO', rotulo: 'Em uso' }, { valor: 'ARQUIVADO', rotulo: 'Arquivadas' }, { valor: 'TODOS', rotulo: 'Todas' },
 ]
-const MARCADORES = 'Use {nome}, {vendedor} e {moto}: o assistente troca pelo primeiro nome do cliente, o nome do vendedor e a moto de interesse.'
+const MARCADORES = 'Use {nome}, {vendedor} e {moto}: o assistente troca pelo primeiro nome do cliente, o nome do vendedor e a moto de interesse. Dúvidas e objeções em uso o robô responde sozinho no meio do roteiro (sem a pergunta do final, se ainda houver perguntas); argumentos e gatilhos aparecem como sugestão para o vendedor.'
 
 const paraLista = (texto: string) => [...new Set(texto.split(',').map(p => p.trim().toLowerCase()).filter(Boolean))]
 
@@ -281,7 +281,7 @@ function ItemCartao({ item, todos, podeAprovar, aberto, onAbrir, onMudou }: {
         <span className="pl-as-kb-numeros">
           {(item.noPeriodo ?? 0) > 0 && <span><b>{item.noPeriodo}</b> no período</span>}
           <span>{item.ocorrencias} no total</span>
-          {item.usos > 0 && <span>usada {item.usos}×</span>}
+          {item.usos > 0 && <span title="Vezes que o robô ou a equipe usou essa resposta, e quantos leads avançaram de etapa no CRM em até 3 dias">usada {item.usos}× · {item.avancos} {item.avancos === 1 ? 'avançou' : 'avançaram'}</span>}
         </span>
         {!aberto && item.exemplos?.[0] && <span className="pl-as-kb-exemplo">“{item.exemplos[0].texto}”</span>}
       </button>

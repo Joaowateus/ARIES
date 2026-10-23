@@ -1325,6 +1325,9 @@ model Lead {
   // Como o lead entrou no CRM: null = cadastro manual; WHATSAPP = criado
   // sozinho quando o contato mandou a 1ª mensagem no WhatsApp do vendedor.
   origemCadastro  String?
+  // Nota do Assistente (0–100) pela conversa do WhatsApp: quanto mais alta,
+  // mais pronto para comprar. Só leitura; quem calcula é o assistente.
+  pontuacao       Int?
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
   fechadoEm       DateTime?
@@ -1843,6 +1846,10 @@ model AssistenteConversa {
   // registrada para aprendizado, sugestões e follow, mas não conta nas
   // métricas do robô (atendidos, conclusão do roteiro).
   robo                 Boolean   @default(true)
+  // Nota do lead (0–100) pelos sinais da conversa e os motivos ("veio de
+  // anúncio", "pediu simulação"…), recalculada a cada mensagem do cliente.
+  nota                 Int?
+  sinais               Json?
   // QUALIFICADO | PEDIU_ATENDENTE | DESISTIU | NAO_E_LEAD
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
@@ -1917,6 +1924,7 @@ model AssistenteConhecimento {
   atualizadoEm       DateTime  @updatedAt
 
   ocorrenciasLista AssistenteConhecimentoOcorrencia[]
+  usosLista        AssistenteConhecimentoUso[]
 
   @@unique([usuarioId, chave])
   @@index([usuarioId, status])
@@ -1942,6 +1950,28 @@ model AssistenteConhecimentoOcorrencia {
   @@index([usuarioId, criadoEm])
   @@index([conhecimentoId, criadoEm])
   @@map("pro_labore_assistente_conhecimento_ocorrencias")
+}
+
+// Cada vez que uma resposta da base foi usada (pelo robô ou pelo vendedor,
+// por sugestão) e se o lead avançou de etapa depois — é o placar de quais
+// respostas funcionam.
+model AssistenteConhecimentoUso {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  conhecimentoId String
+  conversaId     String
+  leadId         String?
+  canal          String // ROBO | SUGESTAO
+  estagioNaHora  String?
+  avancou        Boolean?
+  verificadoEm   DateTime?
+  criadoEm       DateTime  @default(now())
+
+  conhecimento AssistenteConhecimento @relation(fields: [conhecimentoId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, verificadoEm])
+  @@index([conhecimentoId])
+  @@map("pro_labore_assistente_conhecimento_usos")
 }
 
 // Até onde o aprendizado já leu as mensagens dos clientes de cada conta.

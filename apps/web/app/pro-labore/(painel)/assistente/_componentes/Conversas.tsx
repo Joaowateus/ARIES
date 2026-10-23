@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { proLaboreApi, type AcaoConversaAssistente, type AssistenteConversa, type AssistenteConversaDetalhe, type StatusConversaAssistente, type TipoConversaAssistente } from '@/lib/proLaboreApi'
 import { ORIGEM, RESULTADO, ROTULO_ESTAGIO, STATUS_CONVERSA, fmtTelefone, horaCurta, iniciais, tempoRelativo } from './util'
+import { ChipNota, NotaDoLead, SugestoesConversa } from './SugestoesConversa'
 
 const ATUALIZAR_MS = 8000
 
@@ -45,6 +46,8 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
   const [lista, setLista] = useState<{ chave: string; itens: AssistenteConversa[] } | null>(null)
   const [detalhe, setDetalhe] = useState<{ chave: string; conversa: AssistenteConversaDetalhe } | null>(null)
   const [texto, setTexto] = useState('')
+  // Resposta da base escolhida nas sugestões (conta no placar dela, mesmo editada).
+  const [conhecimentoId, setConhecimentoId] = useState<string | undefined>()
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
   const [versao, setVersao] = useState(0)
@@ -91,8 +94,9 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
     setEnviando(true)
     setErro('')
     try {
-      await proLaboreApi.assistente.enviar(conversa.id, texto.trim())
+      await proLaboreApi.assistente.enviar(conversa.id, texto.trim(), conhecimentoId)
       setTexto('')
+      setConhecimentoId(undefined)
       setVersao(v => v + 1)
       onMudou?.()
     } catch (e) {
@@ -149,7 +153,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
           ) : (
             <div className="pl-chat-list">
               {itens.map(c => (
-                <button key={c.id} type="button" className={`pl-chat-item ${idAberto === c.id ? 'active' : ''}`} onClick={() => setSelecionadaId(c.id)}>
+                <button key={c.id} type="button" className={`pl-chat-item ${idAberto === c.id ? 'active' : ''}`} onClick={() => { setSelecionadaId(c.id); setTexto(''); setConhecimentoId(undefined) }}>
                   <div className="pl-chat-item-avatar">{tipo === 'SUPORTE' ? '🤖' : iniciais(c.nomeContato)}</div>
                   <div className="pl-chat-item-body">
                     <div className="pl-chat-item-top">
@@ -160,6 +164,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                     {tipo === 'LEAD' && (
                       <div className="pl-as-item-tags">
                         <span className={`pl-status-badge ${STATUS_CONVERSA[c.status].classe}`}>{STATUS_CONVERSA[c.status].rotulo}</span>
+                        {typeof c.nota === 'number' && <ChipNota nota={c.nota} />}
                         {c.lead && <span className="pl-as-tag">No CRM</span>}
                         {c.robo === false && <span className="pl-as-tag" title="Entrou pelo cadastro automático sem o robô responder">Sem robô</span>}
                       </div>
@@ -226,6 +231,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
 
               {conversa.tipo === 'LEAD' && (
                 <aside className="pl-as-respostas">
+                  <NotaDoLead nota={conversa.nota} sinais={conversa.sinais} />
                   <div className="pl-as-subtitulo">Respostas do roteiro</div>
                   {conversa.resultado && <div className="pl-as-resultado">{RESULTADO[conversa.resultado]}</div>}
                   {!conversa.resultado && conversa.totalPerguntas > 0 && (
@@ -252,6 +258,9 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
             </div>
 
             {erro && <div className="pl-alert pl-alert-error" style={{ margin: '0 16px 10px' }}>{erro}</div>}
+            {conversa.tipo === 'LEAD' && conversa.status !== 'ENCERRADA' && conectado && (
+              <SugestoesConversa conversaId={conversa.id} versao={qtdMensagens} onUsar={(t, id) => { setTexto(t); setConhecimentoId(id) }} />
+            )}
             {conversa.status !== 'ENCERRADA' && (
               <form className="pl-as-composer" onSubmit={e => { e.preventDefault(); enviar() }}>
                 <textarea
@@ -260,7 +269,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                   placeholder={conectado ? (conversa.tipo === 'LEAD' ? `Responder como ${nomeVendedor} (sai pelo WhatsApp dele) — Ctrl+Enter envia` : 'Mandar mensagem no chat “Você”') : 'WhatsApp desconectado — reconecte pra responder por aqui'}
                   value={texto}
                   disabled={!conectado || enviando}
-                  onChange={e => setTexto(e.target.value)}
+                  onChange={e => { setTexto(e.target.value); if (!e.target.value.trim()) setConhecimentoId(undefined) }}
                   onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar() } }}
                 />
                 <button type="submit" className="pl-btn pl-btn-primary" disabled={!conectado || enviando || !texto.trim()}>{enviando ? 'Enviando…' : 'Enviar'}</button>

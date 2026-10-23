@@ -57,11 +57,32 @@ export function pareceDuvidaOuObjecao(texto: string): boolean {
   return bruto.includes('?') || COMECA_PERGUNTA.test(t) || OBJECAO.test(t)
 }
 
+const PREENCHIMENTO = /^(oi+|ola|opa|e ai|eai|bom dia|boa tarde|boa noite|tudo bem|tudo bom|td bem|blz|beleza|ok|okay|certo|entendi|entao|hm+|ah|ta|obrigad[oa]|vlw|valeu)$/
+
+/** O que sobra da mensagem sem as perguntas e as saudações ("A CG 160, aceita troca?" → "A CG 160"). */
+export function parteAfirmativa(texto: string): string {
+  return texto.split(/[,;\n]+|(?<=[.!?])\s+/).map(s => s.trim()).filter(s => {
+    const t = paraBusca(s)
+    return t.length >= 2 && !s.includes('?') && !COMECA_PERGUNTA.test(t) && !PREENCHIMENTO.test(t)
+  }).join(', ')
+}
+
 /** Resposta aprovada com os marcadores trocados ({moto} = moto de interesse do lead). */
 export function preencherResposta(modelo: string, ctx: ContextoRoteiro & { moto?: string | null }): string {
   const moto = ctx.moto?.trim()
   const comMoto = moto ? modelo.replace(/\{moto\}/g, moto) : modelo.replace(/\{moto\}/g, 'a moto')
   return preencher(comMoto, ctx)
+}
+
+export interface ItemResposta { id: string; titulo: string; palavrasChave: string[]; resposta: string }
+// No máximo três respostas da base por conversa: depois disso, é com o vendedor.
+export const MAX_RESPOSTAS_DA_BASE = 3
+
+/** Resposta aprovada para a mensagem do cliente, se ela for dúvida/objeção que a base cobre. */
+export function respostaDaBase<T extends ItemResposta>(texto: string, itens: T[], jaUsados: string[]): T | null {
+  if (!itens.length || jaUsados.length >= MAX_RESPOSTAS_DA_BASE || !pareceDuvidaOuObjecao(texto)) return null
+  const [melhor] = acharConhecimento(texto, itens.filter(i => i.resposta && !jaUsados.includes(i.id)))
+  return melhor && melhor.pontos >= 2 ? melhor.item : null
 }
 
 export interface ModeloPronto { chave: string; tipo: TipoConhecimento; titulo: string; palavrasChave: string[]; rascunho: string; etapa?: string }
