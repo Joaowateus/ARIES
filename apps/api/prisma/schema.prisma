@@ -1860,6 +1860,12 @@ model AssistenteConversa {
   // anúncio", "pediu simulação"…), recalculada a cada mensagem do cliente.
   nota                 Int?
   sinais               Json?
+  // Follow automático: passos já enviados desde a última mensagem do
+  // cliente (volta a 0 quando ele responde) e por que parou de vez
+  // (PEDIU_PARAR | VENDEDOR).
+  followPasso          Int       @default(0)
+  followUltimoEm       DateTime?
+  followParado         String?
   // QUALIFICADO | PEDIU_ATENDENTE | DESISTIU | NAO_E_LEAD
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
@@ -1893,6 +1899,8 @@ model AssistenteMensagem {
   providerId String?  @unique
   // Foto enviada junto (vitrine do estoque): /pro-labore/imagens/<chave>.
   midiaUrl   String?
+  // FOLLOW = mensagem do follow automático.
+  origem     String?
   criadoEm   DateTime @default(now())
 
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
@@ -1977,6 +1985,10 @@ model AssistenteLoja {
   // O assistente move o lead no funil (só para frente, nunca para
   // Fechado/Perdido, com aviso e "desfazer").
   avancoAutomatico Boolean @default(true)
+  // Follow automático com mídia: começa desligado, para o dono revisar as
+  // mensagens antes. followConfig = { passos: [{ dias, texto, midia }], tetoDiario, horaInicio, horaFim }.
+  followAtivo  Boolean  @default(false)
+  followConfig Json?
   atualizadoEm DateTime @default(now()) @updatedAt
 
   @@map("pro_labore_assistente_loja")

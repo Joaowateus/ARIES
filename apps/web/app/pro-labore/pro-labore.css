@@ -3482,3 +3482,29 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-kanban-card-etiquetas:empty { display: none; }
 .pl-kanban-card-auto { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding: 6px 8px; border-radius: var(--pl-radius-sm); background: color-mix(in srgb, var(--pl-info) 12%, transparent); font-size: 11.5px; color: var(--pl-ink-1); }
 .pl-kanban-card-auto .pl-link-action { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--pl-accent); cursor: pointer; flex: none; }
+
+/* Assistente F5: follow automático */
+.pl-fu { display: flex; flex-direction: column; gap: 14px; }
+.pl-fu-topo { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.pl-fu-topo > div:first-child { flex: 1 1 320px; min-width: 0; }
+.pl-fu-status { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12.5px; color: var(--pl-ink-2); }
+.pl-fu-grade { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+.pl-fu-lateral { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pl-fu-passo { border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm); padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.pl-fu-passo-topo { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pl-fu-passo-topo b { font-size: 13px; color: var(--pl-ink-1); }
+.pl-fu-passo-topo label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--pl-ink-2); }
+.pl-fu-passo-topo label .pl-input { width: 64px; }
+.pl-fu-passo-topo select { flex: 1 1 180px; max-width: 260px; }
+.pl-fu-passo-topo .pl-btn { margin-left: auto; padding: 4px 10px; }
+.pl-fu-regras { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--pl-ink-2); line-height: 1.45; }
+.pl-fu-fila { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pl-fu-fila li { border-bottom: 1px solid var(--pl-border); padding-bottom: 10px; }
+.pl-fu-fila li:last-child { border-bottom: 0; padding-bottom: 0; }
+.pl-fu-fila-topo { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--pl-ink-1); }
+.pl-fu-fila-topo span { font-size: 11.5px; color: var(--pl-ink-muted); flex: none; }
+.pl-fu-fila-quando { font-size: 11.5px; color: var(--pl-ink-2); margin-top: 2px; }
+.pl-fu-fila p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--pl-ink-1); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pl-fu-mini { display: block; width: 72px; height: 54px; object-fit: cover; border-radius: 6px; margin-top: 6px; }
+.pl-as-follow-quadro { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--pl-border); display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 1080px) { .pl-fu-grade { grid-template-columns: 1fr; } }

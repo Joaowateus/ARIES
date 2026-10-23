@@ -235,3 +235,42 @@ test('avanço: só para frente, uma etapa, e respeita o desfazer', () => {
   assert.ok(!rebaixadoHaPouco([{ estagioAnterior: 'LEAD', estagioNovo: 'ABORDADO', origem: null, criadoEm: horas(5) }], agora))
   assert.ok(!rebaixadoHaPouco([{ estagioAnterior: 'PERDIDO', estagioNovo: 'LEAD', origem: null, criadoEm: horas(5) }], agora), 'reativação não conta como rebaixar')
 })
+
+// ---------- Follow automático ----------
+import { FOLLOW_PADRAO, baseDoFollow, dentroDoHorario, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido } from '../src/lib/assistenteFollow'
+
+test('config do follow: padrão, ordem crescente e limites', () => {
+  assert.deepEqual(lerConfigFollow(null), FOLLOW_PADRAO)
+  const c = lerConfigFollow({ passos: [{ dias: 7, texto: 'c', midia: 'X' }, { dias: 1, texto: 'a', midia: 'FOTO_MOTO' }, { dias: 1, texto: 'repetido', midia: 'NENHUMA' }], tetoDiario: 500, horaInicio: 9, horaFim: 8 })
+  assert.deepEqual(c.passos.map(p => [p.dias, p.texto, p.midia]), [[1, 'a', 'FOTO_MOTO'], [7, 'c', 'NENHUMA']])
+  assert.equal(c.tetoDiario, 100)
+  assert.ok(c.horaFim > c.horaInicio)
+})
+
+test('horário do follow: segunda a sábado, no horário de Brasília', () => {
+  const cfg = FOLLOW_PADRAO
+  assert.ok(dentroDoHorario(new Date('2026-10-23T15:00:00Z'), cfg), 'sexta 12h')
+  assert.ok(dentroDoHorario(new Date('2026-10-24T15:00:00Z'), cfg), 'sábado 12h')
+  assert.ok(!dentroDoHorario(new Date('2026-10-25T15:00:00Z'), cfg), 'domingo')
+  assert.ok(!dentroDoHorario(new Date('2026-10-23T23:00:00Z'), cfg), 'sexta 20h')
+  assert.ok(!dentroDoHorario(new Date('2026-10-23T11:30:00Z'), cfg), 'sexta 8h30')
+  assert.equal(inicioDoDiaBrt(new Date('2026-10-24T02:00:00Z')).toISOString(), '2026-10-23T03:00:00.000Z', '23h de sexta ainda é sexta')
+})
+
+test('follow só depois da resposta do vendedor, e recomeça quando o cliente responde', () => {
+  const t = (h: number) => new Date(agora.getTime() - h * 3600e3)
+  assert.equal(baseDoFollow([{ remetente: 'CONTATO', criadoEm: t(50) }, { remetente: 'VENDEDOR', criadoEm: t(48) }, { remetente: 'ASSISTENTE', criadoEm: t(20) }])?.getTime(), t(48).getTime())
+  assert.equal(baseDoFollow([{ remetente: 'VENDEDOR', criadoEm: t(48) }, { remetente: 'CONTATO', criadoEm: t(40) }]), null, 'cliente falou por último: a loja deve a resposta')
+  assert.equal(baseDoFollow([{ remetente: 'CONTATO', criadoEm: t(50) }, { remetente: 'ASSISTENTE', criadoEm: t(49) }]), null, 'só o robô respondeu: não há follow')
+
+  const cfg = FOLLOW_PADRAO
+  const prox = (passo: number, baseH: number, ultimoH: number | null, parado: string | null = null) =>
+    proximoFollow({ cfg, passo, parado, baseEm: t(baseH), ultimoFollowEm: ultimoH === null ? null : t(ultimoH), agora })
+  assert.equal(prox(0, 25, null)?.indice, 0, '1 dia sem resposta: passo 1')
+  assert.equal(prox(0, 23, null), null, 'ainda não deu 1 dia')
+  assert.equal(prox(1, 73, 21)?.midia, 'FOTO_MOTO', '3 dias: passo 2 com a foto')
+  assert.equal(prox(1, 73, 10), null, 'no máximo 1 por dia por lead')
+  assert.equal(prox(3, 500, 100), null, 'acabaram os passos')
+  assert.equal(prox(0, 25, null, 'PEDIU_PARAR'), null, 'pediu para parar')
+  assert.equal(quandoDevido({ cfg, passo: 1, parado: null, baseEm: t(48), ultimoFollowEm: t(23) })?.getTime(), t(48).getTime() + 3 * 86_400_000)
+})

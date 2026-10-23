@@ -3265,7 +3265,7 @@ router.post('/assistente/conversas/:id/sugestao-ia', requireProLaboreAuth, requi
   res.json({ origem, leitura: sugestao.leitura, opcoes: sugestao.opcoes })
 })
 
-const acaoConversaSchema = z.object({ acao: z.enum(['ASSUMIR', 'DEVOLVER', 'ENCERRAR', 'NAO_E_LEAD', 'CRIAR_LEAD']) })
+const acaoConversaSchema = z.object({ acao: z.enum(['ASSUMIR', 'DEVOLVER', 'ENCERRAR', 'NAO_E_LEAD', 'CRIAR_LEAD', 'PARAR_FOLLOW', 'RETOMAR_FOLLOW']) })
 
 router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
   const parse = acaoConversaSchema.safeParse(req.body)
@@ -3291,6 +3291,15 @@ router.post('/assistente/conversas/:id/acao', requireProLaboreAuth, requireModul
       return
     }
     await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ATIVA' } })
+  } else if (acao === 'PARAR_FOLLOW') {
+    await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { followParado: 'VENDEDOR' } })
+  } else if (acao === 'RETOMAR_FOLLOW') {
+    // Quem pediu para parar não volta a receber pelo painel.
+    if (conversa.followParado === 'PEDIU_PARAR') {
+      res.status(409).json({ error: 'O cliente pediu para parar de receber mensagens' })
+      return
+    }
+    await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { followParado: null } })
   } else if (acao === 'ENCERRAR') {
     await prisma.assistenteConversa.update({ where: { id: conversa.id }, data: { status: 'ENCERRADA', encerradaEm: agora } })
   } else if (acao === 'NAO_E_LEAD') {
