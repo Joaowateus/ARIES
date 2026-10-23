@@ -714,6 +714,15 @@ export const proLaboreApi = {
       request<AssistenteMensagem>(`/pro-labore/assistente/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto, conhecimentoId }) }),
     sugestoes: (id: string) => request<SugestoesConversa>(`/pro-labore/assistente/conversas/${id}/sugestoes`),
     sugestaoIA: (id: string) => request<SugestaoIAConversa>(`/pro-labore/assistente/conversas/${id}/sugestao-ia`, { method: 'POST' }),
+    enviarMoto: (id: string, motoId: string) =>
+      request<{ ok: boolean; fotos: number }>(`/pro-labore/assistente/conversas/${id}/enviar-moto`, { method: 'POST', body: JSON.stringify({ motoId }) }),
+    vitrine: () => request<DadosVitrine>('/pro-labore/assistente/vitrine'),
+    // Foto da vitrine (já comprimida no navegador): devolve o caminho relativo que fica na moto.
+    enviarFotoMoto: (foto: Blob) =>
+      request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: foto, headers: { 'Content-Type': 'application/octet-stream' } }).then(r => r.caminho),
+    configVitrine: (data: Partial<ConfigVitrine>) => request<ConfigVitrine>('/pro-labore/assistente/vitrine/config', { method: 'PUT', body: JSON.stringify(data) }),
+    criarMoto: (data: MotoVitrineEntrada) => request<{ id: string }>('/pro-labore/assistente/vitrine', { method: 'POST', body: JSON.stringify(data) }),
+    editarMoto: (id: string, data: MotoVitrineEntrada) => request<{ ok: boolean }>(`/pro-labore/assistente/vitrine/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     acao: (id: string, acao: AcaoConversaAssistente) =>
       request<AssistenteConversa>(`/pro-labore/assistente/conversas/${id}/acao`, { method: 'POST', body: JSON.stringify({ acao }) }),
     resumo: (params: { vendedorId?: string; dias: number }) =>
@@ -1594,6 +1603,8 @@ export interface AssistenteMensagem {
   conversaId: string
   remetente: RemetenteMensagemAssistente
   texto: string
+  // Foto enviada junto (vitrine do estoque): /pro-labore/imagens/<chave>.
+  midiaUrl?: string | null
   criadoEm: string
 }
 
@@ -1633,11 +1644,41 @@ export interface EstadoRoteiroAssistente { etapa: number; respostas: Record<stri
 export interface SinalNotaLead { chave: string; rotulo: string; pontos: number }
 export type FaixaNotaLead = 'QUENTE' | 'MORNO' | 'FRIO'
 export interface SugestaoDaBase { id: string; tipo: TipoConhecimento; titulo: string; texto: string; motivo: string; usos: number; avancos: number }
-export interface SugestoesConversa { sugestoes: SugestaoDaBase[]; nota: number | null; faixa: FaixaNotaLead | null; sinais: SinalNotaLead[]; iaLigada: boolean }
+export interface MotoCitada { id: string; nome: string; situacao: SituacaoMotoVitrine; km: number | null; cor: string | null; foto: string | null }
+export interface SugestoesConversa { sugestoes: SugestaoDaBase[]; motos: MotoCitada[]; nota: number | null; faixa: FaixaNotaLead | null; sinais: SinalNotaLead[]; iaLigada: boolean }
 export interface SugestaoIAConversa { origem: 'IA' | 'MODELO'; leitura: string; opcoes: Array<{ texto: string; quando: string }> }
+
+export type SituacaoMotoVitrine = 'DISPONIVEL' | 'RESERVADA' | 'VENDIDA'
+export interface ItemFichaMoto { rotulo: string; valor: string }
+export interface MotoVitrine {
+  id: string
+  modelo: string
+  marca: string | null
+  ano: number | null
+  cor: string | null
+  situacao: SituacaoMotoVitrine
+  versao: string | null
+  km: number | null
+  cilindrada: number | null
+  preco: number | null
+  destaques: string[]
+  ficha: ItemFichaMoto[]
+  fotos: string[]
+  videoUrl: string | null
+  entradaEm: string
+  enviosWhatsapp: number
+  nome: string
+  // Como a ficha chega no WhatsApp (com ou sem preço, conforme a loja).
+  previa: string
+}
+export interface ConfigVitrine { mostrarPreco: boolean; vitrineRobo: boolean }
+export interface DadosVitrine { motos: MotoVitrine[]; config: ConfigVitrine; podeEditar: boolean }
+export type MotoVitrineEntrada = Partial<Pick<MotoVitrine, 'marca' | 'ano' | 'cor' | 'situacao' | 'versao' | 'km' | 'cilindrada' | 'preco' | 'destaques' | 'ficha' | 'fotos' | 'videoUrl'>> & { modelo?: string }
 
 export interface SimulacaoAssistente {
   mensagens: string[]
+  // Foto do estoque enviada antes de mensagens[antesDe], com a ficha na legenda.
+  midias?: Array<{ url: string; legenda: string; antesDe: number }>
   estado: EstadoRoteiroAssistente
   desfecho: 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU' | null
   resumo: Array<{ rotulo: string; valor: string }>

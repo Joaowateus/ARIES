@@ -25,6 +25,18 @@ export async function guardarImagem(usuarioId: string, dados: Buffer): Promise<s
   return `/pro-labore/imagens/${chave}`
 }
 
+// Lê de volta uma imagem guardada (para mandar no WhatsApp, por exemplo).
+const CAMINHO_IMAGEM = /^\/pro-labore\/imagens\/([A-Za-z0-9_-]{20,40})$/
+export function chaveDaImagem(caminho: string): string | null {
+  return caminho.match(CAMINHO_IMAGEM)?.[1] ?? null
+}
+export async function lerImagem(caminho: string): Promise<{ mime: string; dados: Buffer } | null> {
+  const chave = chaveDaImagem(caminho)
+  if (!chave) return null
+  const img = await prisma.imagemUpload.findUnique({ where: { chave }, select: { mime: true, dados: true } })
+  return img ? { mime: img.mime, dados: Buffer.from(img.dados) } : null
+}
+
 // Baixa uma imagem de uma URL (com prazo e limite de tamanho) e guarda.
 const MAX_MINIATURA = 1.5 * 1024 * 1024
 export async function baixarEGuardarImagem(usuarioId: string, url: string, prazoMs = 6000): Promise<string | null> {

@@ -173,6 +173,16 @@ export async function enviarTexto(instancia: string, destino: string, texto: str
   return r?.key?.id ?? null
 }
 
+// Envia uma foto (em base64, sem depender de endereço público) com legenda.
+export async function enviarImagem(instancia: string, destino: string, imagem: { mime: string; dados: Buffer }, legenda: string, digitandoMs = 0): Promise<string | null> {
+  const numero = destino.includes('@') ? destino : destino.replace(/\D/g, '')
+  const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendMedia/${encodeURIComponent(instancia)}`, {
+    number: numero, mediatype: 'image', mimetype: imagem.mime, caption: legenda, media: imagem.dados.toString('base64'),
+    fileName: imagem.mime === 'image/png' ? 'moto.png' : 'moto.jpg', delay: Math.max(0, Math.round(digitandoMs)),
+  })
+  return r?.key?.id ?? null
+}
+
 // Quantas mensagens o servidor tem guardadas com esse contato (limitado a
 // uma página pequena — só interessa saber se existe conversa anterior).
 export async function contarMensagensComContato(instancia: string, jid: string): Promise<number> {

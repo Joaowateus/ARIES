@@ -1881,6 +1881,8 @@ model AssistenteMensagem {
   // ID da mensagem no WhatsApp — deduplica webhook repetido e separa o que
   // o assistente mandou do que o vendedor digitou no celular.
   providerId String?  @unique
+  // Foto enviada junto (vitrine do estoque): /pro-labore/imagens/<chave>.
+  midiaUrl   String?
   criadoEm   DateTime @default(now())
 
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
@@ -1955,6 +1957,18 @@ model AssistenteConhecimentoOcorrencia {
 // Cada vez que uma resposta da base foi usada (pelo robô ou pelo vendedor,
 // por sugestão) e se o lead avançou de etapa depois — é o placar de quais
 // respostas funcionam.
+// Preferências da loja para o Assistente (valem para todos os vendedores).
+model AssistenteLoja {
+  usuarioId    String   @id
+  // Preço no WhatsApp desligado por padrão (decisão do plano).
+  mostrarPreco Boolean  @default(false)
+  // O robô responde "tem a XRE?" com a ficha e a foto do estoque.
+  vitrineRobo  Boolean  @default(true)
+  atualizadoEm DateTime @default(now()) @updatedAt
+
+  @@map("pro_labore_assistente_loja")
+}
+
 model AssistenteConhecimentoUso {
   id             String    @id @default(cuid())
   usuarioId      String
@@ -2655,6 +2669,17 @@ model SmMotoEstoque {
   situacao     String    @default("DISPONIVEL") // DISPONIVEL | RESERVADA | VENDIDA
   saidaEm      DateTime?
   observacao   String?
+  // Vitrine do Assistente Comercial: a ficha que vai para o cliente no WhatsApp.
+  versao       String?
+  km           Int?
+  cilindrada   Int?
+  // Preço de venda: só aparece no WhatsApp se a loja ligar e nunca vai para a IA.
+  preco        Float?
+  destaques    String[]  @default([])
+  ficha        Json? // [{ rotulo, valor }]
+  fotos        String[]  @default([]) // /pro-labore/imagens/<chave>; a 1ª é a capa
+  videoUrl     String?
+  enviosWhatsapp Int     @default(0)
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
 

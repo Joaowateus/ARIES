@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { proLaboreApi, type AssistenteComercial, type ConfigRoteiroAssistente, type ContatoIgnoradoAssistente, type EstadoRoteiroAssistente, type PerguntaRoteiroAssistente, type SimulacaoAssistente } from '@/lib/proLaboreApi'
+import { proLaboreApi, urlArquivoApi, type AssistenteComercial, type ConfigRoteiroAssistente, type ContatoIgnoradoAssistente, type EstadoRoteiroAssistente, type PerguntaRoteiroAssistente, type SimulacaoAssistente } from '@/lib/proLaboreApi'
 import { CAMPOS_LEAD, RESULTADO, fmtTelefone, tempoRelativo } from './util'
 
 const MAX_PERGUNTAS = 10
@@ -230,7 +230,7 @@ function ContatosIgnorados({ vendedorId }: { vendedorId?: string }) {
   )
 }
 
-interface MsgSimulada { de: 'contato' | 'assistente'; texto: string; daBase?: string }
+interface MsgSimulada { de: 'contato' | 'assistente'; texto: string; daBase?: string; foto?: string }
 
 function Simulador({ vendedorId, configuracao, nomeVendedor }: { vendedorId?: string; configuracao: ConfigRoteiroAssistente; nomeVendedor: string }) {
   const [mensagens, setMensagens] = useState<MsgSimulada[]>([])
@@ -262,7 +262,13 @@ function Simulador({ vendedorId, configuracao, nomeVendedor }: { vendedorId?: st
     try {
       const r = await proLaboreApi.assistente.simular({ vendedorId, configuracao, estado, texto: t, nomeContato: nome })
       if (estado === null) setGatilho(r.gatilho)
-      setMensagens(m => [...m, ...r.mensagens.map((x, i) => ({ de: 'assistente' as const, texto: x, daBase: i === 0 ? r.conhecimento?.titulo : undefined }))])
+      // Fotos do estoque entram na posição em que o WhatsApp as mandaria.
+      const novas: MsgSimulada[] = []
+      const fotosAntes = (i: number) => (r.midias ?? []).filter(f => f.antesDe === i || (i === r.mensagens.length && f.antesDe > i)).map(f => ({ de: 'assistente' as const, texto: f.legenda, foto: f.url }))
+      r.mensagens.forEach((x, i) => { novas.push(...fotosAntes(i), { de: 'assistente', texto: x }) })
+      novas.push(...fotosAntes(r.mensagens.length))
+      if (r.conhecimento && novas[0]) novas[0] = { ...novas[0], daBase: r.conhecimento.titulo }
+      setMensagens(m => [...m, ...novas])
       setEstado(r.estado)
       if (r.desfecho) setFinal(r)
     } catch (e) {
@@ -295,10 +301,12 @@ function Simulador({ vendedorId, configuracao, nomeVendedor }: { vendedorId?: st
           <Fragment key={i}>
             <div className={`pl-as-bolha-linha ${m.de === 'assistente' ? 'direita' : ''}`}>
               <div className={`pl-as-bolha ${m.de}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {m.foto && <img className="pl-as-bolha-foto" src={urlArquivoApi(m.foto)} alt="Foto da moto" data-sim-foto />}
                 <div className="pl-as-bolha-texto">{m.texto}</div>
               </div>
             </div>
-            {m.daBase && <div className="pl-as-sim-nota" data-sim-base>Respondeu com a base de conhecimento: “{m.daBase}”.</div>}
+            {m.daBase && <div className="pl-as-sim-nota" data-sim-base>{m.daBase.startsWith('Estoque: ') ? `Respondeu com a vitrine do estoque: ${m.daBase.slice(9)}.` : `Respondeu com a base de conhecimento: “${m.daBase}”.`}</div>}
             {i === 0 && gatilho !== undefined && (
               <div className="pl-as-sim-nota">
                 {gatilho ? <>Frase de campanha reconhecida: “{gatilho}” — no WhatsApp real o assistente atenderia mesmo contato antigo.</> : 'Sem frase de campanha: no WhatsApp real ele só atende se vier de anúncio ou for um contato novo.'}

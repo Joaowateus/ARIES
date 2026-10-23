@@ -121,8 +121,10 @@ const esquemaSugestao = z.object({
 })
 export type SugestaoIA = z.infer<typeof esquemaSugestao>
 
-export async function sugerirResposta(usuarioId: string, ctx: { cliente: unknown; conversa: unknown; conteudos: Array<{ id: string }>; memoria: unknown; vendedor: string; respostasDaLoja?: Array<{ assunto: string; resposta: string }> }): Promise<SugestaoIA | null> {
+export async function sugerirResposta(usuarioId: string, ctx: { cliente: unknown; conversa: unknown; conteudos: Array<{ id: string }>; memoria: unknown; vendedor: string; respostasDaLoja?: Array<{ assunto: string; resposta: string }>; estoque?: unknown[] }): Promise<SugestaoIA | null> {
   const daLoja = semDinheiro(ctx.respostasDaLoja ?? [])
+  // Ficha das motos citadas (sem preço): a IA pode falar de km, cilindrada e destaques.
+  const estoque = semDinheiro(ctx.estoque ?? [])
   const sistema = [
     'Tarefa: sugerir a próxima mensagem do vendedor no WhatsApp para este cliente.',
     'Dê de 2 a 3 opções, cada uma com um caminho diferente (por exemplo: perguntar, mostrar valor, propor o próximo passo). Mensagens curtas, naturais para WhatsApp, no máximo um emoji, sempre terminando com uma pergunta ou um próximo passo claro.',
@@ -130,11 +132,12 @@ export async function sugerirResposta(usuarioId: string, ctx: { cliente: unknown
     `Quem assina é ${ctx.vendedor}. Se a memória traz o estilo do vendedor, respeite.`,
     'conteudoId: escolha um conteúdo da loja (de <conteudos>) só se ele ajudar este cliente agora.',
     ...(daLoja.length ? ['<respostas_da_loja> traz o que a loja aprovou para o assunto que o cliente puxou: a primeira opção deve seguir essa resposta (pode adaptar ao tom da conversa, sem mudar o conteúdo).'] : []),
+    ...(estoque.length ? ['<estoque> traz a ficha das motos de que o cliente falou: use só esses dados (situação, km, cilindrada, destaques); se a moto não estiver disponível, ofereça mostrar outra.'] : []),
   ].join('\n')
-  const usuario = [bloco('cliente', ctx.cliente), bloco('conversa', ctx.conversa), bloco('conteudos', ctx.conteudos), bloco('memoria', ctx.memoria), ...(daLoja.length ? [bloco('respostas_da_loja', daLoja)] : [])].join('\n')
+  const usuario = [bloco('cliente', ctx.cliente), bloco('conversa', ctx.conversa), bloco('conteudos', ctx.conteudos), bloco('memoria', ctx.memoria), ...(daLoja.length ? [bloco('respostas_da_loja', daLoja)] : []), ...(estoque.length ? [bloco('estoque', estoque)] : [])].join('\n')
   const r = await estruturado(usuarioId, sistema, usuario, esquemaSugestao, 3000)
   if (!r) return null
-  const ok = numerosPermitidos(semDinheiro(ctx.conversa), ctx.cliente, ctx.conteudos, daLoja)
+  const ok = numerosPermitidos(semDinheiro(ctx.conversa), ctx.cliente, ctx.conteudos, daLoja, estoque)
   if (!conferem(r, ok)) { console.warn('[copiloto-ia] sugestão com número fora da conversa: descartada'); return null }
   if (r.conteudoId && !ctx.conteudos.some(c => c.id === r.conteudoId)) r.conteudoId = null
   return { ...r, leitura: limpar(r.leitura), opcoes: r.opcoes.map(o => ({ texto: o.texto.trim(), quando: limpar(o.quando) })) }

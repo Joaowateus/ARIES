@@ -20,14 +20,15 @@ import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
 } from '../lib/whatsappEvolution'
-import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente } from '../lib/assistenteMotor'
+import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa } from '../lib/assistenteMotor'
 import {
   CAMPOS_LEAD as CAMPOS_LEAD_ASSISTENTE, CONFIG_PADRAO as CONFIG_ASSISTENTE_PADRAO, lerConfig as lerConfigAssistente,
   linhasResumo as linhasResumoAssistente, iniciarRoteiro as iniciarRoteiroAssistente, avancarRoteiro as avancarRoteiroAssistente,
   casaGatilho as casaGatilhoAssistente, primeiroNome as primeiroNomeAssistente, respostaDoCampo as respostaDoCampoAssistente,
 } from '../lib/assistenteRoteiro'
 import { montarResumoAssistente } from '../lib/assistenteResumo'
-import { baseParaRobo, registrarUso, respostasAtivas, respostasDaLojaParaIA, sugestoesDaBase, ultimasDoCliente } from '../lib/assistenteRespostas'
+import { baseParaRobo, registrarUso, respostasAtivas, respostasDaLojaParaIA, sugestoesDaBase, ultimasDoCliente, vitrineDaLoja, SELECT_MOTO_VITRINE, paraVitrine } from '../lib/assistenteRespostas'
+import { acharMotos, fichaParaIA, fichaTexto, nomeDaMoto } from '../lib/assistenteVitrine'
 import { faixaNota } from '../lib/assistenteNota'
 import { iaLigada as copilotoIaLigada, sugerirResposta, type SugestaoIA } from '../lib/copilotoIA'
 import { sugestaoModelo } from '../lib/copilotoModelos'
@@ -3148,16 +3149,66 @@ async function contextoDeSugestao(conversa: NonNullable<Awaited<ReturnType<typeo
   const respostas = (conversa.respostas ?? {}) as Record<string, string>
   const moto = lead?.modeloInteresse ?? respostaDoCampoAssistente(cfg, respostas, 'modeloInteresse')
   const ctx = { nomeContato: conversa.nomeContato, vendedor: conversa.assistente.vendedor.nome, empresa: cfg.nomeEmpresa, moto }
-  const sugestoes = sugestoesDaBase(itens, { textosDoCliente: ultimasDoCliente(mensagens), estagio: lead?.estagio ?? null, ctx })
-  return { mensagens, lead, respostas, moto, sugestoes }
+  const textosDoCliente = ultimasDoCliente(mensagens)
+  const sugestoes = sugestoesDaBase(itens, { textosDoCliente, estagio: lead?.estagio ?? null, ctx })
+  // Motos do estoque de que a conversa fala (ou a moto de interesse do lead).
+  const { motos: estoque } = await vitrineDaLoja(conversa.assistente.vendedor.usuarioId)
+  const citadas: typeof estoque = []
+  for (const t of [...textosDoCliente, moto ?? '']) {
+    for (const m of acharMotos(t, estoque)) if (!citadas.some(c => c.id === m.id)) citadas.push(m)
+  }
+  const motos = citadas.sort((a, b) => Number(b.situacao === 'DISPONIVEL') - Number(a.situacao === 'DISPONIVEL')).slice(0, 3)
+  return { mensagens, lead, respostas, moto, sugestoes, motos }
 }
 
 router.get('/assistente/conversas/:id/sugestoes', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
   const conversa = await carregarConversaAutorizada(req, res)
   if (!conversa) return
   if (conversa.tipo !== 'LEAD') { res.json({ sugestoes: [], nota: null, faixa: null, sinais: [], iaLigada: false }); return }
-  const { sugestoes } = await contextoDeSugestao(conversa)
-  res.json({ sugestoes, nota: conversa.nota, faixa: conversa.nota === null ? null : faixaNota(conversa.nota), sinais: conversa.sinais ?? [], iaLigada: copilotoIaLigada() })
+  const { sugestoes, motos } = await contextoDeSugestao(conversa)
+  res.json({
+    sugestoes,
+    motos: motos.map(m => ({ id: m.id, nome: nomeDaMoto(m), situacao: m.situacao, km: m.km, cor: m.cor, foto: m.fotos[0] ?? null })),
+    nota: conversa.nota, faixa: conversa.nota === null ? null : faixaNota(conversa.nota), sinais: conversa.sinais ?? [], iaLigada: copilotoIaLigada() })
+})
+
+// Botão "Enviar moto": a ficha na legenda da 1ª foto, mais até duas fotos.
+// Sai pelo WhatsApp do vendedor e conta como resposta dele.
+const enviarMotoSchema = z.object({ motoId: z.string().max(40), fotos: z.number().int().min(0).max(3).optional() })
+router.post('/assistente/conversas/:id/enviar-moto', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
+  const p = enviarMotoSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'Escolha a moto' }); return }
+  const conversa = await carregarConversaAutorizada(req, res)
+  if (!conversa) return
+  if (conversa.tipo !== 'LEAD') { res.status(400).json({ error: 'Só em conversas de lead' }); return }
+  const { assistente } = conversa
+  if (!assistente.instancia || assistente.status !== 'CONECTADO') { res.status(409).json({ error: 'O WhatsApp desse vendedor não está conectado agora' }); return }
+  const usuarioId = assistente.vendedor.usuarioId
+  const linha = await prisma.smMotoEstoque.findFirst({ where: { id: p.data.motoId, usuarioId }, select: SELECT_MOTO_VITRINE })
+  if (!linha) { res.status(404).json({ error: 'Moto não encontrada no estoque' }); return }
+  const moto = paraVitrine(linha)
+  const { mostrarPreco } = await vitrineDaLoja(usuarioId)
+  const legenda = fichaTexto(moto, { mostrarPreco })
+  const destino = conversa.jid ?? conversa.numeroContato
+  const fotos = moto.fotos.slice(0, Math.max(1, p.data.fotos ?? 3))
+  try {
+    if (!fotos.length) await enviarFotoNaConversa(assistente.instancia, conversa.id, destino, { url: '', legenda }, 'VENDEDOR')
+    for (const [i, url] of fotos.entries()) await enviarFotoNaConversa(assistente.instancia, conversa.id, destino, { url, legenda: i === 0 ? legenda : '' }, 'VENDEDOR')
+  } catch (e) {
+    res.status(502).json({ error: mensagemErroWhatsapp(e) })
+    return
+  }
+  const agora = new Date()
+  await prisma.$transaction([
+    prisma.assistenteConversa.update({
+      where: { id: conversa.id },
+      data: { ultimaMensagemEm: agora, ...((conversa.status === 'ATIVA' || conversa.status === 'AGUARDANDO_VENDEDOR') && { status: 'ASSUMIDA', assumidaEm: agora }) },
+    }),
+    prisma.smMotoEstoque.update({ where: { id: moto.id }, data: { enviosWhatsapp: { increment: 1 } } }),
+    // Moto de interesse do lead, se ainda não tinha.
+    ...(conversa.leadId ? [prisma.lead.updateMany({ where: { id: conversa.leadId, modeloInteresse: null }, data: { modeloInteresse: nomeDaMoto(moto) } })] : []),
+  ])
+  res.status(201).json({ ok: true, fotos: fotos.length })
 })
 
 // "Sugerir com IA": a sugestão do Copiloto, já enxergando as respostas da
@@ -3166,7 +3217,7 @@ router.post('/assistente/conversas/:id/sugestao-ia', requireProLaboreAuth, requi
   const conversa = await carregarConversaAutorizada(req, res)
   if (!conversa) return
   if (conversa.tipo !== 'LEAD') { res.status(400).json({ error: 'Só conversas de lead têm sugestão' }); return }
-  const { mensagens, lead, respostas, moto, sugestoes } = await contextoDeSugestao(conversa)
+  const { mensagens, lead, respostas, moto, sugestoes, motos } = await contextoDeSugestao(conversa)
   const usuarioId = conversa.assistente.vendedor.usuarioId
   const cliente = primeiroNomeAssistente(conversa.nomeContato)
   const emOrdem = [...mensagens].reverse()
@@ -3179,6 +3230,7 @@ router.post('/assistente/conversas/:id/sugestao-ia', requireProLaboreAuth, requi
       conversa: emOrdem.map(m => ({ de: m.remetente === 'CONTATO' ? 'CLIENTE' : m.remetente === 'VENDEDOR' ? 'VENDEDOR' : 'ASSISTENTE_AUTOMATICO', texto: m.texto.slice(0, 600), quando: m.criadoEm.toISOString().slice(0, 16) })),
       conteudos: [], memoria, vendedor: primeiroNomeAssistente(conversa.assistente.vendedor.nome),
       respostasDaLoja: respostasDaLojaParaIA(sugestoes),
+      estoque: motos.map(fichaParaIA),
     }).catch(e => { logger.warn({ err: e }, 'assistente: sugestão por IA falhou'); return null })
     if (sugestao) origem = 'IA'
   }
@@ -3293,15 +3345,16 @@ router.post('/assistente/simular', requireProLaboreAuth, requireModulo('assisten
   const cfg = lerConfigAssistente(salva)
   const ctx = { nomeContato: parse.data.nomeContato ?? 'Cliente Teste', vendedor: vendedor.nome, empresa: cfg.nomeEmpresa }
   // As respostas aprovadas da base entram no teste como na conversa de verdade.
-  const itens = await respostasAtivas(req.proLaboreUser!.sub)
-  const base = baseParaRobo(itens, { ...ctx, moto: parse.data.estado ? respostaDoCampoAssistente(cfg, parse.data.estado.respostas, 'modeloInteresse') : null })
+  const [itens, vitrine] = await Promise.all([respostasAtivas(req.proLaboreUser!.sub), vitrineDaLoja(req.proLaboreUser!.sub)])
+  const base = baseParaRobo(itens, { ...ctx, moto: parse.data.estado ? respostaDoCampoAssistente(cfg, parse.data.estado.respostas, 'modeloInteresse') : null }, vitrine)
   const passo = parse.data.estado
     ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx, base)
     : iniciarRoteiroAssistente(cfg, ctx, parse.data.texto, base)
   const usado = passo.conhecimentoUsado ? itens.find(i => i.id === passo.conhecimentoUsado) : null
+  const motoUsada = passo.motoUsada ? vitrine.motos.find(m => m.id === passo.motoUsada) : null
   res.json({
     ...passo,
-    conhecimento: usado ? { id: usado.id, titulo: usado.titulo } : null,
+    conhecimento: usado ? { id: usado.id, titulo: usado.titulo } : motoUsada ? { id: motoUsada.id, titulo: `Estoque: ${nomeDaMoto(motoUsada)}` } : null,
     resumo: passo.desfecho ? linhasResumoAssistente(cfg, passo.estado.respostas) : [],
     gatilho: parse.data.estado ? null : casaGatilhoAssistente(parse.data.texto, cfg.gatilhos),
   })

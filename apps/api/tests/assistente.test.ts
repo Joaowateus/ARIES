@@ -130,3 +130,74 @@ test('nota do lead: quente, morno, frio e desistência', () => {
   const parou = calcularNota({ cfg: CONFIG_PADRAO, origem: 'ANUNCIO', respostas: { interesse: 'CG' }, textosDoContato: ['parar'], resultado: 'DESISTIU' })
   assert.equal(parou.nota, 0)
 })
+
+// ---------- Vitrine do estoque ----------
+import { acharMotos, fichaParaIA, fichaTexto, perguntaDeEstoque, pontosDaMoto, respostaDeEstoque, type MotoVitrine } from '../src/lib/assistenteVitrine'
+
+const moto = (m: Partial<MotoVitrine> & { id: string; modelo: string }): MotoVitrine => ({
+  marca: null, ano: null, cor: null, situacao: 'DISPONIVEL', versao: null, km: null, cilindrada: null, preco: null, destaques: [], ficha: [], fotos: [], videoUrl: null, ...m,
+})
+const xre = moto({ id: 'xre', modelo: 'XRE 300 Sahara', marca: 'Honda', ano: 2023, cor: 'Vermelha', km: 12000, cilindrada: 300, preco: 25900, destaques: ['Revisada'], ficha: [{ rotulo: 'Freio', valor: 'ABS' }], fotos: ['/pro-labore/imagens/xre1'] })
+const cg = moto({ id: 'cg', modelo: 'CG 160 Titan', marca: 'Honda', ano: 2022, km: 8000, cilindrada: 160 })
+const fazer = moto({ id: 'fazer', modelo: 'Fazer 250', marca: 'Yamaha', cilindrada: 250, situacao: 'VENDIDA' })
+const lander = moto({ id: 'lander', modelo: 'Lander 250', marca: 'Yamaha', cilindrada: 250, km: 20000, fotos: ['/pro-labore/imagens/lander1'] })
+const estoque = [xre, cg, fazer, lander]
+
+test('vitrine reconhece a moto pedida pelo nome', () => {
+  assert.ok(pontosDaMoto('tem a XRE 300?', xre) > 0)
+  assert.equal(acharMotos('vocês têm cg 160?', estoque)[0]?.id, 'cg')
+  assert.equal(pontosDaMoto('tem alguma de 160?', cg), 0, 'só a cilindrada não basta')
+  assert.equal(acharMotos('tem honda?', estoque).length, 0, 'só a marca não basta')
+  assert.equal(perguntaDeEstoque('XRE 300', estoque), null, 'resposta de roteiro não é pergunta de estoque')
+  assert.equal(perguntaDeEstoque('Ainda tem a XRE 300?', estoque)?.id, 'xre')
+})
+
+test('ficha do WhatsApp: preço só se a loja ligar; IA nunca recebe preço', () => {
+  const sem = fichaTexto(xre, { mostrarPreco: false })
+  assert.match(sem, /^\*Honda XRE 300 Sahara 2023\* · Vermelha\n12\.000 km · 300 cc\n✅ Revisada\n• Freio: ABS$/)
+  assert.ok(fichaTexto(xre, { mostrarPreco: true }).includes('💰 R$ 25.900'))
+  const ia = JSON.stringify(fichaParaIA(xre))
+  assert.ok(!ia.includes('25900') && !ia.includes('preco') && ia.includes('Freio: ABS'))
+})
+
+test('resposta de estoque: disponível com foto; vendida oferece parecidas; sem parecidas não responde', () => {
+  const r = respostaDeEstoque(xre, estoque, { mostrarPreco: false, nome: 'Ana' })!
+  assert.ok(r.disponivel && r.foto === '/pro-labore/imagens/xre1' && r.texto.startsWith('Temos sim, Ana! 😍'))
+  const v = respostaDeEstoque(fazer, estoque, { mostrarPreco: false, nome: '' })!
+  assert.ok(!v.disponivel && v.texto.startsWith('A Yamaha Fazer 250 já foi vendida, mas temos opções parecidas:') && v.texto.includes('• Yamaha Lander 250 · 20.000 km'))
+  assert.equal(v.foto, '/pro-labore/imagens/lander1')
+  assert.equal(respostaDeEstoque(moto({ id: 'x', modelo: 'Ninja 1000', situacao: 'VENDIDA', cilindrada: 1000 }), [cg], { mostrarPreco: false, nome: '' }), null)
+})
+
+const baseVitrine: BaseRespostas = {
+  responder: (texto, usados) => {
+    const alvo = perguntaDeEstoque(texto, estoque)
+    if (!alvo || usados.includes(`moto:${alvo.id}`)) return null
+    const r = respostaDeEstoque(alvo, estoque, { mostrarPreco: false, nome: 'Ana' })
+    return r && { id: `moto:${alvo.id}`, motoId: alvo.id, texto: r.texto, foto: r.foto, resto: parteAfirmativa(texto), ...(r.disponivel && { valeComo: { campo: 'modeloInteresse' as const, valor: 'Honda XRE 300 Sahara 2023' } }) }
+  },
+}
+
+test('robô: "tem a XRE?" na 1ª mensagem manda a foto e já pula a pergunta do veículo', () => {
+  const p = iniciarRoteiro(CONFIG_PADRAO, ctx, 'Oi, ainda tem a XRE 300?', baseVitrine)
+  assert.equal(p.estado.etapa, 1)
+  assert.equal(p.estado.respostas.interesse, 'Honda XRE 300 Sahara 2023')
+  assert.equal(p.motoUsada, 'xre')
+  assert.equal(p.conhecimentoUsado, null)
+  assert.equal(p.mensagens.length, 2)
+  assert.match(p.mensagens[0], /^Olá, Ana!/)
+  assert.match(p.mensagens[1], /^Como você pensa em pagar\?/)
+  assert.deepEqual(p.midias?.map(m => [m.url, m.antesDe]), [['/pro-labore/imagens/xre1', 1]])
+  assert.match(p.midias![0].legenda, /^Temos sim, Ana!/)
+})
+
+test('robô: estoque no meio do roteiro', () => {
+  const p = avancarRoteiro(CONFIG_PADRAO, naEtapa(0), 'Tem a XRE 300?', ctx, baseVitrine)
+  assert.equal(p.estado.etapa, 1, 'a moto responde "Qual veículo te interessou?"')
+  assert.equal(p.midias?.[0].antesDe, 0)
+  const q = avancarRoteiro(CONFIG_PADRAO, naEtapa(1), 'E a Fazer 250, ainda tem?', ctx, baseVitrine)
+  assert.equal(q.estado.etapa, 1, 'na pergunta do pagamento, repete a pergunta')
+  assert.equal(q.motoUsada, 'fazer')
+  assert.match(q.midias![0].legenda, /já foi vendida/)
+  assert.match(q.mensagens[0], /^Como você pensa em pagar\?/)
+})
