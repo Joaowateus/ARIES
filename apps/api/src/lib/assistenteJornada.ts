@@ -17,6 +17,9 @@ export const ETIQUETAS = {
   PARCELA_CABE: 'Parcela cabe',
   PARCELA_APERTADA: 'Parcela apertada',
   PARCELA_NAO_CABE: 'Parcela não cabe',
+  FICHA_CREDITO: 'Ficha de crédito',
+  CREDITO_APROVADO: 'Crédito aprovado',
+  CREDITO_RECUSADO: 'Crédito recusado',
 } as const
 export type Etiqueta = keyof typeof ETIQUETAS
 
@@ -30,7 +33,7 @@ const PRECO = /\b(caro|cara demais|salgad\w*|puxad\w*|desconto|mais barat\w*|for
 const VISITA = /\b(visitar|visita|passar ai|passo ai|vou ai|ir ai|ver pessoalmente|ver de perto|test ride|endereco|onde fica|onde voces ficam|horario de funcionamento|que horas abre|ate que horas)\b/
 const DOCUMENTOS = /\b(documentos|documentacao|quais documentos|cnh|comprovante de renda|comprovante de residencia)\b/
 // O que o vendedor manda quando a proposta saiu.
-const PROPOSTA = /\b(proposta|segue a simulacao|segue o orcamento|simulacao aprovada|ficha aprovada|credito aprovado|aprovad[oa] no banco|condicao especial pra voce)\b/
+const PROPOSTA = /\b(proposta|segue a simulacao|segue o orcamento|simulacao aprovada|ficha aprovada|credito aprovado|aprovad[oa] no banco|pre-?analise foi aprovada|condicao especial pra voce)\b/
 
 const DIA = 86_400_000
 
@@ -45,6 +48,7 @@ export interface DadosEtiquetas {
   agora: Date
   // Leitura da simulação de financiamento, se houve.
   simulacao?: string | null
+  credito?: { ficha: boolean; aprovado: boolean; recusado: boolean } | null
 }
 
 export function etiquetasDoLead(d: DadosEtiquetas): Etiqueta[] {
@@ -64,6 +68,9 @@ export function etiquetasDoLead(d: DadosEtiquetas): Etiqueta[] {
   if (d.simulacao === 'CABE') e.push('PARCELA_CABE')
   else if (d.simulacao === 'APERTADA') e.push('PARCELA_APERTADA')
   else if (d.simulacao === 'NAO_CABE') e.push('PARCELA_NAO_CABE')
+  if (d.credito?.ficha) e.push('FICHA_CREDITO')
+  if (d.credito?.aprovado) e.push('CREDITO_APROVADO')
+  else if (d.credito?.recusado) e.push('CREDITO_RECUSADO')
   if (d.ultimaNossaEm && (!d.ultimaDoContatoEm || d.ultimaNossaEm > d.ultimaDoContatoEm) && d.agora.getTime() - d.ultimaNossaEm.getTime() >= DIA) e.push('SUMIU_24H')
   return e
 }
@@ -88,7 +95,8 @@ export function proximaEtapa(d: DadosAvanco): Avanco | null {
   let r: Avanco | null = null
   if (d.estagio === 'LEAD' && d.vendedorRespondeu) r = { para: 'ABORDADO', motivo: 'o vendedor respondeu' }
   else if (d.estagio === 'ABORDADO') {
-    if (d.etiquetas.includes('PEDIU_SIMULACAO')) r = { para: 'NEGOCIACAO', motivo: 'pediu simulação' }
+    if (d.etiquetas.includes('CREDITO_APROVADO')) r = { para: 'NEGOCIACAO', motivo: 'crédito pré-aprovado no banco' }
+    else if (d.etiquetas.includes('PEDIU_SIMULACAO')) r = { para: 'NEGOCIACAO', motivo: 'pediu simulação' }
     else if (d.etiquetas.includes('PEDIU_VISITA')) r = { para: 'NEGOCIACAO', motivo: 'quer visitar a loja' }
     else if (DOCUMENTOS.test(contato)) r = { para: 'NEGOCIACAO', motivo: 'perguntou da documentação' }
     else if ((d.nota ?? 0) >= 70) r = { para: 'NEGOCIACAO', motivo: `nota ${d.nota} na conversa` }

@@ -3475,9 +3475,9 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 /* Assistente F4: etiquetas da jornada + avanço automático */
 .pl-as-etiquetas { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .pl-as-etiqueta { font-size: 10.5px; font-weight: 600; color: var(--pl-ink-2); background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
-.pl-as-etiqueta.pediu_simulacao, .pl-as-etiqueta.pediu_visita, .pl-as-etiqueta.parcela_cabe { color: var(--pl-good); border-color: color-mix(in srgb, var(--pl-good) 40%, transparent); }
+.pl-as-etiqueta.pediu_simulacao, .pl-as-etiqueta.pediu_visita, .pl-as-etiqueta.parcela_cabe, .pl-as-etiqueta.credito_aprovado { color: var(--pl-good); border-color: color-mix(in srgb, var(--pl-good) 40%, transparent); }
 .pl-as-etiqueta.sumiu_24h, .pl-as-etiqueta.objecao_preco, .pl-as-etiqueta.parcela_apertada { color: var(--pl-accent-4); border-color: color-mix(in srgb, var(--pl-accent-4) 40%, transparent); }
-.pl-as-etiqueta.parcela_nao_cabe { color: var(--pl-critical); border-color: color-mix(in srgb, var(--pl-critical) 40%, transparent); }
+.pl-as-etiqueta.parcela_nao_cabe, .pl-as-etiqueta.credito_recusado { color: var(--pl-critical); border-color: color-mix(in srgb, var(--pl-critical) 40%, transparent); }
 .pl-as-etiquetas-quadro { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--pl-border); }
 .pl-kanban-card-etiquetas { margin-top: 6px; }
 .pl-kanban-card-etiquetas:empty { display: none; }
@@ -3528,3 +3528,33 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-si-opcoes li small { font-size: 11px; color: var(--pl-ink-muted); text-align: right; }
 .pl-si-opcoes li.melhor { background: var(--pl-surface-2); }
 @media (max-width: 520px) { .pl-si-exemplo { grid-template-columns: 1fr; } }
+
+/* Assistente: pré-análise de crédito */
+.pl-si-secao { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--pl-border); display: flex; flex-direction: column; gap: 8px; }
+.pl-si-bancos { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-si-banco { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--pl-ink-1); background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 999px; padding: 3px 6px 3px 10px; }
+.pl-si-banco button { border: 0; background: none; color: var(--pl-ink-muted); cursor: pointer; font: inherit; font-size: 11px; padding: 0 2px; }
+.pl-si-novo-banco { display: flex; gap: 8px; max-width: 360px; }
+.pl-si-sugestoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-si-placar { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pl-si-placar th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--pl-ink-muted); padding: 0 6px 6px 0; }
+.pl-si-placar td { padding: 6px 6px 6px 0; border-top: 1px solid var(--pl-border); color: var(--pl-ink-1); vertical-align: top; }
+.pl-si-placar small { display: block; font-size: 11px; color: var(--pl-ink-muted); }
+.pl-si-status-bancos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.pl-si-status-bancos li { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--pl-ink-1); }
+.pl-si-status-bancos li b { font-size: 11.5px; color: var(--pl-ink-muted); }
+.pl-si-status-bancos li.aprovada b { color: var(--pl-good); }
+.pl-si-status-bancos li.recusada b { color: var(--pl-critical); }
+.pl-si-status-bancos li.em_analise b { color: var(--pl-accent-4); }
+.pl-si-ficha { display: flex; gap: 14px; justify-content: space-between; flex-wrap: wrap; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm); padding: 4px 12px 12px; }
+.pl-si-ficha-acoes { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.pl-si-autorizou { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; font-size: 12.5px; color: var(--pl-ink-1); line-height: 1.4; }
+.pl-si-analise { border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm); padding: 10px 12px; margin-top: 8px; }
+.pl-si-analise.aprovada { border-color: color-mix(in srgb, var(--pl-good) 45%, var(--pl-border)); }
+.pl-si-analise.recusada { border-color: color-mix(in srgb, var(--pl-critical) 35%, var(--pl-border)); }
+.pl-si-analise-topo { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pl-si-analise-topo b { flex: 1 1 120px; font-size: 13px; color: var(--pl-ink-1); }
+.pl-si-analise-topo select { width: auto; min-width: 140px; }
+.pl-si-analise-campos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.pl-si-analise-envio { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+@media (max-width: 560px) { .pl-si-analise-campos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

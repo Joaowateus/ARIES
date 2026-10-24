@@ -85,6 +85,8 @@ const configSimulacaoSchema = z.object({
   perguntarRenda: z.boolean(),
   comprometimentoMax: z.number().min(10).max(60),
   aviso: z.string().trim().max(300),
+  bancos: z.array(z.string().trim().min(1).max(40)).max(8, 'No máximo 8 bancos'),
+  preAnalise: z.boolean(),
 }).partial()
 
 router.get('/assistente/simulacao', ...ver, async (req: Request, res: Response) => {

@@ -31,12 +31,21 @@ function anthropic(): Anthropic {
 
 // ---------- Contexto sem dinheiro ----------
 
-const CHAVE_FINANCEIRA = /valor|pre[cç]o|custo|margem|gasto|receita|faturamento|ticket|comiss|lucro|sal[aá]rio|dinheiro|investimento|or[cç]amento|financeiro/i
+const CHAVE_FINANCEIRA = /valor|pre[cç]o|custo|margem|gasto|receita|faturamento|ticket|comiss|lucro|sal[aá]rio|dinheiro|investimento|or[cç]amento|financeiro|renda|cpf|nascimento/i
 const DINHEIRO = /R\$\s?\d[\d.,]*(?:\s?(?:mil|mi|milh[õo]es|k)\b)?|\b\d[\d.,]*\s?(?:mil|k)\b(?:\s?reais)?|\b\d[\d.,]*\s?reais\b/gi
 
-/** Tira do contexto qualquer campo financeiro e qualquer valor em dinheiro escrito no texto. */
+const CPF = /\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[\s-]?\d{2}\b/g
+// Data com ano de quem tem 14 anos ou mais: pode ser a data de nascimento da ficha de crédito.
+const NASCIMENTO = /\b\d{1,2}\s*[/.-]\s*\d{1,2}\s*[/.-]\s*(19\d{2}|20[01]\d)\b|\b\d{1,2} de [a-zç]+ (de )?(19\d{2}|20[01]\d)\b/gi
+
+/** CPF e data de nascimento do cliente (da pré-análise de crédito) nunca vão para a IA. */
+export function semDadosPessoais(texto: string): string {
+  return texto.replace(CPF, '[CPF]').replace(NASCIMENTO, '[data de nascimento]')
+}
+
+/** Tira do contexto qualquer campo financeiro, qualquer valor em dinheiro escrito no texto e CPF/data de nascimento. */
 export function semDinheiro<T>(v: T): T {
-  if (typeof v === 'string') return v.replace(DINHEIRO, '[valor omitido]').replace(/R\$/g, 'reais') as T
+  if (typeof v === 'string') return semDadosPessoais(v).replace(DINHEIRO, '[valor omitido]').replace(/R\$/g, 'reais') as T
   if (Array.isArray(v)) return v.map(x => semDinheiro(x)) as T
   if (v && typeof v === 'object' && !(v instanceof Date)) {
     return Object.fromEntries(Object.entries(v).filter(([k]) => !CHAVE_FINANCEIRA.test(k)).map(([k, x]) => [k, semDinheiro(x)])) as T

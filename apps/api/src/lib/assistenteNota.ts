@@ -31,9 +31,11 @@ export interface DadosNota {
   resultado?: string | null
   // Leitura da simulação de financiamento (CABE, APERTADA, NAO_CABE, SEM_RENDA).
   simulacao?: string | null
+  // Pré-análise de crédito: ficha autorizada e a resposta dos bancos.
+  credito?: { ficha: boolean; aprovado: boolean; recusado: boolean } | null
 }
 
-export function calcularNota({ cfg, origem, respostas, textosDoContato, resultado, simulacao }: DadosNota): NotaLead {
+export function calcularNota({ cfg, origem, respostas, textosDoContato, resultado, simulacao, credito }: DadosNota): NotaLead {
   const sinais: SinalNota[] = []
   const somar = (chave: string, rotulo: string, pontos: number) => sinais.push({ chave, rotulo, pontos })
   const textos = textosDoContato.map(normalizar)
@@ -64,6 +66,9 @@ export function calcularNota({ cfg, origem, respostas, textosDoContato, resultad
   if (simulacao) somar('simulou', 'Fez a simulação de financiamento', 5)
   if (simulacao === 'CABE') somar('parcela', 'Parcela cabe na renda', 10)
   else if (simulacao === 'NAO_CABE') somar('parcela', 'Parcela acima da renda', -10)
+  if (credito?.ficha) somar('ficha', 'Autorizou a pré-análise de crédito', 10)
+  if (credito?.aprovado) somar('credito', 'Crédito pré-aprovado no banco', 20)
+  else if (credito?.recusado) somar('credito', 'Crédito recusado nos bancos', -20)
 
   for (const o of OBJECOES) if (o.re.test(tudo)) somar(`objecao:${o.chave}`, o.rotulo, -10)
   if (resultado === 'DESISTIU') somar('desistiu', 'Pediu para parar', -60)

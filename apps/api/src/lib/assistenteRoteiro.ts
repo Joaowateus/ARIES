@@ -172,6 +172,9 @@ export interface PassoRoteiro {
   midias?: MidiaPasso[]
   // Simulação de financiamento mandada neste passo (para guardar na conversa).
   simulacao?: Record<string, unknown> | null
+  // Ficha da pré-análise de crédito colhida neste passo. O CPF nunca fica
+  // nas respostas do roteiro: vai direto para a ficha.
+  ficha?: { cpf?: string; nascimento?: string; consentimento?: { em: string; pergunta: string; resposta: string } } | null
 }
 
 // Simulação de financiamento no fim do roteiro (ver assistenteSimulacao.ts):
@@ -182,7 +185,19 @@ export interface SimuladorRoteiro {
   // null = este lead não recebe simulação (não vai financiar, ou a moto não tem preço).
   avaliar: (respostas: Record<string, string>) => { perguntarRenda: boolean } | null
   simular: (respostas: Record<string, string>) => { texto: string; dados: Record<string, unknown> } | null
+  // Pré-análise de crédito depois da simulação (só com a autorização do cliente).
+  ficha?: FichaRoteiro | null
 }
+export interface FichaRoteiro {
+  consentimento: string
+  recebido: string
+  textos: { cpf: string; cpfInvalido: string; nascimento: string; nascimentoInvalido: string }
+  aceita: (texto: string) => boolean
+  recusa: (texto: string) => boolean
+  lerCpf: (texto: string) => string | null
+  lerNascimento: (texto: string) => string | null
+}
+const PASSOS_EXTRAS = ['RENDA', 'CONSENTE', 'CPF', 'NASCIMENTO']
 
 // Respostas aprovadas da base de conhecimento: quando o cliente pergunta
 // algo no meio do roteiro, o assistente responde com o texto da loja e
@@ -255,14 +270,72 @@ function encerrar(cfg: ConfigAssistente, estado: EstadoRoteiro, ctx: ContextoRot
     estado.respostas._simulacao = 'RENDA'
     return { ...comResposta(daBase, [sim.textoRenda]), estado, desfecho: null }
   }
-  const s = sim && av ? sim.simular(estado.respostas) : null
+  const s = sim && av && !estado.respostas._simulou ? sim.simular(estado.respostas) : null
+  if (s) estado.respostas._simulou = '1'
+  if (s && sim?.ficha && estado.respostas._ficha === undefined) {
+    estado.respostas._ficha = 'PEDIDA'
+    estado.respostas._simulacao = 'CONSENTE'
+    return { ...comResposta(daBase, [s.texto, sim.ficha.consentimento]), estado, desfecho: null, simulacao: s.dados }
+  }
+  delete estado.respostas._simulacao
   return { ...comResposta(daBase, s ? [s.texto, fim] : [fim]), estado, desfecho: 'QUALIFICADO', simulacao: s?.dados ?? null }
+}
+
+// Pré-análise: autorização, CPF e data de nascimento (uma nova tentativa
+// para CPF ou data errados). Recusar ou não entender encerra normalmente:
+// o vendedor segue a conversa.
+function passoDaFicha(cfg: ConfigAssistente, estado: EstadoRoteiro, texto: string, ctx: ContextoRoteiro, f: FichaRoteiro): PassoRoteiro {
+  const r = estado.respostas
+  const etapa = r._simulacao
+  const encerra = (antes: string[] = [], ficha?: PassoRoteiro['ficha']): PassoRoteiro => {
+    delete r._simulacao
+    return { mensagens: [...antes, preencher(cfg.mensagemEncerramento, ctx)], estado, desfecho: 'QUALIFICADO', ficha }
+  }
+  const tentarDeNovo = (marca: string, aviso: string): PassoRoteiro | null => {
+    if (r[marca]) return null
+    r[marca] = '1'
+    return { mensagens: [aviso], estado, desfecho: null }
+  }
+  if (pedeAtendente(texto)) { delete r._simulacao; return { mensagens: [preencher(cfg.mensagemAtendente, ctx)], estado, desfecho: 'PEDIU_ATENDENTE' } }
+  if (etapa === 'CONSENTE') {
+    if (f.recusa(texto)) { r._ficha = 'RECUSOU'; return encerra() }
+    if (desiste(texto)) return { mensagens: [preencher(cfg.mensagemDespedida, ctx)], estado, desfecho: 'DESISTIU' }
+    if (!f.aceita(texto)) { r._ficha = 'SEM_RESPOSTA'; return encerra() }
+    r._ficha = 'AUTORIZOU'
+    r._consentimentoEm = new Date().toISOString()
+    r._consentimentoResposta = texto.trim().slice(0, 80)
+    r._simulacao = 'CPF'
+    return { mensagens: [f.textos.cpf], estado, desfecho: null }
+  }
+  if (desiste(texto)) return { mensagens: [preencher(cfg.mensagemDespedida, ctx)], estado, desfecho: 'DESISTIU' }
+  if (etapa === 'CPF') {
+    const cpf = f.lerCpf(texto)
+    if (!cpf) {
+      const deNovo = f.recusa(texto) ? null : tentarDeNovo('_cpfErro', f.textos.cpfInvalido)
+      if (deNovo) return deNovo
+      r._ficha = 'SEM_CPF'
+      return encerra()
+    }
+    r._ficha = 'CPF'
+    r._simulacao = 'NASCIMENTO'
+    const consentimento = { em: r._consentimentoEm ?? new Date().toISOString(), pergunta: f.consentimento, resposta: r._consentimentoResposta ?? '' }
+    return { mensagens: [f.textos.nascimento], estado, desfecho: null, ficha: { cpf, consentimento } }
+  }
+  const nascimento = f.lerNascimento(texto)
+  if (!nascimento) {
+    const deNovo = f.recusa(texto) ? null : tentarDeNovo('_nascimentoErro', f.textos.nascimentoInvalido)
+    return deNovo ?? encerra([f.recebido])
+  }
+  r._ficha = 'COMPLETA'
+  return encerra([f.recebido], { nascimento })
 }
 
 export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string, ctx: ContextoRoteiro, base?: BaseRespostas, sim?: SimuladorRoteiro): PassoRoteiro {
   const estado: EstadoRoteiro = { etapa: atual.etapa, respostas: { ...atual.respostas } }
-  if (desiste(texto)) return { mensagens: [preencher(cfg.mensagemDespedida, ctx)], estado, desfecho: 'DESISTIU' }
   const pergunta = cfg.perguntas[estado.etapa]
+  // Na autorização, "não quero" é "não quero a pré-análise", não "pare de me mandar mensagem".
+  if (!pergunta && sim?.ficha && ['CONSENTE', 'CPF', 'NASCIMENTO'].includes(estado.respostas._simulacao)) return passoDaFicha(cfg, estado, texto, ctx, sim.ficha)
+  if (desiste(texto)) return { mensagens: [preencher(cfg.mensagemDespedida, ctx)], estado, desfecho: 'DESISTIU' }
   // Resposta da renda, o passo extra da simulação ("pular" vale).
   if (!pergunta && estado.respostas._simulacao === 'RENDA') {
     delete estado.respostas._simulacao
@@ -295,7 +368,8 @@ export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, text
 // estava respondendo, em vez de tratar como resposta da próxima.
 export function complementarResposta(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string): EstadoRoteiro {
   const pergunta = cfg.perguntas[atual.etapa - 1]
-  if (!pergunta) return atual
+  // Nos passos da simulação (renda, CPF) nada vai para a resposta anterior.
+  if (!pergunta || PASSOS_EXTRAS.includes(atual.respostas._simulacao)) return atual
   const anterior = atual.respostas[pergunta.id]
   return { ...atual, respostas: { ...atual.respostas, [pergunta.id]: anterior ? `${anterior} ${texto.trim()}` : texto.trim() } }
 }

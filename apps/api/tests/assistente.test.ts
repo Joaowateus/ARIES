@@ -431,3 +431,97 @@ test('"? simular" no chat "Você"', () => {
   assert.deepEqual(interpretarPergunta('? simula bros renda de 3 mil e entrada de 1.500'), { tipo: 'SIMULAR', alvo: 'bros', entrada: 1500, renda: 3000 })
   assert.equal(interpretarPergunta('simular a proposta amanhã'), null, 'anotação sem ? continua anotação')
 })
+
+// ---------- Pré-análise de crédito ----------
+import { aceitaPreAnalise, lerCpf, lerNascimento, leituraCredito, recusaPreAnalise, textoAprovacao, textoFicha } from '../src/lib/assistenteSimulacao'
+import { complementarResposta } from '../src/lib/assistenteRoteiro'
+import { semDinheiro } from '../src/lib/smIA'
+
+test('CPF e data de nascimento escritos pelo cliente', () => {
+  assert.equal(lerCpf('529.982.247-25'), '52998224725')
+  assert.equal(lerCpf('meu cpf é 111 444 777 35'), '11144477735')
+  assert.equal(lerCpf('52998224724'), null, 'dígito verificador errado')
+  assert.equal(lerCpf('111.111.111-11'), null, 'todos iguais')
+  assert.equal(lerCpf('91988887777'), null, 'telefone não passa por CPF')
+  const hoje = new Date('2026-10-24T12:00:00Z')
+  assert.equal(lerNascimento('15/03/1990', hoje), '15/03/1990')
+  assert.equal(lerNascimento('5-3-90', hoje), '05/03/1990')
+  assert.equal(lerNascimento('nasci em 15 de março de 1990', hoje), '15/03/1990')
+  assert.equal(lerNascimento('15031990', hoje), '15/03/1990')
+  assert.equal(lerNascimento('31/02/1990', hoje), null, 'data que não existe')
+  assert.equal(lerNascimento('10/10/2012', hoje), null, 'menor de 18')
+  assert.equal(lerNascimento('amanhã', hoje), null)
+  assert.ok(aceitaPreAnalise('Sim, pode') && aceitaPreAnalise('autorizo') && !aceitaPreAnalise('não quero') && recusaPreAnalise('Não quero') && recusaPreAnalise('agora não'))
+})
+
+const comFicha = (extra: Partial<VitrineLoja> = {}) => vitrineSim({ simulacao: { ...lerConfigSimulacao({ bancos: ['Santander', 'BV', 'PAN'], preAnalise: true }) }, ...extra })
+const ateAutorizacao = () => {
+  const sim = simuladorDoRobo(CONFIG_PADRAO, ctx, comFicha())
+  return { sim, p: avancarRoteiro(CONFIG_PADRAO, ateOFim(sim, 'Financiado', '4 mil').estado, '3500', ctx, undefined, sim) }
+}
+
+test('robô: depois da simulação pede a autorização, o CPF e a data de nascimento', () => {
+  const { sim, p } = ateAutorizacao()
+  assert.equal(p.desfecho, null)
+  assert.equal(p.mensagens.length, 2)
+  assert.match(p.mensagens[0], /^📊 \*Simulação de financiamento\*/)
+  assert.match(p.mensagens[1], /pré-análise de crédito\* nos bancos parceiros \(Santander, BV e PAN\)\? .*CPF.*Responda \*sim\*/)
+  assert.ok(p.simulacao, 'a simulação já fica guardada')
+  let q = avancarRoteiro(CONFIG_PADRAO, p.estado, 'Sim, pode', ctx, undefined, sim)
+  assert.equal(q.mensagens[0], 'Combinado! Me manda o seu CPF (só os números).')
+  q = avancarRoteiro(CONFIG_PADRAO, q.estado, '529.982.247-24', ctx, undefined, sim)
+  assert.match(q.mensagens[0], /não parece certo/)
+  q = avancarRoteiro(CONFIG_PADRAO, q.estado, '529.982.247-25', ctx, undefined, sim)
+  assert.equal(q.ficha?.cpf, '52998224725')
+  assert.equal(q.ficha?.consentimento?.resposta, 'Sim, pode')
+  assert.match(q.ficha!.consentimento!.pergunta, /pré-análise/)
+  assert.ok(!JSON.stringify(q.estado.respostas).includes('52998224725'), 'o CPF não fica nas respostas do roteiro')
+  assert.match(q.mensagens[0], /data de nascimento/)
+  const fim = avancarRoteiro(CONFIG_PADRAO, q.estado, '15/03/1990', ctx, undefined, sim)
+  assert.equal(fim.desfecho, 'QUALIFICADO')
+  assert.equal(fim.ficha?.nascimento, '15/03/1990')
+  assert.match(fim.mensagens[0], /^🔒 Recebido! Brenda faz a pré-análise/)
+  assert.match(fim.mensagens[1], /^Perfeito, anotei tudo!/)
+  assert.ok(!fim.mensagens.some(m => m.includes('📊')), 'a simulação não se repete')
+  assert.equal(fim.estado.respostas._ficha, 'COMPLETA')
+})
+
+test('robô: "não quero" na autorização encerra normal (não é pedido para parar)', () => {
+  const { sim, p } = ateAutorizacao()
+  const nao = avancarRoteiro(CONFIG_PADRAO, p.estado, 'Não quero', ctx, undefined, sim)
+  assert.ok(nao.desfecho === 'QUALIFICADO' && /^Perfeito, anotei tudo!/.test(nao.mensagens[0]) && !nao.ficha)
+  assert.equal(nao.estado.respostas._ficha, 'RECUSOU')
+  assert.equal(avancarRoteiro(CONFIG_PADRAO, p.estado, 'parar', ctx, undefined, sim).desfecho, 'DESISTIU')
+  assert.equal(avancarRoteiro(CONFIG_PADRAO, p.estado, 'quero falar com a vendedora', ctx, undefined, sim).desfecho, 'PEDIU_ATENDENTE')
+  const cpf = avancarRoteiro(CONFIG_PADRAO, p.estado, 'sim', ctx, undefined, sim)
+  const duasVezes = avancarRoteiro(CONFIG_PADRAO, avancarRoteiro(CONFIG_PADRAO, cpf.estado, '123', ctx, undefined, sim).estado, '456', ctx, undefined, sim)
+  assert.ok(duasVezes.desfecho === 'QUALIFICADO' && duasVezes.estado.respostas._ficha === 'SEM_CPF', 'CPF errado duas vezes: o vendedor segue')
+  assert.deepEqual(complementarResposta(CONFIG_PADRAO, cpf.estado, '529.982.247-25').respostas, cpf.estado.respostas, 'mensagem extra no passo do CPF não vai para a resposta anterior')
+  const sem = ateOFim(simuladorDoRobo(CONFIG_PADRAO, ctx, comFicha({ simulacao: lerConfigSimulacao({ bancos: ['BV'], preAnalise: false }) })), 'Financiado', '4 mil')
+  assert.ok(!avancarRoteiro(CONFIG_PADRAO, sem.estado, '3500', ctx, undefined, simuladorDoRobo(CONFIG_PADRAO, ctx, comFicha({ simulacao: lerConfigSimulacao({ bancos: ['BV'], preAnalise: false }) }))).mensagens.some(m => /pré-análise/.test(m)), 'desligada: não pede')
+  assert.equal(lerConfigSimulacao({ bancos: [], preAnalise: true }).preAnalise, false, 'sem banco cadastrado não liga')
+  assert.deepEqual(lerConfigSimulacao({ bancos: [' Santander ', 'santander', 'BV', '', 3] }).bancos, ['Santander', 'BV'])
+})
+
+test('pré-análise na nota, nas etiquetas, no funil e fora da IA', () => {
+  const credito = (st: string[]) => leituraCredito({ analises: st.map(status => ({ status })) })
+  assert.deepEqual(credito(['A_ENVIAR', 'APROVADA']), { ficha: true, aprovado: true, recusado: false })
+  assert.deepEqual(credito(['RECUSADA', 'RECUSADA']), { ficha: true, aprovado: false, recusado: true })
+  assert.equal(leituraCredito(null), null)
+  const nota = (c: ReturnType<typeof credito>) => calcularNota({ cfg: CONFIG_PADRAO, origem: 'ANUNCIO', respostas: {}, textosDoContato: ['oi'], credito: c }).nota
+  assert.equal(nota(credito(['EM_ANALISE'])), 25)
+  assert.equal(nota(credito(['APROVADA'])), 45)
+  assert.equal(nota(credito(['RECUSADA'])), 5)
+  assert.deepEqual(etq({}, ['oi'], { credito: credito(['APROVADA', 'RECUSADA']) }), ['FICHA_CREDITO', 'CREDITO_APROVADO'])
+  assert.deepEqual(etq({}, ['oi'], { credito: credito(['RECUSADA']) }), ['FICHA_CREDITO', 'CREDITO_RECUSADO'])
+  const base = { vendedorRespondeu: true, textosDoContato: ['oi'], textosDoVendedor: [] as string[], nota: 40, desfeitos: [] as string[] }
+  assert.deepEqual(proximaEtapa({ ...base, estagio: 'ABORDADO', etiquetas: ['CREDITO_APROVADO'] }), { para: 'NEGOCIACAO', motivo: 'crédito pré-aprovado no banco' })
+  const aprovacao = textoAprovacao({ banco: 'BV', status: 'APROVADA', entrada: 3000, prazo: 36, parcela: 612.4, taxa: 2.1 }, { nome: 'Ana', vendedor: 'Brenda' })
+  assert.match(aprovacao, /^✅ Boa notícia, Ana! Sua pré-análise foi aprovada no BV: entrada de R\$ 3\.000 e 36x de R\$ 612,40\./)
+  assert.ok(aprovacao.includes('Sujeito à confirmação dos documentos'))
+  assert.deepEqual(proximaEtapa({ ...base, estagio: 'NEGOCIACAO', etiquetas: [], textosDoVendedor: [aprovacao] }), { para: 'PROPOSTA', motivo: 'você enviou a proposta' })
+  const ficha = textoFicha({ nome: 'Ana Paula', telefone: '5591999990000', cpf: '52998224725', nascimento: '15/03/1990', renda: 3500, moto: 'Honda CG 160', valor: 20000, entrada: 4000, autorizadoEm: new Date('2026-10-24T15:30:00Z') })
+  assert.match(ficha, /^Nome: Ana Paula\nCPF: 529\.982\.247-25\nNascimento: 15\/03\/1990\n.*Renda informada: R\$ 3\.500\nVeículo: Honda CG 160 · R\$ 20\.000\nEntrada: R\$ 4\.000\nAutorizou a consulta em 24\/10\/2026, 12:30$/s)
+  const ia = JSON.stringify(semDinheiro({ conversa: ['meu cpf: 529.982.247-25', 'nasci 15/03/1990', 'pode ser dia 15/11?'], cpf: '52998224725', renda: 3500 }))
+  assert.ok(!ia.includes('529') && !ia.includes('1990') && !ia.includes('3500') && ia.includes('[CPF]') && ia.includes('[data de nascimento]') && ia.includes('15/11'), ia)
+})

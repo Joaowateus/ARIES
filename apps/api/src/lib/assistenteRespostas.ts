@@ -4,11 +4,14 @@
 // Só sai para o cliente o que a loja aprovou (status ATIVO).
 import { prisma } from './prisma'
 import { logger } from './logger'
-import { semDinheiro } from './smIA'
+import { semDadosPessoais, semDinheiro } from './smIA'
 import { ItemResposta, MAX_RESPOSTAS_DA_BASE, acharConhecimento, parteAfirmativa, preencherResposta, respostaDaBase } from './assistenteConhecimento'
 import { BaseRespostas, ConfigAssistente, ContextoRoteiro, SimuladorRoteiro, preencher, primeiroNome, respostaDoCampo } from './assistenteRoteiro'
 import { MotoVitrine, acharMotos, lerFicha, nomeDaMoto, perguntaDeEstoque, respostaDeEstoque } from './assistenteVitrine'
-import { ConfigSimulacao, ResultadoSimulacao, TEXTO_RENDA, lerConfigSimulacao, lerValor, simular, textoSimulacao, vaiFinanciar } from './assistenteSimulacao'
+import {
+  ConfigSimulacao, ResultadoSimulacao, TEXTO_CPF, TEXTO_CPF_INVALIDO, TEXTO_NASCIMENTO, TEXTO_NASCIMENTO_INVALIDO, TEXTO_RENDA, aceitaPreAnalise,
+  lerConfigSimulacao, lerCpf, lerNascimento, lerValor, recusaPreAnalise, simular, textoConsentimento, textoFichaRecebida, textoSimulacao, vaiFinanciar,
+} from './assistenteSimulacao'
 
 const DIA = 86_400_000
 const CACHE_MS = 60_000
@@ -203,10 +206,11 @@ export function respostasParaIA(respostas: unknown): Record<string, string> | nu
   return Object.fromEntries(Object.entries(respostas as Record<string, string>).filter(([k]) => !k.startsWith('_')))
 }
 
-/** A mensagem em que o cliente informou a renda não vai para a IA. */
+/** A renda, o CPF e a data de nascimento do cliente não vão para a IA. */
 export function textoParaIA(texto: string, respostas: unknown): string {
   const renda = (respostas as Record<string, string> | null)?._renda
-  return renda && texto.trim().slice(0, 80) === renda ? '[renda informada para a simulação]' : texto.slice(0, 600)
+  if (renda && texto.trim().slice(0, 80) === renda) return '[renda informada para a simulação]'
+  return semDadosPessoais(texto.slice(0, 600))
 }
 
 /** As três últimas mensagens do cliente, mais recente primeiro (mensagens em qualquer ordem). */
@@ -247,8 +251,14 @@ export function simuladorDoRobo(cfg: ConfigAssistente, ctx: ContextoRoteiro, vit
   if (!vitrine?.simulacaoAtiva || !vitrine.simulacao) return undefined
   const sc = vitrine.simulacao
   const alvo = (r: Record<string, string>) => (vaiFinanciar(respostaDoCampo(cfg, r, 'formaPagamento')) ? motoComPreco(respostaDoCampo(cfg, r, 'modeloInteresse'), vitrine.motos) : null)
+  const vendedor = primeiroNome(ctx.vendedor) || ctx.vendedor
   return {
     textoRenda: preencher(TEXTO_RENDA, ctx),
+    ficha: sc.preAnalise && sc.bancos.length ? {
+      consentimento: textoConsentimento(sc.bancos, vendedor), recebido: textoFichaRecebida(vendedor),
+      textos: { cpf: TEXTO_CPF, cpfInvalido: TEXTO_CPF_INVALIDO, nascimento: TEXTO_NASCIMENTO, nascimentoInvalido: TEXTO_NASCIMENTO_INVALIDO },
+      aceita: aceitaPreAnalise, recusa: recusaPreAnalise, lerCpf, lerNascimento: t => lerNascimento(t),
+    } : null,
     avaliar: r => (alvo(r) ? { perguntarRenda: sc.perguntarRenda } : null),
     simular: r => {
       const moto = alvo(r)
