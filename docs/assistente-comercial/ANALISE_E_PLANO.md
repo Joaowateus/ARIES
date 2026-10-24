@@ -4,6 +4,24 @@ Objetivo: um assistente que **aborde, qualifique e aqueça** o lead desde a
 primeira mensagem, ajude o vendedor durante o atendimento e entregue a ele, no
 próprio WhatsApp, o que precisa saber da produção comercial.
 
+## Situação (outubro de 2026)
+
+As seis fases do plano (seção 5) estão no ar:
+
+| Fase | O que entrou | PR |
+|---|---|---|
+| 1. Base de conhecimento | Aba Conhecimento, 16 modelos prontos, aprendizado de hora em hora com as conversas, aprovação pela gestão | #186 |
+| 2. Atendimento inteligente | Robô responde dúvidas com a base no meio do roteiro, nota do lead (0–100), sugestões na conversa, placar uso → avanço | #187 |
+| 3. Vitrine do estoque | Aba Estoque (fotos, ficha, vídeo, preço opcional), robô responde "tem a XRE?", botão "Enviar moto" | #188 |
+| 4. Jornada | Etiquetas automáticas, avanço de etapa conservador com aviso e "Desfazer" | #189 |
+| 5. Follow automático | Aba Follow (desligado por padrão), cadência 1/3/7 dias com foto ou vídeo, regras de segurança | #190 |
+| 6. Assistente pessoal | Perguntas no chat "Você" com os números do sistema, aviso de lead esperando, resumo da manhã | este |
+
+O que fica para depois: perguntas livres por IA no chat "Você" (hoje são
+assuntos reconhecidos por regra, sem IA); filtro por etiqueta também na
+Reativação; relatório da gestão sobre quais respostas e passos de follow mais
+fazem o lead avançar.
+
 ## 1. O que já existe (engenharia reversa)
 
 **Conexão**

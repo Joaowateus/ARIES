@@ -33,6 +33,8 @@ import { Avanco, Etiqueta, ROTULO_ETAPA, etiquetasDoLead, proximaEtapa, rebaixad
 import { PassoFollow, baseDoFollow, dentroDoHorario, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido } from './assistenteFollow'
 import { preencherResposta } from './assistenteConhecimento'
 import { MotoVitrine, acharMotos, nomeDaMoto } from './assistenteVitrine'
+import { interpretarPergunta } from './assistentePessoal'
+import { leadsEsperando, primeiroNomeVendedor, responderPergunta, resumoDoDia, tempoDesde as tempoDesdePessoal } from './assistentePessoalDados'
 
 export const STATUS_ABERTOS = ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA']
 const MAX_IDADE_MENSAGEM_MS = 10 * 60_000
@@ -911,7 +913,10 @@ export async function conversaDeSuporte(a: { id: string; numeroWhatsapp: string 
 async function tratarSuporte(a: AssistenteCompleto, m: MensagemWhatsapp) {
   if (await jaRegistrada(m.id)) return
   const comando = interpretarComando(m.texto)
-  if (!comando || !a.numeroWhatsapp) return
+  // Fora os comandos, só responde pergunta clara ("? ..." / "...?" de um
+  // assunto conhecido): anotação comum no chat "Você" continua ignorada.
+  const pergunta = comando ? null : interpretarPergunta(m.texto)
+  if ((!comando && !pergunta) || !a.numeroWhatsapp) return
   const cfg = lerConfig(a.configuracao)
   const conversa = await conversaDeSuporte(a)
   try {
@@ -920,8 +925,77 @@ async function tratarSuporte(a: AssistenteCompleto, m: MensagemWhatsapp) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return // webhook repetido
     throw e
   }
-  const resposta = await responderComando(a, comando)
+  const resposta = comando ? await responderComando(a, comando) : await responderPergunta(a, pergunta!)
   await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, conversa.id, a.numeroWhatsapp, [resposta])
+}
+
+// ---------- Assistente pessoal: avisos no chat "Você" ----------
+
+// Avisos para o vendedor: segunda a sábado, das 8h às 20h (Brasília).
+function horarioDeAviso(agora: Date): boolean {
+  const brt = new Date(agora.getTime() - 3 * 3600e3)
+  const dia = brt.getUTCDay(), hora = brt.getUTCHours()
+  return dia >= 1 && dia <= 6 && hora >= 8 && hora < 20
+}
+
+async function assistentesParaAvisar() {
+  return prisma.assistenteComercial.findMany({
+    where: { status: 'CONECTADO', instancia: { not: null }, numeroWhatsapp: { not: null } },
+    include: { vendedor: { select: { id: true, nome: true, usuarioId: true } } },
+  })
+}
+
+/**
+ * Rodada de 15 em 15 min: lead esperando há N min (config do vendedor) sem
+ * resposta vira um aviso no chat "Você" — um só por mensagem do cliente,
+ * juntando todos que estão esperando.
+ */
+export async function avisarLeadsEsperando(agora = new Date()): Promise<{ avisosEspera: number }> {
+  if (!horarioDeAviso(agora)) return { avisosEspera: 0 }
+  let avisos = 0
+  for (const a of await assistentesParaAvisar()) {
+    const cfg = lerConfig(a.configuracao)
+    if (!cfg.avisarVendedor || cfg.alertaEsperaMin <= 0) continue
+    const limite = cfg.alertaEsperaMin * 60_000
+    const esperando = (await leadsEsperando(a.id, agora)).filter(e => agora.getTime() - e.desde.getTime() >= limite && agora.getTime() - e.desde.getTime() <= 3 * 3600e3)
+    if (!esperando.length) continue
+    const jaAvisados = new Map((await prisma.assistenteConversa.findMany({ where: { id: { in: esperando.map(e => e.conversaId) } }, select: { id: true, alertaEsperaEm: true } })).map(c => [c.id, c.alertaEsperaEm]))
+    const novos = esperando.filter(e => { const em = jaAvisados.get(e.conversaId); return !em || em < e.desde })
+    if (!novos.length) continue
+    const texto = [
+      `⏰ *${novos.length === 1 ? '1 lead esperando' : `${novos.length} leads esperando`} você:*`,
+      '',
+      ...novos.slice(0, 6).map(e => `• ${e.nome} — ${tempoDesdePessoal(e.desde, agora)}${e.ultima ? `: "${e.ultima}"` : ''}\n  wa.me/${e.numero}`),
+    ].join('\n')
+    await prisma.assistenteConversa.updateMany({ where: { id: { in: novos.map(e => e.conversaId) } }, data: { alertaEsperaEm: agora } })
+    const suporte = await conversaDeSuporte(a)
+    await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, suporte.id, a.numeroWhatsapp!, [texto])
+      .catch(e => logger.warn({ err: e }, 'assistente: falha ao avisar lead esperando'))
+    avisos += 1
+  }
+  return { avisosEspera: avisos }
+}
+
+/** Rodada de hora em hora: o resumo da manhã (8h–11h, segunda a sábado), uma vez por dia. */
+export async function enviarResumosDaManha(agora = new Date()): Promise<{ resumosManha: number }> {
+  const brt = new Date(agora.getTime() - 3 * 3600e3)
+  const dia = brt.getUTCDay(), hora = brt.getUTCHours()
+  if (dia < 1 || dia > 6 || hora < 8 || hora >= 11) return { resumosManha: 0 }
+  const hoje = inicioDoDiaBrt(agora)
+  let n = 0
+  for (const a of await assistentesParaAvisar()) {
+    const cfg = lerConfig(a.configuracao)
+    if (!cfg.avisarVendedor || !cfg.resumoManha || (a.resumoManhaEm && a.resumoManhaEm >= hoje)) continue
+    // Marca antes: duas rodadas juntas não mandam dois resumos.
+    const marcado = await prisma.assistenteComercial.updateMany({ where: { id: a.id, OR: [{ resumoManhaEm: null }, { resumoManhaEm: { lt: hoje } }] }, data: { resumoManhaEm: agora } })
+    if (!marcado.count) continue
+    const texto = await resumoDoDia(a, agora, `☀️ *Bom dia, ${primeiroNomeVendedor(a.vendedor.nome)}!* Seu dia até agora:`)
+    const suporte = await conversaDeSuporte(a)
+    await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, suporte.id, a.numeroWhatsapp!, [`${texto}\n\nPergunte o que precisar: mande *? ajuda*.`])
+      .catch(e => logger.warn({ err: e }, 'assistente: falha no resumo da manhã'))
+    n += 1
+  }
+  return { resumosManha: n }
 }
 
 async function responderComando(a: AssistenteCompleto, comando: NonNullable<ReturnType<typeof interpretarComando>>): Promise<string> {

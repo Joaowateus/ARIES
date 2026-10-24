@@ -1818,6 +1818,8 @@ model AssistenteComercial {
   fotoPerfilUrl         String?
   conectadoEm           DateTime?
   ultimoEventoEm        DateTime?
+  // Resumo da manhã mandado no chat "Você" (no máximo 1 por dia).
+  resumoManhaEm         DateTime?
   // Liga/desliga as respostas automáticas sem derrubar a conexão.
   atendimentoAutomatico Boolean   @default(true)
   // Cadastra no CRM (etapa Lead) todo contato novo que chama o vendedor,
@@ -1866,6 +1868,8 @@ model AssistenteConversa {
   followPasso          Int       @default(0)
   followUltimoEm       DateTime?
   followParado         String?
+  // Último aviso "lead esperando" mandado ao vendedor sobre esta conversa.
+  alertaEsperaEm       DateTime?
   // QUALIFICADO | PEDIU_ATENDENTE | DESISTIU | NAO_E_LEAD
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)

@@ -274,3 +274,26 @@ test('follow só depois da resposta do vendedor, e recomeça quando o cliente re
   assert.equal(prox(0, 25, null, 'PEDIU_PARAR'), null, 'pediu para parar')
   assert.equal(quandoDevido({ cfg, passo: 1, parado: null, baseEm: t(48), ultimoFollowEm: t(23) })?.getTime(), t(48).getTime() + 3 * 86_400_000)
 })
+
+// ---------- Assistente pessoal no chat "Você" ----------
+import { interpretarPergunta } from '../src/lib/assistentePessoal'
+
+test('perguntas livres no chat "Você" (e anotação comum ignorada)', () => {
+  assert.equal(interpretarPergunta('lembrar de comprar pão'), null)
+  assert.equal(interpretarPergunta('ligar pro contador amanhã'), null)
+  assert.equal(interpretarPergunta('comprar pão?'), null, 'pergunta sem assunto conhecido é anotação')
+  assert.deepEqual(interpretarPergunta('Como estou hoje?'), { tipo: 'HOJE' })
+  assert.deepEqual(interpretarPergunta('? meu dia'), { tipo: 'HOJE' })
+  assert.deepEqual(interpretarPergunta('Quem está esperando?'), { tipo: 'ESPERANDO' })
+  assert.deepEqual(interpretarPergunta('assistente, minha conversão da semana'), { tipo: 'SEMANA' })
+  assert.deepEqual(interpretarPergunta('Como está meu mês?'), { tipo: 'MES' })
+  assert.deepEqual(interpretarPergunta('leads quentes?'), { tipo: 'QUENTES' })
+  assert.deepEqual(interpretarPergunta('meus follows?'), { tipo: 'FOLLOWS' })
+  assert.deepEqual(interpretarPergunta('ficha da XRE 300?'), { tipo: 'FICHA', moto: 'XRE 300' })
+  assert.deepEqual(interpretarPergunta('? tem a bros 160 no estoque'), { tipo: 'FICHA', moto: 'bros 160' })
+  assert.deepEqual(interpretarPergunta('O que respondo para "tá caro"?'), { tipo: 'RESPOSTA', assunto: 'tá caro' })
+  assert.deepEqual(interpretarPergunta('como respondo quando o cliente diz que vai pensar?'), { tipo: 'RESPOSTA', assunto: 'que vai pensar' })
+  assert.deepEqual(interpretarPergunta('Como está a Ana Paula?'), { tipo: 'LEAD', nome: 'Ana Paula' })
+  assert.deepEqual(interpretarPergunta('?'), { tipo: 'AJUDA' })
+  assert.deepEqual(interpretarPergunta('? qualquer coisa estranha'), { tipo: 'AJUDA' })
+})
