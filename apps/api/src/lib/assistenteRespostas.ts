@@ -6,8 +6,9 @@ import { prisma } from './prisma'
 import { logger } from './logger'
 import { semDinheiro } from './smIA'
 import { ItemResposta, MAX_RESPOSTAS_DA_BASE, acharConhecimento, parteAfirmativa, preencherResposta, respostaDaBase } from './assistenteConhecimento'
-import { BaseRespostas, ContextoRoteiro, primeiroNome } from './assistenteRoteiro'
-import { MotoVitrine, lerFicha, nomeDaMoto, perguntaDeEstoque, respostaDeEstoque } from './assistenteVitrine'
+import { BaseRespostas, ConfigAssistente, ContextoRoteiro, SimuladorRoteiro, preencher, primeiroNome, respostaDoCampo } from './assistenteRoteiro'
+import { MotoVitrine, acharMotos, lerFicha, nomeDaMoto, perguntaDeEstoque, respostaDeEstoque } from './assistenteVitrine'
+import { ConfigSimulacao, ResultadoSimulacao, TEXTO_RENDA, lerConfigSimulacao, lerValor, simular, textoSimulacao, vaiFinanciar } from './assistenteSimulacao'
 
 const DIA = 86_400_000
 const CACHE_MS = 60_000
@@ -38,7 +39,15 @@ export function esquecerRespostasAtivas(usuarioId: string) {
 
 // ---------- Vitrine (estoque) ----------
 
-export interface VitrineLoja { motos: MotoVitrine[]; mostrarPreco: boolean; vitrineRobo: boolean }
+export interface VitrineLoja {
+  motos: MotoVitrine[]
+  mostrarPreco: boolean
+  vitrineRobo: boolean
+  // Taxas da simulação de financiamento (null = a loja ainda não cadastrou)
+  // e se o robô simula sozinho no fim do roteiro.
+  simulacao: ConfigSimulacao | null
+  simulacaoAtiva: boolean
+}
 const cacheVitrine = new Map<string, { em: number; v: VitrineLoja }>()
 // Vendida há pouco ainda entra: o cliente pergunta dela e recebe as parecidas.
 const VENDIDA_RECENTE_MS = 60 * DIA
@@ -63,7 +72,11 @@ export async function vitrineDaLoja(usuarioId: string): Promise<VitrineLoja> {
     }),
     prisma.assistenteLoja.findUnique({ where: { usuarioId } }),
   ])
-  const v = { motos: motos.map(paraVitrine), mostrarPreco: loja?.mostrarPreco ?? false, vitrineRobo: loja?.vitrineRobo ?? true }
+  const simulacao = loja?.simulacaoConfig ? lerConfigSimulacao(loja.simulacaoConfig) : null
+  const v = {
+    motos: motos.map(paraVitrine), mostrarPreco: loja?.mostrarPreco ?? false, vitrineRobo: loja?.vitrineRobo ?? true,
+    simulacao, simulacaoAtiva: !!simulacao && (loja?.simulacaoAtiva ?? false),
+  }
   cacheVitrine.set(usuarioId, { em: Date.now(), v })
   return v
 }
@@ -184,7 +197,67 @@ export function respostasDaLojaParaIA(sugestoes: SugestaoDaBase[]): Array<{ assu
     .map(s => ({ assunto: s.titulo, resposta: semDinheiro(s.texto) }))
 }
 
+/** Respostas do roteiro para a IA: sem as chaves internas (renda, controle da base). */
+export function respostasParaIA(respostas: unknown): Record<string, string> | null {
+  if (!respostas || typeof respostas !== 'object') return null
+  return Object.fromEntries(Object.entries(respostas as Record<string, string>).filter(([k]) => !k.startsWith('_')))
+}
+
+/** A mensagem em que o cliente informou a renda não vai para a IA. */
+export function textoParaIA(texto: string, respostas: unknown): string {
+  const renda = (respostas as Record<string, string> | null)?._renda
+  return renda && texto.trim().slice(0, 80) === renda ? '[renda informada para a simulação]' : texto.slice(0, 600)
+}
+
 /** As três últimas mensagens do cliente, mais recente primeiro (mensagens em qualquer ordem). */
 export function ultimasDoCliente(mensagens: Array<{ remetente: string; texto: string; criadoEm: Date }>, n = 3): string[] {
   return mensagens.filter(m => m.remetente === 'CONTATO').sort((a, b) => b.criadoEm.getTime() - a.criadoEm.getTime()).slice(0, n).map(m => m.texto)
+}
+
+// ---------- Simulação de financiamento ----------
+
+/** A moto de interesse no estoque, com preço (vendida não entra). */
+export function motoComPreco(interesse: string | null | undefined, motos: MotoVitrine[]): MotoVitrine | null {
+  if (!interesse) return null
+  return acharMotos(interesse, motos.filter(m => m.situacao !== 'VENDIDA' && (m.preco ?? 0) > 0))[0] ?? null
+}
+
+export interface DadosSimulacao extends ResultadoSimulacao { moto: string | null; motoId: string | null; origem: 'ROBO' | 'VENDEDOR'; criadoEm: string }
+
+export function montarSimulacao(d: { valor: number; entrada: number | null; renda: number | null; moto: MotoVitrine | null; vitrine: VitrineLoja; vendedor: string; origem: 'ROBO' | 'VENDEDOR' }): { texto: string; dados: DadosSimulacao } | null {
+  const cfg = d.vitrine.simulacao
+  if (!cfg) return null
+  const r = simular({ valor: d.valor, entrada: d.entrada, renda: d.renda, cfg })
+  if (!r) return null
+  const vendedor = primeiroNome(d.vendedor) || d.vendedor
+  const aviso = cfg.aviso.replace(/\{vendedor\}/g, vendedor)
+  const moto = d.moto ? nomeDaMoto(d.moto) : null
+  return {
+    texto: textoSimulacao(r, { moto, mostrarPreco: d.vitrine.mostrarPreco, aviso, vendedor }),
+    dados: { ...r, moto, motoId: d.moto?.id ?? null, origem: d.origem, criadoEm: new Date().toISOString() },
+  }
+}
+
+/**
+ * Simulador do robô: só para quem disse que vai financiar e cuja moto de
+ * interesse tem preço no estoque; a entrada sai da resposta do roteiro e a
+ * renda do passo extra (opcional).
+ */
+export function simuladorDoRobo(cfg: ConfigAssistente, ctx: ContextoRoteiro, vitrine?: VitrineLoja): SimuladorRoteiro | undefined {
+  if (!vitrine?.simulacaoAtiva || !vitrine.simulacao) return undefined
+  const sc = vitrine.simulacao
+  const alvo = (r: Record<string, string>) => (vaiFinanciar(respostaDoCampo(cfg, r, 'formaPagamento')) ? motoComPreco(respostaDoCampo(cfg, r, 'modeloInteresse'), vitrine.motos) : null)
+  return {
+    textoRenda: preencher(TEXTO_RENDA, ctx),
+    avaliar: r => (alvo(r) ? { perguntarRenda: sc.perguntarRenda } : null),
+    simular: r => {
+      const moto = alvo(r)
+      if (!moto?.preco) return null
+      const s = montarSimulacao({
+        valor: moto.preco, entrada: lerValor(respostaDoCampo(cfg, r, 'valorEntrada') ?? ''), renda: r._renda ? lerValor(r._renda) : null,
+        moto, vitrine, vendedor: ctx.vendedor, origem: 'ROBO',
+      })
+      return s ? { texto: s.texto, dados: s.dados as unknown as Record<string, unknown> } : null
+    },
+  }
 }

@@ -4,7 +4,8 @@
 import { prisma } from './prisma'
 import { Pergunta, TEXTO_AJUDA_PESSOAL } from './assistentePessoal'
 import { acharConhecimento, preencherResposta } from './assistenteConhecimento'
-import { respostasAtivas, vitrineDaLoja } from './assistenteRespostas'
+import { montarSimulacao, respostasAtivas, vitrineDaLoja } from './assistenteRespostas'
+import { lerValor, resumoSimulacao } from './assistenteSimulacao'
 import { acharMotos, fichaTexto } from './assistenteVitrine'
 import { ETIQUETAS, ROTULO_ETAPA } from './assistenteJornada'
 import { faixaNota } from './assistenteNota'
@@ -147,6 +148,19 @@ export async function responderPergunta(a: AssistentePessoal, p: Pergunta, agora
     const m = achadas[0]
     const situacao = m.situacao === 'DISPONIVEL' ? '✅ Disponível' : m.situacao === 'RESERVADA' ? '⏸️ Reservada' : '❌ Vendida'
     return [fichaTexto(m, { mostrarPreco: true }), '', situacao, m.fotos.length ? `${plural(m.fotos.length, 'foto', 'fotos')} — use "Enviar moto" na conversa do cliente.` : 'Sem foto cadastrada.'].join('\n')
+  }
+  if (p.tipo === 'SIMULAR') {
+    const vitrine = await vitrineDaLoja(usuarioId)
+    if (!vitrine.simulacao) return 'A loja ainda não cadastrou as taxas. O dono ou o supervisor configura na aba Simulação do Assistente.'
+    const numero = /^(r\$\s*)?\d/i.test(p.alvo) ? lerValor(p.alvo) : null
+    const moto = numero ? null : acharMotos(p.alvo, vitrine.motos)[0] ?? null
+    if (!numero && !moto) return `Não achei "${p.alvo}" no estoque. Mande o valor: *? simular 15 mil entrada 3 mil*`
+    const valor = numero ?? moto?.preco ?? null
+    if (!valor) return `A ${p.alvo} está sem preço no estoque. Mande o valor: *? simular 15 mil entrada 3 mil*`
+    // Para o próprio vendedor o valor aparece sempre.
+    const s = montarSimulacao({ valor, entrada: p.entrada, renda: p.renda, moto, vitrine: { ...vitrine, mostrarPreco: true }, vendedor: a.vendedor.nome, origem: 'VENDEDOR' })
+    if (!s) return 'A entrada cobre o valor: não há o que financiar.'
+    return [s.texto, '', `📌 ${resumoSimulacao(s.dados)}`, 'Para mandar ao cliente, use *Simular financiamento* na conversa dele.'].join('\n')
   }
   if (p.tipo === 'RESPOSTA') {
     const itens = await respostasAtivas(usuarioId)

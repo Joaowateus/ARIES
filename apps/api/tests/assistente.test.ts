@@ -297,3 +297,137 @@ test('perguntas livres no chat "Você" (e anotação comum ignorada)', () => {
   assert.deepEqual(interpretarPergunta('?'), { tipo: 'AJUDA' })
   assert.deepEqual(interpretarPergunta('? qualquer coisa estranha'), { tipo: 'AJUDA' })
 })
+
+// ---------- Simulação de financiamento ----------
+import { SIMULACAO_PADRAO, lerConfigSimulacao, lerValor, parcelaPrice, resumoSimulacao, simular, textoSimulacao, vaiFinanciar } from '../src/lib/assistenteSimulacao'
+
+test('valores escritos pelo cliente', () => {
+  assert.equal(lerValor('3 mil'), 3000)
+  assert.equal(lerValor('R$ 2.500,00'), 2500)
+  assert.equal(lerValor('3,5 mil'), 3500)
+  assert.equal(lerValor('uns 2 mil e 500'), 2500)
+  assert.equal(lerValor('5k'), 5000)
+  assert.equal(lerValor('18.900'), 18900)
+  assert.equal(lerValor('minha renda é 4500 por mês'), 4500)
+  assert.equal(lerValor('5'), 5000, 'número pequeno é milhar')
+  assert.equal(lerValor('Não'), 0)
+  assert.equal(lerValor('não tenho'), 0)
+  assert.equal(lerValor('pular'), null)
+  assert.equal(lerValor('prefiro não dizer'), null)
+  assert.equal(lerValor('não sei ainda'), null)
+  assert.equal(lerValor('depende'), null)
+})
+
+test('parcela pela Tabela Price', () => {
+  assert.equal(parcelaPrice(10000, 2, 12), 945.6)
+  assert.equal(parcelaPrice(12000, 0, 12), 1000)
+})
+
+test('simulação: entrada mínima, prazos e quanto pesa na renda', () => {
+  const cfg = lerConfigSimulacao(null)
+  const r = simular({ valor: 20000, entrada: 4000, renda: 3500, cfg })!
+  assert.equal(r.financiado, 16000)
+  assert.deepEqual(r.opcoes.map(o => o.prazo), [12, 24, 36, 48])
+  assert.equal(r.avaliacao, 'CABE')
+  assert.equal(r.melhorPrazo, 24, 'o prazo mais curto que fica até 30% da renda (24x ≈ 24%; 12x ≈ 43%)')
+  const minima = simular({ valor: 20000, entrada: 0, renda: null, cfg })!
+  assert.ok(minima.entradaAjustada && minima.entrada === 2000 && minima.avaliacao === 'SEM_RENDA')
+  // 48x ≈ R$ 531: 53% de R$ 1.000 (não cabe), 35% de R$ 1.500 (apertada: até 10 pontos acima dos 30%).
+  assert.equal(simular({ valor: 20000, entrada: 4000, renda: 1000, cfg })!.avaliacao, 'NAO_CABE')
+  const apertada = simular({ valor: 20000, entrada: 4000, renda: 1500, cfg })!
+  assert.ok(apertada.avaliacao === 'APERTADA' && apertada.melhorPrazo === 48)
+  assert.equal(simular({ valor: 20000, entrada: 25000, renda: null, cfg }), null, 'entrada cobre tudo: não há o que financiar')
+})
+
+test('textos da simulação: cliente sem percentual da renda, vendedor com a leitura', () => {
+  const cfg = lerConfigSimulacao(null)
+  const r = simular({ valor: 20000, entrada: 4000, renda: 3500, cfg })!
+  const t = textoSimulacao(r, { moto: 'Honda CG 160 2024', mostrarPreco: false, aviso: 'Simulação ilustrativa.', vendedor: 'Brenda' })
+  assert.match(t, /^📊 \*Simulação de financiamento\* — Honda CG 160 2024\n\nEntrada: R\$ 4\.000\n• 12x de R\$ /)
+  assert.ok(!t.includes('20.000'), 'preço da moto só com "Preço no WhatsApp" ligado')
+  assert.ok(t.includes('a opção em 24x fica confortável') && !t.includes('% da renda') && t.endsWith('_Simulação ilustrativa._'))
+  assert.ok(textoSimulacao(r, { moto: null, mostrarPreco: true, aviso: 'x', vendedor: 'B' }).includes('Valor: R$ 20.000'))
+  assert.match(resumoSimulacao(r), /^entrada R\$ 4\.000 · 24x de R\$ [\d.]+ \([\d,]+% da renda de R\$ 3\.500\) → cabe no bolso$/)
+})
+
+test('config da simulação e quem vai financiar', () => {
+  const c = lerConfigSimulacao({ taxas: [{ prazo: 36, taxa: 1.999 }, { prazo: 12, taxa: 1.5 }, { prazo: 12, taxa: 9 }, { prazo: 2, taxa: 1 }], comprometimentoMax: 90 })
+  assert.deepEqual(c.taxas, [{ prazo: 12, taxa: 1.5 }, { prazo: 36, taxa: 2 }])
+  assert.equal(c.comprometimentoMax, 60)
+  assert.equal(c.aviso, SIMULACAO_PADRAO.aviso)
+  assert.ok(vaiFinanciar('Financiado') && vaiFinanciar('quero parcelar') && !vaiFinanciar('À vista') && !vaiFinanciar(null))
+})
+
+// ---------- Simulação no robô, na nota e no chat "Você" ----------
+import { respostasParaIA, simuladorDoRobo, textoParaIA, type VitrineLoja } from '../src/lib/assistenteRespostas'
+
+const cg20 = moto({ id: 'cg20', modelo: 'CG 160 Titan', marca: 'Honda', ano: 2024, cilindrada: 160, preco: 20000 })
+const vitrineSim = (extra: Partial<VitrineLoja> = {}): VitrineLoja => ({ motos: [cg20, lander], mostrarPreco: false, vitrineRobo: true, simulacao: lerConfigSimulacao(null), simulacaoAtiva: true, ...extra })
+const ateOFim = (sim: ReturnType<typeof simuladorDoRobo>, pagamento: string, entrada: string) => {
+  let p = avancarRoteiro(CONFIG_PADRAO, naEtapa(0), 'CG 160', ctx, undefined, sim)
+  p = avancarRoteiro(CONFIG_PADRAO, p.estado, pagamento, ctx, undefined, sim)
+  p = avancarRoteiro(CONFIG_PADRAO, p.estado, entrada, ctx, undefined, sim)
+  return avancarRoteiro(CONFIG_PADRAO, p.estado, 'depois das 18h', ctx, undefined, sim)
+}
+
+test('robô: quem vai financiar recebe a pergunta da renda e depois a simulação', () => {
+  const sim = simuladorDoRobo(CONFIG_PADRAO, ctx, vitrineSim())
+  const fim = ateOFim(sim, 'Financiado', '4 mil')
+  assert.equal(fim.desfecho, null, 'ainda falta a renda')
+  assert.match(fim.mensagens.at(-1)!, /renda mensal aproximada/)
+  assert.equal(fim.estado.respostas._simulacao, 'RENDA')
+  const r = avancarRoteiro(CONFIG_PADRAO, fim.estado, 'uns 3.500', ctx, undefined, sim)
+  assert.equal(r.desfecho, 'QUALIFICADO')
+  assert.equal(r.mensagens.length, 2)
+  assert.match(r.mensagens[0], /^📊 \*Simulação de financiamento\* — Honda CG 160 Titan 2024\n\nEntrada: R\$ 4\.000\n/)
+  assert.ok(!r.mensagens[0].includes('20.000'), 'sem "Preço no WhatsApp" o valor da moto não aparece')
+  assert.match(r.mensagens[1], /^Perfeito, anotei tudo!/)
+  assert.equal(r.simulacao?.avaliacao, 'CABE')
+  assert.equal(r.simulacao?.renda, 3500)
+  assert.equal(r.simulacao?.origem, 'ROBO')
+  assert.equal(r.estado.respostas._simulacao, undefined)
+})
+
+test('robô: "pular" a renda simula sem a leitura; à vista, sem preço ou desligado não simula', () => {
+  const sim = simuladorDoRobo(CONFIG_PADRAO, ctx, vitrineSim())
+  const pulou = avancarRoteiro(CONFIG_PADRAO, ateOFim(sim, 'Financiado', 'não').estado, 'pular', ctx, undefined, sim)
+  assert.equal(pulou.simulacao?.avaliacao, 'SEM_RENDA')
+  assert.equal(pulou.simulacao?.entradaAjustada, true, 'sem entrada usa a mínima')
+  const semPerguntar = ateOFim(simuladorDoRobo(CONFIG_PADRAO, ctx, vitrineSim({ simulacao: { ...lerConfigSimulacao(null), perguntarRenda: false } })), 'Financiado', '4 mil')
+  assert.ok(semPerguntar.desfecho === 'QUALIFICADO' && semPerguntar.simulacao?.avaliacao === 'SEM_RENDA')
+  const aVista = ateOFim(sim, 'À vista', '4 mil')
+  assert.ok(aVista.desfecho === 'QUALIFICADO' && !aVista.simulacao && aVista.mensagens.length === 1)
+  assert.equal(simuladorDoRobo(CONFIG_PADRAO, ctx, vitrineSim({ simulacaoAtiva: false })), undefined)
+  const semPreco = ateOFim(simuladorDoRobo(CONFIG_PADRAO, ctx, vitrineSim({ motos: [lander] })), 'Financiado', '4 mil')
+  assert.ok(semPreco.desfecho === 'QUALIFICADO' && !semPreco.simulacao)
+  const pediu = avancarRoteiro(CONFIG_PADRAO, ateOFim(sim, 'Financiado', '4 mil').estado, 'prefiro falar com o vendedor', ctx, undefined, sim)
+  assert.equal(pediu.desfecho, 'PEDIU_ATENDENTE')
+})
+
+test('simulação na nota e nas etiquetas do lead', () => {
+  const nota = (simulacao: string | null) => calcularNota({ cfg: CONFIG_PADRAO, origem: null, respostas: {}, textosDoContato: ['oi'], simulacao }).nota
+  assert.equal(nota(null), 0)
+  assert.equal(nota('CABE'), 15)
+  assert.equal(nota('APERTADA'), 5)
+  assert.equal(nota('NAO_CABE'), 0, 'nunca abaixo de zero')
+  assert.deepEqual(etq({}, ['oi'], { simulacao: 'CABE' }), ['SIMULOU', 'PARCELA_CABE'])
+  assert.deepEqual(etq({}, ['oi'], { simulacao: 'APERTADA' }), ['SIMULOU', 'PARCELA_APERTADA'])
+  assert.deepEqual(etq({}, ['oi'], { simulacao: 'NAO_CABE' }), ['SIMULOU', 'PARCELA_NAO_CABE'])
+  assert.deepEqual(etq({}, ['oi'], { simulacao: 'SEM_RENDA' }), ['SIMULOU'])
+})
+
+test('a renda do cliente não vai para a IA', () => {
+  const respostas = { interesse: 'CG 160', _renda: 'uns 3.500', _kb: 'x', _simulacao: 'RENDA' }
+  assert.deepEqual(respostasParaIA(respostas), { interesse: 'CG 160' })
+  assert.equal(textoParaIA(' uns 3.500 ', respostas), '[renda informada para a simulação]')
+  assert.equal(textoParaIA('quero a CG', respostas), 'quero a CG')
+  assert.equal(respostasParaIA(null), null)
+})
+
+test('"? simular" no chat "Você"', () => {
+  assert.deepEqual(interpretarPergunta('? simular CG 160 entrada 3 mil renda 2500'), { tipo: 'SIMULAR', alvo: 'CG 160', entrada: 3000, renda: 2500 })
+  assert.deepEqual(interpretarPergunta('simular 15 mil com 2 mil de entrada?'), { tipo: 'SIMULAR', alvo: '15 mil', entrada: 2000, renda: null })
+  assert.deepEqual(interpretarPergunta('? simulação da XRE 300 sem entrada'), { tipo: 'SIMULAR', alvo: 'XRE 300', entrada: 0, renda: null })
+  assert.deepEqual(interpretarPergunta('? simula bros renda de 3 mil e entrada de 1.500'), { tipo: 'SIMULAR', alvo: 'bros', entrada: 1500, renda: 3000 })
+  assert.equal(interpretarPergunta('simular a proposta amanhã'), null, 'anotação sem ? continua anotação')
+})

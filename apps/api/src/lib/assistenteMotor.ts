@@ -27,7 +27,8 @@ import {
   ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, MidiaPasso, PassoRoteiro, TEXTO_MENU,
   avancarRoteiro, casaGatilho, complementarResposta, desiste, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
 } from './assistenteRoteiro'
-import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, vitrineDaLoja } from './assistenteRespostas'
+import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, simuladorDoRobo, vitrineDaLoja } from './assistenteRespostas'
+import { ResultadoSimulacao, resumoSimulacao } from './assistenteSimulacao'
 import { calcularNota } from './assistenteNota'
 import { Avanco, Etiqueta, ROTULO_ETAPA, etiquetasDoLead, proximaEtapa, rebaixadoHaPouco } from './assistenteJornada'
 import { PassoFollow, baseDoFollow, dentroDoHorario, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido } from './assistenteFollow'
@@ -351,7 +352,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
         await tx.assistenteConversa.update({ where: { id: conversa.id }, data: base })
         return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo: null, mensagensAvulsas: [TEXTO_SO_TEXTO], nomeContato, origem: conversa.origem }
       }
-      const passo = avancarRoteiro(cfg, estado, m.texto, contexto(a, cfg, nomeContato), baseDoRobo(nomeContato, estado.respostas))
+      const passo = avancarRoteiro(cfg, estado, m.texto, contexto(a, cfg, nomeContato), baseDoRobo(nomeContato, estado.respostas), simuladorDoRobo(cfg, contexto(a, cfg, nomeContato), vitrine))
       await tx.assistenteConversa.update({ where: { id: conversa.id }, data: { ...base, ...dadosDoPasso(passo) } })
       return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo, mensagensAvulsas: [], nomeContato, origem: conversa.origem }
     }
@@ -431,7 +432,7 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
   const conversa = await prisma.assistenteConversa.findUnique({
     where: { id: conversaId },
     select: {
-      tipo: true, leadId: true, respostas: true, nota: true,
+      tipo: true, leadId: true, respostas: true, nota: true, simulacao: true,
       assistente: { select: { id: true, instancia: true, numeroWhatsapp: true, configuracao: true, vendedor: { select: { nome: true, usuarioId: true } } } },
       mensagens: { orderBy: { criadoEm: 'desc' }, take: 80, select: { remetente: true, texto: true, criadoEm: true } },
     },
@@ -445,7 +446,7 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
   const nossa = conversa.mensagens.find(m => m.remetente !== 'CONTATO')
   const etiquetas = etiquetasDoLead({
     cfg, respostas: (conversa.respostas ?? {}) as Record<string, string>, textosDoContato: doContato.map(m => m.texto), nota: conversa.nota,
-    ultimaDoContatoEm: doContato[0]?.criadoEm ?? null, ultimaNossaEm: nossa?.criadoEm ?? null, agora,
+    ultimaDoContatoEm: doContato[0]?.criadoEm ?? null, ultimaNossaEm: nossa?.criadoEm ?? null, agora, simulacao: avaliacaoDa(conversa.simulacao),
   })
   if (etiquetas.join() !== lead.etiquetas.join()) await prisma.lead.update({ where: { id: lead.id }, data: { etiquetas } })
 
@@ -602,11 +603,11 @@ export async function atualizarEtiquetasRecentes(limite = 300, agora = new Date(
 export async function atualizarNota(cfg: ConfigAssistente, conversaId: string) {
   const conversa = await prisma.assistenteConversa.findUnique({
     where: { id: conversaId },
-    select: { origem: true, respostas: true, resultado: true, leadId: true, mensagens: { where: { remetente: 'CONTATO' }, orderBy: { criadoEm: 'desc' }, take: 40, select: { texto: true } } },
+    select: { origem: true, respostas: true, resultado: true, leadId: true, simulacao: true, mensagens: { where: { remetente: 'CONTATO' }, orderBy: { criadoEm: 'desc' }, take: 40, select: { texto: true } } },
   })
   if (!conversa) return
   const { nota, sinais } = calcularNota({
-    cfg, origem: conversa.origem, resultado: conversa.resultado,
+    cfg, origem: conversa.origem, resultado: conversa.resultado, simulacao: avaliacaoDa(conversa.simulacao),
     respostas: (conversa.respostas ?? {}) as Record<string, string>,
     textosDoContato: conversa.mensagens.map(m => m.texto),
   })
@@ -628,11 +629,22 @@ function perguntaJaEntregue(recentes: Array<{ remetente: string; providerId: str
   return !ultimaDoContato || pergunta.criadoEm > ultimaDoContato.criadoEm
 }
 
+const avaliacaoDa = (simulacao: Prisma.JsonValue | null) => (simulacao as { avaliacao?: string } | null)?.avaliacao ?? null
+
+// Respostas do roteiro + a simulação de financiamento, para o CRM e o aviso.
+function linhasDaConversa(cfg: ConfigAssistente, conversa: { respostas: Prisma.JsonValue; simulacao?: Prisma.JsonValue | null }) {
+  const linhas = linhasResumo(cfg, (conversa.respostas ?? {}) as Record<string, string>)
+  const sim = conversa.simulacao as unknown as ResultadoSimulacao | null | undefined
+  if (sim?.opcoes?.length) linhas.push({ rotulo: 'Simulação', valor: resumoSimulacao(sim) })
+  return linhas
+}
+
 function dadosDoPasso(passo: PassoRoteiro) {
   const agora = new Date()
   return {
     etapaRoteiro: passo.estado.etapa,
     respostas: passo.estado.respostas as Prisma.InputJsonValue,
+    ...(passo.simulacao && { simulacao: passo.simulacao as Prisma.InputJsonValue }),
     ...(passo.desfecho === 'DESISTIU' && { status: 'ENCERRADA', resultado: 'DESISTIU', encerradaEm: agora }),
     ...((passo.desfecho === 'QUALIFICADO' || passo.desfecho === 'PEDIU_ATENDENTE') && { status: 'AGUARDANDO_VENDEDOR', resultado: passo.desfecho as Desfecho, aguardandoVendedorEm: agora }),
   }
@@ -728,7 +740,7 @@ async function concluirAtendimento(a: AssistenteCompleto, cfg: ConfigAssistente,
   }
   if (cfg.avisarVendedor && a.numeroWhatsapp) {
     const respostas = (conversa.respostas ?? {}) as Record<string, string>
-    const linhas = linhasResumo(cfg, respostas)
+    const linhas = linhasDaConversa(cfg, conversa)
     const texto = [
       conversa.resultado === 'PEDIU_ATENDENTE' ? '🔔 *Lead pediu pra falar com você*' : '🔔 *Novo lead qualificado*',
       `*${conversa.nomeContato}* · wa.me/${conversa.numeroContato}`,
@@ -749,7 +761,7 @@ export async function vincularOuCriarLead(
   usuarioId: string,
   vendedorId: string,
   cfg: ConfigAssistente,
-  conversa: { numeroContato: string; nomeContato: string; respostas: Prisma.JsonValue; origem: string | null },
+  conversa: { numeroContato: string; nomeContato: string; respostas: Prisma.JsonValue; origem: string | null; simulacao?: Prisma.JsonValue | null },
 ): Promise<string> {
   const final8 = conversa.numeroContato.slice(-8)
   const existentes = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -760,7 +772,7 @@ export async function vincularOuCriarLead(
   if (existentes[0]) return existentes[0].id
 
   const respostas = (conversa.respostas ?? {}) as Record<string, string>
-  const resumo = linhasResumo(cfg, respostas).map(l => `${l.rotulo}: ${l.valor}`)
+  const resumo = linhasDaConversa(cfg, conversa).map(l => `${l.rotulo}: ${l.valor}`)
   const observacao = [
     `Pré-atendido pelo Assistente Comercial no WhatsApp${conversa.origem ? ` (origem: ${ROTULO_ORIGEM[conversa.origem] ?? conversa.origem})` : ''}.`,
     respostas._inicial ? `Primeira mensagem: "${respostas._inicial}"` : null,
@@ -870,11 +882,11 @@ async function sinalizarRetorno(tx: Prisma.TransactionClient, a: AssistenteCompl
 
 // Fim do roteiro com o lead já no CRM: acrescenta o que o assistente apurou
 // sem apagar o que o vendedor já tenha preenchido.
-async function completarLead(leadId: string, cfg: ConfigAssistente, conversa: { numeroContato: string; nomeContato: string; respostas: Prisma.JsonValue }) {
+async function completarLead(leadId: string, cfg: ConfigAssistente, conversa: { numeroContato: string; nomeContato: string; respostas: Prisma.JsonValue; simulacao?: Prisma.JsonValue | null }) {
   const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { nomeCliente: true, modeloInteresse: true, observacao: true } })
   if (!lead) return
   const respostas = (conversa.respostas ?? {}) as Record<string, string>
-  const resumo = linhasResumo(cfg, respostas).map(l => `${l.rotulo}: ${l.valor}`)
+  const resumo = linhasDaConversa(cfg, conversa).map(l => `${l.rotulo}: ${l.valor}`)
   const nome = respostaDoCampo(cfg, respostas, 'nomeCompleto')
   const nomeAutomatico = [conversa.nomeContato, formatarTelefone(conversa.numeroContato)].includes(lead.nomeCliente)
   const jaTemResumo = lead.observacao?.includes('Pré-atendido pelo Assistente Comercial')

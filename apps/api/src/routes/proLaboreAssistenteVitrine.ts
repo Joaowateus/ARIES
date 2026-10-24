@@ -12,6 +12,8 @@ import { requireModulo } from '../lib/acessos'
 import { chaveDaImagem } from '../lib/armazenamento'
 import { SELECT_MOTO_VITRINE, esquecerVitrine, paraVitrine } from '../lib/assistenteRespostas'
 import { fichaTexto, nomeDaMoto } from '../lib/assistenteVitrine'
+import { SIMULACAO_PADRAO, lerConfigSimulacao, resumoSimulacao, simular, textoSimulacao } from '../lib/assistenteSimulacao'
+import { primeiroNome } from '../lib/assistenteRoteiro'
 
 const router = Router()
 const ver = [requireProLaboreAuth, requireModulo('assistente', 'VER')]
@@ -70,6 +72,71 @@ router.put('/assistente/loja', ...editar, async (req: Request, res: Response) =>
   const loja = await prisma.assistenteLoja.upsert({ where: { usuarioId }, update: p.data, create: { usuarioId, ...p.data } })
   esquecerVitrine(usuarioId)
   res.json({ mostrarPreco: loja.mostrarPreco, vitrineRobo: loja.vitrineRobo, avancoAutomatico: loja.avancoAutomatico, podeEditar: true })
+})
+
+// Simulação de financiamento (aba "Simulação"): taxas de referência da loja.
+// Começa desligada e só liga depois de as taxas serem salvas.
+const configSimulacaoSchema = z.object({
+  taxas: z.array(z.object({
+    prazo: z.number().int().min(6, 'Prazo entre 6 e 72 meses').max(72, 'Prazo entre 6 e 72 meses'),
+    taxa: z.number().min(0, 'Taxa entre 0 e 10% ao mês').max(10, 'Taxa entre 0 e 10% ao mês'),
+  })).min(1, 'Cadastre pelo menos um prazo').max(6, 'No máximo 6 prazos'),
+  entradaMinimaPct: z.number().min(0).max(90),
+  perguntarRenda: z.boolean(),
+  comprometimentoMax: z.number().min(10).max(60),
+  aviso: z.string().trim().max(300),
+}).partial()
+
+router.get('/assistente/simulacao', ...ver, async (req: Request, res: Response) => {
+  const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId: req.proLaboreUser!.sub }, select: { simulacaoAtiva: true, simulacaoConfig: true, mostrarPreco: true } })
+  const salva = !!loja?.simulacaoConfig
+  res.json({
+    ativa: salva && !!loja?.simulacaoAtiva, salva,
+    config: salva ? lerConfigSimulacao(loja!.simulacaoConfig) : SIMULACAO_PADRAO,
+    mostrarPreco: loja?.mostrarPreco ?? false, podeEditar: daGestao(req),
+  })
+})
+
+router.put('/assistente/simulacao', ...editar, async (req: Request, res: Response) => {
+  if (!daGestao(req)) return erro(res, 403, 'Só o dono ou o supervisor muda a simulação')
+  const p = z.object({ ativa: z.boolean().optional(), config: configSimulacaoSchema.optional() }).safeParse(req.body)
+  if (!p.success) return erro(res, 400, p.error.issues[0].message)
+  const usuarioId = req.proLaboreUser!.sub
+  const atual = await prisma.assistenteLoja.findUnique({ where: { usuarioId }, select: { simulacaoConfig: true, simulacaoAtiva: true } })
+  const base = atual?.simulacaoConfig ? lerConfigSimulacao(atual.simulacaoConfig) : SIMULACAO_PADRAO
+  const config = p.data.config ? lerConfigSimulacao({ ...base, ...p.data.config }) : atual?.simulacaoConfig ? base : null
+  if (p.data.ativa && !config) return erro(res, 400, 'Salve as taxas antes de ligar a simulação')
+  const data = {
+    ...(config && { simulacaoConfig: config as unknown as Prisma.InputJsonValue }),
+    ...(p.data.ativa !== undefined && { simulacaoAtiva: p.data.ativa }),
+  }
+  const loja = await prisma.assistenteLoja.upsert({ where: { usuarioId }, update: data, create: { usuarioId, ...data } })
+  esquecerVitrine(usuarioId)
+  res.json({ ativa: !!loja.simulacaoConfig && loja.simulacaoAtiva, salva: !!loja.simulacaoConfig, config: lerConfigSimulacao(loja.simulacaoConfig), mostrarPreco: loja.mostrarPreco, podeEditar: true })
+})
+
+// Prévia na aba: o que o cliente recebe e a leitura que vai para o vendedor,
+// com as taxas na tela (mesmo antes de salvar).
+router.post('/assistente/simulacao/previa', ...ver, async (req: Request, res: Response) => {
+  const p = z.object({
+    config: configSimulacaoSchema.optional(),
+    valor: z.number().min(1, 'Informe o valor da moto').max(10_000_000),
+    entrada: z.number().min(0).max(10_000_000).nullable().optional(),
+    renda: z.number().min(0).max(10_000_000).nullable().optional(),
+    vendedor: z.string().trim().max(80).optional(),
+  }).safeParse(req.body)
+  if (!p.success) return erro(res, 400, p.error.issues[0].message)
+  const usuarioId = req.proLaboreUser!.sub
+  const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId }, select: { simulacaoConfig: true, mostrarPreco: true } })
+  const cfg = lerConfigSimulacao({ ...(loja?.simulacaoConfig ? lerConfigSimulacao(loja.simulacaoConfig) : SIMULACAO_PADRAO), ...p.data.config })
+  const r = simular({ valor: p.data.valor, entrada: p.data.entrada ?? null, renda: p.data.renda ?? null, cfg })
+  if (!r) return erro(res, 400, 'A entrada cobre o valor: não há o que financiar')
+  const vendedor = primeiroNome(p.data.vendedor || req.proLaboreUser!.nome) || 'O vendedor'
+  res.json({
+    resultado: r,
+    texto: textoSimulacao(r, { moto: null, mostrarPreco: loja?.mostrarPreco ?? false, aviso: cfg.aviso.replace(/\{vendedor\}/g, vendedor), vendedor }),
+    resumo: resumoSimulacao(r),
+  })
 })
 
 const texto = (max: number) => z.string().trim().max(max).transform(v => v || null).nullable().optional()

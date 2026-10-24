@@ -720,6 +720,14 @@ export const proLaboreApi = {
     sugestaoIA: (id: string) => request<SugestaoIAConversa>(`/pro-labore/assistente/conversas/${id}/sugestao-ia`, { method: 'POST' }),
     enviarMoto: (id: string, motoId: string) =>
       request<{ ok: boolean; fotos: number }>(`/pro-labore/assistente/conversas/${id}/enviar-moto`, { method: 'POST', body: JSON.stringify({ motoId }) }),
+    // Simulação de financiamento: aba da loja e botão na conversa.
+    simulacao: () => request<DadosSimulacaoFinanciamento>('/pro-labore/assistente/simulacao'),
+    salvarSimulacao: (data: { ativa?: boolean; config?: ConfigSimulacaoFinanciamento }) =>
+      request<DadosSimulacaoFinanciamento>('/pro-labore/assistente/simulacao', { method: 'PUT', body: JSON.stringify(data) }),
+    previaSimulacao: (data: { config?: ConfigSimulacaoFinanciamento; valor: number; entrada?: number | null; renda?: number | null; vendedor?: string }) =>
+      request<{ resultado: ResultadoSimulacaoFinanciamento; texto: string; resumo: string }>('/pro-labore/assistente/simulacao/previa', { method: 'POST', body: JSON.stringify(data) }),
+    simularConversa: (id: string, data: { motoId?: string | null; valor?: number | null; entrada?: number | null; renda?: number | null; enviar?: boolean }) =>
+      request<SimulacaoDaConversa>(`/pro-labore/assistente/conversas/${id}/simulacao`, { method: 'POST', body: JSON.stringify(data) }),
     vitrine: () => request<DadosVitrine>('/pro-labore/assistente/vitrine'),
     loja: () => request<PreferenciasLojaAssistente>('/pro-labore/assistente/loja'),
     follow: () => request<DadosFollow>('/pro-labore/assistente/follow'),
@@ -1653,6 +1661,35 @@ export interface AssistenteConversaDetalhe extends Omit<AssistenteConversa, 'men
   mensagens: AssistenteMensagem[] // histórico completo, em ordem cronológica
   resumo: Array<{ rotulo: string; valor: string }>
   totalPerguntas: number
+  // Última simulação de financiamento (do robô ou do vendedor) e a leitura dela.
+  simulacao?: ResultadoSimulacaoFinanciamento | null
+  simulacaoResumo?: string | null
+}
+
+export interface TaxaPrazoSimulacao { prazo: number; taxa: number }
+export interface ConfigSimulacaoFinanciamento { taxas: TaxaPrazoSimulacao[]; entradaMinimaPct: number; perguntarRenda: boolean; comprometimentoMax: number; aviso: string }
+export interface DadosSimulacaoFinanciamento { ativa: boolean; salva: boolean; config: ConfigSimulacaoFinanciamento; mostrarPreco: boolean; podeEditar: boolean }
+export type AvaliacaoSimulacaoFinanciamento = 'CABE' | 'APERTADA' | 'NAO_CABE' | 'SEM_RENDA'
+export interface ResultadoSimulacaoFinanciamento {
+  valor: number
+  entradaInformada: number | null
+  entrada: number
+  entradaAjustada: boolean
+  financiado: number
+  renda: number | null
+  opcoes: Array<{ prazo: number; taxa: number; parcela: number; comprometimentoPct: number | null }>
+  avaliacao: AvaliacaoSimulacaoFinanciamento
+  melhorPrazo: number | null
+  moto?: string | null
+  origem?: 'ROBO' | 'VENDEDOR'
+  criadoEm?: string
+}
+export interface SimulacaoDaConversa {
+  texto: string
+  simulacao: ResultadoSimulacaoFinanciamento
+  resumo: string
+  moto: { id: string; nome: string; preco: number | null } | null
+  enviada?: boolean
 }
 
 export interface EstadoRoteiroAssistente { etapa: number; respostas: Record<string, string> }

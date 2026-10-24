@@ -170,6 +170,18 @@ export interface PassoRoteiro {
   conhecimentoUsado?: string | null
   motoUsada?: string | null
   midias?: MidiaPasso[]
+  // Simulação de financiamento mandada neste passo (para guardar na conversa).
+  simulacao?: Record<string, unknown> | null
+}
+
+// Simulação de financiamento no fim do roteiro (ver assistenteSimulacao.ts):
+// depois da última pergunta, pergunta a renda (passo extra, opcional) e manda
+// as parcelas antes da mensagem de encerramento.
+export interface SimuladorRoteiro {
+  textoRenda: string
+  // null = este lead não recebe simulação (não vai financiar, ou a moto não tem preço).
+  avaliar: (respostas: Record<string, string>) => { perguntarRenda: boolean } | null
+  simular: (respostas: Record<string, string>) => { texto: string; dados: Record<string, unknown> } | null
 }
 
 // Respostas aprovadas da base de conhecimento: quando o cliente pergunta
@@ -235,10 +247,29 @@ export function iniciarRoteiro(cfg: ConfigAssistente, ctx: ContextoRoteiro, text
   return { mensagens: [`${abertura}\n\n${textoPergunta(proxima, ctx)}`], estado, desfecho: null, conhecimentoUsado: usado.conhecimentoUsado, motoUsada: usado.motoUsada }
 }
 
-export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string, ctx: ContextoRoteiro, base?: BaseRespostas): PassoRoteiro {
+// Fim do roteiro: a simulação (se couber) e o encerramento.
+function encerrar(cfg: ConfigAssistente, estado: EstadoRoteiro, ctx: ContextoRoteiro, daBase: RespostaDaBase | null, sim?: SimuladorRoteiro): PassoRoteiro {
+  const fim = preencher(cfg.mensagemEncerramento, ctx)
+  const av = sim?.avaliar(estado.respostas) ?? null
+  if (sim && av?.perguntarRenda && estado.respostas._renda === undefined) {
+    estado.respostas._simulacao = 'RENDA'
+    return { ...comResposta(daBase, [sim.textoRenda]), estado, desfecho: null }
+  }
+  const s = sim && av ? sim.simular(estado.respostas) : null
+  return { ...comResposta(daBase, s ? [s.texto, fim] : [fim]), estado, desfecho: 'QUALIFICADO', simulacao: s?.dados ?? null }
+}
+
+export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string, ctx: ContextoRoteiro, base?: BaseRespostas, sim?: SimuladorRoteiro): PassoRoteiro {
   const estado: EstadoRoteiro = { etapa: atual.etapa, respostas: { ...atual.respostas } }
   if (desiste(texto)) return { mensagens: [preencher(cfg.mensagemDespedida, ctx)], estado, desfecho: 'DESISTIU' }
   const pergunta = cfg.perguntas[estado.etapa]
+  // Resposta da renda, o passo extra da simulação ("pular" vale).
+  if (!pergunta && estado.respostas._simulacao === 'RENDA') {
+    delete estado.respostas._simulacao
+    estado.respostas._renda = texto.trim().slice(0, 80)
+    if (pedeAtendente(texto)) return { mensagens: [preencher(cfg.mensagemAtendente, ctx)], estado, desfecho: 'PEDIU_ATENDENTE' }
+    return encerrar(cfg, estado, ctx, null, sim)
+  }
   const usados = usadosDaBase(estado.respostas)
   const daBase = base?.responder(texto, usados) ?? null
   if (daBase) estado.respostas._kb = [...usados, daBase.id].join(',')
@@ -256,7 +287,7 @@ export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, text
   estado.etapa += 1
   const proxima = cfg.perguntas[estado.etapa]
   if (proxima) return { ...comResposta(daBase, [textoPergunta(proxima, ctx)]), estado, desfecho: null }
-  return { ...comResposta(daBase, [preencher(cfg.mensagemEncerramento, ctx)]), estado, desfecho: 'QUALIFICADO' }
+  return encerrar(cfg, estado, ctx, daBase, sim)
 }
 
 // Contato mandou mais de uma mensagem antes do assistente responder a

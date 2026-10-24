@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { proLaboreApi, urlArquivoApi, type AcaoConversaAssistente, type AssistenteConversa, type AssistenteConversaDetalhe, type StatusConversaAssistente, type TipoConversaAssistente } from '@/lib/proLaboreApi'
-import { ORIGEM, RESULTADO, ROTULO_ESTAGIO, STATUS_CONVERSA, fmtTelefone, horaCurta, iniciais, tempoRelativo } from './util'
+import { ORIGEM, RESULTADO, ROTULO_AVALIACAO, ROTULO_ESTAGIO, STATUS_CONVERSA, fmtReais, fmtTelefone, horaCurta, iniciais, tempoRelativo } from './util'
 import { ChipNota, NotaDoLead, SugestoesConversa } from './SugestoesConversa'
 import { BotaoEnviarMoto } from './EnviarMoto'
+import { BotaoSimular } from './SimularFinanciamento'
 import { EtiquetasLead } from './jornada'
 
 const ATUALIZAR_MS = 8000
@@ -224,6 +225,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                 {conversa.status !== 'ENCERRADA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => executar('ENCERRAR')}>Encerrar</button>}
                 {conversa.status !== 'ENCERRADA' && <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" onClick={() => executar('NAO_E_LEAD')}>Não é lead</button>}
                 {conversa.status !== 'ENCERRADA' && conectado && <BotaoEnviarMoto key={conversa.id} onEnviar={enviarMoto} />}
+                {conversa.status !== 'ENCERRADA' && <BotaoSimular key={`sim-${conversa.id}`} conversaId={conversa.id} conectado={conectado} onEnviada={() => { setVersao(v => v + 1); onMudou?.() }} />}
               </div>
             )}
 
@@ -253,6 +255,22 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                     <div className="pl-as-etiquetas-quadro">
                       <div className="pl-as-subtitulo">Etiquetas</div>
                       <EtiquetasLead etiquetas={conversa.lead!.etiquetas} />
+                    </div>
+                  )}
+                  {conversa.simulacao && (
+                    <div className="pl-as-etiquetas-quadro" data-simulacao-conversa>
+                      <div className="pl-as-subtitulo">Simulação {conversa.simulacao.origem === 'VENDEDOR' ? `de ${nomeVendedor}` : 'do assistente'}</div>
+                      <div className={`pl-si-avaliacao ${conversa.simulacao.avaliacao.toLowerCase()}`}>{ROTULO_AVALIACAO[conversa.simulacao.avaliacao]}</div>
+                      <ul className="pl-si-opcoes">
+                        {conversa.simulacao.opcoes.map(o => (
+                          <li key={o.prazo} className={o.prazo === conversa.simulacao!.melhorPrazo ? 'melhor' : ''}>
+                            <span>{o.prazo}x</span><b>R$ {fmtReais(o.parcela, 2)}</b>{o.comprometimentoPct !== null && <small>{o.comprometimentoPct.toLocaleString('pt-BR')}% da renda</small>}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="pl-hint" style={{ fontSize: 11.5 }}>
+                        {conversa.simulacao.moto ? `${conversa.simulacao.moto} · ` : ''}R$ {fmtReais(conversa.simulacao.valor)} · entrada R$ {fmtReais(conversa.simulacao.entrada)}{conversa.simulacao.entradaAjustada ? ' (mínima)' : ''}{conversa.simulacao.renda ? ` · renda R$ ${fmtReais(conversa.simulacao.renda)}` : ''}
+                      </div>
                     </div>
                   )}
                   <div className="pl-as-subtitulo">Respostas do roteiro</div>
