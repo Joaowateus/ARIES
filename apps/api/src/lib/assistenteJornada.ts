@@ -13,6 +13,10 @@ export const ETIQUETAS = {
   OBJECAO_PRECO: 'Objeção de preço',
   PEDIU_VISITA: 'Pediu visita',
   SUMIU_24H: 'Sumiu há 24h',
+  SIMULOU: 'Simulou',
+  PARCELA_CABE: 'Parcela cabe',
+  PARCELA_APERTADA: 'Parcela apertada',
+  PARCELA_NAO_CABE: 'Parcela não cabe',
 } as const
 export type Etiqueta = keyof typeof ETIQUETAS
 
@@ -39,6 +43,8 @@ export interface DadosEtiquetas {
   // Última mensagem da loja (vendedor ou assistente).
   ultimaNossaEm: Date | null
   agora: Date
+  // Leitura da simulação de financiamento, se houve.
+  simulacao?: string | null
 }
 
 export function etiquetasDoLead(d: DadosEtiquetas): Etiqueta[] {
@@ -54,6 +60,10 @@ export function etiquetasDoLead(d: DadosEtiquetas): Etiqueta[] {
   if (SIMULACAO.test(tudo)) e.push('PEDIU_SIMULACAO')
   if (PRECO.test(tudo)) e.push('OBJECAO_PRECO')
   if (VISITA.test(tudo)) e.push('PEDIU_VISITA')
+  if (d.simulacao) e.push('SIMULOU')
+  if (d.simulacao === 'CABE') e.push('PARCELA_CABE')
+  else if (d.simulacao === 'APERTADA') e.push('PARCELA_APERTADA')
+  else if (d.simulacao === 'NAO_CABE') e.push('PARCELA_NAO_CABE')
   if (d.ultimaNossaEm && (!d.ultimaDoContatoEm || d.ultimaNossaEm > d.ultimaDoContatoEm) && d.agora.getTime() - d.ultimaNossaEm.getTime() >= DIA) e.push('SUMIU_24H')
   return e
 }

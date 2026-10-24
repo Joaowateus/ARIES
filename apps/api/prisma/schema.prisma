@@ -1870,6 +1870,9 @@ model AssistenteConversa {
   followParado         String?
   // Último aviso "lead esperando" mandado ao vendedor sobre esta conversa.
   alertaEsperaEm       DateTime?
+  // Última simulação de financiamento (robô ou vendedor): valores, opções e
+  // a leitura pela renda. Nunca vai para a IA.
+  simulacao            Json?
   // QUALIFICADO | PEDIU_ATENDENTE | DESISTIU | NAO_E_LEAD
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
@@ -1993,6 +1996,11 @@ model AssistenteLoja {
   // mensagens antes. followConfig = { passos: [{ dias, texto, midia }], tetoDiario, horaInicio, horaFim }.
   followAtivo  Boolean  @default(false)
   followConfig Json?
+  // Simulação de financiamento no fim do roteiro: desligada até a loja
+  // cadastrar as taxas. simulacaoConfig = { taxas: [{ prazo, taxa }],
+  // entradaMinimaPct, perguntarRenda, comprometimentoMax, aviso }.
+  simulacaoAtiva  Boolean @default(false)
+  simulacaoConfig Json?
   atualizadoEm DateTime @default(now()) @updatedAt
 
   @@map("pro_labore_assistente_loja")

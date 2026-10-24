@@ -29,9 +29,11 @@ export interface DadosNota {
   // Mensagens do cliente na conversa (qualquer ordem).
   textosDoContato: string[]
   resultado?: string | null
+  // Leitura da simulação de financiamento (CABE, APERTADA, NAO_CABE, SEM_RENDA).
+  simulacao?: string | null
 }
 
-export function calcularNota({ cfg, origem, respostas, textosDoContato, resultado }: DadosNota): NotaLead {
+export function calcularNota({ cfg, origem, respostas, textosDoContato, resultado, simulacao }: DadosNota): NotaLead {
   const sinais: SinalNota[] = []
   const somar = (chave: string, rotulo: string, pontos: number) => sinais.push({ chave, rotulo, pontos })
   const textos = textosDoContato.map(normalizar)
@@ -59,6 +61,9 @@ export function calcularNota({ cfg, origem, respostas, textosDoContato, resultad
   if (CONDICOES.test(tudo)) somar('condicoes', 'Perguntou condições', 5)
   if (resultado === 'PEDIU_ATENDENTE') somar('atendente', 'Pediu para falar com o vendedor', 10)
   if (textos.length >= 4) somar('engajado', 'Conversa ativa', 5)
+  if (simulacao) somar('simulou', 'Fez a simulação de financiamento', 5)
+  if (simulacao === 'CABE') somar('parcela', 'Parcela cabe na renda', 10)
+  else if (simulacao === 'NAO_CABE') somar('parcela', 'Parcela acima da renda', -10)
 
   for (const o of OBJECOES) if (o.re.test(tudo)) somar(`objecao:${o.chave}`, o.rotulo, -10)
   if (resultado === 'DESISTIU') somar('desistiu', 'Pediu para parar', -60)

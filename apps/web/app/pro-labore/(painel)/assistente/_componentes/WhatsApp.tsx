@@ -13,14 +13,16 @@ import { Roteiro } from './Roteiro'
 import { Conhecimento } from './Conhecimento'
 import { Vitrine } from './Vitrine'
 import { Follow } from './Follow'
+import { Simulacao } from './Simulacao'
 import { nomeProprio } from './util'
 
-type Aba = 'visao' | 'conversas' | 'conhecimento' | 'estoque' | 'follow' | 'roteiro'
+type Aba = 'visao' | 'conversas' | 'conhecimento' | 'estoque' | 'simulacao' | 'follow' | 'roteiro'
 const ABAS: Array<{ valor: Aba; rotulo: string }> = [
   { valor: 'visao', rotulo: 'Desempenho' },
   { valor: 'conversas', rotulo: 'Conversas' },
   { valor: 'conhecimento', rotulo: 'Conhecimento' },
   { valor: 'estoque', rotulo: 'Estoque' },
+  { valor: 'simulacao', rotulo: 'Simulação' },
   { valor: 'follow', rotulo: 'Follow' },
   { valor: 'roteiro', rotulo: 'Roteiro e teste' },
 ]
@@ -198,6 +200,8 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
           {aba === 'conhecimento' && <Conhecimento />}
 
           {aba === 'estoque' && <Vitrine />}
+
+          {aba === 'simulacao' && <Simulacao nomeVendedor={nomeVendedor} />}
 
           {aba === 'follow' && <Follow />}
 

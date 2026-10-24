@@ -11,9 +11,13 @@ export const ROTULO_ETIQUETA: Record<string, string> = {
   OBJECAO_PRECO: 'Objeção de preço',
   PEDIU_VISITA: 'Pediu visita',
   SUMIU_24H: 'Sumiu há 24h',
+  SIMULOU: 'Simulou',
+  PARCELA_CABE: 'Parcela cabe',
+  PARCELA_APERTADA: 'Parcela apertada',
+  PARCELA_NAO_CABE: 'Parcela não cabe',
 }
 // Ordem de importância para quando não cabem todas.
-export const ORDEM_ETIQUETAS = ['QUENTE', 'PEDIU_SIMULACAO', 'PEDIU_VISITA', 'SUMIU_24H', 'OBJECAO_PRECO', 'FINANCIAMENTO', 'A_VISTA', 'TEM_TROCA', 'SEM_ENTRADA']
+export const ORDEM_ETIQUETAS = ['QUENTE', 'PARCELA_CABE', 'PARCELA_APERTADA', 'PARCELA_NAO_CABE', 'PEDIU_SIMULACAO', 'PEDIU_VISITA', 'SUMIU_24H', 'OBJECAO_PRECO', 'SIMULOU', 'FINANCIAMENTO', 'A_VISTA', 'TEM_TROCA', 'SEM_ENTRADA']
 
 export function EtiquetasLead({ etiquetas, max = 9 }: { etiquetas: string[] | null | undefined; max?: number }) {
   const lista = [...(etiquetas ?? [])].sort((a, b) => ORDEM_ETIQUETAS.indexOf(a) - ORDEM_ETIQUETAS.indexOf(b))

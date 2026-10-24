@@ -84,3 +84,16 @@ export const CAMPOS_LEAD: Array<{ valor: CampoLeadAssistente; rotulo: string }> 
 export const ROTULO_ESTAGIO: Record<string, string> = {
   LEAD: 'Lead', ABORDADO: 'Abordado', NEGOCIACAO: 'Negociação', PROPOSTA: 'Proposta', FECHADO: 'Venda fechada', PERDIDO: 'Perdido',
 }
+
+// Valor em reais digitado no formulário ("20.000", "4.000,50", "3500").
+export function lerReais(t: string): number | null {
+  const s = t.replace(/[^\d,.]/g, '')
+  if (!s) return null
+  const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : /\.\d{3}(\.|$)/.test(s) ? s.replace(/\./g, '') : s)
+  return Number.isFinite(n) ? n : null
+}
+
+export const fmtReais = (v: number | null | undefined, casas = 0) =>
+  v === null || v === undefined ? '' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
+
+export const ROTULO_AVALIACAO: Record<string, string> = { CABE: 'Cabe no bolso', APERTADA: 'Parcela apertada', NAO_CABE: 'Parcela acima da renda', SEM_RENDA: 'Sem renda informada' }

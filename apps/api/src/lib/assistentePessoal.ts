@@ -4,6 +4,7 @@
 // que começa com "?" / "assistente" ou termina com "?" e casa com um assunto
 // conhecido. Anotação comum continua ignorada.
 import { normalizar } from './assistenteRoteiro'
+import { lerValor } from './assistenteSimulacao'
 
 export type Pergunta =
   | { tipo: 'HOJE' }
@@ -15,6 +16,8 @@ export type Pergunta =
   | { tipo: 'FICHA'; moto: string }
   | { tipo: 'RESPOSTA'; assunto: string }
   | { tipo: 'LEAD'; nome: string }
+  // Moto do estoque ou valor em reais ("? simular CG 160 entrada 3 mil renda 2500").
+  | { tipo: 'SIMULAR'; alvo: string; entrada: number | null; renda: number | null }
   | { tipo: 'AJUDA' }
 
 const CHAMADA = /^(\?+|@?assistente\b[\s,:-]*)/
@@ -38,6 +41,16 @@ export function interpretarPergunta(bruto: string): Pergunta | null {
   if (/(semana)/.test(n) && /(como|conversao|resultado|numero|desempenho|producao|vendi|vendas|leads?|minha|^semana$)/.test(n)) return { tipo: 'SEMANA' }
   if (/(\bmes\b)/.test(n) && /(como|conversao|resultado|numero|desempenho|producao|vendi|vendas|leads?|meu|^mes$)/.test(n)) return { tipo: 'MES' }
   if (/^(como (eu )?(estou|to|tou|ta|esta|vou)( indo)?( hoje)?|como (foi|esta|ta) (o )?(meu )?dia|meu dia|resumo( do dia| de hoje)?|hoje|meus numeros( de hoje)?|minha producao( de hoje)?)$/.test(n)) return { tipo: 'HOJE' }
+
+  const simulacao = semChamada.match(/^simul(?:ar|a|e|a[cç][aã]o(?:\s+d[aoe])?)\s+(.{2,120})$/i)
+  if (simulacao) {
+    const resto = simulacao[1]
+    const trecho = (re: RegExp) => resto.match(re)?.[1]?.trim() ?? null
+    const entrada = /\bsem entrada\b/i.test(resto) ? '0' : trecho(/\bentrada\s+(?:de\s+)?(.+?)(?=\s+(?:e\s+)?renda\b|$)/i) ?? trecho(/\b(?:com\s+)?([\d.,]+\s*(?:mil|k)?)\s+de\s+entrada\b/i)
+    const renda = trecho(/\brenda\s+(?:de\s+)?(.+?)(?=\s+(?:e\s+)?(?:com\s+)?entrada\b|$)/i)
+    const alvo = resto.split(/\s+(?:com\s+|e\s+)?(?:sem\s+)?(?:entrada|renda)\b|\s+com\s+[\d.,]+\s*(?:mil|k)?\s+de\s+entrada\b/i)[0].trim()
+    if (alvo) return { tipo: 'SIMULAR', alvo, entrada: entrada === null ? null : lerValor(entrada), renda: renda === null ? null : lerValor(renda) }
+  }
 
   const ficha = semChamada.match(/^(?:ficha|dados|infos?|informa[cç](?:ão|oes|ões)|detalhes)\s+(?:d[aoe]\s+)?(.{2,60})$/i)
   if (ficha) return { tipo: 'FICHA', moto: ficha[1].trim() }
@@ -64,4 +77,5 @@ export const TEXTO_AJUDA_PESSOAL = [
   '• *ficha da XRE 300?* — a ficha do estoque',
   '• *o que respondo para "tá caro"?* — a resposta aprovada da loja',
   '• *como está a Ana?* — etapa, nota e última mensagem do lead',
+  '• *simular CG 160 entrada 3 mil renda 2500?* — parcelas com as taxas da loja',
 ].join('\n')

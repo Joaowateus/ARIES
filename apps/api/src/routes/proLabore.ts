@@ -20,14 +20,15 @@ import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
 } from '../lib/whatsappEvolution'
-import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa, avaliarJornada } from '../lib/assistenteMotor'
+import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa, avaliarJornada, atualizarNota } from '../lib/assistenteMotor'
 import {
   CAMPOS_LEAD as CAMPOS_LEAD_ASSISTENTE, CONFIG_PADRAO as CONFIG_ASSISTENTE_PADRAO, lerConfig as lerConfigAssistente,
   linhasResumo as linhasResumoAssistente, iniciarRoteiro as iniciarRoteiroAssistente, avancarRoteiro as avancarRoteiroAssistente,
   casaGatilho as casaGatilhoAssistente, primeiroNome as primeiroNomeAssistente, respostaDoCampo as respostaDoCampoAssistente,
 } from '../lib/assistenteRoteiro'
 import { montarResumoAssistente } from '../lib/assistenteResumo'
-import { baseParaRobo, registrarUso, respostasAtivas, respostasDaLojaParaIA, sugestoesDaBase, ultimasDoCliente, vitrineDaLoja, SELECT_MOTO_VITRINE, paraVitrine } from '../lib/assistenteRespostas'
+import { ResultadoSimulacao, lerValor, resumoSimulacao } from '../lib/assistenteSimulacao'
+import { baseParaRobo, montarSimulacao, motoComPreco, registrarUso, respostasAtivas, respostasDaLojaParaIA, respostasParaIA, simuladorDoRobo, sugestoesDaBase, textoParaIA, ultimasDoCliente, vitrineDaLoja, SELECT_MOTO_VITRINE, paraVitrine } from '../lib/assistenteRespostas'
 import { acharMotos, fichaParaIA, fichaTexto, nomeDaMoto } from '../lib/assistenteVitrine'
 import { faixaNota } from '../lib/assistenteNota'
 import { iaLigada as copilotoIaLigada, sugerirResposta, type SugestaoIA } from '../lib/copilotoIA'
@@ -3113,6 +3114,7 @@ router.get('/assistente/conversas/:id', requireProLaboreAuth, requireModulo('ass
   res.json({
     ...completa,
     resumo: linhasResumoAssistente(cfg, respostas),
+    simulacaoResumo: completa?.simulacao ? resumoSimulacao(completa.simulacao as unknown as ResultadoSimulacao) : null,
     totalPerguntas: cfg.perguntas.length,
   })
 })
@@ -3161,6 +3163,65 @@ router.post('/assistente/conversas/:id/mensagens', requireProLaboreAuth, require
   }
   if (conversa.tipo === 'LEAD') await avaliarJornada(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
   res.status(201).json(await prisma.assistenteMensagem.findUnique({ where: { id: registro.id } }))
+})
+
+// Botão "Simular financiamento": o vendedor refaz a conta com outros números
+// (taxas da aba Simulação). Sem "enviar" é só a prévia; com "enviar" a
+// simulação sai pelo WhatsApp dele e fica no lead.
+const simularConversaSchema = z.object({
+  motoId: z.string().max(40).nullable().optional(),
+  valor: z.number().min(1).max(10_000_000).nullable().optional(),
+  entrada: z.number().min(0).max(10_000_000).nullable().optional(),
+  renda: z.number().min(0).max(10_000_000).nullable().optional(),
+  enviar: z.boolean().optional(),
+})
+router.post('/assistente/conversas/:id/simulacao', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
+  const p = simularConversaSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'Valores inválidos' }); return }
+  const conversa = await carregarConversaAutorizada(req, res)
+  if (!conversa) return
+  if (conversa.tipo !== 'LEAD') { res.status(400).json({ error: 'Só em conversas de lead' }); return }
+  const { assistente } = conversa
+  const usuarioId = assistente.vendedor.usuarioId
+  const vitrine = await vitrineDaLoja(usuarioId)
+  if (!vitrine.simulacao) { res.status(409).json({ error: 'A loja ainda não cadastrou as taxas. O dono ou o supervisor configura na aba Simulação do Assistente.' }); return }
+  const cfg = lerConfigAssistente(assistente.configuracao)
+  const respostas = (conversa.respostas ?? {}) as Record<string, string>
+  const lead = conversa.leadId ? await prisma.lead.findUnique({ where: { id: conversa.leadId }, select: { modeloInteresse: true } }) : null
+  const moto = p.data.motoId
+    ? vitrine.motos.find(m => m.id === p.data.motoId) ?? null
+    : motoComPreco(lead?.modeloInteresse ?? respostaDoCampoAssistente(cfg, respostas, 'modeloInteresse'), vitrine.motos)
+  const valor = p.data.valor ?? moto?.preco ?? null
+  if (!valor) { res.status(400).json({ error: 'Informe o valor da moto (ela não tem preço no estoque)' }); return }
+  const entrada = p.data.entrada !== undefined ? p.data.entrada : lerValor(respostaDoCampoAssistente(cfg, respostas, 'valorEntrada') ?? '')
+  const renda = p.data.renda !== undefined ? p.data.renda : respostas._renda ? lerValor(respostas._renda) : null
+  const s = montarSimulacao({ valor, entrada, renda, moto, vitrine, vendedor: assistente.vendedor.nome, origem: 'VENDEDOR' })
+  if (!s) { res.status(400).json({ error: 'A entrada cobre o valor: não há o que financiar' }); return }
+  const resposta = { texto: s.texto, simulacao: s.dados, resumo: resumoSimulacao(s.dados), moto: moto ? { id: moto.id, nome: nomeDaMoto(moto), preco: moto.preco } : null }
+  if (!p.data.enviar) { res.json(resposta); return }
+
+  if (!assistente.instancia || assistente.status !== 'CONECTADO') { res.status(409).json({ error: 'O WhatsApp desse vendedor não está conectado agora' }); return }
+  const destino = conversa.jid ?? conversa.numeroContato
+  const registro = await prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'VENDEDOR', texto: s.texto } })
+  try {
+    const providerId = await enviarTextoWhatsapp(assistente.instancia, destino, s.texto)
+    if (providerId) await prisma.assistenteMensagem.update({ where: { id: registro.id }, data: { providerId } }).catch(() => undefined)
+  } catch (e) {
+    await prisma.assistenteMensagem.delete({ where: { id: registro.id } })
+    res.status(502).json({ error: mensagemErroWhatsapp(e) })
+    return
+  }
+  const agora = new Date()
+  await prisma.assistenteConversa.update({
+    where: { id: conversa.id },
+    data: {
+      ultimaMensagemEm: agora, simulacao: s.dados as unknown as Prisma.InputJsonValue,
+      ...((conversa.status === 'ATIVA' || conversa.status === 'AGUARDANDO_VENDEDOR') && { status: 'ASSUMIDA', assumidaEm: agora }),
+    },
+  })
+  await atualizarNota(cfg, conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na nota do lead'))
+  await avaliarJornada(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
+  res.status(201).json({ ...resposta, enviada: true })
 })
 
 // Sugestões para o vendedor responder: o que a loja aprovou para as últimas
@@ -3253,8 +3314,8 @@ router.post('/assistente/conversas/:id/sugestao-ia', requireProLaboreAuth, requi
   if (copilotoIaLigada()) {
     const memoria = (await memoriaParaIA(usuarioId, conversa.assistente.vendedorId)).filter(m => ['ESTILO', 'PREFERENCIA', 'APRENDIZADO'].includes(m.tipo))
     sugestao = await sugerirResposta(usuarioId, {
-      cliente: { nome: cliente, estagioNoCrm: lead?.estagio ?? null, motoDeInteresse: moto, respostasDoPreAtendimento: respostas },
-      conversa: emOrdem.map(m => ({ de: m.remetente === 'CONTATO' ? 'CLIENTE' : m.remetente === 'VENDEDOR' ? 'VENDEDOR' : 'ASSISTENTE_AUTOMATICO', texto: m.texto.slice(0, 600), quando: m.criadoEm.toISOString().slice(0, 16) })),
+      cliente: { nome: cliente, estagioNoCrm: lead?.estagio ?? null, motoDeInteresse: moto, respostasDoPreAtendimento: respostasParaIA(respostas) },
+      conversa: emOrdem.map(m => ({ de: m.remetente === 'CONTATO' ? 'CLIENTE' : m.remetente === 'VENDEDOR' ? 'VENDEDOR' : 'ASSISTENTE_AUTOMATICO', texto: textoParaIA(m.texto, respostas), quando: m.criadoEm.toISOString().slice(0, 16) })),
       conteudos: [], memoria, vendedor: primeiroNomeAssistente(conversa.assistente.vendedor.nome),
       respostasDaLoja: respostasDaLojaParaIA(sugestoes),
       estoque: motos.map(fichaParaIA),
@@ -3391,14 +3452,16 @@ router.post('/assistente/simular', requireProLaboreAuth, requireModulo('assisten
   const [itens, vitrine] = await Promise.all([respostasAtivas(req.proLaboreUser!.sub), vitrineDaLoja(req.proLaboreUser!.sub)])
   const base = baseParaRobo(itens, { ...ctx, moto: parse.data.estado ? respostaDoCampoAssistente(cfg, parse.data.estado.respostas, 'modeloInteresse') : null }, vitrine)
   const passo = parse.data.estado
-    ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx, base)
+    ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx, base, simuladorDoRobo(cfg, ctx, vitrine))
     : iniciarRoteiroAssistente(cfg, ctx, parse.data.texto, base)
   const usado = passo.conhecimentoUsado ? itens.find(i => i.id === passo.conhecimentoUsado) : null
   const motoUsada = passo.motoUsada ? vitrine.motos.find(m => m.id === passo.motoUsada) : null
   res.json({
     ...passo,
     conhecimento: usado ? { id: usado.id, titulo: usado.titulo } : motoUsada ? { id: motoUsada.id, titulo: `Estoque: ${nomeDaMoto(motoUsada)}` } : null,
-    resumo: passo.desfecho ? linhasResumoAssistente(cfg, passo.estado.respostas) : [],
+    resumo: passo.desfecho
+      ? [...linhasResumoAssistente(cfg, passo.estado.respostas), ...(passo.simulacao ? [{ rotulo: 'Simulação', valor: resumoSimulacao(passo.simulacao as unknown as ResultadoSimulacao) }] : [])]
+      : [],
     gatilho: parse.data.estado ? null : casaGatilhoAssistente(parse.data.texto, cfg.gatilhos),
   })
 })
