@@ -52,6 +52,64 @@ valores em reais (as respostas internas do roteiro saem do contexto e a
 mensagem em que o cliente informou a renda vai mascarada); nada é chamado de
 "aprovado".
 
+## Pré-análise nos bancos parceiros (nível 2, sem API)
+
+A loja trabalha com **Santander, BV e PAN**. Nenhum dos três publica API
+aberta para lojista: cada um tem o portal ou app do parceiro (Santander
+Financiamentos: app "Financiamento Lojista"; BV: Portal de Parceiros; PAN:
+portal do lojista e o MobiGestor, da Mobiauto). Então a pré-análise entra
+pelo caminho que já existe, sem retrabalho:
+
+- **Aba "Simulação" → Pré-análise nos bancos parceiros:** a lista de bancos
+  (até 8) e a chave "Robô pede a ficha depois da simulação". Começa desligada;
+  sem banco cadastrado não liga.
+- **Robô:** depois da simulação, pergunta se o cliente autoriza a pré-análise
+  nos bancos (citando quais). Com o *sim*, pede o CPF (confere os dígitos
+  verificadores; uma nova tentativa se vier errado) e a data de nascimento
+  (18 a 100 anos). "Não", "agora não" ou "não quero" encerram normalmente:
+  nessa etapa não contam como pedido para parar de receber mensagens.
+- **Autorização registrada:** a pergunta exata, a resposta do cliente e o
+  horário ficam guardados com a ficha (LGPD).
+- **Ficha na conversa:** CPF (escondido por padrão), nascimento, renda, moto,
+  valor e entrada, com "Copiar ficha" para colar no portal de cada banco. O
+  vendedor também pode registrar a ficha (cliente passou por telefone ou na
+  loja), marcando que o cliente autorizou. "Apagar ficha" remove a ficha e as
+  respostas.
+- **Resposta por banco:** a enviar, em análise, aprovada (entrada, prazo,
+  parcela e taxa) ou recusada, com observação. Aprovada, "Enviar ao cliente"
+  manda a condição pelo WhatsApp do vendedor, com "sujeito à confirmação dos
+  documentos pelo banco".
+- **CRM e funil:**
+  - Etiquetas: Ficha de crédito, Crédito aprovado e Crédito recusado (quando
+    todos recusaram).
+  - Nota do lead: +10 pela autorização, +20 se algum banco aprovou, −20 se
+    todos recusaram.
+  - Funil: crédito aprovado leva de Abordado para Negociação, e a aprovação
+    enviada ao cliente conta como proposta (Proposta).
+  - O CPF vai para o campo CPF do lead, nunca para a observação.
+- **Placar por banco (30 dias):** fichas lançadas, % de aprovação e taxa média
+  aprovada, para saber em qual banco lançar primeiro.
+- **Privacidade:** CPF e data de nascimento nunca vão para a IA (o filtro de
+  todas as camadas de IA mascara CPF e datas de nascimento), nem para o aviso
+  no WhatsApp do vendedor, nem para as respostas do roteiro. Só o vendedor da
+  conversa e a gestão veem a ficha.
+
+## Depois (nível 3: integração por API)
+
+- **BV:** tem portal de desenvolvedores com APIs para parceiros F&I (inclui
+  condições de financiamento para parceiros). Pedir ao gerente comercial do BV
+  o credenciamento da loja como parceiro F&I e o acesso ao sandbox.
+- **Santander Financiamentos:** sem API pública para lojista; pedir ao
+  consultor de lojista se há integração (API ou parceiro homologado) para
+  simulação e envio de proposta.
+- **PAN:** a integração conhecida é via Mobiauto (MobiGestor mostra crédito
+  pré-aprovado PAN na hora); perguntar ao operador PAN se há API para a loja
+  ou se a integração passa pela Mobiauto.
+
+Com o acesso de qualquer um deles, a ficha que já está no sistema vai direto
+para o banco e a resposta volta sozinha para a conversa, no lugar do
+lançamento manual.
+
 ## Onde está
 
 - Cálculo e textos: `apps/api/src/lib/assistenteSimulacao.ts` (puro, com testes
@@ -60,15 +118,9 @@ mensagem em que o cliente informou a renda vai mascarada); nada é chamado de
   (`assistenteRespostas.ts`); a simulação fica em `AssistenteConversa.simulacao`.
 - Rotas: `GET/PUT /assistente/simulacao`, `POST /assistente/simulacao/previa`
   e `POST /assistente/conversas/:id/simulacao`.
-- Configuração da loja: `AssistenteLoja.simulacaoAtiva` e `simulacaoConfig`.
-
-## Depois (nível 2)
-
-Quando a loja tiver acesso de lojista a uma financeira:
-- o robô pede, com consentimento explícito, CPF e data de nascimento;
-- a ficha vai para a financeira (API ou, sem API, para o vendedor lançar no
-  portal) e a resposta volta para a conversa e para o CRM;
-- a simulação passa a usar a taxa devolvida pela financeira.
-
-Para isso é preciso saber com quais financeiras a loja trabalha e qual canal
-cada uma oferece ao lojista.
+- Configuração da loja: `AssistenteLoja.simulacaoAtiva` e `simulacaoConfig`
+  (com `bancos` e `preAnalise`).
+- Pré-análise: passos do robô em `passoDaFicha` (`assistenteRoteiro.ts`),
+  tabelas `AssistenteFichaCredito` e `AssistenteAnaliseCredito`, rotas em
+  `routes/proLaboreAssistenteCredito.ts` (`/assistente/conversas/:id/credito`,
+  respostas por banco, envio da aprovação e `/assistente/credito/resumo`).

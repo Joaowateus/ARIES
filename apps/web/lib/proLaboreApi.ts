@@ -728,6 +728,16 @@ export const proLaboreApi = {
       request<{ resultado: ResultadoSimulacaoFinanciamento; texto: string; resumo: string }>('/pro-labore/assistente/simulacao/previa', { method: 'POST', body: JSON.stringify(data) }),
     simularConversa: (id: string, data: { motoId?: string | null; valor?: number | null; entrada?: number | null; renda?: number | null; enviar?: boolean }) =>
       request<SimulacaoDaConversa>(`/pro-labore/assistente/conversas/${id}/simulacao`, { method: 'POST', body: JSON.stringify(data) }),
+    // Pré-análise de crédito: ficha autorizada e a resposta de cada banco.
+    credito: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`),
+    salvarFicha: (id: string, data: { cpf: string; nascimento?: string | null; autorizado: true }) =>
+      request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'PUT', body: JSON.stringify(data) }),
+    apagarFicha: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'DELETE' }),
+    salvarAnalise: (id: string, banco: string, data: { status: StatusAnaliseCredito; entrada?: number | null; prazo?: number | null; parcela?: number | null; taxa?: number | null; observacao?: string | null }) =>
+      request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/analises/${encodeURIComponent(banco)}`, { method: 'PUT', body: JSON.stringify(data) }),
+    enviarAprovacao: (id: string, banco: string) =>
+      request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/analises/${encodeURIComponent(banco)}/enviar`, { method: 'POST' }),
+    resumoCredito: (dias = 30) => request<ResumoCredito>(`/pro-labore/assistente/credito/resumo?dias=${dias}`),
     vitrine: () => request<DadosVitrine>('/pro-labore/assistente/vitrine'),
     loja: () => request<PreferenciasLojaAssistente>('/pro-labore/assistente/loja'),
     follow: () => request<DadosFollow>('/pro-labore/assistente/follow'),
@@ -1667,7 +1677,38 @@ export interface AssistenteConversaDetalhe extends Omit<AssistenteConversa, 'men
 }
 
 export interface TaxaPrazoSimulacao { prazo: number; taxa: number }
-export interface ConfigSimulacaoFinanciamento { taxas: TaxaPrazoSimulacao[]; entradaMinimaPct: number; perguntarRenda: boolean; comprometimentoMax: number; aviso: string }
+export interface ConfigSimulacaoFinanciamento { taxas: TaxaPrazoSimulacao[]; entradaMinimaPct: number; perguntarRenda: boolean; comprometimentoMax: number; aviso: string; bancos: string[]; preAnalise: boolean }
+export type StatusAnaliseCredito = 'A_ENVIAR' | 'EM_ANALISE' | 'APROVADA' | 'RECUSADA'
+export interface AnaliseCreditoBanco {
+  banco: string
+  status: StatusAnaliseCredito
+  entrada: number | null
+  prazo: number | null
+  parcela: number | null
+  taxa: number | null
+  observacao: string | null
+  respondidoEm: string | null
+  enviadaAoClienteEm: string | null
+}
+export interface CreditoConversa {
+  ativa: boolean
+  bancos: string[]
+  ficha: {
+    cpf: string
+    nascimento: string | null
+    origem: 'ROBO' | 'VENDEDOR'
+    consentimento: { em?: string; pergunta?: string; resposta?: string }
+    criadoEm: string
+    // Pronta para colar no portal de cada banco.
+    texto: string
+  } | null
+  analises: AnaliseCreditoBanco[]
+}
+export interface ResumoCredito {
+  dias: number
+  fichas: number
+  bancos: Array<{ banco: string; lancadas: number; emAnalise: number; aprovadas: number; recusadas: number; aprovacaoPct: number | null; taxaMedia: number | null }>
+}
 export interface DadosSimulacaoFinanciamento { ativa: boolean; salva: boolean; config: ConfigSimulacaoFinanciamento; mostrarPreco: boolean; podeEditar: boolean }
 export type AvaliacaoSimulacaoFinanciamento = 'CABE' | 'APERTADA' | 'NAO_CABE' | 'SEM_RENDA'
 export interface ResultadoSimulacaoFinanciamento {

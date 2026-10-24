@@ -7,6 +7,7 @@ import { ORIGEM, RESULTADO, ROTULO_AVALIACAO, ROTULO_ESTAGIO, STATUS_CONVERSA, f
 import { ChipNota, NotaDoLead, SugestoesConversa } from './SugestoesConversa'
 import { BotaoEnviarMoto } from './EnviarMoto'
 import { BotaoSimular } from './SimularFinanciamento'
+import { BlocoPreAnalise } from './PreAnalise'
 import { EtiquetasLead } from './jornada'
 
 const ATUALIZAR_MS = 8000
@@ -273,6 +274,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, on
                       </div>
                     </div>
                   )}
+                  <BlocoPreAnalise key={`pa-${conversa.id}`} conversaId={conversa.id} versao={`${versao}-${qtdMensagens}`} conectado={conectado} onMudou={() => { setVersao(v => v + 1); onMudou?.() }} />
                   <div className="pl-as-subtitulo">Respostas do roteiro</div>
                   {conversa.resultado && <div className="pl-as-resultado">{RESULTADO[conversa.resultado]}</div>}
                   {!conversa.resultado && conversa.totalPerguntas > 0 && (

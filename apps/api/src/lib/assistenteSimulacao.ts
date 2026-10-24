@@ -11,6 +11,10 @@ export interface ConfigSimulacao {
   // Quanto da renda a parcela pode ocupar para "caber no bolso".
   comprometimentoMax: number
   aviso: string
+  // Bancos parceiros para a pré-análise e se o robô pede a ficha (CPF e
+  // nascimento, com autorização) depois da simulação.
+  bancos: string[]
+  preAnalise: boolean
 }
 
 export const SIMULACAO_PADRAO: ConfigSimulacao = {
@@ -19,6 +23,8 @@ export const SIMULACAO_PADRAO: ConfigSimulacao = {
   perguntarRenda: true,
   comprometimentoMax: 30,
   aviso: 'Simulação ilustrativa, sem IOF e tarifas, sujeita à análise de crédito. {vendedor} confirma as condições com você.',
+  bancos: [],
+  preAnalise: false,
 }
 
 const numero = (v: unknown, min: number, max: number, padrao: number, casas = 0) => {
@@ -39,12 +45,18 @@ export function lerConfigSimulacao(salva: unknown): ConfigSimulacao {
       .slice(0, 6)
     : SIMULACAO_PADRAO.taxas
   const aviso = typeof c.aviso === 'string' && c.aviso.trim() ? c.aviso.trim().slice(0, 300) : SIMULACAO_PADRAO.aviso
+  const bancos = Array.isArray(c.bancos)
+    ? c.bancos.filter((b): b is string => typeof b === 'string').map(b => b.trim().slice(0, 40)).filter(Boolean)
+      .filter((b, i, l) => l.findIndex(x => x.toLowerCase() === b.toLowerCase()) === i).slice(0, 8)
+    : []
   return {
     taxas: taxas.length ? taxas : SIMULACAO_PADRAO.taxas,
     entradaMinimaPct: numero(c.entradaMinimaPct, 0, 90, SIMULACAO_PADRAO.entradaMinimaPct),
     perguntarRenda: typeof c.perguntarRenda === 'boolean' ? c.perguntarRenda : SIMULACAO_PADRAO.perguntarRenda,
     comprometimentoMax: numero(c.comprometimentoMax, 10, 60, SIMULACAO_PADRAO.comprometimentoMax),
     aviso,
+    bancos,
+    preAnalise: bancos.length > 0 && c.preAnalise === true,
   }
 }
 
@@ -150,4 +162,99 @@ export const TEXTO_RENDA = 'Pra eu te mostrar a parcela que cabe no seu bolso: q
 /** A forma de pagamento respondida é financiamento? */
 export function vaiFinanciar(formaPagamento: string | null | undefined): boolean {
   return !!formaPagamento && /financ|parcel|prestac/.test(normalizar(formaPagamento))
+}
+
+// ---------- Pré-análise de crédito ----------
+// Nível 2 sem API: com a autorização do cliente o robô pega CPF e data de
+// nascimento; o vendedor lança a ficha no portal de cada banco parceiro e
+// registra a resposta. Só depois disso alguém fala em "aprovado".
+
+export const STATUS_ANALISE = ['A_ENVIAR', 'EM_ANALISE', 'APROVADA', 'RECUSADA'] as const
+export type StatusAnalise = (typeof STATUS_ANALISE)[number]
+
+/** CPF com os dígitos verificadores certos (aceita pontos, traço e espaço) → só os 11 números. */
+export function lerCpf(texto: string): string | null {
+  const achado = texto.match(/\d{3}[.\s]?\d{3}[.\s]?\d{3}[\s-]?\d{2}/)
+  const d = (achado?.[0] ?? texto).replace(/\D/g, '')
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return null
+  const dv = (n: number) => {
+    let s = 0
+    for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i)
+    const r = (s * 10) % 11
+    return r === 10 ? 0 : r
+  }
+  return dv(9) === Number(d[9]) && dv(10) === Number(d[10]) ? d : null
+}
+export const formatarCpf = (d: string) => `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+
+const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
+/** Data de nascimento ("15/03/1990", "15-3-90", "15 de março de 1990") de quem tem de 18 a 100 anos → "15/03/1990". */
+export function lerNascimento(texto: string, hoje = new Date()): string | null {
+  const n = normalizar(texto)
+  const num = n.match(/\b(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4}|\d{2})\b/)
+  const ext = n.match(/\b(\d{1,2})\s+de\s+([a-z]+)\s+(?:de\s+)?(\d{4})\b/)
+  const so = n.replace(/\D/g, '')
+  let [dia, mes, ano] = [0, 0, 0]
+  if (num) [dia, mes, ano] = [Number(num[1]), Number(num[2]), Number(num[3])]
+  else if (ext && MESES.includes(ext[2])) [dia, mes, ano] = [Number(ext[1]), MESES.indexOf(ext[2]) + 1, Number(ext[3])]
+  else if (so.length === 8) [dia, mes, ano] = [Number(so.slice(0, 2)), Number(so.slice(2, 4)), Number(so.slice(4))]
+  else return null
+  if (ano < 100) ano += ano > hoje.getUTCFullYear() % 100 ? 1900 : 2000
+  const d = new Date(Date.UTC(ano, mes - 1, dia))
+  if (d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) return null
+  const idade = (hoje.getTime() - d.getTime()) / (365.25 * 86_400_000)
+  if (idade < 18 || idade > 100) return null
+  return `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${ano}`
+}
+
+const ACEITA = /^(sim|s|pode|claro|autorizo|ok|okay|quero|bora|manda|beleza|blz|com certeza|tudo bem|isso|aceito|faz|fechado|pode ser|vamos)\b/
+const RECUSA = /^(nao|n|agora nao|prefiro nao|nao precisa|depois|deixa|melhor nao|dispenso|sem|nem)\b/
+export const recusaPreAnalise = (t: string) => RECUSA.test(normalizar(t))
+export const aceitaPreAnalise = (t: string) => !recusaPreAnalise(t) && ACEITA.test(normalizar(t))
+
+export const listaNatural = (itens: string[]) => (itens.length <= 1 ? itens.join('') : `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`)
+
+export const textoConsentimento = (bancos: string[], vendedor: string) =>
+  `Quer que ${vendedor} já faça uma *pré-análise de crédito* nos bancos parceiros (${listaNatural(bancos)})? Para isso preciso do seu CPF e da sua data de nascimento, usados só para essa consulta. Responda *sim* para autorizar ou *não*.`
+export const TEXTO_CPF = 'Combinado! Me manda o seu CPF (só os números).'
+export const TEXTO_CPF_INVALIDO = 'Esse CPF não parece certo 🤔 Confere e me manda de novo, só os números?'
+export const TEXTO_NASCIMENTO = 'E a sua data de nascimento? (ex.: 15/03/1990)'
+export const TEXTO_NASCIMENTO_INVALIDO = 'Não entendi a data 🤔 Me manda no formato dia/mês/ano, por exemplo 15/03/1990.'
+export const textoFichaRecebida = (vendedor: string) => `🔒 Recebido! ${vendedor} faz a pré-análise nos bancos e te retorna com as condições aprovadas.`
+
+export interface AnaliseCredito { banco: string; status: StatusAnalise; entrada: number | null; prazo: number | null; parcela: number | null; taxa: number | null }
+
+/** Leitura da pré-análise para a nota, as etiquetas e o funil. */
+export function leituraCredito(ficha: { analises: Array<{ status: string }> } | null | undefined): { ficha: boolean; aprovado: boolean; recusado: boolean } | null {
+  if (!ficha) return null
+  const s = ficha.analises.map(a => a.status)
+  return { ficha: true, aprovado: s.includes('APROVADA'), recusado: s.length > 0 && s.every(x => x === 'RECUSADA') }
+}
+
+/** Mensagem ao cliente com a condição que o banco aprovou (lançada pelo vendedor). */
+export function textoAprovacao(a: AnaliseCredito, o: { nome: string; vendedor: string }): string {
+  const condicao = [a.entrada !== null ? `entrada de ${reais(a.entrada)}` : null, a.prazo && a.parcela ? `${a.prazo}x de ${reais(a.parcela, 2)}` : null].filter(Boolean)
+  return [
+    `✅ Boa notícia${o.nome ? `, ${o.nome}` : ''}! Sua pré-análise foi aprovada no ${a.banco}${condicao.length ? `: ${condicao.join(' e ')}` : ''}.`,
+    '',
+    `${o.vendedor} já pode seguir com a sua proposta. Prefere passar na loja ou fechar por aqui?`,
+    '',
+    '_Sujeito à confirmação dos documentos pelo banco._',
+  ].join('\n')
+}
+
+/** Ficha para o vendedor colar no portal de cada banco. */
+export function textoFicha(f: { nome: string; telefone: string; cpf: string; nascimento: string | null; renda: number | null; moto: string | null; valor: number | null; entrada: number | null; autorizadoEm: Date }): string {
+  const quando = f.autorizadoEm.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return [
+    `Nome: ${f.nome}`,
+    `CPF: ${formatarCpf(f.cpf)}`,
+    `Nascimento: ${f.nascimento ?? 'a confirmar'}`,
+    `Telefone: ${f.telefone}`,
+    ...(f.renda ? [`Renda informada: ${reais(f.renda)}`] : []),
+    ...(f.moto || f.valor ? [`Veículo: ${[f.moto, f.valor ? reais(f.valor) : null].filter(Boolean).join(' · ')}`] : []),
+    ...(f.entrada !== null ? [`Entrada: ${reais(f.entrada)}`] : []),
+    `Autorizou a consulta em ${quando}`,
+  ].join('\n')
 }

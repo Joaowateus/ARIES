@@ -1886,14 +1886,61 @@ model AssistenteConversa {
   encerradaEm          DateTime?
   criadoEm             DateTime  @default(now())
 
-  assistente AssistenteComercial  @relation(fields: [assistenteId], references: [id])
-  lead       Lead?                @relation(fields: [leadId], references: [id])
+  assistente AssistenteComercial   @relation(fields: [assistenteId], references: [id])
+  lead       Lead?                 @relation(fields: [leadId], references: [id])
   mensagens  AssistenteMensagem[]
+  ficha      AssistenteFichaCredito?
 
   @@index([assistenteId])
   @@index([assistenteId, tipo])
   @@index([assistenteId, numeroContato])
   @@map("pro_labore_assistente_conversas")
+}
+
+// Pré-análise de crédito (nível 2 da simulação, sem API): a ficha que o
+// cliente autorizou no WhatsApp e a resposta de cada banco parceiro, lançada
+// pelo vendedor no portal do banco. O CPF só aparece para a gestão e para o
+// vendedor da conversa, e nunca vai para a IA nem para o aviso no WhatsApp.
+model AssistenteFichaCredito {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  conversaId    String   @unique
+  cpf           String
+  nascimento    String? // dd/mm/aaaa
+  // { em, pergunta, resposta } — a autorização como o cliente deu.
+  consentimento Json
+  origem        String   @default("ROBO") // ROBO | VENDEDOR
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  conversa AssistenteConversa       @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  analises AssistenteAnaliseCredito[]
+
+  @@index([usuarioId])
+  @@map("pro_labore_assistente_fichas_credito")
+}
+
+model AssistenteAnaliseCredito {
+  id                 String    @id @default(cuid())
+  fichaId            String
+  usuarioId          String
+  banco              String
+  status             String    @default("A_ENVIAR") // A_ENVIAR | EM_ANALISE | APROVADA | RECUSADA
+  entrada            Float?
+  prazo              Int?
+  parcela            Float?
+  taxa               Float?
+  observacao         String?
+  respondidoEm       DateTime?
+  enviadaAoClienteEm DateTime?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  ficha AssistenteFichaCredito @relation(fields: [fichaId], references: [id], onDelete: Cascade)
+
+  @@unique([fichaId, banco])
+  @@index([usuarioId, criadoEm])
+  @@map("pro_labore_assistente_analises_credito")
 }
 
 model AssistenteMensagem {

@@ -5,7 +5,7 @@
 // para quem vai financiar e o vendedor refaz pela conversa. Começa desligada
 // e só liga depois de as taxas serem salvas.
 import { useEffect, useState } from 'react'
-import { proLaboreApi, type ConfigSimulacaoFinanciamento, type DadosSimulacaoFinanciamento } from '@/lib/proLaboreApi'
+import { proLaboreApi, type ConfigSimulacaoFinanciamento, type DadosSimulacaoFinanciamento, type ResumoCredito } from '@/lib/proLaboreApi'
 import { lerReais } from './util'
 
 const REGRAS = [
@@ -16,6 +16,7 @@ const REGRAS = [
   'O preço da moto só aparece para o cliente se "Preço no WhatsApp" estiver ligado na aba Estoque.',
 ]
 const PRAZOS = [6, 10, 12, 15, 18, 24, 30, 36, 42, 48, 60, 72]
+const BANCOS_COMUNS = ['Santander', 'BV', 'PAN', 'Bradesco', 'Itaú', 'Banco do Brasil', 'C6', 'Omni', 'Banco Honda', 'Banco Yamaha']
 
 type Previa = { texto: string; resumo: string } | { erro: string }
 
@@ -27,10 +28,13 @@ export function Simulacao({ nomeVendedor }: { nomeVendedor?: string }) {
   const [erro, setErro] = useState('')
   const [exemplo, setExemplo] = useState({ valor: '20.000', entrada: '4.000', renda: '3.500' })
   const [previa, setPrevia] = useState<Previa | null>(null)
+  const [novoBanco, setNovoBanco] = useState('')
+  const [placar, setPlacar] = useState<ResumoCredito | null>(null)
 
   useEffect(() => {
     let cancelado = false
     proLaboreApi.assistente.simulacao().then(d => { if (!cancelado) { setDados(d); setCfg(d.config) } }).catch(e => { if (!cancelado) setErro((e as Error).message) })
+    proLaboreApi.assistente.resumoCredito(30).then(r => { if (!cancelado) setPlacar(r) }).catch(() => undefined)
     return () => { cancelado = true }
   }, [])
 
@@ -50,6 +54,11 @@ export function Simulacao({ nomeVendedor }: { nomeVendedor?: string }) {
 
   if (!dados || !cfg) return erro ? <div className="pl-alert pl-alert-error">{erro}</div> : <div className="pl-hint">Carregando…</div>
   const editavel = dados.podeEditar
+  const addBanco = (nome: string) => {
+    const b = nome.trim().slice(0, 40)
+    if (b) setCfg(c => c && (c.bancos.some(x => x.toLowerCase() === b.toLowerCase()) || c.bancos.length >= 8 ? c : { ...c, bancos: [...c.bancos, b] }))
+    setNovoBanco('')
+  }
   const mudarTaxa = (i: number, campo: 'prazo' | 'taxa', valor: number) =>
     setCfg(c => c && ({ ...c, taxas: c.taxas.map((t, j) => (j === i ? { ...t, [campo]: valor } : t)) }))
 
@@ -61,7 +70,7 @@ export function Simulacao({ nomeVendedor }: { nomeVendedor?: string }) {
       const r = await proLaboreApi.assistente.salvarSimulacao({ ...extra, ...(extra.ativa === undefined && { config: cfg! }) })
       setDados(r)
       if (extra.ativa === undefined) setCfg(r.config)
-      setAviso(extra.ativa === true ? 'Simulação ligada: o robô passa a simular para quem vai financiar.' : extra.ativa === false ? 'Simulação desligada no robô. O vendedor ainda pode simular pela conversa.' : 'Taxas salvas.')
+      setAviso(extra.ativa === true ? 'Simulação ligada: o robô passa a simular para quem vai financiar.' : extra.ativa === false ? 'Simulação desligada no robô. O vendedor ainda pode simular pela conversa.' : 'Configuração salva.')
     } catch (e) {
       setErro((e as Error).message)
     } finally {
@@ -134,9 +143,41 @@ export function Simulacao({ nomeVendedor }: { nomeVendedor?: string }) {
             <textarea id="si-aviso" className="pl-input pl-textarea" rows={2} maxLength={300} value={cfg.aviso} disabled={!editavel} onChange={e => setCfg(c => c && ({ ...c, aviso: e.target.value }))} />
             <div className="pl-hint">Use {'{vendedor}'} para o nome do vendedor.</div>
           </div>
+
+          <div className="pl-si-secao" data-bancos>
+            <div className="pl-card-title">Pré-análise nos bancos parceiros</div>
+            <div className="pl-card-sub">Depois da simulação, o robô pede ao cliente a autorização, o CPF e a data de nascimento. O vendedor lança a ficha no portal de cada banco e registra a resposta na conversa.</div>
+            <div className="pl-si-bancos">
+              {cfg.bancos.map(b => (
+                <span key={b} className="pl-si-banco" data-banco={b}>
+                  {b}
+                  {editavel && <button type="button" onClick={() => setCfg(c => c && ({ ...c, bancos: c.bancos.filter(x => x !== b), preAnalise: c.bancos.length > 1 && c.preAnalise }))} aria-label={`Tirar ${b}`}>✕</button>}
+                </span>
+              ))}
+              {!cfg.bancos.length && <span className="pl-hint">Nenhum banco cadastrado.</span>}
+            </div>
+            {editavel && cfg.bancos.length < 8 && (
+              <>
+                <form className="pl-si-novo-banco" onSubmit={e => { e.preventDefault(); addBanco(novoBanco) }}>
+                  <input className="pl-input" value={novoBanco} maxLength={40} onChange={e => setNovoBanco(e.target.value)} placeholder="Nome do banco" aria-label="Novo banco parceiro" />
+                  <button type="submit" className="pl-btn pl-btn-ghost" disabled={!novoBanco.trim()}>Adicionar</button>
+                </form>
+                <div className="pl-si-sugestoes">
+                  {BANCOS_COMUNS.filter(b => !cfg.bancos.some(x => x.toLowerCase() === b.toLowerCase())).map(b => (
+                    <button key={b} type="button" className="pl-chip" onClick={() => addBanco(b)} data-sugestao-banco={b}>+ {b}</button>
+                  ))}
+                </div>
+              </>
+            )}
+            <button type="button" role="switch" aria-checked={cfg.preAnalise} className={`pl-as-switch linha ${cfg.preAnalise ? 'on' : ''}`} disabled={!editavel || !cfg.bancos.length} onClick={() => setCfg(c => c && ({ ...c, preAnalise: !c.preAnalise }))} data-pre-analise>
+              <span className="pl-as-switch-trilho" aria-hidden="true"><span /></span>
+              <span><b>Robô pede a ficha depois da simulação</b><small>{cfg.bancos.length ? 'Só com o "sim" do cliente. O CPF fica na conversa, para o vendedor e a gestão; nunca vai para a IA nem para o aviso no WhatsApp.' : 'Cadastre ao menos um banco.'}</small></span>
+            </button>
+          </div>
+
           {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }}>{erro}</div>}
           {aviso && <div className="pl-hint" style={{ marginTop: 12 }} data-aviso-simulacao>{aviso}</div>}
-          {editavel && <div className="pl-vt-rodape"><button type="button" className="pl-btn pl-btn-primary" onClick={() => salvar()} disabled={salvando} data-salvar-simulacao>{salvando ? 'Salvando…' : 'Salvar taxas'}</button></div>}
+          {editavel && <div className="pl-vt-rodape"><button type="button" className="pl-btn pl-btn-primary" onClick={() => salvar()} disabled={salvando} data-salvar-simulacao>{salvando ? 'Salvando…' : 'Salvar'}</button></div>}
         </div>
 
         <div className="pl-fu-lateral">
@@ -157,6 +198,26 @@ export function Simulacao({ nomeVendedor }: { nomeVendedor?: string }) {
                 <div className="pl-as-subtitulo" style={{ marginTop: 10 }}>O vendedor vê</div>
                 <div className="pl-si-leitura" data-resumo-previa>{previa.resumo}</div>
               </>
+            )}
+          </div>
+          <div className="pl-card" data-placar-bancos>
+            <div className="pl-card-title" style={{ marginBottom: 8 }}>Bancos · últimos 30 dias</div>
+            {!placar ? <div className="pl-hint">Carregando…</div> : !placar.bancos.some(b => b.lancadas) ? (
+              <div className="pl-hint">Quando o vendedor registrar a resposta dos bancos, aparece aqui quanto cada um aprova e a taxa que sai.</div>
+            ) : (
+              <table className="pl-si-placar">
+                <thead><tr><th>Banco</th><th>Lançadas</th><th>Aprovação</th><th>Taxa média</th></tr></thead>
+                <tbody>
+                  {placar.bancos.filter(b => b.lancadas).map(b => (
+                    <tr key={b.banco} data-placar={b.banco}>
+                      <td>{b.banco}</td>
+                      <td>{b.lancadas}{b.emAnalise ? <small> ({b.emAnalise} em análise)</small> : null}</td>
+                      <td>{b.aprovacaoPct === null ? '—' : `${b.aprovacaoPct}%`}<small> {b.aprovadas}✓ {b.recusadas}✕</small></td>
+                      <td>{b.taxaMedia === null ? '—' : `${b.taxaMedia.toLocaleString('pt-BR')}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
           <div className="pl-card">

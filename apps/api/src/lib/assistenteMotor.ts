@@ -28,7 +28,7 @@ import {
   avancarRoteiro, casaGatilho, complementarResposta, desiste, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
 } from './assistenteRoteiro'
 import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, simuladorDoRobo, vitrineDaLoja } from './assistenteRespostas'
-import { ResultadoSimulacao, resumoSimulacao } from './assistenteSimulacao'
+import { ResultadoSimulacao, formatarCpf, leituraCredito, resumoSimulacao } from './assistenteSimulacao'
 import { calcularNota } from './assistenteNota'
 import { Avanco, Etiqueta, ROTULO_ETAPA, etiquetasDoLead, proximaEtapa, rebaixadoHaPouco } from './assistenteJornada'
 import { PassoFollow, baseDoFollow, dentroDoHorario, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido } from './assistenteFollow'
@@ -354,6 +354,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
       }
       const passo = avancarRoteiro(cfg, estado, m.texto, contexto(a, cfg, nomeContato), baseDoRobo(nomeContato, estado.respostas), simuladorDoRobo(cfg, contexto(a, cfg, nomeContato), vitrine))
       await tx.assistenteConversa.update({ where: { id: conversa.id }, data: { ...base, ...dadosDoPasso(passo) } })
+      if (passo.ficha) await salvarFichaDoPasso(tx, conversa.id, a.vendedor.usuarioId, passo.ficha, vitrine?.simulacao?.bancos ?? [])
       return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo, mensagensAvulsas: [], nomeContato, origem: conversa.origem }
     }
 
@@ -432,7 +433,7 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
   const conversa = await prisma.assistenteConversa.findUnique({
     where: { id: conversaId },
     select: {
-      tipo: true, leadId: true, respostas: true, nota: true, simulacao: true,
+      tipo: true, leadId: true, respostas: true, nota: true, simulacao: true, ficha: { select: { analises: { select: { status: true } } } },
       assistente: { select: { id: true, instancia: true, numeroWhatsapp: true, configuracao: true, vendedor: { select: { nome: true, usuarioId: true } } } },
       mensagens: { orderBy: { criadoEm: 'desc' }, take: 80, select: { remetente: true, texto: true, criadoEm: true } },
     },
@@ -446,7 +447,7 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
   const nossa = conversa.mensagens.find(m => m.remetente !== 'CONTATO')
   const etiquetas = etiquetasDoLead({
     cfg, respostas: (conversa.respostas ?? {}) as Record<string, string>, textosDoContato: doContato.map(m => m.texto), nota: conversa.nota,
-    ultimaDoContatoEm: doContato[0]?.criadoEm ?? null, ultimaNossaEm: nossa?.criadoEm ?? null, agora, simulacao: avaliacaoDa(conversa.simulacao),
+    ultimaDoContatoEm: doContato[0]?.criadoEm ?? null, ultimaNossaEm: nossa?.criadoEm ?? null, agora, simulacao: avaliacaoDa(conversa.simulacao), credito: leituraCredito(conversa.ficha),
   })
   if (etiquetas.join() !== lead.etiquetas.join()) await prisma.lead.update({ where: { id: lead.id }, data: { etiquetas } })
 
@@ -603,11 +604,11 @@ export async function atualizarEtiquetasRecentes(limite = 300, agora = new Date(
 export async function atualizarNota(cfg: ConfigAssistente, conversaId: string) {
   const conversa = await prisma.assistenteConversa.findUnique({
     where: { id: conversaId },
-    select: { origem: true, respostas: true, resultado: true, leadId: true, simulacao: true, mensagens: { where: { remetente: 'CONTATO' }, orderBy: { criadoEm: 'desc' }, take: 40, select: { texto: true } } },
+    select: { origem: true, respostas: true, resultado: true, leadId: true, simulacao: true, ficha: { select: { analises: { select: { status: true } } } }, mensagens: { where: { remetente: 'CONTATO' }, orderBy: { criadoEm: 'desc' }, take: 40, select: { texto: true } } },
   })
   if (!conversa) return
   const { nota, sinais } = calcularNota({
-    cfg, origem: conversa.origem, resultado: conversa.resultado, simulacao: avaliacaoDa(conversa.simulacao),
+    cfg, origem: conversa.origem, resultado: conversa.resultado, simulacao: avaliacaoDa(conversa.simulacao), credito: leituraCredito(conversa.ficha),
     respostas: (conversa.respostas ?? {}) as Record<string, string>,
     textosDoContato: conversa.mensagens.map(m => m.texto),
   })
@@ -629,6 +630,24 @@ function perguntaJaEntregue(recentes: Array<{ remetente: string; providerId: str
   return !ultimaDoContato || pergunta.criadoEm > ultimaDoContato.criadoEm
 }
 
+// Ficha da pré-análise colhida pelo robô: o CPF chega num passo e a data de
+// nascimento no seguinte. Cada banco parceiro começa como "a enviar".
+async function salvarFichaDoPasso(tx: Prisma.TransactionClient, conversaId: string, usuarioId: string, ficha: NonNullable<PassoRoteiro['ficha']>, bancos: string[]) {
+  if (ficha.cpf) {
+    const consentimento = (ficha.consentimento ?? {}) as Prisma.InputJsonValue
+    const f = await tx.assistenteFichaCredito.upsert({
+      where: { conversaId },
+      create: { conversaId, usuarioId, cpf: ficha.cpf, consentimento, origem: 'ROBO' },
+      update: { cpf: ficha.cpf, consentimento, nascimento: null },
+      select: { id: true },
+    })
+    for (const banco of bancos) {
+      await tx.assistenteAnaliseCredito.upsert({ where: { fichaId_banco: { fichaId: f.id, banco } }, create: { fichaId: f.id, usuarioId, banco }, update: {} })
+    }
+  }
+  if (ficha.nascimento) await tx.assistenteFichaCredito.updateMany({ where: { conversaId }, data: { nascimento: ficha.nascimento } })
+}
+
 const avaliacaoDa = (simulacao: Prisma.JsonValue | null) => (simulacao as { avaliacao?: string } | null)?.avaliacao ?? null
 
 // Respostas do roteiro + a simulação de financiamento, para o CRM e o aviso.
@@ -636,6 +655,14 @@ function linhasDaConversa(cfg: ConfigAssistente, conversa: { respostas: Prisma.J
   const linhas = linhasResumo(cfg, (conversa.respostas ?? {}) as Record<string, string>)
   const sim = conversa.simulacao as unknown as ResultadoSimulacao | null | undefined
   if (sim?.opcoes?.length) linhas.push({ rotulo: 'Simulação', valor: resumoSimulacao(sim) })
+  // Só o andamento: CPF e nascimento ficam na ficha, nunca no aviso nem no CRM.
+  const ficha = ((conversa.respostas ?? {}) as Record<string, string>)._ficha
+  const PRE_ANALISE: Record<string, string> = {
+    COMPLETA: 'autorizada ✅ — ficha pronta na conversa para lançar nos bancos',
+    CPF: 'autorizada, falta confirmar a data de nascimento (ficha na conversa)',
+    RECUSOU: 'o cliente preferiu não fazer agora',
+  }
+  if (ficha && PRE_ANALISE[ficha]) linhas.push({ rotulo: 'Pré-análise', valor: PRE_ANALISE[ficha] })
   return linhas
 }
 
@@ -738,6 +765,9 @@ async function concluirAtendimento(a: AssistenteCompleto, cfg: ConfigAssistente,
       logger.error({ err: e, conversaId }, 'assistente: falha ao criar lead no CRM')
     }
   }
+  // CPF da ficha autorizada completa o lead (se ainda não tinha).
+  const ficha = await prisma.assistenteFichaCredito.findUnique({ where: { conversaId }, select: { cpf: true } })
+  if (ficha && leadId) await prisma.lead.updateMany({ where: { id: leadId, OR: [{ cpf: null }, { cpf: '' }] }, data: { cpf: formatarCpf(ficha.cpf) } })
   if (cfg.avisarVendedor && a.numeroWhatsapp) {
     const respostas = (conversa.respostas ?? {}) as Record<string, string>
     const linhas = linhasDaConversa(cfg, conversa)
