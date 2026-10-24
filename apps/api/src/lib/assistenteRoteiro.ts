@@ -29,6 +29,10 @@ export interface ConfigAssistente {
   avisarVendedor: boolean
   criarLeadNoCrm: boolean
   atrasoSegundos: number
+  // Assistente pessoal no chat "Você": avisa lead esperando há N min (0 =
+  // desligado) e manda o resumo da manhã.
+  alertaEsperaMin: number
+  resumoManha: boolean
 }
 
 export const CONFIG_PADRAO: ConfigAssistente = {
@@ -48,6 +52,8 @@ export const CONFIG_PADRAO: ConfigAssistente = {
   avisarVendedor: true,
   criarLeadNoCrm: true,
   atrasoSegundos: 3,
+  alertaEsperaMin: 10,
+  resumoManha: true,
 }
 
 // Mescla o que está salvo com o padrão — config antiga (ou incompleta)
@@ -76,6 +82,8 @@ export function lerConfig(salva: unknown): ConfigAssistente {
     avisarVendedor: typeof c.avisarVendedor === 'boolean' ? c.avisarVendedor : CONFIG_PADRAO.avisarVendedor,
     criarLeadNoCrm: typeof c.criarLeadNoCrm === 'boolean' ? c.criarLeadNoCrm : CONFIG_PADRAO.criarLeadNoCrm,
     atrasoSegundos: Math.min(15, Math.max(0, Number(c.atrasoSegundos ?? CONFIG_PADRAO.atrasoSegundos) || 0)),
+    alertaEsperaMin: Math.min(120, Math.max(0, Math.round(Number(c.alertaEsperaMin ?? CONFIG_PADRAO.alertaEsperaMin)) || 0)),
+    resumoManha: typeof c.resumoManha === 'boolean' ? c.resumoManha : CONFIG_PADRAO.resumoManha,
   }
 }
 
@@ -303,6 +311,8 @@ export const TEXTO_MENU = [
   '*pendentes* — leads esperando você responder',
   '*pausar* — parar as respostas automáticas',
   '*ativar* — voltar a responder leads novos',
+  '',
+  'Também respondo perguntas: *como estou hoje?*, *quem está esperando?*, *ficha da XRE?*… Mande *? ajuda* pra ver tudo.',
   '',
   'Quando um lead terminar as perguntas, eu te aviso aqui com o resumo. Assim que você responder a conversa dele, eu saio de cena.',
 ].join('\n')

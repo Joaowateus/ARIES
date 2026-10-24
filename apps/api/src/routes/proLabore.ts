@@ -2897,6 +2897,8 @@ const configAssistenteSchema = z.object({
   avisarVendedor: z.boolean(),
   criarLeadNoCrm: z.boolean(),
   atrasoSegundos: z.number().min(0).max(15),
+  alertaEsperaMin: z.number().int().min(0).max(120).optional(),
+  resumoManha: z.boolean().optional(),
 })
 
 const salvarAssistenteSchema = z.object({

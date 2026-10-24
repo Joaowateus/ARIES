@@ -1572,6 +1572,9 @@ export interface ConfigRoteiroAssistente {
   avisarVendedor: boolean
   criarLeadNoCrm: boolean
   atrasoSegundos: number
+  // Assistente pessoal no chat "Você": aviso de lead esperando há N min (0 = desligado) e resumo da manhã.
+  alertaEsperaMin?: number
+  resumoManha?: boolean
 }
 
 export interface AssistenteComercial {
