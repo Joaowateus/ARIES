@@ -19,6 +19,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { logger } from './logger'
+import { agenteDaPessoa, enviarComoPessoa } from './agenteEnvio'
 import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
 import { conversasRecentes, enviarImagem, enviarTexto, historicoDoContato, mensagensDoContato, perfilInstancia } from './whatsappEvolution'
 import { DadosDoCliente, lerDadosDoCliente, mascararDadosPessoais, nomeFraco, nomeProprio, resumoDosDados, temIntencaoDeCompra } from './assistenteCaptura'
@@ -1204,9 +1205,16 @@ export async function avisarLeadsEsperando(agora = new Date()): Promise<{ avisos
       ...novos.slice(0, 6).map(e => `• ${e.nome} — ${tempoDesdePessoal(e.desde, agora)}${e.ultima ? `: "${e.ultima}"` : ''}\n  wa.me/${e.numero}`),
     ].join('\n')
     await prisma.assistenteConversa.updateMany({ where: { id: { in: novos.map(e => e.conversaId) } }, data: { alertaEsperaEm: agora } })
-    const suporte = await conversaDeSuporte(a)
-    await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, suporte.id, a.numeroWhatsapp!, [texto])
-      .catch(e => logger.warn({ err: e }, 'assistente: falha ao avisar lead esperando'))
+    // Quem conversa com o Aries recebe o aviso por ele, em outra conversa; senão, no chat "Você".
+    const aries = await agenteDaPessoa(a.vendedor.id, 'alertas')
+    if (aries) {
+      await enviarComoPessoa(aries.agente, aries.numero, `${texto}\n\nManda *quem atendo agora* para ver a fila completa.`, { vinculoId: aries.vinculoId, intencao: 'ALERTA' })
+        .catch(e => logger.warn({ err: e }, 'assistente: falha ao avisar lead esperando pelo Aries'))
+    } else {
+      const suporte = await conversaDeSuporte(a)
+      await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, suporte.id, a.numeroWhatsapp!, [texto])
+        .catch(e => logger.warn({ err: e }, 'assistente: falha ao avisar lead esperando'))
+    }
     avisos += 1
   }
   return { avisosEspera: avisos }
@@ -1222,6 +1230,8 @@ export async function enviarResumosDaManha(agora = new Date()): Promise<{ resumo
   for (const a of await assistentesParaAvisar()) {
     const cfg = lerConfig(a.configuracao)
     if (!cfg.avisarVendedor || !cfg.resumoManha || (a.resumoManhaEm && a.resumoManhaEm >= hoje)) continue
+    // Quem recebe o resumo da manhã pelo Aries não recebe o do chat "Você" (seriam dois).
+    if (await agenteDaPessoa(a.vendedor.id, 'manha')) continue
     // Marca antes: duas rodadas juntas não mandam dois resumos.
     const marcado = await prisma.assistenteComercial.updateMany({ where: { id: a.id, OR: [{ resumoManhaEm: null }, { resumoManhaEm: { lt: hoje } }] }, data: { resumoManhaEm: agora } })
     if (!marcado.count) continue

@@ -115,8 +115,8 @@ function ultimoMovimento(l: LeadComHist): number {
 }
 
 /** Itens da agenda que valem para a pessoa num dia (mesma regra da tela da Agenda). */
-type ItemAgenda = { id: string; titulo: string; tipo: string; data: Date | null; diasSemana: string | null; dataInicio: Date | null; dataFim: Date | null; horario: string | null; vendedorIds: string | null; incluiDono: boolean; criadoEm: Date }
-function valeNoDia(i: ItemAgenda, dia: Date, autor: string, ehDono: boolean): boolean {
+export type ItemAgenda = { id: string; titulo: string; tipo: string; data: Date | null; diasSemana: string | null; dataInicio: Date | null; dataFim: Date | null; horario: string | null; vendedorIds: string | null; incluiDono: boolean; criadoEm: Date }
+export function valeNoDia(i: ItemAgenda, dia: Date, autor: string, ehDono: boolean): boolean {
   const alvos = (i.vendedorIds ?? '').split(',').map(s => s.trim()).filter(Boolean)
   const paraTodos = alvos.length === 0 && !i.incluiDono
   if (!paraTodos && !(ehDono ? i.incluiDono : alvos.includes(autor))) return false

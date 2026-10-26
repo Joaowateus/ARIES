@@ -15,7 +15,8 @@
     "test:intel": "node --require ts-node/register --test tests/intelMotor.test.ts",
     "test:infra": "node --require ts-node/register --test tests/infra.test.ts",
     "test:assistente": "node --require ts-node/register --test tests/assistente.test.ts",
-    "test:copiloto": "node --require ts-node/register --test tests/copiloto.test.ts"
+    "test:copiloto": "node --require ts-node/register --test tests/copiloto.test.ts",
+    "test:agente": "node --require ts-node/register --test tests/agente.test.ts"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"

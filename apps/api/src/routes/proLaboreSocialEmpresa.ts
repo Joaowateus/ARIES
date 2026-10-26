@@ -10,6 +10,7 @@ import { Router, Request, Response } from 'express'
 import { aprenderTodas } from '../lib/assistenteAprendizado'
 import { verificarAvancos } from '../lib/assistenteRespostas'
 import { atualizarEtiquetasRecentes, avisarLeadsEsperando, enviarResumosDaManha, higienizarObservacoes, recalcularEtiquetasAbertas, rodarFollows, varrerConversasRecentes } from '../lib/assistenteMotor'
+import { rodarAgente } from '../lib/agenteMotor'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
@@ -366,9 +367,11 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
     rodarFollows(agoraDoCron(req), 8000).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0 } }),
     varrerConversasRecentes(agoraDoCron(req), 6000).catch(e => { console.error('[assistente] varredura', e); return { varreduras: 0, mensagensVarridas: 0 } }),
   ])
-  // Assistente pessoal: avisa o vendedor de lead esperando resposta.
+  // Assistente pessoal: avisa o vendedor de lead esperando resposta (pelo Aries, quando vinculado).
   const espera = await avisarLeadsEsperando(agoraDoCron(req)).catch(e => { console.error('[assistente] espera', e); return { avisosEspera: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera })
+  // Aries no WhatsApp: o resumo da manhã no horário escolhido pelo gestor.
+  const agente = await rodarAgente(agoraDoCron(req), 5000).catch(e => { console.error('[agente] manhã', e); return { manhaAgente: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
