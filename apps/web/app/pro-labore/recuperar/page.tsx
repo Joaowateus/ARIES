@@ -45,7 +45,7 @@ export default function ProLaboreRecuperarPage() {
           <div style={{ margin: '0 auto 14px', display: 'flex', justifyContent: 'center' }}>
             <AriesBrandMark size={52} />
           </div>
-          <h1 style={{ fontFamily: 'Sora', fontWeight: 700, fontSize: 22, margin: 0 }}>Pró-Labore</h1>
+          <h1 style={{ fontFamily: 'var(--pl-font-display)', fontWeight: 700, fontSize: 22, margin: 0 }}>Pró-Labore</h1>
           <p style={{ color: 'var(--pl-ink-muted)', fontSize: 13, marginTop: 4 }}>Recuperar acesso à sua conta</p>
         </div>
 

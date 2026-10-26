@@ -443,7 +443,7 @@ export default function ProLaboreVendasPage() {
                 <textarea
                   className="pl-input"
                   rows={8}
-                  style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5 }}
+                  style={{ fontFamily: 'var(--pl-font-mono)', fontSize: 12.5 }}
                   value={textoImportacao}
                   onChange={e => setTextoImportacao(e.target.value)}
                   placeholder={'Jan\tWanderson\tR$ 23.900,00\t✅ Importado\nJan\tNaiza\tR$ 20.000,00\t✅ Importado'}

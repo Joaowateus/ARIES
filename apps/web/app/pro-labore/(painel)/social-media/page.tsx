@@ -252,7 +252,7 @@ export default function ProLaboreSocialMediaPage() {
               <form onSubmit={conectar}>
                 <textarea
                   className="pl-input"
-                  style={{ width: '100%', minHeight: 80, fontFamily: 'monospace', fontSize: 12 }}
+                  style={{ width: '100%', minHeight: 80, fontFamily: 'var(--pl-font-mono)', fontSize: 12 }}
                   placeholder="Cole aqui o token gerado no painel da Meta"
                   value={tokenInput}
                   onChange={e => setTokenInput(e.target.value)}

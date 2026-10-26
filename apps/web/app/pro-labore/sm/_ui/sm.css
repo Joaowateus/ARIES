@@ -3,7 +3,7 @@
    de permissões do gestor. Valores do protótipo (referencia-visual/*.html) no
    tema escuro, que é o padrão; o tema claro deriva a mesma semântica com
    contraste mínimo de 4,5:1 e segue a preferência do Pró-Labore
-   (data-theme em .pl-app). As fontes vêm do @import de pro-labore.css. */
+   (data-theme em .pl-app). As fontes vêm dos tokens --pl-font-* de .pl-app (Geist via next/font). */
 .sm-app {
   --sm-bg: #0A0A0B;
   --sm-bg-sidebar: #0D0D0F;
@@ -63,9 +63,9 @@
   --sm-radius-chip: 999px;
   --sm-radius-modal: 18px;
 
-  --sm-font-title: 'Manrope', 'Sora', system-ui, sans-serif;
-  --sm-font-text: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --sm-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --sm-font-title: var(--pl-font-display), var(--pl-font-display), system-ui, sans-serif;
+  --sm-font-text: var(--pl-font-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sm-font-mono: var(--pl-font-num);
 
   color-scheme: dark;
   background: var(--sm-bg);

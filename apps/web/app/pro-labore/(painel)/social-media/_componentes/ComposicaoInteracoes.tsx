@@ -77,7 +77,7 @@ export function ComposicaoInteracoes({ composicao, recarregando }: { composicao:
               />
             ))}
             <text x={TAM / 2} y={TAM / 2 - 6} textAnchor="middle" className="rotulo-leve">{destaque ? destaque.rotulo : 'Interações'}</text>
-            <text x={TAM / 2} y={TAM / 2 + 16} textAnchor="middle" style={{ fontFamily: 'IBM Plex Mono', fontSize: 20, fontWeight: 700, fill: 'var(--pl-ink-1)' }}>
+            <text x={TAM / 2} y={TAM / 2 + 16} textAnchor="middle" style={{ fontFamily: 'var(--pl-font-num)', fontSize: 20, fontWeight: 700, fill: 'var(--pl-ink-1)' }}>
               {destaque ? fmtPct(destaque.frac, 0) : fmtCompacto(total)}
             </text>
           </svg>

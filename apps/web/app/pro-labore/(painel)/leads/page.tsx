@@ -162,6 +162,8 @@ type FormLead = {
 
 const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '', tipoNegociacao: '', valorNegociacao: '' }
 
+const paramDaUrl = (nome: string) => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(nome))
+
 export default function ProLaboreLeadsPage() {
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel === 'DONO'
@@ -229,7 +231,8 @@ export default function ProLaboreLeadsPage() {
 
   // "Novo lead" virou modal (era um formulário grande sempre aberto no topo,
   // empurrando o quadro pra baixo toda vez) — abre só quando precisa.
-  const [novoLeadAberto, setNovoLeadAberto] = useState(false)
+  // ?novo=1 e ?lead=ID chegam da paleta de comandos (Ctrl K).
+  const [novoLeadAberto, setNovoLeadAberto] = useState(() => paramDaUrl('novo') === '1')
   const [form, setForm] = useState<FormLead>(FORM_VAZIO)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -253,11 +256,29 @@ export default function ProLaboreLeadsPage() {
   // confiar em state do React ali dentro; só em refs, que são sempre atuais.
   const [draggingId, setDraggingId] = useState<string | null>(null)
   // Painel lateral do lead (clique no card) e a densidade dos cards (fica no navegador).
-  const [painelId, setPainelId] = useState<string | null>(null)
+  const [painelId, setPainelId] = useState<string | null>(() => paramDaUrl('lead'))
   const [densidade, setDensidadeEstado] = useState<Densidade>(() => {
     try { return typeof window !== 'undefined' && localStorage.getItem('pl_crm_densidade') === 'detalhado' ? 'detalhado' : 'compacto' } catch { return 'compacto' }
   })
   const fecharPainel = useCallback(() => setPainelId(null), [])
+  // Os atalhos da paleta (?lead=, ?novo=, ?foraDoCrm=) já foram lidos ao montar:
+  // limpa o endereço para recarregar a página não abrir tudo de novo.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (!['lead', 'novo', 'foraDoCrm'].some(p => url.searchParams.has(p))) return
+    for (const p of ['lead', 'novo', 'foraDoCrm']) url.searchParams.delete(p)
+    window.history.replaceState(null, '', url.pathname + url.search)
+  }, [])
+  // Métricas por etapa (R$, conversão, metas): recolhidas num resumo de uma
+  // linha para o quadro aparecer primeiro; a escolha fica no navegador.
+  const [metricasAbertas, setMetricasAbertas] = useState(() => {
+    try { return typeof window !== 'undefined' && localStorage.getItem('pl_crm_metricas') === 'aberto' } catch { return false }
+  })
+  const alternarMetricas = () => {
+    const nova = !metricasAbertas
+    setMetricasAbertas(nova)
+    try { localStorage.setItem('pl_crm_metricas', nova ? 'aberto' : 'fechado') } catch { /* sem armazenamento */ }
+  }
   const setDensidade = (d: Densidade) => { setDensidadeEstado(d); try { localStorage.setItem('pl_crm_densidade', d) } catch { /* sem armazenamento */ } }
   const [dragOverCol, setDragOverCol] = useState<EstagioLead | null>(null)
   const dragRef = useRef<{ lead: Lead; startX: number; startY: number; dragging: boolean; colSobre: EstagioLead | null; abort: AbortController } | null>(null)
@@ -801,6 +822,18 @@ export default function ProLaboreLeadsPage() {
       </div>
 
       {!loading && (
+        <div className="pl-crm-resumo" data-metricas-resumo>
+          <span><small>Oportunidade</small> <b className="pl-crm-fin-oportunidade">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
+          <span><small>Comissão prevista</small> <b>{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPotencialRS, 0))}</b></span>
+          <span><small>Comissão perdida</small> <b className="pl-crm-resumo-perda">{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPerdidaRS, 0))}</b></span>
+          {stagesDados.some(d => d.statusOk === false) && <span className="pl-delta down">{stagesDados.filter(d => d.statusOk === false).length} etapa{stagesDados.filter(d => d.statusOk === false).length > 1 ? 's' : ''} fora da meta</span>}
+          <button type="button" className="pl-link-action" onClick={alternarMetricas} aria-expanded={metricasAbertas} data-alternar-metricas>
+            {metricasAbertas ? 'Esconder métricas por etapa ▴' : 'Ver métricas por etapa ▾'}
+          </button>
+        </div>
+      )}
+
+      {!loading && metricasAbertas && (
         <>
           {isDono && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>

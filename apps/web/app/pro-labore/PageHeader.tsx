@@ -8,7 +8,7 @@ export function PageHeader({ eyebrow, title, subtitle, actions }: {
   actions?: React.ReactNode
 }) {
   return (
-    <div className="pl-section-head" style={{ marginTop: 0 }}>
+    <div className="pl-section-head pl-page-head">
       <div>
         <div className="pl-eyebrow">{eyebrow}</div>
         <h1 className="pl-page-title">{title}</h1>

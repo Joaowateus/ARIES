@@ -74,7 +74,7 @@ function NovaAcao({ diag, r, onFechar, onCriada }: { diag: IntelDiagnostico | nu
     <div className="pl-modal-backdrop" onClick={onFechar}>
       <form className="pl-card pl-modal-panel ic-modal" onClick={e => e.stopPropagation()} onSubmit={salvar} role="dialog" aria-modal="true" aria-labelledby="ic-nova-titulo">
         <div className="ic-modal-corpo">
-          <div><div className="pl-eyebrow">Plano de ação</div><h2 id="ic-nova-titulo" style={{ margin: '4px 0 0', fontFamily: 'Sora', fontSize: 18 }}>{diag ? 'Criar ação a partir do diagnóstico' : 'Nova ação'}</h2>
+          <div><div className="pl-eyebrow">Plano de ação</div><h2 id="ic-nova-titulo" style={{ margin: '4px 0 0', fontFamily: 'var(--pl-font-display)', fontSize: 18 }}>{diag ? 'Criar ação a partir do diagnóstico' : 'Nova ação'}</h2>
             <p className="ic-sub">A ação nasce planejada quando o dono cria; quando vem da supervisão, espera a aprovação do dono.</p></div>
           <div className="ic-form">
             <div className="pl-field largo"><label htmlFor="ic-a-titulo">Ação</label><input id="ic-a-titulo" className="pl-input" value={f.titulo} onChange={e => set('titulo', e.target.value)} required minLength={3} /></div>

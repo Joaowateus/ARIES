@@ -94,7 +94,7 @@ export function MapaCalorHorarios({ heatmap, recarregando }: { heatmap: Celula[]
                           strokeWidth={ehMelhor ? 1.5 : 1}
                         />
                         {c.quantidade > 0 && larguraCel >= 34 && (
-                          <text x={x + larguraCel / 2} y={y + alturaCel / 2 + 4} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 600, fill: `var(--sv-seq-ink-${degrau(valor(c)) + 1})`, fontFamily: 'IBM Plex Mono' }}>
+                          <text x={x + larguraCel / 2} y={y + alturaCel / 2 + 4} textAnchor="middle" style={{ fontSize: 10.5, fontWeight: 600, fill: `var(--sv-seq-ink-${degrau(valor(c)) + 1})`, fontFamily: 'var(--pl-font-num)' }}>
                             {c.quantidade}
                           </text>
                         )}
