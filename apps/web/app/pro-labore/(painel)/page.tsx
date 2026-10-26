@@ -232,6 +232,14 @@ export default function ProLaboreDashboardPage() {
   const meses = painel?.meses ?? []
   const atual = meses[selectedIdx]
   const anterior = selectedIdx > 0 ? meses[selectedIdx - 1] : undefined
+  // No celular a faixa de meses rola de lado: abre já mostrando o mês escolhido.
+  const faixaMeses = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const faixa = faixaMeses.current
+    const ativo = faixa?.querySelector<HTMLElement>('.pl-chip.active')
+    if (!faixa || !ativo || faixa.scrollWidth <= faixa.clientWidth) return
+    faixa.scrollLeft += ativo.getBoundingClientRect().left - faixa.getBoundingClientRect().left - (faixa.clientWidth - ativo.offsetWidth) / 2
+  }, [selectedIdx, meses.length])
 
   // Cada card com filtro isolado lê da chave correspondente no cache (caindo
   // pro painel do filtro geral enquanto a chave isolada ainda não voltou).
@@ -352,7 +360,7 @@ export default function ProLaboreDashboardPage() {
       <PageHeader eyebrow="Visão geral" title="Dashboard" subtitle="Receita, lucro, funil e produção da equipe em um só lugar" />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div className="pl-period-row">
+        <div className="pl-period-row pl-faixa-rola" ref={faixaMeses}>
           {meses.map((m, i) => (
             <button key={m.mes} type="button" className={`pl-chip ${i === selectedIdx ? 'active' : ''}`} onClick={() => setSelectedIdx(i)}>
               {m.label} {m.ano}
@@ -525,6 +533,10 @@ export default function ProLaboreDashboardPage() {
         </div>
       </div>
       <div className="pl-card">
+        {/* Nomes e valores por etapa rolam juntos no celular (antes o cabeçalho
+            ficava fora da rolagem e empurrava a página para o lado). */}
+        <div className="pl-journey-scroll pl-dash-etapas">
+        <div className="pl-dash-etapas-inner">
         <div className="pl-journey-row" style={{ marginBottom: 4 }}>
           {ETAPAS_FUNIL_PL.map(etapa => (
             <div key={etapa} className="pl-stage-name" style={{ textAlign: 'center' }}>{NOME_ETAPA_FUNIL[etapa]}</div>
@@ -551,6 +563,8 @@ export default function ProLaboreDashboardPage() {
               <div className="pl-crm-fin-periodo">{rotuloPeriodoJornada}</div>
             </div>
           ))}
+        </div>
+        </div>
         </div>
         <FunilJourney
           funil={funilFiltrado ?? atual.funil}
@@ -756,7 +770,7 @@ function FraseMotivacional({ parametro, onSaved, isDono }: { parametro: Parametr
           </div>
         </div>
       ) : (
-        <p style={{ fontFamily: 'Sora', fontSize: 17, fontWeight: 600, fontStyle: 'italic', color: 'var(--pl-ink-1)', margin: 0 }}>
+        <p style={{ fontFamily: 'var(--pl-font-display)', fontSize: 17, fontWeight: 600, fontStyle: 'italic', color: 'var(--pl-ink-1)', margin: 0 }}>
           {parametro?.fraseMotivacional ? `"${parametro.fraseMotivacional}"` : 'Nenhuma frase cadastrada ainda.'}
         </p>
       )}

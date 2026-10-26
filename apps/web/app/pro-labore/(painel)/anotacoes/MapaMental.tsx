@@ -3830,10 +3830,10 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
               <IconeExportar />
             </button>
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como JSON" onClick={onExportarJson}>
-              <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 9, fontWeight: 700 }}>{'{ }'}</span>
+              <span style={{ fontFamily: 'var(--pl-font-num)', fontSize: 9, fontWeight: 700 }}>{'{ }'}</span>
             </button>
             <button type="button" className="pl-mapa-tv-btn" title="Exportar como Mermaid (.mmd)" onClick={onExportarMermaid}>
-              <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 8, fontWeight: 700 }}>mmd</span>
+              <span style={{ fontFamily: 'var(--pl-font-num)', fontSize: 8, fontWeight: 700 }}>mmd</span>
             </button>
             <div className="pl-mapa-tv-divisor" />
             <button type="button" className="pl-mapa-tv-btn" title="Apresentar" onClick={iniciarApresentacao}>

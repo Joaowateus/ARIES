@@ -2,7 +2,7 @@
 
 // Paleta de comandos (Ctrl/⌘ + K): ir para qualquer aba, achar um lead pelo
 // nome, telefone ou moto e fazer as ações mais comuns sem procurar no menu.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { proLaboreApi, type Lead } from '@/lib/proLaboreApi'
 
@@ -18,7 +18,6 @@ export function PaletaComandos({ itens, podeCrm }: { itens: ItemPaleta[]; podeCr
   const [busca, setBusca] = useState('')
   const [indice, setIndice] = useState(0)
   const [leads, setLeads] = useState<Lead[] | null>(null)
-  const input = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function atalho(e: KeyboardEvent) {
@@ -35,8 +34,6 @@ export function PaletaComandos({ itens, podeCrm }: { itens: ItemPaleta[]; podeCr
     if (!aberta || !podeCrm || leads) return
     proLaboreApi.leads.listar().then(setLeads).catch(() => setLeads([]))
   }, [aberta, podeCrm, leads])
-
-  useEffect(() => { if (aberta) setTimeout(() => input.current?.focus(), 0) }, [aberta])
 
   const fechar = () => { setAberta(false); setBusca(''); setIndice(0) }
   const navegar = (href: string) => { fechar(); router.push(href) }
@@ -86,7 +83,7 @@ export function PaletaComandos({ itens, podeCrm }: { itens: ItemPaleta[]; podeCr
       <div className="pl-cmd" role="dialog" aria-label="Buscar no sistema" onClick={e => e.stopPropagation()} data-paleta>
         <div className="pl-cmd-busca">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-          <input ref={input} value={busca} onChange={e => { setBusca(e.target.value); setIndice(0) }} onKeyDown={tecla} placeholder={podeCrm ? 'Buscar aba, lead (nome, telefone, moto) ou ação…' : 'Buscar aba ou ação…'} aria-label="Buscar" />
+          <input autoFocus value={busca} onChange={e => { setBusca(e.target.value); setIndice(0) }} onKeyDown={tecla} placeholder={podeCrm ? 'Buscar aba, lead (nome, telefone, moto) ou ação…' : 'Buscar aba ou ação…'} aria-label="Buscar" />
           <kbd>Esc</kbd>
         </div>
         <ul className="pl-cmd-lista" role="listbox">

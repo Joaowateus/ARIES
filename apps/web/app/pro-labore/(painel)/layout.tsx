@@ -9,6 +9,7 @@ import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
 import { AvisoBanco } from './_banco/AvisoBanco'
+import { PaletaComandos } from './_comando/PaletaComandos'
 
 // `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
 // paraEquipe: aparece para toda a equipe mesmo sem o módulo (a página mostra a versão pessoal).
@@ -205,7 +206,10 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     ...(usuario.papel === 'SOCIAL_MEDIA' ? [{ label: null, items: [{ href: '/pro-labore/sm', label: 'Social Media', icon: 'at' as NavIconName }] }] : []),
     ...NAV_GROUPS.map(grupo => ({ ...grupo, items: grupo.items.filter(podeVerItem) })),
   ].filter(grupo => grupo.items.length > 0)
-  const paginaAtual = grupos.flatMap(g => g.items).find(item => item.href === pathname)
+  const itensVisiveis = grupos.flatMap(g => g.items)
+  const paginaAtual = itensVisiveis.find(item => item.href === pathname)
+  const podeCrm = itensVisiveis.some(item => item.href === '/pro-labore/leads')
+  const abrirPaleta = () => { setMenuAberto(false); window.dispatchEvent(new Event('pl-abrir-paleta')) }
   const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : usuario.papel === 'SOCIAL_MEDIA' ? 'social media' : null
 
   return (
@@ -215,7 +219,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
           <AriesBrandMark size={34} />
           <div className="pl-sidebar-brand-text">
             <div className="pl-brand-name">Pró-Labore</div>
-            <div className="pl-brand-sub">Liquidez &amp; pró-labore</div>
+            <div className="pl-brand-sub">Gestão comercial</div>
           </div>
           <button
             type="button"
@@ -232,6 +236,12 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
+
+        <button type="button" className="pl-sidebar-busca" onClick={abrirPaleta} title={sidebarColapsada ? 'Buscar (Ctrl K)' : undefined} aria-label="Buscar aba, lead ou ação" data-abrir-paleta>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <span className="pl-sidebar-link-label">Buscar…</span>
+          <kbd>Ctrl K</kbd>
+        </button>
 
         <nav className="pl-sidebar-nav">
           {grupos.map((grupo, i) => {
@@ -296,6 +306,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
       </aside>
 
       {menuAberto && <div className="pl-sidebar-backdrop" onClick={() => setMenuAberto(false)} />}
+      <PaletaComandos itens={itensVisiveis.map(({ href, label }) => ({ href, label }))} podeCrm={podeCrm} />
 
       <div className="pl-main">
         <div className="pl-topbar-v2">
@@ -303,9 +314,14 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             <span>Pró-Labore</span>
             {paginaAtual && <><span>/</span><b>{paginaAtual.label}</b></>}
           </div>
-          <button type="button" className="pl-menu-toggle" onClick={() => setMenuAberto(true)} aria-label="Abrir menu" aria-expanded={menuAberto}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-          </button>
+          <div className="pl-topbar-acoes">
+            <button type="button" className="pl-menu-toggle" onClick={abrirPaleta} aria-label="Buscar aba, lead ou ação">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            </button>
+            <button type="button" className="pl-menu-toggle" onClick={() => setMenuAberto(true)} aria-label="Abrir menu" aria-expanded={menuAberto}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            </button>
+          </div>
         </div>
 
         <div className="pl-shell">

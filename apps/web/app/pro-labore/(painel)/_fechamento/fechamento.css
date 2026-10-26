@@ -5,7 +5,7 @@
 .fd-janela { max-width: 720px !important; display: flex; flex-direction: column; gap: 14px; }
 .fd-janela > * { flex-shrink: 0; }
 .fd-cab { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-.fd-cab h2 { margin: 4px 0 0; font-family: 'Sora', system-ui, sans-serif; font-size: 18px; color: var(--pl-ink-1); }
+.fd-cab h2 { margin: 4px 0 0; font-family: var(--pl-font-display), system-ui, sans-serif; font-size: 18px; color: var(--pl-ink-1); }
 .fd-sub { margin: 4px 0 0; font-size: 13px; color: var(--pl-ink-muted); line-height: 1.5; }
 .fd-fechar { border: none; background: transparent; font-size: 24px; line-height: 1; color: var(--pl-ink-muted); cursor: pointer; padding: 2px 6px; border-radius: 8px; }
 .fd-fechar:hover { color: var(--pl-ink-1); background: var(--pl-surface-2); }

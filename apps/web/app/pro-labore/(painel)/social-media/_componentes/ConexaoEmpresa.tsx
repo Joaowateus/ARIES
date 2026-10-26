@@ -93,7 +93,7 @@ export function ConectarEmpresa({ conversao, onConectado, onCancelar }: { conver
       <form onSubmit={enviar}>
         <label className="pl-field">
           <span>Token do usuário do sistema</span>
-          <textarea className="pl-input" rows={3} style={{ fontFamily: 'monospace', fontSize: 12 }} value={token} onChange={e => setToken(e.target.value)} placeholder="Cole aqui o token gerado no Business Manager" />
+          <textarea className="pl-input" rows={3} style={{ fontFamily: 'var(--pl-font-mono)', fontSize: 12 }} value={token} onChange={e => setToken(e.target.value)} placeholder="Cole aqui o token gerado no Business Manager" />
         </label>
         <p className="pl-hint" style={{ marginTop: 6 }}>
           Ou use o mesmo token do Tráfego: um token só, que não expira, para os dois. Ele precisa ter também as permissões do Instagram acima.

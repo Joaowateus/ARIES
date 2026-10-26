@@ -34,8 +34,9 @@ function ChaveAvanco() {
 
 // Conferência dos leads: quem escreveu e ficou fora do CRM, para revisar.
 function BotaoForaDoCrm({ total, onMudou }: { total: number; onMudou: () => void }) {
-  const [aberto, setAberto] = useState(false)
-  if (!total) return null
+  // ?foraDoCrm=1 chega da paleta de comandos (Ctrl K).
+  const [aberto, setAberto] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('foraDoCrm') === '1')
+  if (!total && !aberto) return null
   return (
     <>
       <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setAberto(true)} data-abrir-fora-crm

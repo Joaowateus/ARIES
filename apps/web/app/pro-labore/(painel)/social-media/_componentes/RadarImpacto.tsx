@@ -181,7 +181,7 @@ export function RadarImpacto({ posts, medianaReferencia, diasReferencia, periodo
               ))}
 
               {FAIXAS.map((f, k) => (
-                <text key={f.faixa} style={{ fontFamily: 'IBM Plex Mono', fontSize: rotuloCompacto ? 8.5 : 10.5, fontWeight: 700, letterSpacing: rotuloCompacto ? '.02em' : '.12em', fill: 'var(--pl-ink-1)' }}>
+                <text key={f.faixa} style={{ fontFamily: 'var(--pl-font-num)', fontSize: rotuloCompacto ? 8.5 : 10.5, fontWeight: 700, letterSpacing: rotuloCompacto ? '.02em' : '.12em', fill: 'var(--pl-ink-1)' }}>
                   <textPath href={`#${idArco}-f${k}`} startOffset="50%" textAnchor="middle">{ROTULO_FAIXA[f.faixa].toUpperCase()}</textPath>
                 </text>
               ))}
@@ -192,7 +192,7 @@ export function RadarImpacto({ posts, medianaReferencia, diasReferencia, periodo
                 d={`M ${px(Ra + 16, Math.PI / 2 - 0.02)} ${py(Ra + 16, Math.PI / 2 - 0.02)} L ${ox - 16} ${oy - Ra} L ${px(Ra - 16, Math.PI / 2 - 0.02)} ${py(Ra - 16, Math.PI / 2 - 0.02)} Z`}
                 fill="var(--sv-1)"
               />
-              <text style={{ fontFamily: 'IBM Plex Mono', fontSize: 10, fontWeight: 700, letterSpacing: '.14em', fill: 'var(--sv-on-1)' }} dy={3.5}>
+              <text style={{ fontFamily: 'var(--pl-font-num)', fontSize: 10, fontWeight: 700, letterSpacing: '.14em', fill: 'var(--sv-on-1)' }} dy={3.5}>
                 <textPath href={`#${idArco}-seta`} startOffset="50%" textAnchor="middle">IMPACTO NO ALCANCE</textPath>
               </text>
 
@@ -249,7 +249,7 @@ export function RadarImpacto({ posts, medianaReferencia, diasReferencia, periodo
                   style={isolado === f ? { borderColor: 'var(--pl-ink-1)', color: 'var(--pl-ink-1)' } : undefined}
                 >
                   <i style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', background: COR_FORMATO[f] }} />
-                  {ROTULO_FORMATO[f]} <b style={{ fontFamily: 'IBM Plex Mono' }}>{n}</b>
+                  {ROTULO_FORMATO[f]} <b style={{ fontFamily: 'var(--pl-font-num)' }}>{n}</b>
                 </button>
               ))}
             </div>
