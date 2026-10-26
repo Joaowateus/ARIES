@@ -40,8 +40,10 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
   const isDono = usuario?.papel === 'DONO'
 
   const [vendedores, setVendedores] = useState<Vendedor[] | null>(null)
-  const [vendedorEscolhido, setVendedorEscolhido] = useState('')
-  const [aba, setAba] = useState<Aba>('visao')
+  // Link do painel do lead no CRM: ?conversa=...&vendedor=... abre direto na conversa.
+  const [linkConversa] = useState(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('conversa')))
+  const [vendedorEscolhido, setVendedorEscolhido] = useState(() => (typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('vendedor') ?? ''))
+  const [aba, setAba] = useState<Aba>(linkConversa ? 'conversas' : 'visao')
   const [dias, setDias] = useState<(typeof PERIODOS)[number]>(30)
   const [versao, setVersao] = useState(0)
   const [config, setConfig] = useState<{ chave: string; dados: ConfigAssistenteResposta } | null>(null)
@@ -192,7 +194,8 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
               vendedorId={vendedorId}
               conectado={conectado}
               nomeVendedor={nomeVendedor}
-              focoInicial={(resumoAtual?.totais.aguardandoAgora ?? 0) > 0 ? 'AGUARDANDO_VENDEDOR' : ''}
+              focoInicial={linkConversa ? '' : (resumoAtual?.totais.aguardandoAgora ?? 0) > 0 ? 'AGUARDANDO_VENDEDOR' : ''}
+              conversaInicial={linkConversa}
               onMudou={atualizar}
             />
           )}

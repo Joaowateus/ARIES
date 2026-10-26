@@ -28,6 +28,7 @@ import {
 } from '../lib/assistenteRoteiro'
 import { montarResumoAssistente } from '../lib/assistenteResumo'
 import { ResultadoSimulacao, lerValor, resumoSimulacao } from '../lib/assistenteSimulacao'
+import { mascararDadosPessoais } from '../lib/assistenteCaptura'
 import { baseParaRobo, montarSimulacao, motoComPreco, registrarUso, respostasAtivas, respostasDaLojaParaIA, respostasParaIA, simuladorDoRobo, sugestoesDaBase, textoParaIA, ultimasDoCliente, vitrineDaLoja, SELECT_MOTO_VITRINE, paraVitrine } from '../lib/assistenteRespostas'
 import { acharMotos, fichaParaIA, fichaTexto, nomeDaMoto } from '../lib/assistenteVitrine'
 import { faixaNota } from '../lib/assistenteNota'
@@ -802,8 +803,26 @@ router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (r
   if (typeof tipoLead === 'string' && (TIPOS_LEAD as readonly string[]).includes(tipoLead)) {
     where.tipoLead = tipoLead
   }
-  const leads = await prisma.lead.findMany({ where, include: LEAD_INCLUDE, orderBy: { criadoEm: 'desc' } })
-  res.json(leads)
+  const leads = await prisma.lead.findMany({
+    where, orderBy: { criadoEm: 'desc' },
+    include: {
+      ...LEAD_INCLUDE,
+      // Painel do lead: a última conversa do WhatsApp e a última mensagem.
+      assistenteConversas: {
+        orderBy: { ultimaMensagemEm: 'desc' }, take: 1,
+        select: { id: true, status: true, ultimaMensagemEm: true, mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, select: { remetente: true, texto: true, criadoEm: true } } },
+      },
+    },
+  })
+  res.json(leads.map(({ assistenteConversas, ...l }) => {
+    const c = assistenteConversas[0]
+    const m = c?.mensagens[0]
+    return {
+      ...l,
+      // CPF, nascimento e e-mail que o cliente escreveu não aparecem na tela do CRM.
+      conversa: c ? { id: c.id, status: c.status, ultimaMensagemEm: c.ultimaMensagemEm, ultima: m ? { ...m, texto: mascararDadosPessoais(m.texto).slice(0, 400) } : null } : null,
+    }
+  }))
 })
 
 // Faixa do CRM: o WhatsApp de quem já está conectado (leads entram sozinhos)

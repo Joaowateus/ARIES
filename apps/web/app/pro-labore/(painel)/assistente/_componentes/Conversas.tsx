@@ -35,18 +35,20 @@ function useRelogio(ms: number): number {
   return tick
 }
 
-export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, onMudou }: {
+export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, conversaInicial, onMudou }: {
   vendedorId?: string
   conectado: boolean
   nomeVendedor: string
   focoInicial?: StatusConversaAssistente | ''
+  // Aberta direto (link do painel do lead no CRM).
+  conversaInicial?: string | null
   onMudou?: () => void
 }) {
   const [tipo, setTipo] = useState<TipoConversaAssistente>('LEAD')
   const [status, setStatus] = useState<StatusConversaAssistente | ''>(focoInicial ?? '')
   const [buscaDigitada, setBuscaDigitada] = useState('')
   const [busca, setBusca] = useState('')
-  const [selecionadaId, setSelecionadaId] = useState<string | null>(null)
+  const [selecionadaId, setSelecionadaId] = useState<string | null>(conversaInicial ?? null)
   const [lista, setLista] = useState<{ chave: string; itens: AssistenteConversa[] } | null>(null)
   const [detalhe, setDetalhe] = useState<{ chave: string; conversa: AssistenteConversaDetalhe } | null>(null)
   const [texto, setTexto] = useState('')

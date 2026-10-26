@@ -14,6 +14,7 @@ import { situacaoFollow } from '../_follow/follow'
 import { FaixaWhatsapp } from './_whatsapp/FaixaWhatsapp'
 import { ChipNota } from '../assistente/_componentes/SugestoesConversa'
 import { EtiquetasLead, ORDEM_ETIQUETAS, ROTULO_ETIQUETA } from '../assistente/_componentes/jornada'
+import { PainelLead } from './_painel/PainelLead'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
@@ -24,7 +25,13 @@ const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
 ]
 
 const TIPO_LABEL: Record<TipoLead, string> = { TRAFEGO: 'Tráfego Pago', ORGANICO: 'Orgânico' }
-const TIPO_CLASS: Record<TipoLead, string> = { TRAFEGO: 'trafego', ORGANICO: 'organico' }
+type Densidade = 'compacto' | 'detalhado'
+// R$ 15 mil, R$ 1,2 mi — cabe no card e no cabeçalho da coluna.
+function moedaCurta(v: number): string {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`
+  if (v >= 1000) return `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: v >= 100_000 ? 0 : 1 })} mil`
+  return `R$ ${Math.round(v).toLocaleString('pt-BR')}`
+}
 
 // Rótulo fica só na abreviação (P/R) — o significado completo (Pagamento
 // integral / Renegociação) aparece só no title (hover), nunca escrito por
@@ -62,6 +69,8 @@ function tempoParado(dias: number): string {
   if (dias === 1) return '1d'
   return `${dias}d`
 }
+
+const somaDaColuna = (ls: Lead[]) => ls.reduce((t, l) => t + (l.valorNegociacao || 0), 0)
 
 function hojeIso() {
   return new Date().toISOString().slice(0, 10)
@@ -243,6 +252,13 @@ export default function ProLaboreLeadsPage() {
   // fechamento (closure) de quando o pointerdown começou, então não dá pra
   // confiar em state do React ali dentro; só em refs, que são sempre atuais.
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  // Painel lateral do lead (clique no card) e a densidade dos cards (fica no navegador).
+  const [painelId, setPainelId] = useState<string | null>(null)
+  const [densidade, setDensidadeEstado] = useState<Densidade>(() => {
+    try { return typeof window !== 'undefined' && localStorage.getItem('pl_crm_densidade') === 'detalhado' ? 'detalhado' : 'compacto' } catch { return 'compacto' }
+  })
+  const fecharPainel = useCallback(() => setPainelId(null), [])
+  const setDensidade = (d: Densidade) => { setDensidadeEstado(d); try { localStorage.setItem('pl_crm_densidade', d) } catch { /* sem armazenamento */ } }
   const [dragOverCol, setDragOverCol] = useState<EstagioLead | null>(null)
   const dragRef = useRef<{ lead: Lead; startX: number; startY: number; dragging: boolean; colSobre: EstagioLead | null; abort: AbortController } | null>(null)
   const colRefs = useRef(new Map<EstagioLead, HTMLDivElement>())
@@ -582,6 +598,8 @@ export default function ProLaboreLeadsPage() {
   function onPointerUpWin() {
     const st = dragRef.current
     limparDrag()
+    // Toque sem arrastar = abrir o painel do lead.
+    if (st && !st.dragging) { setPainelId(st.lead.id); return }
     if (!st?.dragging || !st.colSobre || st.colSobre === st.lead.estagio) return
     if (st.colSobre === 'FECHADO') {
       if (isDono) abrirConversao(st.lead)
@@ -596,7 +614,7 @@ export default function ProLaboreLeadsPage() {
 
   function onPointerDownCard(e: React.PointerEvent<HTMLDivElement>, lead: Lead) {
     if (lead.vendaId) return
-    if ((e.target as HTMLElement).closest('.pl-kanban-card-actions-row, .pl-kanban-card-advance, .pl-kanban-card-convert, .pl-filter-wrap')) return
+    if ((e.target as HTMLElement).closest('button, a, select, input, .pl-kc-acoes, .pl-filter-wrap')) return
     const abort = new AbortController()
     dragRef.current = { lead, startX: e.clientX, startY: e.clientY, dragging: false, colSobre: null, abort }
     window.addEventListener('pointermove', onPointerMoveWin, { signal: abort.signal })
@@ -621,6 +639,7 @@ export default function ProLaboreLeadsPage() {
   const followsAtrasados = leadsAtivos.filter(l => situacaoDe(l) === 'ATRASADO').length
   const followsHoje = leadsAtivos.filter(l => situacaoDe(l) === 'HOJE').length
   const contagemEtiquetas = ORDEM_ETIQUETAS.map(e => ({ e, n: leadsAtivos.filter(l => l.etiquetas?.includes(e)).length })).filter(x => x.n > 0)
+  const painelLead = painelId ? leads.find(l => l.id === painelId) ?? null : null
   const leadsAtivosOrdenados = [...leadsAtivos]
     .filter(l => !filtroFollow || situacaoDe(l) === filtroFollow)
     .filter(l => !filtroEtiqueta || l.etiquetas?.includes(filtroEtiqueta))
@@ -928,6 +947,14 @@ export default function ProLaboreLeadsPage() {
               {filtroEtiqueta && <span className="pl-link-action pl-leads-textlink" onClick={() => setFiltroEtiqueta('')}>Ver todos os cards</span>}
             </div>
           )}
+          <div className="pl-kanban-barra">
+            <span className="pl-hint">Clique no card para ver tudo do lead.</span>
+            <div className="pl-kanban-densidade" role="group" aria-label="Tamanho dos cards">
+              {(['compacto', 'detalhado'] as const).map(d => (
+                <button key={d} type="button" className={`pl-chip ${densidade === d ? 'active' : ''}`} aria-pressed={densidade === d} onClick={() => setDensidade(d)} data-densidade={d}>{d === 'compacto' ? 'Compacto' : 'Detalhado'}</button>
+              ))}
+            </div>
+          </div>
           <div className="pl-kanban">
             {COLUNAS.map(col => {
               const leadsDaColuna = leadsAtivosOrdenados.filter(l => l.estagio === col.estagio)
@@ -944,7 +971,10 @@ export default function ProLaboreLeadsPage() {
                         <div className="pl-kanban-col-hint">Confirmação de venda é só do dono</div>
                       )}
                     </div>
-                    <div className="pl-kanban-col-count pl-mono">{leadsDaColuna.length}</div>
+                    <div className="pl-kanban-col-lado">
+                      <div className="pl-kanban-col-count pl-mono">{leadsDaColuna.length}</div>
+                      {somaDaColuna(leadsDaColuna) > 0 && <div className="pl-kanban-col-soma" title="Soma do valor da negociação dos cards da coluna">{moedaCurta(somaDaColuna(leadsDaColuna))}</div>}
+                    </div>
                   </div>
                   <div className="pl-kanban-cards">
                     {leadsDaColuna.length === 0 && <div className="pl-kanban-empty">Arraste um lead pra cá</div>}
@@ -955,8 +985,10 @@ export default function ProLaboreLeadsPage() {
                         estagio={col.estagio}
                         isDono={isDono}
                         vejaEquipe={vejaEquipe}
+                        densidade={densidade}
                         dragging={draggingId === lead.id}
                         onPointerDown={e => onPointerDownCard(e, lead)}
+                        onAbrir={() => setPainelId(lead.id)}
                         onMudarEstagio={estagio => mudarEstagio(lead, estagio)}
                         onConverter={() => abrirConversao(lead)}
                         onEditar={() => abrirEdicao(lead)}
@@ -974,6 +1006,24 @@ export default function ProLaboreLeadsPage() {
           </div>
 
         </>
+      )}
+
+      {painelLead && (
+        <PainelLead
+          lead={painelLead}
+          colunas={COLUNAS}
+          isDono={isDono}
+          vejaEquipe={vejaEquipe}
+          onFechar={fecharPainel}
+          onMover={estagio => { if (estagio === 'FECHADO') abrirConversao(painelLead); else mudarEstagio(painelLead, estagio) }}
+          onConverter={() => abrirConversao(painelLead)}
+          onEditar={() => { setPainelId(null); abrirEdicao(painelLead) }}
+          onPerdido={() => { setPainelId(null); marcarPerdido(painelLead) }}
+          onFollow={() => setFollowAberto(painelLead)}
+          onDesfazer={() => desfazerAvanco(painelLead)}
+          onRemover={() => { setPainelId(null); remover(painelLead) }}
+          onDefinirTipoNegociacao={tipo => definirTipoNegociacao(painelLead, tipo)}
+        />
       )}
 
       {followAberto && (
@@ -1180,15 +1230,21 @@ function avancoAutomaticoRecente(lead: Lead) {
 }
 
 /* ============ CARD DO KANBAN ============ */
+// Card enxuto: quem é, o que quer, quão quente está e o próximo passo. O
+// resto (telefone, observação, histórico, todas as ações) fica no painel do
+// lead, que abre com um clique no card. No modo "detalhado" o card mostra
+// também o telefone e mais etiquetas.
 function KanbanCard({
-  lead, estagio, isDono, vejaEquipe, dragging, onPointerDown, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
+  lead, estagio, isDono, vejaEquipe, densidade, dragging, onPointerDown, onAbrir, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
 }: {
   lead: Lead
   estagio: EstagioLead
   isDono: boolean
   vejaEquipe: boolean
+  densidade: Densidade
   dragging: boolean
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
+  onAbrir: () => void
   onMudarEstagio: (estagio: EstagioLead) => void
   onConverter: () => void
   onEditar: () => void
@@ -1212,142 +1268,137 @@ function KanbanCard({
     onMudarEstagio(destino)
   }
   const dias = diasParado(lead)
-  // "Esfriando" — mais de uma semana sem avançar. É um sinal que só fica
-  // mais valioso conforme o CRM acumula leads: com muita coisa na coluna,
-  // é fácil um lead parado passar despercebido rolando a lista.
+  // "Esfriando" — mais de uma semana sem avançar.
   const parado = dias >= 7 && !lead.vendaId
-  // Lead que entrou sozinho: a 1ª linha da observação vira o selo "WhatsApp".
   const viaWhatsapp = lead.origemCadastro === 'WHATSAPP'
-  const linhaOrigem = viaWhatsapp ? lead.observacao?.match(/^Cadastrado automaticamente pelo WhatsApp[^\n]*/)?.[0] : undefined
-  const obsCard = linhaOrigem ? lead.observacao!.slice(linhaOrigem.length).trim() : lead.observacao
+  const faixa = typeof lead.pontuacao === 'number' ? (lead.pontuacao >= 70 ? 'quente' : lead.pontuacao >= 40 ? 'morno' : 'frio') : ''
+  const etiquetas = lead.etiquetas?.filter(e => e !== 'QUENTE') ?? []
+  const detalhado = densidade === 'detalhado'
+  const linha2 = lead.modeloInteresse || (lead.telefone ? telefoneBonito(lead.telefone) : null)
 
   return (
     <div
-      className={`pl-kanban-card ${dragging ? 'dragging' : ''}`}
-      style={movivel ? undefined : { cursor: 'default' }}
+      className={`pl-kanban-card pl-kc ${faixa ? `nota-${faixa}` : ''} ${dragging ? 'dragging' : ''} ${parado ? 'parado' : ''} ${lead.vendaId ? 'vendido' : ''}`}
+      style={movivel ? undefined : { cursor: 'pointer' }}
       onPointerDown={movivel ? onPointerDown : undefined}
+      onClick={movivel ? undefined : onAbrir}
+      onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) onAbrir() }}
+      tabIndex={0}
+      role="button"
+      aria-label={`Abrir ${lead.nomeCliente}`}
+      data-lead={lead.id}
     >
-      <div className="pl-kanban-card-head">
-        <div className="pl-kanban-card-name">{lead.nomeCliente}</div>
-        {!lead.vendaId && <span className={`pl-kanban-card-time ${parado ? 'stale' : ''}`} title={`Há ${tempoParado(dias)} sem mudar de etapa`}>{tempoParado(dias)}</span>}
+      <div className="pl-kc-topo">
+        <span className="pl-kanban-card-name pl-kc-nome">{lead.nomeCliente}</span>
+        <span className="pl-kc-topo-lado">
+          {!lead.vendaId && <span className={`pl-kanban-card-time ${parado ? 'stale' : ''}`} title={`Há ${tempoParado(dias)} sem mudar de etapa`}>{tempoParado(dias)}</span>}
+          {vejaEquipe && lead.vendedor && <span className="pl-avatar pl-kc-vendedor" title={lead.vendedor.nome} style={{ background: corAvatar(lead.vendedor.id) }}>{iniciais(lead.vendedor.nome)}</span>}
+        </span>
       </div>
-      <div className="pl-kanban-card-valor pl-mono" title="Valor da negociação">{formatMoeda(lead.valorNegociacao)}</div>
-      {lead.telefone && <div className="pl-kanban-card-meta">{lead.telefone}</div>}
-      {vejaEquipe && lead.vendedor && (
-        <div className="pl-kanban-card-vendor">
-          <span className="pl-avatar" style={{ width: 18, height: 18, fontSize: 8.5, background: corAvatar(lead.vendedor.id) }}>{iniciais(lead.vendedor.nome)}</span>
-          {lead.vendedor.nome}
+      {(linha2 || lead.valorNegociacao > 0) && (
+        <div className="pl-kc-linha">
+          {linha2 && <span className="pl-kc-moto" title={linha2}>{lead.modeloInteresse ? '🏍 ' : ''}{linha2}</span>}
+          {lead.valorNegociacao > 0 && <span className="pl-kc-valor pl-mono" title="Valor da negociação">{moedaCurta(lead.valorNegociacao)}</span>}
         </div>
       )}
-      {lead.modeloInteresse && <div className="pl-kanban-card-meta">Interesse: {lead.modeloInteresse}</div>}
-      {obsCard && <div className="pl-kanban-card-meta">{obsCard}</div>}
-      {lead.tipoLead && <span className={`pl-kanban-card-tag ${TIPO_CLASS[lead.tipoLead]}`}>{TIPO_LABEL[lead.tipoLead]}</span>}
-      {lead.postCode && <span className="pl-kanban-card-tag organico" title="Post do Instagram que trouxe o lead" style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>Instagram · {lead.postCode}</span>}
-      {viaWhatsapp && <span className="pl-kanban-card-tag whatsapp" title={linhaOrigem ?? 'Entrou sozinho quando o contato chamou no WhatsApp'} style={{ marginLeft: lead.tipoLead || lead.postCode ? 6 : 0 }} data-tag-whatsapp>WhatsApp</span>}
-      {typeof lead.pontuacao === 'number' && !lead.vendaId && (
-        <span style={{ display: 'inline-block', marginLeft: lead.tipoLead || lead.postCode || viaWhatsapp ? 6 : 0, verticalAlign: 'middle' }}>
-          <ChipNota nota={lead.pontuacao} titulo={`Nota do Assistente pela conversa do WhatsApp: ${lead.pontuacao} de 100`} />
-        </span>
-      )}
-      {!lead.vendaId && <div className="pl-kanban-card-etiquetas"><EtiquetasLead etiquetas={lead.etiquetas?.filter(e => e !== 'QUENTE')} max={3} /></div>}
-      {avancoAuto && (
-        <div className="pl-kanban-card-auto" data-avanco-auto>
-          <span title={`Em ${new Date(avancoAuto.criadoEm).toLocaleString('pt-BR')}`}>Movido pelo assistente: {avancoAuto.motivo}</span>
-          <button type="button" className="pl-link-action" onClick={onDesfazer} onPointerDown={e => e.stopPropagation()} data-desfazer>Desfazer</button>
-        </div>
-      )}
-      {lead.tipoNegociacao && (
-        <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]} style={{ marginLeft: lead.tipoLead ? 6 : 0 }}>
-          {lead.tipoNegociacao}
-        </span>
-      )}
-      {sitFollow && (
-        <button type="button" className={`fw-selo ${sitFollow.tipo.toLowerCase()}`} onClick={onFollow} onPointerDown={e => e.stopPropagation()} title={proximoFollow?.nota ?? 'Ver o follow'} data-follow={sitFollow.tipo}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
-          {sitFollow.texto}
-        </button>
-      )}
-      {lead.vendaId ? (
-        <div className="pl-kanban-card-badge">✓ Convertido em venda</div>
-      ) : (
-        <>
-          {isDono && (
-            <div className="pl-kanban-card-tiponeg-row">
-              {TIPOS_NEGOCIACAO.map(tipo => (
-                <button
-                  key={tipo}
-                  type="button"
-                  className={`pl-kanban-card-tiponeg-btn ${lead.tipoNegociacao === tipo ? 'active' : ''}`}
-                  onClick={() => onDefinirTipoNegociacao(tipo)}
-                  title={TIPO_NEGOCIACAO_TITLE[tipo]}
-                >
-                  {tipo}
-                </button>
-              ))}
-            </div>
+      {detalhado && lead.modeloInteresse && lead.telefone && <div className="pl-kc-meta">{telefoneBonito(lead.telefone)}</div>}
+      <div className="pl-kc-selos">
+        {typeof lead.pontuacao === 'number' && !lead.vendaId && <ChipNota nota={lead.pontuacao} titulo={`Nota do Assistente pela conversa do WhatsApp: ${lead.pontuacao} de 100`} />}
+        {(viaWhatsapp || lead.tipoLead || lead.postCode) && (
+          <span className="pl-kc-origem">
+            {viaWhatsapp && <span className="wa" title="Entrou sozinho quando o contato chamou no WhatsApp" data-tag-whatsapp><IconeOrigem tipo="wa" /></span>}
+            {lead.tipoLead === 'TRAFEGO' && <span className="ads" title={TIPO_LABEL.TRAFEGO}><IconeOrigem tipo="ads" /></span>}
+            {lead.tipoLead === 'ORGANICO' && !lead.postCode && <span title={TIPO_LABEL.ORGANICO}><IconeOrigem tipo="org" /></span>}
+            {lead.postCode && <span className="ig" title={`Post do Instagram que trouxe o lead: ${lead.postCode}`}><IconeOrigem tipo="ig" /></span>}
+          </span>
+        )}
+        {!lead.vendaId && etiquetas.length > 0 && <EtiquetasLead etiquetas={etiquetas} max={detalhado ? 4 : 2} />}
+      </div>
+      {(sitFollow || lead.vendaId || lead.tipoNegociacao || avancoAuto) && (
+        <div className="pl-kc-rodape">
+          {avancoAuto && (
+            <span className="pl-kc-auto-mini" data-avanco-auto title={`Movido pelo assistente: ${avancoAuto.motivo} (${new Date(avancoAuto.criadoEm).toLocaleString('pt-BR')})`}>
+              ↗ Assistente moveu
+              <button type="button" className="pl-link-action" onClick={onDesfazer} onPointerDown={e => e.stopPropagation()} data-desfazer>Desfazer</button>
+            </span>
           )}
+          {sitFollow && (
+            <button type="button" className={`fw-selo ${sitFollow.tipo.toLowerCase()}`} onClick={onFollow} onPointerDown={e => e.stopPropagation()} title={proximoFollow?.nota ?? 'Ver o follow'} data-follow={sitFollow.tipo}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+              {sitFollow.texto}
+            </button>
+          )}
+          {lead.vendaId && <span className="pl-kanban-card-badge pl-kc-venda">✓ Convertido em venda</span>}
+          {lead.tipoNegociacao && <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]}>{lead.tipoNegociacao}</span>}
+        </div>
+      )}
+      {movivel && (
+        <div className="pl-kc-acoes" onPointerDown={e => e.stopPropagation()}>
           {proxima && (
-            <button type="button" className="pl-kanban-card-advance" onClick={() => onMudarEstagio(proxima)} title={`Mover para ${proximaTitulo}`}>
-              Avançar
+            <button type="button" className="pl-kc-btn pl-kanban-card-advance" onClick={() => onMudarEstagio(proxima)} title={`Avançar para ${proximaTitulo}`} aria-label={`Avançar para ${proximaTitulo}`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
             </button>
           )}
-          {isDono && estagio !== 'FECHADO' && (
-            <button type="button" className="pl-kanban-card-convert" onClick={onConverter} title="Converter em venda">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-              Converter em venda
-            </button>
-          )}
-          <div className="pl-kanban-card-actions-row">
-            <MoverEtapaMenu estagioAtual={estagio} isDono={isDono} onMover={moverParaEtapa} />
-            <button type="button" className="pl-kanban-icon-btn" onClick={onFollow} title={proximoFollow ? 'Ver o follow' : 'Agendar follow'} aria-label={proximoFollow ? 'Ver o follow' : 'Agendar follow'} data-acao="follow">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
-            </button>
-            <button type="button" className="pl-kanban-icon-btn" onClick={onEditar} title="Editar" aria-label="Editar">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-            </button>
-            <button type="button" className="pl-kanban-icon-btn pl-danger" onClick={onPerdido} title="Marcar como perdido" aria-label="Marcar como perdido">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4v16M4 5h13l-2.5 3.5L17 12H4" /></svg>
-            </button>
-            <button type="button" className="pl-kanban-icon-btn pl-danger" onClick={onRemover} title="Remover" aria-label="Remover">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
-            </button>
-          </div>
-        </>
+          <button type="button" className="pl-kc-btn" onClick={onFollow} title={proximoFollow ? 'Ver o follow' : 'Agendar follow'} aria-label={proximoFollow ? 'Ver o follow' : 'Agendar follow'} data-acao="follow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+          </button>
+          <MenuDoCard
+            estagioAtual={estagio} isDono={isDono} tipoNegociacao={lead.tipoNegociacao ?? null}
+            onAbrir={onAbrir} onMover={moverParaEtapa} onConverter={onConverter} onEditar={onEditar} onPerdido={onPerdido} onRemover={onRemover} onDefinirTipoNegociacao={onDefinirTipoNegociacao}
+          />
+        </div>
       )}
     </div>
   )
 }
 
-/* ============ MENU "MOVER PARA" (qualquer etapa, sem precisar arrastar) ============ */
-// Complementa o arrastar e o botão "Avançar" (que só vai uma etapa adiante):
-// deixa pular direto pra qualquer etapa, inclusive voltando — o principal
-// ganho é justamente numa coluna cheia, onde arrastar até o topo ou até uma
-// etapa duas casas à frente exige rolar a lista inteira segurando o card.
-function MoverEtapaMenu({ estagioAtual, isDono, onMover }: { estagioAtual: EstagioLead; isDono: boolean; onMover: (estagio: EstagioLead) => void }) {
+// Origem do lead em ícone (o nome completo fica no title).
+function IconeOrigem({ tipo }: { tipo: 'wa' | 'ads' | 'org' | 'ig' }) {
+  const p = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true }
+  if (tipo === 'wa') return <svg {...p}><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z" /></svg>
+  if (tipo === 'ads') return <svg {...p}><path d="M3 11l15-6v14L3 13z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg>
+  if (tipo === 'ig') return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" /></svg>
+  return <svg {...p}><path d="M11 20A7 7 0 0 1 4 13c0-5 7-10 7-10s7 5 7 10a7 7 0 0 1-7 7z" /><path d="M11 20v-8" /></svg>
+}
+
+// "5591969500009" → "+55 91 96950-0009" (lead cadastrado à mão com o número cru).
+function telefoneBonito(t: string): string {
+  const d = t.replace(/\D/g, '')
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return `+55 ${d.slice(2, 4)} ${d.slice(4, -4)}-${d.slice(-4)}`
+  if (d.length === 10 || d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, -4)}-${d.slice(-4)}`
+  return t
+}
+
+/* ============ MENU "⋯" DO CARD ============ */
+// Tudo que não precisa ficar à vista: abrir, mover para qualquer etapa
+// (inclusive voltando), editar, converter, P/R, perdido e remover.
+function MenuDoCard({ estagioAtual, isDono, tipoNegociacao, onAbrir, onMover, onConverter, onEditar, onPerdido, onRemover, onDefinirTipoNegociacao }: {
+  estagioAtual: EstagioLead
+  isDono: boolean
+  tipoNegociacao: TipoNegociacao | null
+  onAbrir: () => void
+  onMover: (estagio: EstagioLead) => void
+  onConverter: () => void
+  onEditar: () => void
+  onPerdido: () => void
+  onRemover: () => void
+  onDefinirTipoNegociacao: (tipo: TipoNegociacao) => void
+}) {
   const [aberto, setAberto] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [alvo, setAlvo] = useState<Element | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
 
-  // O botão vive dentro da coluna com rolagem própria (.pl-kanban-cards) —
-  // um popover posicionado normalmente (absolute, dentro do fluxo) fica
-  // cortado pelo overflow da coluna. Um portal, com a posição calculada a
-  // partir do próprio botão, escapa desse recorte e sempre aparece por
-  // cima, não importa em qual coluna o card esteja.
+  // O botão vive dentro da coluna com rolagem própria: o menu sai por um
+  // portal (no .pl-app, onde estão as cores do painel), na posição do botão.
   function alternar() {
     if (aberto) { setAberto(false); return }
     const r = btnRef.current?.getBoundingClientRect()
-    if (r) setPos({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 186) })
+    if (r) setPos({ top: Math.min(r.bottom + 6, window.innerHeight - 360), left: Math.max(8, Math.min(r.right - 220, window.innerWidth - 228)) })
+    setAlvo(btnRef.current?.closest('.pl-app') ?? document.body)
     setAberto(true)
   }
-
-  // As cores do painel (--pl-surface, --pl-border etc.) são escopadas em
-  // .pl-app, de propósito, pra não vazar no resto do ARIES — um portal
-  // direto pro <body> cairia FORA dessa árvore e perderia as variáveis
-  // (o popover renderizava, mas transparente/sem contraste nenhum). Por
-  // isso o alvo do portal é o próprio .pl-app, não o body.
-  const portalAlvo = typeof document !== 'undefined' ? (btnRef.current?.closest('.pl-app') ?? document.body) : null
 
   useEffect(() => {
     if (!aberto) return
@@ -1355,8 +1406,6 @@ function MoverEtapaMenu({ estagioAtual, isDono, onMover }: { estagioAtual: Estag
       if (popRef.current?.contains(e.target as Node) || btnRef.current?.contains(e.target as Node)) return
       setAberto(false)
     }
-    // Fecha ao rolar (a coluna do card ou a página) — sem isso o menu
-    // ficaria "flutuando" longe do botão que o abriu.
     function fechar() { setAberto(false) }
     document.addEventListener('mousedown', onClickFora)
     window.addEventListener('scroll', fechar, true)
@@ -1369,21 +1418,34 @@ function MoverEtapaMenu({ estagioAtual, isDono, onMover }: { estagioAtual: Estag
   }, [aberto])
 
   const opcoes = COLUNAS.filter(c => c.estagio !== estagioAtual && (c.estagio !== 'FECHADO' || isDono))
+  const item = (rotulo: string, fn: () => void, perigo = false) => (
+    <button type="button" className={`pl-kanban-move-item ${perigo ? 'pl-kc-perigo' : ''}`} onClick={() => { setAberto(false); fn() }}>{rotulo}</button>
+  )
 
   return (
     <>
-      <button ref={btnRef} type="button" className="pl-kanban-icon-btn" onClick={alternar} title="Mover para etapa" aria-label="Mover para etapa">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 7l4-4 4 4M16 17l-4 4-4-4M12 3v18" /></svg>
+      <button ref={btnRef} type="button" className="pl-kc-btn" onClick={alternar} title="Mais ações" aria-label="Mais ações" aria-expanded={aberto} data-menu-card>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
       </button>
-      {aberto && pos && portalAlvo && createPortal(
-        <div ref={popRef} className="pl-kanban-move-pop" style={{ top: pos.top, left: pos.left }}>
-          {opcoes.map(o => (
-            <button key={o.estagio} type="button" className="pl-kanban-move-item" onClick={() => { onMover(o.estagio); setAberto(false) }}>
-              {o.titulo}{o.estagio === 'FECHADO' ? ' (converter)' : ''}
-            </button>
-          ))}
+      {aberto && pos && alvo && createPortal(
+        <div ref={popRef} className="pl-kanban-move-pop pl-kc-menu" style={{ top: pos.top, left: pos.left }} role="menu">
+          {item('Abrir detalhes', onAbrir)}
+          {item('Editar', onEditar)}
+          <div className="pl-kc-menu-titulo">Mover para</div>
+          {opcoes.map(o => <div key={o.estagio}>{item(`${o.titulo}${o.estagio === 'FECHADO' ? ' (converter)' : ''}`, () => onMover(o.estagio))}</div>)}
+          {isDono && estagioAtual !== 'FECHADO' && item('✓ Converter em venda', onConverter)}
+          {isDono && (
+            <div className="pl-kc-menu-pr">
+              {TIPOS_NEGOCIACAO.map(t => (
+                <button key={t} type="button" className={`pl-kanban-card-tiponeg-btn ${tipoNegociacao === t ? 'active' : ''}`} onClick={() => { setAberto(false); onDefinirTipoNegociacao(t) }} title={TIPO_NEGOCIACAO_TITLE[t]}>{t}</button>
+              ))}
+            </div>
+          )}
+          <div className="pl-kc-menu-sep" />
+          {item('Marcar como perdido', onPerdido, true)}
+          {item('Remover', onRemover, true)}
         </div>,
-        portalAlvo,
+        alvo,
       )}
     </>
   )
