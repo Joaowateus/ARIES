@@ -154,16 +154,17 @@ export type ChatIA = z.infer<typeof esquemaChat>
 // Durações e quantidades comuns em conselho de vendas ("15 minutos", "48 horas").
 const NUMEROS_COMUNS = [12, 15, 20, 24, 30, 45, 48, 60, 72, 90, 100]
 
-export async function responderChat(usuarioId: string, ctx: { fatos: unknown; achados: unknown; plano: unknown; memoria: unknown; historico: Array<{ autor: string; texto: string }>; pergunta: string; nome: string }): Promise<ChatIA | null> {
+export async function responderChat(usuarioId: string, ctx: { fatos: unknown; achados: unknown; plano: unknown; fila?: unknown; memoria: unknown; historico: Array<{ autor: string; texto: string }>; pergunta: string; nome: string }): Promise<ChatIA | null> {
   const sistema = [
     `Tarefa: conversar com ${ctx.nome} como mentor de vendas. Responda à última mensagem dele em até 6 frases curtas, prático e específico, usando os números dele quando ajudar.`,
     'Pode ensinar técnicas, montar mensagens para clientes, ajudar a planejar o dia, explicar os próprios números e indicar o que estudar (indique livros conhecidos pelo título e autor; não escreva links).',
     'Se a pessoa contar um objetivo, uma preferência ou algo sobre o jeito dela de vender, coloque em "lembrar".',
+    '"fila" é quem atender agora, já na ordem certa (motivo e próximo passo de cada um). Se perguntarem por onde começar ou quem atender, siga essa ordem.',
   ].join('\n')
-  const usuario = [bloco('fatos', ctx.fatos), bloco('achados', ctx.achados), bloco('plano', ctx.plano), bloco('memoria', ctx.memoria), bloco('historico', ctx.historico.slice(-10)), `Mensagem: ${ctx.pergunta}`].join('\n')
+  const usuario = [bloco('fatos', ctx.fatos), bloco('achados', ctx.achados), bloco('plano', ctx.plano), bloco('fila', ctx.fila ?? []), bloco('memoria', ctx.memoria), bloco('historico', ctx.historico.slice(-10)), `Mensagem: ${ctx.pergunta}`].join('\n')
   const r = await estruturado(usuarioId, sistema, usuario, esquemaChat, 2500)
   if (!r) return null
-  const ok = numerosPermitidos(semDinheiro(ctx.fatos), ctx.achados, ctx.plano, ctx.memoria, ctx.pergunta, ctx.historico, NUMEROS_COMUNS)
+  const ok = numerosPermitidos(semDinheiro(ctx.fatos), ctx.achados, ctx.plano, ctx.fila ?? [], ctx.memoria, ctx.pergunta, ctx.historico, NUMEROS_COMUNS)
   if (!conferem(r.resposta, ok)) { console.warn('[copiloto-ia] resposta do chat com número fora dos fatos: descartada'); return null }
   return { resposta: limpar(r.resposta), lembrar: r.lembrar.map(l => ({ ...l, texto: limpar(l.texto) })) }
 }
