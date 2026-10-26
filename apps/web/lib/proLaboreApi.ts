@@ -216,6 +216,16 @@ export interface AgendaItem {
   atualizadoEm: string
 }
 
+export interface AgendaTarefa {
+  id: string
+  titulo: string
+  dia: string // ISO, meia-noite UTC do dia
+  horario: string | null
+  leadId: string | null
+  feitaEm: string | null
+  criadoEm: string
+}
+
 export interface AgendaConclusao {
   id: string
   agendaItemId: string
@@ -607,6 +617,13 @@ export const proLaboreApi = {
     },
     conclusoes: {
       listar: (inicio: string, fim: string) => request<AgendaConclusao[]>(`/pro-labore/agenda-conclusoes?inicio=${inicio}&fim=${fim}`),
+    },
+    // Meu dia: tarefas pessoais (cada pessoa anota as suas; fora da auditoria).
+    tarefas: {
+      listar: (inicio: string, fim: string, atrasadas = false) => request<AgendaTarefa[]>(`/pro-labore/agenda/tarefas?inicio=${inicio}&fim=${fim}${atrasadas ? '&atrasadas=1' : ''}`),
+      criar: (data: { titulo: string; dia: string; horario?: string | null; leadId?: string | null }) => request<AgendaTarefa>('/pro-labore/agenda/tarefas', { method: 'POST', body: JSON.stringify(data) }),
+      editar: (id: string, data: { titulo?: string; dia?: string; horario?: string | null; feita?: boolean }) => request<AgendaTarefa>(`/pro-labore/agenda/tarefas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/agenda/tarefas/${id}`, { method: 'DELETE' }),
     },
     inicios: {
       listar: (inicio: string, fim: string) => request<AgendaInicio[]>(`/pro-labore/agenda-inicios?inicio=${inicio}&fim=${fim}`),

@@ -1446,6 +1446,27 @@ model AgendaConclusao {
   @@map("pro_labore_agenda_conclusoes")
 }
 
+// Tarefa pessoal do "Meu dia" da Agenda: o que a própria pessoa anota para
+// um dia (ligar para o banco, separar documento). Não é rotina do gestor e
+// não entra na auditoria; qualquer pessoa com a Agenda cria as suas.
+// autorId segue a mesma regra das conclusões (vendedorId, ou o usuarioId do
+// dono) — sem FK pelo mesmo motivo.
+model AgendaTarefa {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  autorId      String
+  titulo       String
+  dia          DateTime // meia-noite UTC do dia (mesma convenção de dataReferencia)
+  horario      String? // "HH:mm"
+  leadId       String?
+  feitaEm      DateTime?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  @@index([usuarioId, autorId, dia])
+  @@map("pro_labore_agenda_tarefas")
+}
+
 // Registro de "iniciado" de um item num dia — sinal independente da
 // conclusão (uma tabela nova, e não uma coluna a mais em AgendaConclusao,
 // porque a existência de uma linha em AgendaConclusao já É a semântica de
