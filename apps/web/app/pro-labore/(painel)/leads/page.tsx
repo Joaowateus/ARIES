@@ -768,7 +768,7 @@ export default function ProLaboreLeadsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="CRM"
+        eyebrow="Vendas"
         title="Funil de vendas"
         subtitle={vejaEquipe ? 'Arraste os cards entre as etapas, use "Avançar" ou o menu de mover em cada card' : 'Seus leads, do primeiro contato ao fechamento'}
         actions={

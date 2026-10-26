@@ -151,7 +151,7 @@ export default function ProLaboreSocialMediaPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Operação"
+        eyebrow="Marketing"
         title="Social Media"
         subtitle={conta?.tipoConexao === 'EMPRESA'
           ? 'Desempenho, conteúdo, audiência e crescimento do Instagram da empresa, conectado pelo Business Manager: não depende do login de ninguém.'

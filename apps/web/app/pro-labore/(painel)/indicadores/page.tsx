@@ -93,7 +93,7 @@ export default function ProLaboreIndicadoresPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Funil &amp; anúncios"
+        eyebrow="Gestão"
         title="Indicadores mensais"
         subtitle="Funil manual dos meses antigos e gasto com anúncios: com o Tráfego conectado, o gasto vem sozinho das campanhas. Fechamento, ROAS, CAC e custo por lead são calculados automaticamente"
       />

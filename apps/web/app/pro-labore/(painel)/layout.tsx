@@ -16,30 +16,41 @@ import { PaletaComandos } from './_comando/PaletaComandos'
 interface NavItem { href: string; label: string; icon: NavIconName; modulo?: string; donoOnly?: boolean; hideFromVendedor?: boolean; paraEquipe?: boolean }
 interface NavGroup { label: string | null; items: NavItem[] }
 
+// Abas organizadas por trabalho (antes, "Operação" juntava 11 itens):
+// Vendas (o dia a dia comercial), Rotina, Marketing, Gestão (números e
+// dinheiro), Equipe e Sistema.
 const NAV_GROUPS: NavGroup[] = [
   { label: null, items: [
     { href: '/pro-labore', label: 'Dashboard', icon: 'home', modulo: 'painel' },
   ] },
-  { label: 'Operação', items: [
+  { label: 'Vendas', items: [
+    { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm' },
     // Cada pessoa tem o próprio copiloto (o escopo é feito no backend); o dono vê o da equipe.
     { href: '/pro-labore/copiloto', label: 'Copiloto Comercial', icon: 'spark', modulo: 'copiloto' },
-    { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm' },
+    // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o
+    // próprio assistente, ligado ao próprio número, então todo mundo
+    // precisa enxergar a própria aba (o escopo por pessoa é feito no backend).
+    { href: '/pro-labore/assistente', label: 'Assistente Comercial', icon: 'chat', modulo: 'assistente' },
     { href: '/pro-labore/reativacao', label: 'Reativação', icon: 'refresh', modulo: 'crm' },
+  ] },
+  { label: 'Rotina', items: [
     { href: '/pro-labore/agenda', label: 'Agenda', icon: 'calendar', modulo: 'agenda' },
     // Sem donoOnly/hideFromVendedor: bloco pessoal de reuniões/anotações,
     // cada um só vê o próprio (escopo feito no backend).
     { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic', modulo: 'reunioes' },
     { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook', modulo: 'anotacoes' },
-    { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', modulo: 'vendas', donoOnly: true },
-    // Salários, investimentos, custos e outros gastos, com recibo.
-    { href: '/pro-labore/financeiro', label: 'Financeiro', icon: 'wallet', modulo: 'financeiro', donoOnly: true },
+  ] },
+  { label: 'Marketing', items: [
     // Sem donoOnly: cada pessoa conecta o próprio Instagram e só vê o dela.
     { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', modulo: 'socialMedia' },
     { href: '/pro-labore/trafego', label: 'Tráfego', icon: 'funnel', modulo: 'trafego', donoOnly: true },
-    // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o
-    // próprio assistente, ligado ao próprio número, então todo mundo
-    // precisa enxergar a própria aba (o escopo por pessoa é feito no backend).
-    { href: '/pro-labore/assistente', label: 'Assistente Comercial', icon: 'chat', modulo: 'assistente' },
+  ] },
+  { label: 'Gestão', items: [
+    { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', modulo: 'vendas', donoOnly: true },
+    // Salários, investimentos, custos e outros gastos, com recibo.
+    { href: '/pro-labore/financeiro', label: 'Financeiro', icon: 'wallet', modulo: 'financeiro', donoOnly: true },
+    { href: '/pro-labore/indicadores', label: 'Indicadores', icon: 'chart', modulo: 'indicadores', donoOnly: true },
+    { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', icon: 'compass', modulo: 'planoCrescimento', donoOnly: true },
   ] },
   { label: 'Equipe', items: [
     { href: '/pro-labore/vendedores', label: 'Vendedores', icon: 'users', modulo: 'vendedores', donoOnly: true },
@@ -50,8 +61,6 @@ const NAV_GROUPS: NavGroup[] = [
     { href: '/pro-labore/equipe/acessos', label: 'Acessos e permissões', icon: 'shield', donoOnly: true },
   ] },
   { label: 'Sistema', items: [
-    { href: '/pro-labore/indicadores', label: 'Indicadores', icon: 'chart', modulo: 'indicadores', donoOnly: true },
-    { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', icon: 'compass', modulo: 'planoCrescimento', donoOnly: true },
     { href: '/pro-labore/configuracoes', label: 'Configurações', icon: 'gear', modulo: 'configuracoes', donoOnly: true },
   ] },
 ]
@@ -75,6 +84,7 @@ function smPodeAbrir(acessos: Record<string, string> | undefined, pathname: stri
 }
 
 const CHAVE_SIDEBAR_COLAPSADA = 'pl_sidebar_colapsada'
+const iniciaisDe = (nome: string) => nome.trim().split(/\s+/).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || '?'
 const CHAVE_GRUPOS_COLAPSADOS = 'pl_sidebar_grupos_colapsados'
 
 export default function ProLaborePainelLayout({ children }: { children: React.ReactNode }) {
@@ -215,6 +225,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   ].filter(grupo => grupo.items.length > 0)
   const itensVisiveis = grupos.flatMap(g => g.items)
   const paginaAtual = itensVisiveis.find(item => item.href === pathname)
+  const grupoAtual = grupos.find(g => g.items.some(item => item.href === itemAtual?.href))?.label ?? null
   const podeCrm = itensVisiveis.some(item => item.href === '/pro-labore/leads')
   const abrirPaleta = () => { setMenuAberto(false); window.dispatchEvent(new Event('pl-abrir-paleta')) }
   const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : usuario.papel === 'SOCIAL_MEDIA' ? 'social media' : null
@@ -243,12 +254,6 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
-
-        <button type="button" className="pl-sidebar-busca" onClick={abrirPaleta} title={sidebarColapsada ? 'Buscar (Ctrl K)' : undefined} aria-label="Buscar aba, lead ou ação" data-abrir-paleta>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-          <span className="pl-sidebar-link-label">Buscar…</span>
-          <kbd>Ctrl K</kbd>
-        </button>
 
         <nav className="pl-sidebar-nav">
           {grupos.map((grupo, i) => {
@@ -297,18 +302,11 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
         </nav>
 
         <div className="pl-sidebar-footer">
-          <div className="pl-sidebar-user">
-            <span className="pl-user">{usuario.nome}{rotuloPapel && <span className="pl-hint" style={{ marginLeft: 6 }}>({rotuloPapel})</span>}</span>
-            <PLThemeToggle />
+          <div className="pl-sidebar-tema"><span>Tema</span><PLThemeToggle /></div>
+          <div className="pl-sidebar-plano">
+            <span className="pl-sidebar-plano-ponto" aria-hidden="true" />
+            <span className="pl-sidebar-link-label">Aries Sales Systems</span>
           </div>
-          <button className="pl-logout" onClick={logout} title="Sair" aria-label="Sair">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <path d="M16 17l5-5-5-5" />
-              <path d="M21 12H9" />
-            </svg>
-            <span className="pl-logout-label">Sair</span>
-          </button>
         </div>
       </aside>
 
@@ -316,20 +314,34 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
       <PaletaComandos itens={itensVisiveis.map(({ href, label }) => ({ href, label }))} podeCrm={podeCrm} />
 
       <div className="pl-main">
-        <div className="pl-topbar-v2">
+        <header className="pl-topbar-v2">
+          <button type="button" className="pl-menu-toggle" onClick={() => setMenuAberto(true)} aria-label="Abrir menu" aria-expanded={menuAberto}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
           <div className="pl-breadcrumb">
-            <span>Pró-Labore</span>
-            {paginaAtual && <><span>/</span><b>{paginaAtual.label}</b></>}
+            <span>{grupoAtual ?? 'Pró-Labore'}</span>
+            {paginaAtual && <><span aria-hidden="true">/</span><b>{paginaAtual.label}</b></>}
           </div>
+          <button type="button" className="pl-topo-busca" onClick={abrirPaleta} aria-label="Buscar aba, lead ou ação" data-abrir-paleta>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            <span>Buscar aba, lead ou ação…</span>
+            <kbd>Ctrl K</kbd>
+          </button>
           <div className="pl-topbar-acoes">
-            <button type="button" className="pl-menu-toggle" onClick={abrirPaleta} aria-label="Buscar aba, lead ou ação">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-            </button>
-            <button type="button" className="pl-menu-toggle" onClick={() => setMenuAberto(true)} aria-label="Abrir menu" aria-expanded={menuAberto}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            <PLThemeToggle />
+            <div className="pl-topo-pessoa" title={`${usuario.nome}${rotuloPapel ? ` (${rotuloPapel})` : ''}`}>
+              <span className="pl-avatar-topo" aria-hidden="true">{iniciaisDe(usuario.nome)}</span>
+              <span className="pl-topo-pessoa-texto"><b>{usuario.nome}</b><small>{rotuloPapel ?? 'gestor'}</small></span>
+            </div>
+            <button className="pl-logout" onClick={logout} title="Sair" aria-label="Sair">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
             </button>
           </div>
-        </div>
+        </header>
 
         <div className="pl-shell">
           {nivelAtual === 'NENHUM' ? (

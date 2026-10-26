@@ -377,7 +377,7 @@ export default function ProLaboreVendasPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Vendas" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} actions={<FechamentoDiario modulo="VENDAS" />} />
+      <PageHeader eyebrow="Gestão" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} actions={<FechamentoDiario modulo="VENDAS" />} />
 
       {podeEditar && <>
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>

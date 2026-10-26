@@ -1156,7 +1156,7 @@ function Anotacoes() {
   return (
     <div>
       <PageHeader
-        eyebrow="Operação"
+        eyebrow="Rotina"
         title="Anotações"
         subtitle="Páginas de texto e mapas mentais, organizados em pastas — privado, só você vê"
       />

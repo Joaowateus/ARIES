@@ -98,7 +98,7 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
     <div className="pl-as">
       {cabecalho && (
         <PageHeader
-          eyebrow="Operação"
+          eyebrow="Vendas"
           title="Assistente Comercial"
           subtitle="Um assistente no WhatsApp de cada vendedor: pré-atende os leads novos, qualifica com o seu roteiro, joga no CRM e avisa o vendedor na hora certa"
         />

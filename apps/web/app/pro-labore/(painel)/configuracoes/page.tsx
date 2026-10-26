@@ -184,7 +184,7 @@ export default function ProLaboreConfiguracoesPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Preferências" title="Configurações" subtitle="O Aries no WhatsApp, teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
+      <PageHeader eyebrow="Sistema" title="Configurações" subtitle="O Aries no WhatsApp, teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
 
       <div style={{ marginBottom: 20 }}><AgenteWhatsapp /></div>
 
