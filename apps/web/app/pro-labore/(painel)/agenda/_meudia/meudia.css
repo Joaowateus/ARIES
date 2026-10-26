@@ -1,0 +1,80 @@
+/* ============ AGENDA › MEU DIA ============
+   Semana em cima, o dia em ordem de horário embaixo e, hoje, o que pede
+   atenção agora ao lado. Tipo do item sempre escrito (Rotina, Follow,
+   Minha tarefa), não só pela cor. */
+.md { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+.md-semana-cab { display: flex; align-items: center; gap: 8px; }
+.md-semana { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.md-dia {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; cursor: pointer;
+  border: 1px solid var(--pl-border); border-radius: var(--pl-radius-sm); background: var(--pl-surface); color: var(--pl-ink-2);
+  font-family: var(--pl-font-sans); transition: border-color .15s ease, background .15s ease;
+}
+.md-dia:hover { border-color: var(--pl-border-strong); }
+.md-dia span { font-size: 11.5px; color: var(--pl-ink-muted); }
+.md-dia b { font-size: 17px; font-weight: 600; color: var(--pl-ink-1); letter-spacing: -0.02em; }
+.md-dia small { display: inline-flex; align-items: center; gap: 4px; min-height: 14px; font-size: 11px; color: var(--pl-ink-muted); }
+.md-dia.hoje { border-color: var(--pl-accent); }
+.md-dia.sel { background: var(--pl-accent-strong); border-color: var(--pl-accent-strong); }
+.md-dia.sel span, .md-dia.sel b, .md-dia.sel small { color: var(--pl-accent-ink); }
+
+.md-grade { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.md-grade > :only-child { grid-column: 1 / -1; }
+.md-dia-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.md-dia-cab h2 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.03em; color: var(--pl-ink-1); display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.md-dia-cab h2 span { font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--pl-ink-muted); }
+.md-progresso { min-width: 180px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--pl-ink-2); }
+.md-novo { display: flex; gap: 8px; margin-top: 14px; }
+.md-novo .pl-input { flex: 1; min-width: 0; }
+
+.md-bloco { margin-top: 18px; }
+.md-bloco h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--pl-ink-muted); display: flex; align-items: center; gap: 6px; }
+.md-bloco.atrasados h3 { color: var(--pl-critical); }
+.md-bloco h3 span { font-size: 11px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--pl-critical) 14%, transparent); }
+.md-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.md-item { display: grid; grid-template-columns: 48px 26px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 2px; border-top: 1px solid var(--pl-border); }
+.md-item:first-child { border-top: 0; }
+.md-item.feito .md-titulo { text-decoration: line-through; color: var(--pl-ink-muted); }
+.md-hora { font-size: 13px; font-weight: 600; color: var(--pl-ink-2); padding-top: 3px; }
+.md-item.atrasado .md-hora { color: var(--pl-critical); }
+.md-check {
+  width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--pl-border-strong); background: var(--pl-surface);
+  color: transparent; font-size: 12px; font-weight: 800; cursor: pointer; display: grid; place-items: center; margin-top: 1px;
+}
+.md-check:hover { border-color: var(--pl-good); }
+.md-check.on { background: var(--pl-good); border-color: var(--pl-good); color: #fff; }
+.md-icone { width: 22px; height: 22px; display: grid; place-items: center; color: var(--pl-info); font-weight: 700; }
+.md-corpo { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.md-titulo { font-size: 14px; font-weight: 500; color: var(--pl-ink-1); overflow-wrap: anywhere; }
+.md-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; color: var(--pl-ink-muted); }
+.md-nota { color: var(--pl-ink-2); }
+.md-tag { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--pl-border-strong); color: var(--pl-ink-2); }
+.md-tag.follow { color: var(--pl-info); border-color: color-mix(in srgb, var(--pl-info) 45%, transparent); }
+.md-tag.tarefa { color: var(--pl-accent-4); border-color: color-mix(in srgb, var(--pl-accent-4) 50%, transparent); }
+.md-acoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.md-acoes .pl-btn { padding: 6px 11px; font-size: 12.5px; }
+.md-link { background: none; border: 0; padding: 0; color: var(--pl-info); font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: none; }
+.md-link:hover { text-decoration: underline; }
+.md-link.mudo { color: var(--pl-ink-muted); font-weight: 500; }
+.md-vazio { margin: 18px 0 4px; color: var(--pl-ink-muted); font-size: 13.5px; }
+
+.md-agora h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.015em; color: var(--pl-ink-1); }
+.md-agora .pl-hint { margin: 4px 0 10px; font-weight: 400; }
+.md-agora-lista { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.md-agora-lista li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; }
+.md-agora-lista b { font-size: 13.5px; font-weight: 600; color: var(--pl-ink-1); }
+.md-agora-lista p { margin: 2px 0 3px; font-size: 12.5px; color: var(--pl-ink-2); line-height: 1.45; }
+.md-urg { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--pl-border-strong); color: var(--pl-ink-2); }
+.md-urg.agora { color: var(--pl-critical); border-color: color-mix(in srgb, var(--pl-critical) 45%, transparent); }
+.md-urg.hoje { color: var(--pl-accent-4); border-color: color-mix(in srgb, var(--pl-accent-4) 50%, transparent); }
+
+@media (max-width: 980px) { .md-grade { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .md-semana-cab .pl-icon-btn { display: none; }
+  .md-semana { gap: 4px; }
+  .md-dia { padding: 6px 2px; }
+  .md-dia b { font-size: 15px; }
+  .md-item { grid-template-columns: 42px 24px minmax(0, 1fr); }
+  .md-acoes { grid-column: 3; justify-content: flex-start; }
+  .md-novo { flex-direction: column; }
+}

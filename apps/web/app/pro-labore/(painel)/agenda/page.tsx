@@ -7,6 +7,7 @@ import {
 } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
+import { MeuDia, diaBR, type RotinaDoDia } from './_meudia/MeuDia'
 
 const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const DIAS_SEMANA_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -439,8 +440,10 @@ export default function ProLaboreAgendaPage() {
   // de uma pessoa e cadastro de rotinas nunca mais compartilham o mesmo
   // scroll. Só existe seletor de aba pra quem enxerga a equipe; vendedor
   // sempre vê só a própria rotina (não tem outra aba pra ele).
-  type Aba = 'ROTINA' | 'AUDITORIA' | 'INDIVIDUAL' | 'CADASTRO'
-  const [abaAtiva, setAbaAtiva] = useState<Aba>('AUDITORIA')
+  type Aba = 'MEU_DIA' | 'ROTINA' | 'AUDITORIA' | 'INDIVIDUAL' | 'CADASTRO'
+  // Todo mundo abre no "Meu dia" (rotinas + follows + tarefas próprias + o que pede atenção agora).
+  const [abaAtiva, setAbaAtiva] = useState<Aba>('MEU_DIA')
+  const [diaMeuDia, setDiaMeuDia] = useState(() => diaBR())
 
   const [periodoAuditoria, setPeriodoAuditoria] = useState<PeriodoAuditoria>('hoje')
   const [conclusoesAuditoria, setConclusoesAuditoria] = useState<AgendaConclusao[]>([])
@@ -485,15 +488,22 @@ export default function ProLaboreAgendaPage() {
   // Busca conclusões cobrindo o mês visível E hoje (a união dos dois) — o
   // indicador "hoje" no topo precisa do dia atual mesmo quando a pessoa está
   // navegando o calendário por outro mês.
+  // O "Meu dia" soma a semana dele ao período (a semana pode cruzar o mês).
+  const semanaMeuDia = useMemo(() => {
+    const d = new Date(`${diaMeuDia}T00:00:00.000Z`)
+    const ini = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86_400_000)
+    return { ini: isoDia(ini), fim: isoDia(new Date(ini.getTime() + 6 * 86_400_000)) }
+  }, [diaMeuDia])
   useEffect(() => {
     const inicioMes = new Date(Date.UTC(mesVisivel.ano, mesVisivel.mes, 1))
     const fimMes = new Date(Date.UTC(mesVisivel.ano, mesVisivel.mes + 1, 0))
     const hoje = hojeUTC()
-    const inicio = inicioMes < hoje ? inicioMes : hoje
-    const fim = fimMes > hoje ? fimMes : hoje
+    const datas = [inicioMes, fimMes, hoje, new Date(`${semanaMeuDia.ini}T00:00:00.000Z`), new Date(`${semanaMeuDia.fim}T00:00:00.000Z`)]
+    const inicio = new Date(Math.min(...datas.map(d => d.getTime())))
+    const fim = new Date(Math.max(...datas.map(d => d.getTime())))
     proLaboreApi.agenda.conclusoes.listar(isoDia(inicio), isoDia(fim)).then(setConclusoes)
     proLaboreApi.agenda.inicios.listar(isoDia(inicio), isoDia(fim)).then(setInicios)
-  }, [mesVisivel.ano, mesVisivel.mes])
+  }, [mesVisivel.ano, mesVisivel.mes, semanaMeuDia])
 
   // Auditoria de aderência: período independente do mês visível no
   // calendário, só carregado (e usado) por quem enxerga a equipe.
@@ -885,7 +895,14 @@ export default function ProLaboreAgendaPage() {
 
   // Só quem vê a equipe navega entre abas — vendedor sempre cai direto na
   // própria rotina, que é a única coisa que ele tem pra ver por aqui.
-  const abaEfetiva: Aba = vejaEquipe ? abaAtiva : 'ROTINA'
+  const abaEfetiva: Aba = vejaEquipe || abaAtiva === 'MEU_DIA' ? abaAtiva : 'ROTINA'
+  // Todas as rotinas que valem para mim no dia (qualquer categoria), para o "Meu dia".
+  const rotinasDoDia = (diaIso: string): RotinaDoDia[] => {
+    const d = new Date(`${diaIso}T00:00:00.000Z`)
+    return itens
+      .filter(i => itemAplicaPara(i, meuVendedorId, isDono) && itemAplicaNoDia(i, d))
+      .map(item => ({ item, feito: foiConcluido(conclusoes, item.id, meuAutorId, diaIso), categoria: CATEGORIA_LABEL[item.categoria] }))
+  }
   const pessoaIndividual = auditoria.find(p => p.id === individualId) ?? null
 
   return (
@@ -893,16 +910,19 @@ export default function ProLaboreAgendaPage() {
       <PageHeader
         eyebrow="Rotina"
         title="Agenda de trabalho"
-        subtitle={vejaEquipe ? 'Sua agenda pessoal, a auditoria da equipe e o cadastro de rotinas — separados, cada um na sua aba' : 'Sua rotina do dia a dia'}
+        subtitle={vejaEquipe ? 'Seu dia em ordem de horário, a auditoria da equipe e o cadastro de rotinas' : 'Seu dia em ordem de horário: rotinas, follows do CRM e as suas tarefas'}
       />
 
-      {vejaEquipe && (
-        <div className="pl-period-row" style={{ marginTop: 16, marginBottom: 4 }}>
-          <button type="button" className={`pl-chip ${abaAtiva === 'AUDITORIA' ? 'active' : ''}`} onClick={() => setAbaAtiva('AUDITORIA')}>Auditoria da Equipe</button>
-          <button type="button" className={`pl-chip ${abaAtiva === 'INDIVIDUAL' ? 'active' : ''}`} onClick={() => setAbaAtiva('INDIVIDUAL')}>Vendedor Individual</button>
-          <button type="button" className={`pl-chip ${abaAtiva === 'ROTINA' ? 'active' : ''}`} onClick={() => setAbaAtiva('ROTINA')}>Minha Rotina</button>
-          <button type="button" className={`pl-chip ${abaAtiva === 'CADASTRO' ? 'active' : ''}`} onClick={() => setAbaAtiva('CADASTRO')}>Rotinas Cadastradas</button>
-        </div>
+      <div className="pl-period-row" style={{ marginTop: 16, marginBottom: 4 }}>
+        <button type="button" className={`pl-chip ${abaEfetiva === 'MEU_DIA' ? 'active' : ''}`} onClick={() => setAbaAtiva('MEU_DIA')}>Meu dia</button>
+        {vejaEquipe && <button type="button" className={`pl-chip ${abaAtiva === 'AUDITORIA' ? 'active' : ''}`} onClick={() => setAbaAtiva('AUDITORIA')}>Auditoria da Equipe</button>}
+        {vejaEquipe && <button type="button" className={`pl-chip ${abaAtiva === 'INDIVIDUAL' ? 'active' : ''}`} onClick={() => setAbaAtiva('INDIVIDUAL')}>Vendedor Individual</button>}
+        <button type="button" className={`pl-chip ${abaEfetiva === 'ROTINA' ? 'active' : ''}`} onClick={() => setAbaAtiva('ROTINA')}>{vejaEquipe ? 'Minha Rotina' : 'Calendário da rotina'}</button>
+        {vejaEquipe && <button type="button" className={`pl-chip ${abaAtiva === 'CADASTRO' ? 'active' : ''}`} onClick={() => setAbaAtiva('CADASTRO')}>Rotinas Cadastradas</button>}
+      </div>
+
+      {abaEfetiva === 'MEU_DIA' && (
+        <MeuDia dia={diaMeuDia} onDia={setDiaMeuDia} rotinasDoDia={rotinasDoDia} onAlternarRotina={alternarConclusao} vejaEquipe={vejaEquipe} />
       )}
 
       {abaEfetiva === 'AUDITORIA' && (
