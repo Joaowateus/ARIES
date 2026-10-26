@@ -986,6 +986,7 @@ export default function ProLaboreLeadsPage() {
                         isDono={isDono}
                         vejaEquipe={vejaEquipe}
                         densidade={densidade}
+                        destaque={filtroEtiqueta || undefined}
                         dragging={draggingId === lead.id}
                         onPointerDown={e => onPointerDownCard(e, lead)}
                         onAbrir={() => setPainelId(lead.id)}
@@ -1235,13 +1236,15 @@ function avancoAutomaticoRecente(lead: Lead) {
 // lead, que abre com um clique no card. No modo "detalhado" o card mostra
 // também o telefone e mais etiquetas.
 function KanbanCard({
-  lead, estagio, isDono, vejaEquipe, densidade, dragging, onPointerDown, onAbrir, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
+  lead, estagio, isDono, vejaEquipe, densidade, destaque, dragging, onPointerDown, onAbrir, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
 }: {
   lead: Lead
   estagio: EstagioLead
   isDono: boolean
   vejaEquipe: boolean
   densidade: Densidade
+  // Etiqueta filtrada: aparece primeiro no card.
+  destaque?: string
   dragging: boolean
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
   onAbrir: () => void
@@ -1312,7 +1315,7 @@ function KanbanCard({
             {lead.postCode && <span className="ig" title={`Post do Instagram que trouxe o lead: ${lead.postCode}`}><IconeOrigem tipo="ig" /></span>}
           </span>
         )}
-        {!lead.vendaId && etiquetas.length > 0 && <EtiquetasLead etiquetas={etiquetas} max={detalhado ? 4 : 2} />}
+        {!lead.vendaId && etiquetas.length > 0 && <EtiquetasLead etiquetas={etiquetas} max={detalhado ? 4 : 2} primeiro={destaque} />}
       </div>
       {(sitFollow || lead.vendaId || lead.tipoNegociacao || avancoAuto) && (
         <div className="pl-kc-rodape">

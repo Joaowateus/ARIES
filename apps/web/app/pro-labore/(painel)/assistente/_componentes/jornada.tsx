@@ -24,8 +24,10 @@ export const ROTULO_ETIQUETA: Record<string, string> = {
 // Ordem de importância para quando não cabem todas.
 export const ORDEM_ETIQUETAS = ['QUENTE', 'CREDITO_APROVADO', 'PARCELA_CABE', 'PARCELA_APERTADA', 'PARCELA_NAO_CABE', 'PEDIU_SIMULACAO', 'PEDIU_VISITA', 'SUMIU_24H', 'OBJECAO_PRECO', 'CREDITO_RECUSADO', 'RESTRICAO_NOME', 'SEM_CNH', 'FICHA_CREDITO', 'SIMULOU', 'FINANCIAMENTO', 'A_VISTA', 'TEM_TROCA', 'SEM_ENTRADA']
 
-export function EtiquetasLead({ etiquetas, max = 9 }: { etiquetas: string[] | null | undefined; max?: number }) {
-  const lista = [...(etiquetas ?? [])].sort((a, b) => ORDEM_ETIQUETAS.indexOf(a) - ORDEM_ETIQUETAS.indexOf(b))
+// `primeiro`: a etiqueta filtrada no CRM aparece sempre, na frente das outras.
+export function EtiquetasLead({ etiquetas, max = 9, primeiro }: { etiquetas: string[] | null | undefined; max?: number; primeiro?: string }) {
+  const peso = (e: string) => (e === primeiro ? -1 : ORDEM_ETIQUETAS.indexOf(e))
+  const lista = [...(etiquetas ?? [])].sort((a, b) => peso(a) - peso(b))
   if (!lista.length) return null
   const resto = lista.length - max
   return (
