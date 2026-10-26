@@ -3,7 +3,6 @@
 // Painel lateral do lead (abre com um clique no card): tudo que saiu do card
 // para ele ficar enxuto — contato, etapas, nota e etiquetas, follow, última
 // mensagem do WhatsApp, observação, histórico e as ações.
-import Link from 'next/link'
 import { useEffect } from 'react'
 import type { EstagioLead, Lead, TipoNegociacao } from '@/lib/proLaboreApi'
 import { situacaoFollow } from '../../_follow/follow'
@@ -15,6 +14,11 @@ const NEGOCIACAO: Record<TipoNegociacao, string> = { P: 'Pagamento integral', R:
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 const soDigitos = (t: string) => t.replace(/\D/g, '')
+// Último avanço foi do assistente, há menos de 3 dias e o lead continua lá: dá para desfazer.
+function avancoDesfazivel(lead: Lead) {
+  const ultimo = lead.historico?.at(-1)
+  return !!ultimo && ultimo.origem === 'ASSISTENTE' && ultimo.estagioNovo === lead.estagio && !lead.vendaId && Date.now() - new Date(ultimo.criadoEm).getTime() < 3 * 86_400_000
+}
 
 export function PainelLead({ lead, colunas, isDono, vejaEquipe, onFechar, onMover, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao }: {
   lead: Lead
@@ -42,7 +46,7 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, onFechar, onMove
   const follow = lead.follows?.[0] ?? null
   const sit = follow ? situacaoFollow(follow) : null
   const ultimoAuto = lead.historico?.at(-1)
-  const desfazivel = ultimoAuto?.origem === 'ASSISTENTE' && ultimoAuto.estagioNovo === lead.estagio && !lead.vendaId && Date.now() - new Date(ultimoAuto.criadoEm).getTime() < 3 * 86_400_000
+  const desfazivel = avancoDesfazivel(lead)
   const conversa = lead.conversa
   const whats = lead.telefone && soDigitos(lead.telefone).length >= 10 ? `https://wa.me/${soDigitos(lead.telefone).replace(/^(?!55)/, '55')}` : null
   const linkConversa = conversa ? `/pro-labore/assistente?aba=whatsapp&conversa=${conversa.id}${lead.vendedorId ? `&vendedor=${lead.vendedorId}` : ''}` : null
@@ -98,10 +102,10 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, onFechar, onMove
           {lead.email && <div><dt>E-mail</dt><dd>{lead.email}</dd></div>}
           {isDono && (
             <div>
-              <dt>Negociação</dt>
+              <dt title="P = pagamento integral · R = renegociação">Negociação (P/R)</dt>
               <dd className="pl-pn-pr">
                 {(['P', 'R'] as TipoNegociacao[]).map(t => (
-                  <button key={t} type="button" className={`pl-chip ${lead.tipoNegociacao === t ? 'active' : ''}`} aria-pressed={lead.tipoNegociacao === t} onClick={() => onDefinirTipoNegociacao(t)} title={NEGOCIACAO[t]}>{t} · {NEGOCIACAO[t]}</button>
+                  <button key={t} type="button" className={`pl-chip ${lead.tipoNegociacao === t ? 'active' : ''}`} aria-pressed={lead.tipoNegociacao === t} onClick={() => onDefinirTipoNegociacao(t)} title={NEGOCIACAO[t]}>{t}</button>
                 ))}
               </dd>
             </div>
@@ -134,7 +138,8 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, onFechar, onMove
                 {conversa.ultima.texto}
               </blockquote>
             ) : <p className="pl-hint">Sem mensagens.</p>}
-            {linkConversa && <Link className="pl-link-action" href={linkConversa}>Abrir a conversa →</Link>}
+            {/* Navegação completa: o Assistente lê ?conversa= ao montar. */}
+            {linkConversa && <a className="pl-link-action" href={linkConversa}>Abrir a conversa →</a>}
           </section>
         )}
 
