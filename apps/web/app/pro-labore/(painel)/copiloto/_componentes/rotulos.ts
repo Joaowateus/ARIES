@@ -1,6 +1,6 @@
 export const TIPO_ACAO: Record<string, string> = {
   RESPONDER: 'WhatsApp', ABORDAR: 'Abordagem', FOLLOW_UP: 'Follow-up', REATIVAR: 'Próxima etapa',
-  AGENDA: 'Agenda', ESTUDO: 'Estudo', EQUIPE: 'Equipe', HABITO: 'Hábito',
+  AGENDA: 'Agenda', ESTUDO: 'Estudo', EQUIPE: 'Equipe', HABITO: 'Hábito', FECHAR: 'Sinal de compra',
 }
 export const RESULTADO_ACAO: Record<string, string> = { AVANCOU: 'o lead avançou', RESPONDIDA: 'respondida', SEM_EFEITO: 'sem avanço ainda' }
 export const ESTAGIO: Record<string, string> = { LEAD: 'Novo', ABORDADO: 'Abordado', NEGOCIACAO: 'Negociação', PROPOSTA: 'Proposta', FECHADO: 'Fechado', PERDIDO: 'Perdido' }

@@ -141,3 +141,34 @@
   .cp-plano li { grid-template-columns: 28px 1fr; }
   .cp-acao-botoes { grid-column: 2; justify-content: flex-start; }
 }
+
+/* ============ FILA AO VIVO ("quem atender agora") ============
+   Urgência sempre com rótulo escrito (Agora / Hoje / Quando der), não só cor. */
+.cp-fila-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-fila-lista { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cp-fila-item {
+  display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 12px; align-items: start;
+  padding: 12px 14px; border: 1px solid var(--pl-border); border-left-width: 3px; border-radius: var(--pl-radius-sm); background: var(--pl-surface);
+}
+.cp-fila-item.agora { border-left-color: var(--pl-critical); }
+.cp-fila-item.hoje { border-left-color: var(--pl-accent-4); }
+.cp-fila-item.depois { border-left-color: var(--pl-border-strong); }
+.cp-fila-urg { justify-self: start; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--pl-border-strong); color: var(--pl-ink-2); white-space: nowrap; }
+.cp-fila-urg.agora { color: var(--pl-critical); border-color: color-mix(in srgb, var(--pl-critical) 45%, transparent); background: color-mix(in srgb, var(--pl-critical) 8%, transparent); }
+.cp-fila-urg.hoje { color: var(--pl-accent-4); border-color: color-mix(in srgb, var(--pl-accent-4) 50%, transparent); background: color-mix(in srgb, var(--pl-accent-4) 8%, transparent); }
+.cp-fila-corpo { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cp-fila-quem { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cp-fila-quem b { font-size: 14.5px; font-weight: 600; color: var(--pl-ink-1); }
+.cp-fila-quem span { font-size: 12.5px; color: var(--pl-ink-muted); }
+.cp-fila-quem .cp-fila-nota { font-weight: 600; color: var(--pl-ink-2); padding: 0 6px; border-radius: 6px; background: var(--pl-surface-2); }
+.cp-fila-motivo { font-size: 13.5px; font-weight: 500; color: var(--pl-ink-1); }
+.cp-fila-passo { font-size: 13px; color: var(--pl-ink-2); line-height: 1.5; }
+.cp-fila-sinais { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.cp-fila-sinais span { font-size: 11.5px; color: var(--pl-ink-2); padding: 2px 8px; border-radius: 999px; background: var(--pl-surface-2); }
+.cp-fila-botoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.cp-fila-botoes .pl-btn { padding: 7px 12px; font-size: 13px; }
+.cp-fila-rodape { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+@media (max-width: 720px) {
+  .cp-fila-item { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .cp-fila-botoes { justify-content: flex-start; }
+}

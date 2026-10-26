@@ -11,6 +11,7 @@ import { requireModulo, nivelAtende } from '../lib/acessos'
 import { EQUIPE, primeiroNome, chaveDia } from '../lib/copilotoFatos'
 import { COMPETENCIAS, COMPETENCIAS_LISTA, bibliotecaDa, type Competencia } from '../lib/copilotoCompetencias'
 import { fatosParaIA, garantirPerfil, gerarDia, hojeChave, memoriaParaIA, telaDoDia, type Relatorio } from '../lib/copiloto'
+import { ROTULO_MOTIVO, filaDoCopiloto } from '../lib/copilotoFila'
 import { buscarEstudosNaWeb, competenciaValida, iaLigada, responderChat, sugerirResposta, type SugestaoIA } from '../lib/copilotoIA'
 import { DICAS, pedidoDeMemoria, sugestaoModelo } from '../lib/copilotoModelos'
 import { semDinheiro } from '../lib/smIA'
@@ -87,6 +88,14 @@ router.get('/copiloto/hoje', ...base, async (req: Request, res: Response) => {
     if (!r) { res.status(404).json({ error: 'Pessoa não encontrada' }); return }
   }
   res.json(await respostaHoje(req))
+})
+
+// Fila ao vivo de "próxima melhor ação" (regras, sem IA, sem valores em reais).
+router.get('/copiloto/fila', ...base, async (req: Request, res: Response) => {
+  const c = req.copiloto!
+  const fila = await filaDoCopiloto(c.usuarioId, c.pessoa)
+  if (!fila) { res.status(404).json({ error: 'Pessoa não encontrada' }); return }
+  res.json(fila)
 })
 
 // A IA redige o relatório de hoje (quando a pessoa abre a tela e ainda não há texto da IA).
@@ -347,8 +356,11 @@ router.post('/copiloto/chat', ...base, soDaPessoa, escrita, async (req: Request,
     if (!(await telaDoDia(c.usuarioId, c.pessoa))) await gerarDia(c.usuarioId, c.pessoa)
     const tela = (await telaDoDia(c.usuarioId, c.pessoa))!
     const historico = (await prisma.copilotoMensagem.findMany({ where: { usuarioId: c.usuarioId, pessoa: c.pessoa }, orderBy: { criadoEm: 'desc' }, take: 11, select: { autor: true, texto: true } })).reverse().slice(0, -1)
+    // Quem atender agora, para a IA: primeiro nome, etapa, motivo e passo (sem valores; a nota do follow passa pelo semDinheiro).
+    const fila = (await filaDoCopiloto(c.usuarioId, c.pessoa).catch(() => null))?.itens.slice(0, 8) ?? []
+    const filaIA = semDinheiro(fila.map(i => ({ nome: primeiroNome(i.nome), etapa: i.estagio, motivo: ROTULO_MOTIVO[i.motivo.tipo], detalhe: i.motivo.texto, passo: i.passo, sinais: i.sinais, vendedor: i.vendedor })))
     const ia = iaLigada() ? await responderChat(c.usuarioId, {
-      fatos: fatosParaIA(tela.fatos), achados: tela.achados.map(a => ({ tipo: a.tipo, texto: a.texto })), plano: tela.acoes.map(a => ({ texto: a.texto, status: a.status })),
+      fatos: fatosParaIA(tela.fatos), achados: tela.achados.map(a => ({ tipo: a.tipo, texto: a.texto })), plano: tela.acoes.map(a => ({ texto: a.texto, status: a.status })), fila: filaIA,
       memoria: await memoriaParaIA(c.usuarioId, c.pessoa), historico, pergunta, nome: c.nome,
     }) : null
     if (ia) {
@@ -362,7 +374,9 @@ router.post('/copiloto/chat', ...base, soDaPessoa, escrita, async (req: Request,
       const d = DICAS[r.foco]
       resposta = [
         iaLigada() ? 'Não consegui responder com segurança agora. Enquanto isso, o essencial de hoje:' : 'A conversa livre usa a IA, que não está ligada neste sistema. Enquanto isso, o essencial de hoje:',
-        tela.acoes.filter(a => a.status === 'PENDENTE').slice(0, 3).map((a, i) => `${i + 1}. ${a.texto}`).join(' '),
+        fila.length
+          ? `Quem atender agora: ${fila.slice(0, 3).map((x, i) => `${i + 1}. ${primeiroNome(x.nome)}: ${x.motivo.texto.charAt(0).toLowerCase()}${x.motivo.texto.slice(1)}`).join(' ')}`
+          : tela.acoes.filter(a => a.status === 'PENDENTE').slice(0, 3).map((a, i) => `${i + 1}. ${a.texto}`).join(' '),
         `Técnica do dia: ${d.titulo}. ${d.tecnica}`,
         'Para eu lembrar de algo, escreva "lembre que ...".',
       ].filter(Boolean).join('\n')

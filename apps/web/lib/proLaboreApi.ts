@@ -807,6 +807,7 @@ export const proLaboreApi = {
   copiloto: {
     pessoas: () => request<CpPessoa[]>('/pro-labore/copiloto/pessoas'),
     hoje: (pessoa?: string) => request<CpHoje>(`/pro-labore/copiloto/hoje${qp(pessoa)}`),
+    fila: (pessoa?: string) => request<CpFila>(`/pro-labore/copiloto/fila${qp(pessoa)}`),
     hojeIA: (pessoa?: string) => request<CpHoje>(`/pro-labore/copiloto/hoje/ia${qp(pessoa)}`, { method: 'POST' }),
     atualizar: (pessoa?: string) => request<CpHoje>(`/pro-labore/copiloto/hoje/atualizar${qp(pessoa)}`, { method: 'POST', body: '{}' }),
     lido: (pessoa?: string) => request<{ ok: boolean }>(`/pro-labore/copiloto/hoje/lido${qp(pessoa)}`, { method: 'POST' }),
@@ -2980,6 +2981,26 @@ export interface SmAssistente {
 
 export type CpTipoAchado = 'FORTE' | 'ATENCAO' | 'ERRO'
 export type CpStatusAcao = 'PENDENTE' | 'FEITA' | 'IGNORADA'
+// Fila ao vivo de "próxima melhor ação" do Copiloto (regras, sem IA).
+export type CpTipoMotivo = 'WHATS_ESPERANDO' | 'CREDITO_APROVADO' | 'WHATS_SEM_RESPOSTA' | 'FOLLOW_ATRASADO' | 'PEDIU_VISITA' | 'FICHA_CREDITO' | 'FOLLOW_HOJE' | 'PEDIU_SIMULACAO' | 'QUENTE_PARADO' | 'NOVO_SEM_ABORDAGEM' | 'PARADO'
+export type CpGrupoFila = 'WHATSAPP' | 'FOLLOW' | 'COMPRA' | 'CARTEIRA'
+export interface CpItemFila {
+  chave: string
+  leadId: string | null
+  conversaId: string | null
+  followId: string | null
+  nome: string
+  estagio: string | null
+  modelo: string | null
+  vendedor: string | null
+  pontuacao: number | null
+  prioridade: number
+  grupo: CpGrupoFila
+  motivo: { tipo: CpTipoMotivo; texto: string; passo: string }
+  sinais: string[]
+  passo: string
+}
+export interface CpFila { itens: CpItemFila[]; total: number; urgentes: number; porGrupo: Record<CpGrupoFila, number>; geradoEm: string }
 export type CpStatusEstudo = 'SUGERIDO' | 'ESTUDANDO' | 'CONCLUIDO' | 'DESCARTADO'
 export type CpTipoMemoria = 'OBJETIVO' | 'PREFERENCIA' | 'PONTO_FORTE' | 'PONTO_FRACO' | 'APRENDIZADO' | 'ESTILO'
 export interface CpPessoa { pessoa: string; nome: string; tipo: 'EQUIPE' | 'VENDEDOR' | 'EU'; indice?: number | null }

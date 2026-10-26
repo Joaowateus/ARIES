@@ -60,8 +60,8 @@ export function relatorioModelo(f: Fatos, achados: Achado[], plano: AcaoPlano[],
   const tom = indice >= 80 ? 'o dia começa em boa forma' : indice >= 60 ? 'tem pontos importantes para ajustar hoje' : 'hoje pede foco total no básico'
   const primeira = plano[0]
   const resumo = f.pessoa.tipo === 'EQUIPE'
-    ? `${nome}, a equipe está com índice de execução ${indice} e ${f.carteira.total} leads em aberto, ${f.parados.total} deles parados. ${primeira ? `Comece por: ${primeira.texto.toLowerCase()}.` : ''}`.trim()
-    : `${nome}, ${tom}: índice de execução ${indice}, com ${f.carteira.total} leads em aberto e ${f.parados.total} parados. ${primeira ? `Primeira ação: ${primeira.texto.toLowerCase()}.` : ''}`.trim()
+    ? `${nome}, a equipe está com índice de execução ${indice} e ${f.carteira.total} leads em aberto, ${f.parados.total} deles parados. ${primeira ? `Comece por: ${primeira.texto.charAt(0).toLowerCase()}${primeira.texto.slice(1)}.` : ''}`.trim()
+    : `${nome}, ${tom}: índice de execução ${indice}, com ${f.carteira.total} leads em aberto e ${f.parados.total} parados. ${primeira ? `Primeira ação: ${primeira.texto.charAt(0).toLowerCase()}${primeira.texto.slice(1)}.` : ''}`.trim()
   const d = DICAS[foco]
   return {
     resumo, indoBem: fortes.slice(0, 3), atencao: atencao.slice(0, 4), erros: erros.slice(0, 3),

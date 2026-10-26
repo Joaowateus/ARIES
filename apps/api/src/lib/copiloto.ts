@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { bibliotecaDa, COMPETENCIAS, type Competencia } from './copilotoCompetencias'
 import { EQUIPE, achadosDe, chaveDia, coletarFatos, competenciaFoco, indiceDoDia, planoDoDia, rankEstagio, type Achado, type Fatos } from './copilotoFatos'
+import { filaDoCopiloto, juntarSinaisNoPlano } from './copilotoFila'
 import { iaLigada, redigirRelatorio, type RelatorioIA } from './copilotoIA'
 import { relatorioModelo } from './copilotoModelos'
 import { diaBrasilia } from './socialMediaSync'
@@ -19,7 +20,7 @@ import { enviarTexto, evolutionConfigurada } from './whatsappEvolution'
 const DIA = 24 * 3600e3
 export const ROTULO_ACAO: Record<string, string> = {
   RESPONDER: 'Responder no WhatsApp', ABORDAR: 'Abordar lead novo', FOLLOW_UP: 'Follow-up de negociação e proposta', REATIVAR: 'Puxar lead abordado',
-  AGENDA: 'Tarefa da agenda', ESTUDO: 'Estudo', EQUIPE: 'Conversa com a equipe', HABITO: 'Hábito',
+  AGENDA: 'Tarefa da agenda', ESTUDO: 'Estudo', EQUIPE: 'Conversa com a equipe', HABITO: 'Hábito', FECHAR: 'Sinal de compra',
 }
 
 export const hojeChave = (agora = new Date()) => chaveDia(diaBrasilia(agora))
@@ -141,7 +142,9 @@ export async function gerarDia(usuarioId: string, pessoa: string, opcoes: { agor
   const achados = achadosDe(fatos)
   const indice = indiceDoDia(fatos)
   const foco = competenciaFoco(achados, pessoa === EQUIPE)
-  const plano = planoDoDia(fatos, foco, perfil.minutosEstudoDia, efeito)
+  // Sinais fortes da fila (crédito aprovado, follow vencido, pediu visita) entram no plano da manhã.
+  const fila = await filaDoCopiloto(usuarioId, pessoa, agora, 10).catch(() => null)
+  const plano = juntarSinaisNoPlano(planoDoDia(fatos, foco, perfil.minutosEstudoDia, efeito), fila?.itens ?? [])
 
   let relatorio: RelatorioIA = relatorioModelo(fatos, achados, plano, indice, foco)
   let origem = 'MODELO'

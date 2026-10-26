@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { proLaboreApi, type CpAcao, type CpHoje, type CpStatusAcao } from '@/lib/proLaboreApi'
 import type { AbaCopiloto } from '../page'
 import { RESULTADO_ACAO, TIPO_ACAO, ddmm, horas, num, pct } from './rotulos'
+import { Fila } from './Fila'
 
 function Anel({ valor }: { valor: number }) {
   const r = 46, c = 2 * Math.PI * r
@@ -86,9 +87,11 @@ export function Hoje({ dados, pessoa, escrevendo, onDados, irPara, abrirPessoa, 
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }}>{erro}</div>}
       </section>
 
+      <Fila pessoa={pessoa} irPara={irPara} />
+
       <section className="cp-card" aria-label="Plano de hoje">
         <div className="cp-card-cab">
-          <div><h2>Plano de hoje</h2><p className="cp-sub">Na ordem de impacto. {feitas} de {lista.length} feitas. O que o CRM comprovar amanhã (lead que avançou, conversa respondida) entra como feito sozinho.</p></div>
+          <div><h2>Plano de hoje</h2><p className="cp-sub">Os compromissos do dia, montados de manhã. {feitas} de {lista.length} feitas. O que o CRM comprovar amanhã (lead que avançou, conversa respondida) entra como feito sozinho.</p></div>
         </div>
         {lista.length === 0 ? <p className="cp-legenda">Nada urgente hoje. Use o tempo para prospectar e estudar.</p> : (
           <ol className="cp-plano">
@@ -102,7 +105,7 @@ export function Hoje({ dados, pessoa, escrevendo, onDados, irPara, abrirPessoa, 
                 </div>
                 <div className="cp-acao-botoes">
                   {a.refTipo === 'CONVERSA' && a.refId && <button type="button" className="cp-link" onClick={() => irPara('conversas', a.refId!)}>Abrir e sugerir resposta</button>}
-                  {a.refTipo === 'LEAD' && <Link className="cp-link" href="/pro-labore/leads">Abrir o CRM</Link>}
+                  {a.refTipo === 'LEAD' && (a.refId ? <a className="cp-link" href={`/pro-labore/leads?lead=${a.refId}`}>Abrir o lead</a> : <Link className="cp-link" href="/pro-labore/leads">Abrir o CRM</Link>)}
                   {a.refTipo === 'AGENDA' && <Link className="cp-link" href="/pro-labore/agenda">Abrir a agenda</Link>}
                   {a.refTipo === 'VENDEDOR' && a.refId && <button type="button" className="cp-link" onClick={() => abrirPessoa(a.refId!)}>Ver o copiloto dele</button>}
                   {a.tipo === 'ESTUDO' && <button type="button" className="cp-link" onClick={() => irPara('estudar')}>Abrir a trilha</button>}

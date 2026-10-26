@@ -14,19 +14,10 @@ export const EQUIPE = 'EQUIPE'
 const H = 3600e3
 const DIA = 24 * H
 
-export const ESTAGIOS_ABERTOS = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA'] as const
-const RANK: Record<string, number> = { LEAD: 0, ABORDADO: 1, NEGOCIACAO: 2, PROPOSTA: 3, FECHADO: 4 }
-export const rankEstagio = (e: string | null | undefined) => (e && e in RANK ? RANK[e] : -1)
-/** Dias sem movimento a partir dos quais o lead conta como parado, por estágio. */
-export const PARADO_APOS: Record<string, number> = { LEAD: 1, ABORDADO: 3, NEGOCIACAO: 4, PROPOSTA: 3 }
+import { ESTAGIOS_ABERTOS, PARADO_APOS, primeiroNome, rankEstagio } from './copilotoEtapas'
+export { ESTAGIOS_ABERTOS, PARADO_APOS, primeiroNome, rankEstagio }
 export const ESTAGIO_NOME: Record<string, string> = { LEAD: 'novo', ABORDADO: 'abordado', NEGOCIACAO: 'em negociação', PROPOSTA: 'com proposta', FECHADO: 'fechado', PERDIDO: 'perdido' }
 
-export function primeiroNome(n: string | null | undefined): string {
-  const p = (n ?? '').trim().split(/\s+/)[0]
-  if (!p) return 'Cliente'
-  // "BRENDA" ou "brenda" viram "Brenda"; "McCarthy" fica como está.
-  return p === p.toUpperCase() || p === p.toLowerCase() ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : p
-}
 const arred = (v: number, c = 0) => Math.round(v * 10 ** c) / 10 ** c
 const pct = (a: number, b: number) => (b > 0 ? arred((a / b) * 100) : null)
 function mediana(xs: number[]): number | null {
@@ -79,7 +70,7 @@ export interface AcaoPlano { tipo: string; texto: string; porque: string; refTip
 
 interface Escopo { usuarioId: string; pessoa: string; vendedorIds: string[] | null; autorAgenda: string; nome: string; assistenteIds: string[] }
 
-async function escopoDa(usuarioId: string, pessoa: string): Promise<Escopo | null> {
+export async function escopoDa(usuarioId: string, pessoa: string): Promise<Escopo | null> {
   if (pessoa === EQUIPE) {
     const [dono, vendedores, assistentes] = await Promise.all([
       prisma.proLaboreUsuario.findUnique({ where: { id: usuarioId }, select: { nome: true } }),
