@@ -3944,6 +3944,13 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-input:focus, .pl-select:focus { outline: none; border-color: var(--pl-accent); box-shadow: var(--pl-ring); background: var(--pl-surface); }
 .pl-field label { color: var(--pl-ink-2); font-weight: 600; }
 .pl-select-chip { border-radius: 999px; box-shadow: var(--pl-shadow-xs); }
+/* Seta própria no lugar da nativa: mesma forma em todo navegador e tema. */
+.pl-app select.pl-select, .pl-app select.pl-input, .pl-app select.pl-select-chip {
+  -webkit-appearance: none; appearance: none; padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237a8097' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 13px;
+}
+.pl-app select.pl-select-chip.active { background-color: var(--pl-accent-soft); }
 
 /* ---------- Chips, abas e selos ---------- */
 .pl-chip { border-radius: 999px; box-shadow: var(--pl-shadow-xs); transition: transform .2s var(--pl-ease), box-shadow .2s var(--pl-ease), background .2s var(--pl-ease), color .2s var(--pl-ease), border-color .2s var(--pl-ease); }
