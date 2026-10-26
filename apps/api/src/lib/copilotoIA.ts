@@ -7,6 +7,7 @@
 //
 // Links de estudo só entram com o endereço que a própria busca na web
 // devolveu: o que não apareceu nos resultados é descartado.
+import { ROTULOS_IA } from './agenteConversa'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
@@ -167,6 +168,23 @@ export async function responderChat(usuarioId: string, ctx: { fatos: unknown; ac
   const ok = numerosPermitidos(semDinheiro(ctx.fatos), ctx.achados, ctx.plano, ctx.fila ?? [], ctx.memoria, ctx.pergunta, ctx.historico, NUMEROS_COMUNS)
   if (!conferem(r.resposta, ok)) { console.warn('[copiloto-ia] resposta do chat com número fora dos fatos: descartada'); return null }
   return { resposta: limpar(r.resposta), lembrar: r.lembrar.map(l => ({ ...l, texto: limpar(l.texto) })) }
+}
+
+// ---------- Aries no WhatsApp: só classificar a pergunta ----------
+
+const esquemaRotulo = z.object({ rotulo: z.enum(ROTULOS_IA) })
+/**
+ * Rótulo da mensagem que alguém da equipe mandou para o Aries, quando as
+ * regras não entenderam. A IA recebe só o texto da mensagem (sem valores);
+ * a resposta continua montada com os números do sistema.
+ */
+export async function classificarMensagemAgente(usuarioId: string, texto: string): Promise<string | null> {
+  const sistema = [
+    'Tarefa: classificar a mensagem que alguém da equipe de uma loja de motos mandou para o assistente da loja no WhatsApp.',
+    'Rótulos: AGORA (quem atender, por onde começar), AGENDA (agenda, compromissos, tarefas do dia), PLANO (plano do dia do copiloto), VENDAS (vendas ou faturamento da loja), EQUIPE (desempenho da equipe), TRAFEGO (anúncios, custo por lead), FINANCEIRO (pagamentos, despesas), HOJE (meus números de hoje), SEMANA e MES (meus números da semana ou do mês), QUENTES (leads quentes), FOLLOWS (retornos e follows), ESPERANDO (quem está esperando resposta), AJUDA (o que o assistente faz) e NENHUM (qualquer outra coisa, inclusive dúvida de técnica de venda ou conversa).',
+  ].join('\n')
+  const r = await estruturado(usuarioId, sistema, `Mensagem: ${semDinheiro(texto).slice(0, 500)}`, esquemaRotulo, 400)
+  return r && r.rotulo !== 'NENHUM' ? r.rotulo : null
 }
 
 // ---------- Estudos com busca na web ----------

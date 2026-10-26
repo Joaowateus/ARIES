@@ -151,6 +151,18 @@ export async function perfilInstancia(instancia: string): Promise<PerfilInstanci
   }
 }
 
+// Perfil do número (nome, recado e foto) — usado pelo Aries, o agente da
+// conta, para aparecer no WhatsApp com a logo e o nome da loja. Cada parte é
+// independente: uma falha (ex.: foto recusada) não impede as outras.
+export async function atualizarPerfil(instancia: string, perfil: { nome?: string; recado?: string; fotoUrl?: string }): Promise<{ nome: boolean; recado: boolean; foto: boolean }> {
+  const tentar = async (caminho: string, corpo: unknown) => { try { await chamar('POST', `${caminho}/${encodeURIComponent(instancia)}`, corpo); return true } catch { return false } }
+  return {
+    nome: perfil.nome ? await tentar('/chat/updateProfileName', { name: perfil.nome }) : false,
+    recado: perfil.recado ? await tentar('/chat/updateProfileStatus', { status: perfil.recado }) : false,
+    foto: perfil.fotoUrl ? await tentar('/chat/updateProfilePicture', { picture: perfil.fotoUrl }) : false,
+  }
+}
+
 // Desconecta o aparelho e apaga a instância (o próximo "Conectar" começa do
 // zero, com QR novo). Erro de "não existe" é ignorado — o objetivo já foi
 // atingido.

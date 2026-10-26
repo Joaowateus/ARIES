@@ -1467,6 +1467,66 @@ model AgendaTarefa {
   @@map("pro_labore_agenda_tarefas")
 }
 
+// Aries no WhatsApp: um número da conta (chip próprio) que conversa com o
+// dono e com a equipe como uma pessoa — responde com os números do sistema,
+// anota na agenda e manda o resumo da manhã e os avisos. Cada pessoa vincula
+// o próprio WhatsApp mandando um código para o número do agente.
+model AgenteWhatsapp {
+  id           String    @id @default(cuid())
+  usuarioId    String    @unique
+  instancia    String    @unique
+  segredo      String    @unique // vai na URL do webhook
+  status       String    @default("DESCONECTADO") // DESCONECTADO | CONECTANDO | CONECTADO
+  numero       String?
+  nome         String    @default("Aries")
+  perfilEm     DateTime? // quando o nome e a foto foram aplicados no WhatsApp
+  manhaHora    String    @default("08:00")
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  vinculos AgenteVinculo[]
+
+  @@map("pro_labore_agente_whatsapp")
+}
+
+model AgenteVinculo {
+  id             String    @id @default(cuid())
+  agenteId       String
+  pessoa         String // "DONO" ou o id do Vendedor
+  codigo         String
+  numero         String? // só dígitos, preenchido quando a pessoa manda o código
+  verificadoEm   DateTime?
+  manha          Boolean   @default(true)
+  alertas        Boolean   @default(true)
+  ultimaManhaEm  DateTime?
+  ultimoAlertaEm DateTime?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
+
+  agente    AgenteWhatsapp   @relation(fields: [agenteId], references: [id], onDelete: Cascade)
+  mensagens AgenteMensagem[]
+
+  @@unique([agenteId, pessoa])
+  @@unique([agenteId, codigo])
+  @@unique([agenteId, numero])
+  @@map("pro_labore_agente_vinculos")
+}
+
+model AgenteMensagem {
+  id        String   @id @default(cuid())
+  vinculoId String
+  direcao   String // ENTRADA | SAIDA
+  texto     String
+  intencao  String?
+  externoId String?  @unique // id da mensagem no WhatsApp (o webhook pode repetir)
+  criadoEm  DateTime @default(now())
+
+  vinculo AgenteVinculo @relation(fields: [vinculoId], references: [id], onDelete: Cascade)
+
+  @@index([vinculoId, criadoEm])
+  @@map("pro_labore_agente_mensagens")
+}
+
 // Registro de "iniciado" de um item num dia — sinal independente da
 // conclusão (uma tabela nova, e não uma coluna a mais em AgendaConclusao,
 // porque a existência de uma linha em AgendaConclusao já É a semântica de

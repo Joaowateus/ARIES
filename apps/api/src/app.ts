@@ -59,6 +59,7 @@ import proLaboreAssistenteVitrineRoutes from './routes/proLaboreAssistenteVitrin
 import proLaboreAssistenteCreditoRoutes from './routes/proLaboreAssistenteCredito'
 import proLaboreAssistenteCapturaRoutes from './routes/proLaboreAssistenteCaptura'
 import proLaboreAgendaTarefasRoutes from './routes/proLaboreAgendaTarefas'
+import proLaboreAgenteRoutes from './routes/proLaboreAgente'
 import proLaboreAssistenteFollowRoutes from './routes/proLaboreAssistenteFollow'
 import proLaboreSmTestesRoutes from './routes/proLaboreSmTestes'
 import proLaboreSmAssistenteRoutes from './routes/proLaboreSmAssistente'
@@ -125,13 +126,13 @@ app.use(rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, code: 'RATE_LIMIT', message: 'Muitas requisições. Tente novamente em breve.' },
-  // Webhook do WhatsApp chega sempre do mesmo IP (o servidor Evolution) e
+  // Webhooks do WhatsApp (assistente e Aries) chegam sempre do mesmo IP (o servidor Evolution) e
   // em rajada quando vários leads escrevem juntos — é autenticado pelo
   // segredo na URL, não pelo limite.
   // Transmissão ao vivo das apresentações: numa sala/escritório todo mundo
   // sai pelo mesmo IP, e o apresentador manda o ponteiro várias vezes por
   // segundo — rotas autenticadas, fora do limite por IP.
-  skip: req => req.path.startsWith('/pro-labore/assistente/webhook/')
+  skip: req => req.path.startsWith('/pro-labore/assistente/webhook/') || req.path.startsWith('/pro-labore/agente/webhook/')
     || /^\/pro-labore\/apresentacoes\/[^/]+\/(transmissao|estado|palco)$/.test(req.path),
 }))
 
@@ -231,6 +232,7 @@ app.use('/pro-labore', proLaboreAssistenteVitrineRoutes)
 app.use('/pro-labore', proLaboreAssistenteCreditoRoutes)
 app.use('/pro-labore', proLaboreAssistenteCapturaRoutes)
 app.use('/pro-labore', proLaboreAgendaTarefasRoutes)
+app.use('/pro-labore', proLaboreAgenteRoutes)
 app.use('/pro-labore', proLaboreAssistenteFollowRoutes)
 app.use('/pro-labore', proLaboreSmTestesRoutes)
 app.use('/pro-labore', proLaboreSmAssistenteRoutes)

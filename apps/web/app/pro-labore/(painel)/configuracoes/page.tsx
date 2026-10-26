@@ -5,6 +5,7 @@ import { temAcesso, proLaboreApi, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
+import { AgenteWhatsapp } from './_agente/AgenteWhatsapp'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -183,7 +184,9 @@ export default function ProLaboreConfiguracoesPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Preferências" title="Configurações" subtitle="Teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
+      <PageHeader eyebrow="Preferências" title="Configurações" subtitle="O Aries no WhatsApp, teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
+
+      <div style={{ marginBottom: 20 }}><AgenteWhatsapp /></div>
 
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-head">

@@ -216,6 +216,11 @@ export interface AgendaItem {
   atualizadoEm: string
 }
 
+export interface AgenteInfo { status: 'CONECTADO' | 'CONECTANDO' | 'DESCONECTADO'; numero: string | null; nome: string; manhaHora: string; perfilEm?: string | null }
+export interface AgenteVinculoInfo { pessoa: string; codigo: string; numero: string | null; verificadoEm: string | null; manha: boolean; alertas: boolean; link: string | null }
+export interface AgentePainel { configurado: boolean; agente: AgenteInfo | null; pessoas: Array<{ pessoa: string; nome: string; papel: 'DONO' | 'VENDEDOR'; vinculo: AgenteVinculoInfo | null }> }
+export interface AgenteMeu { agente: Omit<AgenteInfo, 'perfilEm'> | null; vinculo: AgenteVinculoInfo | null }
+
 export interface AgendaTarefa {
   id: string
   titulo: string
@@ -821,6 +826,21 @@ export const proLaboreApi = {
     leitura: (inicio?: string, fim?: string) => request<IntelLeitura>(`/pro-labore/intel/leitura${qpPeriodo(inicio, fim)}`, { method: 'POST' }),
   },
   // Copiloto Comercial: `pessoa` só vale para o dono (EQUIPE ou um vendedor).
+  // Aries no WhatsApp: o número do agente (gestor) e o vínculo de cada pessoa.
+  agente: {
+    painel: () => request<AgentePainel>('/pro-labore/agente'),
+    conectar: (data: { numeroPareamento?: string }) => request<{ status: 'CONECTADO' | 'CONECTANDO'; qrBase64?: string | null; pairingCode?: string | null }>('/pro-labore/agente/conectar', { method: 'POST', body: JSON.stringify(data) }),
+    conexao: () => request<{ status: 'CONECTADO' | 'CONECTANDO' | 'DESCONECTADO' }>('/pro-labore/agente/conexao'),
+    desconectar: () => request<{ ok: boolean }>('/pro-labore/agente/desconectar', { method: 'POST', body: '{}' }),
+    config: (data: { nome?: string; manhaHora?: string }) => request<AgenteInfo>('/pro-labore/agente/config', { method: 'PUT', body: JSON.stringify(data) }),
+    perfil: () => request<{ nome: boolean; recado: boolean; foto: boolean }>('/pro-labore/agente/perfil', { method: 'POST', body: '{}' }),
+    codigo: (pessoa: string) => request<AgenteVinculoInfo>(`/pro-labore/agente/vinculos/${encodeURIComponent(pessoa)}/codigo`, { method: 'POST', body: '{}' }),
+    preferencias: (pessoa: string, data: { manha?: boolean; alertas?: boolean }) => request<{ ok: boolean }>(`/pro-labore/agente/vinculos/${encodeURIComponent(pessoa)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    desvincular: (pessoa: string) => request<{ ok: boolean }>(`/pro-labore/agente/vinculos/${encodeURIComponent(pessoa)}`, { method: 'DELETE' }),
+    meu: () => request<AgenteMeu>('/pro-labore/agente/meu'),
+    meuCodigo: () => request<AgenteVinculoInfo>('/pro-labore/agente/meu/codigo', { method: 'POST', body: '{}' }),
+    meuPreferencias: (data: { manha?: boolean; alertas?: boolean }) => request<{ ok: boolean }>('/pro-labore/agente/meu', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
   copiloto: {
     pessoas: () => request<CpPessoa[]>('/pro-labore/copiloto/pessoas'),
     hoje: (pessoa?: string) => request<CpHoje>(`/pro-labore/copiloto/hoje${qp(pessoa)}`),

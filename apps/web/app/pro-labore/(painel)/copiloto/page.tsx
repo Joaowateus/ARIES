@@ -15,6 +15,7 @@ import { Estudos } from './_componentes/Estudos'
 import { Evolucao } from './_componentes/Evolucao'
 import { Chat } from './_componentes/Chat'
 import { Memoria } from './_componentes/Memoria'
+import { MeuAgente } from '../_agente/MeuAgente'
 
 export type AbaCopiloto = 'hoje' | 'conversas' | 'estudar' | 'evolucao' | 'conversar' | 'memoria'
 
@@ -89,6 +90,8 @@ export default function CopilotoPage() {
           {pessoa !== 'EQUIPE' && <span className="cp-legenda">Você acompanha o copiloto desta pessoa só para ler. A conversa e a memória dela ficam com ela.</span>}
         </div>
       )}
+
+      <MeuAgente />
 
       <div className="cp-abas">
         <div className="pl-sv-tabs" role="tablist" aria-label="Seções do copiloto">
