@@ -67,7 +67,7 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
       proLaboreApi.copiloto.fila().then(f => { if (!cancelado) setFila(f.itens) }).catch(() => { if (!cancelado) setFila(null) })
     }
     carregar()
-    const t = setInterval(carregar, 120_000)
+    const t = setInterval(() => { if (!document.hidden) carregar() }, 120_000)
     return () => { cancelado = true; clearInterval(t) }
   }, [])
 

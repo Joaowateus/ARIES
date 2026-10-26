@@ -48,11 +48,12 @@ status: ativo
 
 ## Achados que ficam registrados
 
-- **Limite da API, 200 chamadas por minuto por IP.**
-  - Cada aba aberta do zero faz ~12 chamadas em produção. No modo dev são ~23, porque o React duplica os efeitos.
-  - Numa loja, todos os vendedores saem pelo mesmo IP. Com 5 pessoas trocando de aba ao mesmo tempo, dá para encostar no limite.
-  - Na Vercel o contador é por instância, o que alivia, mas não garante.
-  - Proposta: contar por login nas rotas autenticadas e manter o limite por IP só nas públicas. Também juntar as chamadas da barra lateral (follows, avisos, ao vivo, pedidos) numa só.
+- **Limite da API por IP (resolvido em 26/10).**
+  - Antes: 200 chamadas por minuto por IP. Na loja todo mundo sai pelo mesmo IP, e cada aba fazia ~12 chamadas.
+  - Agora: quem está logado (token válido) conta pelo próprio login, com 300 por minuto. Sem login, ou com token inválido, continua pelo IP com 200. Os webhooks do WhatsApp seguem fora do limite.
+  - Os quatro selos do menu lateral (ao vivo, pedidos de reunião, follows do dia e avisos do Instagram) viraram uma chamada só, `GET /barra-lateral`.
+  - Com a aba do navegador escondida, o menu, o Copiloto, o "Meu dia", o Assistente e as Reuniões param de consultar. O menu atualiza na hora quando a pessoa volta.
+  - Resultado: o Dashboard caiu de ~12 para ~9 chamadas por abertura, e cada pessoa tem o próprio limite.
 - **Rótulos longos nos indicadores** (ex.: "Gasto com anúncios") quebram em 2 linhas e desalinham o valor entre os cards. É aceitável hoje. Dá para resolver com subgrid quando o Dashboard for redesenhado.
 - **Lint antigo:** `set-state-in-effect` e `exhaustive-deps` no Mapa Mental, no layout e no Dashboard. Nenhum vem das mudanças desta fase.
 

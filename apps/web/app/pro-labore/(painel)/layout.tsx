@@ -100,18 +100,25 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const [avisosSocial, setAvisosSocial] = useState<string[]>([])
   // Follows do CRM atrasados ou marcados para hoje: lembrete no menu.
   const [followsDia, setFollowsDia] = useState({ atrasados: 0, hoje: 0 })
+  // Uma chamada só para os selos, e nenhuma enquanto a aba do navegador está
+  // escondida (volta a buscar quando a pessoa reabre a aba).
   useEffect(() => {
     if (!usuario) return
     let cancelado = false
     const buscar = () => {
-      proLaboreApi.apresentacoes.aoVivo().then(l => { if (!cancelado) setReunioesAoVivo(l.length) }).catch(() => undefined)
-      if (usuario.papel === 'DONO') proLaboreApi.apresentacoes.pendencias().then(r => { if (!cancelado) setPedidosReuniao(r.pedidos) }).catch(() => undefined)
-      if (usuario.papel !== 'SOCIAL_MEDIA') proLaboreApi.follows.contagem().then(r => { if (!cancelado) setFollowsDia(r) }).catch(() => undefined)
-      if (usuario.papel === 'DONO') proLaboreApi.socialMedia.avisos().then(l => { if (!cancelado) setAvisosSocial(l.filter(a => !a.lidaEm).map(a => a.titulo)) }).catch(() => undefined)
+      if (document.hidden) return
+      proLaboreApi.barraLateral().then(b => {
+        if (cancelado) return
+        setReunioesAoVivo(b.aoVivo)
+        setPedidosReuniao(b.pedidosReuniao)
+        if (b.follows) setFollowsDia(b.follows)
+        setAvisosSocial(b.avisosSocial)
+      }).catch(() => undefined)
     }
-    void buscar()
+    buscar()
     const t = setInterval(buscar, 45_000)
-    return () => { cancelado = true; clearInterval(t) }
+    document.addEventListener('visibilitychange', buscar)
+    return () => { cancelado = true; clearInterval(t); document.removeEventListener('visibilitychange', buscar) }
   }, [usuario])
   const [gruposColapsados, setGruposColapsados] = useState<string[]>([])
 

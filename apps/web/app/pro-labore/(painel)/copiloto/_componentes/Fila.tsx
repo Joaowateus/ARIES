@@ -43,7 +43,7 @@ export function Fila({ pessoa, irPara }: { pessoa?: string; irPara: (a: AbaCopil
       .then(f => { if (!cancelado) { setFila(f); setErro('') } })
       .catch(e => { if (!cancelado) setErro((e as Error).message) })
     carregar()
-    const t = setInterval(carregar, 60_000)
+    const t = setInterval(() => { if (!document.hidden) carregar() }, 60_000)
     return () => { cancelado = true; clearInterval(t) }
   }, [pessoa])
 

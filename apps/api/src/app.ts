@@ -3,7 +3,8 @@ import express from 'express'
 import cors from 'cors'
 import compression from 'compression'
 import helmet from 'helmet'
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import { loginDoPedido } from './lib/loginDoPedido'
 import { pinoHttp } from 'pino-http'
 import { prisma } from './lib/prisma'
 import { logger } from './lib/logger'
@@ -60,6 +61,7 @@ import proLaboreAssistenteCreditoRoutes from './routes/proLaboreAssistenteCredit
 import proLaboreAssistenteCapturaRoutes from './routes/proLaboreAssistenteCaptura'
 import proLaboreAgendaTarefasRoutes from './routes/proLaboreAgendaTarefas'
 import proLaboreAgenteRoutes from './routes/proLaboreAgente'
+import proLaboreBarraLateralRoutes from './routes/proLaboreBarraLateral'
 import proLaboreAssistenteFollowRoutes from './routes/proLaboreAssistenteFollow'
 import proLaboreSmTestesRoutes from './routes/proLaboreSmTestes'
 import proLaboreSmAssistenteRoutes from './routes/proLaboreSmAssistente'
@@ -119,10 +121,16 @@ app.use(cors({
   maxAge: 86400,
 }))
 
-// Global rate limit — 200 req/min per IP
+// Limite global por minuto. Quem está logado (token válido) é contado pelo
+// próprio login: na loja todo mundo sai pelo mesmo IP, e 5 pessoas trocando
+// de aba (~12 chamadas cada) encostavam nos 200/min do IP inteiro. Sem login
+// (ou com token inválido) continua contado pelo IP, com o limite de antes.
+const LIMITE_POR_LOGIN = 300
+const LIMITE_POR_IP = 200
 app.use(rateLimit({
   windowMs: 60_000,
-  max: 200,
+  limit: req => (loginDoPedido(req) ? LIMITE_POR_LOGIN : LIMITE_POR_IP),
+  keyGenerator: req => loginDoPedido(req) ?? `ip:${ipKeyGenerator(req.ip ?? '')}`,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, code: 'RATE_LIMIT', message: 'Muitas requisições. Tente novamente em breve.' },
@@ -233,6 +241,7 @@ app.use('/pro-labore', proLaboreAssistenteCreditoRoutes)
 app.use('/pro-labore', proLaboreAssistenteCapturaRoutes)
 app.use('/pro-labore', proLaboreAgendaTarefasRoutes)
 app.use('/pro-labore', proLaboreAgenteRoutes)
+app.use('/pro-labore', proLaboreBarraLateralRoutes)
 app.use('/pro-labore', proLaboreAssistenteFollowRoutes)
 app.use('/pro-labore', proLaboreSmTestesRoutes)
 app.use('/pro-labore', proLaboreSmAssistenteRoutes)

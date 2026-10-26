@@ -81,7 +81,7 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
   // Mantém os números da fila ("esperando você") atualizados enquanto a
   // aba está aberta.
   useEffect(() => {
-    const id = setInterval(() => setVersao(v => v + 1), 60_000)
+    const id = setInterval(() => { if (!document.hidden) setVersao(v => v + 1) }, 60_000)
     return () => clearInterval(id)
   }, [])
 
