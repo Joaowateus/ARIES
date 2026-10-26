@@ -77,6 +77,8 @@ const obj = (v: unknown): Obj => (v && typeof v === 'object' ? (v as Obj) : {})
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
 // Número desconhecido recebe a apresentação no máximo a cada 12h (por instância do servidor).
 const apresentados = new Map<string, number>()
+// Contato com endereço anônimo do WhatsApp ("@lid", sem o telefone): responde e vincula pelo próprio endereço.
+const contatoDa = (m: MensagemWhatsapp) => (m.semTelefone ? m.jid : m.numero)
 
 export async function processarWebhookAgente(segredo: string, corpo: unknown): Promise<number> {
   const agente = await prisma.agenteWhatsapp.findUnique({ where: { segredo } })
@@ -105,17 +107,19 @@ async function tratarMensagem(agente: AgenteWhatsapp, m: MensagemWhatsapp, agora
   const intencao = entenderMensagem(m.texto)
   if (intencao?.tipo === 'VINCULAR') { await vincular(agente, m, intencao.codigo, agora); return }
 
-  const vinculo = await prisma.agenteVinculo.findUnique({ where: { agenteId_numero: { agenteId: agente.id, numero: m.numero } } })
+  const contato = contatoDa(m)
+  const vinculo = await prisma.agenteVinculo.findUnique({ where: { agenteId_numero: { agenteId: agente.id, numero: contato } } })
   if (!vinculo?.verificadoEm) {
-    const chave = `${agente.id}|${m.numero}`
+    const chave = `${agente.id}|${contato}`
     if ((apresentados.get(chave) ?? 0) > agora.getTime() - 12 * H) return
+    if (apresentados.size > 2000) for (const [k, t] of apresentados) if (t < agora.getTime() - 12 * H) apresentados.delete(k)
     apresentados.set(chave, agora.getTime())
-    await enviarComoPessoa(agente, m.numero, `Oi! Eu sou o *${agente.nome}*, assistente da equipe comercial. 🤖\n\nPara conversar comigo, gere o seu código no sistema (Copiloto › ${agente.nome} no WhatsApp) e me mande aqui, assim: *ARIES 123456*.`)
+    await enviarComoPessoa(agente, contato, `Oi! Eu sou o *${agente.nome}*, assistente da equipe comercial. 🤖\n\nPara conversar comigo, gere o seu código no sistema (Copiloto › ${agente.nome} no WhatsApp) e me mande aqui, assim: *ARIES 123456*.`)
     return
   }
   await prisma.agenteMensagem.create({ data: { vinculoId: vinculo.id, direcao: 'ENTRADA', texto: m.texto.slice(0, 4000), intencao: intencao?.tipo ?? null, externoId: m.id ?? null } })
   const ctx = await contextoDoVinculo(agente, vinculo)
-  if (!ctx) { await enviarComoPessoa(agente, m.numero, 'Seu acesso à equipe não está ativo no sistema. Fala com o gestor. 🙏', { vinculoId: vinculo.id }); return }
+  if (!ctx) { await enviarComoPessoa(agente, contato, 'Seu acesso à equipe não está ativo no sistema. Fala com o gestor. 🙏', { vinculoId: vinculo.id }); return }
 
   // A IA só classifica o que as regras não pegaram (só o texto da pergunta, sem dados).
   let i: Intencao | null = intencao
@@ -129,23 +133,24 @@ async function tratarMensagem(agente: AgenteWhatsapp, m: MensagemWhatsapp, agora
     const r = await conversarComCopiloto({ usuarioId: agente.usuarioId, pessoa: ctx.dono ? EQUIPE : ctx.pessoa, nome: ctx.nome }, m.texto)
     resposta = r.origem === 'IA' ? r.resposta : naoEntendi(ctx, m.texto)
   } else resposta = naoEntendi(ctx, m.texto)
-  await enviarComoPessoa(agente, m.numero, resposta, { vinculoId: vinculo.id, intencao: i?.tipo ?? 'LIVRE' })
+  await enviarComoPessoa(agente, contato, resposta, { vinculoId: vinculo.id, intencao: i?.tipo ?? 'LIVRE' })
 }
 
 async function vincular(agente: AgenteWhatsapp, m: MensagemWhatsapp, codigo: string, agora: Date) {
   const v = await prisma.agenteVinculo.findUnique({ where: { agenteId_codigo: { agenteId: agente.id, codigo } } })
+  const contato = contatoDa(m)
   if (!v) {
-    await enviarComoPessoa(agente, m.numero, 'Esse código não confere. 🤔 Gere um novo no sistema (Copiloto) e me mande de novo.')
+    await enviarComoPessoa(agente, contato, 'Esse código não confere. 🤔 Gere um novo no sistema (Copiloto) e me mande de novo.')
     return
   }
   // O número passa a ser desta pessoa (se estava com outra, sai de lá) e o código não vale mais.
   const vinculo = await prisma.$transaction(async tx => {
-    await tx.agenteVinculo.updateMany({ where: { agenteId: agente.id, numero: m.numero, NOT: { id: v.id } }, data: { numero: null, verificadoEm: null } })
-    return tx.agenteVinculo.update({ where: { id: v.id }, data: { numero: m.numero, verificadoEm: agora, codigo: await codigoLivre(agente.id) } })
+    await tx.agenteVinculo.updateMany({ where: { agenteId: agente.id, numero: contato, NOT: { id: v.id } }, data: { numero: null, verificadoEm: null } })
+    return tx.agenteVinculo.update({ where: { id: v.id }, data: { numero: contato, verificadoEm: agora, codigo: await codigoLivre(agente.id) } })
   })
   const ctx = await contextoDoVinculo(agente, vinculo)
   const nome = ctx?.nome ?? 'tudo certo'
-  await enviarComoPessoa(agente, m.numero, [
+  await enviarComoPessoa(agente, contato, [
     `Prontinho, ${nome}! 🎉 Agora a gente se fala por aqui.`,
     `Todo dia às ${agente.manhaHora} eu te mando o resumo do dia${ctx?.dono ? '' : ' e aviso quando um lead estiver esperando você'}.`,
     textoAjuda(nome, !!ctx?.dono),
@@ -173,6 +178,9 @@ export async function rodarAgente(agora = new Date(), orcamentoMs = 5000): Promi
   const r = { manhaAgente: 0 }
   const agentes = await prisma.agenteWhatsapp.findMany({ where: { status: 'CONECTADO' }, include: { vinculos: { where: { verificadoEm: { not: null }, numero: { not: null } } } } })
   const hora = horaBR(agora), hoje = diaBR(agora)
+  // Segunda a sábado, como o resumo do chat "Você".
+  const semana = new Date(agora.getTime() - 3 * H).getUTCDay()
+  if (semana === 0) return r
   for (const a of agentes) {
     for (const v of a.vinculos) {
       if (Date.now() - inicio > orcamentoMs) return r
