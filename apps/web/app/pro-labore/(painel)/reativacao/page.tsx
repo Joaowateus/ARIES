@@ -156,7 +156,7 @@ export default function ReativacaoPage() {
   return (
     <div className="rv">
       <PageHeader
-        eyebrow="Operação"
+        eyebrow="Vendas"
         title="Reativação"
         subtitle="Clientes que ainda não estavam prontos para comprar: saíram do funil com todas as informações para você aquecer, fazer follow e trazer de volta na hora certa"
         actions={<Link href="/pro-labore/leads" className="pl-btn pl-btn-ghost">Voltar ao CRM</Link>}

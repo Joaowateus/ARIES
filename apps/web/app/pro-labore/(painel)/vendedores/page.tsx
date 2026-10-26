@@ -221,7 +221,7 @@ export default function ProLaboreVendedoresPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Times" title="Vendedores" subtitle="Quem faz parte da produção da sua operação — usado no ranking do dashboard" />
+      <PageHeader eyebrow="Equipe" title="Vendedores" subtitle="Quem faz parte da produção da sua operação — usado no ranking do dashboard" />
 
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-title" style={{ marginBottom: 14 }}>Novo vendedor</div>

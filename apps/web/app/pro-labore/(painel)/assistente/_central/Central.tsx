@@ -74,7 +74,7 @@ export function Central() {
   return (
     <div className="ic">
       <PageHeader
-        eyebrow="Operação · Central de Inteligência"
+        eyebrow="Vendas · Central de inteligência"
         title="Assistente Comercial"
         subtitle="O cérebro analítico da operação: lê a Jornada de compra, Tráfego, Social Media, Vendas, Financeiro e Equipe, compara com as metas, explica onde está o gargalo e acompanha o plano de ação até o resultado"
         actions={<BotaoPdf versoes={[

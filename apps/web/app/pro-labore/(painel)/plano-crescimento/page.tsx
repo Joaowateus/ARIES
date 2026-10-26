@@ -240,7 +240,7 @@ export default function ProLaborePlanoCrescimentoPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Sistema"
+        eyebrow="Gestão"
         title="Plano de Crescimento"
         subtitle="Diagnóstico do momento da operação, cruzando funil, vendas, ROAS e redes sociais — o que fazer agora pra iniciar, manter, escalonar ou escalar cada frente do negócio"
       />

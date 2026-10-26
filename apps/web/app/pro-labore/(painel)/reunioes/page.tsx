@@ -302,7 +302,7 @@ function Biblioteca() {
   return (
     <div>
       <PageHeader
-        eyebrow="Operação"
+        eyebrow="Rotina"
         title="Reuniões"
         subtitle={isDono
           ? 'Apresente mapas mentais ao vivo pra equipe, organizados em departamentos com senha e pastas — tudo fica guardado com anotações e lembretes'

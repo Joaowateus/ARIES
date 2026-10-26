@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.0.0
+version: 1.1.0
 status: ativo
 ---
 
@@ -56,6 +56,46 @@ status: ativo
   - Resultado: o Dashboard caiu de ~12 para ~9 chamadas por abertura, e cada pessoa tem o próprio limite.
 - **Rótulos longos nos indicadores** (ex.: "Gasto com anúncios") quebram em 2 linhas e desalinham o valor entre os cards. É aceitável hoje. Dá para resolver com subgrid quando o Dashboard for redesenhado.
 - **Lint antigo:** `set-state-in-effect` e `exhaustive-deps` no Mapa Mental, no layout e no Dashboard. Nenhum vem das mudanças desta fase.
+
+## Visual 2027 (26/10)
+
+Pedido: reestruturação visual completa, para o sistema ficar no nível dos CRMs de 2027 (tipografia, formas, cores, degradês e sombras). Referências: Linear, Vercel e Stripe.
+
+### Tokens (em `.pl-app`, claro e escuro)
+
+| Grupo | Como ficou |
+|---|---|
+| Cor da marca | Degradê violeta → azul (`--pl-grad-brand`, #6d4aff → #4c7df0). Vai no botão principal, no item ativo do menu, no chip ativo, no dia escolhido da agenda e em toda superfície cheia de destaque com texto branco |
+| Fundo | "Aurora": dois degradês radiais bem leves sobre o fundo (`--pl-bg-aurora`). Neutros puxam para o azul-ardósia |
+| Superfícies | Três camadas (`--pl-surface`, `-2`, `-3`) e um degradê sutil de cima para baixo nos cards (`--pl-grad-surface`). Vidro com desfoque (`--pl-glass`) no menu e na barra do topo |
+| Sombras | Em camadas: `xs`, `card`, `card-hover`, `pop` (janelas e paleta) e `glow` (brilho da cor da marca). Foco com anel de 4px (`--pl-ring`) |
+| Raios | 22, 18, 14 e 10px (`--pl-radius-xl/lg/md/sm`). Chips e abas em pílula |
+| Movimento | Uma curva só (`--pl-ease`). Cards e KPIs sobem 1–2px no hover. Tudo desliga com "reduzir movimento" do sistema |
+| Cores categóricas | Avatares, cor de cada indicador e linha do pró-labore: violeta, âmbar, ciano, laranja e azul. Validadas com o validador de paleta (separação para daltonismo e contraste) nos dois temas. Os gráficos de série mantêm a paleta `--sv-*` |
+| Status | Verde, âmbar e vermelho continuam como sinal funcional, separados das cores da marca |
+
+### Estrutura
+
+- **Menu lateral flutuante**, de vidro e com cantos de 22px.
+  - Abas em 7 grupos:
+    - Dashboard, sem grupo;
+    - **Vendas:** CRM, Copiloto, Assistente e Reativação;
+    - **Rotina:** Agenda, Reuniões e Anotações;
+    - **Marketing:** Social Media e Tráfego;
+    - **Gestão:** Vendas, Financeiro, Indicadores e Plano;
+    - **Equipe:** Vendedores, Ocorrências e Acessos;
+    - **Sistema:** Configurações.
+  - A lista rola por dentro quando a tela é baixa (1366×768); o rodapé fica sempre visível.
+- **Barra do topo fixa**, de vidro:
+  - caminho ("Vendas / CRM");
+  - busca Ctrl K em destaque;
+  - tema;
+  - avatar com nome e papel;
+  - sair.
+  - No celular, a busca vira a lupa, e a troca de tema vai para dentro do menu.
+- **Cabeçalho das páginas:**
+  - rótulo em pílula com o nome do grupo;
+  - título de 34px com degradê no texto.
 
 ## Próximas fases (mesmo pedido)
 

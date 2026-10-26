@@ -76,7 +76,7 @@ export default function CopilotoPage() {
   return (
     <div className="cp">
       <PageHeader
-        eyebrow="Operação"
+        eyebrow="Vendas"
         title="Copiloto Comercial"
         subtitle="Seu mentor de vendas de todo dia: lê a sua produção no sistema, mostra onde você vai bem e onde está errando, monta o plano do dia e indica o que estudar e o que responder"
       />

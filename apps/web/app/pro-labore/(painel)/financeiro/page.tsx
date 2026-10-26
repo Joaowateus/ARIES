@@ -58,7 +58,7 @@ export default function FinanceiroPage() {
   return (
     <div className="pl-fin">
       <PageHeader
-        eyebrow="Operação"
+        eyebrow="Gestão"
         title="Financeiro"
         subtitle="Salários, investimentos, custos e outros gastos. Cada pagamento gera um recibo pronto para imprimir e assinar."
         actions={
