@@ -3476,8 +3476,8 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-as-etiquetas { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .pl-as-etiqueta { font-size: 10.5px; font-weight: 600; color: var(--pl-ink-2); background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
 .pl-as-etiqueta.pediu_simulacao, .pl-as-etiqueta.pediu_visita, .pl-as-etiqueta.parcela_cabe, .pl-as-etiqueta.credito_aprovado { color: var(--pl-good); border-color: color-mix(in srgb, var(--pl-good) 40%, transparent); }
-.pl-as-etiqueta.sumiu_24h, .pl-as-etiqueta.objecao_preco, .pl-as-etiqueta.parcela_apertada { color: var(--pl-accent-4); border-color: color-mix(in srgb, var(--pl-accent-4) 40%, transparent); }
-.pl-as-etiqueta.parcela_nao_cabe, .pl-as-etiqueta.credito_recusado { color: var(--pl-critical); border-color: color-mix(in srgb, var(--pl-critical) 40%, transparent); }
+.pl-as-etiqueta.sumiu_24h, .pl-as-etiqueta.objecao_preco, .pl-as-etiqueta.parcela_apertada, .pl-as-etiqueta.sem_cnh { color: var(--pl-accent-4); border-color: color-mix(in srgb, var(--pl-accent-4) 40%, transparent); }
+.pl-as-etiqueta.parcela_nao_cabe, .pl-as-etiqueta.credito_recusado, .pl-as-etiqueta.restricao_nome { color: var(--pl-critical); border-color: color-mix(in srgb, var(--pl-critical) 40%, transparent); }
 .pl-as-etiquetas-quadro { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--pl-border); }
 .pl-kanban-card-etiquetas { margin-top: 6px; }
 .pl-kanban-card-etiquetas:empty { display: none; }
@@ -3558,3 +3558,11 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-si-analise-campos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .pl-si-analise-envio { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
 @media (max-width: 560px) { .pl-si-analise-campos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* CRM: WhatsApp fora do CRM */
+.pl-fc-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pl-fc-lista li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--pl-border); flex-wrap: wrap; }
+.pl-fc-quem { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; }
+.pl-fc-quem b { font-size: 13.5px; color: var(--pl-ink-1); overflow-wrap: anywhere; }
+.pl-fc-quem span { font-size: 12px; color: var(--pl-ink-muted); }
+.pl-fc-acoes { display: flex; gap: 8px; }

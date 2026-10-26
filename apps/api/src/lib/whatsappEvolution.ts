@@ -186,10 +186,39 @@ export async function enviarImagem(instancia: string, destino: string, imagem: {
 // Quantas mensagens o servidor tem guardadas com esse contato (limitado a
 // uma página pequena — só interessa saber se existe conversa anterior).
 export async function contarMensagensComContato(instancia: string, jid: string): Promise<number> {
+  return (await historicoDoContato(instancia, jid)).total
+}
+
+/** Últimas mensagens trocadas com o contato (mais recentes primeiro), como vêm do servidor. */
+export async function mensagensDoContato(instancia: string, jid: string, limite = 20): Promise<{ total: number; registros: unknown[] }> {
   const r = await chamar<unknown>('POST', `/chat/findMessages/${encodeURIComponent(instancia)}`, {
-    where: { key: { remoteJid: jid } }, limit: 5,
+    where: { key: { remoteJid: jid } }, limit: limite, offset: limite, page: 1,
   })
   const d = r as { messages?: { records?: unknown[]; total?: number } } | unknown[]
-  if (Array.isArray(d)) return d.length
-  return d.messages?.total ?? d.messages?.records?.length ?? 0
+  if (Array.isArray(d)) return { total: d.length, registros: d }
+  const registros = d.messages?.records ?? []
+  return { total: d.messages?.total ?? registros.length, registros }
+}
+
+/** Quantas mensagens há com o contato e em que instantes (ms) as mais recentes foram trocadas. */
+export async function historicoDoContato(instancia: string, jid: string): Promise<{ total: number; instantes: number[] }> {
+  const { total, registros } = await mensagensDoContato(instancia, jid, 20)
+  const instantes = registros.map(r => Number((r as { messageTimestamp?: unknown }).messageTimestamp)).filter(t => Number.isFinite(t) && t > 0).map(t => (t > 1e12 ? t : t * 1000))
+  return { total, instantes }
+}
+
+export interface ConversaRecente { jid: string; nome: string | null; atualizadaEm: number | null; salvo: boolean; ultimaDeMim: boolean | null }
+
+/** Conversas com mensagem entre `desde` e `ate` (para a varredura de leads perdidos). */
+export async function conversasRecentes(instancia: string, desde: Date, ate: Date, limite = 60): Promise<ConversaRecente[]> {
+  const r = await chamar<unknown>('POST', `/chat/findChats/${encodeURIComponent(instancia)}`, {
+    where: { messageTimestamp: { gte: desde.toISOString(), lte: ate.toISOString() } }, take: limite,
+  })
+  const lista = Array.isArray(r) ? r : Array.isArray((r as { chats?: unknown[] })?.chats) ? (r as { chats: unknown[] }).chats : []
+  return lista.map(c => {
+    const o = (c ?? {}) as { remoteJid?: string; pushName?: string | null; updatedAt?: string; isSaved?: boolean; lastMessage?: { key?: { fromMe?: boolean }; messageTimestamp?: number } }
+    const ts = Number(o.lastMessage?.messageTimestamp)
+    const atualizada = Number.isFinite(ts) && ts > 0 ? (ts > 1e12 ? ts : ts * 1000) : o.updatedAt ? Date.parse(o.updatedAt) : NaN
+    return { jid: o.remoteJid ?? '', nome: o.pushName ?? null, atualizadaEm: Number.isFinite(atualizada) ? atualizada : null, salvo: o.isSaved === true, ultimaDeMim: typeof o.lastMessage?.key?.fromMe === 'boolean' ? o.lastMessage.key.fromMe : null }
+  }).filter(c => c.jid && !/@(g\.us|broadcast|newsletter)$/.test(c.jid))
 }

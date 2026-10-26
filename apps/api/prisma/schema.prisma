@@ -1820,6 +1820,9 @@ model AssistenteComercial {
   ultimoEventoEm        DateTime?
   // Resumo da manhã mandado no chat "Você" (no máximo 1 por dia).
   resumoManhaEm         DateTime?
+  // Última varredura das conversas recentes no servidor (pega o lead cujo
+  // aviso de mensagem nova não chegou).
+  varreduraEm           DateTime?
   // Liga/desliga as respostas automáticas sem derrubar a conexão.
   atendimentoAutomatico Boolean   @default(true)
   // Cadastra no CRM (etapa Lead) todo contato novo que chama o vendedor,
@@ -1833,8 +1836,30 @@ model AssistenteComercial {
   vendedor  Vendedor                    @relation(fields: [vendedorId], references: [id])
   conversas AssistenteConversa[]
   ignorados AssistenteContatoIgnorado[]
+  foraDoCrm AssistenteContatoForaCrm[]
 
   @@map("pro_labore_assistente_comercial")
+}
+
+// Quem escreveu no WhatsApp do vendedor e não virou lead (contato antigo que
+// não falou de compra). Só nome, número e quando — o conteúdo da conversa
+// não é guardado. O vendedor decide: "virar lead" ou "não é lead".
+model AssistenteContatoForaCrm {
+  id           String   @id @default(cuid())
+  assistenteId String
+  numero       String
+  jid          String
+  nome         String?
+  semTelefone  Boolean  @default(false)
+  mensagens    Int      @default(1)
+  ultimaEm     DateTime @default(now())
+  criadoEm     DateTime @default(now())
+
+  assistente AssistenteComercial @relation(fields: [assistenteId], references: [id], onDelete: Cascade)
+
+  @@unique([assistenteId, numero])
+  @@index([assistenteId, ultimaEm])
+  @@map("pro_labore_assistente_fora_crm")
 }
 
 // Uma conversa = um contato falando com o assistente de um vendedor.
@@ -1873,6 +1898,9 @@ model AssistenteConversa {
   // Última simulação de financiamento (robô ou vendedor): valores, opções e
   // a leitura pela renda. Nunca vai para a IA.
   simulacao            Json?
+  // Quando as etiquetas do lead foram recalculadas por esta conversa (o job
+  // de hora em hora passa por todos os leads abertos).
+  etiquetasEm          DateTime?
   // QUALIFICADO | PEDIU_ATENDENTE | DESISTIU | NAO_E_LEAD
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
