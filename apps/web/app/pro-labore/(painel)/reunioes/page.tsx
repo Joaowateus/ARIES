@@ -200,7 +200,7 @@ function Biblioteca() {
   // Atualiza de tempos em tempos — é assim que a equipe descobre que uma
   // apresentação acabou de entrar ao vivo.
   useEffect(() => {
-    const t = setInterval(() => setVersao(v => v + 1), 20_000)
+    const t = setInterval(() => { if (!document.hidden) setVersao(v => v + 1) }, 20_000)
     return () => clearInterval(t)
   }, [])
 

@@ -826,6 +826,8 @@ export const proLaboreApi = {
     leitura: (inicio?: string, fim?: string) => request<IntelLeitura>(`/pro-labore/intel/leitura${qpPeriodo(inicio, fim)}`, { method: 'POST' }),
   },
   // Copiloto Comercial: `pessoa` só vale para o dono (EQUIPE ou um vendedor).
+  // Selos do menu lateral numa chamada só (ao vivo, pedidos, follows do dia, avisos do Instagram).
+  barraLateral: () => request<{ aoVivo: number; pedidosReuniao: number; follows: { atrasados: number; hoje: number } | null; avisosSocial: string[] }>('/pro-labore/barra-lateral'),
   // Aries no WhatsApp: o número do agente (gestor) e o vínculo de cada pessoa.
   agente: {
     painel: () => request<AgentePainel>('/pro-labore/agente'),

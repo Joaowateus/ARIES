@@ -16,7 +16,7 @@ export function Conversas({ pessoa, inicial, somenteLeitura }: { pessoa?: string
     let cancelado = false
     const carregar = () => proLaboreApi.copiloto.conversas(pessoa).then(l => { if (!cancelado) setLista(l) }).catch(e => { if (!cancelado) setErro((e as Error).message) })
     carregar()
-    const id = setInterval(carregar, 30_000)
+    const id = setInterval(() => { if (!document.hidden) carregar() }, 30_000)
     return () => { cancelado = true; clearInterval(id) }
   }, [pessoa])
 
