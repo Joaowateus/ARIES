@@ -68,6 +68,7 @@ export const ORIGEM: Record<OrigemConversaAssistente, { rotulo: string; descrica
   ANUNCIO: { rotulo: 'Anúncio', descricao: 'Clicou num anúncio que abre o WhatsApp' },
   GATILHO: { rotulo: 'Frase de campanha', descricao: 'Mandou uma das frases de campanha configuradas' },
   CONTATO_NOVO: { rotulo: 'Contato novo', descricao: 'Primeira conversa com o vendedor, sem sinal de campanha' },
+  INTENCAO: { rotulo: 'Falou em compra', descricao: 'Já conversava com o vendedor e falou em moto, preço ou financiamento' },
 }
 
 export const CAMPOS_LEAD: Array<{ valor: CampoLeadAssistente; rotulo: string }> = [

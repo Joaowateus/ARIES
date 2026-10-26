@@ -20,6 +20,8 @@ export const ETIQUETAS = {
   FICHA_CREDITO: 'Ficha de crédito',
   CREDITO_APROVADO: 'Crédito aprovado',
   CREDITO_RECUSADO: 'Crédito recusado',
+  SEM_CNH: 'Sem CNH',
+  RESTRICAO_NOME: 'Restrição no nome',
 } as const
 export type Etiqueta = keyof typeof ETIQUETAS
 
@@ -28,6 +30,9 @@ const A_VISTA = /\ba vista\b/
 const TROCA = /\b(na troca|dar na troca|pra troca|aceita troca|aceitam troca|minha moto|tenho uma moto|tenho um carro)\b/
 const SEM_ENTRADA_RESPOSTA = /^(nao|sem|nenhum|nada|zero|ainda nao)\b/
 const SEM_ENTRADA = /\b(sem entrada|nao tenho entrada|nao tenho dinheiro (pra|para|de) entrada)\b/
+// "Possui CNH? (sim ou não): não", "não tenho CNH", "ainda não sou habilitado".
+const SEM_CNH = /\b(nao (tenho|possuo) (a |minha )?(cnh|carteira|habilitacao)|sem (cnh|carteira|habilitacao)|nao sou habilitad[oa]|ainda nao (tenho (cnh|carteira|habilitacao)|sou habilitad[oa])|cnh\s*\??\s*(\(\s*sim ou nao\s*\))?\s*[:\-=]?\s*nao\b)/
+const RESTRICAO = /\b(nome sujo|nome (ta |esta )?negativado|negativad[oa]|restricao no (meu )?(nome|cpf)|spc|serasa|score baixo|cpf sujo)\b/
 const SIMULACAO = /\b(simula|simulacao|simular|quanto fica|quanto ficaria|valor da parcela|parcela de quanto|em quantas vezes|quantas parcelas|faz uma simulacao)\b/
 const PRECO = /\b(caro|cara demais|salgad\w*|puxad\w*|desconto|mais barat\w*|fora do (meu )?orcamento|nao cabe)\b/
 const VISITA = /\b(visitar|visita|passar ai|passo ai|vou ai|ir ai|ver pessoalmente|ver de perto|test ride|endereco|onde fica|onde voces ficam|horario de funcionamento|que horas abre|ate que horas)\b/
@@ -64,6 +69,8 @@ export function etiquetasDoLead(d: DadosEtiquetas): Etiqueta[] {
   if (SIMULACAO.test(tudo)) e.push('PEDIU_SIMULACAO')
   if (PRECO.test(tudo)) e.push('OBJECAO_PRECO')
   if (VISITA.test(tudo)) e.push('PEDIU_VISITA')
+  if (SEM_CNH.test(tudo)) e.push('SEM_CNH')
+  if (RESTRICAO.test(tudo)) e.push('RESTRICAO_NOME')
   if (d.simulacao) e.push('SIMULOU')
   if (d.simulacao === 'CABE') e.push('PARCELA_CABE')
   else if (d.simulacao === 'APERTADA') e.push('PARCELA_APERTADA')

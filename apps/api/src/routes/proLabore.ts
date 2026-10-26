@@ -814,15 +814,20 @@ router.get('/leads/captura-whatsapp', requireProLaboreAuth, requireModulo('crm',
   const verEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
   const vendedores = await prisma.vendedor.findMany({
     where: verEquipe ? { usuarioId, ativo: true, vende: true } : { id: vendedorId ?? '-', usuarioId },
-    select: { id: true, nome: true, assistenteComercial: { select: { status: true, cadastroAutomatico: true } } },
+    select: { id: true, nome: true, assistenteComercial: { select: { status: true, cadastroAutomatico: true, varreduraEm: true } } },
     orderBy: { nome: 'asc' },
   })
-  const cadastradosHoje = await prisma.lead.count({
-    where: { ...leadWhereBase(req), origemCadastro: 'WHATSAPP', criadoEm: { gte: inicioDoDiaBrasilia(diaBrasilia(new Date())) } },
-  })
+  const [cadastradosHoje, foraDoCrm] = await Promise.all([
+    prisma.lead.count({ where: { ...leadWhereBase(req), origemCadastro: 'WHATSAPP', criadoEm: { gte: inicioDoDiaBrasilia(diaBrasilia(new Date())) } } }),
+    // Quem escreveu e não virou lead nos últimos 14 dias (para revisar).
+    prisma.assistenteContatoForaCrm.count({ where: { ultimaEm: { gte: new Date(Date.now() - 14 * 86_400_000) }, assistente: { vendedorId: { in: vendedores.map(v => v.id) } } } }),
+  ])
+  const varreduras = vendedores.map(v => v.assistenteComercial?.varreduraEm?.getTime() ?? 0).filter(Boolean)
   res.json({
     servidorConfigurado: evolutionConfigurada(),
     cadastradosHoje,
+    foraDoCrm,
+    ultimaVarreduraEm: varreduras.length ? new Date(Math.min(...varreduras)) : null,
     vendedores: vendedores.map(v => ({
       id: v.id, nome: v.nome, proprio: v.id === vendedorId,
       conectado: v.assistenteComercial?.status === 'CONECTADO',

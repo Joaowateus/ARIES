@@ -276,6 +276,9 @@ export interface Lead {
   historico?: { estagioNovo: EstagioLead; criadoEm: string; origem?: 'ASSISTENTE' | null; motivo?: string | null }[]
   // Próximo follow pendente (botão Follow do card); vem no máximo um.
   follows?: FollowLead[]
+  // Última conversa do WhatsApp (painel do lead), com a última mensagem já
+  // sem dados pessoais.
+  conversa?: { id: string; status: string; ultimaMensagemEm: string; ultima: { remetente: 'CONTATO' | 'VENDEDOR' | 'ASSISTENTE'; texto: string; criadoEm: string } | null } | null
   // Perdido: motivo, nota e temperatura (vão com o lead para a Reativação).
   motivoPerda?: MotivoPerda | null
   notaPerda?: string | null
@@ -511,6 +514,9 @@ export const proLaboreApi = {
     criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; tipoNegociacao?: TipoNegociacao; valorNegociacao: number; forcarDuplicado?: boolean }) =>
       request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
     capturaWhatsapp: () => request<CapturaWhatsappCrm>('/pro-labore/leads/captura-whatsapp'),
+    foraDoCrm: () => request<{ dias: number; itens: ContatoForaDoCrm[] }>('/pro-labore/assistente/fora-do-crm'),
+    foraDoCrmVirarLead: (id: string) => request<{ leadId: string }>(`/pro-labore/assistente/fora-do-crm/${id}/lead`, { method: 'POST' }),
+    foraDoCrmIgnorar: (id: string) => request<{ ok: boolean }>(`/pro-labore/assistente/fora-do-crm/${id}/ignorar`, { method: 'POST' }),
     editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; tipoNegociacao?: TipoNegociacao | null; valorNegociacao?: number }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     desfazerAvanco: (id: string) => request<Lead>(`/pro-labore/leads/${id}/desfazer-avanco`, { method: 'POST' }),
@@ -1565,7 +1571,8 @@ export type StatusAssistente = 'NAO_CONECTADO' | 'AGUARDANDO_QR' | 'CONECTADO' |
 export type TipoConversaAssistente = 'SUPORTE' | 'LEAD'
 export type StatusConversaAssistente = 'ATIVA' | 'AGUARDANDO_VENDEDOR' | 'ASSUMIDA' | 'ENCERRADA'
 export type ResultadoConversaAssistente = 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU' | 'NAO_E_LEAD'
-export type OrigemConversaAssistente = 'ANUNCIO' | 'GATILHO' | 'CONTATO_NOVO'
+export type OrigemConversaAssistente = 'ANUNCIO' | 'GATILHO' | 'CONTATO_NOVO' | 'INTENCAO'
+export interface ContatoForaDoCrm { id: string; nome: string | null; telefone: string | null; mensagens: number; ultimaEm: string; vendedor: { id: string; nome: string } }
 export type RemetenteMensagemAssistente = 'CONTATO' | 'ASSISTENTE' | 'VENDEDOR'
 export type AcaoConversaAssistente = 'ASSUMIR' | 'DEVOLVER' | 'ENCERRAR' | 'NAO_E_LEAD' | 'CRIAR_LEAD' | 'PARAR_FOLLOW' | 'RETOMAR_FOLLOW'
 export type CampoLeadAssistente = 'modeloInteresse' | 'formaPagamento' | 'valorEntrada' | 'veiculoTroca' | 'cidade' | 'melhorHorario' | 'nomeCompleto' | 'outro'
@@ -1615,6 +1622,10 @@ export interface AssistenteComercial {
 export interface CapturaWhatsappCrm {
   servidorConfigurado: boolean
   cadastradosHoje: number
+  // Quem escreveu no WhatsApp e não virou lead (últimos 14 dias).
+  foraDoCrm: number
+  // Última conferência das conversas no servidor (pega o lead cujo aviso se perdeu).
+  ultimaVarreduraEm: string | null
   vendedores: { id: string; nome: string; proprio: boolean; conectado: boolean; cadastroAutomatico: boolean }[]
 }
 

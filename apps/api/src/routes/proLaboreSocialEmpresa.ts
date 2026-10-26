@@ -9,7 +9,7 @@
 import { Router, Request, Response } from 'express'
 import { aprenderTodas } from '../lib/assistenteAprendizado'
 import { verificarAvancos } from '../lib/assistenteRespostas'
-import { atualizarEtiquetasRecentes, avisarLeadsEsperando, enviarResumosDaManha, rodarFollows } from '../lib/assistenteMotor'
+import { atualizarEtiquetasRecentes, avisarLeadsEsperando, enviarResumosDaManha, higienizarObservacoes, recalcularEtiquetasAbertas, rodarFollows, varrerConversasRecentes } from '../lib/assistenteMotor'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
@@ -314,9 +314,13 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   const avancos = await verificarAvancos().catch(e => { console.error('[assistente] avanços', e); return { usosVerificados: 0, usosComAvanco: 0 } })
   // Etiquetas que mudam com o tempo ("sumiu há 24h").
   const etiquetas = await atualizarEtiquetasRecentes(300, agoraDoCron(req)).catch(e => { console.error('[assistente] etiquetas', e); return { etiquetasConversas: 0 } })
+  // Todos os leads abertos com conversa: etiquetas em dia (as mais antigas primeiro).
+  const abertas = await recalcularEtiquetasAbertas(200, agoraDoCron(req)).catch(e => { console.error('[assistente] etiquetas abertas', e); return { etiquetasAbertas: 0 } })
+  // CPF, nascimento e e-mail escritos na observação de leads antigos: para os campos, mascarados no texto.
+  const higiene = await higienizarObservacoes(300).catch(e => { console.error('[assistente] observações', e); return { observacoesLimpas: 0 } })
   // Assistente pessoal: o resumo da manhã no chat "Você" de cada vendedor.
   const manha = await enviarResumosDaManha(agoraDoCron(req)).catch(e => { console.error('[assistente] resumo da manhã', e); return { resumosManha: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...manha })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
@@ -357,10 +361,14 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
   const trafego = await sincronizarTrafegoPendentes(10_000).catch(e => { console.error('[trafego] cron', e); return { trafegoSincronizadas: 0, trafegoFalhas: 0 } })
   // Assistente Comercial: follow automático (só quando a loja ligou; horário e teto conferidos lá dentro).
-  const follow = await rodarFollows(agoraDoCron(req), 8000).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0 } })
+  // Follow automático e a varredura dos leads cujo aviso do WhatsApp se perdeu, em paralelo.
+  const [follow, varredura] = await Promise.all([
+    rodarFollows(agoraDoCron(req), 8000).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0 } }),
+    varrerConversasRecentes(agoraDoCron(req), 6000).catch(e => { console.error('[assistente] varredura', e); return { varreduras: 0, mensagensVarridas: 0 } }),
+  ])
   // Assistente pessoal: avisa o vendedor de lead esperando resposta.
   const espera = await avisarLeadsEsperando(agoraDoCron(req)).catch(e => { console.error('[assistente] espera', e); return { avisosEspera: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...espera })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

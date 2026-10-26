@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, type CapturaWhatsappCrm, type PreferenciasLojaAssistente } from '@/lib/proLaboreApi'
+import { ForaDoCrm } from './ForaDoCrm'
 
 const IconeWhats = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none' }}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
@@ -31,14 +32,32 @@ function ChaveAvanco() {
   )
 }
 
-export function FaixaWhatsapp({ gestao, versao }: { gestao: boolean; versao: number }) {
+// Conferência dos leads: quem escreveu e ficou fora do CRM, para revisar.
+function BotaoForaDoCrm({ total, onMudou }: { total: number; onMudou: () => void }) {
+  const [aberto, setAberto] = useState(false)
+  if (!total) return null
+  return (
+    <>
+      <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setAberto(true)} data-abrir-fora-crm
+        title="Contatos antigos que escreveram sem falar de compra: revise se algum é lead">
+        {total} fora do CRM · revisar
+      </button>
+      {aberto && <ForaDoCrm onFechar={() => setAberto(false)} onMudou={onMudou} />}
+    </>
+  )
+}
+
+export function FaixaWhatsapp({ gestao, versao, onMudou }: { gestao: boolean; versao: number; onMudou?: () => void }) {
   const [d, setD] = useState<CapturaWhatsappCrm | null>(null)
+  const [recarga, setRecarga] = useState(0)
   useEffect(() => {
     let cancelado = false
     proLaboreApi.leads.capturaWhatsapp().then(r => { if (!cancelado) setD(r) }).catch(() => undefined)
     return () => { cancelado = true }
-  }, [versao])
+  }, [versao, recarga])
   if (!d || !d.vendedores.length) return null
+  const mudou = () => { setRecarga(r => r + 1); onMudou?.() }
+  const conferido = d.ultimaVarreduraEm ? ` Conferido no WhatsApp às ${new Date(d.ultimaVarreduraEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.` : ''
   const linkConectar = gestao ? '/pro-labore/assistente?aba=whatsapp' : '/pro-labore/assistente'
 
   // Sem o servidor do WhatsApp (Evolution) ninguém consegue conectar: diz o
@@ -76,8 +95,9 @@ export function FaixaWhatsapp({ gestao, versao }: { gestao: boolean; versao: num
     return (
       <div className="pl-section-note" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }} data-faixa-whatsapp={eu.cadastroAutomatico ? 'ativo' : 'pausado'}>
         <span className={`pl-status-badge ${eu.cadastroAutomatico ? 'bom' : 'atencao'}`}>{eu.cadastroAutomatico ? 'WhatsApp conectado' : 'Cadastro automático pausado'}</span>
-        <span>{eu.cadastroAutomatico ? `Contatos novos do seu WhatsApp entram sozinhos em Leads${hoje}.` : 'Os contatos novos não estão entrando sozinhos no CRM.'}</span>
+        <span>{eu.cadastroAutomatico ? `Contatos novos do seu WhatsApp entram sozinhos em Leads${hoje}.${conferido}` : 'Os contatos novos não estão entrando sozinhos no CRM.'}</span>
         {!eu.cadastroAutomatico && <Link className="pl-link-action pl-leads-textlink" href={linkConectar}>Ligar de novo →</Link>}
+        <BotaoForaDoCrm total={d.foraDoCrm} onMudou={mudou} />
       </div>
     )
   }
@@ -90,8 +110,10 @@ export function FaixaWhatsapp({ gestao, versao }: { gestao: boolean; versao: num
       <span style={{ flex: '1 1 300px' }}>
         <b>Cadastro automático pelo WhatsApp:</b> {conectados.length} de {d.vendedores.length} vendedor{d.vendedores.length !== 1 ? 'es' : ''} com os leads entrando sozinhos{hoje}.
         {faltam.length > 0 && <> Falta{faltam.length > 1 ? 'm' : ''}: {faltam.map(v => `${v.nome}${v.conectado ? ' (pausado)' : ''}`).join(', ')}.</>}
+        {conferido}
       </span>
       {faltam.length > 0 && <Link className="pl-btn pl-btn-ghost" href={linkConectar}>Conectar WhatsApp</Link>}
+      <BotaoForaDoCrm total={d.foraDoCrm} onMudou={mudou} />
       {conectados.length > 0 && <ChaveAvanco />}
     </div>
   )

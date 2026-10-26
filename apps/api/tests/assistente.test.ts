@@ -525,3 +525,34 @@ test('pré-análise na nota, nas etiquetas, no funil e fora da IA', () => {
   const ia = JSON.stringify(semDinheiro({ conversa: ['meu cpf: 529.982.247-25', 'nasci 15/03/1990', 'pode ser dia 15/11?'], cpf: '52998224725', renda: 3500 }))
   assert.ok(!ia.includes('529') && !ia.includes('1990') && !ia.includes('3500') && ia.includes('[CPF]') && ia.includes('[data de nascimento]') && ia.includes('15/11'), ia)
 })
+
+// ---------- Captura de leads ----------
+import { lerDadosDoCliente, mascararDadosPessoais, nomeFraco, temIntencaoDeCompra } from '../src/lib/assistenteCaptura'
+
+test('ficha que o cliente manda por conta própria (dados fictícios)', () => {
+  const umaLinha = '📊 *DADOS NECESSÁRIOS PARA SIMULAÇÃO:* CPF: 52998224725 DATA DE NASCIMENTO: 12/04/1994 NOME COMPLETO: maria teste da silva NÚMERO DE TELEFONE: 91900000000 E-MAIL: maria.teste@example.com POSSUI CNH? (Sim ou não): não VALOR DE ENTRADA: 3 mil VALOR CONFORTÁVEL DE PARCELA: 600'
+  assert.deepEqual(lerDadosDoCliente(umaLinha, new Date('2026-10-26')), {
+    cpf: '52998224725', nascimento: '12/04/1994', nome: 'maria teste da silva', telefone: '91900000000', email: 'maria.teste@example.com', cnh: false, entrada: 3000, parcela: 600, renda: null,
+  })
+  const linhas = lerDadosDoCliente('CPF: 111.444.777-35\nData de nascimento: 5/5/85\nNome completo: José Teste\nPossui CNH? sim\nEntrada: 2.500', new Date('2026-10-26'))
+  assert.ok(linhas && linhas.cpf === '11144477735' && linhas.nascimento === '05/05/1985' && linhas.nome === 'José Teste' && linhas.cnh === true && linhas.entrada === 2500)
+  assert.equal(lerDadosDoCliente('Oi, quanto fica a parcela da Titan com 3 mil de entrada?'), null, 'conversa normal não é ficha')
+  const m = mascararDadosPessoais(umaLinha)
+  assert.ok(!m.includes('52998224725') && !m.includes('12/04/1994') && !m.includes('maria.teste@') && m.includes('CPF: [CPF]') && m.includes('91900000000'), m)
+  assert.equal(mascararDadosPessoais('meu cpf 529.982.247-25 e celular 91988887777'), 'meu cpf [CPF] e celular 91988887777')
+  assert.ok(nomeFraco('🥷🍁🍁') && nomeFraco('+55 91 98888-7777') && nomeFraco('Bruno') && !nomeFraco('Bruno Lima'))
+})
+
+test('contato conhecido falando de compra', () => {
+  for (const t of ['Quais são os modelos de motos disponíveis?', 'qual o valor da titan?', 'vi o anúncio', 'quero financiar', 'tem a Lander?', 'quanto custa a cg 160'])
+    assert.ok(temIntencaoDeCompra(t, ['Lander 250']), t)
+  for (const t of ['oi tudo bem', 'bom dia, amanhã vou aí na sua casa', 'kkkk verdade', 'manda o pix do almoço'])
+    assert.ok(!temIntencaoDeCompra(t, ['Lander 250']), t)
+})
+
+test('etiquetas: sem CNH e restrição no nome', () => {
+  assert.ok(etq({}, ['POSSUI CNH? (Sim ou não): não']).includes('SEM_CNH'))
+  assert.ok(etq({}, ['ainda não tenho cnh, posso comprar?']).includes('SEM_CNH'))
+  assert.ok(!etq({}, ['tenho cnh sim']).includes('SEM_CNH'))
+  assert.ok(etq({}, ['meu nome tá negativado, consigo?']).includes('RESTRICAO_NOME'))
+})

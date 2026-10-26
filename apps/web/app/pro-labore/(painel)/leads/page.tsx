@@ -739,7 +739,7 @@ export default function ProLaboreLeadsPage() {
         }
       />
 
-      <FaixaWhatsapp gestao={vejaEquipe} versao={leads.length} />
+      <FaixaWhatsapp gestao={vejaEquipe} versao={leads.length} onMudou={carregar} />
 
       <div className="pl-leads-toolbar">
         <div className="pl-search-wrap">
