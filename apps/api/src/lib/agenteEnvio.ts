@@ -5,9 +5,17 @@ import { prisma } from './prisma'
 import { enviarTexto } from './whatsappEvolution'
 import { emPartes, tempoDigitando } from './agenteConversa'
 
-/** Manda em até 3 partes, cada uma com "digitando..." proporcional ao tamanho, e registra. */
+// O "digitando..." segura a chamada ao servidor do WhatsApp: no total, cabe
+// folgado nos 30 s da função na Vercel junto com a IA (vercel.json).
+const DIGITANDO_TOTAL_MS = 8000
+
+/** Manda em até 3 partes, cada uma com "digitando..." proporcional ao tamanho (8 s no total, no máximo), e registra. */
 export async function enviarComoPessoa(agente: { instancia: string }, numero: string, texto: string, registro?: { vinculoId: string; intencao?: string }) {
-  for (const parte of emPartes(texto)) await enviarTexto(agente.instancia, numero, parte, tempoDigitando(parte))
+  const partes = emPartes(texto)
+  const tempos = partes.map(tempoDigitando)
+  const soma = tempos.reduce((a, b) => a + b, 0)
+  const fator = soma > DIGITANDO_TOTAL_MS ? DIGITANDO_TOTAL_MS / soma : 1
+  for (let k = 0; k < partes.length; k++) await enviarTexto(agente.instancia, numero, partes[k], Math.max(800, Math.round(tempos[k] * fator)))
   if (registro) await prisma.agenteMensagem.create({ data: { vinculoId: registro.vinculoId, direcao: 'SAIDA', texto: texto.slice(0, 4000), intencao: registro.intencao ?? null } })
 }
 
