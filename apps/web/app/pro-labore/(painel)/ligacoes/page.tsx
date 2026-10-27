@@ -154,7 +154,7 @@ function LinhaAuditoria({ l, agora }: { l: LigacaoComLead; agora: number }) {
     <tr data-auditoria-linha={l.id}>
       <td><Link href={`/pro-labore/leads?lead=${l.lead.id}`}>{l.lead.nomeCliente}</Link><small>{rotuloPasso(l)}</small></td>
       <td>{l.lead.vendedor?.nome ?? '—'}</td>
-      <td>{dataHora(l.agendadaPara)}</td>
+      <td>{dataHora(l.agendadaPara)}{l.adiamentos > 0 && <small className={l.adiamentos >= 3 ? 'lg-adiou muito' : 'lg-adiou'} title="Vezes que tocou em Adiar no aviso: a hora marcada mostrada já é a nova" data-adiamentos={l.adiamentos}>adiou {l.adiamentos}x</small>}</td>
       <td>{l.discadaEm ? `${dataHora(l.discadaEm)}${l.dispositivo ? ` · ${l.dispositivo === 'CELULAR' ? 'celular' : 'computador'}` : ''}` : '—'}</td>
       <td>{vencida ? <span className="lg-alerta" data-alerta="NAO_FEITA">Não feita · {quandoLigar(l.agendadaPara, agora).texto.replace('atrasada ', '')}</span> : l.registradaEm ? dataHora(l.registradaEm) : '—'}</td>
       <td>{l.resultado ? RESULTADO[l.resultado] : '—'}{l.resultado === 'ATENDEU' && <small>{duracao(l.duracaoSeg)}</small>}</td>

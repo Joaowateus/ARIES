@@ -15,6 +15,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { avisarLigacoes } from '../lib/ligacoesAviso'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import {
   ErroGraphApi,
@@ -371,7 +372,9 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const espera = await avisarLeadsEsperando(agoraDoCron(req)).catch(e => { console.error('[assistente] espera', e); return { avisosEspera: 0 } })
   // Aries no WhatsApp: o resumo da manhã no horário escolhido pelo gestor.
   const agente = await rodarAgente(agoraDoCron(req), 5000).catch(e => { console.error('[agente] manhã', e); return { manhaAgente: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente })
+  // Ligações: aviso na hora e lembrete 30 min depois para quem liga (Aries ou chat "Você").
+  const ligacoes = await avisarLigacoes(agoraDoCron(req)).catch(e => { console.error('[ligacoes] aviso', e); return { avisosLigacao: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente, ...ligacoes })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

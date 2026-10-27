@@ -4066,6 +4066,11 @@ model LigacaoTarefa {
   resumo          String?
   // SEM_DISCAR | DURACAO_INCOERENTE | REGISTRO_RAPIDO | FORA_DO_HORARIO | EM_SERIE | ATRASADA
   alertas         String[]  @default([])
+  // Aviso para quem liga (WhatsApp pelo Aries ou chat "Você"): na hora e um lembrete 30 min depois.
+  avisadaEm       DateTime?
+  relembradaEm    DateTime?
+  // Quantas vezes adiou pelo aviso (aparece na auditoria).
+  adiamentos      Int       @default(0)
   criadoPor       String?
   criadoEm        DateTime  @default(now())
   atualizadoEm    DateTime  @updatedAt
