@@ -290,7 +290,7 @@ export default function ProLaboreVendedoresPage() {
                         ? <span className="pl-delta up" style={{ display: 'inline-flex' }} title={v.email}>Com login</span>
                         : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Sem login</span>}
                     </td>
-                    <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
+                    <td className="pl-right pl-vd-acoes">
                       <span className="pl-link-action" onClick={() => alternarPapel(v)} style={{ marginRight: 14 }}>
                         {v.papel === 'SUPERVISOR' ? 'Tornar vendedor(a)' : 'Tornar supervisor(a)'}
                       </span>

@@ -234,7 +234,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     <div className="pl-app-shell">
       <aside className={`pl-sidebar ${menuAberto ? 'open' : ''} ${sidebarColapsada ? 'collapsed' : ''}`}>
         <div className="pl-sidebar-brand">
-          <AriesBrandMark size={34} />
+          <AriesBrandMark size={28} />
           <div className="pl-sidebar-brand-text">
             <div className="pl-brand-name">Pró-Labore</div>
             <div className="pl-brand-sub">Gestão comercial</div>
@@ -303,9 +303,16 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
 
         <div className="pl-sidebar-footer">
           <div className="pl-sidebar-tema"><span>Tema</span><PLThemeToggle /></div>
-          <div className="pl-sidebar-plano">
-            <span className="pl-sidebar-plano-ponto" aria-hidden="true" />
-            <span className="pl-sidebar-link-label">Aries Sales Systems</span>
+          <div className="pl-sidebar-user" title={`${usuario.nome}${rotuloPapel ? ` (${rotuloPapel})` : ''}`}>
+            <span className="pl-sb-avatar" aria-hidden="true">{iniciaisDe(usuario.nome)}</span>
+            <span className="pl-sidebar-user-texto"><b>{usuario.nome}</b><small>{rotuloPapel ?? 'gestor'}</small></span>
+            <button className="pl-logout" onClick={logout} title="Sair" aria-label="Sair">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+            </button>
           </div>
         </div>
       </aside>
@@ -322,24 +329,13 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             <span>{grupoAtual ?? 'Pró-Labore'}</span>
             {paginaAtual && <><span aria-hidden="true">/</span><b>{paginaAtual.label}</b></>}
           </div>
-          <button type="button" className="pl-topo-busca" onClick={abrirPaleta} aria-label="Buscar aba, lead ou ação" data-abrir-paleta>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-            <span>Buscar aba, lead ou ação…</span>
-            <kbd>Ctrl K</kbd>
-          </button>
           <div className="pl-topbar-acoes">
-            <PLThemeToggle />
-            <div className="pl-topo-pessoa" title={`${usuario.nome}${rotuloPapel ? ` (${rotuloPapel})` : ''}`}>
-              <span className="pl-avatar-topo" aria-hidden="true">{iniciaisDe(usuario.nome)}</span>
-              <span className="pl-topo-pessoa-texto"><b>{usuario.nome}</b><small>{rotuloPapel ?? 'gestor'}</small></span>
-            </div>
-            <button className="pl-logout" onClick={logout} title="Sair" aria-label="Sair">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <path d="M16 17l5-5-5-5" />
-                <path d="M21 12H9" />
-              </svg>
+            <button type="button" className="pl-topo-busca" onClick={abrirPaleta} aria-label="Buscar aba, lead ou ação" data-abrir-paleta>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+              <span>Buscar…</span>
+              <kbd>Ctrl K</kbd>
             </button>
+            <PLThemeToggle />
           </div>
         </header>
 
