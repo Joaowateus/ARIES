@@ -7,7 +7,8 @@
 // Pipedrive: o dia em ordem de horário, com a semana logo acima.
 import './meudia.css'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { proLaboreApi, type AgendaItem, type AgendaTarefa, type CpItemFila, type FollowComLead } from '@/lib/proLaboreApi'
+import { proLaboreApi, type AgendaItem, type AgendaTarefa, type CpItemFila, type FollowComLead, type LigacaoComLead } from '@/lib/proLaboreApi'
+import { BotaoLigar, RegistrarLigacao, rotuloPasso } from '../../_ligacoes/Ligacoes'
 
 export interface RotinaDoDia { item: AgendaItem; feito: boolean; categoria: string }
 
@@ -36,6 +37,7 @@ export function lerTarefaRapida(texto: string): { titulo: string; horario: strin
 type Entrada =
   | { chave: string; tipo: 'ROTINA'; horario: string | null; feito: boolean; rotina: RotinaDoDia }
   | { chave: string; tipo: 'FOLLOW'; horario: string | null; feito: false; follow: FollowComLead; atrasado: boolean }
+  | { chave: string; tipo: 'LIGACAO'; horario: string | null; feito: false; ligacao: LigacaoComLead; atrasado: boolean }
   | { chave: string; tipo: 'TAREFA'; horario: string | null; feito: boolean; tarefa: AgendaTarefa; atrasada: boolean }
 
 export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe }: {
@@ -51,6 +53,9 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
   const [tarefas, setTarefas] = useState<AgendaTarefa[]>([])
   const [follows, setFollows] = useState<FollowComLead[] | null>(null)
   const [fila, setFila] = useState<CpItemFila[] | null>(null)
+  // Ligações pendentes (cadências e agendadas no lead): Ligar e Registrar direto daqui.
+  const [ligacoes, setLigacoes] = useState<LigacaoComLead[] | null>(null)
+  const [registrando, setRegistrando] = useState<LigacaoComLead | null>(null)
   const [novo, setNovo] = useState('')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -65,6 +70,7 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
     const carregar = () => {
       proLaboreApi.follows.pendentes().then(f => { if (!cancelado) setFollows(f) }).catch(() => { if (!cancelado) setFollows(null) })
       proLaboreApi.copiloto.fila().then(f => { if (!cancelado) setFila(f.itens) }).catch(() => { if (!cancelado) setFila(null) })
+      proLaboreApi.ligacoes.pendentes().then(l => { if (!cancelado) setLigacoes(l) }).catch(() => { if (!cancelado) setLigacoes(null) })
     }
     carregar()
     const t = setInterval(() => { if (!document.hidden) carregar() }, 120_000)
@@ -73,25 +79,28 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
 
   const followsDoDia = (d: string) => (follows ?? []).filter(f => diaBR(new Date(f.agendadoPara)) === d)
   const tarefasDoDia = (d: string) => tarefas.filter(t => t.dia.slice(0, 10) === d)
+  const ligacoesDoDia = (d: string) => (ligacoes ?? []).filter(l => diaBR(new Date(l.agendadaPara)) === d)
 
   const entradas: Entrada[] = [
     ...rotinasDoDia(dia).map(r => ({ chave: `r:${r.item.id}`, tipo: 'ROTINA' as const, horario: r.item.horario ?? null, feito: r.feito, rotina: r })),
     ...followsDoDia(dia).map(f => ({ chave: `f:${f.id}`, tipo: 'FOLLOW' as const, horario: horaBR(f.agendadoPara), feito: false as const, follow: f, atrasado: false })),
+    ...ligacoesDoDia(dia).map(l => ({ chave: `l:${l.id}`, tipo: 'LIGACAO' as const, horario: horaBR(l.agendadaPara), feito: false as const, ligacao: l, atrasado: false })),
     ...tarefasDoDia(dia).map(t => ({ chave: `t:${t.id}`, tipo: 'TAREFA' as const, horario: t.horario, feito: !!t.feitaEm, tarefa: t, atrasada: false })),
   ].sort((a, b) => (a.horario ?? '99:99').localeCompare(b.horario ?? '99:99'))
   const atrasados: Entrada[] = dia !== hoje ? [] : [
     ...(follows ?? []).filter(f => diaBR(new Date(f.agendadoPara)) < hoje).map(f => ({ chave: `f:${f.id}`, tipo: 'FOLLOW' as const, horario: null, feito: false as const, follow: f, atrasado: true })),
+    ...(ligacoes ?? []).filter(l => diaBR(new Date(l.agendadaPara)) < hoje).map(l => ({ chave: `l:${l.id}`, tipo: 'LIGACAO' as const, horario: null, feito: false as const, ligacao: l, atrasado: true })),
     ...tarefas.filter(t => t.dia.slice(0, 10) < hoje && !t.feitaEm).map(t => ({ chave: `t:${t.id}`, tipo: 'TAREFA' as const, horario: t.horario, feito: false, tarefa: t, atrasada: true })),
   ]
   const comHorario = entradas.filter(e => e.horario)
   const semHorario = entradas.filter(e => !e.horario)
-  const marcaveis = entradas.filter(e => e.tipo !== 'FOLLOW')
+  const marcaveis = entradas.filter(e => e.tipo !== 'FOLLOW' && e.tipo !== 'LIGACAO')
   const feitos = marcaveis.filter(e => e.feito).length
   const agora = dia === hoje ? (fila ?? []).filter(i => i.prioridade >= 65).slice(0, 5) : []
 
   function resumoDoDia(d: string) {
-    const r = rotinasDoDia(d), t = tarefasDoDia(d), f = followsDoDia(d)
-    const total = r.length + t.length + f.length
+    const r = rotinasDoDia(d), t = tarefasDoDia(d), f = followsDoDia(d), l = ligacoesDoDia(d)
+    const total = r.length + t.length + f.length + l.length
     const feitosDia = r.filter(x => x.feito).length + t.filter(x => x.feitaEm).length
     const status = total === 0 ? null : feitosDia === total ? 'completo' : feitosDia > 0 ? 'parcial' : 'pendente'
     return { total, status }
@@ -130,6 +139,27 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
           <div className="md-corpo">
             <div className="md-titulo">{item.titulo}</div>
             <div className="md-meta"><span className="md-tag rotina">{e.rotina.categoria}</span>{item.exigeLocalizacao && <span title="Pede o selo de localização no check-in">📍 com localização</span>}{item.descricao && <span>{item.descricao}</span>}</div>
+          </div>
+        </li>
+      )
+    }
+    if (e.tipo === 'LIGACAO') {
+      const l = e.ligacao
+      return (
+        <li key={e.chave} className={`md-item follow ${e.atrasado ? 'atrasado' : ''}`} data-md={e.chave}>
+          <span className="md-hora">{e.atrasado ? new Date(`${diaBR(new Date(l.agendadaPara))}T12:00:00Z`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }) : e.horario}</span>
+          <span className="md-icone" aria-hidden="true">☎</span>
+          <div className="md-corpo">
+            <div className="md-titulo">Ligar: {l.lead.nomeCliente}</div>
+            <div className="md-meta">
+              <span className="md-tag follow">{rotuloPasso(l)}</span>
+              <span>{[ETAPA[l.lead.estagio] ?? l.lead.estagio, l.lead.modeloInteresse, vejaEquipe ? l.lead.vendedor?.nome : null].filter(Boolean).join(' · ')}</span>
+              {l.instrucao && <span className="md-nota">“{l.instrucao}”</span>}
+            </div>
+          </div>
+          <div className="md-acoes">
+            <BotaoLigar ligacao={l} telefone={l.lead.telefone} onDiscou={x => setLigacoes(ls => (ls ?? []).map(y => (y.id === x.id ? { ...y, ...x } : y)))} />
+            <button type="button" className="md-link" onClick={() => setRegistrando(l)}>Registrar</button>
           </div>
         </li>
       )
@@ -255,6 +285,12 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
           </aside>
         )}
       </div>
+      {registrando && (
+        <RegistrarLigacao
+          ligacao={registrando} nomeCliente={registrando.lead.nomeCliente} onFechar={() => setRegistrando(null)}
+          onRegistrou={r => { setRegistrando(null); setLigacoes(ls => [...(ls ?? []).filter(x => x.id !== r.feita.id), ...(r.proxima ? [{ ...r.proxima, lead: registrando.lead }] : [])]) }}
+        />
+      )}
     </div>
   )
 }

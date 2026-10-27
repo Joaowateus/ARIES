@@ -4,6 +4,7 @@
 // lead ou não é lead (não aparece mais).
 import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma'
+import { aplicarCadenciasDoLeadNovo } from '../lib/ligacoes'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { requireModulo } from '../lib/acessos'
 import { formatarTelefone } from '../lib/assistenteMotor'
@@ -66,6 +67,7 @@ router.post('/assistente/fora-do-crm/:id/lead', ...editar, async (req: Request, 
       },
     })
     await tx.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
+    await aplicarCadenciasDoLeadNovo(tx, lead)
     return lead.id
   }))
   const aberta = await prisma.assistenteConversa.findFirst({ where: { assistenteId: assistente.id, tipo: 'LEAD', numeroContato: item.numero, status: { in: ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA'] } }, select: { id: true } })

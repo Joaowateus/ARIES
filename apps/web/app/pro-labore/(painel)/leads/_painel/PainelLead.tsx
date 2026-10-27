@@ -10,6 +10,7 @@ import { situacaoFollow } from '../../_follow/follow'
 import { ChipNota } from '../../assistente/_componentes/SugestoesConversa'
 import { EtiquetasLead } from '../../assistente/_componentes/jornada'
 import { NotasLead } from './NotasLead'
+import { LigacoesLead } from './LigacoesLead'
 
 const ORIGEM_LEAD: Record<string, string> = { TRAFEGO: 'Tráfego pago', ORGANICO: 'Orgânico' }
 const NEGOCIACAO: Record<TipoNegociacao, string> = { P: 'Pagamento integral', R: 'Renegociação' }
@@ -22,7 +23,7 @@ function avancoDesfazivel(lead: Lead) {
   return !!ultimo && ultimo.origem === 'ASSISTENTE' && ultimo.estagioNovo === lead.estagio && !lead.vendaId && Date.now() - new Date(ultimo.criadoEm).getTime() < 3 * 86_400_000
 }
 
-export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeEscrever, onContagemNotas, onFechar, onMover, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao }: {
+export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeEscrever, onContagemNotas, onLigacoesMudaram, onFechar, onMover, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao }: {
   lead: Lead
   colunas: Array<{ estagio: EstagioLead; titulo: string }>
   isDono: boolean
@@ -31,6 +32,8 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeE
   focarNota: boolean
   podeEscrever: boolean
   onContagemNotas: (n: number) => void
+  // Ligação agendada/registrada: o card atualiza o selo da próxima ligação.
+  onLigacoesMudaram: () => void
   onFechar: () => void
   onMover: (estagio: EstagioLead) => void
   onConverter: () => void
@@ -119,6 +122,8 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeE
         </dl>
 
         <NotasLead key={lead.id} leadId={lead.id} focar={focarNota} podeEscrever={podeEscrever} onContagem={onContagemNotas} />
+
+        <LigacoesLead key={`lig-${lead.id}`} leadId={lead.id} nomeCliente={lead.nomeCliente} telefone={lead.telefone} podeEscrever={podeEscrever && aberto} vejaAlertas={vejaEquipe} onMudou={onLigacoesMudaram} />
 
         {(typeof lead.pontuacao === 'number' || (lead.etiquetas?.length ?? 0) > 0) && (
           <section className="pl-pn-bloco">

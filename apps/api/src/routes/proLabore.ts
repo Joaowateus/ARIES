@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
+import { aplicarCadenciasDoLeadNovo, cancelarLigacoesDoLead } from '../lib/ligacoes'
 import { recalcularPagamentoComissao } from '../lib/comissoes'
 import { Prisma } from '@prisma/client'
 import { signProLaboreToken } from '../lib/jwtProLabore'
@@ -793,6 +794,8 @@ const LEAD_INCLUDE = {
   follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 1, select: { id: true, agendadoPara: true, canal: true, nota: true } },
   // Quantas notas da negociação o lead tem (selo no card; o texto abre no painel).
   _count: { select: { notas: true } },
+  // A próxima ligação pendente (selo do card e painel do lead).
+  ligacoes: { where: { status: 'PENDENTE' }, orderBy: { agendadaPara: 'asc' }, take: 1, select: { id: true, agendadaPara: true, passo: true, totalPassos: true } },
 } as const
 
 
@@ -940,7 +943,10 @@ router.post('/leads', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), asyn
     include: LEAD_INCLUDE,
   })
   await prisma.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
-  res.status(201).json(lead)
+  // Cadência de ligações com gatilho de lead novo: os lembretes já nascem com o lead.
+  const ligacoes = await aplicarCadenciasDoLeadNovo(prisma, { id: lead.id, usuarioId, vendedorId: lead.vendedorId, tipoLead: lead.tipoLead, origemCadastro: null })
+    .catch(e => { logger.warn({ err: e }, 'ligações: falha ao aplicar cadência no lead novo'); return 0 })
+  res.status(201).json(ligacoes ? await prisma.lead.findUnique({ where: { id: lead.id }, include: LEAD_INCLUDE }) : lead)
 })
 
 const editarLeadSchema = z.object({
@@ -1048,6 +1054,10 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
   const perda = parse.data.estagio === 'PERDIDO'
     ? { perdidoEm: new Date(), motivoPerda: parse.data.motivoPerda ?? null, notaPerda: parse.data.notaPerda || null, temperatura: parse.data.temperatura ?? null }
     : atual.estagio === 'PERDIDO' ? { reativadoEm: new Date(), reativacoes: { increment: 1 } } : {}
+  // Saiu do funil (fechou ou perdeu): as ligações pendentes param.
+  if (parse.data.estagio === 'FECHADO' || parse.data.estagio === 'PERDIDO') {
+    await cancelarLigacoesDoLead(prisma, atual.id, parse.data.estagio === 'FECHADO' ? 'Venda fechada' : 'Lead perdido')
+  }
   const lead = await prisma.lead.update({
     where: { id: atual.id },
     data: { estagio: parse.data.estagio, fechadoEm, ...perda },
@@ -1152,6 +1162,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
     include: VENDA_INCLUDE,
   })
 
+  await cancelarLigacoesDoLead(prisma, atual.id, 'Venda fechada')
   const lead = await prisma.lead.update({
     where: { id: atual.id },
     data: { estagio: 'FECHADO', fechadoEm: new Date(), vendaId: venda.id },

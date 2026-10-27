@@ -19,14 +19,17 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
   const agora = Date.now()
   const hoje = new Date(Math.floor((agora - OFFSET_BR) / DIA) * DIA + OFFSET_BR), amanha = new Date(hoje.getTime() + DIA)
   const lead = veCrm ? leadWhereBase(req) : null
-  const [aoVivo, pedidosReuniao, atrasados, deHoje, avisos] = await Promise.all([
+  const [aoVivo, pedidosReuniao, atrasados, deHoje, avisos, ligAtrasadas, ligHoje] = await Promise.all([
     prisma.apresentacao.count({ where: { usuarioId: u.sub, aoVivo: true, aprovacao: 'APROVADA', apresentadorSinalEm: { gte: new Date(agora - SINAL_APRESENTADOR_MS) } } }),
     dono ? prisma.apresentacao.count({ where: { usuarioId: u.sub, aprovacao: 'PENDENTE' } }) : 0,
     lead ? prisma.leadFollow.count({ where: { status: 'PENDENTE', agendadoPara: { lt: hoje }, lead } }) : 0,
     lead ? prisma.leadFollow.count({ where: { status: 'PENDENTE', agendadoPara: { gte: hoje, lt: amanha }, lead } }) : 0,
     dono ? prisma.smNotificacao.findMany({ where: { usuarioId: u.sub, destinatario: 'GESTOR', lidaEm: null }, orderBy: { atualizadoEm: 'desc' }, take: 20, select: { titulo: true } }) : [],
+    // Ligações: já passou da hora / ainda hoje.
+    lead ? prisma.ligacaoTarefa.count({ where: { status: 'PENDENTE', agendadaPara: { lt: new Date(agora) }, lead } }) : 0,
+    lead ? prisma.ligacaoTarefa.count({ where: { status: 'PENDENTE', agendadaPara: { gte: new Date(agora), lt: amanha }, lead } }) : 0,
   ])
-  res.json({ aoVivo, pedidosReuniao, follows: lead ? { atrasados, hoje: deHoje } : null, avisosSocial: avisos.map(a => a.titulo) })
+  res.json({ aoVivo, pedidosReuniao, follows: lead ? { atrasados, hoje: deHoje } : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje } : null, avisosSocial: avisos.map(a => a.titulo) })
 })
 
 export default router

@@ -303,6 +303,8 @@ export interface Lead {
   reativacoes?: number
   // Quantas notas da negociação o lead tem (selo no card).
   _count?: { notas: number }
+  // A próxima ligação pendente (selo do card).
+  ligacoes?: Array<{ id: string; agendadaPara: string; passo: number | null; totalPassos: number | null }>
 }
 
 export interface Venda {
@@ -473,6 +475,23 @@ async function requestArquivo(path: string): Promise<Blob> {
 }
 
 export const proLaboreApi = {
+  // Ligações: lembretes, cadências e auditoria.
+  ligacoes: {
+    pendentes: (vendedorId?: string) => request<LigacaoComLead[]>(`/pro-labore/ligacoes/pendentes${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
+    doLead: (leadId: string) => request<{ ligacoes: Ligacao[]; cadencias: Array<{ id: string; nome: string; passos: number }> }>(`/pro-labore/leads/${leadId}/ligacoes`),
+    agendar: (leadId: string, data: { agendadaPara: string; instrucao?: string }) => request<Ligacao>(`/pro-labore/leads/${leadId}/ligacoes`, { method: 'POST', body: JSON.stringify(data) }),
+    iniciarCadencia: (leadId: string, cadenciaId: string) => request<{ criadas: number }>(`/pro-labore/leads/${leadId}/cadencias/${cadenciaId}`, { method: 'POST' }),
+    discar: (id: string) => request<Ligacao>(`/pro-labore/ligacoes/${id}/discar`, { method: 'POST' }),
+    registrar: (id: string, data: RegistroLigacao) => request<{ feita: Ligacao; proxima: Ligacao | null }>(`/pro-labore/ligacoes/${id}/registrar`, { method: 'POST', body: JSON.stringify(data) }),
+    cancelar: (id: string, motivo: string) => request<Ligacao>(`/pro-labore/ligacoes/${id}/cancelar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
+    auditoria: (dias: number, vendedorId?: string) => request<AuditoriaLigacoes>(`/pro-labore/ligacoes/auditoria?dias=${dias}${vendedorId ? `&vendedorId=${vendedorId}` : ''}`),
+    cadencias: {
+      listar: () => request<CadenciaLigacao[]>('/pro-labore/ligacoes/cadencias'),
+      criar: (data: Omit<CadenciaLigacao, 'id' | 'criadoEm' | 'atualizadoEm'>) => request<CadenciaLigacao>('/pro-labore/ligacoes/cadencias', { method: 'POST', body: JSON.stringify(data) }),
+      editar: (id: string, data: Omit<CadenciaLigacao, 'id' | 'criadoEm' | 'atualizadoEm'>) => request<CadenciaLigacao>(`/pro-labore/ligacoes/cadencias/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+      remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/ligacoes/cadencias/${id}`, { method: 'DELETE' }),
+    },
+  },
   // Processo de atendimento: a equipe lê, o dono edita.
   processo: {
     ler: () => request<ProcessoAtendimento>('/pro-labore/processo'),
@@ -859,7 +878,7 @@ export const proLaboreApi = {
   },
   // Copiloto Comercial: `pessoa` só vale para o dono (EQUIPE ou um vendedor).
   // Selos do menu lateral numa chamada só (ao vivo, pedidos, follows do dia, avisos do Instagram).
-  barraLateral: () => request<{ aoVivo: number; pedidosReuniao: number; follows: { atrasados: number; hoje: number } | null; avisosSocial: string[] }>('/pro-labore/barra-lateral'),
+  barraLateral: () => request<{ aoVivo: number; pedidosReuniao: number; follows: { atrasados: number; hoje: number } | null; ligacoes: { atrasadas: number; hoje: number } | null; avisosSocial: string[] }>('/pro-labore/barra-lateral'),
   // Aries no WhatsApp: o número do agente (gestor) e o vínculo de cada pessoa.
   agente: {
     painel: () => request<AgentePainel>('/pro-labore/agente'),
@@ -3263,6 +3282,29 @@ export type MotivoPerda = 'SEM_MOMENTO' | 'SEM_CREDITO' | 'PRECO' | 'SEM_RESPOST
 export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE'
 export interface FollowLead { id: string; agendadoPara: string; canal: CanalFollow | null; nota: string | null; status?: 'PENDENTE' | 'FEITO' | 'CANCELADO'; feitoEm?: string | null; resultado?: string | null; criadoPor?: string | null; criadoEm?: string }
 export interface NovoFollow { agendadoPara: string; canal?: CanalFollow; nota?: string }
+// Ligações auditáveis (lembretes por lead, cadências e auditoria).
+export type ResultadoLigacao = 'ATENDEU' | 'NAO_ATENDEU' | 'CAIXA_POSTAL' | 'OCUPADO' | 'NUMERO_ERRADO' | 'PEDIU_RETORNO'
+export type AlertaLigacao = 'SEM_DISCAR' | 'DURACAO_INCOERENTE' | 'REGISTRO_RAPIDO' | 'FORA_DO_HORARIO' | 'EM_SERIE' | 'ATRASADA'
+export type GatilhoCadencia = 'LEAD_NOVO' | 'LEAD_ANUNCIO' | 'LEAD_WHATSAPP'
+export interface Ligacao {
+  id: string; leadId: string; vendedorId: string | null; cadenciaId: string | null; cadenciaNome: string | null
+  passo: number | null; totalPassos: number | null; instrucao: string | null; agendadaPara: string
+  status: 'PENDENTE' | 'FEITA' | 'CANCELADA'; motivoCancelada: string | null
+  discadaEm: string | null; discagens: number; dispositivo: 'CELULAR' | 'COMPUTADOR' | null
+  registradaEm: string | null; registradaPor: string | null; resultado: ResultadoLigacao | null; duracaoSeg: number | null; resumo: string | null
+  alertas: AlertaLigacao[]; criadoPor: string | null; criadoEm: string
+}
+export interface LigacaoComLead extends Ligacao { lead: { id: string; nomeCliente: string; telefone: string | null; estagio: EstagioLead; modeloInteresse: string | null; vendedor: { id: string; nome: string } | null } }
+export interface PassoCadencia { aposMinutos: number | null; dia: number; hora: string | null; instrucao: string }
+export interface CadenciaLigacao { id: string; nome: string; ativa: boolean; gatilho: GatilhoCadencia | null; pararAoAtender: boolean; passos: PassoCadencia[]; criadoEm: string; atualizadoEm: string }
+export interface AuditoriaLigacoes {
+  dias: number
+  resumo: Array<{ vendedorId: string | null; nome: string; previstas: number; feitas: number; noPrazo: number; atrasadas: number; naoFeitas: number; atendidas: number; comAlerta: number; minutosAteLigar: number | null; duracaoMediaSeg: number | null }>
+  atencao: LigacaoComLead[]
+  recentes: LigacaoComLead[]
+}
+export interface RegistroLigacao { resultado: ResultadoLigacao; duracaoSeg?: number; resumo?: string; retornoEm?: string }
+
 export interface NotaLead { id: string; texto: string; autorId: string; autorNome: string | null; criadoEm: string; atualizadoEm: string; podeEditar: boolean }
 export interface FollowComLead extends FollowLead { lead: { id: string; nomeCliente: string; telefone: string | null; estagio: EstagioLead; modeloInteresse: string | null; vendedor: { id: string; nome: string } | null } }
 export interface LeadPerdido extends Omit<Lead, 'historico'> {

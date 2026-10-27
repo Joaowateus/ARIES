@@ -25,6 +25,7 @@ import { conversasRecentes, enviarImagem, enviarTexto, historicoDoContato, mensa
 import { DadosDoCliente, lerDadosDoCliente, mascararDadosPessoais, nomeFraco, nomeProprio, resumoDosDados, temIntencaoDeCompra } from './assistenteCaptura'
 import { lerImagem } from './armazenamento'
 import { MidiaRecebida, registrarMidias } from './assistenteMidia'
+import { aplicarCadenciasDoLeadNovo } from './ligacoes'
 import { origemPorCodigo } from './smAtribuicao'
 import {
   ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, MidiaPasso, PassoRoteiro, TEXTO_MENU,
@@ -984,6 +985,7 @@ export async function vincularOuCriarLead(
     },
   })
   await prisma.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
+  await aplicarCadenciasDoLeadNovo(prisma, { ...lead, veioDeAnuncio: conversa.origem === 'ANUNCIO' }).catch(e => logger.warn({ err: e }, 'ligações: falha ao aplicar cadência no lead novo'))
   return lead.id
 }
 
@@ -1043,6 +1045,7 @@ async function capturarLead(tx: Prisma.TransactionClient, a: AssistenteCompleto,
     },
   })
   await tx.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
+  await aplicarCadenciasDoLeadNovo(tx, { ...lead, veioDeAnuncio: origem === 'ANUNCIO' })
   logger.info({ leadId: lead.id, vendedorId: a.vendedorId, origem }, 'assistente: lead cadastrado automaticamente pelo WhatsApp')
   return lead.id
 }
