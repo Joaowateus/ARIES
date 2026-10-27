@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.3.0
+version: 1.4.0
 status: ativo
 ---
 
@@ -116,6 +116,64 @@ Pedido: um espaço para anotar o que acontece na negociação com o lead, visív
   - modelo `LeadNota`, que é apagado junto com o lead;
   - rotas `GET/POST /pro-labore/leads/:id/notas` e `PATCH/DELETE /pro-labore/leads/notas/:id`;
   - a contagem vem no `GET /leads` (`_count.notas`).
+
+## Conversas — ouvir áudios e ver fotos (27/10)
+
+- O webhook do WhatsApp registra o áudio e a foto de cada mensagem gravada, recebida ou enviada pelo celular do vendedor.
+- O arquivo é baixado na hora pela Evolution (`getBase64FromMediaMessage`), com prazo de 5 s.
+  - Se não der, fica pendente e baixa quando alguém abre a conversa.
+  - Depois de 3 tentativas sem arquivo, fica "indisponível": o WhatsApp apaga a mídia depois de um tempo.
+- **Onde fica o arquivo:** no Vercel Blob (privado; se o store não aceitar, público com sufixo aleatório) ou no banco quando não há Blob. O endereço nunca vai para o navegador.
+- **Rota:** `GET /pro-labore/assistente/midias/:mensagemId`, com login e no escopo da conversa.
+- **O que não acontece:** conversa pessoal do vendedor continua sem nada guardado, e nada vai para a IA.
+- **Na bolha da conversa:**
+  - o áudio aparece como "Ouvir áudio · 0:07", toca no próprio painel e tem a opção "Baixar";
+  - a foto carrega quando aparece na tela e abre em tamanho real.
+
+## Processo de atendimento (27/10)
+
+- **Aba "Processo" no Assistente**, logo depois de Conversas. É o guia da loja:
+  - links oficiais;
+  - fluxo do atendimento, com etapas e prazo;
+  - respostas prontas por etapa;
+  - regras e combinados.
+- **Quem faz o quê:** o dono edita (pode começar com um modelo de loja de motos); a equipe lê e copia.
+- **Na conversa:** o botão "Respostas do processo", ao lado do Enviar, preenche a mensagem e troca `{cliente}` e `{vendedor}` pelos nomes.
+- **Rotas:** `GET/PUT /pro-labore/processo` (o PUT é só para o dono). Não vai para a IA.
+
+## Ligações auditáveis (27/10)
+
+- **Aba "Ligações" no menu**, em Vendas, com selo de atrasadas e de hoje. Tem três partes:
+  - **Para ligar:** a fila do dia, com atrasadas, hoje e próximos dias.
+  - **Auditoria:** para o dono e o supervisor.
+  - **Cadências:** para o dono.
+- **Cadência:** são passos como "5 min depois", "D+1 às 10h" e "D+3 às 10h", cada um com o que falar.
+  - **Como começa:** sozinha no lead novo (todo lead, só de anúncio ou só do WhatsApp) ou à mão pelo painel do lead.
+  - **Fora do horário:** passo de "minutos depois" que cai fora do horário vai para as 9h seguintes.
+  - **Quando para:**
+    - quando o cliente atende (opcional);
+    - em número errado;
+    - quando o lead fecha ou é perdido.
+- **Ligar:** abre o discador (`tel:`) e registra a hora, quantas vezes e de qual aparelho.
+- **Registrar:** o resultado é obrigatório.
+  - "Atendeu" pede a duração e o que foi falado.
+  - "Pediu retorno" cria a próxima ligação.
+- **Alertas gravados no registro:**
+  - sem discar;
+  - duração maior que o tempo desde a discagem;
+  - "atendeu" menos de 20 s depois de discar;
+  - registros em série (menos de 45 s);
+  - fora do horário (antes das 7h ou depois das 21h);
+  - atraso de mais de 2 h.
+- **Auditoria por pessoa:**
+  - previstas, no prazo, atrasadas, não feitas, atendidas e com alerta;
+  - tempo até ligar e duração média;
+  - a lista "Para conferir".
+- **Onde mais aparece:**
+  - no painel do lead: a próxima ligação, agendar, iniciar cadência e o histórico;
+  - no card: a próxima ligação;
+  - no Meu dia: Ligar e Registrar.
+- **Limite:** prova de que a ligação aconteceu (registro da operadora e gravação) só com uma central telefônica integrada. O sistema prova a discagem pela tela e a coerência do registro.
 
 ## Próximas fases (mesmo pedido)
 

@@ -9,6 +9,7 @@
 // - a conversa nasce ligada ao post de origem (pauta e código), quando há.
 import { Prisma, SmConversa } from '@prisma/client'
 import { prisma } from './prisma'
+import { aplicarCadenciasDoLeadNovo } from './ligacoes'
 import {
   buscarPerfilRemetente, comApiDaEmpresa, enviarMensagemDirect, enviarRespostaPrivada, ErroGraphApi, responderComentario,
 } from './instagramGraph'
@@ -393,6 +394,7 @@ export async function transformarEmLead(conversa: SmConversa, d: { nome: string;
       },
     })
     await tx.leadEstagioHistorico.create({ data: { leadId: l.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
+    await aplicarCadenciasDoLeadNovo(tx, l)
     await tx.smConversa.update({ where: { id: conversa.id }, data: { leadId: l.id, status: 'LEAD' } })
     if (consultor) {
       await tx.smConfig.upsert({ where: { usuarioId: conversa.usuarioId }, create: { usuarioId: conversa.usuarioId, rodizioUltimoVendedorId: consultor.id }, update: { rodizioUltimoVendedorId: consultor.id } })

@@ -25,6 +25,8 @@ const NAV_GROUPS: NavGroup[] = [
   ] },
   { label: 'Vendas', items: [
     { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm' },
+    // Lembretes de ligação (avulsos e cadências) com auditoria; mesmo escopo do CRM.
+    { href: '/pro-labore/ligacoes', label: 'Ligações', icon: 'phone', modulo: 'crm' },
     // Cada pessoa tem o próprio copiloto (o escopo é feito no backend); o dono vê o da equipe.
     { href: '/pro-labore/copiloto', label: 'Copiloto Comercial', icon: 'spark', modulo: 'copiloto' },
     // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o
@@ -110,6 +112,8 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const [avisosSocial, setAvisosSocial] = useState<string[]>([])
   // Follows do CRM atrasados ou marcados para hoje: lembrete no menu.
   const [followsDia, setFollowsDia] = useState({ atrasados: 0, hoje: 0 })
+  // Ligações atrasadas e de hoje: selo no item Ligações.
+  const [ligacoesDia, setLigacoesDia] = useState({ atrasadas: 0, hoje: 0 })
   // Uma chamada só para os selos, e nenhuma enquanto a aba do navegador está
   // escondida (volta a buscar quando a pessoa reabre a aba).
   useEffect(() => {
@@ -122,6 +126,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
         setReunioesAoVivo(b.aoVivo)
         setPedidosReuniao(b.pedidosReuniao)
         if (b.follows) setFollowsDia(b.follows)
+        if (b.ligacoes) setLigacoesDia(b.ligacoes)
         setAvisosSocial(b.avisosSocial)
       }).catch(() => undefined)
     }
@@ -290,6 +295,9 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                     )}
                     {item.href === '/pro-labore/leads' && followsDia.atrasados + followsDia.hoje > 0 && (
                       <span className={`pl-nav-pedidos ${followsDia.atrasados > 0 ? 'pl-nav-follow-atrasado' : ''}`} title={[followsDia.atrasados && `${followsDia.atrasados} follow${followsDia.atrasados > 1 ? 's' : ''} atrasado${followsDia.atrasados > 1 ? 's' : ''}`, followsDia.hoje && `${followsDia.hoje} para hoje`].filter(Boolean).join(' · ')} data-follows-menu>{followsDia.atrasados + followsDia.hoje}</span>
+                    )}
+                    {item.href === '/pro-labore/ligacoes' && ligacoesDia.atrasadas + ligacoesDia.hoje > 0 && (
+                      <span className={`pl-nav-pedidos ${ligacoesDia.atrasadas > 0 ? 'pl-nav-follow-atrasado' : ''}`} title={[ligacoesDia.atrasadas && `${ligacoesDia.atrasadas} atrasada${ligacoesDia.atrasadas > 1 ? 's' : ''}`, ligacoesDia.hoje && `${ligacoesDia.hoje} para hoje`].filter(Boolean).join(' · ')} data-ligacoes-menu>{ligacoesDia.atrasadas + ligacoesDia.hoje}</span>
                     )}
                     {item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 && pedidosReuniao > 0 && (
                       <span className="pl-nav-pedidos" title={`${pedidosReuniao} ${pedidosReuniao === 1 ? 'pedido' : 'pedidos'} da equipe pra apresentar`}>{pedidosReuniao}</span>

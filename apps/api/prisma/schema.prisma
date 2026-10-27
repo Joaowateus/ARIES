@@ -1354,6 +1354,7 @@ model Lead {
   historico           LeadEstagioHistorico[]
   follows             LeadFollow[]
   notas               LeadNota[]
+  ligacoes            LigacaoTarefa[]
   assistenteConversas AssistenteConversa[]
 
   @@index([usuarioId])
@@ -2090,9 +2091,41 @@ model AssistenteMensagem {
   criadoEm   DateTime @default(now())
 
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
+  // Áudio ou foto que veio (ou saiu) pelo WhatsApp, para ouvir e ver na conversa.
+  midia    AssistenteMidia?
 
   @@index([conversaId])
   @@map("pro_labore_assistente_mensagens")
+}
+
+// Áudio e foto das conversas do WhatsApp (recebidos e enviados pelo celular
+// do vendedor), para o dono ouvir e ver o atendimento. Baixado pela
+// Evolution logo que a mensagem chega; se não der, fica PENDENTE e baixa na
+// primeira vez que alguém abrir. Guardado no Vercel Blob (produção) ou no
+// banco (sem Blob configurado). O endereço do arquivo nunca vai para o
+// navegador: a tela recebe o arquivo pela rota com login. Nunca vai para a IA.
+model AssistenteMidia {
+  id           String   @id @default(cuid())
+  mensagemId   String   @unique
+  usuarioId    String
+  tipo         String // AUDIO | IMAGEM
+  mime         String?
+  duracaoSeg   Int?
+  tamanho      Int?
+  status       String   @default("PENDENTE") // PENDENTE | OK | INDISPONIVEL
+  tentativas   Int      @default(0)
+  // Vercel Blob: o endereço e se o blob é privado ou público (sufixo aleatório).
+  blobUrl      String?
+  blobAcesso   String?
+  // Sem Blob configurado: o arquivo fica no próprio banco.
+  dados        Bytes?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  mensagem AssistenteMensagem @relation(fields: [mensagemId], references: [id], onDelete: Cascade)
+
+  @@index([status, criadoEm])
+  @@map("pro_labore_assistente_midias")
 }
 
 // Números que o assistente nunca deve responder: contatos com quem o
@@ -3965,4 +3998,82 @@ model LeadFollow {
   @@index([usuarioId, status, agendadoPara])
   @@index([leadId, status])
   @@map("pro_labore_lead_follows")
+}
+
+// Processo de atendimento da loja (aba "Processo" do Assistente): links das
+// redes, o fluxo padrão passo a passo, respostas prontas e regras. Um por
+// conta; o dono edita, a equipe inteira lê e copia as respostas. Não vai
+// para a IA (é guia para as pessoas).
+model ProcessoAtendimento {
+  id            String   @id @default(cuid())
+  usuarioId     String   @unique
+  // { links: [{rotulo,url}], etapas: [{titulo,descricao,prazo}], respostas: [{titulo,texto,etapa}], regras: [{titulo,texto}] }
+  conteudo      Json
+  atualizadoPor String?
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  @@map("pro_labore_processo_atendimento")
+}
+
+// Cadência de ligações (aba Ligações › Cadências): os passos que viram
+// lembretes de ligação para o vendedor do lead. Aplicada à mão no painel do
+// lead ou sozinha no lead novo (gatilho). O dono cria e edita.
+model CadenciaLigacao {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  nome           String
+  ativa          Boolean  @default(true)
+  // null = só à mão; LEAD_NOVO = todo lead novo; LEAD_ANUNCIO = lead de
+  // anúncio/tráfego pago; LEAD_WHATSAPP = lead que entrou sozinho pelo WhatsApp.
+  gatilho        String?
+  // Atendeu: as próximas ligações desta cadência para o lead são canceladas.
+  pararAoAtender Boolean  @default(true)
+  // [{ aposMinutos: number|null, dia: number, hora: "HH:MM"|null, instrucao: string }]
+  passos         Json
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  @@index([usuarioId, ativa])
+  @@map("pro_labore_cadencias_ligacao")
+}
+
+// Lembrete de ligação para um lead (avulso ou passo de uma cadência), com o
+// que é preciso para auditar: quando tocou em "Ligar" (abre o discador),
+// quantas vezes, quando registrou, o resultado, a duração informada, o
+// resumo e os alertas calculados no registro (ver lib/ligacoes).
+model LigacaoTarefa {
+  id              String    @id @default(cuid())
+  usuarioId       String
+  leadId          String
+  vendedorId      String? // quem deve ligar: o vendedor do lead (null = o dono)
+  cadenciaId      String?
+  passo           Int? // 1, 2, 3… dentro da cadência
+  totalPassos     Int?
+  instrucao       String?
+  agendadaPara    DateTime
+  status          String    @default("PENDENTE") // PENDENTE | FEITA | CANCELADA
+  motivoCancelada String?
+  discadaEm       DateTime? // último toque em "Ligar"
+  discagens       Int       @default(0)
+  dispositivo     String? // CELULAR | COMPUTADOR (de onde tocou em "Ligar")
+  registradaEm    DateTime?
+  registradaPorId String?
+  registradaPor   String?
+  // ATENDEU | NAO_ATENDEU | CAIXA_POSTAL | OCUPADO | NUMERO_ERRADO | PEDIU_RETORNO
+  resultado       String?
+  duracaoSeg      Int?
+  resumo          String?
+  // SEM_DISCAR | DURACAO_INCOERENTE | REGISTRO_RAPIDO | FORA_DO_HORARIO | EM_SERIE | ATRASADA
+  alertas         String[]  @default([])
+  criadoPor       String?
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, status, agendadaPara])
+  @@index([leadId, status])
+  @@index([vendedorId, status, agendadaPara])
+  @@map("pro_labore_ligacoes")
 }
