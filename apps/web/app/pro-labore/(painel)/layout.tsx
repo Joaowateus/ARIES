@@ -10,6 +10,8 @@ import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
 import { AvisoBanco } from './_banco/AvisoBanco'
 import { PaletaComandos } from './_comando/PaletaComandos'
+import { AvisoLigacao } from './_ligacoes/AvisoLigacao'
+import type { LigacaoAgora } from '@/lib/proLaboreApi'
 
 // `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
 // paraEquipe: aparece para toda a equipe mesmo sem o módulo (a página mostra a versão pessoal).
@@ -114,6 +116,10 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const [followsDia, setFollowsDia] = useState({ atrasados: 0, hoje: 0 })
   // Ligações atrasadas e de hoje: selo no item Ligações.
   const [ligacoesDia, setLigacoesDia] = useState({ atrasadas: 0, hoje: 0 })
+  // Ligações da própria pessoa que chegaram na hora: aviso na tela (e no computador).
+  const [ligacoesAgora, setLigacoesAgora] = useState<LigacaoAgora[]>([])
+  // Ligou, registrou ou adiou pelo aviso: busca os selos de novo na hora.
+  const [versaoBarra, setVersaoBarra] = useState(0)
   // Uma chamada só para os selos, e nenhuma enquanto a aba do navegador está
   // escondida (volta a buscar quando a pessoa reabre a aba).
   useEffect(() => {
@@ -126,7 +132,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
         setReunioesAoVivo(b.aoVivo)
         setPedidosReuniao(b.pedidosReuniao)
         if (b.follows) setFollowsDia(b.follows)
-        if (b.ligacoes) setLigacoesDia(b.ligacoes)
+        if (b.ligacoes) { setLigacoesDia({ atrasadas: b.ligacoes.atrasadas, hoje: b.ligacoes.hoje }); setLigacoesAgora(b.ligacoes.agora ?? []) }
         setAvisosSocial(b.avisosSocial)
       }).catch(() => undefined)
     }
@@ -134,7 +140,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     const t = setInterval(buscar, 45_000)
     document.addEventListener('visibilitychange', buscar)
     return () => { cancelado = true; clearInterval(t); document.removeEventListener('visibilitychange', buscar) }
-  }, [usuario])
+  }, [usuario, versaoBarra])
   const [gruposColapsados, setGruposColapsados] = useState<string[]>([])
 
   useEffect(() => {
@@ -327,6 +333,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
 
       {menuAberto && <div className="pl-sidebar-backdrop" onClick={() => setMenuAberto(false)} />}
       <PaletaComandos itens={itensVisiveis.map(({ href, label }) => ({ href, label }))} podeCrm={podeCrm} />
+      <AvisoLigacao itens={ligacoesAgora} onMudou={() => setVersaoBarra(v => v + 1)} />
 
       <div className="pl-main">
         <header className="pl-topbar-v2">

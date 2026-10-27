@@ -17,7 +17,7 @@ const quem = (req: Request) => ({ id: req.proLaboreUser!.vendedorId ?? req.proLa
 const SELECT = {
   id: true, leadId: true, vendedorId: true, cadenciaId: true, passo: true, totalPassos: true, instrucao: true, agendadaPara: true,
   status: true, motivoCancelada: true, discadaEm: true, discagens: true, dispositivo: true, registradaEm: true, registradaPor: true,
-  resultado: true, duracaoSeg: true, resumo: true, alertas: true, criadoPor: true, criadoEm: true,
+  resultado: true, duracaoSeg: true, resumo: true, alertas: true, criadoPor: true, criadoEm: true, adiamentos: true,
 } as const
 const LEAD_RESUMO = { select: { id: true, nomeCliente: true, telefone: true, estagio: true, modeloInteresse: true, vendedor: { select: { id: true, nome: true } } } } as const
 
@@ -155,6 +155,22 @@ router.post('/ligacoes/:id/registrar', requireProLaboreAuth, requireModulo('crm'
   res.json(resultado)
 })
 
+const ADIAMENTOS_ATENCAO = 3
+
+/** "Adiar" do aviso: empurra a ligação X minutos, avisa de novo na nova hora e conta o adiamento (auditoria). */
+router.post('/ligacoes/:id/adiar', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
+  const minutos = z.number().int().min(5).max(240).safeParse(req.body?.minutos)
+  if (!minutos.success) { res.status(400).json({ error: 'Adie de 5 a 240 minutos' }); return }
+  const l = await ligacaoDoPedido(req, res)
+  if (!l) return
+  if (l.status !== 'PENDENTE') { res.status(409).json({ error: 'Esta ligação já foi encerrada.' }); return }
+  res.json(await prisma.ligacaoTarefa.update({
+    where: { id: l.id },
+    data: { agendadaPara: new Date(Date.now() + minutos.data * 60e3), avisadaEm: null, relembradaEm: null, adiamentos: { increment: 1 } },
+    select: SELECT,
+  }))
+})
+
 router.post('/ligacoes/:id/cancelar', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const motivo = z.string().trim().min(3, 'Diga o motivo').max(300).safeParse(req.body?.motivo)
   if (!motivo.success) { res.status(400).json({ error: motivo.error.issues[0].message }); return }
@@ -197,8 +213,8 @@ router.get('/ligacoes/auditoria', requireProLaboreAuth, requireModulo('crm', 'VE
   const media = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null)
   const resumo = [...porPessoa.values()].map(({ minutosAteLigar, duracoes, ...p }) => ({ ...p, minutosAteLigar: media(minutosAteLigar), duracaoMediaSeg: media(duracoes) }))
     .sort((a, b) => b.previstas - a.previstas)
-  // Para olhar de perto: com alerta (fora o atraso sozinho) ou vencidas sem registro.
-  const atencao = lista.filter(l => (l.status === 'FEITA' && l.alertas.some(a => a !== 'ATRASADA')) || (l.status === 'PENDENTE' && venceu(l.agendadaPara))).slice(0, 200)
+  // Para olhar de perto: com alerta (fora o atraso sozinho), vencidas sem registro ou adiadas 3 vezes ou mais.
+  const atencao = lista.filter(l => (l.status === 'FEITA' && l.alertas.some(a => a !== 'ATRASADA')) || (l.status === 'PENDENTE' && venceu(l.agendadaPara)) || l.adiamentos >= ADIAMENTOS_ATENCAO).slice(0, 200)
   const recentes = lista.filter(l => l.status === 'FEITA').slice(0, 200)
   const nomes = await nomesDasCadencias(req.proLaboreUser!.sub, lista.map(l => l.cadenciaId))
   res.json({ dias, resumo, atencao: comCadencia(atencao, nomes), recentes: comCadencia(recentes, nomes) })

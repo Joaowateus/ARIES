@@ -484,6 +484,7 @@ export const proLaboreApi = {
     discar: (id: string) => request<Ligacao>(`/pro-labore/ligacoes/${id}/discar`, { method: 'POST' }),
     registrar: (id: string, data: RegistroLigacao) => request<{ feita: Ligacao; proxima: Ligacao | null }>(`/pro-labore/ligacoes/${id}/registrar`, { method: 'POST', body: JSON.stringify(data) }),
     cancelar: (id: string, motivo: string) => request<Ligacao>(`/pro-labore/ligacoes/${id}/cancelar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
+    adiar: (id: string, minutos: number) => request<Ligacao>(`/pro-labore/ligacoes/${id}/adiar`, { method: 'POST', body: JSON.stringify({ minutos }) }),
     auditoria: (dias: number, vendedorId?: string) => request<AuditoriaLigacoes>(`/pro-labore/ligacoes/auditoria?dias=${dias}${vendedorId ? `&vendedorId=${vendedorId}` : ''}`),
     cadencias: {
       listar: () => request<CadenciaLigacao[]>('/pro-labore/ligacoes/cadencias'),
@@ -878,7 +879,7 @@ export const proLaboreApi = {
   },
   // Copiloto Comercial: `pessoa` só vale para o dono (EQUIPE ou um vendedor).
   // Selos do menu lateral numa chamada só (ao vivo, pedidos, follows do dia, avisos do Instagram).
-  barraLateral: () => request<{ aoVivo: number; pedidosReuniao: number; follows: { atrasados: number; hoje: number } | null; ligacoes: { atrasadas: number; hoje: number } | null; avisosSocial: string[] }>('/pro-labore/barra-lateral'),
+  barraLateral: () => request<{ aoVivo: number; pedidosReuniao: number; follows: { atrasados: number; hoje: number } | null; ligacoes: { atrasadas: number; hoje: number; agora: LigacaoAgora[] } | null; avisosSocial: string[] }>('/pro-labore/barra-lateral'),
   // Aries no WhatsApp: o número do agente (gestor) e o vínculo de cada pessoa.
   agente: {
     painel: () => request<AgentePainel>('/pro-labore/agente'),
@@ -3292,8 +3293,10 @@ export interface Ligacao {
   status: 'PENDENTE' | 'FEITA' | 'CANCELADA'; motivoCancelada: string | null
   discadaEm: string | null; discagens: number; dispositivo: 'CELULAR' | 'COMPUTADOR' | null
   registradaEm: string | null; registradaPor: string | null; resultado: ResultadoLigacao | null; duracaoSeg: number | null; resumo: string | null
-  alertas: AlertaLigacao[]; criadoPor: string | null; criadoEm: string
+  alertas: AlertaLigacao[]; criadoPor: string | null; criadoEm: string; adiamentos: number
 }
+// Ligação da própria pessoa que chegou na hora (aviso na tela, pela barra lateral).
+export interface LigacaoAgora { id: string; agendadaPara: string; passo: number | null; totalPassos: number | null; instrucao: string | null; discadaEm: string | null; discagens: number; status: 'PENDENTE'; lead: { id: string; nomeCliente: string; telefone: string | null } }
 export interface LigacaoComLead extends Ligacao { lead: { id: string; nomeCliente: string; telefone: string | null; estagio: EstagioLead; modeloInteresse: string | null; vendedor: { id: string; nome: string } | null } }
 export interface PassoCadencia { aposMinutos: number | null; dia: number; hora: string | null; instrucao: string }
 export interface CadenciaLigacao { id: string; nome: string; ativa: boolean; gatilho: GatilhoCadencia | null; pararAoAtender: boolean; passos: PassoCadencia[]; criadoEm: string; atualizadoEm: string }

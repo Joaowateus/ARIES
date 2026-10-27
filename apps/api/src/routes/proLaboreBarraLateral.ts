@@ -19,7 +19,9 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
   const agora = Date.now()
   const hoje = new Date(Math.floor((agora - OFFSET_BR) / DIA) * DIA + OFFSET_BR), amanha = new Date(hoje.getTime() + DIA)
   const lead = veCrm ? leadWhereBase(req) : null
-  const [aoVivo, pedidosReuniao, atrasados, deHoje, avisos, ligAtrasadas, ligHoje] = await Promise.all([
+  // Ligações da própria pessoa (o dono: as dos leads sem vendedor) que já chegaram na hora: aviso na tela.
+  const minhas = lead ? { status: 'PENDENTE', vendedorId: dono ? null : u.vendedorId ?? '-', agendadaPara: { lte: new Date(agora + 60e3), gte: new Date(agora - 12 * 3600e3) }, lead } : null
+  const [aoVivo, pedidosReuniao, atrasados, deHoje, avisos, ligAtrasadas, ligHoje, ligAgora] = await Promise.all([
     prisma.apresentacao.count({ where: { usuarioId: u.sub, aoVivo: true, aprovacao: 'APROVADA', apresentadorSinalEm: { gte: new Date(agora - SINAL_APRESENTADOR_MS) } } }),
     dono ? prisma.apresentacao.count({ where: { usuarioId: u.sub, aprovacao: 'PENDENTE' } }) : 0,
     lead ? prisma.leadFollow.count({ where: { status: 'PENDENTE', agendadoPara: { lt: hoje }, lead } }) : 0,
@@ -28,8 +30,12 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
     // Ligações: já passou da hora / ainda hoje.
     lead ? prisma.ligacaoTarefa.count({ where: { status: 'PENDENTE', agendadaPara: { lt: new Date(agora) }, lead } }) : 0,
     lead ? prisma.ligacaoTarefa.count({ where: { status: 'PENDENTE', agendadaPara: { gte: new Date(agora), lt: amanha }, lead } }) : 0,
+    minhas ? prisma.ligacaoTarefa.findMany({
+      where: minhas, orderBy: { agendadaPara: 'asc' }, take: 5,
+      select: { id: true, agendadaPara: true, passo: true, totalPassos: true, instrucao: true, discadaEm: true, discagens: true, status: true, lead: { select: { id: true, nomeCliente: true, telefone: true } } },
+    }) : [],
   ])
-  res.json({ aoVivo, pedidosReuniao, follows: lead ? { atrasados, hoje: deHoje } : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje } : null, avisosSocial: avisos.map(a => a.titulo) })
+  res.json({ aoVivo, pedidosReuniao, follows: lead ? { atrasados, hoje: deHoje } : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje, agora: ligAgora } : null, avisosSocial: avisos.map(a => a.titulo) })
 })
 
 export default router

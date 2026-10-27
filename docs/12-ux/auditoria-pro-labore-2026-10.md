@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.4.0
+version: 1.5.0
 status: ativo
 ---
 
@@ -174,6 +174,29 @@ Pedido: um espaço para anotar o que acontece na negociação com o lead, visív
   - no card: a próxima ligação;
   - no Meu dia: Ligar e Registrar.
 - **Limite:** prova de que a ligação aconteceu (registro da operadora e gravação) só com uma central telefônica integrada. O sistema prova a discagem pela tela e a coerência do registro.
+
+## Aviso de ligação (27/10)
+
+A ligação automática pelo WhatsApp do vendedor não é possível pela Evolution (ela não faz chamadas de voz). No lugar, o sistema avisa quem vai ligar, para não esquecer.
+
+- **Pelo WhatsApp, na hora marcada** (até 5 min antes):
+  - o dono recebe pelo Aries, quando conversa com ele e deixou os avisos ligados;
+  - o vendedor recebe no Aries (se tiver vínculo) ou no chat "Você" do assistente dele;
+  - a mensagem traz o lead, a hora, o passo da cadência, o telefone, o que falar e o link para registrar;
+  - as ligações da mesma pessoa vão juntas numa mensagem só.
+- **Lembrete:** 30 min depois, se a ligação continuar sem registro. Vai uma vez só.
+- **Quando não avisa:**
+  - antes das 7h ou depois das 21h (Brasília);
+  - ligação marcada há mais de 3 h (lembrete: mais de 6 h), para não chegar uma enxurrada de antigas.
+- **Atraso em produção:** o job roda a cada 15 min, então a mensagem pode chegar até ~15 min depois da hora. O aviso na tela não depende do job.
+- **Na tela, em qualquer aba** (canto inferior direito), quando chega a hora:
+  - Ligar, Registrar, Adiar 15 min e fechar (volta em 10 min);
+  - depois de tocar em Ligar, o aviso pede o registro.
+- **No computador:** com a permissão do navegador ("Avisar também no computador"), aparece uma notificação do sistema, uma vez por ligação, mesmo com outra aba aberta.
+- **Adiar:**
+  - empurra a ligação, avisa de novo na nova hora e conta o adiamento;
+  - a auditoria mostra "adiou Nx";
+  - 3 adiamentos ou mais levam a ligação para "Para conferir".
 
 ## Próximas fases (mesmo pedido)
 
