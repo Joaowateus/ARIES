@@ -3998,3 +3998,19 @@ model LeadFollow {
   @@index([leadId, status])
   @@map("pro_labore_lead_follows")
 }
+
+// Processo de atendimento da loja (aba "Processo" do Assistente): links das
+// redes, o fluxo padrão passo a passo, respostas prontas e regras. Um por
+// conta; o dono edita, a equipe inteira lê e copia as respostas. Não vai
+// para a IA (é guia para as pessoas).
+model ProcessoAtendimento {
+  id            String   @id @default(cuid())
+  usuarioId     String   @unique
+  // { links: [{rotulo,url}], etapas: [{titulo,descricao,prazo}], respostas: [{titulo,texto,etapa}], regras: [{titulo,texto}] }
+  conteudo      Json
+  atualizadoPor String?
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  @@map("pro_labore_processo_atendimento")
+}

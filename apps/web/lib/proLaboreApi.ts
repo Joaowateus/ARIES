@@ -473,6 +473,11 @@ async function requestArquivo(path: string): Promise<Blob> {
 }
 
 export const proLaboreApi = {
+  // Processo de atendimento: a equipe lê, o dono edita.
+  processo: {
+    ler: () => request<ProcessoAtendimento>('/pro-labore/processo'),
+    salvar: (conteudo: ConteudoProcesso) => request<ProcessoAtendimento>('/pro-labore/processo', { method: 'PUT', body: JSON.stringify({ conteudo }) }),
+  },
   // Áudio e foto das conversas do WhatsApp (escopo da conversa).
   midiasConversa: {
     arquivo: (mensagemId: string) => requestArquivo(`/pro-labore/assistente/midias/${mensagemId}`),
@@ -1695,6 +1700,14 @@ export interface CapturaWhatsappCrm {
   ultimaVarreduraEm: string | null
   vendedores: { id: string; nome: string; proprio: boolean; conectado: boolean; cadastroAutomatico: boolean }[]
 }
+
+// Processo de atendimento da loja (aba "Processo" do Assistente).
+export interface LinkProcesso { rotulo: string; url: string }
+export interface EtapaProcesso { titulo: string; descricao: string; prazo: string }
+export interface RespostaProcesso { titulo: string; texto: string; etapa: string }
+export interface RegraProcesso { titulo: string; texto: string }
+export interface ConteudoProcesso { links: LinkProcesso[]; etapas: EtapaProcesso[]; respostas: RespostaProcesso[]; regras: RegraProcesso[] }
+export interface ProcessoAtendimento { conteudo: ConteudoProcesso; atualizadoEm: string | null; atualizadoPor: string | null; podeEditar: boolean }
 
 export interface ConfigAssistenteResposta {
   assistente: AssistenteComercial | null

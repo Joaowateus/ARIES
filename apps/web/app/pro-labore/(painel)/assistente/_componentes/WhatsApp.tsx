@@ -14,12 +14,15 @@ import { Conhecimento } from './Conhecimento'
 import { Vitrine } from './Vitrine'
 import { Follow } from './Follow'
 import { Simulacao } from './Simulacao'
+import { Processo } from './Processo'
 import { nomeProprio } from './util'
 
-type Aba = 'visao' | 'conversas' | 'conhecimento' | 'estoque' | 'simulacao' | 'follow' | 'roteiro'
+type Aba = 'visao' | 'conversas' | 'processo' | 'conhecimento' | 'estoque' | 'simulacao' | 'follow' | 'roteiro'
 const ABAS: Array<{ valor: Aba; rotulo: string }> = [
   { valor: 'visao', rotulo: 'Desempenho' },
   { valor: 'conversas', rotulo: 'Conversas' },
+  // O guia de atendimento da loja (links, fluxo, respostas prontas, regras).
+  { valor: 'processo', rotulo: 'Processo' },
   { valor: 'conhecimento', rotulo: 'Conhecimento' },
   { valor: 'estoque', rotulo: 'Estoque' },
   { valor: 'simulacao', rotulo: 'Simulação' },
@@ -199,6 +202,8 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
               onMudou={atualizar}
             />
           )}
+
+          {aba === 'processo' && <Processo />}
 
           {aba === 'conhecimento' && <Conhecimento />}
 

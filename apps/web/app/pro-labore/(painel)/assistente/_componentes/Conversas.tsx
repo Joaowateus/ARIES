@@ -10,6 +10,7 @@ import { BotaoSimular } from './SimularFinanciamento'
 import { BlocoPreAnalise } from './PreAnalise'
 import { EtiquetasLead } from './jornada'
 import { MidiaMensagem, ehRotuloDeMidia } from './MidiaMensagem'
+import { RespostasDoProcesso } from './Processo'
 
 const ATUALIZAR_MS = 8000
 
@@ -330,7 +331,10 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, co
                   onChange={e => { setTexto(e.target.value); if (!e.target.value.trim()) setConhecimentoId(undefined) }}
                   onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar() } }}
                 />
-                <button type="submit" className="pl-btn pl-btn-primary" disabled={!conectado || enviando || !texto.trim()}>{enviando ? 'Enviando…' : 'Enviar'}</button>
+                <div className="pl-as-composer-acoes">
+                  {conversa.tipo === 'LEAD' && <RespostasDoProcesso nomeCliente={conversa.nomeContato} nomeVendedor={nomeVendedor} desativado={!conectado || enviando} onUsar={t => { setTexto(t); setConhecimentoId(undefined) }} />}
+                  <button type="submit" className="pl-btn pl-btn-primary" disabled={!conectado || enviando || !texto.trim()}>{enviando ? 'Enviando…' : 'Enviar'}</button>
+                </div>
               </form>
             )}
           </>
