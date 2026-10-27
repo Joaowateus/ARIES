@@ -25,19 +25,25 @@ const DIA = 864e5
 export const diaBR = (d: Date) => new Date(d.getTime() - 3 * 3600e3).toISOString().slice(0, 10)
 const hora = (d: Date) => d.toLocaleTimeString('pt-BR', { timeZone: FUSO, hour: '2-digit', minute: '2-digit' })
 
-/** Situação do follow para o selo do card: atrasado, hoje ou futuro. */
-export function situacaoFollow(f: Pick<FollowLead, 'agendadoPara'>, agora = new Date()): { tipo: 'ATRASADO' | 'HOJE' | 'FUTURO'; texto: string } {
+/** Situação do follow para o selo do card: atrasado, hoje ou futuro. A nova análise de crédito tem o nome dela. */
+export function situacaoFollow(f: Pick<FollowLead, 'agendadoPara' | 'tipo'>, agora = new Date()): { tipo: 'ATRASADO' | 'HOJE' | 'FUTURO'; texto: string } {
+  const nome = f.tipo === 'CREDITO' ? 'Nova análise' : 'Follow'
   const d = new Date(f.agendadoPara)
   const hoje = diaBR(agora), dia = diaBR(d)
   if (dia < hoje) {
     const dias = Math.round((Date.parse(hoje) - Date.parse(dia)) / DIA)
-    return { tipo: 'ATRASADO', texto: `Follow atrasado ${dias} ${dias === 1 ? 'dia' : 'dias'}` }
+    return { tipo: 'ATRASADO', texto: `${nome} atrasad${f.tipo === 'CREDITO' ? 'a' : 'o'} ${dias} ${dias === 1 ? 'dia' : 'dias'}` }
   }
-  if (dia === hoje) return { tipo: d < agora ? 'ATRASADO' : 'HOJE', texto: `Follow hoje ${hora(d)}` }
+  if (dia === hoje) return { tipo: d < agora ? 'ATRASADO' : 'HOJE', texto: `${nome} hoje ${hora(d)}` }
   const amanha = diaBR(new Date(agora.getTime() + DIA))
-  if (dia === amanha) return { tipo: 'FUTURO', texto: `Follow amanhã ${hora(d)}` }
-  return { tipo: 'FUTURO', texto: `Follow ${d.toLocaleDateString('pt-BR', { timeZone: FUSO, weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '')} ${hora(d)}` }
+  if (dia === amanha) return { tipo: 'FUTURO', texto: `${nome} amanhã ${hora(d)}` }
+  return { tipo: 'FUTURO', texto: `${nome} ${d.toLocaleDateString('pt-BR', { timeZone: FUSO, weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '')} ${hora(d)}` }
 }
+
+/** Primeiro nome para as mensagens prontas ({nome}). */
+export const primeiroNome = (nome: string) => { const p = nome.trim().split(/\s+/)[0] ?? ''; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : '' }
+/** wa.me com a mensagem já escrita (quando não dá para mandar pelo sistema). */
+export const linkWhatsappComTexto = (telefone: string | null | undefined, texto: string) => { const l = linkWhatsapp(telefone); return l ? `${l}?text=${encodeURIComponent(texto)}` : null }
 
 /** Data e hora em Brasília a partir de "AAAA-MM-DD" e "HH:mm" (vai como ISO com -03:00). */
 export const isoBR = (dia: string, hhmm: string) => `${dia}T${hhmm}:00-03:00`

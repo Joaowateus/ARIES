@@ -73,3 +73,11 @@
 .rv-trilha span { color: var(--pl-ink-muted); }
 .rv-edicao { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 10px; }
 .rv-reativar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--pl-border); padding-top: 10px; }
+
+/* Mensagem pelo WhatsApp e nova análise de crédito */
+.fw-mensagem { display: flex; flex-direction: column; gap: 10px; }
+.fw-prontas { display: flex; flex-direction: column; gap: 6px; }
+.fw-credito { display: flex; flex-direction: column; gap: 10px; }
+.fw-credito-resumo { margin: 0; font-size: 13px; color: var(--pl-ink-2); line-height: 1.5; }
+.fw-credito-passos { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; color: var(--pl-ink-2); line-height: 1.5; }
+.fw-credito-passos b { color: var(--pl-ink-1); }

@@ -137,9 +137,10 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeE
 
         <section className="pl-pn-bloco">
           <h3>Follow</h3>
-          {sit ? (
-            <button type="button" className={`fw-selo ${sit.tipo.toLowerCase()}`} onClick={onFollow}>{sit.texto}{follow?.nota ? ` · ${follow.nota}` : ''}</button>
-          ) : <p className="pl-hint">Nenhum follow agendado.</p>}
+          {sit ? (lead.follows ?? []).map(f => {
+            const s = situacaoFollow(f)
+            return <button key={f.id} type="button" className={`fw-selo ${s.tipo.toLowerCase()}`} onClick={onFollow} data-selo-follow={f.tipo ?? 'CONTATO'}>{s.texto}{f.tipo !== 'CREDITO' && f.nota ? ` · ${f.nota}` : ''}</button>
+          }) : <p className="pl-hint">Nenhum follow agendado.</p>}
         </section>
 
         {conversa && (

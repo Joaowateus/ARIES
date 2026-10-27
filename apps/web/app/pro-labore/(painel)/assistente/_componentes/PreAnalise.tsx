@@ -11,6 +11,8 @@ import { fmtReais, lerReais } from './util'
 const STATUS: Record<StatusAnaliseCredito, string> = { A_ENVIAR: 'A enviar', EM_ANALISE: 'Em análise', APROVADA: 'Aprovada', RECUSADA: 'Recusada' }
 const mascarar = (cpf: string) => `***.${cpf.slice(4, 7)}.${cpf.slice(8, 11)}-**`
 const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const diaHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' às')
+const PRAZOS = [15, 30, 45, 60]
 
 // Na lateral da conversa: o andamento por banco e o botão que abre a ficha.
 export function BlocoPreAnalise({ conversaId, versao, conectado, onMudou }: { conversaId: string; versao: string; conectado: boolean; onMudou: () => void }) {
@@ -37,6 +39,7 @@ export function BlocoPreAnalise({ conversaId, versao, conectado, onMudou }: { co
           {credito.analises.map(a => <li key={a.banco} className={a.status.toLowerCase()}><span>{a.banco}</span><b>{STATUS[a.status]}</b></li>)}
         </ul>
       )}
+      {credito.novaAnalise && <div className="pl-hint" style={{ fontSize: 12, marginTop: 4 }} data-nova-analise-lateral>🔁 Nova análise em {diaHora(credito.novaAnalise.agendadoPara)}</div>}
       <button type="button" className="pl-vt-link" style={{ marginTop: 6 }} onClick={() => setAberto(true)} data-abrir-pre-analise>{credito.ficha ? 'Abrir ficha e respostas' : 'Registrar ficha'}</button>
       {aberto && <ModalPreAnalise conversaId={conversaId} credito={credito} conectado={conectado} onAtualizar={atualizar} onFechar={() => setAberto(false)} />}
     </div>
@@ -97,10 +100,44 @@ function ModalPreAnalise({ conversaId, credito, conectado, onAtualizar, onFechar
                 onEnviar={() => rodar(() => proLaboreApi.assistente.enviarAprovacao(conversaId, a.banco))}
               />
             ))}
+            {credito.semAprovacao && <NovaAnalise conversaId={conversaId} credito={credito} ocupado={ocupado} rodar={rodar} />}
           </>
         )}
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }} data-erro-pre-analise>{erro}</div>}
         <div className="pl-vt-rodape"><button type="button" className="pl-btn pl-btn-ghost" onClick={onFechar} disabled={ocupado}>Fechar</button></div>
+      </div>
+    </div>
+  )
+}
+
+// Nenhum banco aprovou: a nova análise do vendedor (follow de crédito) e a
+// nova consulta, que só sai com a autorização renovada do cliente.
+function NovaAnalise({ conversaId, credito, ocupado, rodar }: { conversaId: string; credito: CreditoConversa; ocupado: boolean; rodar: (fn: () => Promise<CreditoConversa>) => void }) {
+  const [remarcar, setRemarcar] = useState(false)
+  const [autorizou, setAutorizou] = useState(false)
+  const marcada = credito.novaAnalise
+  return (
+    <div className="pa-nova" data-nova-analise>
+      <div className="pl-as-subtitulo">Nenhum banco aprovou</div>
+      {!credito.temLead ? <p className="pl-hint">Crie o lead no CRM para marcar a nova análise.</p> : marcada && !remarcar ? (
+        <div className="pa-nova-linha">
+          <span>🔁 Nova análise marcada para <b data-nova-analise-data>{diaHora(marcada.agendadoPara)}</b>. Você recebe o aviso no WhatsApp no dia.</span>
+          <span className="pa-nova-acoes">
+            <button type="button" className="pl-vt-link" onClick={() => setRemarcar(true)} disabled={ocupado}>Remarcar</button>
+            <button type="button" className="pl-vt-link" onClick={() => rodar(() => proLaboreApi.assistente.cancelarNovaAnalise(conversaId))} disabled={ocupado} data-cancelar-nova-analise>Cancelar</button>
+          </span>
+        </div>
+      ) : (
+        <div className="pa-nova-linha">
+          <span>Marcar uma nova análise para ver se a restrição continua, daqui a:</span>
+          <span className="pa-nova-acoes">
+            {PRAZOS.map(d => <button key={d} type="button" className="pl-chip" disabled={ocupado} onClick={() => { setRemarcar(false); rodar(() => proLaboreApi.assistente.novaAnalise(conversaId, d)) }} data-marcar-nova-analise={d}>{d} dias</button>)}
+          </span>
+        </div>
+      )}
+      <div className="pa-nova-reabrir">
+        <label className="pl-si-autorizou"><input type="checkbox" checked={autorizou} onChange={e => setAutorizou(e.target.checked)} data-autorizou-nova /> O cliente autorizou uma nova consulta agora</label>
+        <button type="button" className="pl-btn pl-btn-ghost" disabled={ocupado || !autorizou} onClick={() => rodar(() => proLaboreApi.assistente.reabrirCredito(conversaId))} data-reabrir-pre-analise>Reabrir a pré-análise</button>
       </div>
     </div>
   )

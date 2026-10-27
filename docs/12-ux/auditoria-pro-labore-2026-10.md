@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.5.0
+version: 1.6.0
 status: ativo
 ---
 
@@ -197,6 +197,45 @@ A ligação automática pelo WhatsApp do vendedor não é possível pela Evoluti
   - empurra a ligação, avisa de novo na nova hora e conta o adiamento;
   - a auditoria mostra "adiou Nx";
   - 3 adiamentos ou mais levam a ligação para "Para conferir".
+
+## Follow por fluxos e crédito recusado (27/10)
+
+**Fluxos automáticos por situação** (Assistente › Follow). Cada fluxo tem até 5 passos e liga e desliga sozinho:
+
+| Fluxo | Quando entra | Dias de cada passo | Padrão |
+|---|---|---|---|
+| Parou de responder | Sumiu depois da resposta do vendedor, sem simulação | 1 a 30 | ligado |
+| Depois da simulação | Recebeu a simulação (do robô ou do vendedor) e sumiu | 1 a 30, contando da simulação | ligado, avisa o vendedor no fim |
+| Depois da aprovação | Recebeu a pré-análise aprovada e sumiu | 1 a 30, contando do envio | ligado, avisa o vendedor no fim |
+| Resgate de perdido | Lead perdido (fora "comprou em outro lugar", "desistiu" e "sem crédito") | 3 a 180, contando da perda | desligado |
+
+- **Fluxo fixo:** o fluxo é escolhido no 1º passo e fica até o cliente responder. Respondeu, recomeça pelo ponto de agora. A sequência antiga em andamento continua no fluxo geral.
+- **Mídia por passo:** só texto, foto ou vídeo da moto de interesse (aba Estoque), ou imagem própria. A imagem própria é enviada pela tela e reduzida no navegador, e a mensagem vai como legenda.
+- **Links das redes:** o editor tem "Inserir" com {nome}, {moto}, {vendedor} e os links da aba Processo. O link entra como palavra solta, para o WhatsApp deixar clicável.
+- **Fim do fluxo:** opcional, "criar follow para o vendedor ligar". Dispara 2 dias depois do último passo sem resposta, só se o lead não tiver outro follow pendente.
+- **Taxa de resposta:** por fluxo, nos últimos 30 dias. Conta como resposta o cliente escrever em até 3 dias depois da mensagem, e mostra quantos passaram para o vendedor.
+- **Regras que continuam:** só conversa já assumida, 1 mensagem por dia por lead, teto por número, segunda a sábado no horário. Para quando o cliente pede.
+
+**Crédito recusado** (follow do vendedor, nunca mensagem automática):
+- **Quando cria:** quando nenhum banco aprovou (pelo menos uma recusa, nenhuma aprovada, nenhuma em análise). O follow "Nova análise" é marcado para daqui a 30 dias, às 10h (configurável de 7 a 120 dias, ou só à mão).
+- **Quando cancela:** se algum banco aprova, ou se a venda fecha. O follow cancelado pelo vendedor não volta sozinho para a mesma recusa.
+- **Na ficha da conversa:** marcar, remarcar ou cancelar (15, 30, 45 ou 60 dias).
+- **No dia:**
+  - aviso no WhatsApp do vendedor (Aries ou chat "Você"), com o link que abre o follow no CRM;
+  - aparece no card ("Nova análise…"), no Meu dia e no menu.
+- **No follow:**
+  1. Chamar o cliente, com a mensagem pronta da config ou "Abrir no WhatsApp".
+  2. Com a autorização nova do cliente, reabrir a pré-análise: as recusas voltam para "a enviar" (a recusa anterior fica na observação) e a nova autorização fica na ficha.
+- **Privacidade:**
+  - o nome dos bancos fica no contexto do follow, fora da nota que o Aries e os resumos leem;
+  - o aviso no WhatsApp não cita banco nem restrição;
+  - nada disso vai para a IA.
+- **Convive com o follow comum:** agendar um follow comum não cancela a nova análise.
+
+**Mensagem pelo WhatsApp em qualquer follow:**
+- "Mandar mensagem" sai pelo WhatsApp do vendedor (conversa do sistema), com as respostas prontas da aba Processo.
+- Já dá o follow como feito e pode agendar o próximo.
+- Sem conversa no sistema, abre o WhatsApp com o texto pronto.
 
 ## Próximas fases (mesmo pedido)
 

@@ -32,8 +32,8 @@ function texto(itens: Item[], tipo: 'AVISO' | 'LEMBRETE', nomesCadencia: Map<str
   return [cab, '', ...linhas, '', link ? `Depois da ligação, registre o resultado: ${link}` : 'Depois da ligação, registre o resultado no sistema, em Ligações.'].join('\n')
 }
 
-/** Por quem o aviso sai: Aries (vínculo com avisos ligados) ou o chat "Você" do assistente do vendedor. */
-async function enviar(usuarioId: string, vendedorId: string | null, mensagem: string): Promise<boolean> {
+/** Por quem o aviso sai: Aries (vínculo com avisos ligados) ou o chat "Você" do assistente do vendedor. Também usado pelo follow de crédito. */
+export async function avisarNoWhatsapp(usuarioId: string, vendedorId: string | null, mensagem: string): Promise<boolean> {
   const pessoa = vendedorId ?? 'DONO'
   const v = await prisma.agenteVinculo.findFirst({
     where: { pessoa, alertas: true, verificadoEm: { not: null }, numero: { not: null }, agente: { usuarioId, status: 'CONECTADO' } },
@@ -78,7 +78,7 @@ export async function avisarLigacoes(agora = new Date()): Promise<{ avisosLigaca
       const marcados = await prisma.ligacaoTarefa.updateMany({ where: { id: { in: itens.map(i => i.id) }, [campo]: null }, data: { [campo]: agora } })
       if (!marcados.count) continue
       try {
-        if (await enviar(itens[0].usuarioId, itens[0].vendedorId, texto(itens, tipo, nomes, link))) enviados++
+        if (await avisarNoWhatsapp(itens[0].usuarioId, itens[0].vendedorId, texto(itens, tipo, nomes, link))) enviados++
       } catch (e) {
         logger.warn({ err: e, tipo }, 'ligações: falha ao avisar pelo WhatsApp')
       }

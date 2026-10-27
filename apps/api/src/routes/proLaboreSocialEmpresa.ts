@@ -16,6 +16,7 @@ import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { avisarLigacoes } from '../lib/ligacoesAviso'
+import { avisarFollowsCredito } from '../lib/followCredito'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import {
   ErroGraphApi,
@@ -365,7 +366,7 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   // Assistente Comercial: follow automático (só quando a loja ligou; horário e teto conferidos lá dentro).
   // Follow automático e a varredura dos leads cujo aviso do WhatsApp se perdeu, em paralelo.
   const [follow, varredura] = await Promise.all([
-    rodarFollows(agoraDoCron(req), 8000).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0 } }),
+    rodarFollows(agoraDoCron(req), 8000).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0, followsParaVendedor: 0 } }),
     varrerConversasRecentes(agoraDoCron(req), 6000).catch(e => { console.error('[assistente] varredura', e); return { varreduras: 0, mensagensVarridas: 0 } }),
   ])
   // Assistente pessoal: avisa o vendedor de lead esperando resposta (pelo Aries, quando vinculado).
@@ -374,7 +375,9 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const agente = await rodarAgente(agoraDoCron(req), 5000).catch(e => { console.error('[agente] manhã', e); return { manhaAgente: 0 } })
   // Ligações: aviso na hora e lembrete 30 min depois para quem liga (Aries ou chat "Você").
   const ligacoes = await avisarLigacoes(agoraDoCron(req)).catch(e => { console.error('[ligacoes] aviso', e); return { avisosLigacao: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente, ...ligacoes })
+  // Follow de crédito recusado: avisa o vendedor no dia da nova análise.
+  const credito = await avisarFollowsCredito(agoraDoCron(req)).catch(e => { console.error('[follow] crédito', e); return { avisosCredito: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente, ...ligacoes, ...credito })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

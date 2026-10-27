@@ -594,6 +594,12 @@ export const proLaboreApi = {
     agendar: (leadId: string, data: NovoFollow) => request<FollowLead>(`/pro-labore/leads/${leadId}/follows`, { method: 'POST', body: JSON.stringify(data) }),
     encerrar: (id: string, data: { status: 'FEITO' | 'CANCELADO'; resultado?: string; proximo?: NovoFollow }) =>
       request<{ feito: FollowLead; proximo: FollowLead | null }>(`/pro-labore/follows/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    // Mandar a mensagem do follow pelo WhatsApp do vendedor (conversa do sistema) e a mensagem sugerida.
+    whatsapp: (id: string) => request<WhatsappDoFollow>(`/pro-labore/follows/${id}/whatsapp`),
+    enviarWhatsapp: (id: string, data: { texto: string; proximo?: NovoFollow }) =>
+      request<{ feito: FollowLead; proximo: FollowLead | null }>(`/pro-labore/follows/${id}/whatsapp`, { method: 'POST', body: JSON.stringify(data) }),
+    // Nova análise de crédito: o cliente autorizou a nova consulta.
+    reabrirCredito: (id: string) => request<{ conversaId: string; vendedorId: string }>(`/pro-labore/follows/${id}/credito/reabrir`, { method: 'POST', body: JSON.stringify({ autorizado: true }) }),
   },
   // Notas da negociação do lead (painel do card). Só o autor e o dono editam.
   notasLead: {
@@ -813,6 +819,9 @@ export const proLaboreApi = {
     salvarFicha: (id: string, data: { cpf: string; nascimento?: string | null; autorizado: true }) =>
       request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'PUT', body: JSON.stringify(data) }),
     apagarFicha: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'DELETE' }),
+    novaAnalise: (id: string, dias: number) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/nova-analise`, { method: 'POST', body: JSON.stringify({ dias }) }),
+    cancelarNovaAnalise: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/nova-analise`, { method: 'DELETE' }),
+    reabrirCredito: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/reabrir`, { method: 'POST', body: JSON.stringify({ autorizado: true }) }),
     salvarAnalise: (id: string, banco: string, data: { status: StatusAnaliseCredito; entrada?: number | null; prazo?: number | null; parcela?: number | null; taxa?: number | null; observacao?: string | null }) =>
       request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/analises/${encodeURIComponent(banco)}`, { method: 'PUT', body: JSON.stringify(data) }),
     enviarAprovacao: (id: string, banco: string) =>
@@ -1817,6 +1826,11 @@ export interface CreditoConversa {
     texto: string
   } | null
   analises: AnaliseCreditoBanco[]
+  // Nenhum banco aprovou (pelo menos uma recusa, nenhuma em análise).
+  semAprovacao: boolean
+  temLead?: boolean
+  // Nova análise marcada para o vendedor (follow de crédito).
+  novaAnalise: { id: string; agendadoPara: string; criadoPor: string | null } | null
 }
 export interface ResumoCredito {
   dias: number
@@ -1881,10 +1895,13 @@ export interface MotoVitrine {
 }
 export interface ConfigVitrine { mostrarPreco: boolean; vitrineRobo: boolean }
 export interface PreferenciasLojaAssistente extends ConfigVitrine { avancoAutomatico: boolean; podeEditar: boolean }
-export type MidiaFollow = 'NENHUMA' | 'FOTO_MOTO' | 'VIDEO_MOTO'
-export interface PassoFollow { dias: number; texto: string; midia: MidiaFollow }
-export interface ConfigFollow { passos: PassoFollow[]; tetoDiario: number; horaInicio: number; horaFim: number }
-export interface ItemFilaFollow { conversaId: string; nome: string; vendedor: string; passo: number; total: number; devidoEm: string; texto: string; foto: string | null }
+export type SituacaoFollow = 'SEM_RESPOSTA' | 'APOS_SIMULACAO' | 'APOS_APROVACAO' | 'REATIVACAO'
+export type MidiaFollow = 'NENHUMA' | 'FOTO_MOTO' | 'VIDEO_MOTO' | 'IMAGEM'
+// imagem: a foto própria do passo (/pro-labore/imagens/<chave>), quando midia = IMAGEM.
+export interface PassoFollow { dias: number; texto: string; midia: MidiaFollow; imagem: string | null }
+export interface FluxoFollow { situacao: SituacaoFollow; ativo: boolean; passos: PassoFollow[]; aoFinal: 'NADA' | 'AVISAR_VENDEDOR' }
+export interface ConfigFollow { fluxos: FluxoFollow[]; tetoDiario: number; horaInicio: number; horaFim: number; credito: { ativo: boolean; dias: number; texto: string } }
+export interface ItemFilaFollow { conversaId: string; nome: string; vendedor: string; fluxo: SituacaoFollow; passo: number; total: number; devidoEm: string; texto: string; foto: string | null }
 export interface DadosFollow {
   ativo: boolean
   config: ConfigFollow
@@ -1892,7 +1909,9 @@ export interface DadosFollow {
   noHorario: boolean
   enviadosHoje: number
   fila: ItemFilaFollow[]
-  ultimos: Array<{ id: string; texto: string; midiaUrl: string | null; criadoEm: string; conversa: { id: string; nomeContato: string } }>
+  ultimos: Array<{ id: string; texto: string; midiaUrl: string | null; criadoEm: string; followFluxo: SituacaoFollow | null; conversa: { id: string; nomeContato: string } }>
+  // Últimos 30 dias: respondeu = o cliente escreveu em até 3 dias depois da mensagem.
+  desempenho: { dias: number; paraVendedor: number; fluxos: Array<{ fluxo: SituacaoFollow; enviados: number; responderam: number }> }
 }
 export interface DadosVitrine { motos: MotoVitrine[]; config: ConfigVitrine; podeEditar: boolean }
 export type MotoVitrineEntrada = Partial<Pick<MotoVitrine, 'marca' | 'ano' | 'cor' | 'situacao' | 'versao' | 'km' | 'cilindrada' | 'preco' | 'destaques' | 'ficha' | 'fotos' | 'videoUrl'>> & { modelo?: string }
@@ -3281,7 +3300,10 @@ export interface SaudeBanco { usadoMB: number; limiteMB: number; alertaMB: numbe
 export type CanalFollow = 'WHATSAPP' | 'LIGACAO' | 'VISITA' | 'EMAIL' | 'OUTRO'
 export type MotivoPerda = 'SEM_MOMENTO' | 'SEM_CREDITO' | 'PRECO' | 'SEM_RESPOSTA' | 'CONCORRENCIA' | 'SEM_ESTOQUE' | 'DESISTIU' | 'OUTRO'
 export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE'
-export interface FollowLead { id: string; agendadoPara: string; canal: CanalFollow | null; nota: string | null; status?: 'PENDENTE' | 'FEITO' | 'CANCELADO'; feitoEm?: string | null; resultado?: string | null; criadoPor?: string | null; criadoEm?: string }
+// CREDITO = nova análise de crédito do vendedor (depois da recusa); convive com o follow comum.
+export interface FollowLead { id: string; agendadoPara: string; canal: CanalFollow | null; nota: string | null; tipo?: 'CONTATO' | 'CREDITO'; contexto?: { conversaId: string; bancos: string[]; recusadoEm: string } | null; status?: 'PENDENTE' | 'FEITO' | 'CANCELADO'; feitoEm?: string | null; resultado?: string | null; criadoPor?: string | null; criadoEm?: string }
+// Por onde mandar a mensagem do follow: a conversa no WhatsApp do sistema (ou o motivo de não dar) e o texto sugerido.
+export interface WhatsappDoFollow { conversaId: string | null; vendedorId: string | null; motivo: string | null; telefone: string | null; sugestao: string }
 export interface NovoFollow { agendadoPara: string; canal?: CanalFollow; nota?: string }
 // Ligações auditáveis (lembretes por lead, cadências e auditoria).
 export type ResultadoLigacao = 'ATENDEU' | 'NAO_ATENDEU' | 'CAIXA_POSTAL' | 'OCUPADO' | 'NUMERO_ERRADO' | 'PEDIU_RETORNO'

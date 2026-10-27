@@ -171,16 +171,16 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
           <span className="md-hora">{e.atrasado ? new Date(`${diaBR(new Date(f.agendadoPara))}T12:00:00Z`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }) : e.horario}</span>
           <span className="md-icone" aria-hidden="true">↻</span>
           <div className="md-corpo">
-            <div className="md-titulo">Follow: {f.lead.nomeCliente}</div>
+            <div className="md-titulo">{f.tipo === 'CREDITO' ? 'Nova análise de crédito' : 'Follow'}: {f.lead.nomeCliente}</div>
             <div className="md-meta">
-              <span className="md-tag follow">{f.canal ? CANAL[f.canal] ?? f.canal : 'Follow'}</span>
+              <span className="md-tag follow">{f.tipo === 'CREDITO' ? 'Crédito' : f.canal ? CANAL[f.canal] ?? f.canal : 'Follow'}</span>
               <span>{[ETAPA[f.lead.estagio] ?? f.lead.estagio, f.lead.modeloInteresse, vejaEquipe ? f.lead.vendedor?.nome : null].filter(Boolean).join(' · ')}</span>
-              {f.nota && <span className="md-nota">“{f.nota}”</span>}
+              {f.tipo === 'CREDITO' ? <span className="md-nota">Chamar o cliente e, com a autorização dele, refazer a pré-análise</span> : f.nota && <span className="md-nota">“{f.nota}”</span>}
             </div>
           </div>
           <div className="md-acoes">
-            <a className="pl-btn pl-btn-ghost" href={`/pro-labore/leads?lead=${f.lead.id}`}>Abrir lead</a>
-            <button type="button" className="md-link" onClick={() => followFeito(f)}>Feito</button>
+            <a className="pl-btn pl-btn-ghost" href={`/pro-labore/leads?lead=${f.lead.id}&follow=${f.id}`} data-abrir-follow>{f.tipo === 'CREDITO' ? 'Abrir' : 'Abrir lead'}</a>
+            {f.tipo !== 'CREDITO' && <button type="button" className="md-link" onClick={() => followFeito(f)}>Feito</button>}
           </div>
         </li>
       )
