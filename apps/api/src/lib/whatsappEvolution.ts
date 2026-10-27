@@ -195,6 +195,20 @@ export async function enviarImagem(instancia: string, destino: string, imagem: {
   return r?.key?.id ?? null
 }
 
+// Arquivo de um áudio/foto que passou pela instância (recebido ou enviado
+// pelo celular), pelo ID da mensagem no WhatsApp. O servidor busca a mídia
+// no WhatsApp e devolve em base64; com o tempo o WhatsApp apaga o arquivo e
+// aí não tem mais como baixar (null).
+export async function baixarMidiaDaMensagem(instancia: string, providerId: string): Promise<{ mime: string; dados: Buffer } | null> {
+  const r = await chamar<{ base64?: string; mimetype?: string } | null>('POST', `/chat/getBase64FromMediaMessage/${encodeURIComponent(instancia)}`, {
+    message: { key: { id: providerId } }, convertToMp4: false,
+  })
+  const base64 = (r?.base64 ?? '').replace(/^data:[^;]+;base64,/, '')
+  if (!base64) return null
+  const dados = Buffer.from(base64, 'base64')
+  return dados.length ? { mime: (r?.mimetype ?? 'application/octet-stream').split(';')[0].trim(), dados } : null
+}
+
 // Quantas mensagens o servidor tem guardadas com esse contato (limitado a
 // uma página pequena — só interessa saber se existe conversa anterior).
 export async function contarMensagensComContato(instancia: string, jid: string): Promise<number> {

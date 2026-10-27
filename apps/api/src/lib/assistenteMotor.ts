@@ -24,6 +24,7 @@ import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
 import { conversasRecentes, enviarImagem, enviarTexto, historicoDoContato, mensagensDoContato, perfilInstancia } from './whatsappEvolution'
 import { DadosDoCliente, lerDadosDoCliente, mascararDadosPessoais, nomeFraco, nomeProprio, resumoDosDados, temIntencaoDeCompra } from './assistenteCaptura'
 import { lerImagem } from './armazenamento'
+import { MidiaRecebida, registrarMidias } from './assistenteMidia'
 import { origemPorCodigo } from './smAtribuicao'
 import {
   ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, MidiaPasso, PassoRoteiro, TEXTO_MENU,
@@ -61,6 +62,8 @@ export interface MensagemWhatsapp {
   tituloAnuncio: string | null
   // Endereço "@lid" sem o telefone ao lado: `numero` é só um identificador.
   semTelefone: boolean
+  // Áudio ou foto: o arquivo é baixado depois (ver assistenteMidia).
+  midia: { tipo: MidiaRecebida['tipo']; mime: string | null; segundos: number | null } | null
 }
 
 export function soDigitos(v: string | null | undefined): string {
@@ -86,6 +89,16 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : nul
 const MIDIA_ROTULO: Record<string, string> = {
   audioMessage: '[áudio]', imageMessage: '[imagem]', videoMessage: '[vídeo]', documentMessage: '[documento]',
   stickerMessage: '[figurinha]', locationMessage: '[localização]', contactMessage: '[contato]', ptvMessage: '[vídeo]',
+}
+
+// Áudio de voz e foto viram arquivo para ouvir/ver na conversa (vídeo,
+// documento e figurinha ficam só com o rótulo).
+function midiaDaMensagem(message: Obj): MensagemWhatsapp['midia'] {
+  const audio = obj(message.audioMessage), imagem = obj(message.imageMessage)
+  const segundos = Number(audio.seconds)
+  if (message.audioMessage) return { tipo: 'AUDIO', mime: str(audio.mimetype)?.split(';')[0].trim() ?? null, segundos: Number.isFinite(segundos) && segundos > 0 ? segundos : null }
+  if (message.imageMessage) return { tipo: 'IMAGEM', mime: str(imagem.mimetype), segundos: null }
+  return null
 }
 
 function extrairTexto(message: Obj): { texto: string; ehTexto: boolean } {
@@ -159,6 +172,7 @@ export function lerMensagens(dadosBrutos: unknown): MensagemWhatsapp[] {
       veioDeAnuncio: veioDeAnuncio(contextos),
       tituloAnuncio: tituloDoAnuncio(contextos),
       semTelefone: jidTelefone.endsWith('@lid'),
+      midia: midiaDaMensagem(message),
     })
   }
   return saida
@@ -181,13 +195,17 @@ export async function processarWebhookAssistente(segredo: string, corpo: unknown
   }
   if (evento !== 'messages.upsert') return 200
 
+  const midias: MidiaRecebida[] = []
   for (const m of lerMensagens(c.data)) {
     try {
       await tratarMensagem(assistente, m)
+      if (m.midia && m.id) midias.push({ providerId: m.id, ...m.midia })
     } catch (e) {
       logger.error({ err: e, assistenteId: assistente.id }, 'assistente: falha ao processar mensagem')
     }
   }
+  // Áudios e fotos das mensagens gravadas: baixa já (com prazo) para ouvir/ver na conversa.
+  if (midias.length) await registrarMidias(assistente.vendedor.usuarioId, midias).catch(e => logger.warn({ err: e }, 'assistente: falha ao registrar mídia'))
   await prisma.assistenteComercial.update({ where: { id: assistente.id }, data: { ultimoEventoEm: new Date() } })
   return 200
 }

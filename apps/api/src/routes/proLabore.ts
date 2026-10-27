@@ -3131,7 +3131,8 @@ router.get('/assistente/conversas/:id', requireProLaboreAuth, requireModulo('ass
   const completa = await prisma.assistenteConversa.findUnique({
     where: { id: conversa.id },
     include: {
-      mensagens: { orderBy: { criadoEm: 'asc' } },
+      // Áudio/foto da mensagem (o arquivo vem por GET /assistente/midias/:mensagemId).
+      mensagens: { orderBy: { criadoEm: 'asc' }, include: { midia: { select: { tipo: true, status: true, duracaoSeg: true } } } },
       lead: { select: { id: true, nomeCliente: true, estagio: true, etiquetas: true } },
     },
   })

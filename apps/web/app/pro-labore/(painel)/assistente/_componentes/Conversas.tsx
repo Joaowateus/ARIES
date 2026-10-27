@@ -9,6 +9,7 @@ import { BotaoEnviarMoto } from './EnviarMoto'
 import { BotaoSimular } from './SimularFinanciamento'
 import { BlocoPreAnalise } from './PreAnalise'
 import { EtiquetasLead } from './jornada'
+import { MidiaMensagem, ehRotuloDeMidia } from './MidiaMensagem'
 
 const ATUALIZAR_MS = 8000
 
@@ -243,7 +244,8 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, co
                         {m.remetente !== 'CONTATO' && conversa.tipo === 'LEAD' && <span className="pl-as-bolha-autor">{m.remetente === 'ASSISTENTE' ? (m.origem === 'FOLLOW' ? 'Follow automático' : 'Assistente') : nomeVendedor}</span>}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         {m.midiaUrl && <img className="pl-as-bolha-foto" src={urlArquivoApi(m.midiaUrl)} alt="Foto enviada" loading="lazy" />}
-                        {!(m.midiaUrl && m.texto === '[imagem]') && <div className="pl-as-bolha-texto"><TextoWhats texto={m.texto} /></div>}
+                        {m.midia && <MidiaMensagem mensagemId={m.id} midia={m.midia} />}
+                        {!((m.midiaUrl || m.midia) && ehRotuloDeMidia(m.texto)) && <div className="pl-as-bolha-texto"><TextoWhats texto={m.texto} /></div>}
                         <span className="pl-as-bolha-hora">{horaCurta(m.criadoEm)}</span>
                       </div>
                     </div>

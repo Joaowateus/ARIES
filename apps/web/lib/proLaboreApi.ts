@@ -458,7 +458,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return body as T
 }
 
+// Arquivo (áudio, foto) que exige login: volta como Blob; erro vem em JSON como no request.
+async function requestArquivo(path: string): Promise<Blob> {
+  const token = getToken()
+  const res = await fetch(`${BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!res.ok) {
+    let body: { error?: string } | null = null
+    try { body = await res.json() } catch { /* sem corpo JSON */ }
+    const erro = new Error(body?.error ?? `Erro inesperado (${res.status})`) as ErroApi
+    erro.status = res.status
+    throw erro
+  }
+  return res.blob()
+}
+
 export const proLaboreApi = {
+  // Áudio e foto das conversas do WhatsApp (escopo da conversa).
+  midiasConversa: {
+    arquivo: (mensagemId: string) => requestArquivo(`/pro-labore/assistente/midias/${mensagemId}`),
+  },
   auth: {
     status: () => request<{ existeUsuario: boolean }>('/pro-labore/auth/status'),
     setup: (data: { nome: string; email: string; senha: string }) =>
@@ -1696,6 +1714,9 @@ export interface AssistenteMensagem {
   midiaUrl?: string | null
   // FOLLOW = mensagem do follow automático.
   origem?: 'FOLLOW' | null
+  // Áudio ou foto do WhatsApp (recebido ou enviado pelo celular): o arquivo
+  // vem por proLaboreApi.midiasConversa.arquivo(id), com login.
+  midia?: { tipo: 'AUDIO' | 'IMAGEM'; status: 'PENDENTE' | 'OK' | 'INDISPONIVEL'; duracaoSeg: number | null } | null
   criadoEm: string
 }
 

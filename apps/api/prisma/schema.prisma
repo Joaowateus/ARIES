@@ -2090,9 +2090,41 @@ model AssistenteMensagem {
   criadoEm   DateTime @default(now())
 
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
+  // Áudio ou foto que veio (ou saiu) pelo WhatsApp, para ouvir e ver na conversa.
+  midia    AssistenteMidia?
 
   @@index([conversaId])
   @@map("pro_labore_assistente_mensagens")
+}
+
+// Áudio e foto das conversas do WhatsApp (recebidos e enviados pelo celular
+// do vendedor), para o dono ouvir e ver o atendimento. Baixado pela
+// Evolution logo que a mensagem chega; se não der, fica PENDENTE e baixa na
+// primeira vez que alguém abrir. Guardado no Vercel Blob (produção) ou no
+// banco (sem Blob configurado). O endereço do arquivo nunca vai para o
+// navegador: a tela recebe o arquivo pela rota com login. Nunca vai para a IA.
+model AssistenteMidia {
+  id           String   @id @default(cuid())
+  mensagemId   String   @unique
+  usuarioId    String
+  tipo         String // AUDIO | IMAGEM
+  mime         String?
+  duracaoSeg   Int?
+  tamanho      Int?
+  status       String   @default("PENDENTE") // PENDENTE | OK | INDISPONIVEL
+  tentativas   Int      @default(0)
+  // Vercel Blob: o endereço e se o blob é privado ou público (sufixo aleatório).
+  blobUrl      String?
+  blobAcesso   String?
+  // Sem Blob configurado: o arquivo fica no próprio banco.
+  dados        Bytes?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  mensagem AssistenteMensagem @relation(fields: [mensagemId], references: [id], onDelete: Cascade)
+
+  @@index([status, criadoEm])
+  @@map("pro_labore_assistente_midias")
 }
 
 // Números que o assistente nunca deve responder: contatos com quem o
