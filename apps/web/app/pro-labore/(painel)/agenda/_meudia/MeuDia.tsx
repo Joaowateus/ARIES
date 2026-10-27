@@ -179,7 +179,7 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
             </div>
           </div>
           <div className="md-acoes">
-            <a className="pl-btn pl-btn-ghost" href={`/pro-labore/leads?lead=${f.lead.id}&follow=${f.id}`} data-abrir-follow>{f.tipo === 'CREDITO' ? 'Abrir' : 'Abrir lead'}</a>
+            <a className="pl-btn pl-btn-ghost" href={f.tipo === 'CREDITO' ? `/pro-labore/leads?lead=${f.lead.id}&follow=${f.id}` : `/pro-labore/leads?lead=${f.lead.id}`} data-abrir-follow>{f.tipo === 'CREDITO' ? 'Abrir' : 'Abrir lead'}</a>
             {f.tipo !== 'CREDITO' && <button type="button" className="md-link" onClick={() => followFeito(f)}>Feito</button>}
           </div>
         </li>
