@@ -791,6 +791,8 @@ const LEAD_INCLUDE = {
   historico: { select: { estagioNovo: true, criadoEm: true, origem: true, motivo: true }, orderBy: { criadoEm: 'asc' } },
   // O próximo follow pendente (botão Follow do card).
   follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 1, select: { id: true, agendadoPara: true, canal: true, nota: true } },
+  // Quantas notas da negociação o lead tem (selo no card; o texto abre no painel).
+  _count: { select: { notas: true } },
 } as const
 
 

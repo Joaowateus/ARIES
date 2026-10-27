@@ -172,6 +172,8 @@ export default function ProLaboreLeadsPage() {
   // qualquer lead), mas "Converter"/arrastar pra Fechamentos continua
   // exclusivo do dono — essas ações continuam em `isDono` estrito.
   const vejaEquipe = isDono || isSupervisor
+  // Só ver o CRM: o painel mostra as notas, sem o campo de escrever (a API também barra).
+  const podeEditarCrm = isDono || (usuario?.acessos?.crm ?? 'EDITAR') === 'EDITAR'
 
   const [leads, setLeads] = useState<Lead[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -260,7 +262,11 @@ export default function ProLaboreLeadsPage() {
   const [densidade, setDensidadeEstado] = useState<Densidade>(() => {
     try { return typeof window !== 'undefined' && localStorage.getItem('pl_crm_densidade') === 'detalhado' ? 'detalhado' : 'compacto' } catch { return 'compacto' }
   })
-  const fecharPainel = useCallback(() => setPainelId(null), [])
+  // Aberto pelo botão "Notas" do card: o painel já leva para o campo da nota.
+  const [focoNota, setFocoNota] = useState(false)
+  const fecharPainel = useCallback(() => { setPainelId(null); setFocoNota(false) }, [])
+  const abrirNotas = (id: string) => { setPainelId(id); setFocoNota(true) }
+  const contarNotas = (id: string, n: number) => setLeads(ls => ls.map(l => (l.id === id ? { ...l, _count: { ...l._count, notas: n } } : l)))
   // Os atalhos da paleta (?lead=, ?novo=, ?foraDoCrm=) já foram lidos ao montar:
   // limpa o endereço para recarregar a página não abrir tudo de novo.
   useEffect(() => {
@@ -1023,6 +1029,7 @@ export default function ProLaboreLeadsPage() {
                         dragging={draggingId === lead.id}
                         onPointerDown={e => onPointerDownCard(e, lead)}
                         onAbrir={() => setPainelId(lead.id)}
+                        onNotas={() => abrirNotas(lead.id)}
                         onMudarEstagio={estagio => mudarEstagio(lead, estagio)}
                         onConverter={() => abrirConversao(lead)}
                         onEditar={() => abrirEdicao(lead)}
@@ -1048,6 +1055,9 @@ export default function ProLaboreLeadsPage() {
           colunas={COLUNAS}
           isDono={isDono}
           vejaEquipe={vejaEquipe}
+          focarNota={focoNota}
+          podeEscrever={podeEditarCrm}
+          onContagemNotas={n => contarNotas(painelLead.id, n)}
           onFechar={fecharPainel}
           onMover={estagio => { if (estagio === 'FECHADO') abrirConversao(painelLead); else mudarEstagio(painelLead, estagio) }}
           onConverter={() => abrirConversao(painelLead)}
@@ -1269,7 +1279,7 @@ function avancoAutomaticoRecente(lead: Lead) {
 // lead, que abre com um clique no card. No modo "detalhado" o card mostra
 // também o telefone e mais etiquetas.
 function KanbanCard({
-  lead, estagio, isDono, vejaEquipe, densidade, destaque, dragging, onPointerDown, onAbrir, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
+  lead, estagio, isDono, vejaEquipe, densidade, destaque, dragging, onPointerDown, onAbrir, onNotas, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
 }: {
   lead: Lead
   estagio: EstagioLead
@@ -1281,6 +1291,7 @@ function KanbanCard({
   dragging: boolean
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
   onAbrir: () => void
+  onNotas: () => void
   onMudarEstagio: (estagio: EstagioLead) => void
   onConverter: () => void
   onEditar: () => void
@@ -1311,6 +1322,7 @@ function KanbanCard({
   const etiquetas = lead.etiquetas?.filter(e => e !== 'QUENTE') ?? []
   const detalhado = densidade === 'detalhado'
   const linha2 = lead.modeloInteresse || (lead.telefone ? telefoneBonito(lead.telefone) : null)
+  const notas = lead._count?.notas ?? 0
 
   return (
     <div
@@ -1349,6 +1361,11 @@ function KanbanCard({
           </span>
         )}
         {!lead.vendaId && etiquetas.length > 0 && <EtiquetasLead etiquetas={etiquetas} max={detalhado ? 4 : 2} primeiro={destaque} />}
+        {notas > 0 && (
+          <span className="pl-kc-notas" title={`${notas} nota${notas > 1 ? 's' : ''} da negociação`} data-notas-card={notas}>
+            <IconeNota />{notas}
+          </span>
+        )}
       </div>
       {(sitFollow || lead.vendaId || lead.tipoNegociacao || avancoAuto) && (
         <div className="pl-kc-rodape">
@@ -1378,6 +1395,9 @@ function KanbanCard({
           <button type="button" className="pl-kc-btn" onClick={onFollow} title={proximoFollow ? 'Ver o follow' : 'Agendar follow'} aria-label={proximoFollow ? 'Ver o follow' : 'Agendar follow'} data-acao="follow">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
           </button>
+          <button type="button" className="pl-kc-btn" onClick={onNotas} title="Notas da negociação" aria-label="Notas da negociação" data-acao="notas">
+            <IconeNota />
+          </button>
           <MenuDoCard
             estagioAtual={estagio} isDono={isDono} tipoNegociacao={lead.tipoNegociacao ?? null}
             onAbrir={onAbrir} onMover={moverParaEtapa} onConverter={onConverter} onEditar={onEditar} onPerdido={onPerdido} onRemover={onRemover} onDefinirTipoNegociacao={onDefinirTipoNegociacao}
@@ -1386,6 +1406,11 @@ function KanbanCard({
       )}
     </div>
   )
+}
+
+// Notas da negociação (selo e botão do card).
+function IconeNota() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /><path d="M8 13h8M8 17h5" /></svg>
 }
 
 // Origem do lead em ícone (o nome completo fica no title).

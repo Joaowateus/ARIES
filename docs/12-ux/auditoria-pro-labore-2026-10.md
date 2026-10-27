@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.2.0
+version: 1.3.0
 status: ativo
 ---
 
@@ -95,6 +95,27 @@ A primeira versão do Visual 2027 trazia degradê violeta → azul, vidro, brilh
 - **Celular:**
   - o menu vira gaveta, com o tema e a pessoa logada no rodapé;
   - a busca vira a lupa no topo.
+
+## CRM — notas da negociação (27/10)
+
+Pedido: um espaço para anotar o que acontece na negociação com o lead, visível ao clicar no card.
+
+- **No painel do lead** (abre no clique do card), logo abaixo dos dados, fica a seção **Notas da negociação**:
+  - um campo para escrever (Ctrl + Enter salva) e a lista com a nota mais nova em cima;
+  - cada nota mostra quem escreveu e quando, e aparece "editada" se mudou depois.
+- **No card:**
+  - um selo com o ícone de nota mostra quantas notas o lead tem;
+  - o botão de nota, na barra de ações que aparece ao passar o mouse, abre o painel com o campo já em foco.
+- **Quem pode o quê:**
+  - quem enxerga o lead lê todas as notas, e o vendedor só enxerga os próprios leads;
+  - só quem escreveu a nota, ou o dono, edita ou apaga;
+  - quem só pode ver o CRM não vê o campo de escrever.
+- **Observação do cadastro:** continua separada, com esse nome. É o campo do cadastro, que a captura do WhatsApp já preenche sozinha.
+- **IA:** as notas não vão para nenhuma IA, porque podem ter valores e dados que o cliente contou.
+- **Dados técnicos:**
+  - modelo `LeadNota`, que é apagado junto com o lead;
+  - rotas `GET/POST /pro-labore/leads/:id/notas` e `PATCH/DELETE /pro-labore/leads/notas/:id`;
+  - a contagem vem no `GET /leads` (`_count.notas`).
 
 ## Próximas fases (mesmo pedido)
 

@@ -301,6 +301,8 @@ export interface Lead {
   temperatura?: Temperatura | null
   reativadoEm?: string | null
   reativacoes?: number
+  // Quantas notas da negociação o lead tem (selo no card).
+  _count?: { notas: number }
 }
 
 export interface Venda {
@@ -549,6 +551,13 @@ export const proLaboreApi = {
     agendar: (leadId: string, data: NovoFollow) => request<FollowLead>(`/pro-labore/leads/${leadId}/follows`, { method: 'POST', body: JSON.stringify(data) }),
     encerrar: (id: string, data: { status: 'FEITO' | 'CANCELADO'; resultado?: string; proximo?: NovoFollow }) =>
       request<{ feito: FollowLead; proximo: FollowLead | null }>(`/pro-labore/follows/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  // Notas da negociação do lead (painel do card). Só o autor e o dono editam.
+  notasLead: {
+    doLead: (leadId: string) => request<NotaLead[]>(`/pro-labore/leads/${leadId}/notas`),
+    criar: (leadId: string, texto: string) => request<NotaLead>(`/pro-labore/leads/${leadId}/notas`, { method: 'POST', body: JSON.stringify({ texto }) }),
+    editar: (id: string, texto: string) => request<NotaLead>(`/pro-labore/leads/notas/${id}`, { method: 'PATCH', body: JSON.stringify({ texto }) }),
+    remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/leads/notas/${id}`, { method: 'DELETE' }),
   },
   // Perdidos fora do funil: motivo, temperatura, follows e reativação.
   reativacao: {
@@ -3220,6 +3229,7 @@ export type MotivoPerda = 'SEM_MOMENTO' | 'SEM_CREDITO' | 'PRECO' | 'SEM_RESPOST
 export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE'
 export interface FollowLead { id: string; agendadoPara: string; canal: CanalFollow | null; nota: string | null; status?: 'PENDENTE' | 'FEITO' | 'CANCELADO'; feitoEm?: string | null; resultado?: string | null; criadoPor?: string | null; criadoEm?: string }
 export interface NovoFollow { agendadoPara: string; canal?: CanalFollow; nota?: string }
+export interface NotaLead { id: string; texto: string; autorId: string; autorNome: string | null; criadoEm: string; atualizadoEm: string; podeEditar: boolean }
 export interface FollowComLead extends FollowLead { lead: { id: string; nomeCliente: string; telefone: string | null; estagio: EstagioLead; modeloInteresse: string | null; vendedor: { id: string; nome: string } | null } }
 export interface LeadPerdido extends Omit<Lead, 'historico'> {
   historico: Array<{ estagioAnterior: EstagioLead | null; estagioNovo: EstagioLead; criadoEm: string }>

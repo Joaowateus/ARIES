@@ -3685,6 +3685,23 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-pn-hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .pl-pn-hist li { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; color: var(--pl-ink-1); padding-left: 12px; border-left: 2px solid var(--pl-border); }
 .pl-pn-hist li span { font-size: 11.5px; color: var(--pl-ink-muted); }
+/* Notas da negociação: campo de escrever em cima, a mais nova primeiro. */
+.pl-pn-nota-nova { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.pl-pn-nota-nova textarea, .pl-pn-notas-lista textarea { resize: vertical; min-height: 72px; font-family: inherit; line-height: 1.45; }
+.pl-pn-nota-barra { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pl-pn-nota-barra .pl-btn { padding: 6px 12px; font-size: 13px; }
+.pl-pn-notas-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pl-pn-notas-lista li { padding: 10px 12px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); background: var(--pl-surface-2); }
+.pl-pn-nota-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.pl-pn-nota-cab b { font-size: 12.5px; font-weight: 600; color: var(--pl-ink-1); }
+.pl-pn-nota-cab span { font-size: 11.5px; color: var(--pl-ink-muted); white-space: nowrap; }
+.pl-pn-notas-lista p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--pl-ink-1); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pl-pn-nota-acoes { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.pl-pn-nota-acoes .pl-btn { padding: 5px 11px; font-size: 12.5px; }
+.pl-pn-nota-acoes .pl-link-action { font-size: 12px; background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+/* Card: quantas notas o lead tem. */
+.pl-kc-notas { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--pl-ink-2); }
+.pl-kc-notas svg { width: 12px; height: 12px; }
 .pl-pn-rodape { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--pl-border); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 @media (max-width: 520px) {
   .pl-pn { padding: 16px; }
