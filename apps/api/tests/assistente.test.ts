@@ -237,14 +237,57 @@ test('avanço: só para frente, uma etapa, e respeita o desfazer', () => {
 })
 
 // ---------- Follow automático ----------
-import { FOLLOW_PADRAO, baseDoFollow, dentroDoHorario, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido } from '../src/lib/assistenteFollow'
+import { FOLLOW_PADRAO, baseDoFollow, dentroDoHorario, escolherFluxo, fimDoFluxo, fluxoDa, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido, situacaoDoFollow } from '../src/lib/assistenteFollow'
 
 test('config do follow: padrão, ordem crescente e limites', () => {
   assert.deepEqual(lerConfigFollow(null), FOLLOW_PADRAO)
+  // config antiga (uma cadência só) vira o fluxo "Parou de responder"
   const c = lerConfigFollow({ passos: [{ dias: 7, texto: 'c', midia: 'X' }, { dias: 1, texto: 'a', midia: 'FOTO_MOTO' }, { dias: 1, texto: 'repetido', midia: 'NENHUMA' }], tetoDiario: 500, horaInicio: 9, horaFim: 8 })
-  assert.deepEqual(c.passos.map(p => [p.dias, p.texto, p.midia]), [[1, 'a', 'FOTO_MOTO'], [7, 'c', 'NENHUMA']])
+  assert.deepEqual(fluxoDa(c, 'SEM_RESPOSTA').passos.map(p => [p.dias, p.texto, p.midia]), [[1, 'a', 'FOTO_MOTO'], [7, 'c', 'NENHUMA']])
+  assert.deepEqual(fluxoDa(c, 'APOS_SIMULACAO').passos, fluxoDa(FOLLOW_PADRAO, 'APOS_SIMULACAO').passos, 'os outros fluxos vêm do padrão')
+  assert.ok(c.fluxos.filter(f => f.situacao !== 'SEM_RESPOSTA').every(f => !f.ativo), 'na config antiga os fluxos novos começam desligados (o dono revisa antes)')
   assert.equal(c.tetoDiario, 100)
   assert.ok(c.horaFim > c.horaInicio)
+  assert.deepEqual(c.credito, FOLLOW_PADRAO.credito)
+})
+
+test('fluxos do follow: imagem própria, limites de dias e crédito', () => {
+  const img = '/pro-labore/imagens/abcdefghijklmnopqrstuvwx'
+  const c = lerConfigFollow({
+    fluxos: [
+      { situacao: 'REATIVACAO', ativo: true, aoFinal: 'X', passos: [{ dias: 400, texto: 'volta', midia: 'IMAGEM', imagem: img }, { dias: 1, texto: 'cedo', midia: 'IMAGEM', imagem: 'http://fora.com/x.png' }] },
+      { situacao: 'APOS_APROVACAO', ativo: false, aoFinal: 'NADA', passos: [] },
+    ],
+    credito: { ativo: false, dias: 2, texto: '  ' },
+  })
+  const r = fluxoDa(c, 'REATIVACAO')
+  assert.deepEqual(r.passos.map(p => [p.dias, p.midia, p.imagem]), [[3, 'NENHUMA', null], [180, 'IMAGEM', img]], 'imagem de fora vira só texto; resgate vai de 3 a 180 dias')
+  assert.equal(r.ativo, true)
+  assert.equal(r.aoFinal, 'NADA')
+  assert.equal(fluxoDa(c, 'APOS_APROVACAO').ativo, false)
+  assert.deepEqual(fluxoDa(c, 'APOS_APROVACAO').passos, fluxoDa(FOLLOW_PADRAO, 'APOS_APROVACAO').passos, 'fluxo sem passos fica com os do padrão')
+  assert.deepEqual(c.credito, { ativo: false, dias: 7, texto: FOLLOW_PADRAO.credito.texto })
+})
+
+test('fluxo do follow: pelo ponto em que o cliente sumiu, fixo até ele responder', () => {
+  assert.equal(situacaoDoFollow({ aprovacaoEnviadaEm: null, temSimulacao: false }), 'SEM_RESPOSTA')
+  assert.equal(situacaoDoFollow({ aprovacaoEnviadaEm: null, temSimulacao: true }), 'APOS_SIMULACAO')
+  assert.equal(situacaoDoFollow({ aprovacaoEnviadaEm: new Date(), temSimulacao: true }), 'APOS_APROVACAO')
+  const cfg = FOLLOW_PADRAO
+  assert.equal(escolherFluxo(cfg, { situacao: 'APOS_SIMULACAO', fluxoAtual: null, passo: 0 })?.situacao, 'APOS_SIMULACAO', 'começa pelo ponto de agora')
+  assert.equal(escolherFluxo(cfg, { situacao: 'APOS_SIMULACAO', fluxoAtual: null, passo: 2 })?.situacao, 'SEM_RESPOSTA', 'sequência antiga em andamento continua no fluxo geral')
+  assert.equal(escolherFluxo(cfg, { situacao: 'APOS_APROVACAO', fluxoAtual: 'APOS_SIMULACAO', passo: 1 })?.situacao, 'APOS_SIMULACAO', 'não troca de fluxo no meio')
+  const semSimulacao = lerConfigFollow({ fluxos: [{ situacao: 'APOS_SIMULACAO', ativo: false, aoFinal: 'NADA', passos: [{ dias: 1, texto: 'oi oi', midia: 'NENHUMA' }] }] })
+  assert.equal(escolherFluxo(semSimulacao, { situacao: 'APOS_SIMULACAO', fluxoAtual: null, passo: 0 })?.situacao, 'SEM_RESPOSTA', 'fluxo desligado cai no geral')
+  assert.equal(escolherFluxo(semSimulacao, { situacao: 'SEM_RESPOSTA', fluxoAtual: 'APOS_SIMULACAO', passo: 1 }), null, 'desligado no meio: para')
+  assert.equal(escolherFluxo(cfg, { situacao: 'REATIVACAO', fluxoAtual: null, passo: 0 }), null, 'resgate começa desligado')
+
+  const fluxo = fluxoDa(cfg, 'APOS_SIMULACAO')
+  const ag = new Date('2026-10-23T15:00:00Z')
+  assert.ok(fimDoFluxo({ fluxo, passo: 3, ultimoFollowEm: new Date(ag.getTime() - 49 * 3600e3), agora: ag }), 'último passo há 2 dias: passa para o vendedor')
+  assert.ok(!fimDoFluxo({ fluxo, passo: 3, ultimoFollowEm: new Date(ag.getTime() - 20 * 3600e3), agora: ag }), 'ainda não deu 2 dias')
+  assert.ok(!fimDoFluxo({ fluxo, passo: 4, ultimoFollowEm: new Date(ag.getTime() - 99 * 3600e3), agora: ag }), 'já passou para o vendedor')
+  assert.ok(!fimDoFluxo({ fluxo: fluxoDa(cfg, 'SEM_RESPOSTA'), passo: 3, ultimoFollowEm: new Date(ag.getTime() - 99 * 3600e3), agora: ag }), 'fluxo sem aviso no fim')
 })
 
 test('horário do follow: segunda a sábado, no horário de Brasília', () => {
@@ -263,16 +306,16 @@ test('follow só depois da resposta do vendedor, e recomeça quando o cliente re
   assert.equal(baseDoFollow([{ remetente: 'VENDEDOR', criadoEm: t(48) }, { remetente: 'CONTATO', criadoEm: t(40) }]), null, 'cliente falou por último: a loja deve a resposta')
   assert.equal(baseDoFollow([{ remetente: 'CONTATO', criadoEm: t(50) }, { remetente: 'ASSISTENTE', criadoEm: t(49) }]), null, 'só o robô respondeu: não há follow')
 
-  const cfg = FOLLOW_PADRAO
+  const { passos } = fluxoDa(FOLLOW_PADRAO, 'SEM_RESPOSTA')
   const prox = (passo: number, baseH: number, ultimoH: number | null, parado: string | null = null) =>
-    proximoFollow({ cfg, passo, parado, baseEm: t(baseH), ultimoFollowEm: ultimoH === null ? null : t(ultimoH), agora })
+    proximoFollow({ passos, passo, parado, baseEm: t(baseH), ultimoFollowEm: ultimoH === null ? null : t(ultimoH), agora })
   assert.equal(prox(0, 25, null)?.indice, 0, '1 dia sem resposta: passo 1')
   assert.equal(prox(0, 23, null), null, 'ainda não deu 1 dia')
   assert.equal(prox(1, 73, 21)?.midia, 'FOTO_MOTO', '3 dias: passo 2 com a foto')
   assert.equal(prox(1, 73, 10), null, 'no máximo 1 por dia por lead')
   assert.equal(prox(3, 500, 100), null, 'acabaram os passos')
   assert.equal(prox(0, 25, null, 'PEDIU_PARAR'), null, 'pediu para parar')
-  assert.equal(quandoDevido({ cfg, passo: 1, parado: null, baseEm: t(48), ultimoFollowEm: t(23) })?.getTime(), t(48).getTime() + 3 * 86_400_000)
+  assert.equal(quandoDevido({ passos, passo: 1, parado: null, baseEm: t(48), ultimoFollowEm: t(23) })?.getTime(), t(48).getTime() + 3 * 86_400_000)
 })
 
 // ---------- Assistente pessoal no chat "Você" ----------

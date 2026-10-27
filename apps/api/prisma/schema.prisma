@@ -1998,6 +1998,10 @@ model AssistenteConversa {
   followPasso          Int       @default(0)
   followUltimoEm       DateTime?
   followParado         String?
+  // Fluxo da sequência em andamento (SEM_RESPOSTA | APOS_SIMULACAO |
+  // APOS_APROVACAO | REATIVACAO): escolhido no 1º passo, vale até o cliente
+  // responder. Passo além do último = já passou para o vendedor.
+  followFluxo          String?
   // Último aviso "lead esperando" mandado ao vendedor sobre esta conversa.
   alertaEsperaEm       DateTime?
   // Última simulação de financiamento (robô ou vendedor): valores, opções e
@@ -2088,6 +2092,8 @@ model AssistenteMensagem {
   midiaUrl   String?
   // FOLLOW = mensagem do follow automático.
   origem     String?
+  // Fluxo do follow automático que mandou (para a taxa de resposta por fluxo).
+  followFluxo String?
   criadoEm   DateTime @default(now())
 
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
@@ -3986,6 +3992,13 @@ model LeadFollow {
   agendadoPara DateTime
   canal        String? // WHATSAPP | LIGACAO | VISITA | EMAIL | OUTRO
   nota         String?
+  // CONTATO = follow comum (um pendente por lead) | CREDITO = refazer a
+  // pré-análise depois da recusa (só o vendedor; convive com o comum).
+  tipo         String    @default("CONTATO")
+  // CREDITO: { conversaId, bancos: [nomes], recusadoEm } — nunca vai para a IA.
+  contexto     Json?
+  // Aviso mandado ao vendedor no WhatsApp quando chegou o dia.
+  avisadoEm    DateTime?
   status       String    @default("PENDENTE") // PENDENTE | FEITO | CANCELADO
   feitoEm      DateTime?
   resultado    String?
@@ -3997,6 +4010,7 @@ model LeadFollow {
 
   @@index([usuarioId, status, agendadoPara])
   @@index([leadId, status])
+  @@index([tipo, status, agendadoPara])
   @@map("pro_labore_lead_follows")
 }
 

@@ -206,7 +206,7 @@ export default function ReativacaoPage() {
           )}
         </>
       )}
-      {followDe && <FollowModal lead={followDe} pendente={followDe.proximoFollow} onFechar={() => setFollowDe(null)} onMudou={carregar} />}
+      {followDe && <FollowModal lead={followDe} pendentes={followDe.follows ?? (followDe.proximoFollow ? [followDe.proximoFollow] : [])} onFechar={() => setFollowDe(null)} onMudou={carregar} />}
     </div>
   )
 }

@@ -790,8 +790,9 @@ const TIPOS_NEGOCIACAO = ['P', 'R'] as const
 const LEAD_INCLUDE = {
   vendedor: { select: { id: true, nome: true } },
   historico: { select: { estagioNovo: true, criadoEm: true, origem: true, motivo: true }, orderBy: { criadoEm: 'asc' } },
-  // O próximo follow pendente (botão Follow do card).
-  follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 1, select: { id: true, agendadoPara: true, canal: true, nota: true } },
+  // Os follows pendentes, o mais próximo primeiro (botão Follow do card). A
+  // nova análise de crédito convive com o follow comum.
+  follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 3, select: { id: true, agendadoPara: true, canal: true, nota: true, tipo: true, contexto: true } },
   // Quantas notas da negociação o lead tem (selo no card; o texto abre no painel).
   _count: { select: { notas: true } },
   // A próxima ligação pendente (selo do card e painel do lead).
@@ -1058,6 +1059,8 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
   if (parse.data.estagio === 'FECHADO' || parse.data.estagio === 'PERDIDO') {
     await cancelarLigacoesDoLead(prisma, atual.id, parse.data.estagio === 'FECHADO' ? 'Venda fechada' : 'Lead perdido')
   }
+  // Vendeu: a nova análise de crédito marcada perde o sentido (perdido continua: é o caso dela).
+  if (parse.data.estagio === 'FECHADO') await prisma.leadFollow.updateMany({ where: { leadId: atual.id, tipo: 'CREDITO', status: 'PENDENTE' }, data: { status: 'CANCELADO', resultado: 'Venda fechada' } })
   const lead = await prisma.lead.update({
     where: { id: atual.id },
     data: { estagio: parse.data.estagio, fechadoEm, ...perda },
@@ -1163,6 +1166,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
   })
 
   await cancelarLigacoesDoLead(prisma, atual.id, 'Venda fechada')
+  await prisma.leadFollow.updateMany({ where: { leadId: atual.id, tipo: 'CREDITO', status: 'PENDENTE' }, data: { status: 'CANCELADO', resultado: 'Venda fechada' } })
   const lead = await prisma.lead.update({
     where: { id: atual.id },
     data: { estagio: 'FECHADO', fechadoEm: new Date(), vendaId: venda.id },
@@ -3253,7 +3257,7 @@ router.post('/assistente/conversas/:id/simulacao', requireProLaboreAuth, require
   await prisma.assistenteConversa.update({
     where: { id: conversa.id },
     data: {
-      ultimaMensagemEm: agora, simulacao: s.dados as unknown as Prisma.InputJsonValue,
+      ultimaMensagemEm: agora, simulacao: { ...s.dados, em: agora.toISOString() } as unknown as Prisma.InputJsonValue,
       ...((conversa.status === 'ATIVA' || conversa.status === 'AGUARDANDO_VENDEDOR') && { status: 'ASSUMIDA', assumidaEm: agora }),
     },
   })

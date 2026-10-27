@@ -35,7 +35,7 @@ import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, si
 import { ResultadoSimulacao, formatarCpf, leituraCredito, resumoSimulacao } from './assistenteSimulacao'
 import { calcularNota } from './assistenteNota'
 import { Avanco, Etiqueta, ROTULO_ETAPA, etiquetasDoLead, proximaEtapa, rebaixadoHaPouco } from './assistenteJornada'
-import { PassoFollow, baseDoFollow, dentroDoHorario, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido } from './assistenteFollow'
+import { ConfigFollow, FluxoFollow, PassoFollow, ROTULO_SITUACAO, SituacaoFollow, baseDoFollow, dentroDoHorario, escolherFluxo, fimDoFluxo, fluxoDa, inicioDoDiaBrt, lerConfigFollow, proximoFollow, quandoDevido, situacaoDoFollow } from './assistenteFollow'
 import { preencherResposta } from './assistenteConhecimento'
 import { MotoVitrine, acharMotos, nomeDaMoto } from './assistenteVitrine'
 import { interpretarPergunta } from './assistentePessoal'
@@ -543,23 +543,58 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
 // ---------- Follow automático (ver assistenteFollow.ts) ----------
 
 const SELECT_CONVERSA_FOLLOW = {
-  id: true, assistenteId: true, nomeContato: true, jid: true, numeroContato: true, respostas: true, followPasso: true, followUltimoEm: true,
-  lead: { select: { modeloInteresse: true } },
+  id: true, assistenteId: true, nomeContato: true, jid: true, numeroContato: true, respostas: true, followPasso: true, followUltimoEm: true, followFluxo: true, simulacao: true,
+  lead: { select: { id: true, usuarioId: true, vendedorId: true, estagio: true, modeloInteresse: true, perdidoEm: true } },
+  ficha: { select: { analises: { where: { enviadaAoClienteEm: { not: null } }, select: { enviadaAoClienteEm: true } } } },
   mensagens: { orderBy: { criadoEm: 'desc' as const }, take: 40, select: { remetente: true, criadoEm: true } },
 } satisfies Prisma.AssistenteConversaSelect
 type ConversaFollow = Prisma.AssistenteConversaGetPayload<{ select: typeof SELECT_CONVERSA_FOLLOW }>
 
-function conversasDoFollow(assistenteIds: string[], agora: Date) {
+// Perdido por estes motivos não entra no resgate: comprou em outro lugar,
+// desistiu, ou foi crédito (esse tem o follow de nova análise do vendedor).
+const PERDA_SEM_RESGATE = ['CONCORRENCIA', 'DESISTIU', 'SEM_CREDITO']
+
+function conversasDoFollow(assistenteIds: string[], agora: Date, resgate: boolean) {
+  const abertas: Prisma.AssistenteConversaWhereInput = {
+    assistenteId: { in: assistenteIds }, tipo: 'LEAD', status: 'ASSUMIDA', followParado: null,
+    ultimaMensagemEm: { gte: new Date(agora.getTime() - 40 * DIA_MS) },
+    lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null } },
+  }
+  // Resgate: perdido nos últimos 200 dias, numa conversa que o vendedor já tinha assumido.
+  const perdidas: Prisma.AssistenteConversaWhereInput = {
+    assistenteId: { in: assistenteIds }, tipo: 'LEAD', followParado: null, assumidaEm: { not: null },
+    lead: { is: { estagio: 'PERDIDO', vendaId: null, perdidoEm: { gte: new Date(agora.getTime() - 200 * DIA_MS) }, OR: [{ motivoPerda: null }, { motivoPerda: { notIn: PERDA_SEM_RESGATE } }] } },
+  }
   return prisma.assistenteConversa.findMany({
-    where: {
-      assistenteId: { in: assistenteIds }, tipo: 'LEAD', status: 'ASSUMIDA', followParado: null,
-      ultimaMensagemEm: { gte: new Date(agora.getTime() - 40 * DIA_MS) },
-      lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null } },
-    },
+    where: resgate ? { OR: [abertas, perdidas] } : abertas,
     select: SELECT_CONVERSA_FOLLOW,
     orderBy: { ultimaMensagemEm: 'asc' },
     take: 400,
   })
+}
+
+interface PlanoFollow { fluxo: FluxoFollow; passo: number; baseEm: Date | null }
+
+/** O fluxo, o passo e a data-base da conversa agora (null = nada a fazer). */
+function planoDoFollow(cfgF: ConfigFollow, c: ConversaFollow): PlanoFollow | null {
+  if (c.lead?.estagio === 'PERDIDO') {
+    const fluxo = fluxoDa(cfgF, 'REATIVACAO')
+    if (!fluxo.ativo || !c.lead.perdidoEm) return null
+    // Escreveu depois da perda: o lead já volta quente para o vendedor (Reativação).
+    const ultimaDoCliente = c.mensagens.find(m => m.remetente === 'CONTATO')
+    if (ultimaDoCliente && ultimaDoCliente.criadoEm > c.lead.perdidoEm) return null
+    return { fluxo, passo: c.followFluxo === 'REATIVACAO' ? c.followPasso : 0, baseEm: c.lead.perdidoEm }
+  }
+  const aprovacaoEnviadaEm = c.ficha?.analises.reduce<Date | null>((m, a) => (a.enviadaAoClienteEm && (!m || a.enviadaAoClienteEm > m) ? a.enviadaAoClienteEm : m), null) ?? null
+  const simulacaoEm = (c.simulacao as { em?: string } | null)?.em
+  // Lead que voltou do resgate para o funil recomeça pelo ponto de agora.
+  const passo = c.followFluxo === 'REATIVACAO' ? 0 : c.followPasso
+  const fluxo = escolherFluxo(cfgF, { situacao: situacaoDoFollow({ aprovacaoEnviadaEm, temSimulacao: !!c.simulacao }), fluxoAtual: c.followFluxo, passo })
+  if (!fluxo) return null
+  // Conta a partir do marco quando ele veio depois da resposta do vendedor (simulação mandada agora não gera follow no mesmo dia).
+  const inicio = fluxo.situacao === 'APOS_APROVACAO' ? aprovacaoEnviadaEm : fluxo.situacao === 'APOS_SIMULACAO' && simulacaoEm ? new Date(simulacaoEm) : null
+  const base = baseDoFollow(c.mensagens)
+  return { fluxo, passo, baseEm: base && inicio && inicio > base ? inicio : base }
 }
 
 // A moto de interesse no estoque (disponível), para a foto/vídeo e o {moto}.
@@ -572,7 +607,25 @@ function motoDoFollow(cfg: ConfigAssistente, c: Pick<ConversaFollow, 'respostas'
 export function textoDoFollow(passo: PassoFollow, cfg: ConfigAssistente, ctx: { nomeContato: string; vendedor: string }, alvo: { nome: string | null; moto: MotoVitrine | null }): { texto: string; foto: string | null } {
   let texto = preencherResposta(passo.texto, { ...ctx, empresa: cfg.nomeEmpresa, moto: alvo.nome })
   if (passo.midia === 'VIDEO_MOTO' && alvo.moto?.videoUrl) texto += `\n🎬 ${alvo.moto.videoUrl}`
-  return { texto, foto: passo.midia === 'FOTO_MOTO' ? alvo.moto?.fotos[0] ?? null : null }
+  const foto = passo.midia === 'IMAGEM' ? passo.imagem : passo.midia === 'FOTO_MOTO' ? alvo.moto?.fotos[0] ?? null : null
+  return { texto, foto }
+}
+
+/**
+ * Fim do fluxo sem resposta (fluxo com "avisar o vendedor"): vira follow do
+ * vendedor no CRM para hoje, a não ser que ele já tenha um marcado.
+ */
+async function passarParaOVendedor(c: ConversaFollow, fluxo: FluxoFollow, vendedorId: string, agora: Date): Promise<boolean> {
+  const marcado = await prisma.assistenteConversa.updateMany({ where: { id: c.id, followPasso: c.followPasso, followFluxo: c.followFluxo, followParado: null }, data: { followPasso: fluxo.passos.length + 1 } })
+  if (!marcado.count || !c.lead) return false
+  if (await prisma.leadFollow.count({ where: { leadId: c.lead.id, status: 'PENDENTE', tipo: 'CONTATO' } })) return false
+  await prisma.leadFollow.create({
+    data: {
+      usuarioId: c.lead.usuarioId, leadId: c.lead.id, vendedorId: c.lead.vendedorId ?? vendedorId, agendadoPara: agora, canal: 'LIGACAO', criadoPor: 'Follow automático',
+      nota: `Não respondeu ao follow automático (${ROTULO_SITUACAO[fluxo.situacao].toLowerCase()}). Tente uma ligação ou um áudio.`,
+    },
+  })
+  return true
 }
 
 /**
@@ -580,9 +633,9 @@ export function textoDoFollow(passo: PassoFollow, cfg: ConfigAssistente, ctx: { 
  * dentro do horário e do teto diário de cada número. Marca a conversa antes
  * de enviar, para duas rodadas juntas não mandarem em dobro.
  */
-export async function rodarFollows(agora = new Date(), prazoMs = 8000): Promise<{ followsEnviados: number }> {
+export async function rodarFollows(agora = new Date(), prazoMs = 8000): Promise<{ followsEnviados: number; followsParaVendedor: number }> {
   const inicio = Date.now()
-  let enviados = 0
+  let enviados = 0, paraVendedor = 0
   for (const loja of await prisma.assistenteLoja.findMany({ where: { followAtivo: true } })) {
     const cfgF = lerConfigFollow(loja.followConfig)
     if (!dentroDoHorario(agora, cfgF)) continue
@@ -592,21 +645,29 @@ export async function rodarFollows(agora = new Date(), prazoMs = 8000): Promise<
     })
     if (!assistentes.length) continue
     const { motos } = await vitrineDaLoja(loja.usuarioId).catch(() => ({ motos: [] as MotoVitrine[] }))
+    const resgate = fluxoDa(cfgF, 'REATIVACAO').ativo
     for (const a of assistentes) {
       const cfg = lerConfig(a.configuracao)
       let hoje = await prisma.assistenteMensagem.count({ where: { origem: 'FOLLOW', criadoEm: { gte: inicioDoDiaBrt(agora) }, conversa: { assistenteId: a.id } } })
-      for (const c of await conversasDoFollow([a.id], agora)) {
+      for (const c of await conversasDoFollow([a.id], agora, resgate)) {
         if (hoje >= cfgF.tetoDiario || Date.now() - inicio > prazoMs) break
-        const passo = proximoFollow({ cfg: cfgF, passo: c.followPasso, parado: null, baseEm: baseDoFollow(c.mensagens), ultimoFollowEm: c.followUltimoEm, agora })
+        const plano = planoDoFollow(cfgF, c)
+        if (!plano) continue
+        if (fimDoFluxo({ fluxo: plano.fluxo, passo: plano.passo, ultimoFollowEm: c.followUltimoEm, agora })) {
+          if (await passarParaOVendedor(c, plano.fluxo, a.vendedorId, agora).catch(e => { logger.warn({ err: e, conversaId: c.id }, 'assistente: fim do fluxo de follow'); return false })) paraVendedor += 1
+          continue
+        }
+        const passo = proximoFollow({ passos: plano.fluxo.passos, passo: plano.passo, parado: null, baseEm: plano.baseEm, ultimoFollowEm: c.followUltimoEm, agora })
         if (!passo) continue
-        const marcado = await prisma.assistenteConversa.updateMany({ where: { id: c.id, followPasso: c.followPasso, followParado: null }, data: { followPasso: c.followPasso + 1, followUltimoEm: agora } })
+        const fluxo = plano.fluxo.situacao
+        const marcado = await prisma.assistenteConversa.updateMany({ where: { id: c.id, followPasso: c.followPasso, followFluxo: c.followFluxo, followParado: null }, data: { followPasso: plano.passo + 1, followFluxo: fluxo, followUltimoEm: agora } })
         if (!marcado.count) continue
         const { texto, foto } = textoDoFollow(passo, cfg, { nomeContato: c.nomeContato, vendedor: a.vendedor.nome }, motoDoFollow(cfg, c, motos))
         const destino = c.jid ?? c.numeroContato
         try {
-          if (foto) await enviarFotoNaConversa(a.instancia, c.id, destino, { url: foto, legenda: texto }, 'ASSISTENTE', 1500, 'FOLLOW')
+          if (foto) await enviarFotoNaConversa(a.instancia, c.id, destino, { url: foto, legenda: texto }, 'ASSISTENTE', 1500, 'FOLLOW', fluxo)
           else {
-            const registro = await prisma.assistenteMensagem.create({ data: { conversaId: c.id, remetente: 'ASSISTENTE', texto, origem: 'FOLLOW' } })
+            const registro = await prisma.assistenteMensagem.create({ data: { conversaId: c.id, remetente: 'ASSISTENTE', texto, origem: 'FOLLOW', followFluxo: fluxo } })
             try {
               const id = await enviarTexto(a.instancia!, destino, texto, 1500)
               if (id) await prisma.assistenteMensagem.update({ where: { id: registro.id }, data: { providerId: id, criadoEm: new Date() } }).catch(() => undefined)
@@ -620,16 +681,16 @@ export async function rodarFollows(agora = new Date(), prazoMs = 8000): Promise<
           enviados += 1
         } catch (e) {
           // Não saiu: devolve o passo para a próxima rodada tentar de novo.
-          await prisma.assistenteConversa.updateMany({ where: { id: c.id, followPasso: c.followPasso + 1 }, data: { followPasso: c.followPasso, followUltimoEm: c.followUltimoEm } })
+          await prisma.assistenteConversa.updateMany({ where: { id: c.id, followPasso: plano.passo + 1, followFluxo: fluxo }, data: { followPasso: c.followPasso, followFluxo: c.followFluxo, followUltimoEm: c.followUltimoEm } })
           logger.warn({ err: e, conversaId: c.id }, 'assistente: follow automático não saiu')
         }
       }
     }
   }
-  return { followsEnviados: enviados }
+  return { followsEnviados: enviados, followsParaVendedor: paraVendedor }
 }
 
-export interface ItemFilaFollow { conversaId: string; nome: string; vendedor: string; passo: number; total: number; devidoEm: Date; texto: string; foto: string | null }
+export interface ItemFilaFollow { conversaId: string; nome: string; vendedor: string; fluxo: SituacaoFollow; passo: number; total: number; devidoEm: Date; texto: string; foto: string | null }
 
 /** Próximos follows (para a tela), sem enviar nada. */
 export async function filaDeFollow(usuarioId: string, vendedorId: string | null, agora = new Date()): Promise<ItemFilaFollow[]> {
@@ -643,13 +704,15 @@ export async function filaDeFollow(usuarioId: string, vendedorId: string | null,
   const { motos } = await vitrineDaLoja(usuarioId)
   const porId = new Map(assistentes.map(a => [a.id, a]))
   const fila: ItemFilaFollow[] = []
-  for (const c of await conversasDoFollow(assistentes.map(a => a.id), agora)) {
-    const devidoEm = quandoDevido({ cfg: cfgF, passo: c.followPasso, parado: null, baseEm: baseDoFollow(c.mensagens), ultimoFollowEm: c.followUltimoEm })
+  for (const c of await conversasDoFollow(assistentes.map(a => a.id), agora, fluxoDa(cfgF, 'REATIVACAO').ativo)) {
+    const plano = planoDoFollow(cfgF, c)
+    if (!plano) continue
+    const devidoEm = quandoDevido({ passos: plano.fluxo.passos, passo: plano.passo, parado: null, baseEm: plano.baseEm, ultimoFollowEm: c.followUltimoEm })
     if (!devidoEm) continue
     const a = porId.get(c.assistenteId)!
     const cfg = lerConfig(a.configuracao)
-    const { texto, foto } = textoDoFollow(cfgF.passos[c.followPasso], cfg, { nomeContato: c.nomeContato, vendedor: a.vendedor.nome }, motoDoFollow(cfg, c, motos))
-    fila.push({ conversaId: c.id, nome: c.nomeContato, vendedor: a.vendedor.nome, passo: c.followPasso + 1, total: cfgF.passos.length, devidoEm, texto, foto })
+    const { texto, foto } = textoDoFollow(plano.fluxo.passos[plano.passo], cfg, { nomeContato: c.nomeContato, vendedor: a.vendedor.nome }, motoDoFollow(cfg, c, motos))
+    fila.push({ conversaId: c.id, nome: c.nomeContato, vendedor: a.vendedor.nome, fluxo: plano.fluxo.situacao, passo: plano.passo + 1, total: plano.fluxo.passos.length, devidoEm, texto, foto })
   }
   return fila.sort((x, y) => x.devidoEm.getTime() - y.devidoEm.getTime()).slice(0, 40)
 }
@@ -824,7 +887,8 @@ function dadosDoPasso(passo: PassoRoteiro) {
   return {
     etapaRoteiro: passo.estado.etapa,
     respostas: passo.estado.respostas as Prisma.InputJsonValue,
-    ...(passo.simulacao && { simulacao: passo.simulacao as Prisma.InputJsonValue }),
+    // `em`: quando a simulação saiu (o follow "depois da simulação" conta dali).
+    ...(passo.simulacao && { simulacao: { ...(passo.simulacao as object), em: agora.toISOString() } as Prisma.InputJsonValue }),
     ...(passo.desfecho === 'DESISTIU' && { status: 'ENCERRADA', resultado: 'DESISTIU', encerradaEm: agora }),
     ...((passo.desfecho === 'QUALIFICADO' || passo.desfecho === 'PEDIU_ATENDENTE') && { status: 'AGUARDANDO_VENDEDOR', resultado: passo.desfecho as Desfecho, aguardandoVendedorEm: agora }),
   }
@@ -889,11 +953,11 @@ export async function enviarDoAssistente(a: { id: string; instancia: string | nu
  * enviar, como o texto, para o eco ser reconhecido; sem foto válida, vai só
  * a legenda. Falhou o envio: apaga o registro e repassa o erro.
  */
-export async function enviarFotoNaConversa(instancia: string | null, conversaId: string, destino: string, foto: { url: string; legenda: string }, remetente: 'ASSISTENTE' | 'VENDEDOR', digitandoMs = 0, origem: string | null = null) {
+export async function enviarFotoNaConversa(instancia: string | null, conversaId: string, destino: string, foto: { url: string; legenda: string }, remetente: 'ASSISTENTE' | 'VENDEDOR', digitandoMs = 0, origem: string | null = null, followFluxo: string | null = null) {
   const img = await lerImagem(foto.url)
   const valida = !!img && (img.mime === 'image/jpeg' || img.mime === 'image/png')
   if (!valida && !foto.legenda) return null
-  const registro = await prisma.assistenteMensagem.create({ data: { conversaId, remetente, texto: foto.legenda || '[imagem]', midiaUrl: valida ? foto.url : null, origem } })
+  const registro = await prisma.assistenteMensagem.create({ data: { conversaId, remetente, texto: foto.legenda || '[imagem]', midiaUrl: valida ? foto.url : null, origem, followFluxo } })
   try {
     if (!instancia) throw new Error('Assistente sem instância conectada')
     const id = valida ? await enviarImagem(instancia, destino, img!, foto.legenda, digitandoMs) : await enviarTexto(instancia, destino, foto.legenda, digitandoMs)
@@ -1107,7 +1171,7 @@ async function aplicarDadosDoCliente(tx: Prisma.TransactionClient, d: { usuarioI
 // hoje. No máximo um aviso por semana, e nada se já houver follow pendente.
 async function sinalizarRetorno(tx: Prisma.TransactionClient, a: AssistenteCompleto, lead: LeadDoTelefone, m: MensagemWhatsapp) {
   const recente = await tx.leadFollow.findFirst({
-    where: { leadId: lead.id, OR: [{ status: 'PENDENTE' }, { criadoEm: { gte: new Date(Date.now() - DIAS_ENTRE_SINAIS_DE_RETORNO * 86_400_000) } }] },
+    where: { leadId: lead.id, tipo: 'CONTATO', OR: [{ status: 'PENDENTE' }, { criadoEm: { gte: new Date(Date.now() - DIAS_ENTRE_SINAIS_DE_RETORNO * 86_400_000) } }] },
     select: { id: true },
   })
   if (recente) return

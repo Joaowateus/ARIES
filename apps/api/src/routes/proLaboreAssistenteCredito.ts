@@ -14,6 +14,7 @@ import { atualizarNota, avaliarJornada } from '../lib/assistenteMotor'
 import { lerConfig, primeiroNome } from '../lib/assistenteRoteiro'
 import { vitrineDaLoja } from '../lib/assistenteRespostas'
 import { ResultadoSimulacao, STATUS_ANALISE, formatarCpf, lerCpf, lerNascimento, textoAprovacao, textoFicha } from '../lib/assistenteSimulacao'
+import { agendarNovaAnalise, reabrirPreAnalise, semAprovacao, sincronizarFollowCredito } from '../lib/followCredito'
 
 const router = Router()
 const ver = [requireProLaboreAuth, requireModulo('assistente', 'VER')]
@@ -44,13 +45,18 @@ async function recalcular(conversa: Conversa) {
   const cfg = lerConfig(conversa.assistente.configuracao)
   await atualizarNota(cfg, conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na nota do lead'))
   await avaliarJornada(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
+  // Nenhum banco aprovou: nova análise em 30 dias para o vendedor; aprovou: cancela a que estava marcada.
+  await sincronizarFollowCredito(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha no follow de crédito'))
 }
 
 async function resposta(conversa: Conversa) {
   const { simulacao: cfgSim } = await vitrineDaLoja(conversa.assistente.vendedor.usuarioId)
   const bancos = cfgSim?.bancos ?? []
   const f = await prisma.assistenteFichaCredito.findUnique({ where: { conversaId: conversa.id }, include: { analises: { orderBy: { criadoEm: 'asc' } } } })
-  if (!f) return { ativa: !!cfgSim?.preAnalise, bancos, ficha: null, analises: [] }
+  if (!f) return { ativa: !!cfgSim?.preAnalise, bancos, ficha: null, analises: [], semAprovacao: false, novaAnalise: null }
+  const novaAnalise = conversa.leadId
+    ? await prisma.leadFollow.findFirst({ where: { leadId: conversa.leadId, tipo: 'CREDITO', status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, select: { id: true, agendadoPara: true, criadoPor: true } })
+    : null
   const sim = conversa.simulacao as unknown as ResultadoSimulacao & { moto?: string | null } | null
   const consentimento = f.consentimento as { em?: string; pergunta?: string; resposta?: string }
   // Banco cadastrado depois da ficha aparece como "a enviar".
@@ -66,6 +72,10 @@ async function resposta(conversa: Conversa) {
       }),
     },
     analises: analises.map(a => ({ banco: a.banco, status: a.status, entrada: a.entrada, prazo: a.prazo, parcela: a.parcela, taxa: a.taxa, observacao: a.observacao, respondidoEm: a.respondidoEm, enviadaAoClienteEm: a.enviadaAoClienteEm })),
+    // Nenhum banco aprovou: dá para marcar a nova análise e, com a autorização nova, reabrir.
+    semAprovacao: semAprovacao(f.analises),
+    temLead: !!conversa.leadId,
+    novaAnalise,
   }
 }
 
@@ -137,18 +147,49 @@ router.put('/assistente/conversas/:id/credito/analises/:banco', ...editar, async
   if (!(cfgSim?.bancos ?? []).includes(banco) && !conversa.ficha.analises.some(a => a.banco === banco)) return erro(res, 404, 'Banco não cadastrado na aba Simulação')
   const respondida = p.data.status === 'APROVADA' || p.data.status === 'RECUSADA'
   const aprovada = p.data.status === 'APROVADA'
+  // Mesma resposta salva de novo (ex.: só a observação mudou): a hora da resposta fica a mesma.
+  const antes = conversa.ficha.analises.find(a => a.banco === banco)
   const data = {
     status: p.data.status,
     entrada: aprovada ? p.data.entrada ?? null : null, prazo: aprovada ? p.data.prazo ?? null : null,
     parcela: aprovada ? p.data.parcela ?? null : null, taxa: aprovada ? p.data.taxa ?? null : null,
     observacao: p.data.observacao ?? null,
-    respondidoEm: respondida ? new Date() : null,
+    respondidoEm: respondida ? (antes?.status === p.data.status && antes.respondidoEm ? antes.respondidoEm : new Date()) : null,
   }
   await prisma.assistenteAnaliseCredito.upsert({
     where: { fichaId_banco: { fichaId: conversa.ficha.id, banco } },
     create: { fichaId: conversa.ficha.id, usuarioId: conversa.ficha.usuarioId, banco, ...data },
     update: data,
   })
+  await recalcular(conversa)
+  res.json(await resposta(conversa))
+})
+
+// Nova análise de crédito: o vendedor marca (ou remarca) para daqui a N dias.
+router.post('/assistente/conversas/:id/credito/nova-analise', ...editar, async (req: Request, res: Response) => {
+  const dias = z.number().int().min(7).max(120).safeParse(req.body?.dias)
+  if (!dias.success) return erro(res, 400, 'Escolha de 7 a 120 dias')
+  const conversa = await conversaAutorizada(req, res)
+  if (!conversa) return
+  if (!conversa.leadId) return erro(res, 409, 'A conversa ainda não tem lead no CRM')
+  if (!conversa.ficha) return erro(res, 409, 'Registre a ficha de crédito antes')
+  await agendarNovaAnalise(conversa.id, dias.data, req.proLaboreUser!.nome ?? null)
+  res.status(201).json(await resposta(conversa))
+})
+
+router.delete('/assistente/conversas/:id/credito/nova-analise', ...editar, async (req: Request, res: Response) => {
+  const conversa = await conversaAutorizada(req, res)
+  if (!conversa) return
+  if (conversa.leadId) await prisma.leadFollow.updateMany({ where: { leadId: conversa.leadId, tipo: 'CREDITO', status: 'PENDENTE' }, data: { status: 'CANCELADO', resultado: 'Cancelada pelo vendedor' } })
+  res.json(await resposta(conversa))
+})
+
+// Nova consulta depois da recusa: só com a autorização renovada do cliente.
+router.post('/assistente/conversas/:id/credito/reabrir', ...editar, async (req: Request, res: Response) => {
+  if (req.body?.autorizado !== true) return erro(res, 400, 'Confirme que o cliente autorizou a nova consulta')
+  const conversa = await conversaAutorizada(req, res)
+  if (!conversa) return
+  if (!(await reabrirPreAnalise(conversa.id, req.proLaboreUser!.nome ?? 'o vendedor'))) return erro(res, 409, 'Não há recusa para refazer nesta ficha')
   await recalcular(conversa)
   res.json(await resposta(conversa))
 })

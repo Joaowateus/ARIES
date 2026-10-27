@@ -17,7 +17,7 @@ const LADO_FOTO = 1280
 
 // Foto do celular (3–8 MB) vira um JPEG de até 1280 px, leve para o banco e
 // para o WhatsApp.
-async function comprimirFoto(arquivo: File): Promise<Blob> {
+export async function comprimirFoto(arquivo: File): Promise<Blob> {
   const url = URL.createObjectURL(arquivo)
   try {
     const img = await new Promise<HTMLImageElement>((ok, erro) => {

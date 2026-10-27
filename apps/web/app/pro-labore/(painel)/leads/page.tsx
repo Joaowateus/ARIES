@@ -195,6 +195,11 @@ export default function ProLaboreLeadsPage() {
   const [filtroCustomFim, setFiltroCustomFim] = useState('')
   // Follow (botão do card) e perda (o cliente vai para a Reativação).
   const [followAberto, setFollowAberto] = useState<Lead | null>(null)
+  // ?lead=...&follow=... (link do aviso da nova análise no WhatsApp e do Meu dia): abre o follow certo do lead.
+  const [linkFollow, setLinkFollow] = useState<{ leadId: string; followId: string } | null>(() => {
+    const leadId = paramDaUrl('lead'), followId = paramDaUrl('follow')
+    return leadId && followId ? { leadId, followId } : null
+  })
   const [perdaAberta, setPerdaAberta] = useState<Lead | null>(null)
   const [filtroFollow, setFiltroFollow] = useState<'' | 'ATRASADO' | 'HOJE'>('')
   // Etiqueta da jornada (posta pelo Assistente): filtra só os cards do Kanban.
@@ -259,7 +264,7 @@ export default function ProLaboreLeadsPage() {
   // confiar em state do React ali dentro; só em refs, que são sempre atuais.
   const [draggingId, setDraggingId] = useState<string | null>(null)
   // Painel lateral do lead (clique no card) e a densidade dos cards (fica no navegador).
-  const [painelId, setPainelId] = useState<string | null>(() => paramDaUrl('lead'))
+  const [painelId, setPainelId] = useState<string | null>(() => (paramDaUrl('follow') ? null : paramDaUrl('lead')))
   const [densidade, setDensidadeEstado] = useState<Densidade>(() => {
     try { return typeof window !== 'undefined' && localStorage.getItem('pl_crm_densidade') === 'detalhado' ? 'detalhado' : 'compacto' } catch { return 'compacto' }
   })
@@ -272,8 +277,8 @@ export default function ProLaboreLeadsPage() {
   // limpa o endereço para recarregar a página não abrir tudo de novo.
   useEffect(() => {
     const url = new URL(window.location.href)
-    if (!['lead', 'novo', 'foraDoCrm'].some(p => url.searchParams.has(p))) return
-    for (const p of ['lead', 'novo', 'foraDoCrm']) url.searchParams.delete(p)
+    if (!['lead', 'novo', 'foraDoCrm', 'follow'].some(p => url.searchParams.has(p))) return
+    for (const p of ['lead', 'novo', 'foraDoCrm', 'follow']) url.searchParams.delete(p)
     window.history.replaceState(null, '', url.pathname + url.search)
   }, [])
   // Métricas por etapa (R$, conversão, metas): recolhidas num resumo de uma
@@ -772,6 +777,9 @@ export default function ProLaboreLeadsPage() {
   const tetoComissaoAtual = leadConvertendo?.vendedorId ? tetoComissaoEfetivo(leadConvertendo) : null
   const leadEditando = editandoId ? leads.find(l => l.id === editandoId) ?? null : null
 
+  // O follow aberto pelo card ou, vindo do link (?lead=&follow=), o do lead do link assim que a lista chega.
+  const alvoFollow = followAberto ?? (linkFollow ? leads.find(l => l.id === linkFollow.leadId) ?? null : null)
+
   return (
     <div>
       <PageHeader
@@ -1072,8 +1080,8 @@ export default function ProLaboreLeadsPage() {
         />
       )}
 
-      {followAberto && (
-        <FollowModal lead={followAberto} pendente={followAberto.follows?.[0] ?? null} onFechar={() => setFollowAberto(null)} onMudou={carregar} />
+      {alvoFollow && (
+        <FollowModal lead={alvoFollow} pendentes={alvoFollow.follows ?? []} inicial={followAberto ? null : linkFollow?.followId} onFechar={() => { setFollowAberto(null); setLinkFollow(null) }} onMudou={carregar} />
       )}
       {perdaAberta && (
         <PerdaModal
