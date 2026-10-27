@@ -1353,6 +1353,7 @@ model Lead {
   venda               Venda?                 @relation(fields: [vendaId], references: [id])
   historico           LeadEstagioHistorico[]
   follows             LeadFollow[]
+  notas               LeadNota[]
   assistenteConversas AssistenteConversa[]
 
   @@index([usuarioId])
@@ -1377,6 +1378,28 @@ model LeadEstagioHistorico {
 
   @@index([leadId])
   @@map("pro_labore_lead_estagio_historico")
+}
+
+// Notas da negociação do lead (painel do card): o que foi combinado, o que
+// o cliente pediu, o que falta. Uma por registro, com quem escreveu e
+// quando; separado de `observacao`, que é o texto do cadastro (e que a
+// captura do WhatsApp preenche sozinha). Nunca vai para a IA.
+model LeadNota {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  leadId       String
+  texto        String
+  // Quem escreveu: o vendedorId para a equipe, o id do dono para o dono
+  // (mesma regra do autor da Agenda). Só o autor e o dono editam ou apagam.
+  autorId      String
+  autorNome    String?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, criadoEm])
+  @@map("pro_labore_lead_notas")
 }
 
 // Agenda de trabalho: itens de rotina (metas diárias, processos, auditorias,

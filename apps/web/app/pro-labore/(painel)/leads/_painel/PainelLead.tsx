@@ -1,13 +1,15 @@
 'use client'
 
 // Painel lateral do lead (abre com um clique no card): tudo que saiu do card
-// para ele ficar enxuto — contato, etapas, nota e etiquetas, follow, última
-// mensagem do WhatsApp, observação, histórico e as ações.
+// para ele ficar enxuto — contato, etapas, notas da negociação, nota e
+// etiquetas do assistente, follow, última mensagem do WhatsApp, observação
+// do cadastro, histórico e as ações.
 import { useEffect } from 'react'
 import type { EstagioLead, Lead, TipoNegociacao } from '@/lib/proLaboreApi'
 import { situacaoFollow } from '../../_follow/follow'
 import { ChipNota } from '../../assistente/_componentes/SugestoesConversa'
 import { EtiquetasLead } from '../../assistente/_componentes/jornada'
+import { NotasLead } from './NotasLead'
 
 const ORIGEM_LEAD: Record<string, string> = { TRAFEGO: 'Tráfego pago', ORGANICO: 'Orgânico' }
 const NEGOCIACAO: Record<TipoNegociacao, string> = { P: 'Pagamento integral', R: 'Renegociação' }
@@ -20,11 +22,15 @@ function avancoDesfazivel(lead: Lead) {
   return !!ultimo && ultimo.origem === 'ASSISTENTE' && ultimo.estagioNovo === lead.estagio && !lead.vendaId && Date.now() - new Date(ultimo.criadoEm).getTime() < 3 * 86_400_000
 }
 
-export function PainelLead({ lead, colunas, isDono, vejaEquipe, onFechar, onMover, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao }: {
+export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeEscrever, onContagemNotas, onFechar, onMover, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao }: {
   lead: Lead
   colunas: Array<{ estagio: EstagioLead; titulo: string }>
   isDono: boolean
   vejaEquipe: boolean
+  // Aberto pelo botão "Notas" do card: já leva para o campo da nota.
+  focarNota: boolean
+  podeEscrever: boolean
+  onContagemNotas: (n: number) => void
   onFechar: () => void
   onMover: (estagio: EstagioLead) => void
   onConverter: () => void
@@ -112,6 +118,8 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, onFechar, onMove
           )}
         </dl>
 
+        <NotasLead key={lead.id} leadId={lead.id} focar={focarNota} podeEscrever={podeEscrever} onContagem={onContagemNotas} />
+
         {(typeof lead.pontuacao === 'number' || (lead.etiquetas?.length ?? 0) > 0) && (
           <section className="pl-pn-bloco">
             <h3>Leitura do assistente</h3>
@@ -145,7 +153,7 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, onFechar, onMove
 
         {lead.observacao && (
           <section className="pl-pn-bloco">
-            <h3>Observação</h3>
+            <h3>Observação do cadastro</h3>
             <p className="pl-pn-obs">{lead.observacao}</p>
           </section>
         )}
