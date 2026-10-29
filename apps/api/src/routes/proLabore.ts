@@ -3634,15 +3634,16 @@ const TIPOS_BLOCO = ['paragrafo', 'titulo1', 'titulo2', 'titulo3', 'lista', 'lis
 const blocoSchema = z.object({
   id: z.string(),
   tipo: z.enum(TIPOS_BLOCO),
-  texto: z.string().max(5000, 'Bloco muito longo'),
+  texto: z.string().max(20000, 'Bloco muito longo (máx. 20 mil caracteres)'),
   marcado: z.boolean().optional(),
   icone: z.string().max(8, 'Ícone inválido').optional(),
 })
 
 const notaSchema = z.object({
   titulo: z.string().trim().max(200, 'Título muito longo').optional(),
-  conteudo: z.string().max(20000, 'Conteúdo muito longo').optional(),
-  blocos: z.array(blocoSchema).max(1000, 'Página com blocos demais').optional(),
+  // Páginas com textos colados (roteiros, atas): até ~200 mil caracteres.
+  conteudo: z.string().max(200000, 'Página muito longa (máx. 200 mil caracteres)').optional(),
+  blocos: z.array(blocoSchema).max(3000, 'Página com blocos demais').optional(),
   icone: z.string().max(8, 'Ícone inválido').nullable().optional(),
   categoria: z.enum(CATEGORIAS_NOTA).optional(),
   reuniaoId: z.string().optional(),

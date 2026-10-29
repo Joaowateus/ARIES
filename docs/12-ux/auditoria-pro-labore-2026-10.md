@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.6.0
+version: 1.7.0
 status: ativo
 ---
 
@@ -236,6 +236,20 @@ A ligação automática pelo WhatsApp do vendedor não é possível pela Evoluti
 - "Mandar mensagem" sai pelo WhatsApp do vendedor (conversa do sistema), com as respostas prontas da aba Processo.
 - Já dá o follow como feito e pode agendar o próximo.
 - Sem conversa no sistema, abre o WhatsApp com o texto pronto.
+
+## Anotações: salvar texto longo e virar mapa mental (29/10)
+
+- **"Erro ao salvar" ao colar textos longos:**
+  - **Causa:** o texto colado inteiro virava um bloco só e passava do limite de 5 mil caracteres por bloco. O erro ainda descartava a edição.
+  - **Agora, ao colar:** cada linha vira um bloco, com títulos (#), listas, numeração e o recuo das sublistas reconhecidos.
+  - **Novos limites:** 20 mil caracteres por bloco e 200 mil por página.
+  - **Quando der erro:** a edição volta para a fila e o sistema tenta de novo 3 vezes. A mensagem do erro aparece, com "Tentar de novo".
+  - **Ao sair da página:** o que estiver pendente é salvo antes de sair.
+- **Transformar em mapa mental:**
+  - **Onde:** um botão na página. Também aparece uma oferta logo depois de colar um texto com 4 linhas ou mais.
+  - **Como monta (sem IA):** a ideia central é o título da página. Os títulos viram ramos e subtítulos. A linha que introduz uma lista (ex.: "responder a três perguntas:") recebe os itens como filhos, e as sublistas recuadas descem um nível.
+  - **Texto longo:** fica encurtado no nó, com até 140 caracteres.
+  - **Onde salva:** o mapa é criado na mesma pasta e abre no layout de mapa mental. A página original continua.
 
 ## Próximas fases (mesmo pedido)
 
