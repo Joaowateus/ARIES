@@ -9,6 +9,7 @@ import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
 import { textoParaArvore, textoRendeMapa } from './motor-mapa-mental/deTexto'
 import { arvoreParaObjetosBoard } from './motor-mapa-mental/conversao'
+import { DocumentoVisual } from './visual/DocumentoVisual'
 import MapaMentalCanvas, {
   dadosIniciaisDoBoard, gerarBoardDoTemplate, TEMAS_BOARD, TemaBoard, TEMPLATES_BOARD, CONFIGURACAO_PADRAO, ConfiguracaoBoard,
 } from './MapaMental'
@@ -159,6 +160,9 @@ function PaginaNota({ nota, onAtualizada, onExcluir, onVirarMapa }: { nota: Nota
   const [ofertaMapa, setOfertaMapa] = useState(false)
   const [virando, setVirando] = useState(false)
   const tentativasRef = useRef(0)
+  // Texto (editar) ou Visual (o mesmo conteúdo organizado em caixas, setas, tabelas; e o PDF).
+  const [modo, setModo] = useState<'texto' | 'visual'>('texto')
+  const [blocosVisual, setBlocosVisual] = useState<Bloco[]>([])
   const blocosAtuaisRef = useRef<Bloco[]>(blocosIniciais)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   type CamposNota = Partial<{ titulo: string; icone: string | null; categoria: CategoriaNota; blocos: Bloco[] }>
@@ -274,11 +278,16 @@ function PaginaNota({ nota, onAtualizada, onExcluir, onVirarMapa }: { nota: Nota
         </div>
       )}
 
-      <EditorBlocos
+      <div className="pl-nota-modo" role="tablist" aria-label="Modo da página">
+        <button type="button" role="tab" aria-selected={modo === 'texto'} className={`pl-chip ${modo === 'texto' ? 'active' : ''}`} onClick={() => { setBlocosIniciais(blocosAtuaisRef.current); setModo('texto') }} data-modo-texto>Texto</button>
+        <button type="button" role="tab" aria-selected={modo === 'visual'} className={`pl-chip ${modo === 'visual' ? 'active' : ''}`} onClick={() => { setBlocosVisual(blocosAtuaisRef.current); setModo('visual') }} data-modo-visual>Visual e PDF</button>
+      </div>
+
+      {modo === 'visual' ? <DocumentoVisual titulo={titulo} blocos={blocosVisual} /> : <EditorBlocos
         blocosIniciais={blocosIniciais}
         onChange={novos => { blocosAtuaisRef.current = novos; agendarSalvar({ blocos: novos }) }}
         onColou={linhas => { if (linhas >= 4 && textoRendeMapa(blocosAtuaisRef.current)) setOfertaMapa(true) }}
-      />
+      />}
     </div>
   )
 }
