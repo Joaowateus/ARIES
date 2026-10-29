@@ -1161,6 +1161,14 @@ export const proLaboreApi = {
     aprovar: {
       fila: () => request<SmFilaAprovacao>('/pro-labore/sm/aprovar'),
     },
+    // Referências (benchmark): vídeos com mais engajamento por moto do estoque e perfis de referência.
+    referencias: {
+      ver: () => request<SmReferencias>('/pro-labore/sm/referencias'),
+      adicionarPerfil: (usuario: string) => request<SmReferencias>('/pro-labore/sm/referencias/perfis', { method: 'POST', body: JSON.stringify({ usuario }) }),
+      removerPerfil: (id: string) => request<SmReferencias>(`/pro-labore/sm/referencias/perfis/${id}`, { method: 'DELETE' }),
+      salvarHashtags: (chave: string, hashtags: string[]) => request<SmReferencias>(`/pro-labore/sm/referencias/motos/${encodeURIComponent(chave)}/hashtags`, { method: 'PUT', body: JSON.stringify({ hashtags }) }),
+      atualizar: () => request<SmReferencias>('/pro-labore/sm/referencias/atualizar', { method: 'POST' }),
+    },
     concorrentes: {
       ver: () => request<SmConcorrentes>('/pro-labore/sm/concorrentes'),
       adicionar: (usuario: string) => request<SmConcorrentes>('/pro-labore/sm/concorrentes', { method: 'POST', body: JSON.stringify({ usuario }) }),
@@ -2660,6 +2668,15 @@ export interface SmPerfilComparado {
   postsSemana: number | null; engajamentoMedio: number | null; taxaEngajamento: number | null; ultimoPostEm: string | null
 }
 export interface SmConcorrente extends SmPerfilComparado { id: string; nome: string | null; atualizadoEm: string | null; erro: string | null; desde: string | null; serie: { data: string; seguidores: number }[] }
+export interface SmVideoReferencia { id: string; origem: 'HASHTAG' | 'PERFIL'; fonte: string; autor: string | null; permalink: string; legenda: string | null; curtidas: number | null; comentarios: number | null; formato: string | null; publicadoEm: string | null; motoChave: string | null; engajamento: number; taxa: number | null }
+export interface SmReferencias {
+  disponivel: boolean
+  conta: string | null
+  podeEditar: boolean
+  hashtagsSemana: { usadas: number; limite: number }
+  motos: Array<{ chave: string; nome: string; quantidade: number; hashtags: string[]; buscadoEm: string | null; ultimoErro: string | null; videos: SmVideoReferencia[] }>
+  perfis: Array<{ id: string; usuario: string; nome: string | null; fotoUrl: string | null; seguidores: number | null; atualizadoEm: string | null; ultimoErro: string | null; videos: SmVideoReferencia[] }>
+}
 export interface SmConcorrentes { disponivel: boolean; motivo: string | null; max: number; podeEditar: boolean; loja: SmPerfilComparado | null; perfis: SmConcorrente[] }
 export interface SmArquivoAcervo { id: string; tipo: 'IMAGEM' | 'VIDEO' | 'TOMADA' | 'CAPA'; url: string; tomada: number | null; criadoEm: string; pautas: { id: string; titulo: string; status: SmStatusPauta; permalink: string | null }[] }
 export interface SmAcervoMoto {

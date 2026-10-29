@@ -973,6 +973,7 @@ model ProLaboreUsuario {
   smPushInscricoes          SmPushInscricao[]
   smPulsos                  SmPulso[]
   smConcorrentes            SmConcorrente[]
+  smReferenciaPerfis        SmReferenciaPerfil[]
   smPlanejamentos           SmPlanejamento[]
   metaSaude                 MetaSaude?
   lancamentosFinanceiros    LancamentoFinanceiro[]
@@ -3462,6 +3463,70 @@ model SmConcorrente {
 
   @@unique([usuarioId, usuario])
   @@map("pro_labore_sm_concorrentes")
+}
+
+// Referências (aba do Social Media, benchmark): perfis do Instagram que a
+// loja usa como referência (Business Discovery: dados públicos) e os vídeos
+// com mais engajamento por moto do estoque (busca por hashtag, top_media).
+// O Instagram não informa visualizações nem alcance de conteúdo de outras
+// contas: a régua é curtidas + comentários.
+model SmReferenciaPerfil {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  usuario      String // @ sem a arroba, minúsculo
+  nome         String?
+  fotoUrl      String?
+  seguidores   Int?
+  atualizadoEm DateTime?
+  ultimoErro   String?
+  criadoEm     DateTime  @default(now())
+
+  dono ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, usuario])
+  @@map("pro_labore_sm_referencia_perfis")
+}
+
+// As hashtags de cada moto do estoque (chave = marca + modelo normalizados)
+// e quando foram buscadas: a busca de hashtag tem limite de 30 hashtags
+// diferentes por semana na conta.
+model SmReferenciaMoto {
+  id         String    @id @default(cuid())
+  usuarioId  String
+  chave      String
+  hashtags   String[]
+  buscadoEm  DateTime?
+  ultimoErro String?
+  // Cada hashtag pesquisada e quando ([{ h, em }], últimos 7 dias): o limite
+  // do Instagram conta toda hashtag buscada na semana, mesmo trocada depois.
+  buscadas   Json?
+  criadoEm   DateTime  @default(now())
+
+  @@unique([usuarioId, chave])
+  @@map("pro_labore_sm_referencia_motos")
+}
+
+// Vídeo público guardado da última busca (de uma hashtag de moto ou de um
+// perfil de referência).
+model SmReferenciaVideo {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  mediaId      String
+  origem       String // HASHTAG | PERFIL
+  fonte        String // a hashtag (sem #) ou o @ do perfil
+  motoChave    String? // moto do estoque a que o vídeo se refere (hashtag ou legenda)
+  autor        String? // @ do perfil (a busca de hashtag não informa o autor)
+  permalink    String
+  legenda      String?
+  curtidas     Int?
+  comentarios  Int?
+  formato      String? // REELS | VIDEO
+  publicadoEm  DateTime?
+  atualizadoEm DateTime  @default(now())
+
+  @@unique([usuarioId, mediaId])
+  @@index([usuarioId, motoChave])
+  @@map("pro_labore_sm_referencia_videos")
 }
 
 model SmConcorrenteRetrato {

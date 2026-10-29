@@ -10,7 +10,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { usePLTema } from '@/lib/proLaboreTheme'
 import { definirVerComoSocialMedia, proLaboreApi, verComoSocialMediaAtivo, type SmAbaAssistente, type SmAvisoPulso, type SmAvisosLista, type SmEu, type SmModulo, type SmNivel } from '@/lib/proLaboreApi'
 import {
-  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAgenda, IcAnotacoes, IcAprovar, IcAtendimento, IcReunioes, IcEstoque, IcCalendario, IcDesempenho, IcCentral, IcHoje, IcMetodo, IcProducao, IcVendasPorPost,
+  Botao, CardEsqueleto, CartaoStatusConta, EstadoVazio, IcAgenda, IcAnotacoes, IcAprovar, IcAtendimento, IcReunioes, IcEstoque, IcCalendario, IcDesempenho, IcCentral, IcHoje, IcMetodo, IcProducao, IcReferencias, IcVendasPorPost,
   ListaAtalhos, PainelAvisos, telaDesligada, PaletaSM, SidebarSM, SmApp, haQuanto, registrarSW, type ComandoPaleta, type ItemMenu, type StatusConta,
 } from '../_ui'
 import { EspacoSMCtx, atende } from './EspacoSM'
@@ -211,6 +211,7 @@ function Espaco({ papel, children }: { papel: 'DONO' | 'SOCIAL_MEDIA'; children:
       ...(ctx.pode('producao') ? [
         { href: '/pro-labore/sm/central', rotulo: 'Central de conteúdo', icone: <IcCentral /> },
         { href: '/pro-labore/sm/metodo', rotulo: 'Método', icone: <IcMetodo /> },
+        { href: '/pro-labore/sm/referencias', rotulo: 'Referências', icone: <IcReferencias /> },
         { href: '/pro-labore/sm/calendario', rotulo: 'Calendário', icone: <IcCalendario />, atalho: 'G C' },
         { href: '/pro-labore/sm/producao', rotulo: 'Produção', icone: <IcProducao /> },
       ] : []),
