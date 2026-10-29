@@ -4279,3 +4279,9 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pa-nova-linha b { color: var(--pl-ink-1); }
 .pa-nova-acoes { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pa-nova-reabrir { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px solid var(--pl-border); }
+
+/* Anotações: erro ao salvar e oferta de virar mapa mental */
+.pl-nota-erro { color: var(--pl-critical); }
+.pl-nota-erro button { border: 0; background: none; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.pl-nota-oferta { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--pl-border-strong); border-radius: var(--pl-radius-sm); background: var(--pl-surface); font-size: 13px; color: var(--pl-ink-2); }
+.pl-nota-oferta span { flex: 1 1 260px; }

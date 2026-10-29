@@ -7,6 +7,8 @@ import {
 } from '@/lib/proLaboreApi'
 import { PageHeader } from '../../PageHeader'
 import EditorBlocos from './EditorBlocos'
+import { textoParaArvore, textoRendeMapa } from './motor-mapa-mental/deTexto'
+import { arvoreParaObjetosBoard } from './motor-mapa-mental/conversao'
 import MapaMentalCanvas, {
   dadosIniciaisDoBoard, gerarBoardDoTemplate, TEMAS_BOARD, TemaBoard, TEMPLATES_BOARD, CONFIGURACAO_PADRAO, ConfiguracaoBoard,
 } from './MapaMental'
@@ -146,12 +148,17 @@ function VisaoLixeira({ mapas, onAbrirPasta, onRestaurar, onExcluirDefinitivo }:
   )
 }
 
-function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAtualizada: (nota: Nota) => void; onExcluir: () => void }) {
+function PaginaNota({ nota, onAtualizada, onExcluir, onVirarMapa }: { nota: Nota | null; onAtualizada: (nota: Nota) => void; onExcluir: () => void; onVirarMapa: (titulo: string, blocos: Bloco[]) => Promise<void> }) {
   const [titulo, setTitulo] = useState(nota?.titulo ?? '')
   const [icone, setIcone] = useState(nota?.icone ?? '')
   const [categoria, setCategoria] = useState<CategoriaNota>(nota?.categoria ?? 'TRABALHO')
   const [blocosIniciais, setBlocosIniciais] = useState<Bloco[]>(criarBlocosIniciais(nota))
   const [status, setStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo')
+  const [erroSalvar, setErroSalvar] = useState('')
+  // Colou um texto grande: oferece virar mapa mental na hora.
+  const [ofertaMapa, setOfertaMapa] = useState(false)
+  const [virando, setVirando] = useState(false)
+  const tentativasRef = useRef(0)
   const blocosAtuaisRef = useRef<Bloco[]>(blocosIniciais)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   type CamposNota = Partial<{ titulo: string; icone: string | null; categoria: CategoriaNota; blocos: Bloco[] }>
@@ -169,7 +176,16 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nota?.id])
 
-  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }, [])
+  // Saiu da página com edição pendente: salva antes de sair, sem esperar.
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    const pendente = pendenteRef.current
+    if (nota && Object.keys(pendente).length) {
+      const blocos = pendente.blocos ?? blocosAtuaisRef.current
+      void proLaboreApi.notas.atualizar(nota.id, { ...pendente, conteudo: blocos.map(b => b.texto).filter(Boolean).join('\n') }).catch(() => undefined)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function criarBlocosIniciais(n: Nota | null): Bloco[] {
     if (n?.blocos && n.blocos.length > 0) return n.blocos
@@ -192,11 +208,22 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
         const conteudo = blocos.map(b => b.texto).filter(Boolean).join('\n')
         const atualizada = await proLaboreApi.notas.atualizar(nota.id, { ...paraSalvar, conteudo })
         onAtualizada(atualizada)
-        setStatus('salvo')
-      } catch {
+        tentativasRef.current = 0
+        setErroSalvar('')
+        setStatus(Object.keys(pendenteRef.current).length ? 'salvando' : 'salvo')
+      } catch (e) {
+        // Não perde a edição: volta para a fila e tenta de novo sozinho (até 3 vezes).
+        pendenteRef.current = { ...paraSalvar, ...pendenteRef.current }
+        setErroSalvar((e as Error).message)
         setStatus('erro')
+        if (tentativasRef.current++ < 3) timeoutRef.current = setTimeout(() => agendarSalvar({}), 4000)
       }
     }, 500)
+  }
+  const tentarDeNovo = () => { tentativasRef.current = 0; agendarSalvar({}) }
+  async function virarMapa() {
+    setVirando(true)
+    try { await onVirarMapa(titulo, blocosAtuaisRef.current) } finally { setVirando(false) }
   }
 
   if (!nota) return <div className="pl-card"><div className="pl-empty">Nota não encontrada.</div></div>
@@ -209,7 +236,12 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
           tamanhoClasse="pl-notion-pagina-icone"
           onEscolher={novoIcone => { setIcone(novoIcone ?? ''); agendarSalvar({ icone: novoIcone }) }}
         />
-        <div className="pl-notion-pagina-status">{status === 'salvando' ? 'Salvando...' : status === 'erro' ? 'Erro ao salvar' : 'Salvo'}</div>
+        <div className="pl-notion-pagina-status" data-status-nota={status}>
+          {status === 'salvando' ? 'Salvando...' : status === 'erro' ? <span className="pl-nota-erro" title={erroSalvar}>Erro ao salvar{erroSalvar ? `: ${erroSalvar}` : ''} · <button type="button" onClick={tentarDeNovo}>Tentar de novo</button></span> : 'Salvo'}
+        </div>
+        <button type="button" className="pl-an-topo-btn" onClick={() => { void virarMapa() }} disabled={virando} title="Cria um mapa mental com os títulos, tópicos e listas desta página" data-virar-mapa>
+          {virando ? 'Criando mapa…' : '🧠 Transformar em mapa mental'}
+        </button>
         <button type="button" className="pl-kanban-icon-btn pl-danger" title="Excluir" onClick={onExcluir}>
           <IconeLixeira />
         </button>
@@ -234,9 +266,18 @@ function PaginaNota({ nota, onAtualizada, onExcluir }: { nota: Nota | null; onAt
         ))}
       </div>
 
+      {ofertaMapa && (
+        <div className="pl-nota-oferta" data-oferta-mapa>
+          <span>🧠 Texto colado. Quer ver isso como mapa mental (para uma reunião, por exemplo)?</span>
+          <button type="button" className="pl-btn pl-btn-primary" disabled={virando} onClick={() => { void virarMapa() }}>Transformar em mapa mental</button>
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setOfertaMapa(false)}>Agora não</button>
+        </div>
+      )}
+
       <EditorBlocos
         blocosIniciais={blocosIniciais}
         onChange={novos => { blocosAtuaisRef.current = novos; agendarSalvar({ blocos: novos }) }}
+        onColou={linhas => { if (linhas >= 4 && textoRendeMapa(blocosAtuaisRef.current)) setOfertaMapa(true) }}
       />
     </div>
   )
@@ -992,6 +1033,20 @@ function Anotacoes() {
     }
   }
 
+  // Página → mapa mental (sem IA): títulos viram ramos, listas viram filhos. Fica na mesma pasta; a página continua.
+  async function mapaDaNota(pastaId: string | null, titulo: string, blocos: Bloco[]) {
+    const { tree, total } = textoParaArvore(titulo || 'Sem título', blocos)
+    if (total < 2) { alert('Escreva ou cole o conteúdo na página antes: não há tópicos para o mapa.'); return }
+    try {
+      const { objetos, conectores } = arvoreParaObjetosBoard(tree)
+      const mapa = await proLaboreApi.mapasMentais.criar({ pastaId, titulo: `${titulo || 'Sem título'} (mapa)`, icone: '🧠', objetos, conectores, configuracao: { ...CONFIGURACAO_PADRAO, layout: 'mapaMental' as const } })
+      setMapas(prev => [mapa, ...prev])
+      navegar({ tipo: 'mapa', id: mapa.id })
+    } catch (e) {
+      alert(`Não foi possível criar o mapa mental: ${(e as Error).message}`)
+    }
+  }
+
   async function criarPasta(paiId: string | null) {
     try {
       const pasta = await proLaboreApi.pastas.criar({ nome: 'Nova pasta', paiId })
@@ -1274,6 +1329,7 @@ function Anotacoes() {
                 <PaginaNota
                   key={visao.id}
                   nota={notaAberta}
+                  onVirarMapa={(titulo, blocos) => mapaDaNota(notaAberta?.pastaId ?? null, titulo, blocos)}
                   onAtualizada={atualizarNotaLocal}
                   onExcluir={() => { void excluirItens([chaveDe('nota', visao.id)]) }}
                 />

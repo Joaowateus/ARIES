@@ -70,13 +70,29 @@ function detectarAtalho(valor: string): { tipo: TipoBloco; restante: string } | 
   return null
 }
 
+// Linha de texto colado → bloco, pelos mesmos atalhos de markdown da digitação.
+function blocoDaLinha(linha: string): Bloco {
+  const t = linha.trim()
+  // Recuo de sublista (2 espaços ou tab por nível) fica no começo do texto do item.
+  const recuo = '  '.repeat(Math.floor((linha.match(/^[ \t]*/)?.[0] ?? '').replace(/\t/g, '  ').length / 2))
+  const casos: Array<[RegExp, TipoBloco]> = [
+    [/^###\s+(.*)$/, 'titulo3'], [/^##\s+(.*)$/, 'titulo2'], [/^#\s+(.*)$/, 'titulo1'],
+    [/^\[[ xX]?\]\s+(.*)$/, 'checkbox'], [/^[-*•▪◦–]\s+(.*)$/, 'lista'], [/^\d{1,3}[.)]\s+(.*)$/, 'lista_numerada'], [/^>\s+(.*)$/, 'citacao'],
+  ]
+  for (const [re, tipo] of casos) {
+    const m = t.match(re)
+    if (m) return { ...novoBloco(tipo, tipo.startsWith('titulo') ? m[1] : recuo + m[1]), ...(tipo === 'checkbox' && { marcado: /^\[[xX]\]/.test(t) }) }
+  }
+  return novoBloco('paragrafo', t)
+}
+
 function autoResize(el: HTMLTextAreaElement | null) {
   if (!el) return
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
 }
 
-export default function EditorBlocos({ blocosIniciais, onChange }: { blocosIniciais: Bloco[]; onChange: (blocos: Bloco[]) => void }) {
+export default function EditorBlocos({ blocosIniciais, onChange, onColou }: { blocosIniciais: Bloco[]; onChange: (blocos: Bloco[]) => void; onColou?: (linhas: number) => void }) {
   const [blocos, setBlocos] = useState<Bloco[]>(blocosIniciais.length > 0 ? blocosIniciais : [novoBloco()])
   const [menuAbertoIndice, setMenuAbertoIndice] = useState<number | null>(null)
   const [menuIconeAbertoIndice, setMenuIconeAbertoIndice] = useState<number | null>(null)
@@ -132,6 +148,36 @@ export default function EditorBlocos({ blocosIniciais, onChange }: { blocosInici
     commit(novos)
     if (valor === '/') setMenuAbertoIndice(indice)
     else if (menuAbertoIndice === indice) setMenuAbertoIndice(null)
+  }
+
+  // Texto com várias linhas colado: cada linha vira um bloco (títulos e
+  // listas reconhecidos). Sem isso o texto inteiro ficava num bloco só,
+  // grande demais para salvar.
+  function handleColar(e: React.ClipboardEvent<HTMLTextAreaElement>, indice: number) {
+    const bloco = blocos[indice]
+    const texto = e.clipboardData.getData('text/plain')
+    if (bloco.tipo === 'codigo' || !/\r?\n/.test(texto)) return
+    const linhas = texto.split(/\r?\n/).filter(l => l.trim())
+    if (linhas.length < 2) return
+    e.preventDefault()
+    const el = e.currentTarget
+    const antes = bloco.texto.slice(0, el.selectionStart), depois = bloco.texto.slice(el.selectionEnd)
+    const novosBlocos = linhas.map(blocoDaLinha)
+    const novos = [...blocos]
+    // A primeira linha continua no bloco atual quando ele já tinha texto antes do cursor.
+    if (antes.trim()) {
+      novos[indice] = { ...bloco, texto: antes + novosBlocos[0].texto }
+      novosBlocos.shift()
+    } else novos.splice(indice, 1)
+    const posicao = antes.trim() ? indice + 1 : indice
+    const ultimo = novosBlocos.at(-1)
+    if (ultimo && depois) ultimo.texto += depois
+    else if (!ultimo && depois) novos[indice] = { ...novos[indice], texto: novos[indice].texto + depois }
+    novos.splice(posicao, 0, ...novosBlocos)
+    commit(novos.length ? novos : [novoBloco()])
+    const fim = Math.max(0, posicao + novosBlocos.length - 1)
+    focarDepois(fim, (novos[fim]?.texto.length ?? 0) - depois.length)
+    onColou?.(linhas.length)
   }
 
   function escolherTipoNoMenu(indice: number, tipo: TipoBloco) {
@@ -346,6 +392,7 @@ export default function EditorBlocos({ blocosIniciais, onChange }: { blocosInici
                   placeholder={PLACEHOLDER_POR_TIPO[bloco.tipo]}
                   onChange={e => handleTexto(indice, e.target.value)}
                   onKeyDown={e => handleKeyDown(e, indice)}
+                  onPaste={e => handleColar(e, indice)}
                   onFocus={e => autoResize(e.currentTarget)}
                 />
               </div>
