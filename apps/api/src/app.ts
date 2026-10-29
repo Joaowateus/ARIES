@@ -75,6 +75,7 @@ import proLaboreSmRetrospectivaRoutes from './routes/proLaboreSmRetrospectiva'
 import proLaboreSmPulsoRoutes from './routes/proLaboreSmPulso'
 import proLaboreSmCapturaRoutes from './routes/proLaboreSmCaptura'
 import proLaboreSmConcorrentesRoutes from './routes/proLaboreSmConcorrentes'
+import proLaboreSmReferenciasRoutes from './routes/proLaboreSmReferencias'
 import proLaboreSmAcervoRoutes from './routes/proLaboreSmAcervo'
 import proLaboreSmPlanejamentoRoutes from './routes/proLaboreSmPlanejamento'
 import proLaboreMetaConexaoRoutes from './routes/proLaboreMetaConexao'
@@ -259,6 +260,7 @@ app.use('/pro-labore', proLaboreSmRetrospectivaRoutes)
 app.use('/pro-labore', proLaboreSmPulsoRoutes)
 app.use('/pro-labore', proLaboreSmCapturaRoutes)
 app.use('/pro-labore', proLaboreSmConcorrentesRoutes)
+app.use('/pro-labore', proLaboreSmReferenciasRoutes)
 app.use('/pro-labore', proLaboreSmAcervoRoutes)
 app.use('/pro-labore', proLaboreSmPlanejamentoRoutes)
 app.use('/pro-labore', proLaboreMetaConexaoRoutes)

@@ -767,3 +767,35 @@ export async function buscarPerfilConcorrente(igUserId: string, accessToken: str
     ultimos: (b.media?.data ?? []).map(m => ({ publicadoEm: new Date(m.timestamp), curtidas: m.like_count ?? null, comentarios: m.comments_count ?? null, formato: m.media_product_type ?? null })),
   }
 }
+
+// Referências (aba do Social Media): vídeos públicos com mais engajamento.
+// Só pelo Graph do Facebook (chamar dentro de `comApiDaEmpresa`). O Instagram
+// não informa visualizações nem alcance de conteúdo de outras contas.
+export interface MidiaPublica { id: string; permalink: string; legenda: string | null; curtidas: number | null; comentarios: number | null; formato: string | null; publicadoEm: Date | null; video: boolean }
+interface MidiaGraph { id: string; permalink?: string; caption?: string; like_count?: number; comments_count?: number; media_type?: string; media_product_type?: string; timestamp?: string }
+const CAMPOS_MIDIA_PUBLICA = 'id,permalink,caption,like_count,comments_count,media_type,media_product_type,timestamp'
+const paraMidiaPublica = (m: MidiaGraph): MidiaPublica => ({
+  id: m.id, permalink: m.permalink ?? '', legenda: m.caption ?? null, curtidas: m.like_count ?? null, comentarios: m.comments_count ?? null,
+  formato: m.media_product_type ?? m.media_type ?? null, publicadoEm: m.timestamp ? new Date(m.timestamp) : null,
+  video: m.media_type === 'VIDEO' || m.media_product_type === 'REELS',
+})
+
+/** Os posts mais relevantes de uma hashtag (top_media). Conta no limite de 30 hashtags por semana. */
+export async function midiasDaHashtag(igUserId: string, accessToken: string, hashtag: string): Promise<MidiaPublica[]> {
+  const busca = await chamarGraphApi<{ data?: Array<{ id: string }> }>('/ig_hashtag_search', { user_id: igUserId, q: hashtag, access_token: accessToken })
+  const id = busca.data?.[0]?.id
+  if (!id) return []
+  const r = await chamarGraphApi<{ data?: MidiaGraph[] }>(`/${id}/top_media`, { user_id: igUserId, fields: CAMPOS_MIDIA_PUBLICA, limit: '50', access_token: accessToken })
+  return (r.data ?? []).map(paraMidiaPublica).filter(m => m.permalink)
+}
+
+/** Perfil público (Business Discovery) com os últimos 50 posts. */
+export async function midiasDoPerfil(igUserId: string, accessToken: string, usuario: string): Promise<{ usuario: string; nome: string | null; fotoUrl: string | null; seguidores: number | null; midias: MidiaPublica[] }> {
+  const r = await chamarGraphApi<{ business_discovery?: { username: string; name?: string; profile_picture_url?: string; followers_count?: number; media?: { data?: MidiaGraph[] } } }>(`/${igUserId}`, {
+    fields: `business_discovery.username(${usuario}){username,name,profile_picture_url,followers_count,media.limit(50){${CAMPOS_MIDIA_PUBLICA}}}`,
+    access_token: accessToken,
+  })
+  const b = r.business_discovery
+  if (!b) throw new ErroGraphApi('Perfil não encontrado ou não é uma conta profissional', 110)
+  return { usuario: b.username, nome: b.name ?? null, fotoUrl: b.profile_picture_url ?? null, seguidores: b.followers_count ?? null, midias: (b.media?.data ?? []).map(paraMidiaPublica).filter(m => m.permalink) }
+}

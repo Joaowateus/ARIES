@@ -17,6 +17,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { avisarLigacoes } from '../lib/ligacoesAviso'
 import { avisarFollowsCredito } from '../lib/followCredito'
+import { rodarReferencias } from '../lib/smReferencias'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import {
   ErroGraphApi,
@@ -345,7 +346,9 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const concorrentes = await rodarConcorrentes(agora).catch(e => { console.error('[sm] concorrentes', e); return { concorrentes: 0 } })
   const planejamento = await rodarPlanejamento(agora).catch(e => { console.error('[sm] planejamento', e); return { planejamento: 0 } })
   const lembretes = await lembretesAnuais(agora).catch(e => { console.error('[meta] lembretes', e); return { lembretesMeta: 0 } })
-  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes })
+  // Referências: vídeos dos perfis (todo dia) e das hashtags das motos (a cada 3 dias, no limite semanal).
+  const referencias = await rodarReferencias(agora).catch(e => { console.error('[sm] referências', e); return { referenciasPerfis: 0, referenciasMotos: 0 } })
+  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em

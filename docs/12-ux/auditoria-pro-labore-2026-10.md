@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.8.0
+version: 1.9.0
 status: ativo
 ---
 
@@ -270,6 +270,29 @@ A página tem dois modos: **Texto**, para editar, e **Visual e PDF**. No modo Vi
   - abre a impressão do navegador só com o documento, em A4 com fundo branco e cores preservadas;
   - o nome do arquivo é o título da página;
   - escolha "Salvar como PDF" na impressão.
+
+## Social Media: aba Referências (29/10)
+
+A aba fica no menu Trabalho do Social Media. Ver é de quem tem Produção; mudar é de quem tem Produção completa (o gestor, sempre).
+
+- **Por moto do estoque:**
+  - **Quais motos:** cada modelo disponível ou reservado, agrupado por marca e modelo.
+  - **Hashtags:** começa com duas sugeridas (ex.: #cg160titan e #hondacg160titan). Dá para editar até 3.
+  - **Busca:** pelos posts mais relevantes de cada hashtag (Graph `ig_hashtag_search` → `top_media`), ficando só os vídeos e Reels.
+  - **Junto:** os vídeos dos perfis de referência cuja legenda fala do modelo.
+- **Perfis de referência** (até 20): pela Business Discovery (dados públicos de conta profissional). Mostra os melhores vídeos entre os últimos 50 posts e a taxa de engajamento sobre os seguidores.
+- **A régua:**
+  - **Como ordena:** pelo engajamento público (curtidas + comentários).
+  - **O que não dá:** o Instagram não informa visualizações nem alcance de conteúdo de outras contas.
+  - **Assistir:** o vídeo abre incorporado do Instagram, sem sair da tela.
+- **Limite do Instagram:** 30 hashtags diferentes por semana na conta.
+  - Cada busca é registrada com a data, inclusive de hashtag trocada depois.
+  - O sistema usa até 26. A moto que passaria do limite espera a próxima semana, com aviso na tela.
+  - Uma moto só é rebuscada depois de 3 dias.
+- **Atualização:** os perfis atualizam todo dia no job diário; o botão "Atualizar agora" atualiza na hora.
+- **Requisito na Meta:**
+  - **Hashtags:** o app precisa da permissão **Instagram Public Content Access**. Sem ela, a moto mostra o aviso e os perfis continuam funcionando.
+  - **Conta:** o Instagram precisa estar conectado pela empresa.
 
 ## Próximas fases (mesmo pedido)
 
