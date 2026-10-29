@@ -7,7 +7,7 @@ purpose: >
 responsibility: Frontend do Pró-Labore.
 relationships:
   - docs/12-ux/design-system.md
-version: 1.7.0
+version: 1.8.0
 status: ativo
 ---
 
@@ -250,6 +250,26 @@ A ligação automática pelo WhatsApp do vendedor não é possível pela Evoluti
   - **Como monta (sem IA):** a ideia central é o título da página. Os títulos viram ramos e subtítulos. A linha que introduz uma lista (ex.: "responder a três perguntas:") recebe os itens como filhos, e as sublistas recuadas descem um nível.
   - **Texto longo:** fica encurtado no nó, com até 140 caracteres.
   - **Onde salva:** o mapa é criado na mesma pasta e abre no layout de mapa mental. A página original continua.
+
+## Anotações: modo "Visual e PDF" (29/10)
+
+A página tem dois modos: **Texto**, para editar, e **Visual e PDF**. No modo Visual, o mesmo conteúdo é organizado sozinho, sem IA, pela estrutura do texto:
+
+| No texto | No visual |
+|---|---|
+| Item numerado sozinho seguido de texto | Seção com número |
+| Itens numerados, cada um com uma linha de descrição (2 ou mais) | Caixas com setas, quando a seção fala de funil, fluxo, jornada, processo ou etapas; senão, etapas numeradas |
+| Linhas com colunas (tab ou \|), coladas de tabela | Tabela; se a última coluna é de números, ganha gráfico de barras |
+| "Rótulo: texto" (ex.: "Objetivo gerencial: …") | Destaque |
+| "A → B → C" | Cadeia de etapas (chips com setas) |
+| "A. Pergunta?", "B. …", com as linhas de baixo | Cartões, com as cadeias dentro |
+| "Etapa 0 — …", ou linha curta antes de tabela, lista ou cartões | Subtítulo |
+| Lista, checklist, citação, destaque, código, imagem | Versões visuais equivalentes |
+
+- **Gerar PDF:**
+  - abre a impressão do navegador só com o documento, em A4 com fundo branco e cores preservadas;
+  - o nome do arquivo é o título da página;
+  - escolha "Salvar como PDF" na impressão.
 
 ## Próximas fases (mesmo pedido)
 
