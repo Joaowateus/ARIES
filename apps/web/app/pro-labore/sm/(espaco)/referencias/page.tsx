@@ -1,44 +1,21 @@
 'use client'
 
-// Referências (benchmark): para cada moto do estoque, os vídeos públicos do
-// Instagram com mais engajamento (busca pelas hashtags da moto) e os perfis
-// que a loja usa como referência, com os melhores vídeos de cada um. O vídeo
-// abre aqui mesmo (incorporado do Instagram). A régua é curtidas +
-// comentários: o Instagram não informa visualizações nem alcance de outras contas.
-import { useCallback, useEffect, useState } from 'react'
-import { proLaboreApi, type SmReferencias, type SmVideoReferencia } from '@/lib/proLaboreApi'
-import { Banner, Botao, CardEsqueleto, Chip, EstadoVazio, Modal, Rotulo, Segmentado, haQuanto, useToast } from '../../_ui'
+// Referências (benchmark e espionagem): os posts públicos do Instagram dos
+// concorrentes, dos perfis de inspiração e das hashtags de cada moto do
+// estoque, num lugar só para filtrar, comparar, tirar padrões e guardar o
+// que vale copiar (e virar pauta). A régua é curtidas + comentários: o
+// Instagram não informa visualizações nem alcance de outras contas.
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { proLaboreApi, type SmPostReferencia, type SmReferenciaSalva, type SmReferencias } from '@/lib/proLaboreApi'
+import { Banner, Botao, CardEsqueleto, Chip, EstadoVazio, KpiCard, Modal, Rotulo, Segmentado, haQuanto, useToast } from '../../_ui'
 import { useEspacoSM } from '../EspacoSM'
+import { PainelPost, num, quem } from './comum'
+import { Explorar, FILTROS_INICIAIS, GradePosts, type Filtros } from './Explorar'
+import { Insights } from './Insights'
+import { Perfis } from './Perfis'
+import { Salvos } from './Salvos'
 
-const num = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR'))
-const trecho = (t: string | null) => (t ? (t.length > 140 ? `${t.slice(0, 139)}…` : t) : '')
-/** Endereço de incorporação do Instagram para o post/reel. */
-const embed = (permalink: string) => `${permalink.replace(/\?.*$/, '').replace(/\/$/, '')}/embed`
-
-function Video({ v, posicao, aoAssistir }: { v: SmVideoReferencia; posicao: number; aoAssistir: () => void }) {
-  return (
-    <li className="sm-ref-video" data-video-ref={v.id}>
-      <span className="sm-ref-pos" aria-label={`${posicao}º`}>{posicao}</span>
-      <div className="sm-ref-video-corpo">
-        <div className="sm-ref-numeros">
-          <b title="Curtidas + comentários">{num(v.engajamento)}</b><span>engajamento</span>
-          <span>· {num(v.curtidas)} curtidas · {num(v.comentarios)} comentários</span>
-          {v.taxa != null && <Chip tom="info" titulo="Engajamento ÷ seguidores do perfil">{v.taxa.toLocaleString('pt-BR')}% dos seguidores</Chip>}
-        </div>
-        <p>{trecho(v.legenda) || <i>sem legenda</i>}</p>
-        <div className="sm-ref-meta">
-          <span>{v.autor ? `@${v.autor}` : `via #${v.fonte}`}</span>
-          {v.formato && <span>{v.formato === 'REELS' ? 'Reels' : 'Vídeo'}</span>}
-          {v.publicadoEm && <span>{haQuanto(v.publicadoEm)}</span>}
-        </div>
-        <div className="sm-ref-acoes">
-          <Botao variante="sec" onClick={aoAssistir} data-assistir>Assistir aqui</Botao>
-          <a className="sm-ref-link" href={v.permalink} target="_blank" rel="noreferrer">Abrir no Instagram ↗</a>
-        </div>
-      </div>
-    </li>
-  )
-}
+type Aba = 'explorar' | 'motos' | 'perfis' | 'insights' | 'salvos'
 
 function Hashtags({ chave, hashtags, podeEditar, aoSalvar }: { chave: string; hashtags: string[]; podeEditar: boolean; aoSalvar: (lista: string[]) => Promise<boolean> }) {
   const [editando, setEditando] = useState(false)
@@ -65,48 +42,96 @@ export default function ReferenciasPage() {
   const toast = useToast()
   const [dados, setDados] = useState<SmReferencias | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const [aba, setAba] = useState<'motos' | 'perfis'>('motos')
+  const [aba, setAba] = useState<Aba>('explorar')
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS)
   const [moto, setMoto] = useState<string | null>(null)
-  const [novo, setNovo] = useState('')
   const [ocupado, setOcupado] = useState(false)
-  const [assistindo, setAssistindo] = useState<SmVideoReferencia | null>(null)
+  const [agora] = useState(() => Date.now())
+  // O post aberto: guarda só o id (do post ou do salvo), para refletir as mudanças.
+  const [aberto, setAberto] = useState<{ mediaId: string; postId: string | null } | null>(null)
 
   const carregar = useCallback(() => {
     proLaboreApi.sm.referencias.ver().then(d => { setDados(d); setErro(null) }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar agora.'))
   }, [])
   useEffect(() => { if (pode('producao')) carregar() }, [carregar, pode])
 
-  async function acao(fn: () => Promise<SmReferencias>, ok?: string) {
+  const acao = useCallback(async (fn: () => Promise<SmReferencias>, ok?: string) => {
     setOcupado(true)
     try { setDados(await fn()); if (ok) toast({ mensagem: ok }); return true }
     catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível concluir', tom: 'bad' }); return false }
     finally { setOcupado(false) }
+  }, [toast])
+
+  const salvar = (p: SmPostReferencia, nota?: string) => acao(() => proLaboreApi.sm.referencias.salvar(p.id, nota ?? null), 'Referência salva em "Salvos".')
+  const criarPauta = async (salvoId: string) => {
+    setOcupado(true)
+    try {
+      const r = await proLaboreApi.sm.referencias.criarPauta(salvoId)
+      setDados(r)
+      toast({ mensagem: 'Pauta criada na Produção (Ideias). A referência foi para "Para gravar".' })
+    } catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível criar a pauta', tom: 'bad' }) }
+    finally { setOcupado(false) }
   }
+  const abrirPost = (p: SmPostReferencia) => setAberto({ mediaId: p.mediaId, postId: p.id })
+  const abrirSalvo = (s: SmReferenciaSalva) => setAberto({ mediaId: s.mediaId, postId: null })
+
+  const kpis = useMemo(() => {
+    if (!dados) return null
+    const semEu = dados.posts.filter(p => !(p.origem === 'PERFIL' && dados.perfis.find(x => x.usuario === p.fonte)?.tipo === 'EU'))
+    const mes = agora - 30 * 864e5
+    return {
+      posts: semEu.length,
+      curva: semEu.filter(p => p.foraDaCurva && p.publicadoEm && Date.parse(p.publicadoEm) >= mes).length,
+      concorrentes: dados.perfis.filter(p => p.tipo === 'CONCORRENTE').length,
+      referencias: dados.perfis.filter(p => p.tipo === 'REFERENCIA').length,
+      ideias: dados.salvos.filter(s => s.status === 'IDEIA').length,
+      gravar: dados.salvos.filter(s => s.status === 'GRAVAR').length,
+      lido: dados.perfis.reduce<string | null>((u, p) => (p.atualizadoEm && (!u || p.atualizadoEm > u) ? p.atualizadoEm : u), null),
+    }
+  }, [dados, agora])
 
   if (!pode('producao')) return <div className="sm-card"><EstadoVazio titulo="Sem acesso às referências">O gestor pode liberar o módulo Produção em Equipe → Acessos e permissões.</EstadoVazio></div>
   const motoAtual = dados?.motos.find(m => m.chave === moto) ?? dados?.motos[0] ?? null
+  const postsDaMoto = motoAtual && dados ? dados.posts.filter(p => p.motoChave === motoAtual.chave) : []
+  const postAberto = aberto && dados ? (aberto.postId ? dados.posts.find(p => p.id === aberto.postId) : null) ?? dados.posts.find(p => p.mediaId === aberto.mediaId) ?? null : null
+  const salvoAberto = aberto && dados ? dados.salvos.find(s => s.mediaId === aberto.mediaId) ?? null : null
 
   return (
     <>
       <header className="sm-pagina-cab">
         <div>
           <Rotulo>Trabalho · Referências</Rotulo>
-          <h1 className="sm-ttl sm-h1">Os vídeos que mais engajam, por moto do estoque</h1>
-          <p>Referências públicas do Instagram para cada moto que está na loja e dos perfis que servem de exemplo. Atualiza sozinho todo dia.</p>
+          <h1 className="sm-ttl sm-h1">Referências e concorrentes</h1>
+          <p>O que os concorrentes e os melhores perfis estão postando, o que engaja nas hashtags de cada moto do estoque e o que vale copiar. Atualiza sozinho todo dia.</p>
         </div>
         {dados?.podeEditar && dados.disponivel && <Botao variante="sec" disabled={ocupado} onClick={() => acao(() => proLaboreApi.sm.referencias.atualizar(), 'Referências atualizadas.')} data-atualizar-referencias>{ocupado ? 'Buscando…' : 'Atualizar agora'}</Botao>}
       </header>
       {erro && <p className="sm-erro" role="alert">{erro}</p>}
       {!dados && !erro && <CardEsqueleto linhas={6} texto="Buscando as referências" />}
       {dados && !dados.disponivel && (
-        <Banner tom="warn" titulo="Conecte o Instagram da loja pela empresa (Meta)">A busca de vídeos públicos usa a API do Instagram ligada à página do Facebook da loja. O gestor conecta em Social Media → Conexão.</Banner>
+        <Banner tom="warn" titulo="Conecte o Instagram da loja pela empresa (Meta)">A busca de posts públicos usa a API do Instagram ligada à página do Facebook da loja. O gestor conecta em Social Media → Conexão.</Banner>
       )}
-      {dados && dados.disponivel && (
+      {dados && dados.disponivel && kpis && (
         <div className="sm-ref">
+          <div className="sm-ref-kpis">
+            <KpiCard rotulo="Posts monitorados" valor={num(kpis.posts)} legenda={`${dados.perfis.filter(p => p.tipo !== 'EU').length} perfis · ${dados.motos.length} motos`} />
+            <KpiCard rotulo="Fora da curva (30 dias)" valor={num(kpis.curva)} legenda="2× a média da fonte ou mais" />
+            <KpiCard rotulo="Concorrentes" valor={num(kpis.concorrentes)} legenda={`${kpis.referencias} referências de inspiração`} />
+            <KpiCard rotulo="Salvos" valor={num(kpis.ideias + kpis.gravar)} legenda={`${kpis.ideias} ideias · ${kpis.gravar} para gravar`} />
+            <KpiCard rotulo="Hashtags na semana" valor={`${dados.hashtagsSemana.usadas}/${dados.hashtagsSemana.limite}`} legenda={kpis.lido ? `perfis lidos ${haQuanto(kpis.lido)}` : 'limite do Instagram'} />
+          </div>
           <p className="sm-legenda sm-ref-nota">
-            Ordem por <b>engajamento</b> (curtidas + comentários). O Instagram não informa visualizações nem alcance de vídeos de outras contas. Hashtags pesquisadas nesta semana: {dados.hashtagsSemana.usadas} de {dados.hashtagsSemana.limite} (limite do Instagram).
+            Régua: <b>engajamento</b> (curtidas + comentários) e o <b>índice</b>, que compara cada post com a mediana da própria fonte (2× = o dobro do normal daquele perfil). O Instagram não informa visualizações nem alcance de posts de outras contas.
           </p>
-          <Segmentado rotulo="Referências" valor={aba} aoMudar={v => setAba(v)} opcoes={[{ valor: 'motos', rotulo: `Por moto (${dados.motos.length})` }, { valor: 'perfis', rotulo: `Perfis de referência (${dados.perfis.length})` }]} />
+          <Segmentado rotulo="Referências" valor={aba} aoMudar={setAba} className="sm-ref-abas" opcoes={[
+            { valor: 'explorar', rotulo: 'Explorar' },
+            { valor: 'motos', rotulo: `Por moto (${dados.motos.length})` },
+            { valor: 'perfis', rotulo: `Perfis e concorrentes (${dados.perfis.filter(p => p.tipo !== 'EU').length})` },
+            { valor: 'insights', rotulo: 'O que funciona' },
+            { valor: 'salvos', rotulo: `Salvos (${dados.salvos.length})` },
+          ]} />
+
+          {aba === 'explorar' && <Explorar dados={dados} filtros={filtros} setFiltros={setFiltros} aoAbrir={abrirPost} aoSalvar={p => salvar(p)} />}
 
           {aba === 'motos' && (dados.motos.length === 0 ? (
             <EstadoVazio titulo="Nenhuma moto no estoque">Cadastre as motos em Estoque: cada modelo ganha as suas referências.</EstadoVazio>
@@ -116,7 +141,7 @@ export default function ReferenciasPage() {
                 {dados.motos.map(m => (
                   <button key={m.chave} type="button" className={`sm-ref-moto ${motoAtual?.chave === m.chave ? 'ativo' : ''}`} onClick={() => setMoto(m.chave)} data-moto-ref={m.chave}>
                     <b>{m.nome}</b>
-                    <span>{m.videos.length ? `${m.videos.length} vídeos` : m.buscadoEm ? 'nada encontrado' : 'aguardando busca'}{m.quantidade > 1 ? ` · ${m.quantidade} no estoque` : ''}</span>
+                    <span>{m.posts ? `${m.posts} posts · melhor ${num(m.melhor)}` : m.buscadoEm ? 'nada encontrado' : 'aguardando busca'}{m.quantidade > 1 ? ` · ${m.quantidade} no estoque` : ''}</span>
                   </button>
                 ))}
               </nav>
@@ -126,46 +151,37 @@ export default function ReferenciasPage() {
                     <h2 className="sm-h-card">{motoAtual.nome}</h2>
                     <Hashtags key={motoAtual.chave + motoAtual.hashtags.join()} chave={motoAtual.chave} hashtags={motoAtual.hashtags} podeEditar={dados.podeEditar} aoSalvar={lista => acao(() => proLaboreApi.sm.referencias.salvarHashtags(motoAtual.chave, lista), 'Hashtags salvas: a moto entra na próxima busca.')} />
                     <span className="sm-legenda">{motoAtual.buscadoEm ? `Buscado ${haQuanto(motoAtual.buscadoEm)}` : 'Ainda não buscado'}</span>
+                    {postsDaMoto.length > 0 && <button type="button" className="sm-link-botao" onClick={() => { setFiltros({ ...FILTROS_INICIAIS, moto: motoAtual.chave }); setAba('explorar') }}>Filtrar no Explorar</button>}
                   </div>
                   {motoAtual.ultimoErro && <Banner tom="warn" titulo="Busca da moto">{motoAtual.ultimoErro}</Banner>}
-                  {motoAtual.videos.length === 0 ? <EstadoVazio titulo="Sem vídeos ainda">{motoAtual.buscadoEm ? 'Nenhum vídeo nas hashtags desta moto: tente outras hashtags.' : 'Toque em "Atualizar agora" ou espere a busca automática do dia.'}</EstadoVazio> : (
-                    <ol className="sm-ref-lista">{motoAtual.videos.map((v, i) => <Video key={v.id} v={v} posicao={i + 1} aoAssistir={() => setAssistindo(v)} />)}</ol>
-                  )}
+                  <GradePosts key={motoAtual.chave} posts={postsDaMoto} podeEditar={dados.podeEditar} aoAbrir={abrirPost} aoSalvar={p => salvar(p)} numerar
+                    vazio={<EstadoVazio titulo="Sem posts ainda">{motoAtual.buscadoEm ? 'Nenhum post nas hashtags desta moto: tente outras hashtags.' : 'Toque em "Atualizar agora" ou espere a busca automática do dia.'}</EstadoVazio>} />
                 </section>
               )}
             </div>
           ))}
 
-          {aba === 'perfis' && (
-            <>
-              {dados.podeEditar && (
-                <form className="sm-ref-novo" onSubmit={async e => { e.preventDefault(); if (await acao(() => proLaboreApi.sm.referencias.adicionarPerfil(novo), 'Perfil adicionado.')) setNovo('') }}>
-                  <input className="sm-input" value={novo} onChange={e => setNovo(e.target.value)} placeholder="@perfil.de.referencia ou link do Instagram" aria-label="Perfil de referência" data-novo-perfil-ref />
-                  <Botao type="submit" variante="pri" disabled={ocupado || !novo.trim()}>Adicionar</Botao>
-                </form>
-              )}
-              {dados.perfis.length === 0 ? <EstadoVazio titulo="Nenhum perfil de referência">Adicione perfis (contas profissionais) que fazem bons vídeos de moto: os melhores vídeos de cada um aparecem aqui.</EstadoVazio> : dados.perfis.map(p => (
-                <section key={p.id} className="sm-card sm-ref-perfil" data-perfil-ref={p.usuario}>
-                  <div className="sm-ref-painel-cab">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {p.fotoUrl ? <img className="sm-ref-foto" src={p.fotoUrl} alt="" /> : <span className="sm-ref-foto" aria-hidden="true">{p.usuario.slice(0, 1).toUpperCase()}</span>}
-                    <div>
-                      <h2 className="sm-h-card"><a href={`https://www.instagram.com/${p.usuario}/`} target="_blank" rel="noreferrer">@{p.usuario}</a></h2>
-                      <span className="sm-legenda">{[p.nome, p.seguidores != null ? `${num(p.seguidores)} seguidores` : null, p.atualizadoEm ? `atualizado ${haQuanto(p.atualizadoEm)}` : null].filter(Boolean).join(' · ')}</span>
-                    </div>
-                    {dados.podeEditar && <Botao variante="fantasma" disabled={ocupado} onClick={() => acao(() => proLaboreApi.sm.referencias.removerPerfil(p.id), `@${p.usuario} saiu das referências.`)}>Remover</Botao>}
-                  </div>
-                  {p.ultimoErro && <Banner tom="warn" titulo="Perfil">{p.ultimoErro}</Banner>}
-                  {p.videos.length > 0 && <ol className="sm-ref-lista">{p.videos.map((v, i) => <Video key={v.id} v={v} posicao={i + 1} aoAssistir={() => setAssistindo(v)} />)}</ol>}
-                </section>
-              ))}
-            </>
+          {aba === 'perfis' && <Perfis dados={dados} ocupado={ocupado} acao={acao} aoAbrir={abrirPost} aoSalvar={p => salvar(p)} />}
+          {aba === 'insights' && <Insights dados={dados} aoAbrir={abrirPost} />}
+          {aba === 'salvos' && (
+            <Salvos dados={dados} ocupado={ocupado} aoAbrir={abrirSalvo} aoPauta={s => criarPauta(s.id)}
+              aoStatus={(s, status) => acao(() => proLaboreApi.sm.referencias.atualizarSalvo(s.id, { status }))}
+              aoRemover={s => acao(() => proLaboreApi.sm.referencias.removerSalvo(s.id), 'Referência tirada dos salvos.')} />
           )}
         </div>
       )}
-      {assistindo && (
-        <Modal largo titulo={assistindo.autor ? `@${assistindo.autor}` : `#${assistindo.fonte}`} aoFechar={() => setAssistindo(null)}>
-          <iframe className="sm-ref-embed" src={embed(assistindo.permalink)} title="Vídeo do Instagram" allow="encrypted-media; picture-in-picture" loading="lazy" data-embed />
+      {dados && aberto && (postAberto || salvoAberto) && (
+        <Modal largo titulo={quem((postAberto ?? salvoAberto)!)} aoFechar={() => setAberto(null)}>
+          <PainelPost key={aberto.mediaId} p={(postAberto ?? salvoAberto)!} salvo={salvoAberto} dados={dados} podeEditar={dados.podeEditar} ocupado={ocupado}
+            aoSalvar={nota => { if (postAberto) salvar(postAberto, nota) }}
+            aoNota={nota => { if (salvoAberto) acao(() => proLaboreApi.sm.referencias.atualizarSalvo(salvoAberto.id, { nota }), 'Anotação salva.') }}
+            aoPauta={async () => {
+              if (salvoAberto) return criarPauta(salvoAberto.id)
+              if (!postAberto) return
+              const r = await proLaboreApi.sm.referencias.salvar(postAberto.id).catch(() => null)
+              const s = r?.salvos.find(x => x.mediaId === postAberto.mediaId)
+              if (s) await criarPauta(s.id)
+            }} />
         </Modal>
       )}
     </>

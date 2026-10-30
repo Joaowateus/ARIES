@@ -3480,6 +3480,11 @@ model SmReferenciaPerfil {
   nome         String?
   fotoUrl      String?
   seguidores   Int?
+  posts        Int? // total de publicações do perfil
+  // REFERENCIA (inspiração) | CONCORRENTE (espionar) | EU (a própria conta, entra sozinha para comparar)
+  tipo         String    @default("REFERENCIA")
+  // Seguidores por dia ([{ d: AAAA-MM-DD, s }], últimos 180 dias): crescimento do perfil.
+  historico    Json?
   atualizadoEm DateTime?
   ultimoErro   String?
   criadoEm     DateTime  @default(now())
@@ -3523,13 +3528,41 @@ model SmReferenciaVideo {
   legenda      String?
   curtidas     Int?
   comentarios  Int?
-  formato      String? // REELS | VIDEO
+  formato      String? // REELS | VIDEO | CARROSSEL | FOTO
+  midiaUrl     String? // arquivo do post no CDN do Instagram (miniatura; expira em alguns dias)
   publicadoEm  DateTime?
   atualizadoEm DateTime  @default(now())
 
   @@unique([usuarioId, mediaId])
   @@index([usuarioId, motoChave])
   @@map("pro_labore_sm_referencia_videos")
+}
+
+// Referência guardada pela equipe (banco de ideias): cópia do post (a busca
+// apaga e refaz os posts) com a anotação, o andamento e a pauta criada a partir dela.
+model SmReferenciaSalva {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  mediaId      String
+  origem       String // HASHTAG | PERFIL
+  fonte        String
+  autor        String?
+  motoChave    String?
+  permalink    String
+  legenda      String?
+  curtidas     Int?
+  comentarios  Int?
+  formato      String?
+  midiaUrl     String?
+  publicadoEm  DateTime?
+  status       String    @default("IDEIA") // IDEIA | GRAVAR | FEITO
+  nota         String?
+  pautaId      String?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  @@unique([usuarioId, mediaId])
+  @@map("pro_labore_sm_referencia_salvas")
 }
 
 model SmConcorrenteRetrato {

@@ -126,6 +126,7 @@ export function Briefing({ pauta, podeEditar, souGestor, regraAprovacao, motos, 
           <Chip>{FORMATO_ROTULO[pauta.formato]}</Chip>
           <Chip tom="info">{ETAPA_ROTULO[pauta.etapaFunil ?? ETAPA_DO_PILAR[pauta.pilar]]}{pauta.etapaFunil ? '' : ' (pelo pilar)'}</Chip>
           <Chip>Origem: {ORIGEM_ROTULO[pauta.origem]}</Chip>
+          {pauta.origem === 'REFERENCIA' && pauta.origemRef?.startsWith('https://') && <a className="sm-link-botao" href={pauta.origemRef} target="_blank" rel="noreferrer" data-pauta-referencia>Ver a referência ↗</a>}
           {pauta.trial && <Chip tom="info">Trial Reel</Chip>}
           {pauta.codigo && <Chip tom="learn">{pauta.codigo}</Chip>}
         </div>
