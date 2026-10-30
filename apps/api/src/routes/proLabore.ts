@@ -509,7 +509,7 @@ router.delete('/vendedores/:id', requireProLaboreAuth, requireModulo('vendedores
     prisma.lancamentoFinanceiro.count({ where: { vendedorId: atual.id } }),
   ])
   if (recibos > 0) {
-    res.status(409).json({ error: `Essa pessoa tem ${recibos} recibo${recibos > 1 ? 's' : ''} no Financeiro (salário, vale…). Desative em vez de excluir, pra não perder o histórico.` })
+    res.status(409).json({ error: `Essa pessoa tem ${recibos} recibo${recibos > 1 ? 's' : ''} no Financeiro (ajuda de custo, vale…). Desative em vez de excluir, pra não perder o histórico.` })
     return
   }
   if (comprovantes > 0) {

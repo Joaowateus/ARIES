@@ -15,8 +15,8 @@ import { normalizarDocumento } from '../lib/documento'
 const router = Router()
 
 export const CATEGORIAS = [
-  { chave: 'SALARIO', rotulo: 'Salário', plural: 'Salários', equipe: true, titulo: 'Recibo de pagamento de salário', referente: 'ao salário' },
-  { chave: 'ADIANTAMENTO', rotulo: 'Adiantamento (vale)', plural: 'Adiantamentos', equipe: true, titulo: 'Recibo de adiantamento salarial', referente: 'ao adiantamento salarial (vale)' },
+  { chave: 'SALARIO', rotulo: 'Ajuda de custo mensal', plural: 'Ajudas de custo', equipe: true, titulo: 'Recibo de pagamento de ajuda de custo mensal', referente: 'à ajuda de custo mensal' },
+  { chave: 'ADIANTAMENTO', rotulo: 'Adiantamento (vale)', plural: 'Adiantamentos', equipe: true, titulo: 'Recibo de adiantamento da ajuda de custo', referente: 'ao adiantamento da ajuda de custo (vale)' },
   { chave: 'BONIFICACAO', rotulo: 'Bonificação', plural: 'Bonificações', equipe: true, titulo: 'Recibo de bonificação', referente: 'à bonificação' },
   { chave: 'REEMBOLSO', rotulo: 'Reembolso', plural: 'Reembolsos', equipe: true, titulo: 'Recibo de reembolso de despesas', referente: 'ao reembolso de despesas' },
   { chave: 'INVESTIMENTO', rotulo: 'Investimento', plural: 'Investimentos', equipe: false, titulo: 'Recibo de pagamento · investimento', referente: 'ao investimento' },
@@ -142,13 +142,13 @@ router.post('/financeiro', requireProLaboreAuth, requireModulo('financeiro', 'ED
   if (favorecido.length < 2) { res.status(400).json({ error: 'Informe quem recebe: é o nome que sai no recibo' }); return }
   const competencia = d.competencia ?? (cat.chave === 'SALARIO' || cat.chave === 'ADIANTAMENTO' ? d.pagoEm.slice(0, 7) : null)
   const descricao = d.descricao?.trim()
-    || (cat.chave === 'SALARIO' ? `Salário de ${mesExtenso(competencia!)}` : cat.chave === 'ADIANTAMENTO' ? `Adiantamento salarial de ${mesExtenso(competencia!)}` : '')
+    || (cat.chave === 'SALARIO' ? `Ajuda de custo mensal de ${mesExtenso(competencia!)}` : cat.chave === 'ADIANTAMENTO' ? `Adiantamento da ajuda de custo de ${mesExtenso(competencia!)}` : '')
   if (!descricao) { res.status(400).json({ error: 'Diga a que se refere o pagamento (ex.: aluguel da loja de outubro)' }); return }
   const valorTotal = totalDosItens(d.itens)
   if (valorTotal <= 0) { res.status(400).json({ error: 'Os descontos não podem ser maiores que o valor a pagar' }); return }
   if (cat.chave === 'SALARIO' && d.vendedorId) {
     const ja = await prisma.lancamentoFinanceiro.findFirst({ where: { usuarioId, categoria: 'SALARIO', vendedorId: d.vendedorId, competencia, canceladoEm: null }, select: { numero: true } })
-    if (ja) { res.status(409).json({ error: `${favorecido} já tem recibo de salário de ${mesExtenso(competencia!)} (nº ${ja.numero}). Cancele esse recibo antes de pagar de novo.` }); return }
+    if (ja) { res.status(409).json({ error: `${favorecido} já tem recibo de ajuda de custo de ${mesExtenso(competencia!)} (nº ${ja.numero}). Cancele esse recibo antes de pagar de novo.` }); return }
   }
   const l = await criarNumerado({
     usuarioId, categoria: cat.chave, vendedorId: d.vendedorId || null, favorecido, documento,
@@ -176,7 +176,7 @@ router.get('/financeiro/salarios', requireProLaboreAuth, requireModulo('financei
 const salariosSchema = z.object({
   competencia: mesSchema,
   lembrar: z.boolean().default(true),
-  pagamentos: z.array(z.object({ vendedorId: z.string().min(1), valor: z.number().positive('Informe o salário de cada pessoa marcada') })).min(1, 'Marque pelo menos uma pessoa').max(200),
+  pagamentos: z.array(z.object({ vendedorId: z.string().min(1), valor: z.number().positive('Informe a ajuda de custo de cada pessoa marcada') })).min(1, 'Marque pelo menos uma pessoa').max(200),
   ...comumSchema,
 })
 
@@ -191,10 +191,10 @@ router.post('/financeiro/salarios', requireProLaboreAuth, requireModulo('finance
   if (pessoas.length !== ids.length) { res.status(404).json({ error: 'Alguma pessoa não foi encontrada na equipe' }); return }
   const ja = await prisma.lancamentoFinanceiro.findMany({ where: { usuarioId, categoria: 'SALARIO', competencia: d.competencia, vendedorId: { in: ids }, canceladoEm: null }, select: { numero: true, favorecido: true } })
   if (ja.length) {
-    res.status(409).json({ error: `Já existe recibo de salário de ${mesExtenso(d.competencia)} para ${ja.map(j => `${j.favorecido} (nº ${j.numero})`).join(', ')}. Desmarque ${ja.length > 1 ? 'essas pessoas' : 'essa pessoa'} ou cancele o recibo antes.` })
+    res.status(409).json({ error: `Já existe recibo de ajuda de custo de ${mesExtenso(d.competencia)} para ${ja.map(j => `${j.favorecido} (nº ${j.numero})`).join(', ')}. Desmarque ${ja.length > 1 ? 'essas pessoas' : 'essa pessoa'} ou cancele o recibo antes.` })
     return
   }
-  const descricao = `Salário de ${mesExtenso(d.competencia)}`
+  const descricao = `Ajuda de custo mensal de ${mesExtenso(d.competencia)}`
   const criados = []
   for (const p of d.pagamentos) {
     const pessoa = pessoas.find(x => x.id === p.vendedorId)!

@@ -9,8 +9,8 @@ import { formatMoeda } from '@/lib/format'
 import { abrirRecibo, hojeLocal, lerValor, mesExtenso, ROTULO_FORMA } from './util'
 
 const EXEMPLO: Record<CategoriaFinanceira, string> = {
-  SALARIO: 'Em branco: "Salário de" + o mês de referência',
-  ADIANTAMENTO: 'Em branco: "Adiantamento salarial de" + o mês',
+  SALARIO: 'Em branco: "Ajuda de custo mensal de" + o mês de referência',
+  ADIANTAMENTO: 'Em branco: "Adiantamento da ajuda de custo de" + o mês',
   BONIFICACAO: 'Ex.: meta de vendas batida em setembro',
   REEMBOLSO: 'Ex.: combustível da entrega do cliente',
   INVESTIMENTO: 'Ex.: compra do elevador hidráulico da oficina',
@@ -50,13 +50,13 @@ export function NovoPagamento({ dados, nomeDono, onFechar, onRegistrado }: {
     setCategoria(c)
     const nova = dados.categorias.find(x => x.chave === c)!
     if (!nova.equipe) setPessoaId('')
-    if (c === 'SALARIO' && linhas.length === 1 && !linhas[0].valor) setLinhas([{ descricao: 'Salário base', valor: pessoa?.salarioBase ? String(pessoa.salarioBase) : '', desconto: false }])
+    if (c === 'SALARIO' && linhas.length === 1 && !linhas[0].valor) setLinhas([{ descricao: 'Ajuda de custo mensal', valor: pessoa?.salarioBase ? String(pessoa.salarioBase) : '', desconto: false }])
   }
   function escolherPessoa(id: string) {
     setPessoaId(id)
     const p = dados.equipe.find(x => x.id === id)
     setDocumento(p?.documento ?? '')
-    if (categoria === 'SALARIO' && p?.salarioBase && linhas.length === 1 && !linhas[0].valor) setLinhas([{ descricao: linhas[0].descricao || 'Salário base', valor: String(p.salarioBase), desconto: false }])
+    if (categoria === 'SALARIO' && p?.salarioBase && linhas.length === 1 && !linhas[0].valor) setLinhas([{ descricao: linhas[0].descricao || 'Ajuda de custo mensal', valor: String(p.salarioBase), desconto: false }])
   }
   const mudarLinha = (i: number, m: Partial<Linha>) => setLinhas(ls => ls.map((l, j) => (j === i ? { ...l, ...m } : l)))
 
@@ -121,7 +121,7 @@ export function NovoPagamento({ dados, nomeDono, onFechar, onRegistrado }: {
                   <label htmlFor="fin-pessoa">Quem recebe</label>
                   <select id="fin-pessoa" className="pl-select" value={pessoaId} onChange={e => escolherPessoa(e.target.value)} required>
                     <option value="" disabled>Escolha a pessoa da equipe</option>
-                    {dados.equipe.map(p => <option key={p.id} value={p.id}>{p.nome}{p.salarioBase ? ` · salário ${formatMoeda(p.salarioBase)}` : ''}</option>)}
+                    {dados.equipe.map(p => <option key={p.id} value={p.id}>{p.nome}{p.salarioBase ? ` · ajuda de custo ${formatMoeda(p.salarioBase)}` : ''}</option>)}
                     <option value="outra">Outra pessoa (fora da equipe)</option>
                   </select>
                 </div>
@@ -154,7 +154,7 @@ export function NovoPagamento({ dados, nomeDono, onFechar, onRegistrado }: {
                 <label htmlFor="fin-ref">Referente a{categoria === 'SALARIO' || categoria === 'ADIANTAMENTO' ? ' (opcional)' : ''}</label>
                 <input id="fin-ref" className="pl-input" value={descricao} onChange={e => setDescricao(e.target.value)} maxLength={200} placeholder={EXEMPLO[categoria]}
                   required={categoria !== 'SALARIO' && categoria !== 'ADIANTAMENTO'} />
-                {(categoria === 'SALARIO' || categoria === 'ADIANTAMENTO') && competencia && !descricao && <span className="pl-hint">Sai no recibo: {categoria === 'SALARIO' ? 'Salário' : 'Adiantamento salarial'} de {mesExtenso(competencia)}</span>}
+                {(categoria === 'SALARIO' || categoria === 'ADIANTAMENTO') && competencia && !descricao && <span className="pl-hint">Sai no recibo: {categoria === 'SALARIO' ? 'Ajuda de custo mensal' : 'Adiantamento da ajuda de custo'} de {mesExtenso(competencia)}</span>}
               </div>
             </div>
 
@@ -163,7 +163,7 @@ export function NovoPagamento({ dados, nomeDono, onFechar, onRegistrado }: {
               {linhas.map((l, i) => (
                 <div key={i} className="pl-fin-linha">
                   <input className="pl-input" aria-label={`Descrição da linha ${i + 1}`} value={l.descricao} onChange={e => mudarLinha(i, { descricao: e.target.value })} maxLength={120}
-                    placeholder={i === 0 ? (categoria === 'SALARIO' ? 'Salário base' : 'Descrição (opcional)') : 'Ex.: INSS, vale descontado, hora extra'} />
+                    placeholder={i === 0 ? (categoria === 'SALARIO' ? 'Ajuda de custo mensal' : 'Descrição (opcional)') : 'Ex.: INSS, vale descontado, hora extra'} />
                   <input className="pl-input pl-fin-valor" aria-label={`Valor da linha ${i + 1}`} inputMode="decimal" value={l.valor} onChange={e => mudarLinha(i, { valor: e.target.value })} placeholder="0,00" />
                   <label className="pl-fin-desc"><input type="checkbox" checked={l.desconto} onChange={e => mudarLinha(i, { desconto: e.target.checked })} /> Desconto</label>
                   {linhas.length > 1 && <button type="button" className="pl-fin-tirar" aria-label={`Tirar a linha ${i + 1}`} onClick={() => setLinhas(ls => ls.filter((_, j) => j !== i))}>×</button>}

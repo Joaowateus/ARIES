@@ -17,12 +17,15 @@ const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso
 const dataLonga = (iso: string) => `${Number(iso.slice(8, 10))} de ${MESES[Number(iso.slice(5, 7)) - 1]} de ${iso.slice(0, 4)}`
 const mesExtenso = (mes: string) => `${MESES[Number(mes.slice(5, 7)) - 1]} de ${mes.slice(0, 4)}`
 
-// "referente ao salário de outubro de 2026" / "referente ao custo: aluguel da loja"
+// Recibos antigos guardaram "Salário de …" / "Adiantamento salarial de …": saem com o nome atual.
+const nomeAtual = (d: string) => d.replace(/^Salário base$/, 'Ajuda de custo mensal').replace(/^Salário de /, 'Ajuda de custo mensal de ').replace(/^Adiantamento salarial de /, 'Adiantamento da ajuda de custo de ')
+
+// "referente à ajuda de custo mensal de outubro de 2026" / "referente ao custo: aluguel da loja"
 function referente(r: ReciboFinanceiro) {
   const porMes = (r.categoria === 'SALARIO' || r.categoria === 'ADIANTAMENTO') && r.competencia
   if (porMes) {
-    const automatico = r.descricao === `${r.categoria === 'SALARIO' ? 'Salário' : 'Adiantamento salarial'} de ${mesExtenso(r.competencia!)}`
-    return `${r.categoriaInfo.referente} de ${mesExtenso(r.competencia!)}${automatico ? '' : ` (${r.descricao})`}`
+    const automatico = nomeAtual(r.descricao) === `${r.categoria === 'SALARIO' ? 'Ajuda de custo mensal' : 'Adiantamento da ajuda de custo'} de ${mesExtenso(r.competencia!)}`
+    return `${r.categoriaInfo.referente} de ${mesExtenso(r.competencia!)}${automatico ? '' : ` (${nomeAtual(r.descricao)})`}`
   }
   return `${r.categoriaInfo.referente}: ${r.descricao}${r.competencia ? `, referência ${mesExtenso(r.competencia)}` : ''}`
 }
@@ -65,7 +68,7 @@ function Via({ r, rotulo }: { r: ReciboFinanceiro; rotulo: string | null }) {
         <tbody>
           {r.itens.map((i, k) => (
             <tr key={k}>
-              <td>{i.descricao}</td>
+              <td>{nomeAtual(i.descricao)}</td>
               {temDesconto
                 ? <><td className="dir">{i.desconto ? '' : formatMoeda(i.valor)}</td><td className="dir">{i.desconto ? formatMoeda(i.valor) : ''}</td></>
                 : <td className="dir">{formatMoeda(i.valor)}</td>}
@@ -92,7 +95,7 @@ function Via({ r, rotulo }: { r: ReciboFinanceiro; rotulo: string | null }) {
         <div>
           <span className="linha" />
           <b>{r.favorecido}</b>
-          <small>{equipe ? 'Funcionário (quem recebe)' : 'Quem recebe (fornecedor / prestador)'}</small>
+          <small>{equipe ? 'Colaborador (quem recebe)' : 'Quem recebe (fornecedor / prestador)'}</small>
           {!r.documento && <small>CPF/CNPJ: ____________________________</small>}
         </div>
         <div>

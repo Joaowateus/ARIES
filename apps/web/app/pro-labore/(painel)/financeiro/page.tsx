@@ -60,12 +60,12 @@ export default function FinanceiroPage() {
       <PageHeader
         eyebrow="Gestão"
         title="Financeiro"
-        subtitle="Salários, investimentos, custos e outros gastos. Cada pagamento gera um recibo pronto para imprimir e assinar."
+        subtitle="Ajudas de custo, investimentos, custos e outros gastos. Cada pagamento gera um recibo pronto para imprimir e assinar."
         actions={
           <div className="pl-fin-acoes">
             <FechamentoDiario modulo="FINANCEIRO" />
             {pode && <>
-              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setModal('salarios')}>Pagar salários</button>
+              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setModal('salarios')}>Pagar ajudas de custo</button>
               <button type="button" className="pl-btn pl-btn-primary" onClick={() => setModal('novo')}>Novo pagamento</button>
             </>}
           </div>
@@ -90,7 +90,7 @@ export default function FinanceiroPage() {
         <div className="pl-kpi">
           <div className="pl-kpi-label">Equipe</div>
           <div className="pl-kpi-value">{p ? formatMoeda(equipeTotal) : '—'}</div>
-          <div className="pl-kpi-foot"><span className="pl-kpi-vs">Salários, vales, bonificações e reembolsos</span></div>
+          <div className="pl-kpi-foot"><span className="pl-kpi-vs">Ajudas de custo, vales, bonificações e reembolsos</span></div>
         </div>
         {(['INVESTIMENTO', 'CUSTO', 'OUTRO'] as CategoriaFinanceira[]).map(c => (
           <div key={c} className="pl-kpi">
@@ -126,7 +126,7 @@ export default function FinanceiroPage() {
             <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>
               {atual.lancamentos.length ? 'Nenhum pagamento com esse filtro' : `Nenhum pagamento em ${mesExtenso(mes)}`}
             </h3>
-            {pode && !atual.lancamentos.length && <p style={{ marginTop: 6 }}>Use &quot;Pagar salários&quot; para a folha da equipe ou &quot;Novo pagamento&quot; para custos, investimentos e outros gastos.</p>}
+            {pode && !atual.lancamentos.length && <p style={{ marginTop: 6 }}>Use &quot;Pagar ajudas de custo&quot; para a folha da equipe ou &quot;Novo pagamento&quot; para custos, investimentos e outros gastos.</p>}
           </div>
         ) : (
           <div className="pl-table-wrap">

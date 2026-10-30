@@ -49,7 +49,7 @@ export function PagarSalarios({ mesInicial, formas, nomeDono, onFechar, onRegist
   async function confirmar(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
-    if (semValor.length) { setErro(`Informe o salário de ${semValor.map(p => p.nome).join(', ')}.`); return }
+    if (semValor.length) { setErro(`Informe a ajuda de custo de ${semValor.map(p => p.nome).join(', ')}.`); return }
     setSalvando(true)
     try {
       const r = await proLaboreApi.financeiro.pagarSalarios({
@@ -59,7 +59,7 @@ export function PagarSalarios({ mesInicial, formas, nomeDono, onFechar, onRegist
       setFeitos(r)
       onRegistrado()
     } catch (err) {
-      setErro(err instanceof Error ? err.message : 'Não deu pra registrar os salários')
+      setErro(err instanceof Error ? err.message : 'Não deu pra registrar as ajudas de custo')
     } finally {
       setSalvando(false)
     }
@@ -70,12 +70,12 @@ export function PagarSalarios({ mesInicial, formas, nomeDono, onFechar, onRegist
       <div className="pl-card pl-modal-panel pl-fin-modal" role="dialog" aria-modal="true" aria-labelledby="fin-sal-titulo" onClick={e => e.stopPropagation()}>
         {feitos ? (
           <>
-            <div className="pl-card-title" id="fin-sal-titulo">Salários registrados</div>
+            <div className="pl-card-title" id="fin-sal-titulo">Ajudas de custo registradas</div>
             <div className="pl-card-sub">Imprima cada recibo e peça para a pessoa assinar.</div>
             <ul className="pl-pgc-lista">
               {feitos.map(f => (
                 <li key={f.id}>
-                  <span><b>{f.favorecido}</b><small>Recibo de salário nº {f.numero}</small></span>
+                  <span><b>{f.favorecido}</b><small>Recibo de ajuda de custo nº {f.numero}</small></span>
                   <b className="pl-pgc-valor">{formatMoeda(f.valorTotal)}</b>
                   <button type="button" className="pl-btn pl-btn-primary pl-pgc-btn" onClick={() => abrirRecibo(f.id)}>Abrir recibo</button>
                 </li>
@@ -85,11 +85,11 @@ export function PagarSalarios({ mesInicial, formas, nomeDono, onFechar, onRegist
           </>
         ) : (
           <form onSubmit={confirmar}>
-            <div className="pl-card-title" id="fin-sal-titulo">Pagar salários</div>
+            <div className="pl-card-title" id="fin-sal-titulo">Pagar ajudas de custo</div>
             <div className="pl-card-sub">Marque quem vai receber. Sai um recibo para cada pessoa.</div>
             <div className="pl-pgc-campos">
               <div className="pl-field">
-                <label htmlFor="sal-comp">Salário do mês</label>
+                <label htmlFor="sal-comp">Ajuda de custo do mês</label>
                 <input id="sal-comp" type="month" className="pl-input" value={competencia} onChange={e => setCompetencia(e.target.value)} required />
               </div>
               <div className="pl-field">
@@ -101,7 +101,7 @@ export function PagarSalarios({ mesInicial, formas, nomeDono, onFechar, onRegist
             {carregando ? <p className="pl-hint" style={{ marginTop: 14 }}>Carregando a equipe…</p> : dados.equipe.length === 0 ? (
               <p className="pl-hint" style={{ marginTop: 14 }}>Ninguém na equipe ainda. Cadastre as pessoas em Vendedores ou em Acessos e permissões.</p>
             ) : (
-              <ul className="pl-fin-equipe" aria-label={`Equipe · salário de ${mesExtenso(competencia)}`}>
+              <ul className="pl-fin-equipe" aria-label={`Equipe · ajuda de custo de ${mesExtenso(competencia)}`}>
                 {dados.equipe.map(p => (
                   <li key={p.id} className={p.pago ? 'pago' : undefined}>
                     <label className="pl-fin-equipe-nome">
@@ -109,7 +109,7 @@ export function PagarSalarios({ mesInicial, formas, nomeDono, onFechar, onRegist
                       <span><b>{p.nome}</b><small>{p.pago ? `Já recebeu: recibo nº ${p.pago.numero} · ${formatMoeda(p.pago.valorTotal)}` : p.vende ? 'Vendedor' : 'Equipe'}</small></span>
                     </label>
                     {!p.pago && (
-                      <input className="pl-input pl-fin-valor" inputMode="decimal" aria-label={`Salário de ${p.nome}`} value={valores[p.id] ?? ''} placeholder="0,00"
+                      <input className="pl-input pl-fin-valor" inputMode="decimal" aria-label={`Ajuda de custo de ${p.nome}`} value={valores[p.id] ?? ''} placeholder="0,00"
                         onChange={e => { const v = e.target.value; setValores(x => ({ ...x, [p.id]: v })); if (lerValor(v) > 0) setMarcados(m => ({ ...m, [p.id]: true })) }} />
                     )}
                   </li>
@@ -138,7 +138,7 @@ export function PagarSalarios({ mesInicial, formas, nomeDono, onFechar, onRegist
             <div className="pl-pgc-acoes">
               <button type="button" className="pl-btn pl-btn-ghost" onClick={onFechar}>Cancelar</button>
               <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando || escolhidos.length === 0}>
-                {salvando ? 'Registrando…' : `Pagar ${escolhidos.length} ${escolhidos.length === 1 ? 'salário' : 'salários'} · ${formatMoeda(total)}`}
+                {salvando ? 'Registrando…' : `Pagar ${escolhidos.length} ${escolhidos.length === 1 ? 'ajuda de custo' : 'ajudas de custo'} · ${formatMoeda(total)}`}
               </button>
             </div>
           </form>
