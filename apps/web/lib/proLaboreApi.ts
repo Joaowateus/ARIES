@@ -1168,10 +1168,16 @@ export const proLaboreApi = {
     // Referências (benchmark): vídeos com mais engajamento por moto do estoque e perfis de referência.
     referencias: {
       ver: () => request<SmReferencias>('/pro-labore/sm/referencias'),
-      adicionarPerfil: (usuario: string) => request<SmReferencias>('/pro-labore/sm/referencias/perfis', { method: 'POST', body: JSON.stringify({ usuario }) }),
+      adicionarPerfil: (usuario: string, tipo: 'REFERENCIA' | 'CONCORRENTE' = 'REFERENCIA') => request<SmReferencias>('/pro-labore/sm/referencias/perfis', { method: 'POST', body: JSON.stringify({ usuario, tipo }) }),
+      tipoPerfil: (id: string, tipo: 'REFERENCIA' | 'CONCORRENTE') => request<SmReferencias>(`/pro-labore/sm/referencias/perfis/${id}/tipo`, { method: 'PUT', body: JSON.stringify({ tipo }) }),
+      importarConcorrentes: () => request<SmReferencias>('/pro-labore/sm/referencias/perfis/importar', { method: 'POST', body: '{}' }),
+      salvar: (postId: string, nota?: string | null) => request<SmReferencias>('/pro-labore/sm/referencias/salvos', { method: 'POST', body: JSON.stringify({ postId, nota }) }),
+      atualizarSalvo: (id: string, d: { status?: SmStatusSalva; nota?: string | null }) => request<SmReferencias>(`/pro-labore/sm/referencias/salvos/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+      removerSalvo: (id: string) => request<SmReferencias>(`/pro-labore/sm/referencias/salvos/${id}`, { method: 'DELETE' }),
+      criarPauta: (id: string) => request<SmReferencias & { pautaId: string }>(`/pro-labore/sm/referencias/salvos/${id}/pauta`, { method: 'POST', body: '{}' }),
       removerPerfil: (id: string) => request<SmReferencias>(`/pro-labore/sm/referencias/perfis/${id}`, { method: 'DELETE' }),
       salvarHashtags: (chave: string, hashtags: string[]) => request<SmReferencias>(`/pro-labore/sm/referencias/motos/${encodeURIComponent(chave)}/hashtags`, { method: 'PUT', body: JSON.stringify({ hashtags }) }),
-      atualizar: () => request<SmReferencias>('/pro-labore/sm/referencias/atualizar', { method: 'POST' }),
+      atualizar: () => request<SmReferencias & { rodada: { perfis: number; motos: number; pendentes: number } }>('/pro-labore/sm/referencias/atualizar', { method: 'POST' }),
     },
     concorrentes: {
       ver: () => request<SmConcorrentes>('/pro-labore/sm/concorrentes'),
@@ -2484,7 +2490,7 @@ export type SmPilar = 'ESTOQUE' | 'PROVA' | 'EDUCACAO' | 'BASTIDORES'
 export type SmFormato = 'REELS' | 'CARROSSEL' | 'FOTO' | 'STORY'
 export type SmColuna = 'IDEIA' | 'ROTEIRO' | 'GRAVACAO' | 'EDICAO' | 'APROVACAO' | 'AGENDADO'
 export type SmStatusPauta = SmColuna | 'PUBLICADO'
-export type SmOrigem = 'MANUAL' | 'ESTOQUE' | 'VENDA' | 'INSIGHT' | 'AUDIENCIA' | 'CALENDARIO'
+export type SmOrigem = 'MANUAL' | 'ESTOQUE' | 'VENDA' | 'INSIGHT' | 'AUDIENCIA' | 'CALENDARIO' | 'REFERENCIA'
 
 export interface SmMotoEntrada {
   modelo: string
@@ -2542,6 +2548,7 @@ export interface SmPauta {
   ordem: number
   prazo: string | null
   origem: SmOrigem
+  origemRef?: string | null
   motoId: string | null
   moto: { id: string; modelo: string; ano: number | null; cor: string | null } | null
   gancho: string | null
@@ -2672,14 +2679,37 @@ export interface SmPerfilComparado {
   postsSemana: number | null; engajamentoMedio: number | null; taxaEngajamento: number | null; ultimoPostEm: string | null
 }
 export interface SmConcorrente extends SmPerfilComparado { id: string; nome: string | null; atualizadoEm: string | null; erro: string | null; desde: string | null; serie: { data: string; seguidores: number }[] }
-export interface SmVideoReferencia { id: string; origem: 'HASHTAG' | 'PERFIL'; fonte: string; autor: string | null; permalink: string; legenda: string | null; curtidas: number | null; comentarios: number | null; formato: string | null; publicadoEm: string | null; motoChave: string | null; engajamento: number; taxa: number | null }
+export type SmFormatoPublico = 'REELS' | 'VIDEO' | 'CARROSSEL' | 'FOTO'
+export type SmTipoPerfilRef = 'REFERENCIA' | 'CONCORRENTE' | 'EU'
+export type SmStatusSalva = 'IDEIA' | 'GRAVAR' | 'FEITO'
+export interface SmPostReferencia {
+  id: string; mediaId: string; origem: 'HASHTAG' | 'PERFIL'; fonte: string; autor: string | null; permalink: string; legenda: string | null
+  curtidas: number | null; comentarios: number | null; formato: SmFormatoPublico | null; midiaUrl: string | null; publicadoEm: string | null; motoChave: string | null
+  engajamento: number; taxa: number | null; indice: number | null; foraDaCurva: boolean; video: boolean; salvoId: string | null
+}
+/** @deprecated nome antigo */
+export type SmVideoReferencia = SmPostReferencia
+export interface SmPerfilReferencia {
+  id: string; usuario: string; nome: string | null; fotoUrl: string | null; seguidores: number | null; totalPosts: number | null; tipo: SmTipoPerfilRef
+  atualizadoEm: string | null; ultimoErro: string | null; postsSemana: number | null; engajamentoMedio: number | null; taxaMedia: number | null
+  crescimento7: number | null; crescimento30: number | null; historico: Array<{ d: string; s: number }>; ultimoPostEm: string | null
+}
+export interface SmReferenciaSalva {
+  id: string; mediaId: string; origem: 'HASHTAG' | 'PERFIL'; fonte: string; autor: string | null; motoChave: string | null; permalink: string; legenda: string | null
+  curtidas: number | null; comentarios: number | null; formato: SmFormatoPublico | null; midiaUrl: string | null; publicadoEm: string | null
+  status: SmStatusSalva; nota: string | null; pautaId: string | null; criadoEm: string; engajamento: number; video: boolean
+}
 export interface SmReferencias {
   disponivel: boolean
   conta: string | null
   podeEditar: boolean
+  maxPerfis: number
+  importaveis: number
   hashtagsSemana: { usadas: number; limite: number }
-  motos: Array<{ chave: string; nome: string; quantidade: number; hashtags: string[]; buscadoEm: string | null; ultimoErro: string | null; videos: SmVideoReferencia[] }>
-  perfis: Array<{ id: string; usuario: string; nome: string | null; fotoUrl: string | null; seguidores: number | null; atualizadoEm: string | null; ultimoErro: string | null; videos: SmVideoReferencia[] }>
+  motos: Array<{ chave: string; nome: string; quantidade: number; hashtags: string[]; buscadoEm: string | null; ultimoErro: string | null; posts: number; melhor: number | null; fontes: Array<{ h: string; n: number | null; em: string | null }> }>
+  perfis: SmPerfilReferencia[]
+  posts: SmPostReferencia[]
+  salvos: SmReferenciaSalva[]
 }
 export interface SmConcorrentes { disponivel: boolean; motivo: string | null; max: number; podeEditar: boolean; loja: SmPerfilComparado | null; perfis: SmConcorrente[] }
 export interface SmArquivoAcervo { id: string; tipo: 'IMAGEM' | 'VIDEO' | 'TOMADA' | 'CAPA'; url: string; tomada: number | null; criadoEm: string; pautas: { id: string; titulo: string; status: SmStatusPauta; permalink: string | null }[] }

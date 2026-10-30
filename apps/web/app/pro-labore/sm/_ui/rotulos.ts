@@ -7,7 +7,7 @@ import type { Pilar } from './componentes'
 export const PILAR_ROTULO: Record<SmPilar, string> = { ESTOQUE: 'Estoque', PROVA: 'Prova social', EDUCACAO: 'Educação', BASTIDORES: 'Bastidores' }
 export const PILAR_CHIP: Record<SmPilar, Pilar> = { ESTOQUE: 'estoque', PROVA: 'prova', EDUCACAO: 'educacao', BASTIDORES: 'bastidores' }
 export const FORMATO_ROTULO: Record<SmFormato, string> = { REELS: 'Reels', CARROSSEL: 'Carrossel', FOTO: 'Foto', STORY: 'Story' }
-export const ORIGEM_ROTULO: Record<SmOrigem, string> = { MANUAL: 'Manual', ESTOQUE: 'Estoque', VENDA: 'Venda no CRM', INSIGHT: 'Insight', AUDIENCIA: 'Audiência', CALENDARIO: 'Calendário' }
+export const ORIGEM_ROTULO: Record<SmOrigem, string> = { MANUAL: 'Manual', ESTOQUE: 'Estoque', VENDA: 'Venda no CRM', INSIGHT: 'Insight', AUDIENCIA: 'Audiência', CALENDARIO: 'Calendário', REFERENCIA: 'Referência' }
 export const COLUNA_ROTULO: Record<SmColuna, string> = { IDEIA: 'Ideias', ROTEIRO: 'Roteiro', GRAVACAO: 'Gravação', EDICAO: 'Edição', APROVACAO: 'Aprovação', AGENDADO: 'Agendado' }
 // Método: cadência "três posts, três vezes ao dia".
 export const ETAPA_ROTULO: Record<SmEtapaFunil, string> = { TOPO: 'Topo', MEIO: 'Meio', FUNDO: 'Fundo' }
