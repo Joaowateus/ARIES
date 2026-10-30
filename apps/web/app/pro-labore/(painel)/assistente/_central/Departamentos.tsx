@@ -6,7 +6,7 @@ import type { IntelCentral, IntelLinhaScore } from '@/lib/proLaboreApi'
 import { brl, num, pct100 } from './fmt'
 
 const STATUS_LINHA: Record<IntelLinhaScore['status'], string> = { OK: 'Na meta', ATENCAO: 'Atenção', CRITICO: 'Crítico', SEM_DADOS: 'Sem dados', INFO: 'Informativo' }
-const CATEGORIA: Record<string, string> = { ANUNCIO: 'Anúncios', MARKETING: 'Marketing', COMISSAO: 'Comissões', SALARIO: 'Salários', ALUGUEL: 'Aluguel', IMPOSTO: 'Impostos', OUTROS: 'Outros' }
+const CATEGORIA: Record<string, string> = { ANUNCIO: 'Anúncios', MARKETING: 'Marketing', COMISSAO: 'Comissões', SALARIO: 'Ajudas de custo', ALUGUEL: 'Aluguel', IMPOSTO: 'Impostos', OUTROS: 'Outros' }
 
 export function Departamentos({ d }: { d: IntelCentral }) {
   const eq = d.equipe, fin = d.financeiro

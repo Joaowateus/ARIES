@@ -139,7 +139,7 @@ async function textoTrafego(c: ContextoAgente, agora: Date): Promise<string> {
   ].join('\n\n')
 }
 
-const CATEGORIA_FIN: Record<string, string> = { SALARIO: 'Salários', ADIANTAMENTO: 'Vales', BONIFICACAO: 'Bonificações', REEMBOLSO: 'Reembolsos', INVESTIMENTO: 'Investimentos', CUSTO: 'Custos', OUTRO: 'Outros' }
+const CATEGORIA_FIN: Record<string, string> = { SALARIO: 'Ajudas de custo', ADIANTAMENTO: 'Vales', BONIFICACAO: 'Bonificações', REEMBOLSO: 'Reembolsos', INVESTIMENTO: 'Investimentos', CUSTO: 'Custos', OUTRO: 'Outros' }
 async function textoFinanceiro(c: ContextoAgente, agora: Date): Promise<string> {
   const hoje = diaBrasilia(agora)
   const ini = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 1) + 3 * H)
