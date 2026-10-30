@@ -18,6 +18,17 @@ const FORMA: Record<string, string> = { PIX: 'Pix', DINHEIRO: 'dinheiro', TRANSF
 // Datas vêm como ISO; lê dia/mês/ano direto da string pra não trocar de dia
 // por causa do fuso do navegador.
 const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+/** 14 dígitos → 00.000.000/0000-00; 11 dígitos → 000.000.000-00. */
+function formatarDocumento(d: string): string {
+  if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
+  if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+  return d
+}
+/** O documento de quem recebe: o do titular no pró-labore, o do vendedor na comissão. */
+function documentoDe(c: ComprovanteComissao): { rotulo: string; valor: string } | null {
+  if (c.tipo === 'PROLABORE') return c.documentoRecebedor ? { rotulo: c.documentoRecebedor.length === 14 ? 'CNPJ' : 'CPF', valor: formatarDocumento(c.documentoRecebedor) } : null
+  return c.vendedor?.documento ? { rotulo: 'CPF/CNPJ', valor: c.vendedor.documento } : null
+}
 const dataLonga = (iso: string) => `${Number(iso.slice(8, 10))} de ${MESES[Number(iso.slice(5, 7)) - 1]} de ${iso.slice(0, 4)}`
 
 // Cliente da venda: o lead convertido, ou o nome que a observação padrão
@@ -47,6 +58,7 @@ function textos(c: ComprovanteComissao) {
 
 function Via({ c, rotulo }: { c: ComprovanteComissao; rotulo: string | null }) {
   const t = textos(c)
+  const doc = documentoDe(c)
   const total = c.vendas.reduce((s, v) => s + v.valor, 0)
   return (
     <section className="pl-recibo-folha">
@@ -67,7 +79,7 @@ function Via({ c, rotulo }: { c: ComprovanteComissao; rotulo: string | null }) {
       </div>
 
       <p className="pl-recibo-texto">
-        Eu, <b>{t.recebedor}</b>{!t.proLabore && c.vendedor?.documento ? <>, CPF/CNPJ <b>{c.vendedor.documento}</b></> : null}, declaro que recebi de <b>{c.pagador}</b> a importância
+        Eu, <b>{t.recebedor}</b>{doc ? <>, {doc.rotulo} <b>{doc.valor}</b></> : null}, declaro que recebi de <b>{c.pagador}</b> a importância
         de <b>{formatMoeda(total)}</b> (<i>{reaisPorExtenso(total)}</i>), referente {t.referente}{' '}
         sobre {c.vendas.length === 1 ? 'a venda listada' : `as ${c.vendas.length} vendas listadas`} abaixo,
         paga em {dataLonga(c.pagoEm)}{c.formaPagamento ? ` via ${FORMA[c.formaPagamento] ?? c.formaPagamento}` : ''}.
@@ -104,7 +116,7 @@ function Via({ c, rotulo }: { c: ComprovanteComissao; rotulo: string | null }) {
           <span className="linha" />
           <b>{t.recebedor}</b>
           <small>{t.papelRecebedor}</small>
-          {!t.proLabore && c.vendedor?.documento ? <small>CPF/CNPJ: {c.vendedor.documento}</small> : <small>CPF: ____________________________</small>}
+          {doc ? <small data-documento-recibo>{doc.rotulo}: {doc.valor}</small> : <small>{t.proLabore ? 'CPF/CNPJ' : 'CPF'}: ____________________________</small>}
         </div>
         <div>
           <span className="linha" />
@@ -139,6 +151,15 @@ export default function ComprovantePage() {
   }, [c])
 
   const aviso = !loading && !usuario ? 'Entre no sistema pra ver o comprovante.' : erro
+  const [documento, setDocumento] = useState('')
+  const [salvandoDoc, setSalvandoDoc] = useState(false)
+  async function salvarDocumento() {
+    setSalvandoDoc(true)
+    try {
+      const r = await proLaboreApi.pagamentosVendas.salvarDocumentoTitular(documento)
+      setC(atual => atual && { ...atual, documentoRecebedor: r.documento })
+    } catch (e) { alert(e instanceof Error ? e.message : 'Não deu pra salvar') } finally { setSalvandoDoc(false) }
+  }
   const t = c ? textos(c) : null
   return (
     <div className="pl-recibo-pagina">
@@ -151,6 +172,13 @@ export default function ComprovantePage() {
           </div>
         )}
       </div>
+      {c && t?.proLabore && !c.canceladoEm && !c.documentoRecebedor && usuario?.papel === 'DONO' && (
+        <form className="pl-recibo-barra pl-recibo-doc" onSubmit={e => { e.preventDefault(); void salvarDocumento() }} data-form-documento>
+          <span>Seu CPF ou CNPJ nos recibos de pró-labore (vale para todos, inclusive os antigos):</span>
+          <input value={documento} onChange={e => setDocumento(e.target.value)} placeholder="00.000.000/0000-00" inputMode="numeric" aria-label="CPF ou CNPJ do titular" />
+          <button type="submit" disabled={salvandoDoc || documento.replace(/\D/g, '').length < 11}>{salvandoDoc ? 'Salvando…' : 'Salvar'}</button>
+        </form>
+      )}
       {aviso ? <p className="pl-recibo-aviso">{aviso}</p> : !c ? <p className="pl-recibo-aviso">Carregando…</p> : c.canceladoEm ? (
         <p className="pl-recibo-aviso pl-recibo-cancelado">
           <b>{t!.doc} nº {c.numero} cancelado</b> em {dataCurta(c.canceladoEm)}: {t!.proLabore ? 'os pró-labores' : `as comissões de ${t!.recebedor}`} que estavam nele

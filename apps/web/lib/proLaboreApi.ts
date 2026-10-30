@@ -348,6 +348,8 @@ export interface PagamentoComissao {
 }
 
 export interface ComprovanteComissao extends PagamentoComissao {
+  // Recibo de pró-labore: CPF/CNPJ (só dígitos) do titular, do cadastro do dono.
+  documentoRecebedor?: string | null
   // `valor` = o que foi pago naquela venda (comissão ou pró-labore, conforme o tipo).
   vendas: Array<{ id: string; data: string; valorVenda: number; valor: number; valorComissao: number | null; valorProLabore: number; observacao: string | null; lead: { nomeCliente: string } | null }>
 }
@@ -557,6 +559,8 @@ export const proLaboreApi = {
       request<{ ok: boolean; desmarcadas: number }>('/pro-labore/pagamentos-vendas/desmarcar', { method: 'POST', body: JSON.stringify({ tipo, vendaIds }) }),
     listar: (tipo: TipoPagamentoVenda) => request<PagamentoComissao[]>(`/pro-labore/pagamentos-vendas?tipo=${tipo}`),
     comprovante: (id: string) => request<ComprovanteComissao>(`/pro-labore/pagamentos-vendas/${id}`),
+    // CPF/CNPJ do titular que sai em todo recibo de pró-labore (só o dono).
+    salvarDocumentoTitular: (documento: string) => request<{ documento: string | null }>('/pro-labore/comissoes/documento-titular', { method: 'PUT', body: JSON.stringify({ documento }) }),
   },
   funil: {
     listar: (ano?: number) => request<FunilMensal[]>(`/pro-labore/funil${ano ? `?ano=${ano}` : ''}`),

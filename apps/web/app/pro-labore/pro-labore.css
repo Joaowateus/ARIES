@@ -4360,3 +4360,8 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   html.vd-imprimindo .vd-impressao { page: vd-doc; }
   @page vd-doc { size: A4; margin: 14mm 14mm 16mm; }
 }
+
+/* Recibo: CPF/CNPJ do titular (some na impressão, como a barra) */
+.pl-recibo-doc { flex-wrap: wrap; gap: 8px 12px; font-size: 13px; }
+.pl-recibo-doc span { flex: 1 1 280px; }
+.pl-recibo-doc input { padding: 6px 10px; border: 1px solid #c3c7cf; border-radius: 6px; font: inherit; min-width: 200px; }
