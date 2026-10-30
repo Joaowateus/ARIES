@@ -18,7 +18,7 @@ const FORMA: Record<string, string> = { PIX: 'Pix', DINHEIRO: 'dinheiro', TRANSF
 // Datas vêm como ISO; lê dia/mês/ano direto da string pra não trocar de dia
 // por causa do fuso do navegador.
 const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
-/** 67205215000110 → 67.205.215/0001-10; 11 dígitos → 000.000.000-00. */
+/** 14 dígitos → 00.000.000/0000-00; 11 dígitos → 000.000.000-00. */
 function formatarDocumento(d: string): string {
   if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
   if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
