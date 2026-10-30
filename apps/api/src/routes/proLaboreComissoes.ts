@@ -219,12 +219,41 @@ async function comprovante(req: Request, res: Response) {
   }
   const tipo = pagamento.tipo as TipoPagamento
   const { vendas, vendasProLabore, ...resto } = pagamento
-  res.json({ ...resto, vendas: (tipo === 'PROLABORE' ? vendasProLabore : vendas).map(v => ({ ...v, valor: valorDoPagamento(tipo, v) })) })
+  // Recibo de pró-labore: o CPF/CNPJ do titular (cadastro do dono) sai sempre.
+  const titular = tipo === 'PROLABORE' ? await prisma.proLaboreUsuario.findUnique({ where: { id: req.proLaboreUser!.sub }, select: { documento: true } }) : null
+  res.json({ ...resto, documentoRecebedor: titular?.documento ?? null, vendas: (tipo === 'PROLABORE' ? vendasProLabore : vendas).map(v => ({ ...v, valor: valorDoPagamento(tipo, v) })) })
+}
+
+/** CPF ou CNPJ com dígitos verificadores válidos (só dígitos). */
+export function documentoValido(d: string): boolean {
+  if (/^(\d)\1+$/.test(d)) return false
+  const dv = (base: string, pesos: number[]) => { const r = base.split('').reduce((s, n, i) => s + Number(n) * pesos[i], 0) % 11; return r < 2 ? 0 : 11 - r }
+  if (d.length === 11) {
+    const p1 = [10, 9, 8, 7, 6, 5, 4, 3, 2], p2 = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2]
+    const c1 = dv(d.slice(0, 9), p1) % 10, c2 = dv(d.slice(0, 10), p2) % 10
+    return c1 === Number(d[9]) && c2 === Number(d[10])
+  }
+  if (d.length === 14) {
+    const p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], p2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    return dv(d.slice(0, 12), p1) === Number(d[12]) && dv(d.slice(0, 13), p2) === Number(d[13])
+  }
+  return false
+}
+
+// O CPF/CNPJ do titular que sai nos recibos de pró-labore (só o dono muda).
+async function salvarDocumentoTitular(req: Request, res: Response) {
+  if (req.proLaboreUser!.papel !== 'DONO') { res.status(403).json({ error: 'Só o dono muda o documento do recibo de pró-labore' }); return }
+  const bruto = typeof req.body?.documento === 'string' ? req.body.documento : ''
+  const documento = bruto.replace(/\D/g, '')
+  if (documento && !documentoValido(documento)) { res.status(400).json({ error: 'CPF ou CNPJ inválido' }); return }
+  await prisma.proLaboreUsuario.update({ where: { id: req.proLaboreUser!.sub }, data: { documento: documento || null } })
+  res.json({ documento: documento || null })
 }
 
 router.post(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, registrar)
 router.post(['/pagamentos-vendas/desmarcar', '/comissoes/desmarcar'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, desmarcar)
 router.get(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireModulo('vendas', 'VER'), requireEscopoEquipe, listar)
+router.put('/comissoes/documento-titular', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), salvarDocumentoTitular)
 router.get(['/pagamentos-vendas/:id', '/comissoes/pagamentos/:id'], requireProLaboreAuth, requireModulo('vendas', 'VER'), requireEscopoEquipe, comprovante)
 
 export default router

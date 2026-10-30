@@ -922,6 +922,9 @@ model ProLaboreUsuario {
   nome         String
   email        String   @unique
   senhaHash    String
+  // CPF ou CNPJ (só dígitos) de quem recebe o pró-labore: sai em todo recibo
+  // de retirada de pró-labore.
+  documento    String?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
