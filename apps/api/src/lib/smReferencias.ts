@@ -30,10 +30,34 @@ export const chaveDaMoto = (marca: string | null, modelo: string) => normalizar(
 const junto = (t: string) => normalizar(t).replace(/ /g, '')
 export const engajamento = (v: { curtidas: number | null; comentarios: number | null }) => (v.curtidas ?? 0) + (v.comentarios ?? 0)
 
-/** "CG 160 Fan" da Honda → #cg160fan e #hondacg160fan. */
+/**
+ * Hashtags da moto, das mais específicas às mais buscadas: "CG 160 Titan" da Honda → #cg160titan, #hondacg160, #cg160.
+ * Nome sem número sozinho é genérico demais (#pop traz de tudo): aí só com a marca (#hondapop).
+ */
 export function hashtagsSugeridas(marca: string | null, modelo: string): string[] {
+  const tokens = normalizar(modelo).split(' ').filter(Boolean)
+  const comNumero = tokens.findIndex(t => /\d/.test(t))
+  const base = (comNumero >= 0 ? tokens.slice(0, comNumero + 1) : tokens.slice(0, 1)).join('')
+  const inteiro = tokens.join('')
+  const lista = [
+    /\d/.test(inteiro) && inteiro.length >= 4 ? inteiro : null,
+    marca ? `${junto(marca)}${base}` : null,
+    /\d/.test(base) && base.length >= 4 ? base : null,
+  ]
+  return [...new Set(lista.filter((h): h is string => !!h && /^[a-z0-9]{3,40}$/.test(h)))].slice(0, 3)
+}
+/** As hashtags que o sistema sugeria antes (só o nome junto e marca + nome): trocadas pelas novas se ninguém editou. */
+const sugestaoAntiga = (marca: string | null, modelo: string) => {
   const m = junto(modelo)
   return [...new Set([m, `${junto(marca ?? '')}${m}`])].filter(h => /^[a-z0-9]{3,40}$/.test(h)).slice(0, 2)
+}
+/** Hashtags em uso: as editadas pela equipe ou, se ainda são as automáticas antigas, as sugeridas agora. */
+function hashtagsDaMoto(moto: { marca: string | null; modelo: string }, salvas: string[] | undefined) {
+  const novas = hashtagsSugeridas(moto.marca, moto.modelo)
+  if (!salvas?.length) return { hashtags: novas, trocou: false }
+  const antigas = sugestaoAntiga(moto.marca, moto.modelo)
+  const automaticas = salvas.length === antigas.length && salvas.every((h, i) => h === antigas[i])
+  return automaticas && antigas.join() !== novas.join() ? { hashtags: novas, trocou: true } : { hashtags: salvas, trocou: false }
 }
 export const hashtagValida = (h: string) => /^[a-z0-9_]{2,60}$/.test(h)
 export const limparHashtag = (h: string) => junto(h.replace(/^#/, ''))
@@ -78,7 +102,8 @@ const paraVideo = (usuarioId: string, origem: 'HASHTAG' | 'PERFIL', fonte: strin
   usuarioId, mediaId: m.id, origem, fonte, motoChave, autor, permalink: m.permalink, legenda: m.legenda?.slice(0, 2000) ?? null,
   curtidas: m.curtidas, comentarios: m.comentarios, formato: m.formato, midiaUrl: m.midiaUrl, publicadoEm: m.publicadoEm,
 })
-type Busca = { h: string; em: string }
+// n: quantos posts o Instagram devolveu naquela hashtag (diagnóstico na tela).
+type Busca = { h: string; em: string; n?: number }
 const buscasDe = (j: unknown): Busca[] => (Array.isArray(j) ? j.filter((b): b is Busca => !!b && typeof b.h === 'string' && typeof b.em === 'string') : [])
 /** Hashtags pesquisadas nos últimos 7 dias (todas as motos): é o que o Instagram conta no limite. */
 const usadasNaSemana = (motos: Array<{ buscadas: unknown }>, agora: Date) =>
@@ -109,14 +134,15 @@ export async function atualizarReferencias(usuarioId: string, opcoes: { agora?: 
   const agora = opcoes.agora ?? new Date()
   const inicio = Date.now(), prazo = opcoes.prazoMs ?? 20_000
   const conta = await contaDaEmpresa(usuarioId)
-  if (conta?.tipoConexao !== 'EMPRESA') return { perfis: 0, motos: 0 }
+  if (conta?.tipoConexao !== 'EMPRESA') return { perfis: 0, motos: 0, pendentes: 0 }
   const motos = await motosDoEstoque(usuarioId)
   await garantirContaPropria(usuarioId, conta.nomeUsuario)
-  let perfisLidos = 0, motosLidas = 0
+  let perfisLidos = 0, motosLidas = 0, perfisFaltando = 0
 
+  // Os perfis usam no máximo metade do tempo: a outra metade é das motos (o que o Instagram tem sobre cada modelo).
   for (const p of await prisma.smReferenciaPerfil.findMany({ where: { usuarioId }, orderBy: { atualizadoEm: { sort: 'asc', nulls: 'first' } } })) {
-    if (Date.now() - inicio > prazo) break
     if (!opcoes.forcar && p.atualizadoEm && agora.getTime() - p.atualizadoEm.getTime() < DIA - 3600e3) continue
+    if (Date.now() - inicio > prazo / 2) { perfisFaltando++; continue }
     try {
       const r = await comApiDaEmpresa(() => midiasDoPerfil(conta.instagramUserId, conta.accessToken, p.usuario))
       const videos = melhores(r.midias)
@@ -135,12 +161,12 @@ export async function atualizarReferencias(usuarioId: string, opcoes: { agora?: 
   // Hashtags já buscadas nos últimos 7 dias não contam de novo no limite do Instagram.
   const usadas = usadasNaSemana([...salvas.values()], agora)
   const fila = motos
-    .map(m => ({ moto: m, salva: salvas.get(m.chave) }))
-    .filter(({ salva }) => opcoes.forcar || !salva?.buscadoEm || agora.getTime() - salva.buscadoEm.getTime() >= REBUSCAR_APOS)
-    .sort((a, b) => (a.salva?.buscadoEm?.getTime() ?? 0) - (b.salva?.buscadoEm?.getTime() ?? 0))
-  for (const { moto, salva } of fila) {
-    if (Date.now() - inicio > prazo) break
-    const hashtags = salva?.hashtags.length ? salva.hashtags : hashtagsSugeridas(moto.marca, moto.modelo)
+    .map(m => ({ moto: m, salva: salvas.get(m.chave), ...hashtagsDaMoto(m, salvas.get(m.chave)?.hashtags) }))
+    .filter(({ salva, trocou }) => opcoes.forcar || trocou || !salva?.buscadoEm || agora.getTime() - salva.buscadoEm.getTime() >= REBUSCAR_APOS)
+    .sort((a, b) => (a.trocou || !a.salva?.buscadoEm ? 0 : a.salva.buscadoEm.getTime()) - (b.trocou || !b.salva?.buscadoEm ? 0 : b.salva.buscadoEm.getTime()))
+  let motosSemTempo = 0
+  for (const [i, { moto, salva, hashtags }] of fila.entries()) {
+    if (Date.now() - inicio > prazo) { motosSemTempo = fila.length - i; break }
     if (!hashtags.length) continue
     const novas = hashtags.filter(h => !usadas.has(h))
     if (usadas.size + novas.length > TETO_HASHTAGS) {
@@ -153,22 +179,25 @@ export async function atualizarReferencias(usuarioId: string, opcoes: { agora?: 
       const achadas: Array<{ fonte: string; m: MidiaPublica }> = []
       for (const h of hashtags) {
         usadas.add(h)
-        buscadas.push({ h, em: agora.toISOString() })
-        for (const m of await comApiDaEmpresa(() => midiasDaHashtag(conta.instagramUserId, conta.accessToken, h))) achadas.push({ fonte: h, m })
+        const busca: Busca = { h, em: agora.toISOString() }
+        buscadas.push(busca)
+        const midias = await comApiDaEmpresa(() => midiasDaHashtag(conta.instagramUserId, conta.accessToken, h))
+        busca.n = midias.length
+        for (const m of midias) achadas.push({ fonte: h, m })
       }
       const vistos = new Set<string>()
       const videos = achadas.filter(a => !vistos.has(a.m.id) && vistos.add(a.m.id)).sort((a, b) => engajamento(b.m) - engajamento(a.m)).slice(0, POSTS_POR_FONTE)
       await prisma.$transaction([
         prisma.smReferenciaVideo.deleteMany({ where: { usuarioId, origem: 'HASHTAG', motoChave: moto.chave } }),
         prisma.smReferenciaVideo.createMany({ data: videos.map(a => paraVideo(usuarioId, 'HASHTAG', a.fonte, moto.chave, null, a.m)), skipDuplicates: true }),
-        prisma.smReferenciaMoto.upsert({ where: { usuarioId_chave: { usuarioId, chave: moto.chave } }, create: { usuarioId, chave: moto.chave, hashtags, buscadoEm: agora, buscadas }, update: { buscadoEm: agora, ultimoErro: null, buscadas } }),
+        prisma.smReferenciaMoto.upsert({ where: { usuarioId_chave: { usuarioId, chave: moto.chave } }, create: { usuarioId, chave: moto.chave, hashtags, buscadoEm: agora, buscadas }, update: { hashtags, buscadoEm: agora, ultimoErro: null, buscadas } }),
       ])
       motosLidas++
     } catch (e) {
       await prisma.smReferenciaMoto.upsert({ where: { usuarioId_chave: { usuarioId, chave: moto.chave } }, create: { usuarioId, chave: moto.chave, hashtags, ultimoErro: mensagemDeErro(e), buscadas }, update: { ultimoErro: mensagemDeErro(e), buscadas } })
     }
   }
-  return { perfis: perfisLidos, motos: motosLidas }
+  return { perfis: perfisLidos, motos: motosLidas, pendentes: perfisFaltando + motosSemTempo }
 }
 
 const SELECT_VIDEO = { id: true, mediaId: true, origem: true, fonte: true, autor: true, permalink: true, legenda: true, curtidas: true, comentarios: true, formato: true, midiaUrl: true, publicadoEm: true, motoChave: true } as const
@@ -227,12 +256,15 @@ export async function painelReferencias(usuarioId: string, agora = new Date()) {
     importaveis: concorrentes.filter(c => !jaNosPerfis.has(c.usuario)).length,
     motos: motos.map(m => {
       const s = porChave.get(m.chave)
-      const daMoto = posts.filter(v => v.motoChave === m.chave)
+      const { hashtags, trocou } = hashtagsDaMoto(m, s?.hashtags)
+      // Por moto: o que o Instagram tem de melhor sobre o modelo (busca por hashtag), não os perfis acompanhados.
+      const daMoto = posts.filter(v => v.motoChave === m.chave && v.origem === 'HASHTAG')
+      const ultimas = new Map(buscasDe(s?.buscadas).map(b => [b.h, b]))
       return {
-        chave: m.chave, nome: m.nome, quantidade: m.quantidade,
-        hashtags: s?.hashtags.length ? s.hashtags : hashtagsSugeridas(m.marca, m.modelo),
-        buscadoEm: s?.buscadoEm ?? null, ultimoErro: s?.ultimoErro ?? null,
+        chave: m.chave, nome: m.nome, quantidade: m.quantidade, hashtags,
+        buscadoEm: trocou ? null : s?.buscadoEm ?? null, ultimoErro: s?.ultimoErro ?? null,
         posts: daMoto.length, melhor: daMoto[0]?.engajamento ?? null,
+        fontes: hashtags.map(h => ({ h, n: ultimas.get(h)?.n ?? null, em: ultimas.get(h)?.em ?? null })),
       }
     }),
     perfis: perfis.map(p => {

@@ -1177,7 +1177,7 @@ export const proLaboreApi = {
       criarPauta: (id: string) => request<SmReferencias & { pautaId: string }>(`/pro-labore/sm/referencias/salvos/${id}/pauta`, { method: 'POST', body: '{}' }),
       removerPerfil: (id: string) => request<SmReferencias>(`/pro-labore/sm/referencias/perfis/${id}`, { method: 'DELETE' }),
       salvarHashtags: (chave: string, hashtags: string[]) => request<SmReferencias>(`/pro-labore/sm/referencias/motos/${encodeURIComponent(chave)}/hashtags`, { method: 'PUT', body: JSON.stringify({ hashtags }) }),
-      atualizar: () => request<SmReferencias>('/pro-labore/sm/referencias/atualizar', { method: 'POST' }),
+      atualizar: () => request<SmReferencias & { rodada: { perfis: number; motos: number; pendentes: number } }>('/pro-labore/sm/referencias/atualizar', { method: 'POST' }),
     },
     concorrentes: {
       ver: () => request<SmConcorrentes>('/pro-labore/sm/concorrentes'),
@@ -2706,7 +2706,7 @@ export interface SmReferencias {
   maxPerfis: number
   importaveis: number
   hashtagsSemana: { usadas: number; limite: number }
-  motos: Array<{ chave: string; nome: string; quantidade: number; hashtags: string[]; buscadoEm: string | null; ultimoErro: string | null; posts: number; melhor: number | null }>
+  motos: Array<{ chave: string; nome: string; quantidade: number; hashtags: string[]; buscadoEm: string | null; ultimoErro: string | null; posts: number; melhor: number | null; fontes: Array<{ h: string; n: number | null; em: string | null }> }>
   perfis: SmPerfilReferencia[]
   posts: SmPostReferencia[]
   salvos: SmReferenciaSalva[]

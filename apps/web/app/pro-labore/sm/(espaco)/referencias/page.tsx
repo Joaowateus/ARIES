@@ -62,6 +62,21 @@ export default function ReferenciasPage() {
     finally { setOcupado(false) }
   }, [toast])
 
+  // "Atualizar agora": cada rodada tem tempo limitado; continua sozinho enquanto faltar moto ou perfil e houver progresso.
+  const [rodada, setRodada] = useState(0)
+  const atualizarTudo = async () => {
+    setOcupado(true)
+    try {
+      for (let i = 1; i <= 6; i++) {
+        setRodada(i)
+        const r = await proLaboreApi.sm.referencias.atualizar()
+        setDados(r)
+        if (!r.rodada.pendentes || r.rodada.motos + r.rodada.perfis === 0) break
+      }
+      toast({ mensagem: 'Referências atualizadas.' })
+    } catch (e) { toast({ mensagem: e instanceof Error ? e.message : 'Não foi possível atualizar', tom: 'bad' }) }
+    finally { setOcupado(false); setRodada(0) }
+  }
   const salvar = (p: SmPostReferencia, nota?: string) => acao(() => proLaboreApi.sm.referencias.salvar(p.id, nota ?? null), 'Referência salva em "Salvos".')
   const criarPauta = async (salvoId: string) => {
     setOcupado(true)
@@ -92,7 +107,8 @@ export default function ReferenciasPage() {
 
   if (!pode('producao')) return <div className="sm-card"><EstadoVazio titulo="Sem acesso às referências">O gestor pode liberar o módulo Produção em Equipe → Acessos e permissões.</EstadoVazio></div>
   const motoAtual = dados?.motos.find(m => m.chave === moto) ?? dados?.motos[0] ?? null
-  const postsDaMoto = motoAtual && dados ? dados.posts.filter(p => p.motoChave === motoAtual.chave) : []
+  // Por moto: só o que a busca do Instagram achou sobre o modelo (os perfis acompanhados ficam no Explorar e no raio-x).
+  const postsDaMoto = motoAtual && dados ? dados.posts.filter(p => p.motoChave === motoAtual.chave && p.origem === 'HASHTAG') : []
   const postAberto = aberto && dados ? (aberto.postId ? dados.posts.find(p => p.id === aberto.postId) : null) ?? dados.posts.find(p => p.mediaId === aberto.mediaId) ?? null : null
   const salvoAberto = aberto && dados ? dados.salvos.find(s => s.mediaId === aberto.mediaId) ?? null : null
 
@@ -104,7 +120,7 @@ export default function ReferenciasPage() {
           <h1 className="sm-ttl sm-h1">Referências e concorrentes</h1>
           <p>O que os concorrentes e os melhores perfis estão postando, o que engaja nas hashtags de cada moto do estoque e o que vale copiar. Atualiza sozinho todo dia.</p>
         </div>
-        {dados?.podeEditar && dados.disponivel && <Botao variante="sec" disabled={ocupado} onClick={() => acao(() => proLaboreApi.sm.referencias.atualizar(), 'Referências atualizadas.')} data-atualizar-referencias>{ocupado ? 'Buscando…' : 'Atualizar agora'}</Botao>}
+        {dados?.podeEditar && dados.disponivel && <Botao variante="sec" disabled={ocupado} onClick={atualizarTudo} data-atualizar-referencias>{rodada ? `Buscando… (${rodada}ª rodada)` : 'Atualizar agora'}</Botao>}
       </header>
       {erro && <p className="sm-erro" role="alert">{erro}</p>}
       {!dados && !erro && <CardEsqueleto linhas={6} texto="Buscando as referências" />}
@@ -151,11 +167,17 @@ export default function ReferenciasPage() {
                     <h2 className="sm-h-card">{motoAtual.nome}</h2>
                     <Hashtags key={motoAtual.chave + motoAtual.hashtags.join()} chave={motoAtual.chave} hashtags={motoAtual.hashtags} podeEditar={dados.podeEditar} aoSalvar={lista => acao(() => proLaboreApi.sm.referencias.salvarHashtags(motoAtual.chave, lista), 'Hashtags salvas: a moto entra na próxima busca.')} />
                     <span className="sm-legenda">{motoAtual.buscadoEm ? `Buscado ${haQuanto(motoAtual.buscadoEm)}` : 'Ainda não buscado'}</span>
-                    {postsDaMoto.length > 0 && <button type="button" className="sm-link-botao" onClick={() => { setFiltros({ ...FILTROS_INICIAIS, moto: motoAtual.chave }); setAba('explorar') }}>Filtrar no Explorar</button>}
+                    {postsDaMoto.length > 0 && <button type="button" className="sm-link-botao" onClick={() => { setFiltros({ ...FILTROS_INICIAIS, moto: motoAtual.chave, fonte: 'hashtags' }); setAba('explorar') }}>Filtrar no Explorar</button>}
                   </div>
+                  {motoAtual.fontes.some(f => f.em) && (
+                    <p className="sm-legenda" data-fontes-moto>
+                      O Instagram devolveu: {motoAtual.fontes.map(f => `#${f.h} ${f.n == null ? (f.em ? '(buscada)' : '(na próxima busca)') : `${f.n} posts`}`).join(' · ')}.
+                      {motoAtual.fontes.some(f => f.n === 0) && ' Hashtag com 0 posts quase não é usada: troque por outra em "editar".'}
+                    </p>
+                  )}
                   {motoAtual.ultimoErro && <Banner tom="warn" titulo="Busca da moto">{motoAtual.ultimoErro}</Banner>}
                   <GradePosts key={motoAtual.chave} posts={postsDaMoto} podeEditar={dados.podeEditar} aoAbrir={abrirPost} aoSalvar={p => salvar(p)} numerar
-                    vazio={<EstadoVazio titulo="Sem posts ainda">{motoAtual.buscadoEm ? 'Nenhum post nas hashtags desta moto: tente outras hashtags.' : 'Toque em "Atualizar agora" ou espere a busca automática do dia.'}</EstadoVazio>} />
+                    vazio={<EstadoVazio titulo="Sem posts ainda">{motoAtual.buscadoEm ? 'O Instagram não devolveu posts nas hashtags desta moto: troque as hashtags em "editar" (ex.: a do modelo com o ano ou com a marca).' : 'Toque em "Atualizar agora" ou espere a busca automática do dia.'}</EstadoVazio>} />
                 </section>
               )}
             </div>

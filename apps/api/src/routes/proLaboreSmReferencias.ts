@@ -81,8 +81,8 @@ router.post('/sm/referencias/salvos/:id/pauta', ...editar, async (req: Request, 
 
 // "Atualizar agora": perfis e as motos sem busca recente (respeita o limite semanal de hashtags).
 router.post('/sm/referencias/atualizar', ...editar, async (req: Request, res: Response) => {
-  await atualizarReferencias(req.sm!.usuarioId, { prazoMs: 20_000 })
-  await responder(req, res)
+  const rodada = await atualizarReferencias(req.sm!.usuarioId, { prazoMs: 20_000 })
+  res.json({ ...(await painelReferencias(req.sm!.usuarioId)), podeEditar: true, rodada })
 })
 
 export default router
