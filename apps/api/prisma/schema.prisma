@@ -4197,3 +4197,19 @@ model LigacaoTarefa {
   @@index([vendedorId, status, agendadaPara])
   @@map("pro_labore_ligacoes")
 }
+
+// Importação do histórico do banco antigo (Neon): a simulação (relatório) e o
+// andamento da importação em rodadas (seleção, posição e ids casados).
+model ImportacaoNeon {
+  id          String    @id @default(cuid())
+  usuarioId   String    @unique
+  status      String // SIMULADO | IMPORTANDO | CONCLUIDA
+  relatorio   Json?
+  estado      Json
+  simuladoEm  DateTime?
+  iniciadoEm  DateTime?
+  concluidoEm DateTime?
+  criadoEm    DateTime  @default(now())
+
+  @@map("pro_labore_importacoes_neon")
+}
