@@ -6,6 +6,7 @@ import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 import { AgenteWhatsapp } from './_agente/AgenteWhatsapp'
+import { ImportacaoNeon } from './_importacao/ImportacaoNeon'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -359,6 +360,8 @@ export default function ProLaboreConfiguracoesPage() {
 
         <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoPlano} style={{ marginTop: 18 }}>{salvandoPlano ? 'Salvando...' : 'Salvar'}</button>
       </form>
+
+      <div style={{ marginTop: 20 }}><ImportacaoNeon /></div>
     </div>
   )
 }
