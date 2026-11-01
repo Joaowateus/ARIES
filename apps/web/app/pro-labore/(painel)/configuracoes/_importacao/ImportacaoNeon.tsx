@@ -78,6 +78,7 @@ export function ImportacaoNeon() {
           <div className="pl-alert" style={{ marginBottom: 12 }}>
             <b>{num(r.total)} registros novos</b> para importar.
             {r.vendasNoAtualDesde && <> As vendas lançadas aqui começam em {data(r.vendasNoAtualDesde)}.</>}
+            {r.tabelas.some(t => t.renumerados) && <> Alguns recibos antigos (pagamentos de comissão e pró-labore, Financeiro) usam números que já existem aqui, porque a numeração recomeçou: <b>eles entram com número novo, continuando depois dos atuais</b>, e as vendas continuam ligadas a eles.</>}
             {r.vendasRepetidas > 0 && <> <b>{r.vendasRepetidas} venda{r.vendasRepetidas > 1 ? 's' : ''} do banco antigo têm o mesmo dia e valor de uma venda já lançada aqui</b> (podem ser a mesma venda lançada duas vezes: confira em Vendas depois).</>}
           </div>
           <div className="pl-table-wrap">
@@ -124,7 +125,7 @@ export function ImportacaoNeon() {
           </div>
           <p className="pl-hint" style={{ marginTop: 8 }}>
             {estado.status === 'CONCLUIDA' ? <><b>Importação concluída</b>{estado.concluidoEm ? ` em ${new Date(estado.concluidoEm).toLocaleString('pt-BR')}` : ''}: </> : <>{num(p.feitos)} de {num(p.total)} lidos: </>}
-            {num(p.inseridos)} importados, {num(p.casados)} ligados a um cadastro que já existia, {num(p.existentes)} já existiam{p.falhas ? <>, <b>{num(p.falhas)} não entraram</b></> : ''}.
+            {num(p.inseridos)} importados, {num(p.casados)} ligados a um cadastro que já existia, {num(p.existentes)} já existiam{p.renumerados ? `, ${num(p.renumerados)} recibos com número novo` : ''}{p.falhas ? <>, <b>{num(p.falhas)} não entraram</b></> : ''}.
           </p>
           {p.ultimasFalhas.length > 0 && (
             <details>

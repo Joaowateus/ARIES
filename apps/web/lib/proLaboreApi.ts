@@ -3399,7 +3399,7 @@ export interface Reativacao {
   resumo: { total: number; followsPendentes: number; reativados30d: number; porMotivo: Array<{ motivo: MotivoPerda | 'SEM_MOTIVO'; n: number }>; porTemperatura: Array<{ temperatura: Temperatura | 'SEM_TEMPERATURA'; n: number }> }
 }
 
-export interface ImportacaoNeonTabela { tabela: string; rotulo: string | null; total: number; jaExistem: number; casados: number; novos: number; de: string | null; ate: string | null; colunasIgnoradas: number }
+export interface ImportacaoNeonTabela { tabela: string; rotulo: string | null; total: number; jaExistem: number; casados: number; renumerados?: number; novos: number; de: string | null; ate: string | null; colunasIgnoradas: number }
 export interface ImportacaoNeon {
   configurado: boolean
   status: 'SIMULADO' | 'IMPORTANDO' | 'CONCLUIDA' | null
@@ -3407,5 +3407,5 @@ export interface ImportacaoNeon {
   iniciadoEm: string | null
   concluidoEm: string | null
   relatorio: { ultimaMigracaoFonte: string | null; contaAntigaIgual: boolean; tabelas: ImportacaoNeonTabela[]; vendasRepetidas: number; vendasNoAtualDesde: string | null; total: number } | null
-  progresso: { total: number; feitos: number; inseridos: number; existentes: number; casados: number; falhas: number; ultimasFalhas: Array<{ tabela: string; id: string; erro: string }> } | null
+  progresso: { total: number; feitos: number; inseridos: number; existentes: number; casados: number; renumerados?: number; falhas: number; ultimasFalhas: Array<{ tabela: string; id: string; erro: string }> } | null
 }

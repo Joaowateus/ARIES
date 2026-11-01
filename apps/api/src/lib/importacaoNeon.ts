@@ -142,7 +142,7 @@ async function selecionar(est: Awaited<ReturnType<typeof estrutura>>, colsFonte:
 
 // --- Estado (no banco atual) ---
 
-interface Resultado { inseridos: number; existentes: number; casados: number; falhas: number }
+interface Resultado { inseridos: number; existentes: number; casados: number; renumerados?: number; falhas: number }
 interface Estado {
   donoAntigo: string
   selecao: Selecao
@@ -180,8 +180,8 @@ function progresso(est: Estado) {
     if (i < est.cursor.tabela) feitos += n
     else if (i === est.cursor.tabela) feitos += Math.min(n, est.cursor.posicao)
   }
-  const soma = (k: keyof Resultado) => Object.values(est.resultado).reduce((s, r) => s + r[k], 0)
-  return { total, feitos, inseridos: soma('inseridos'), existentes: soma('existentes'), casados: soma('casados'), falhas: soma('falhas'), ultimasFalhas: est.falhas.slice(-10) }
+  const soma = (k: keyof Resultado) => Object.values(est.resultado).reduce((s, r) => s + (r[k] ?? 0), 0)
+  return { total, feitos, inseridos: soma('inseridos'), existentes: soma('existentes'), casados: soma('casados'), renumerados: soma('renumerados'), falhas: soma('falhas'), ultimasFalhas: est.falhas.slice(-10) }
 }
 
 export async function simularImportacao(usuarioId: string) {
@@ -207,12 +207,12 @@ export async function simularImportacao(usuarioId: string) {
     const ids = selecao[nome]
     if (!ids?.length) continue
     const existentes = new Set((await prisma.$queryRawUnsafe<Array<{ id: string }>>(`SELECT id::text AS id FROM ${q(nome)} WHERE id::text = ANY($1::text[])`, ids)).map(x => x.id))
-    const casados = await contarCasados(est.tabelas.get(nome)!, ids.filter(id => !existentes.has(id)), donoAntigo, usuarioId)
+    const { casados, renumerados } = await contarCasados(est.tabelas.get(nome)!, ids.filter(id => !existentes.has(id)), donoAntigo, usuarioId)
     const n = existentes.size
     const temData = colsFonte.get(nome)?.has('criadoEm')
     const periodo = temData ? (await fonte().$queryRawUnsafe<Array<{ de: Date | null; ate: Date | null }>>(`SELECT min("criadoEm") AS de, max("criadoEm") AS ate FROM ${q(nome)} WHERE id::text = ANY($1::text[])`, ids))[0] : null
     const semNoDestino = colsFonte.get(nome)!.size - [...colsFonte.get(nome)!].filter(c => est.tabelas.get(nome)!.colunas.includes(c)).length
-    tabelas.push({ tabela: nome, rotulo: ROTULOS[nome] ?? null, total: ids.length, jaExistem: n, casados, novos: ids.length - n - casados, de: periodo?.de ?? null, ate: periodo?.ate ?? null, colunasIgnoradas: semNoDestino })
+    tabelas.push({ tabela: nome, rotulo: ROTULOS[nome] ?? null, total: ids.length, jaExistem: n, casados, renumerados, novos: ids.length - n - casados, de: periodo?.de ?? null, ate: periodo?.ate ?? null, colunasIgnoradas: semNoDestino })
   }
   // Vendas que parecem repetidas: mesmo dia e mesmo valor já lançados no banco atual.
   let vendasRepetidas = 0
@@ -238,13 +238,21 @@ export async function simularImportacao(usuarioId: string) {
 }
 
 /**
+ * Chave única com numeração sequencial (recibos: usuarioId + tipo/categoria + numero). O banco atual
+ * recomeçou a numeração, então o nº 1 antigo não é o nº 1 novo: o antigo entra com o próximo número livre.
+ */
+const numeracaoDe = (t: Tabela) => t.uniques.find(ch => ch.includes('numero') && t.colunas.includes('numero')) ?? null
+const texto = (v: unknown) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v))
+
+/**
  * Quantos registros novos vão ser casados com um que já existe no banco atual (mesma chave única
  * ou chave natural, como o nome da vendedora): na importação eles não entram, só apontam para o existente.
  */
 async function contarCasados(t: Tabela, ids: string[], donoAntigo: string, usuarioId: string) {
   const natural = CHAVES_NATURAIS[t.nome] && t.colunas.includes('usuarioId') ? CHAVES_NATURAIS[t.nome] : null
-  const chaves = [...t.uniques, ...(natural ? [natural] : [])].filter(ch => !ch.includes('id'))
-  if (!ids.length || !chaves.length) return 0
+  const numeracao = numeracaoDe(t)
+  const chaves = [...t.uniques.filter(ch => ch !== numeracao), ...(natural ? [natural] : []), ...(numeracao ? [numeracao] : [])].filter(ch => !ch.includes('id'))
+  if (!ids.length || !chaves.length) return { casados: 0, renumerados: 0 }
   const norm = (v: unknown, nat: boolean) => (v == null ? null : nat ? String(v).trim().toLowerCase() : typeof v === 'object' ? JSON.stringify(v) : String(v))
   const conjuntos = await Promise.all(chaves.map(async ch => {
     const nat = ch === natural
@@ -252,22 +260,24 @@ async function contarCasados(t: Tabela, ids: string[], donoAntigo: string, usuar
     const linhas = await prisma.$queryRawUnsafe<Array<{ j: string }>>(`SELECT json_build_array(${ch.map(q).join(', ')})::text AS j FROM ${q(t.nome)} ${filtro}`, ...(filtro ? [usuarioId] : []))
     return new Set(linhas.map(l => (JSON.parse(l.j) as unknown[]).map(v => norm(v, nat)).join('|')))
   }))
-  let n = 0
+  let n = 0, renumerados = 0
+  const bate = (l: Record<string, unknown>, k: number) => chaves[k].every(c => l[c] != null) && conjuntos[k].has(chaves[k].map(c => norm(l[c], chaves[k] === natural)).join('|'))
   for (let i = 0; i < ids.length; i += 1000) {
     const brutas = await fonte().$queryRawUnsafe<Array<{ j: string }>>(`SELECT row_to_json(x)::text AS j FROM ${q(t.nome)} x WHERE id::text = ANY($1::text[])`, ids.slice(i, i + 1000))
     for (const b of brutas) {
       const l = JSON.parse(b.j.split(donoAntigo).join(usuarioId)) as Record<string, unknown>
-      if (chaves.some((ch, k) => ch.every(c => l[c] != null) && conjuntos[k].has(ch.map(c => norm(l[c], ch === natural)).join('|')))) n++
+      if (chaves.some((ch, k) => ch !== numeracao && bate(l, k))) n++
+      else if (numeracao && bate(l, chaves.indexOf(numeracao))) renumerados++
     }
   }
-  return n
-}
+  return { casados: n, renumerados }
+  }
 
 // --- Importação em rodadas ---
 
 /** Procura no banco atual o registro que ocupa o lugar deste (mesma chave única ou chave natural). */
 async function existenteNoDestino(t: Tabela, linha: Record<string, unknown>, usuarioId: string): Promise<string | null> {
-  const chaves = [...t.uniques]
+  const chaves = t.uniques.filter(ch => ch !== numeracaoDe(t))
   for (const ch of chaves) {
     if (!ch.every(c => linha[c] != null)) continue
     const r = await prisma.$queryRawUnsafe<Array<{ id: string }>>(`SELECT id::text AS id FROM ${q(t.nome)} WHERE ${ch.map((c, i) => `${q(c)}::text = $${i + 1}`).join(' AND ')} LIMIT 1`, ...ch.map(c => (typeof linha[c] === 'object' ? JSON.stringify(linha[c]) : String(linha[c]))))
@@ -318,6 +328,24 @@ export async function rodarImportacao(usuarioId: string, prazoMs = 20_000) {
     for (const l of linhas) {
       const natural = CHAVES_NATURAIS[nome] ? await existenteNoDestino({ ...t, uniques: [] }, l, usuarioId) : null
       if (natural && natural !== l.id) { mapaDe(nome)[String(l.id)] = natural; r.casados++ } else paraInserir.push(l)
+    }
+    // Recibo cujo número já está em uso no banco atual: entra com o próximo número livre do mesmo tipo (na ordem antiga).
+    const numeracao = numeracaoDe(t)
+    if (numeracao && comuns.includes('numero')) {
+      const grupo = numeracao.filter(c => c !== 'numero')
+      const proximo = new Map<string, number>()
+      for (const l of [...paraInserir].sort((a, b) => Number(a.numero) - Number(b.numero))) {
+        if (l.numero == null || !numeracao.every(c => l[c] != null)) continue
+        const ocupado = await prisma.$queryRawUnsafe<unknown[]>(`SELECT 1 FROM ${q(nome)} WHERE ${numeracao.map((c, i) => `${q(c)}::text = $${i + 1}`).join(' AND ')} LIMIT 1`, ...numeracao.map(c => texto(l[c])))
+        const chaveGrupo = grupo.map(c => texto(l[c])).join('|')
+        // local: o último número dado neste grupo; um número antigo abaixo dele já foi ocupado por um renumerado.
+        const local = proximo.get(chaveGrupo)
+        if (!ocupado.length && (local == null || Number(l.numero) > local)) continue
+        const [{ m }] = await prisma.$queryRawUnsafe<Array<{ m: number }>>(`SELECT COALESCE(max(numero), 0)::int AS m FROM ${q(nome)} WHERE ${grupo.map((c, i) => `${q(c)}::text = $${i + 1}`).join(' AND ') || 'true'}`, ...grupo.map(c => texto(l[c])))
+        l.numero = Math.max(m, local ?? 0) + 1
+        proximo.set(chaveGrupo, Number(l.numero))
+        r.renumerados = (r.renumerados ?? 0) + 1
+      }
     }
     const inserir = async (lista: typeof linhas) => {
       const sql = `INSERT INTO ${q(nome)} (${comuns.map(q).join(', ')}) SELECT ${comuns.map(q).join(', ')} FROM json_populate_recordset(NULL::${q(nome)}, $1::json) ON CONFLICT DO NOTHING RETURNING id::text AS id`
