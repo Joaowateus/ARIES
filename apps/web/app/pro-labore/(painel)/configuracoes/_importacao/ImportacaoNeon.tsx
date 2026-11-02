@@ -27,15 +27,24 @@ export function ImportacaoNeon() {
 
   async function importar() {
     setOcupado('importar'); setErro(null)
+    let falhasSeguidas = 0
     try {
-      // Cada chamada tem tempo limitado: continua sozinho até concluir.
-      for (let i = 0; i < 300; i++) {
-        const r = await proLaboreApi.sistema.importacaoNeon.importar()
-        setEstado(r)
-        if (r.status === 'CONCLUIDA') break
+      // Cada chamada tem tempo limitado: continua sozinho até concluir. Se a conexão cair,
+      // espera um pouco e tenta de novo (até 5 vezes seguidas); rodar de novo não duplica.
+      for (let i = 0; i < 500; i++) {
+        try {
+          const r = await proLaboreApi.sistema.importacaoNeon.importar()
+          setEstado(r); falhasSeguidas = 0
+          if (r.status === 'CONCLUIDA') break
+        } catch (e) {
+          if (++falhasSeguidas >= 5) throw e
+          await new Promise(ok => setTimeout(ok, 3000 * falhasSeguidas))
+        }
       }
-    } catch (e) { setErro(e instanceof Error ? `${e.message}. Toque em "Continuar" para seguir de onde parou.` : 'A importação parou. Toque em "Continuar".') }
-    finally { setOcupado(null) }
+    } catch (e) {
+      setErro(`A importação parou${e instanceof Error ? ` (${e.message})` : ''}. Nada foi duplicado: toque em "Continuar a importação" para seguir de onde parou.`)
+      proLaboreApi.sistema.importacaoNeon.ver().then(setEstado).catch(() => {})
+    } finally { setOcupado(null) }
   }
 
   if (!estado) return null
@@ -71,7 +80,14 @@ export function ImportacaoNeon() {
         </>
       )}
 
-      {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }} role="alert">{erro}</div>}
+      {erro && (
+        <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }} role="alert">
+          {erro}
+          {estado.status !== 'SIMULADO' && estado.status !== 'CONCLUIDA' && (
+            <div style={{ marginTop: 10 }}><button type="button" className="pl-btn pl-btn-primary" onClick={importar} disabled={!!ocupado} data-continuar-neon>Continuar a importação</button></div>
+          )}
+        </div>
+      )}
 
       {r && (
         <div style={{ marginTop: 16 }} data-relatorio-neon>
