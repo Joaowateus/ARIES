@@ -64,7 +64,7 @@ export function EspacoBanco() {
       <h3 style={{ margin: '18px 0 8px', fontSize: 14 }}>O que dá para liberar sem perder nada</h3>
       {!dados.blobConfigurado && (dados.liberar.imagens.quantidade > 0 || dados.liberar.midias.quantidade > 0) && (
         <div className="pl-alert" style={{ marginBottom: 10 }} data-sem-blob>
-          Para mover fotos e áudios, ligue o armazenamento de arquivos: na Vercel, projeto <b>ariessistemacomercial</b> → <b>Storage</b> → <b>Create</b> → <b>Blob</b> → conectar ao projeto. Depois faça um Redeploy e volte aqui.
+          Para mover fotos e áudios, ligue o armazenamento de arquivos: na Vercel, projeto <b>ariessistemacomercial</b> → <b>Storage</b> → <b>Create</b> → <b>Blob</b> → conectar ao projeto. Depois faça um Redeploy da Produção e volte aqui. Já ligou? Confira em Settings → Environment Variables se existe <b>BLOB_STORE_ID</b> ou <b>BLOB_READ_WRITE_TOKEN</b> marcada para Production.
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
