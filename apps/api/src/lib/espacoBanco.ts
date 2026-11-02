@@ -7,7 +7,7 @@
 // Depois de esvaziar, VACUUM FULL devolve o espaço do arquivo da tabela
 // (sem ele o Postgres só reaproveita o espaço para dados novos).
 import { prisma } from './prisma'
-import { gravarNoBlob, tokenBlob } from './armazenamento'
+import { blobConfigurado, gravarNoBlob, ultimoErroBlob } from './armazenamento'
 import { LIMITE_BANCO_MB } from './bancoDisponivel'
 import { logger } from './logger'
 
@@ -55,7 +55,7 @@ export async function painelEspaco() {
   return {
     usadoMB: mb(bytes),
     limiteMB: LIMITE_BANCO_MB(),
-    blobConfigurado: !!tokenBlob(),
+    blobConfigurado: blobConfigurado(),
     tabelas: tabelas.map(t => ({ tabela: t.t, rotulo: ROTULOS[t.t] ?? null, mb: mb(t.bytes), linhas: Math.round(t.linhas) })),
     liberar: {
       eventos: { quantidade: Number(eventos.n), mb: mb(eventos.bytes) },
@@ -86,7 +86,7 @@ export async function liberarEspaco(acao: AcaoEspaco, prazoMs = 15_000) {
     restantes = await prisma.smWebhookEvento.count({ where: { recebidoEm: { lt: corte }, OR: [{ processadoEm: { not: null } }, { recebidoEm: { lt: parado } }] } })
     if (!restantes) await compactar('pro_labore_sm_webhook_eventos')
   } else {
-    if (!tokenBlob()) throw new ErroEspaco(400, 'O armazenamento de arquivos (Vercel Blob) não está ligado ao projeto da API')
+    if (!blobConfigurado()) throw new ErroEspaco(400, 'O armazenamento de arquivos (Vercel Blob) não está ligado ao projeto da API')
     const tabela = acao === 'imagens' ? 'pro_labore_imagens' : 'pro_labore_assistente_midias'
     while (Date.now() - inicio < prazoMs) {
       const lote = acao === 'imagens'
@@ -108,7 +108,7 @@ export async function liberarEspaco(acao: AcaoEspaco, prazoMs = 15_000) {
         else await prisma.assistenteMidia.update({ where: { id }, data: { ...blob, dados: null } })
         feitos++
       }
-      if (falhas >= 3) throw new ErroEspaco(502, 'O Vercel Blob recusou os arquivos: confira o armazenamento no painel da Vercel')
+      if (falhas >= 3) throw new ErroEspaco(502, `O Vercel Blob recusou os arquivos${ultimoErroBlob ? ` (${ultimoErroBlob})` : ''}: confira o armazenamento no painel da Vercel`)
     }
     restantes = acao === 'imagens'
       ? await prisma.imagemUpload.count({ where: { dados: { not: null } } })

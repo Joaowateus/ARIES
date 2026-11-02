@@ -1,12 +1,12 @@
 // Áudios e fotos das conversas do WhatsApp (modelo AssistenteMidia): o
 // webhook registra a mídia da mensagem e tenta baixar na hora pela
 // Evolution; o que não der fica PENDENTE e baixa na primeira vez que alguém
-// abrir. O arquivo vai para o Vercel Blob (privado; se o store não aceitar,
-// público com sufixo aleatório) ou, sem Blob configurado, para o banco. O
+// abrir. O arquivo vai para o Vercel Blob (lib/armazenamento: privado; se o
+// store não aceitar, público com sufixo aleatório) ou, sem Blob, para o banco. O
 // endereço do Blob nunca sai da API: a tela recebe o arquivo pela rota com
 // login. Nada disso vai para a IA.
-import { get, put } from '@vercel/blob'
 import { prisma } from './prisma'
+import { gravarNoBlob, lerDoBlob } from './armazenamento'
 import { logger } from './logger'
 import { baixarMidiaDaMensagem, evolutionConfigurada } from './whatsappEvolution'
 
@@ -16,26 +16,14 @@ export interface MidiaRecebida { providerId: string; tipo: TipoMidia; mime: stri
 // A resposta da Vercel não passa de 4,5 MB; áudio de voz e foto do WhatsApp ficam bem abaixo.
 const MAX_BYTES = 4 * 1024 * 1024
 const MAX_TENTATIVAS = 3
-const tokenBlob = () => process.env.BLOB_READ_WRITE_TOKEN?.trim() || null
 const EXTENSAO: Record<string, string> = {
   'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr',
   'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
 }
 
 async function guardar(usuarioId: string, midiaId: string, arquivo: { mime: string; dados: Buffer }) {
-  const token = tokenBlob()
-  if (token) {
-    const caminho = `conversas/${usuarioId}/${midiaId}.${EXTENSAO[arquivo.mime] ?? 'bin'}`
-    for (const acesso of ['private', 'public'] as const) {
-      try {
-        const r = await put(caminho, arquivo.dados, { access: acesso, token, contentType: arquivo.mime, addRandomSuffix: true })
-        return { blobUrl: r.url, blobAcesso: acesso, dados: null }
-      } catch (e) {
-        logger.warn({ err: e, acesso }, 'midia: o Blob recusou o arquivo')
-      }
-    }
-  }
-  return { blobUrl: null, blobAcesso: null, dados: arquivo.dados }
+  const blob = await gravarNoBlob(`conversas/${usuarioId}/${midiaId}.${EXTENSAO[arquivo.mime] ?? 'bin'}`, arquivo.mime, arquivo.dados)
+  return blob ? { ...blob, dados: null } : { blobUrl: null, blobAcesso: null, dados: arquivo.dados }
 }
 
 /** Baixa pela Evolution e guarda. true = arquivo disponível. */
@@ -112,12 +100,6 @@ export async function arquivoDaMidia(mensagemId: string): Promise<ArquivoMidia |
   const mime = m.mime ?? 'application/octet-stream'
   if (m.dados) return { status: 'OK', mime, dados: Buffer.from(m.dados) }
   if (!m.blobUrl) return { status: 'INDISPONIVEL' }
-  if (m.blobAcesso === 'private') {
-    const r = await get(m.blobUrl, { access: 'private', token: tokenBlob() ?? undefined })
-    if (!r || r.statusCode !== 200) return { status: 'INDISPONIVEL' }
-    return { status: 'OK', mime, dados: Buffer.from(await new Response(r.stream).arrayBuffer()) }
-  }
-  const r = await fetch(m.blobUrl)
-  if (!r.ok) return { status: 'INDISPONIVEL' }
-  return { status: 'OK', mime, dados: Buffer.from(await r.arrayBuffer()) }
+  const dados = await lerDoBlob(m.blobUrl, m.blobAcesso).catch(() => null)
+  return dados ? { status: 'OK', mime, dados } : { status: 'INDISPONIVEL' }
 }

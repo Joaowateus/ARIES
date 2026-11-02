@@ -10,17 +10,24 @@ import { prisma } from './prisma'
 import { logger } from './logger'
 
 export const tokenBlob = () => process.env.BLOB_READ_WRITE_TOKEN?.trim() || null
+// Blob ligado ao projeto: pela chave antiga (BLOB_READ_WRITE_TOKEN) ou pelo jeito novo da Vercel
+// (BLOB_STORE_ID + a credencial OIDC que a própria Vercel injeta em cada chamada).
+export const blobConfigurado = () => !!(tokenBlob() || process.env.BLOB_STORE_ID?.trim())
+const credencial = () => (tokenBlob() ? { token: tokenBlob()! } : {})
 const EXTENSAO: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }
+
+/** A última recusa do Blob (para explicar na tela o que falta). */
+export let ultimoErroBlob: string | null = null
 
 /** Grava no Blob; null = sem Blob configurado ou o Blob recusou (o arquivo fica no banco). */
 export async function gravarNoBlob(caminho: string, mime: string, dados: Buffer): Promise<{ blobUrl: string; blobAcesso: 'private' | 'public' } | null> {
-  const token = tokenBlob()
-  if (!token) return null
+  if (!blobConfigurado()) return null
   for (const acesso of ['private', 'public'] as const) {
     try {
-      const r = await put(caminho, dados, { access: acesso, token, contentType: mime, addRandomSuffix: true })
+      const r = await put(caminho, dados, { access: acesso, ...credencial(), contentType: mime, addRandomSuffix: true })
       return { blobUrl: r.url, blobAcesso: acesso }
     } catch (e) {
+      ultimoErroBlob = e instanceof Error ? e.message.slice(0, 200) : String(e)
       logger.warn({ err: e, acesso }, 'armazenamento: o Blob recusou o arquivo')
     }
   }
@@ -30,7 +37,7 @@ export async function gravarNoBlob(caminho: string, mime: string, dados: Buffer)
 /** Lê do Blob (privado com o token; público direto). */
 export async function lerDoBlob(blobUrl: string, blobAcesso: string | null): Promise<Buffer | null> {
   if (blobAcesso === 'private') {
-    const r = await get(blobUrl, { access: 'private', token: tokenBlob() ?? undefined })
+    const r = await get(blobUrl, { access: 'private', ...credencial() })
     if (!r || r.statusCode !== 200) return null
     return Buffer.from(await new Response(r.stream).arrayBuffer())
   }
