@@ -19,7 +19,8 @@ import { prisma } from './prisma'
 export class ErroImportacao extends Error { constructor(readonly status: number, message: string) { super(message) } }
 
 const TABELA_DONO = 'pro_labore_usuarios'
-const LOTE = 200
+// Lote e prazo pequenos: cada chamada na Vercel tem 30 s, e o servidor fica longe dos bancos.
+const LOTE = 100
 const MAX_FALHAS = 50
 // Mesmo registro cadastrado de novo no banco atual: casa por estas colunas (sem diferenciar maiúsculas).
 const CHAVES_NATURAIS: Record<string, string[]> = {
@@ -291,7 +292,7 @@ async function existenteNoDestino(t: Tabela, linha: Record<string, unknown>, usu
   return null
 }
 
-export async function rodarImportacao(usuarioId: string, prazoMs = 20_000) {
+export async function rodarImportacao(usuarioId: string, prazoMs = 12_000) {
   const registro = await lerEstado(usuarioId)
   if (!registro || !['SIMULADO', 'IMPORTANDO'].includes(registro.status)) throw new ErroImportacao(400, 'Faça a simulação antes de importar')
   const inicio = Date.now()
@@ -324,10 +325,19 @@ export async function rodarImportacao(usuarioId: string, prazoMs = 20_000) {
       linhas.push(so)
     }
     // Chave natural (ex.: a mesma vendedora cadastrada de novo): aponta para a que já existe e não insere.
+    // Uma consulta só por lote (conferir linha a linha estourava o tempo da chamada com muitos leads).
+    const natural = CHAVES_NATURAIS[nome] && t.colunas.includes('usuarioId') ? CHAVES_NATURAIS[nome] : null
+    const chaveNatural = (l: Record<string, unknown>) => (natural!.every(c => typeof l[c] === 'string' && (l[c] as string).trim()) ? natural!.map(c => (l[c] as string).trim().toLowerCase()).join('|') : null)
+    const existentesNaturais = new Map<string, string>()
+    if (natural) {
+      const atuais = await prisma.$queryRawUnsafe<Array<{ id: string; k: string }>>(`SELECT id::text AS id, ${natural.map(c => `lower(trim(${q(c)}::text))`).join(` || '|' || `)} AS k FROM ${q(nome)} WHERE "usuarioId" = $1 AND ${natural.map(c => `${q(c)} IS NOT NULL`).join(' AND ')}`, usuarioId)
+      for (const a of atuais) if (!existentesNaturais.has(a.k)) existentesNaturais.set(a.k, a.id)
+    }
     const paraInserir: typeof linhas = []
     for (const l of linhas) {
-      const natural = CHAVES_NATURAIS[nome] ? await existenteNoDestino({ ...t, uniques: [] }, l, usuarioId) : null
-      if (natural && natural !== l.id) { mapaDe(nome)[String(l.id)] = natural; r.casados++ } else paraInserir.push(l)
+      const k = natural ? chaveNatural(l) : null
+      const igual = k ? existentesNaturais.get(k) : undefined
+      if (igual && igual !== l.id) { mapaDe(nome)[String(l.id)] = igual; r.casados++ } else paraInserir.push(l)
     }
     // Recibo cujo número já está em uso no banco atual: entra com o próximo número livre do mesmo tipo (na ordem antiga).
     const numeracao = numeracaoDe(t)
@@ -366,13 +376,15 @@ export async function rodarImportacao(usuarioId: string, prazoMs = 20_000) {
         }
       }
     }
+    // Os que não entraram: quais já estão no banco atual com o mesmo id (uma consulta para o lote todo).
+    const naoEntraram = paraInserir.filter(l => !l.__falhou && !inseridos!.has(String(l.id))).map(l => String(l.id))
+    const jaAqui = new Set(naoEntraram.length ? (await prisma.$queryRawUnsafe<Array<{ id: string }>>(`SELECT id::text AS id FROM ${q(nome)} WHERE id::text = ANY($1::text[])`, naoEntraram)).map(x => x.id) : [])
     for (const l of paraInserir) {
       if (l.__falhou) continue
       const id = String(l.id)
       if (inseridos!.has(id)) { r.inseridos++; continue }
       // Não entrou: ou o mesmo id já está no banco atual, ou outro registro ocupa a mesma chave única.
-      const [{ n }] = await prisma.$queryRawUnsafe<Array<{ n: bigint }>>(`SELECT count(*) AS n FROM ${q(nome)} WHERE id::text = $1`, id)
-      if (Number(n)) { r.existentes++; continue }
+      if (jaAqui.has(id)) { r.existentes++; continue }
       const outro = await existenteNoDestino(t, l, usuarioId)
       if (outro) { mapaDe(nome)[id] = outro; r.casados++ } else { r.falhas++; if (e.falhas.length < MAX_FALHAS) e.falhas.push({ tabela: nome, id, erro: 'conflito sem registro correspondente' }) }
     }
