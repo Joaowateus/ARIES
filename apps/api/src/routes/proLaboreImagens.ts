@@ -4,11 +4,9 @@
 // devolve um endereço público com chave aleatória — a tag <img> não envia
 // o token de login, então a chave longa é o que protege.
 import express, { Router, Request, Response } from 'express'
-import crypto from 'crypto'
 import { z } from 'zod'
-import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
-import { tipoPelaAssinatura } from '../lib/armazenamento'
+import { criarImagem, imagemPorChave, tipoPelaAssinatura } from '../lib/armazenamento'
 
 const router = Router()
 // A Vercel recusa requisições acima de 4,5 MB; o site manda no máximo 3,5 MB.
@@ -35,8 +33,7 @@ router.post('/imagens', requireProLaboreAuth, express.raw({ type: 'application/o
     res.status(400).json({ error: 'Formato não aceito — use JPG, PNG, WebP ou GIF' })
     return
   }
-  const chave = crypto.randomBytes(18).toString('base64url')
-  await prisma.imagemUpload.create({ data: { chave, usuarioId: req.proLaboreUser!.sub, mime, dados, tamanho: dados.length } })
+  const chave = await criarImagem(req.proLaboreUser!.sub, mime, dados)
   res.status(201).json({ caminho: `/pro-labore/imagens/${chave}` })
 })
 
@@ -46,7 +43,7 @@ router.get('/imagens/:chave', async (req: Request, res: Response) => {
     res.status(404).end()
     return
   }
-  const img = await prisma.imagemUpload.findUnique({ where: { chave }, select: { mime: true, dados: true } })
+  const img = await imagemPorChave(chave)
   if (!img) {
     res.status(404).end()
     return
@@ -55,7 +52,7 @@ router.get('/imagens/:chave', async (req: Request, res: Response) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
   res.setHeader('Content-Type', img.mime)
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-  res.send(Buffer.from(img.dados))
+  res.send(img.dados)
 })
 
 export default router

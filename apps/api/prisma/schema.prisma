@@ -1024,13 +1024,13 @@ model Vendedor {
   criadoEm             DateTime @default(now())
   atualizadoEm         DateTime @updatedAt
 
-  usuario             ProLaboreUsuario     @relation(fields: [usuarioId], references: [id])
-  vendas              Venda[]
-  pagamentosComissao  PagamentoComissao[]
-  leads               Lead[]
-  ocorrencias         Ocorrencia[]
-  assistenteComercial AssistenteComercial?
-  socialMediaContas   SocialMediaConta[]
+  usuario                ProLaboreUsuario       @relation(fields: [usuarioId], references: [id])
+  vendas                 Venda[]
+  pagamentosComissao     PagamentoComissao[]
+  leads                  Lead[]
+  ocorrencias            Ocorrencia[]
+  assistenteComercial    AssistenteComercial?
+  socialMediaContas      SocialMediaConta[]
   lancamentosFinanceiros LancamentoFinanceiro[]
   smMembro               SmMembro?
 
@@ -1181,29 +1181,29 @@ model MetaFunilProLabore {
 // venda tem um vendedor atribuído) são valores independentes: cada um
 // respeita o próprio teto e nunca ultrapassa o valor da venda.
 model Venda {
-  id             String   @id @default(cuid())
-  usuarioId      String
-  vendedorId     String?
-  data           DateTime
-  valorVenda     Float
-  valorProLabore Float
-  valorComissao  Float?
-  observacao     String?
+  id                   String   @id @default(cuid())
+  usuarioId            String
+  vendedorId           String?
+  data                 DateTime
+  valorVenda           Float
+  valorProLabore       Float
+  valorComissao        Float?
+  observacao           String?
   // Comprovante em que a comissão desta venda foi paga ao vendedor (nulo =
   // ainda a pagar). Enquanto estiver pago, valor e vendedor da comissão
   // ficam travados — pra mudar, desmarca o pagamento antes.
-  pagamentoComissaoId String?
+  pagamentoComissaoId  String?
   // Idem pro pró-labore: comprovante em que a retirada do pró-labore desta
   // venda foi registrada (nulo = ainda não pago). Trava o valorProLabore.
   pagamentoProLaboreId String?
   // Origem herdada do lead na conversão (seção 3.5): a venda continua
   // creditada ao post mesmo fechada depois do período analisado.
-  origem         String? // INSTAGRAM_ORGANICO
-  postCode       String?
-  midiaId        String?
-  canalEntrada   String?
-  criadoEm       DateTime @default(now())
-  atualizadoEm   DateTime @updatedAt
+  origem               String? // INSTAGRAM_ORGANICO
+  postCode             String?
+  midiaId              String?
+  canalEntrada         String?
+  criadoEm             DateTime @default(now())
+  atualizadoEm         DateTime @updatedAt
 
   usuario            ProLaboreUsuario   @relation(fields: [usuarioId], references: [id])
   vendedor           Vendedor?          @relation(fields: [vendedorId], references: [id])
@@ -1226,9 +1226,9 @@ model Venda {
 // A numeração é sequencial por conta e por tipo. valorTotal é recalculado
 // quando uma venda sai do pagamento.
 model PagamentoComissao {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   usuarioId      String
-  tipo           String   @default("COMISSAO") // COMISSAO | PROLABORE
+  tipo           String    @default("COMISSAO") // COMISSAO | PROLABORE
   vendedorId     String?
   numero         Int
   pagoEm         DateTime
@@ -1243,7 +1243,7 @@ model PagamentoComissao {
   // Preenchido quando todas as vendas saíram do pagamento: o registro fica
   // (o número nunca é reaproveitado) e o comprovante aparece como cancelado.
   canceladoEm    DateTime?
-  criadoEm       DateTime @default(now())
+  criadoEm       DateTime  @default(now())
 
   usuario         ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
   vendedor        Vendedor?        @relation(fields: [vendedorId], references: [id], onDelete: Restrict)
@@ -1295,62 +1295,62 @@ model LancamentoFinanceiro {
 // os números computados daqui e só cai pro FunilMensal em meses sem Lead
 // nenhum (histórico anterior à funcionalidade).
 model Lead {
-  id              String    @id @default(cuid())
-  usuarioId       String
-  vendedorId      String?
-  nomeCliente     String
-  telefone        String?
-  email           String?
-  cpf             String?
-  endereco        String?
-  modeloInteresse String? // moto que o cliente tem interesse — separado de observacao pra facilitar relatório
-  observacao      String?
-  tipoLead        String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
+  id               String    @id @default(cuid())
+  usuarioId        String
+  vendedorId       String?
+  nomeCliente      String
+  telefone         String?
+  email            String?
+  cpf              String?
+  endereco         String?
+  modeloInteresse  String? // moto que o cliente tem interesse — separado de observacao pra facilitar relatório
+  observacao       String?
+  tipoLead         String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
   // Quanto o cliente teria capacidade de gerar de faturamento — base pro
   // indicador de "oportunidade de faturamento" que passou pelo funil.
   // Default 0 só pra não quebrar leads já cadastrados antes deste campo
   // existir; obrigatório em todo lead novo (exigido na validação da rota).
-  valorNegociacao Float     @default(0)
+  valorNegociacao  Float     @default(0)
   // P | R — como a negociação vai ser paga, e não como o lead entrou
   // (isso é tipoLead/canal). Muda o teto de pró-labore/comissão usado na
   // conversão em venda (ver tetoProLaboreRenegociacao/tetoComissaoRenegociacao
   // em ParametroLiquidez) — null se ainda não classificada, o que a
   // conversão trata igual a P (pagamento integral, tetos normais da conta).
-  tipoNegociacao  String?
-  estagio         String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
-  vendaId         String?   @unique
+  tipoNegociacao   String?
+  estagio          String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
+  vendaId          String?   @unique
   // Origem vinda do Social Media (seção 3.4): o lead criado pelo Atendimento
   // guarda o post e o canal de entrada, e a venda herda isso pelo lead.
-  origem          String? // INSTAGRAM_ORGANICO
-  postCode        String? // #P-DDMM-MODELO, #S-..., #BIO
-  midiaId         String? // id da mídia no Instagram
-  canalEntrada    String? // DIRECT | COMENTARIO | COMENTE_QUERO | RESPOSTA_STORY | LINK_WHATSAPP
-  conversaId      String?
+  origem           String? // INSTAGRAM_ORGANICO
+  postCode         String? // #P-DDMM-MODELO, #S-..., #BIO
+  midiaId          String? // id da mídia no Instagram
+  canalEntrada     String? // DIRECT | COMENTARIO | COMENTE_QUERO | RESPOSTA_STORY | LINK_WHATSAPP
+  conversaId       String?
   // Como o lead entrou no CRM: null = cadastro manual; WHATSAPP = criado
   // sozinho quando o contato mandou a 1ª mensagem no WhatsApp do vendedor.
-  origemCadastro  String?
+  origemCadastro   String?
   // Nota do Assistente (0–100) pela conversa do WhatsApp: quanto mais alta,
   // mais pronto para comprar. Só leitura; quem calcula é o assistente.
-  pontuacao       Int?
+  pontuacao        Int?
   // Etiquetas da jornada, calculadas pelo Assistente a cada mensagem
   // (QUENTE, FINANCIAMENTO, A_VISTA, TEM_TROCA, SEM_ENTRADA, PEDIU_SIMULACAO,
   // OBJECAO_PRECO, PEDIU_VISITA, SUMIU_24H).
-  etiquetas       String[]  @default([])
+  etiquetas        String[]  @default([])
   // Etapas para as quais um avanço automático foi desfeito: o assistente
   // não tenta de novo.
-  avancosDesfeitos String[] @default([])
-  criadoEm        DateTime  @default(now())
-  atualizadoEm    DateTime  @updatedAt
-  fechadoEm       DateTime?
+  avancosDesfeitos String[]  @default([])
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+  fechadoEm        DateTime?
   // Perdido: o lead sai do funil e vai para a Reativação com o motivo e a
   // temperatura (FRIO | MORNO | QUENTE). Reativar devolve ao funil e conta
   // em `reativacoes`; o motivo fica guardado como histórico.
-  motivoPerda     String?
-  notaPerda       String?
-  perdidoEm       DateTime?
-  temperatura     String?
-  reativadoEm     DateTime?
-  reativacoes     Int       @default(0)
+  motivoPerda      String?
+  notaPerda        String?
+  perdidoEm        DateTime?
+  temperatura      String?
+  reativadoEm      DateTime?
+  reativacoes      Int       @default(0)
 
   usuario             ProLaboreUsuario       @relation(fields: [usuarioId], references: [id])
   vendedor            Vendedor?              @relation(fields: [vendedorId], references: [id])
@@ -1716,10 +1716,10 @@ model SocialMediaConta {
   falhasSeguidas        Int       @default(0)
   proximaTentativaEm    DateTime?
 
-  usuario   ProLaboreUsuario            @relation(fields: [usuarioId], references: [id])
-  vendedor  Vendedor?                   @relation(fields: [vendedorId], references: [id])
-  midias    SocialMediaMidia[]
-  snapshots SocialMediaSnapshotDiario[]
+  usuario         ProLaboreUsuario            @relation(fields: [usuarioId], references: [id])
+  vendedor        Vendedor?                   @relation(fields: [vendedorId], references: [id])
+  midias          SocialMediaMidia[]
+  snapshots       SocialMediaSnapshotDiario[]
   alcancesPeriodo SocialMediaAlcancePeriodo[]
   sincronizacoes  SmSincronizacao[]
   webhookEventos  SmWebhookEvento[]
@@ -2027,8 +2027,8 @@ model AssistenteConversa {
   encerradaEm          DateTime?
   criadoEm             DateTime  @default(now())
 
-  assistente AssistenteComercial   @relation(fields: [assistenteId], references: [id])
-  lead       Lead?                 @relation(fields: [leadId], references: [id])
+  assistente AssistenteComercial     @relation(fields: [assistenteId], references: [id])
+  lead       Lead?                   @relation(fields: [leadId], references: [id])
   mensagens  AssistenteMensagem[]
   ficha      AssistenteFichaCredito?
 
@@ -2054,7 +2054,7 @@ model AssistenteFichaCredito {
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
 
-  conversa AssistenteConversa       @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  conversa AssistenteConversa         @relation(fields: [conversaId], references: [id], onDelete: Cascade)
   analises AssistenteAnaliseCredito[]
 
   @@index([usuarioId])
@@ -2085,20 +2085,20 @@ model AssistenteAnaliseCredito {
 }
 
 model AssistenteMensagem {
-  id         String   @id @default(cuid())
-  conversaId String
-  remetente  String // CONTATO | ASSISTENTE | VENDEDOR
-  texto      String
+  id          String   @id @default(cuid())
+  conversaId  String
+  remetente   String // CONTATO | ASSISTENTE | VENDEDOR
+  texto       String
   // ID da mensagem no WhatsApp — deduplica webhook repetido e separa o que
   // o assistente mandou do que o vendedor digitou no celular.
-  providerId String?  @unique
+  providerId  String?  @unique
   // Foto enviada junto (vitrine do estoque): /pro-labore/imagens/<chave>.
-  midiaUrl   String?
+  midiaUrl    String?
   // FOLLOW = mensagem do follow automático.
-  origem     String?
+  origem      String?
   // Fluxo do follow automático que mandou (para a taxa de resposta por fluxo).
   followFluxo String?
-  criadoEm   DateTime @default(now())
+  criadoEm    DateTime @default(now())
 
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
   // Áudio ou foto que veio (ou saiu) pelo WhatsApp, para ouvir e ver na conversa.
@@ -2206,24 +2206,24 @@ model AssistenteConhecimentoOcorrencia {
 // respostas funcionam.
 // Preferências da loja para o Assistente (valem para todos os vendedores).
 model AssistenteLoja {
-  usuarioId    String   @id
+  usuarioId        String   @id
   // Preço no WhatsApp desligado por padrão (decisão do plano).
-  mostrarPreco Boolean  @default(false)
+  mostrarPreco     Boolean  @default(false)
   // O robô responde "tem a XRE?" com a ficha e a foto do estoque.
-  vitrineRobo  Boolean  @default(true)
+  vitrineRobo      Boolean  @default(true)
   // O assistente move o lead no funil (só para frente, nunca para
   // Fechado/Perdido, com aviso e "desfazer").
-  avancoAutomatico Boolean @default(true)
+  avancoAutomatico Boolean  @default(true)
   // Follow automático com mídia: começa desligado, para o dono revisar as
   // mensagens antes. followConfig = { passos: [{ dias, texto, midia }], tetoDiario, horaInicio, horaFim }.
-  followAtivo  Boolean  @default(false)
-  followConfig Json?
+  followAtivo      Boolean  @default(false)
+  followConfig     Json?
   // Simulação de financiamento no fim do roteiro: desligada até a loja
   // cadastrar as taxas. simulacaoConfig = { taxas: [{ prazo, taxa }],
   // entradaMinimaPct, perguntarRenda, comprometimentoMax, aviso }.
-  simulacaoAtiva  Boolean @default(false)
-  simulacaoConfig Json?
-  atualizadoEm DateTime @default(now()) @updatedAt
+  simulacaoAtiva   Boolean  @default(false)
+  simulacaoConfig  Json?
+  atualizadoEm     DateTime @default(now()) @updatedAt
 
   @@map("pro_labore_assistente_loja")
 }
@@ -2523,10 +2523,10 @@ model Apresentacao {
   criadoEm            DateTime  @default(now())
   atualizadoEm        DateTime  @updatedAt
 
-  usuario      ProLaboreUsuario         @relation(fields: [usuarioId], references: [id])
-  departamento ReuniaoDepartamento?     @relation(fields: [departamentoId], references: [id], onDelete: Restrict)
-  pasta        ReuniaoPasta?            @relation(fields: [pastaId], references: [id], onDelete: SetNull)
-  espectadores ApresentacaoEspectador[]
+  usuario       ProLaboreUsuario          @relation(fields: [usuarioId], references: [id])
+  departamento  ReuniaoDepartamento?      @relation(fields: [departamentoId], references: [id], onDelete: Restrict)
+  pasta         ReuniaoPasta?             @relation(fields: [pastaId], references: [id], onDelete: SetNull)
+  espectadores  ApresentacaoEspectador[]
   notasPessoais ApresentacaoNotaPessoal[]
 
   @@index([usuarioId])
@@ -2679,7 +2679,7 @@ model TrafegoConta {
   totaisEm              DateTime?
   atualizadoEm          DateTime  @updatedAt
 
-  insights TrafegoInsightDiario[]
+  insights      TrafegoInsightDiario[]
   totaisDiarios TrafegoContaDiario[]
 
   @@map("pro_labore_trafego_contas")
@@ -2689,49 +2689,49 @@ model TrafegoConta {
 // campanha/conjunto/conta são somados a partir daqui — menos alcance e
 // frequência, que não somam (ver TrafegoAlcance).
 model TrafegoInsightDiario {
-  id            String   @id @default(cuid())
-  contaId       String
-  data          DateTime @db.Date
-  adId          String
-  adNome        String
-  adsetId       String
-  adsetNome     String
-  campanhaId    String
-  campanhaNome  String
-  objetivo      String?
-  gasto         Float    @default(0)
-  impressoes    Int      @default(0)
-  alcance       Int      @default(0)
-  cliques       Int      @default(0)
-  cliquesLink   Int      @default(0)
-  lpv           Int      @default(0)
-  conversas     Int      @default(0)
-  leads         Int      @default(0)
-  videoViews    Int      @default(0)
-  thruplays     Int      @default(0)
-  videoP25      Int      @default(0)
-  videoP50      Int      @default(0)
-  videoP75      Int      @default(0)
-  videoP100     Int      @default(0)
-  videoP95      Int      @default(0)
-  videoPlays    Int      @default(0)
+  id                String   @id @default(cuid())
+  contaId           String
+  data              DateTime @db.Date
+  adId              String
+  adNome            String
+  adsetId           String
+  adsetNome         String
+  campanhaId        String
+  campanhaNome      String
+  objetivo          String?
+  gasto             Float    @default(0)
+  impressoes        Int      @default(0)
+  alcance           Int      @default(0)
+  cliques           Int      @default(0)
+  cliquesLink       Int      @default(0)
+  lpv               Int      @default(0)
+  conversas         Int      @default(0)
+  leads             Int      @default(0)
+  videoViews        Int      @default(0)
+  thruplays         Int      @default(0)
+  videoP25          Int      @default(0)
+  videoP50          Int      @default(0)
+  videoP75          Int      @default(0)
+  videoP100         Int      @default(0)
+  videoP95          Int      @default(0)
+  videoPlays        Int      @default(0)
   // Soma de (tempo médio assistido × reproduções), em segundos: dividida
   // pelas reproduções do período dá o tempo médio.
-  videoTempoTotal Float  @default(0)
-  cliquesSaida  Int      @default(0)
-  engajamento   Int      @default(0)
-  reacoes       Int      @default(0)
-  comentarios   Int      @default(0)
-  compartilhamentos Int  @default(0)
-  salvamentos   Int      @default(0)
+  videoTempoTotal   Float    @default(0)
+  cliquesSaida      Int      @default(0)
+  engajamento       Int      @default(0)
+  reacoes           Int      @default(0)
+  comentarios       Int      @default(0)
+  compartilhamentos Int      @default(0)
+  salvamentos       Int      @default(0)
   // Conversas em que a pessoa mandou 2, 3 e 5+ mensagens; e bloqueios.
-  conversasProf2 Int     @default(0)
-  conversasProf3 Int     @default(0)
-  conversasProf5 Int     @default(0)
-  bloqueios     Int      @default(0)
+  conversasProf2    Int      @default(0)
+  conversasProf3    Int      @default(0)
+  conversasProf5    Int      @default(0)
+  bloqueios         Int      @default(0)
   // Novos contatos de mensagem (onsite_conversion.messaging_first_reply).
-  novosContatos Int      @default(0)
-  atualizadoEm  DateTime @updatedAt
+  novosContatos     Int      @default(0)
+  atualizadoEm      DateTime @updatedAt
 
   conta TrafegoConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
 
@@ -2840,13 +2840,16 @@ model TrafegoPublicoCache {
 // 4 MB; só as maiores chegam reduzidas pelo navegador). Servidas por GET público pela `chave` (aleatória, longa):
 // a tag <img> não manda o token de login.
 model ImagemUpload {
-  id        String   @id @default(cuid())
-  chave     String   @unique
-  usuarioId String
-  mime      String
-  dados     Bytes
-  tamanho   Int
-  criadoEm  DateTime @default(now())
+  id         String   @id @default(cuid())
+  chave      String   @unique
+  usuarioId  String
+  mime       String
+  // O arquivo fica no Vercel Blob (blobUrl) quando configurado; senão, no próprio banco (dados).
+  dados      Bytes?
+  blobUrl    String?
+  blobAcesso String? // private | public
+  tamanho    Int
+  criadoEm   DateTime @default(now())
 
   @@index([usuarioId])
   @@map("pro_labore_imagens")
@@ -2918,29 +2921,29 @@ model SmPermissao {
 // conteúdo precisa — modelo, ano, cor e há quantos dias está na loja.
 // Nunca guarda custo nem margem. Mantido pelo gestor.
 model SmMotoEstoque {
-  id           String    @id @default(cuid())
-  usuarioId    String
-  modelo       String
-  marca        String?
-  ano          Int?
-  cor          String?
-  entradaEm    DateTime
-  situacao     String    @default("DISPONIVEL") // DISPONIVEL | RESERVADA | VENDIDA
-  saidaEm      DateTime?
-  observacao   String?
+  id             String    @id @default(cuid())
+  usuarioId      String
+  modelo         String
+  marca          String?
+  ano            Int?
+  cor            String?
+  entradaEm      DateTime
+  situacao       String    @default("DISPONIVEL") // DISPONIVEL | RESERVADA | VENDIDA
+  saidaEm        DateTime?
+  observacao     String?
   // Vitrine do Assistente Comercial: a ficha que vai para o cliente no WhatsApp.
-  versao       String?
-  km           Int?
-  cilindrada   Int?
+  versao         String?
+  km             Int?
+  cilindrada     Int?
   // Preço de venda: só aparece no WhatsApp se a loja ligar e nunca vai para a IA.
-  preco        Float?
-  destaques    String[]  @default([])
-  ficha        Json? // [{ rotulo, valor }]
-  fotos        String[]  @default([]) // /pro-labore/imagens/<chave>; a 1ª é a capa
-  videoUrl     String?
-  enviosWhatsapp Int     @default(0)
-  criadoEm     DateTime  @default(now())
-  atualizadoEm DateTime  @updatedAt
+  preco          Float?
+  destaques      String[]  @default([])
+  ficha          Json? // [{ rotulo, valor }]
+  fotos          String[]  @default([]) // /pro-labore/imagens/<chave>; a 1ª é a capa
+  videoUrl       String?
+  enviosWhatsapp Int       @default(0)
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   pautas  SmPauta[]
@@ -3027,35 +3030,35 @@ model SmPautaMidia {
 // gestor. Padrões da especificação: 4 dias com post por semana, até 2 posts
 // por dia, no máximo 2 dias seguidos sem post e o mix 40/20/25/15.
 model SmConfig {
-  id              String   @id @default(cuid())
-  usuarioId       String   @unique
-  minDiasSemana   Int      @default(4)
-  maxPostsDia     Int      @default(2)
-  maxDiasSemPost  Int      @default(2)
-  mixMeta         Json     @default("{\"ESTOQUE\":40,\"PROVA\":20,\"EDUCACAO\":25,\"BASTIDORES\":15}")
-  horizonteDias   Int      @default(21) // até onde o calendário oferece "+ slot livre"
+  id                      String    @id @default(cuid())
+  usuarioId               String    @unique
+  minDiasSemana           Int       @default(4)
+  maxPostsDia             Int       @default(2)
+  maxDiasSemPost          Int       @default(2)
+  mixMeta                 Json      @default("{\"ESTOQUE\":40,\"PROVA\":20,\"EDUCACAO\":25,\"BASTIDORES\":15}")
+  horizonteDias           Int       @default(21) // até onde o calendário oferece "+ slot livre"
   // Metas da semana da tela Hoje (seção 4); todas editáveis pelo gestor.
-  metaLeadsSemana Int      @default(10)
-  metaRespostaMin Int      @default(15) // tempo de resposta a DMs, em minutos
-  metaRetencao    Int      @default(45) // retenção média dos reels, em %
+  metaLeadsSemana         Int       @default(10)
+  metaRespostaMin         Int       @default(15) // tempo de resposta a DMs, em minutos
+  metaRetencao            Int       @default(45) // retenção média dos reels, em %
   // Metas dos sinais da tela 05 · Desempenho (seção 12), editáveis pelo gestor.
-  metaPuloPct     Int      @default(40) // pulo nos 3 s, em % (abaixo é melhor)
-  metaEnviosMil   Float    @default(3) // envios por mil alcançados
-  metaSalvosMil   Float    @default(3) // salvos por mil alcançados
-  metaCurtidasPct Float    @default(3) // curtidas por alcance, em %
+  metaPuloPct             Int       @default(40) // pulo nos 3 s, em % (abaixo é melhor)
+  metaEnviosMil           Float     @default(3) // envios por mil alcançados
+  metaSalvosMil           Float     @default(3) // salvos por mil alcançados
+  metaCurtidasPct         Float     @default(3) // curtidas por alcance, em %
   // Expediente (decisão P13): fora dele, a automação de resposta avisa o cliente.
-  expedienteInicio Int     @default(8)
-  expedienteFim    Int     @default(18)
-  expedienteDias   String  @default("1,2,3,4,5") // 0 = domingo
+  expedienteInicio        Int       @default(8)
+  expedienteFim           Int       @default(18)
+  expedienteDias          String    @default("1,2,3,4,5") // 0 = domingo
   // Rodízio dos leads do Social Media (decisão P4): o último consultor que recebeu.
   rodizioUltimoVendedorId String?
   // WhatsApp da loja (decisão P9): destino do link rastreado /r/{code}.
-  whatsappLoja    String?
+  whatsappLoja            String?
   // Método (escada do desejo): degrau em que o perfil está hoje, de 1 a 6.
-  escadaDegrau    Int?
-  escadaNota      String?
-  escadaDefinidaEm DateTime?
-  atualizadoEm    DateTime @default(now()) @updatedAt
+  escadaDegrau            Int?
+  escadaNota              String?
+  escadaDefinidaEm        DateTime?
+  atualizadoEm            DateTime  @default(now()) @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -3146,16 +3149,16 @@ model SmRespostaRapida {
 // da loja com a mensagem que traz o código do post. O slug é curto e único
 // no sistema todo (a rota é pública); o código é o da pauta (#P-, #S-) ou #BIO.
 model SmLinkRastreado {
-  id         String   @id @default(cuid())
-  usuarioId  String
-  slug       String   @unique
-  codigo     String
-  tipo       String // POST | STORY | BIO
-  pautaId    String?  @unique
-  titulo     String?
-  mensagem   String
-  cliques    Int      @default(0)
-  criadoEm   DateTime @default(now())
+  id        String   @id @default(cuid())
+  usuarioId String
+  slug      String   @unique
+  codigo    String
+  tipo      String // POST | STORY | BIO
+  pautaId   String?  @unique
+  titulo    String?
+  mensagem  String
+  cliques   Int      @default(0)
+  criadoEm  DateTime @default(now())
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   toques  SmLinkClique[]
@@ -3231,16 +3234,16 @@ model SmGancho {
 // Ação de um insight executada pelo assistente da aba (seção 13.1): guarda
 // o que foi feito para desfazer e para o insight não voltar logo em seguida.
 model SmInsightAcao {
-  id         String    @id @default(cuid())
-  usuarioId  String
-  ator       String // id do membro Social Media, ou GESTOR
-  aba        String
-  chave      String // identificador estável do insight
-  operacao   Json
-  desfazer   Json?
-  mensagem   String
-  executadoEm DateTime @default(now())
-  desfeitoEm DateTime?
+  id          String    @id @default(cuid())
+  usuarioId   String
+  ator        String // id do membro Social Media, ou GESTOR
+  aba         String
+  chave       String // identificador estável do insight
+  operacao    Json
+  desfazer    Json?
+  mensagem    String
+  executadoEm DateTime  @default(now())
+  desfeitoEm  DateTime?
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -3295,15 +3298,15 @@ model SmIAUso {
 // ou volta depois de 30 min sem atividade; guarda o momento e a frase da
 // saudação, e se a pessoa já começou o dia (o bloco recolhe numa linha).
 model SmVisita {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   usuarioId         String
   ator              String // GESTOR ou o id do membro Social Media
-  inicioEm          DateTime @default(now())
-  ultimaAtividadeEm DateTime @default(now())
+  inicioEm          DateTime  @default(now())
+  ultimaAtividadeEm DateTime  @default(now())
   anteriorEm        DateTime? // última atividade da visita anterior (para "volta de folga" e "venda desde o último acesso")
   momento           String // VOLTA | VENDA | DIFICIL | SEXTA | SEGUNDA | MANHA | TARDE | NOITE
   fraseId           String?
-  recolhida         Boolean  @default(false)
+  recolhida         Boolean   @default(false)
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -3343,10 +3346,10 @@ model SmSaudacaoExibida {
 
 // Preferências de cada pessoa do espaço (gestor ou Social Media).
 model SmPreferencia {
-  id        String  @id @default(cuid())
-  usuarioId String
-  ator      String
-  genero    String? // F | M: concordância da saudação ("Bem-vinda", "Bem-vindo"); vazio = neutra
+  id                    String    @id @default(cuid())
+  usuarioId             String
+  ator                  String
+  genero                String? // F | M: concordância da saudação ("Bem-vinda", "Bem-vindo"); vazio = neutra
   // Primeiro acesso (tela 08) e o ritmo: hora do modo foco e canais de aviso.
   focoHora              Int       @default(9)
   avisos                Json? // { whatsapp, celular, email }
@@ -3641,22 +3644,22 @@ model SmDossie {
 // Ciclo mensal de produção: 20 dias × 9 vídeos (3 manhã/topo, 3 tarde/meio,
 // 3 noite/fundo). Gerar de novo cria outra versão; nada é apagado.
 model SmCiclo {
-  id           String    @id @default(cuid())
-  usuarioId    String
-  mes          String // YYYY-MM
-  versao       Int       @default(1)
-  status       String    @default("RASCUNHO") // RASCUNHO | APROVADO | FECHADO | ARQUIVADO
-  dossieId     String
-  dias         Json // ["2026-11-02", ...] dias de produção (meta-base 20)
-  horarios     Json // { MANHA: ["08:00",...], TARDE: [...], NOITE: [...] }
-  origem       String    @default("MANUAL") // MANUAL | AUTOMATICO
-  geradoPor    String    @default("GESTOR")
+  id            String    @id @default(cuid())
+  usuarioId     String
+  mes           String // YYYY-MM
+  versao        Int       @default(1)
+  status        String    @default("RASCUNHO") // RASCUNHO | APROVADO | FECHADO | ARQUIVADO
+  dossieId      String
+  dias          Json // ["2026-11-02", ...] dias de produção (meta-base 20)
+  horarios      Json // { MANHA: ["08:00",...], TARDE: [...], NOITE: [...] }
+  origem        String    @default("MANUAL") // MANUAL | AUTOMATICO
+  geradoPor     String    @default("GESTOR")
   consideracoes Json? // aprendizados do mês anterior usados na geração
-  relatorio    Json? // fechamento do mês
-  aprovadoEm   DateTime?
-  fechadoEm    DateTime?
-  criadoEm     DateTime  @default(now())
-  atualizadoEm DateTime  @updatedAt
+  relatorio     Json? // fechamento do mês
+  aprovadoEm    DateTime?
+  fechadoEm     DateTime?
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   dossie  SmDossie         @relation(fields: [dossieId], references: [id])
@@ -3668,55 +3671,55 @@ model SmCiclo {
 }
 
 model SmVideo {
-  id                String    @id @default(cuid())
-  cicloId           String
-  codigo            String // V-2026-11-S1D2-M3
-  semana            Int
-  diaCiclo          Int
-  data              String // YYYY-MM-DD
-  horario           String // HH:mm (Belém)
-  periodo           String // MANHA | TARDE | NOITE
-  ordem             Int // 1 a 3 dentro do período
-  etapa             String // TOPO | MEIO | FUNDO
-  tema              String
-  temaChave         String
-  pilar             String // pilar editorial da semana
-  formato           String
-  alvoTipo          String // DOR | DESEJO | OBJECAO | PERGUNTA
-  alvo              String
-  lente             String
-  lenteMotivo       String?
-  persona           String
-  objetivo          String
-  titulo            String
-  gancho            String
-  contexto          String
-  desenvolvimento   String
-  valor             String
-  cta               String
-  gravacao          String
-  cenas             String[]  @default([])
-  textosTela        String[]  @default([])
-  duracaoSeg        Int       @default(30)
-  legenda           String
-  provaNecessaria   String?
-  provaId           String?
+  id                  String    @id @default(cuid())
+  cicloId             String
+  codigo              String // V-2026-11-S1D2-M3
+  semana              Int
+  diaCiclo            Int
+  data                String // YYYY-MM-DD
+  horario             String // HH:mm (Belém)
+  periodo             String // MANHA | TARDE | NOITE
+  ordem               Int // 1 a 3 dentro do período
+  etapa               String // TOPO | MEIO | FUNDO
+  tema                String
+  temaChave           String
+  pilar               String // pilar editorial da semana
+  formato             String
+  alvoTipo            String // DOR | DESEJO | OBJECAO | PERGUNTA
+  alvo                String
+  lente               String
+  lenteMotivo         String?
+  persona             String
+  objetivo            String
+  titulo              String
+  gancho              String
+  contexto            String
+  desenvolvimento     String
+  valor               String
+  cta                 String
+  gravacao            String
+  cenas               String[]  @default([])
+  textosTela          String[]  @default([])
+  duracaoSeg          Int       @default(30)
+  legenda             String
+  provaNecessaria     String?
+  provaId             String?
   pendenteConfirmacao String? // motivo (estoque, preço, taxa, garantia, condição): null = não depende
-  confirmadoEm      DateTime? // a informação pendente foi confirmada (quem e o quê, na nota)
-  confirmacaoNota   String?
-  ajusteComentario  String? // pedido de ajuste do gestor no roteiro
-  responsavel       String?
-  status            String    @default("PLANEJADO")
-  roteiroOrigem     String    @default("MODELO") // MODELO | IA | MANUAL
-  aprovadoEm        DateTime?
-  pautaId           String?   @unique
-  permalink         String?
-  metricasManuais   Json? // mensagens, visitas, avaliações, propostas
-  resultado         String?
-  aprendizado       String?
-  melhoria          String?
-  criadoEm          DateTime  @default(now())
-  atualizadoEm      DateTime  @updatedAt
+  confirmadoEm        DateTime? // a informação pendente foi confirmada (quem e o quê, na nota)
+  confirmacaoNota     String?
+  ajusteComentario    String? // pedido de ajuste do gestor no roteiro
+  responsavel         String?
+  status              String    @default("PLANEJADO")
+  roteiroOrigem       String    @default("MODELO") // MODELO | IA | MANUAL
+  aprovadoEm          DateTime?
+  pautaId             String?   @unique
+  permalink           String?
+  metricasManuais     Json? // mensagens, visitas, avaliações, propostas
+  resultado           String?
+  aprendizado         String?
+  melhoria            String?
+  criadoEm            DateTime  @default(now())
+  atualizadoEm        DateTime  @updatedAt
 
   ciclo SmCiclo @relation(fields: [cicloId], references: [id], onDelete: Cascade)
 
@@ -3728,17 +3731,17 @@ model SmVideo {
 // Bancos da Central: ganchos, perguntas reais, objeções do atendimento,
 // aprendizados e sugestões (sempre marcadas como sugestão).
 model SmCentralItem {
-  id         String   @id @default(cuid())
-  usuarioId  String
-  tipo       String // GANCHO | PERGUNTA | OBJECAO | APRENDIZADO | SUGESTAO
-  texto      String
-  natureza   String   @default("FATO") // FATO | HIPOTESE | SUGESTAO
-  tags       Json     @default("{}") // etapa, formato, alvo, persona, lente, origem
-  resultado  String?
-  ocorrencias Int     @default(1)
-  usadoEm    String? // id do vídeo que virou conteúdo
-  criadoPor  String   @default("SOCIAL_MEDIA")
-  criadoEm   DateTime @default(now())
+  id          String   @id @default(cuid())
+  usuarioId   String
+  tipo        String // GANCHO | PERGUNTA | OBJECAO | APRENDIZADO | SUGESTAO
+  texto       String
+  natureza    String   @default("FATO") // FATO | HIPOTESE | SUGESTAO
+  tags        Json     @default("{}") // etapa, formato, alvo, persona, lente, origem
+  resultado   String?
+  ocorrencias Int      @default(1)
+  usadoEm     String? // id do vídeo que virou conteúdo
+  criadoPor   String   @default("SOCIAL_MEDIA")
+  criadoEm    DateTime @default(now())
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -3990,19 +3993,19 @@ model IntelRelatorio {
 // Diagnóstico estruturado (por regra), guardado pela chave estável para
 // formar o histórico: quando apareceu, quantas vezes, se foi resolvido.
 model IntelDiagnostico {
-  id                 String   @id @default(cuid())
-  usuarioId          String
-  chave              String
-  periodo            String // AAAA-MM
-  departamento       String // TRAFEGO | SOCIAL_MEDIA | COMERCIAL | GESTAO | FINANCEIRO
-  severidade         String // CRITICO | ALTO | MODERADO | MONITORAMENTO
-  problema           String
-  dados              Json // evidência, meta, atual, diferença, hipóteses, confiança, impacto, ação, prazo, indicador
-  status             String   @default("ATIVO") // ATIVO | RESOLVIDO
-  ocorrencias        Int      @default(1)
-  primeiraVezEm      DateTime @default(now())
-  ultimaVezEm        DateTime @default(now())
-  resolvidoEm        DateTime?
+  id            String    @id @default(cuid())
+  usuarioId     String
+  chave         String
+  periodo       String // AAAA-MM
+  departamento  String // TRAFEGO | SOCIAL_MEDIA | COMERCIAL | GESTAO | FINANCEIRO
+  severidade    String // CRITICO | ALTO | MODERADO | MONITORAMENTO
+  problema      String
+  dados         Json // evidência, meta, atual, diferença, hipóteses, confiança, impacto, ação, prazo, indicador
+  status        String    @default("ATIVO") // ATIVO | RESOLVIDO
+  ocorrencias   Int       @default(1)
+  primeiraVezEm DateTime  @default(now())
+  ultimaVezEm   DateTime  @default(now())
+  resolvidoEm   DateTime?
 
   @@unique([usuarioId, chave, periodo])
   @@index([usuarioId, status])
@@ -4012,35 +4015,35 @@ model IntelDiagnostico {
 // Plano de ação: nasce de um diagnóstico (ou à mão), passa por aprovação,
 // execução e validação pelo indicador — concluir a tarefa não basta.
 model IntelAcao {
-  id               String    @id @default(cuid())
-  usuarioId        String
-  diagnosticoId    String?
-  titulo           String
-  problema         String
-  evidencias       String?
-  objetivo         String?
-  departamento     String
-  responsavelId    String? // id do Vendedor, ou "DONO"
-  responsavelNome  String?
-  colaboradores    Json?
-  prazo            DateTime?
-  prioridade       String // CRITICO | ALTO | MODERADO | MONITORAMENTO
-  indicadorChave   String?
-  indicadorNome    String?
-  valorInicial     Float?
-  metaEsperada     Float?
-  melhorQuando     String? // MAIOR | MENOR
-  status           String    @default("IDENTIFICADA")
-  justificativa    String?
-  comentarios      Json?
+  id                 String    @id @default(cuid())
+  usuarioId          String
+  diagnosticoId      String?
+  titulo             String
+  problema           String
+  evidencias         String?
+  objetivo           String?
+  departamento       String
+  responsavelId      String? // id do Vendedor, ou "DONO"
+  responsavelNome    String?
+  colaboradores      Json?
+  prazo              DateTime?
+  prioridade         String // CRITICO | ALTO | MODERADO | MONITORAMENTO
+  indicadorChave     String?
+  indicadorNome      String?
+  valorInicial       Float?
+  metaEsperada       Float?
+  melhorQuando       String? // MAIOR | MENOR
+  status             String    @default("IDENTIFICADA")
+  justificativa      String?
+  comentarios        Json?
   evidenciasExecucao String?
-  resultadoValor   Float?
-  resultadoEm      DateTime?
-  criadoPor        String
-  aprovadoPor      String?
-  aprovadoEm       DateTime?
-  criadoEm         DateTime  @default(now())
-  atualizadoEm     DateTime  @updatedAt
+  resultadoValor     Float?
+  resultadoEm        DateTime?
+  criadoPor          String
+  aprovadoPor        String?
+  aprovadoEm         DateTime?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
 
   @@index([usuarioId, status])
   @@map("pro_labore_intel_acoes")
@@ -4049,15 +4052,15 @@ model IntelAcao {
 // Reunião de gestão (tráfego, comercial ou integrada): o retrato dos números
 // no momento, as notas e as ações acordadas.
 model IntelReuniao {
-  id         String   @id @default(cuid())
-  usuarioId  String
-  tipo       String // TRAFEGO | COMERCIAL | INTEGRADA
-  data       DateTime @default(now())
-  titulo     String
-  notas      String?
-  retrato    Json
-  acoesIds   Json?
-  criadoPor  String
+  id        String   @id @default(cuid())
+  usuarioId String
+  tipo      String // TRAFEGO | COMERCIAL | INTEGRADA
+  data      DateTime @default(now())
+  titulo    String
+  notas     String?
+  retrato   Json
+  acoesIds  Json?
+  criadoPor String
 
   @@index([usuarioId, data])
   @@map("pro_labore_intel_reunioes")

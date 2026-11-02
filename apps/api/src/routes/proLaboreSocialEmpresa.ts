@@ -18,6 +18,7 @@ import { prisma } from '../lib/prisma'
 import { avisarLigacoes } from '../lib/ligacoesAviso'
 import { avisarFollowsCredito } from '../lib/followCredito'
 import { rodarReferencias } from '../lib/smReferencias'
+import { limparEventosAntigos } from '../lib/espacoBanco'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import {
   ErroGraphApi,
@@ -348,7 +349,9 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const lembretes = await lembretesAnuais(agora).catch(e => { console.error('[meta] lembretes', e); return { lembretesMeta: 0 } })
   // Referências: vídeos dos perfis (todo dia) e das hashtags das motos (a cada 3 dias, no limite semanal).
   const referencias = await rodarReferencias(agora).catch(e => { console.error('[sm] referências', e); return { referenciasPerfis: 0, referenciasMotos: 0 } })
-  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias })
+  // Os eventos brutos do Instagram já processados não ficam para sempre (espaço do banco).
+  const eventosLimpos = await limparEventosAntigos(agora).catch(e => { console.error('[sm] limpeza de eventos', e); return { eventosApagados: 0 } })
+  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em
