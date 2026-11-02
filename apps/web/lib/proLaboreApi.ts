@@ -867,6 +867,9 @@ export const proLaboreApi = {
   // Saúde do sistema (dono): tamanho do banco contra o limite do plano.
   sistema: {
     banco: () => request<SaudeBanco>('/pro-labore/sistema/banco'),
+    // Espaço do banco: o que ocupa e o que dá para liberar (rodadas).
+    espaco: () => request<EspacoBanco>('/pro-labore/sistema/espaco'),
+    liberarEspaco: (acao: 'eventos' | 'imagens' | 'midias') => request<EspacoBanco & { rodada: { feitos: number; restantes: number } }>('/pro-labore/sistema/espaco/liberar', { method: 'POST', body: JSON.stringify({ acao }) }),
     // Importação do histórico do banco antigo (Neon): simulação e rodadas.
     importacaoNeon: {
       ver: () => request<ImportacaoNeon>('/pro-labore/sistema/importacao-neon'),
@@ -3408,4 +3411,12 @@ export interface ImportacaoNeon {
   concluidoEm: string | null
   relatorio: { ultimaMigracaoFonte: string | null; contaAntigaIgual: boolean; tabelas: ImportacaoNeonTabela[]; vendasRepetidas: number; vendasNoAtualDesde: string | null; total: number } | null
   progresso: { total: number; feitos: number; inseridos: number; existentes: number; casados: number; renumerados?: number; falhas: number; ultimasFalhas: Array<{ tabela: string; id: string; erro: string }> } | null
+}
+
+export interface EspacoBanco {
+  usadoMB: number
+  limiteMB: number
+  blobConfigurado: boolean
+  tabelas: Array<{ tabela: string; rotulo: string | null; mb: number; linhas: number }>
+  liberar: Record<'eventos' | 'imagens' | 'midias', { quantidade: number; mb: number }>
 }
