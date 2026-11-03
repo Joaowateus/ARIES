@@ -7,7 +7,7 @@
 // Depois de esvaziar, VACUUM FULL devolve o espaço do arquivo da tabela
 // (sem ele o Postgres só reaproveita o espaço para dados novos).
 import { prisma } from './prisma'
-import { blobConfigurado, gravarNoBlob, ultimoErroBlob } from './armazenamento'
+import { blobConfigurado, gravarNoBlob, lerDoBlob, supabaseConfigurado, ultimoErroBlob } from './armazenamento'
 import { LIMITE_BANCO_MB } from './bancoDisponivel'
 import { logger } from './logger'
 
@@ -40,7 +40,7 @@ const ROTULOS: Record<string, string> = {
 const q = (n: string) => `"${n.replace(/"/g, '""')}"`
 
 export async function painelEspaco() {
-  const [[{ bytes }], tabelas, [eventos], [imagens], [midias]] = await Promise.all([
+  const [[{ bytes }], tabelas, [eventos], [imagens], [midias], [naVercel]] = await Promise.all([
     prisma.$queryRawUnsafe<Array<{ bytes: bigint }>>(`SELECT pg_database_size(current_database()) AS bytes`),
     prisma.$queryRawUnsafe<Array<{ t: string; bytes: bigint; linhas: number }>>(`
       SELECT c.relname AS t, pg_total_relation_size(c.oid) AS bytes, GREATEST(c.reltuples, 0)::float8 AS linhas
@@ -50,12 +50,16 @@ export async function painelEspaco() {
     prisma.$queryRawUnsafe<Array<{ n: bigint; bytes: bigint }>>(`SELECT count(*) AS n, COALESCE(sum(pg_column_size(payload)), 0)::bigint AS bytes FROM pro_labore_sm_webhook_eventos WHERE "recebidoEm" < $1 AND ("processadoEm" IS NOT NULL OR "recebidoEm" < $2)`, new Date(Date.now() - EVENTOS_DIAS * DIA), new Date(Date.now() - 30 * DIA)),
     prisma.$queryRawUnsafe<Array<{ n: bigint; bytes: bigint }>>(`SELECT count(*) AS n, COALESCE(sum(tamanho), 0)::bigint AS bytes FROM pro_labore_imagens WHERE dados IS NOT NULL`),
     prisma.$queryRawUnsafe<Array<{ n: bigint; bytes: bigint }>>(`SELECT count(*) AS n, COALESCE(sum(octet_length(dados)), 0)::bigint AS bytes FROM pro_labore_assistente_midias WHERE dados IS NOT NULL`),
+    // Arquivos que foram para o Vercel Blob (que pode suspender no plano gratuito): dá para levar ao Supabase.
+    prisma.$queryRawUnsafe<Array<{ n: bigint; bytes: bigint }>>(`SELECT count(*) AS n, COALESCE(sum(t), 0)::bigint AS bytes FROM (SELECT tamanho AS t FROM pro_labore_imagens WHERE "blobAcesso" IN ('private', 'public') UNION ALL SELECT COALESCE(tamanho, 0) FROM pro_labore_assistente_midias WHERE "blobAcesso" IN ('private', 'public')) x`),
   ])
   const mb = (b: bigint | number) => Math.round((Number(b) / MB) * 10) / 10
   return {
     usadoMB: mb(bytes),
     limiteMB: LIMITE_BANCO_MB(),
     blobConfigurado: blobConfigurado(),
+    supabaseConfigurado: supabaseConfigurado(),
+    naVercel: { quantidade: Number(naVercel.n), mb: mb(naVercel.bytes) },
     tabelas: tabelas.map(t => ({ tabela: t.t, rotulo: ROTULOS[t.t] ?? null, mb: mb(t.bytes), linhas: Math.round(t.linhas) })),
     compactaveisMB: mb(tabelas.filter(t => COMPACTAVEIS.includes(t.t)).reduce((x, t) => x + Number(t.bytes), 0)),
     liberar: {
@@ -74,7 +78,7 @@ async function compactar(tabela: string): Promise<string | null> {
   }
 }
 
-export type AcaoEspaco = 'eventos' | 'imagens' | 'midias' | 'compactar'
+export type AcaoEspaco = 'eventos' | 'imagens' | 'midias' | 'compactar' | 'vercel'
 // Tabelas que guardavam arquivos e eventos: depois de esvaziadas, o espaço só volta ao disco com VACUUM FULL.
 const COMPACTAVEIS = ['pro_labore_imagens', 'pro_labore_assistente_midias', 'pro_labore_sm_webhook_eventos']
 
@@ -82,6 +86,34 @@ const COMPACTAVEIS = ['pro_labore_imagens', 'pro_labore_assistente_midias', 'pro
 export async function liberarEspaco(acao: AcaoEspaco, prazoMs = 15_000) {
   const inicio = Date.now()
   let feitos = 0, restantes = 0, falhas = 0
+  if (acao === 'vercel') {
+    if (!supabaseConfigurado()) throw new ErroEspaco(400, 'O armazenamento do Supabase não está configurado (SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY na Vercel)')
+    const naVercel = { blobAcesso: { in: ['private', 'public'] } }
+    let falhasSeguidas = 0
+    while (Date.now() - inicio < prazoMs) {
+      const imgs = await prisma.imagemUpload.findMany({ where: naVercel, select: { id: true, usuarioId: true, chave: true, mime: true, blobUrl: true, blobAcesso: true }, take: 10 })
+      const mids = imgs.length ? [] : await prisma.assistenteMidia.findMany({ where: naVercel, select: { id: true, usuarioId: true, mime: true, blobUrl: true, blobAcesso: true }, take: 10 })
+      if (!imgs.length && !mids.length) break
+      for (const x of [...imgs.map(i => ({ ...i, tipo: 'img' as const })), ...mids.map(m => ({ ...m, chave: m.id, tipo: 'mid' as const }))]) {
+        if (Date.now() - inicio >= prazoMs) break
+        const dados = x.blobUrl ? await lerDoBlob(x.blobUrl, x.blobAcesso).catch(() => null) : null
+        if (!dados) {
+          falhas++
+          if (++falhasSeguidas >= 5) throw new ErroEspaco(502, 'A Vercel não está entregando os arquivos guardados lá (o armazenamento está suspenso). Reative o armazenamento na Vercel por um momento ou espere o próximo mês e toque de novo')
+          continue
+        }
+        falhasSeguidas = 0
+        const mime = x.mime ?? 'application/octet-stream'
+        const destino = await gravarNoBlob(`${x.tipo === 'img' ? 'imagens' : 'conversas'}/${x.usuarioId}/${x.chave}.${mime.split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'bin'}`, mime, dados, { soSupabase: true })
+        if (!destino) throw new ErroEspaco(502, `O Supabase recusou o arquivo${ultimoErroBlob ? ` (${ultimoErroBlob})` : ''}`)
+        if (x.tipo === 'img') await prisma.imagemUpload.update({ where: { id: x.id }, data: destino })
+        else await prisma.assistenteMidia.update({ where: { id: x.id }, data: destino })
+        feitos++
+      }
+    }
+    restantes = (await prisma.imagemUpload.count({ where: naVercel })) + (await prisma.assistenteMidia.count({ where: naVercel }))
+    return { feitos, restantes, falhas }
+  }
   if (acao === 'compactar') {
     for (const t of COMPACTAVEIS) {
       const erro = await compactar(t)
@@ -99,7 +131,7 @@ export async function liberarEspaco(acao: AcaoEspaco, prazoMs = 15_000) {
     restantes = await prisma.smWebhookEvento.count({ where: { recebidoEm: { lt: corte }, OR: [{ processadoEm: { not: null } }, { recebidoEm: { lt: parado } }] } })
     if (!restantes) await compactar('pro_labore_sm_webhook_eventos')
   } else {
-    if (!blobConfigurado()) throw new ErroEspaco(400, 'O armazenamento de arquivos (Vercel Blob) não está ligado ao projeto da API')
+    if (!blobConfigurado()) throw new ErroEspaco(400, 'Nenhum armazenamento de arquivos configurado (Supabase ou Vercel Blob)')
     const tabela = acao === 'imagens' ? 'pro_labore_imagens' : 'pro_labore_assistente_midias'
     while (Date.now() - inicio < prazoMs) {
       const lote = acao === 'imagens'
@@ -121,7 +153,7 @@ export async function liberarEspaco(acao: AcaoEspaco, prazoMs = 15_000) {
         else await prisma.assistenteMidia.update({ where: { id }, data: { ...blob, dados: null } })
         feitos++
       }
-      if (falhas >= 3) throw new ErroEspaco(502, `O Vercel Blob recusou os arquivos${ultimoErroBlob ? ` (${ultimoErroBlob})` : ''}: confira o armazenamento no painel da Vercel`)
+      if (falhas >= 3) throw new ErroEspaco(502, `O armazenamento de arquivos recusou os arquivos${ultimoErroBlob ? ` (${ultimoErroBlob})` : ''}`)
     }
     restantes = acao === 'imagens'
       ? await prisma.imagemUpload.count({ where: { dados: { not: null } } })

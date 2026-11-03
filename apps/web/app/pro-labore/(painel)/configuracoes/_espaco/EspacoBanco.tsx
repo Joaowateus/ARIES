@@ -7,8 +7,8 @@
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type EspacoBanco as Espaco } from '@/lib/proLaboreApi'
 
-type Acao = 'eventos' | 'imagens' | 'midias' | 'compactar'
-const ACOES: Array<{ acao: Exclude<Acao, 'compactar'>; titulo: string; texto: string; botao: string; precisaBlob: boolean }> = [
+type Acao = 'eventos' | 'imagens' | 'midias' | 'compactar' | 'vercel'
+const ACOES: Array<{ acao: Exclude<Acao, 'compactar' | 'vercel'>; titulo: string; texto: string; botao: string; precisaBlob: boolean }> = [
   { acao: 'eventos', titulo: 'Eventos brutos do Instagram', texto: 'Cópias dos avisos que o Instagram manda (comentários, mensagens). O conteúdo já foi para as telas do Social Media; os processados há mais de 7 dias podem sair. A partir de agora, saem sozinhos depois de 15 dias.', botao: 'Apagar eventos antigos', precisaBlob: false },
   { acao: 'imagens', titulo: 'Fotos e imagens dentro do banco', texto: 'Fotos das pautas, do estoque e miniaturas dos posts. Vão para o armazenamento de arquivos e continuam abrindo igual. As novas já vão direto para lá.', botao: 'Mover para o armazenamento', precisaBlob: true },
   { acao: 'midias', titulo: 'Áudios e fotos das conversas', texto: 'Mídias das conversas do WhatsApp guardadas no banco. Vão para o armazenamento de arquivos e continuam tocando igual.', botao: 'Mover para o armazenamento', precisaBlob: true },
@@ -32,7 +32,7 @@ export function EspacoBanco() {
         try {
           const r = await proLaboreApi.sistema.liberarEspaco(acao)
           setDados(r); falhas = 0; total += r.rodada.feitos
-          if (!r.rodada.restantes) { setOk(acao === 'compactar' ? `Pronto: tabelas compactadas. O banco foi de ${num(antes)} MB para ${num(r.usadoMB)} MB.` : `Pronto: ${num(total)} ${acao === 'eventos' ? 'eventos apagados' : 'arquivos movidos'}. O banco foi de ${num(antes)} MB para ${num(r.usadoMB)} MB.`); break }
+          if (!r.rodada.restantes) { setOk(acao === 'vercel' ? `Pronto: ${num(total)} arquivos levados da Vercel para o Supabase.` : acao === 'compactar' ? `Pronto: tabelas compactadas. O banco foi de ${num(antes)} MB para ${num(r.usadoMB)} MB.` : `Pronto: ${num(total)} ${acao === 'eventos' ? 'eventos apagados' : 'arquivos movidos'}. O banco foi de ${num(antes)} MB para ${num(r.usadoMB)} MB.`); break }
         } catch (e) {
           if (++falhas >= 4) throw e
           await new Promise(res => setTimeout(res, 3000 * falhas))
@@ -62,9 +62,19 @@ export function EspacoBanco() {
       </div>
 
       <h3 style={{ margin: '18px 0 8px', fontSize: 14 }}>O que dá para liberar sem perder nada</h3>
-      {!dados.blobConfigurado && (dados.liberar.imagens.quantidade > 0 || dados.liberar.midias.quantidade > 0) && (
+      {!dados.supabaseConfigurado && (dados.liberar.imagens.quantidade > 0 || dados.liberar.midias.quantidade > 0 || dados.naVercel.quantidade > 0) && (
         <div className="pl-alert" style={{ marginBottom: 10 }} data-sem-blob>
-          Para mover fotos e áudios, ligue o armazenamento de arquivos: na Vercel, projeto <b>ariessistemacomercial</b> → <b>Storage</b> → <b>Create</b> → <b>Blob</b> → conectar ao projeto. Depois faça um Redeploy da Produção e volte aqui. Já ligou? Confira em Settings → Environment Variables se existe <b>BLOB_STORE_ID</b> ou <b>BLOB_READ_WRITE_TOKEN</b> marcada para Production.
+          Para mover fotos e áudios, ligue o armazenamento do <b>Supabase</b> (1 GB grátis, fora dos 500 MB do banco): na Vercel, projeto <b>ariessistemacomercial</b> → Settings → Environment Variables, crie <b>SUPABASE_URL</b> (o Project URL do Supabase) e <b>SUPABASE_SERVICE_ROLE_KEY</b> (a chave secreta do Supabase), marcadas para Production. Depois faça um Redeploy da Produção e volte aqui.
+        </div>
+      )}
+      {dados.naVercel.quantidade > 0 && (
+        <div className="pl-card" style={{ padding: 14, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }} data-liberar="vercel">
+          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+            <b>Arquivos guardados na Vercel</b>
+            <div className="pl-hint" style={{ marginTop: 4 }}>Fotos e áudios que foram para o armazenamento da Vercel, que suspende no plano gratuito. Leve para o Supabase para eles não ficarem presos lá.{!dados.supabaseConfigurado && ' Primeiro configure o Supabase (acima).'}</div>
+          </div>
+          <div style={{ textAlign: 'right', minWidth: 120 }}><b>~{num(dados.naVercel.mb)} MB</b><div className="pl-hint">{num(dados.naVercel.quantidade)} arquivos</div></div>
+          <button type="button" className="pl-btn pl-btn-primary" disabled={!!ocupado || !dados.supabaseConfigurado} onClick={() => liberar('vercel')} data-botao-liberar="vercel">{ocupado === 'vercel' ? 'Levando…' : 'Levar para o Supabase'}</button>
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
