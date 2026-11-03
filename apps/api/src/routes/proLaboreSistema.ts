@@ -28,9 +28,9 @@ router.get('/sistema/espaco', ...dono, async (_req: Request, res: Response) => {
 // Uma rodada (tempo limitado): a tela chama de novo enquanto houver restantes.
 router.post('/sistema/espaco/liberar', ...dono, async (req: Request, res: Response) => {
   const acao = String(req.body?.acao ?? '')
-  if (!['eventos', 'imagens', 'midias'].includes(acao)) { res.status(400).json({ error: 'Ação inválida' }); return }
+  if (!['eventos', 'imagens', 'midias', 'compactar'].includes(acao)) { res.status(400).json({ error: 'Ação inválida' }); return }
   try {
-    const rodada = await liberarEspaco(acao as 'eventos' | 'imagens' | 'midias')
+    const rodada = await liberarEspaco(acao as 'eventos' | 'imagens' | 'midias' | 'compactar')
     res.json({ rodada, ...(await painelEspaco()) })
   } catch (e) {
     if (e instanceof ErroEspaco) { res.status(e.status).json({ error: e.message }); return }

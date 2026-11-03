@@ -57,6 +57,7 @@ export async function painelEspaco() {
     limiteMB: LIMITE_BANCO_MB(),
     blobConfigurado: blobConfigurado(),
     tabelas: tabelas.map(t => ({ tabela: t.t, rotulo: ROTULOS[t.t] ?? null, mb: mb(t.bytes), linhas: Math.round(t.linhas) })),
+    compactaveisMB: mb(tabelas.filter(t => COMPACTAVEIS.includes(t.t)).reduce((x, t) => x + Number(t.bytes), 0)),
     liberar: {
       eventos: { quantidade: Number(eventos.n), mb: mb(eventos.bytes) },
       imagens: { quantidade: Number(imagens.n), mb: mb(imagens.bytes) },
@@ -66,16 +67,28 @@ export async function painelEspaco() {
 }
 
 /** Devolve ao disco o espaço da tabela já esvaziada (trava a tabela por instantes). */
-async function compactar(tabela: string) {
-  try { await prisma.$executeRawUnsafe(`VACUUM (FULL, ANALYZE) ${q(tabela)}`) } catch (e) { logger.warn({ err: e, tabela }, 'espaço: VACUUM FULL falhou') }
+async function compactar(tabela: string): Promise<string | null> {
+  try { await prisma.$executeRawUnsafe(`VACUUM (FULL, ANALYZE) ${q(tabela)}`); return null } catch (e) {
+    logger.warn({ err: e, tabela }, 'espaço: VACUUM FULL falhou')
+    return e instanceof Error ? e.message.split('\n').filter(Boolean).slice(-1)[0].slice(0, 200) : String(e)
+  }
 }
 
-export type AcaoEspaco = 'eventos' | 'imagens' | 'midias'
+export type AcaoEspaco = 'eventos' | 'imagens' | 'midias' | 'compactar'
+// Tabelas que guardavam arquivos e eventos: depois de esvaziadas, o espaço só volta ao disco com VACUUM FULL.
+const COMPACTAVEIS = ['pro_labore_imagens', 'pro_labore_assistente_midias', 'pro_labore_sm_webhook_eventos']
 
 /** Uma rodada (tempo limitado): a tela chama de novo enquanto `restantes` > 0. */
 export async function liberarEspaco(acao: AcaoEspaco, prazoMs = 15_000) {
   const inicio = Date.now()
   let feitos = 0, restantes = 0, falhas = 0
+  if (acao === 'compactar') {
+    for (const t of COMPACTAVEIS) {
+      const erro = await compactar(t)
+      if (erro) throw new ErroEspaco(502, `Não deu para compactar ${t.replace(/^pro_labore_/, '')}: ${erro}`)
+    }
+    return { feitos: COMPACTAVEIS.length, restantes: 0 }
+  }
   if (acao === 'eventos') {
     const corte = new Date(Date.now() - EVENTOS_DIAS * DIA), parado = new Date(Date.now() - 30 * DIA)
     while (Date.now() - inicio < prazoMs) {
