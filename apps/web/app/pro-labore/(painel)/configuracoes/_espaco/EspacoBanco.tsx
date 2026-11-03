@@ -7,8 +7,8 @@
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type EspacoBanco as Espaco } from '@/lib/proLaboreApi'
 
-type Acao = 'eventos' | 'imagens' | 'midias'
-const ACOES: Array<{ acao: Acao; titulo: string; texto: string; botao: string; precisaBlob: boolean }> = [
+type Acao = 'eventos' | 'imagens' | 'midias' | 'compactar'
+const ACOES: Array<{ acao: Exclude<Acao, 'compactar'>; titulo: string; texto: string; botao: string; precisaBlob: boolean }> = [
   { acao: 'eventos', titulo: 'Eventos brutos do Instagram', texto: 'Cópias dos avisos que o Instagram manda (comentários, mensagens). O conteúdo já foi para as telas do Social Media; os processados há mais de 7 dias podem sair. A partir de agora, saem sozinhos depois de 15 dias.', botao: 'Apagar eventos antigos', precisaBlob: false },
   { acao: 'imagens', titulo: 'Fotos e imagens dentro do banco', texto: 'Fotos das pautas, do estoque e miniaturas dos posts. Vão para o armazenamento de arquivos e continuam abrindo igual. As novas já vão direto para lá.', botao: 'Mover para o armazenamento', precisaBlob: true },
   { acao: 'midias', titulo: 'Áudios e fotos das conversas', texto: 'Mídias das conversas do WhatsApp guardadas no banco. Vão para o armazenamento de arquivos e continuam tocando igual.', botao: 'Mover para o armazenamento', precisaBlob: true },
@@ -32,7 +32,7 @@ export function EspacoBanco() {
         try {
           const r = await proLaboreApi.sistema.liberarEspaco(acao)
           setDados(r); falhas = 0; total += r.rodada.feitos
-          if (!r.rodada.restantes) { setOk(`Pronto: ${num(total)} ${acao === 'eventos' ? 'eventos apagados' : 'arquivos movidos'}. O banco foi de ${num(antes)} MB para ${num(r.usadoMB)} MB.`); break }
+          if (!r.rodada.restantes) { setOk(acao === 'compactar' ? `Pronto: tabelas compactadas. O banco foi de ${num(antes)} MB para ${num(r.usadoMB)} MB.` : `Pronto: ${num(total)} ${acao === 'eventos' ? 'eventos apagados' : 'arquivos movidos'}. O banco foi de ${num(antes)} MB para ${num(r.usadoMB)} MB.`); break }
         } catch (e) {
           if (++falhas >= 4) throw e
           await new Promise(res => setTimeout(res, 3000 * falhas))
@@ -87,6 +87,14 @@ export function EspacoBanco() {
             </div>
           )
         })}
+      </div>
+      <div className="pl-card" style={{ padding: 14, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }} data-liberar="compactar">
+        <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <b>Compactar (devolver o espaço já liberado)</b>
+          <div className="pl-hint" style={{ marginTop: 4 }}>Depois de tirar arquivos e eventos, o espaço continua reservado nas tabelas até elas serem compactadas. Leva alguns segundos e não apaga nada.</div>
+        </div>
+        <div style={{ textAlign: 'right', minWidth: 120 }}><b>{num(dados.compactaveisMB)} MB</b><div className="pl-hint">nessas tabelas hoje</div></div>
+        <button type="button" className="pl-btn pl-btn-primary" disabled={!!ocupado} onClick={() => liberar('compactar')} data-botao-liberar="compactar">{ocupado === 'compactar' ? 'Compactando…' : 'Compactar'}</button>
       </div>
       {ok && <div className="pl-alert pl-alert-success" style={{ marginTop: 12 }} role="status">{ok}</div>}
       {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }} role="alert">{erro}</div>}
