@@ -72,9 +72,21 @@ export async function painelEspaco() {
 
 /** Devolve ao disco o espaço da tabela já esvaziada (trava a tabela por instantes). */
 async function compactar(tabela: string): Promise<string | null> {
+  const motivo = (e: unknown) => (e instanceof Error ? e.message.split('\n').filter(Boolean).slice(-1)[0].slice(0, 200) : String(e))
   try { await prisma.$executeRawUnsafe(`VACUUM (FULL, ANALYZE) ${q(tabela)}`); return null } catch (e) {
-    logger.warn({ err: e, tabela }, 'espaço: VACUUM FULL falhou')
-    return e instanceof Error ? e.message.split('\n').filter(Boolean).slice(-1)[0].slice(0, 200) : String(e)
+    // Pelo pooler do Supabase o VACUUM cai numa transação (código 25001). CLUSTER pela chave primária
+    // reescreve a tabela do mesmo jeito (devolve o espaço) e pode rodar dentro de transação.
+    if (!/25001|transaction block/i.test(motivo(e))) { logger.warn({ err: e, tabela }, 'espaço: VACUUM FULL falhou'); return motivo(e) }
+  }
+  try {
+    const [pk] = await prisma.$queryRawUnsafe<Array<{ nome: string }>>(`SELECT c.conname AS nome FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace WHERE n.nspname = 'public' AND t.relname = $1 AND c.contype = 'p'`, tabela)
+    if (!pk) return 'tabela sem chave primária'
+    await prisma.$executeRawUnsafe(`CLUSTER ${q(tabela)} USING ${q(pk.nome)}`)
+    await prisma.$executeRawUnsafe(`ANALYZE ${q(tabela)}`)
+    return null
+  } catch (e) {
+    logger.warn({ err: e, tabela }, 'espaço: CLUSTER falhou')
+    return motivo(e)
   }
 }
 
