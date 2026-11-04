@@ -25,6 +25,9 @@ export async function conferirMeses(usuarioId: string, meses = 12) {
     }),
     prisma.fechamentoMesVendas.findMany({ where: { usuarioId, fechadoEm: { not: null } }, select: { mes: true } }),
   ])
+  // Moto que saiu do estoque como vendida, mas sem venda ligada nem venda com a mesma placa.
+  const motosVendidas = await prisma.smMotoEstoque.findMany({ where: { usuarioId, situacao: 'VENDIDA', saidaEm: { not: null }, vendas: { none: {} } }, select: { modelo: true, ano: true, placa: true, saidaEm: true } })
+  const placasVendidas = new Set((await prisma.venda.findMany({ where: { usuarioId, placa: { in: motosVendidas.map(m => m.placa).filter((p): p is string => !!p) } }, select: { placa: true } })).map(v => v.placa))
   const fechados = new Set(fechamentos.map(f => f.mes))
   const porMes = new Map<string, MesConferido>()
   const mes = (m: string) => {
@@ -43,6 +46,13 @@ export async function conferirMeses(usuarioId: string, meses = 12) {
   const semVenda = new Map<string, number>()
   for (const l of leadsSemVenda) { const k = mesDe(l.fechadoEm ?? l.criadoEm); semVenda.set(k, (semVenda.get(k) ?? 0) + 1) }
   for (const [k, n] of semVenda) if (k >= desde) mes(k).pontos.push({ tipo: 'fechadoSemVenda', gravidade: 'media', onde: 'crm', texto: `${plural(n, 'lead marcado como fechado', 'leads marcados como fechados')} no CRM sem venda lançada` })
+  const semVendaPorMes = new Map<string, string[]>()
+  for (const m of motosVendidas) {
+    if (m.placa && placasVendidas.has(m.placa)) continue
+    const k = mesDe(m.saidaEm!)
+    semVendaPorMes.set(k, [...(semVendaPorMes.get(k) ?? []), `${m.modelo}${m.ano ? ` ${m.ano}` : ''}${m.placa ? ` (${m.placa})` : ''}`])
+  }
+  for (const [k, motos] of semVendaPorMes) if (k >= desde) mes(k).pontos.push({ tipo: 'motoSemVenda', gravidade: 'media', onde: 'vendas', texto: `${plural(motos.length, 'moto saiu', 'motos saíram')} do estoque como vendida sem venda lançada: ${motos.slice(0, 3).join(', ')}${motos.length > 3 ? '…' : ''}` })
   for (const p of pagamentos) {
     const k = mesDe(p.pagoEm)
     if (k < desde) continue

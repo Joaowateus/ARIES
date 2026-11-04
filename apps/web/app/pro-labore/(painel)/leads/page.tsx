@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { proLaboreApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
 import { metaDefinida } from '@/lib/metaFunil'
 import { AvisoRepetida, parecidasDoErro } from '../vendas/AvisoRepetida'
+import { SeletorMoto } from '../vendas/SeletorMoto'
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
@@ -257,7 +258,7 @@ export default function ProLaboreLeadsPage() {
 
   const [convertendoId, setConvertendoId] = useState<string | null>(null)
   const [convertRepetida, setConvertRepetida] = useState<{ mensagem: string; parecidas: VendaParecida[] } | null>(null)
-  const [convertForm, setConvertForm] = useState({ data: hojeIso(), valorVenda: '', valorProLabore: '', valorComissao: '', observacao: '', placa: '' })
+  const [convertForm, setConvertForm] = useState({ data: hojeIso(), valorVenda: '', valorProLabore: '', valorComissao: '', observacao: '', placa: '', motoId: '' })
   const [convertErro, setConvertErro] = useState('')
   const [convertSalvando, setConvertSalvando] = useState(false)
 
@@ -563,7 +564,7 @@ export default function ProLaboreLeadsPage() {
   function abrirConversao(lead: Lead) {
     if (!isDono) return
     setConvertendoId(lead.id)
-    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(tetoProLaboreEfetivo(lead)), valorComissao: lead.vendedorId ? String(tetoComissaoEfetivo(lead)) : '', observacao: '', placa: '' })
+    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(tetoProLaboreEfetivo(lead)), valorComissao: lead.vendedorId ? String(tetoComissaoEfetivo(lead)) : '', observacao: '', placa: '', motoId: '' })
     setConvertRepetida(null)
     setConvertErro('')
   }
@@ -591,7 +592,7 @@ export default function ProLaboreLeadsPage() {
         valorProLabore: Number(convertForm.valorProLabore),
         valorComissao: leadConvertendo?.vendedorId && convertForm.valorComissao !== '' ? Number(convertForm.valorComissao) : undefined,
         observacao: convertForm.observacao || undefined,
-        placa: convertForm.placa || undefined, confirmarRepetida,
+        placa: convertForm.placa || undefined, motoId: convertForm.motoId || undefined, confirmarRepetida,
       })
       fecharConversao()
       carregar()
@@ -1214,6 +1215,7 @@ export default function ProLaboreLeadsPage() {
                   <span className="pl-hint">Máximo {formatMoeda(tetoComissaoAtual ?? 0)}</span>
                 </div>
               )}
+              <SeletorMoto id="conv-moto" valor={convertForm.motoId} onEscolher={m => setConvertForm(f => ({ ...f, motoId: m?.id ?? '', placa: m?.placa ?? f.placa }))} />
               <div className="pl-field">
                 <label>Placa da moto</label>
                 <input className="pl-input" value={convertForm.placa} onChange={e => setConvertForm(f => ({ ...f, placa: e.target.value.toUpperCase() }))} placeholder="ABC1D23" maxLength={8} data-campo-placa-conversao />

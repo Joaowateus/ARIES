@@ -73,7 +73,7 @@ function Estoque() {
                 <tbody>
                   {naLoja.sort((a, b) => b.diasEmEstoque - a.diasEmEstoque).map(m => (
                     <tr key={m.id} id={`moto-${m.id}`} className={m.id === motoURL ? 'sm-estoque-destaque' : undefined} aria-current={m.id === motoURL ? 'true' : undefined}>
-                      <td><b>{m.modelo}</b>{m.ano ? ` ${m.ano}` : ''}{m.cor ? <span className="sm-legenda"> · {m.cor}</span> : null} <Chip tom={STATUS[m.status].tom}>{STATUS[m.status].texto}</Chip></td>
+                      <td><b>{m.modelo}</b>{m.ano ? ` ${m.ano}` : ''}{m.cor ? <span className="sm-legenda"> · {m.cor}</span> : null}{m.placa ? <span className="sm-legenda"> · {m.placa}</span> : null} <Chip tom={STATUS[m.status].tom}>{STATUS[m.status].texto}</Chip></td>
                       <td>{quandoCurto(m.entradaEm, false)}</td>
                       <td>{m.diasEmEstoque}</td>
                       <td>{m.posts}</td>
@@ -107,6 +107,7 @@ function NovaMoto({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: () => 
   const [marca, setMarca] = useState('')
   const [ano, setAno] = useState('')
   const [cor, setCor] = useState('')
+  const [placa, setPlaca] = useState('')
   const [entrada, setEntrada] = useState(() => isoParaData(new Date().toISOString()))
   const [erro, setErro] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -115,7 +116,7 @@ function NovaMoto({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: () => 
       <form style={{ display: 'flex', flexDirection: 'column', gap: 12 }} onSubmit={async e => {
         e.preventDefault(); setEnviando(true); setErro(null)
         try {
-          await proLaboreApi.sm.estoque.criar({ modelo, marca: marca || null, ano: ano ? Number(ano) : null, cor: cor || null, entradaEm: dataParaIso(entrada)! })
+          await proLaboreApi.sm.estoque.criar({ modelo, marca: marca || null, ano: ano ? Number(ano) : null, cor: cor || null, placa: placa || null, entradaEm: dataParaIso(entrada)! })
           aoCriar()
         } catch (err) { setErro(err instanceof Error ? err.message : 'Não foi possível cadastrar'); setEnviando(false) }
       }}>
@@ -124,6 +125,7 @@ function NovaMoto({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: () => 
           <label className="sm-campo">Marca<input className="sm-input" value={marca} onChange={e => setMarca(e.target.value)} maxLength={40} /></label>
           <label className="sm-campo">Ano<input className="sm-input" type="number" min={1950} max={2100} value={ano} onChange={e => setAno(e.target.value)} /></label>
           <label className="sm-campo">Cor<input className="sm-input" value={cor} onChange={e => setCor(e.target.value)} maxLength={40} /></label>
+          <label className="sm-campo">Placa<input className="sm-input" value={placa} onChange={e => setPlaca(e.target.value.toUpperCase())} maxLength={8} placeholder="ABC1D23" data-campo-placa-estoque /></label>
           <label className="sm-campo">Entrada na loja<input className="sm-input" type="date" value={entrada} onChange={e => setEntrada(e.target.value)} required /></label>
         </div>
         {erro && <p className="sm-erro" role="alert">{erro}</p>}

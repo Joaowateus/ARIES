@@ -9,6 +9,7 @@ import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
 import RegistrarPagamento, { abrirComprovante, valorPago } from './RegistrarPagamento'
 import { AvisoRepetida, parecidasDoErro } from './AvisoRepetida'
 import { FechamentoMes } from './FechamentoMes'
+import { SeletorMoto, nomeMotoVenda } from './SeletorMoto'
 
 const MESES_MAP: Record<string, number> = {
   jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
@@ -67,7 +68,7 @@ export default function ProLaboreVendasPage() {
   const [salvando, setSalvando] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
-  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '' })
+  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '', motoId: '' })
 
   const [repetida, setRepetida] = useState<{ mensagem: string; parecidas: VendaParecida[] } | null>(null)
   const [mesesFechados, setMesesFechados] = useState<Set<string>>(new Set())
@@ -141,9 +142,9 @@ export default function ProLaboreVendasPage() {
           placa: form.placa || null, confirmarRepetida,
         })
       } else {
-        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, vendedorId, valorComissao, observacao: form.observacao || undefined, placa: form.placa || undefined, confirmarRepetida })
+        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, vendedorId, valorComissao, observacao: form.observacao || undefined, placa: form.placa || undefined, motoId: form.motoId || undefined, confirmarRepetida })
       }
-      setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '' })
+      setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '', motoId: '' })
       setEditandoId(null)
       carregar()
     } catch (err: unknown) {
@@ -165,12 +166,13 @@ export default function ProLaboreVendasPage() {
       valorComissao: v.valorComissao != null ? String(v.valorComissao) : '',
       observacao: v.observacao ?? '',
       placa: v.placa ?? '',
+      motoId: v.motoId ?? '',
     })
   }
 
   function cancelarEdicao() {
     setEditandoId(null)
-    setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '' })
+    setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '', motoId: '' })
   }
 
   async function remover(id: string) {
@@ -420,6 +422,10 @@ export default function ProLaboreVendasPage() {
               <span className="pl-hint">{comissaoTravada ? `Já paga (comprovante nº ${vendaEditada!.pagamentoComissao!.numero}). Desmarque na tabela pra mudar.` : `Máximo ${formatMoeda(tetoComissaoAtual ?? 0)}`}</span>
             </div>
           )}
+          {!editandoId && <SeletorMoto key={vendas.length} valor={form.motoId} onEscolher={m => {
+            setForm(f => ({ ...f, motoId: m?.id ?? '', placa: m?.placa ?? f.placa, observacao: f.observacao || (m ? nomeMotoVenda(m) : '') }))
+            if (m?.preco && !form.valorVenda) atualizarValorVenda(String(m.preco))
+          }} />}
           <div className="pl-field">
             <label>Placa da moto</label>
             <input type="text" className="pl-input" value={form.placa} onChange={e => setForm(f => ({ ...f, placa: e.target.value.toUpperCase() }))} placeholder="ABC1D23" maxLength={8} data-campo-placa />

@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { ErroRegraVenda, placaDoEstoque } from '../lib/regrasVenda'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { requireModulo } from '../lib/acessos'
 import { chaveDaImagem } from '../lib/armazenamento'
@@ -34,7 +35,7 @@ router.get('/assistente/vitrine', ...ver, async (req: Request, res: Response) =>
   const [motos, loja] = await Promise.all([
     prisma.smMotoEstoque.findMany({
       where: { usuarioId, OR: [{ situacao: { not: 'VENDIDA' } }, { saidaEm: { gte: new Date(Date.now() - 30 * DIA) } }] },
-      select: { ...SELECT_MOTO_VITRINE, entradaEm: true, enviosWhatsapp: true },
+      select: { ...SELECT_MOTO_VITRINE, entradaEm: true, enviosWhatsapp: true, placa: true },
       orderBy: [{ situacao: 'asc' }, { entradaEm: 'desc' }],
     }),
     prisma.assistenteLoja.findUnique({ where: { usuarioId } }),
@@ -155,6 +156,7 @@ const motoSchema = z.object({
   destaques: z.array(z.string().trim().max(60)).max(8).transform(l => l.filter(Boolean)).optional(),
   ficha: z.array(z.object({ rotulo: z.string().trim().max(40), valor: z.string().trim().max(80) })).max(12).transform(l => l.filter(f => f.rotulo && f.valor)).optional(),
   fotos: z.array(z.string()).max(MAX_FOTOS, `No máximo ${MAX_FOTOS} fotos`).optional(),
+  placa: z.string().trim().max(10).nullable().optional(),
   videoUrl: z.string().trim().max(300).refine(v => !v || /^https?:\/\/\S+$/i.test(v), 'O vídeo precisa ser um link (https://...)').transform(v => v || null).nullable().optional(),
 })
 
@@ -174,6 +176,7 @@ router.post('/assistente/vitrine', ...editar, async (req: Request, res: Response
   const usuarioId = req.proLaboreUser!.sub
   if (!(await fotosValidas(usuarioId, p.data.fotos))) return erro(res, 400, 'Foto inválida')
   const { ficha, ...d } = p.data
+  try { if (d.placa !== undefined) d.placa = placaDoEstoque(d.placa) ?? null } catch (e) { if (e instanceof ErroRegraVenda) return erro(res, 400, e.message); throw e }
   const moto = await prisma.smMotoEstoque.create({
     data: { usuarioId, ...d, entradaEm: new Date(), ...(ficha && { ficha: ficha as Prisma.InputJsonValue }), saidaEm: d.situacao === 'VENDIDA' ? new Date() : null },
     select: { id: true },
@@ -190,6 +193,7 @@ router.patch('/assistente/vitrine/:id', ...editar, async (req: Request, res: Res
   if (!atual) return erro(res, 404, 'Moto não encontrada')
   if (!(await fotosValidas(usuarioId, p.data.fotos))) return erro(res, 400, 'Foto inválida')
   const { ficha, ...d } = p.data
+  try { if (d.placa !== undefined) d.placa = placaDoEstoque(d.placa) ?? null } catch (e) { if (e instanceof ErroRegraVenda) return erro(res, 400, e.message); throw e }
   const situacao = d.situacao ?? atual.situacao
   await prisma.smMotoEstoque.update({
     where: { id: atual.id },

@@ -87,3 +87,41 @@ export async function alterarFechamento(usuarioId: string, mes: string, acao: 'f
     update: { fechadoEm, historico: historico as unknown as Prisma.InputJsonValue },
   })
 }
+
+// --- Estoque: a venda dá baixa na moto ---
+
+/**
+ * Acha a moto do estoque desta venda: a escolhida (motoId) ou, sem escolha, a
+ * de mesma placa ainda não vendida. Devolve também a placa da moto, para a
+ * venda herdar quando não veio escrita.
+ */
+export async function motoDaVenda(usuarioId: string, motoId: string | null | undefined, placa: string | null) {
+  if (motoId) {
+    const m = await prisma.smMotoEstoque.findFirst({ where: { id: motoId, usuarioId }, select: { id: true, placa: true, situacao: true, modelo: true } })
+    if (!m) throw new ErroRegraVenda(400, 'Moto do estoque não encontrada')
+    if (m.situacao === 'VENDIDA') throw new ErroRegraVenda(409, `${m.modelo} já está como vendida no estoque. Se for outra unidade, cadastre-a no estoque antes.`, 'MOTO_VENDIDA')
+    return { motoId: m.id, placa: m.placa }
+  }
+  if (!placa) return { motoId: null, placa: null }
+  const m = await prisma.smMotoEstoque.findFirst({ where: { usuarioId, placa, situacao: { not: 'VENDIDA' } }, select: { id: true, placa: true } })
+  return { motoId: m?.id ?? null, placa: m?.placa ?? null }
+}
+
+export async function darBaixaNaMoto(motoId: string | null, data: Date) {
+  if (!motoId) return
+  await prisma.smMotoEstoque.update({ where: { id: motoId }, data: { situacao: 'VENDIDA', saidaEm: data } })
+}
+
+/** Venda excluída: a moto volta ao estoque, se nenhuma outra venda a usa. */
+export async function devolverMotoAoEstoque(motoId: string | null) {
+  if (!motoId) return
+  const outras = await prisma.venda.count({ where: { motoId } })
+  if (outras) return
+  await prisma.smMotoEstoque.updateMany({ where: { id: motoId, situacao: 'VENDIDA' }, data: { situacao: 'DISPONIVEL', saidaEm: null } })
+}
+
+/** Placa digitada no estoque: valida o formato e devolve sem traço, em maiúsculas (ou null). */
+export function placaDoEstoque(placa: string | null | undefined) {
+  if (placa === undefined) return undefined
+  return resolverPlaca(placa ?? '', null)
+}

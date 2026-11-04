@@ -5,6 +5,7 @@ import express, { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { ErroRegraVenda, placaDoEstoque } from '../lib/regrasVenda'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { contextoSM, requireGestorSM, requireModuloSM } from '../lib/smAcesso'
 import { guardarImagem, tipoPelaAssinatura } from '../lib/armazenamento'
@@ -31,7 +32,7 @@ const erro = (res: Response, status: number, mensagem: string, extra?: Record<st
 
 // ---------- Estoque leve ----------
 
-const SELECT_MOTO = { id: true, modelo: true, marca: true, ano: true, cor: true, entradaEm: true, situacao: true, saidaEm: true, observacao: true } as const
+const SELECT_MOTO = { id: true, modelo: true, marca: true, ano: true, cor: true, entradaEm: true, situacao: true, saidaEm: true, observacao: true, placa: true } as const
 
 router.get('/sm/estoque', ...autenticado, requireModuloSM('estoque', 'LEITURA'), async (req: Request, res: Response) => {
   res.json(await listarEstoque(req.sm!.usuarioId))
@@ -55,12 +56,14 @@ const motoSchema = z.object({
   situacao: z.enum(['DISPONIVEL', 'RESERVADA', 'VENDIDA']).optional(),
   saidaEm: z.coerce.date().nullable().optional(),
   observacao: z.string().trim().max(300).nullable().optional(),
+  placa: z.string().trim().max(10).nullable().optional(),
 })
 
 router.post('/sm/estoque', ...autenticado, requireModuloSM('estoque', 'COMPLETO'), async (req: Request, res: Response) => {
   const parse = motoSchema.safeParse(req.body)
   if (!parse.success) return erro(res, 400, parse.error.issues[0].message)
   const d = parse.data
+  try { if (d.placa !== undefined) d.placa = placaDoEstoque(d.placa) ?? null } catch (e) { if (e instanceof ErroRegraVenda) return erro(res, 400, e.message); throw e }
   const moto = await prisma.smMotoEstoque.create({
     data: { usuarioId: req.sm!.usuarioId, ...d, saidaEm: d.situacao === 'VENDIDA' ? d.saidaEm ?? new Date() : null },
     select: SELECT_MOTO,
@@ -74,6 +77,7 @@ router.patch('/sm/estoque/:id', ...autenticado, requireModuloSM('estoque', 'COMP
   const atual = await prisma.smMotoEstoque.findFirst({ where: { id: String(req.params.id), usuarioId: req.sm!.usuarioId } })
   if (!atual) return erro(res, 404, 'Moto não encontrada')
   const d = parse.data
+  try { if (d.placa !== undefined) d.placa = placaDoEstoque(d.placa) ?? null } catch (e) { if (e instanceof ErroRegraVenda) return erro(res, 400, e.message); throw e }
   const situacao = d.situacao ?? atual.situacao
   const saidaEm = situacao === 'VENDIDA' ? d.saidaEm ?? atual.saidaEm ?? new Date() : null
   const moto = await prisma.smMotoEstoque.update({ where: { id: atual.id }, data: { ...d, saidaEm }, select: SELECT_MOTO })

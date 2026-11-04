@@ -17,7 +17,7 @@ import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../l
 import { randomBytes } from 'crypto'
 import { logger } from '../lib/logger'
 import { origemPorCodigo } from '../lib/smAtribuicao'
-import { ErroRegraVenda, alterarFechamento, exigirMesAberto, exigirSemRepetida, fechamentosDoAno, resolverPlaca } from '../lib/regrasVenda'
+import { ErroRegraVenda, alterarFechamento, darBaixaNaMoto, devolverMotoAoEstoque, exigirMesAberto, exigirSemRepetida, fechamentosDoAno, motoDaVenda, resolverPlaca } from '../lib/regrasVenda'
 
 /** Responde os erros das regras de venda (placa, repetida, mês fechado); devolve true se respondeu. */
 function responderRegraVenda(res: Response, e: unknown) {
@@ -617,7 +617,18 @@ const criarVendaSchema = z.object({
   valorComissao: z.number().min(0, 'Comissão não pode ser negativa').optional(),
   observacao: z.string().optional(),
   placa: z.string().optional(),
+  motoId: z.string().optional(),
   confirmarRepetida: z.boolean().optional(),
+})
+
+// Motos do estoque que ainda podem ser vendidas (para escolher no lançamento da venda).
+router.get('/vendas/estoque', requireProLaboreAuth, requireModulo('vendas', 'VER'), async (req: Request, res: Response) => {
+  const motos = await prisma.smMotoEstoque.findMany({
+    where: { usuarioId: req.proLaboreUser!.sub, situacao: { not: 'VENDIDA' } },
+    select: { id: true, modelo: true, marca: true, ano: true, cor: true, versao: true, placa: true, preco: true, situacao: true },
+    orderBy: [{ situacao: 'asc' }, { modelo: 'asc' }],
+  })
+  res.json(motos)
 })
 
 // Fechamento do mês (só o dono): o mês conferido não aceita venda nova, edição nem exclusão.
@@ -678,9 +689,11 @@ router.post('/vendas', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), 
   }
 
   const dataVenda = new Date(parse.data.data)
-  let placa: string | null
+  let placa: string | null, motoId: string | null
   try {
     placa = resolverPlaca(parse.data.placa, parse.data.observacao)
+    const moto = await motoDaVenda(usuarioId, parse.data.motoId, placa)
+    motoId = moto.motoId; placa = placa ?? moto.placa
     await exigirMesAberto(usuarioId, dataVenda)
     await exigirSemRepetida(usuarioId, { placa, valorVenda, data: dataVenda, vendedorId }, parse.data.confirmarRepetida)
   } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
@@ -693,6 +706,7 @@ router.post('/vendas', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), 
       vendedorId,
       ...origemPost,
       placa,
+      motoId,
       data: dataVenda,
       valorVenda,
       valorProLabore,
@@ -701,6 +715,7 @@ router.post('/vendas', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), 
     },
     include: VENDA_INCLUDE,
   })
+  await darBaixaNaMoto(motoId, dataVenda)
   res.status(201).json(venda)
 })
 
@@ -738,6 +753,8 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITA
     else if (!atual.placa && parse.data.observacao !== undefined) placaNova = resolverPlaca(null, parse.data.observacao)
     if (placaNova && placaNova !== atual.placa) await exigirSemRepetida(usuarioId, { placa: placaNova, valorVenda: atual.valorVenda, data: atual.data, ignorarId: atual.id }, parse.data.confirmarRepetida)
   } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
+  // Placa nova numa venda sem moto: se a moto está no estoque, liga e dá baixa.
+  const motoNova = !atual.motoId && placaNova && placaNova !== atual.placa ? (await motoDaVenda(usuarioId, null, placaNova)).motoId : null
 
   if (parse.data.vendedorId) {
     const vendedor = await prisma.vendedor.findFirst({ where: { id: parse.data.vendedorId, usuarioId } })
@@ -799,9 +816,11 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITA
       valorComissao: valorComissaoEfetivo ?? null,
       observacao: parse.data.observacao ?? atual.observacao,
       placa: placaNova,
+      ...(motoNova ? { motoId: motoNova } : {}),
     },
     include: VENDA_INCLUDE,
   })
+  if (motoNova) await darBaixaNaMoto(motoNova, atual.data)
   res.json(venda)
 })
 
@@ -813,6 +832,7 @@ router.delete('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDIT
   }
   try { await exigirMesAberto(atual.usuarioId, atual.data) } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
   await prisma.venda.delete({ where: { id: atual.id } })
+  await devolverMotoAoEstoque(atual.motoId)
   // A venda saiu dos comprovantes: refaz o total (ou cancela o comprovante vazio).
   if (atual.pagamentoComissaoId) await recalcularPagamentoComissao(prisma, atual.pagamentoComissaoId)
   if (atual.pagamentoProLaboreId) await recalcularPagamentoComissao(prisma, atual.pagamentoProLaboreId)
@@ -1156,6 +1176,7 @@ const converterLeadSchema = z.object({
   valorComissao: z.number().min(0, 'Comissão não pode ser negativa').optional(),
   observacao: z.string().optional(),
   placa: z.string().optional(),
+  motoId: z.string().optional(),
   confirmarRepetida: z.boolean().optional(),
 })
 
@@ -1208,9 +1229,11 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
   }
 
   const dataVenda = new Date(parse.data.data)
-  let placa: string | null
+  let placa: string | null, motoId: string | null
   try {
     placa = resolverPlaca(parse.data.placa, parse.data.observacao ?? atual.modeloInteresse)
+    const moto = await motoDaVenda(usuarioId, parse.data.motoId, placa)
+    motoId = moto.motoId; placa = placa ?? moto.placa
     await exigirMesAberto(usuarioId, dataVenda)
     await exigirSemRepetida(usuarioId, { placa, valorVenda, data: dataVenda, vendedorId: atual.vendedorId }, parse.data.confirmarRepetida)
   } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
@@ -1220,6 +1243,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
       usuarioId,
       vendedorId: atual.vendedorId,
       placa,
+      motoId,
       // A venda herda a origem do lead (seção 3.5).
       origem: atual.origem, postCode: atual.postCode, midiaId: atual.midiaId, canalEntrada: atual.canalEntrada,
       data: dataVenda,
@@ -1231,6 +1255,7 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
     include: VENDA_INCLUDE,
   })
 
+  await darBaixaNaMoto(motoId, dataVenda)
   await cancelarLigacoesDoLead(prisma, atual.id, 'Venda fechada')
   await prisma.leadFollow.updateMany({ where: { leadId: atual.id, tipo: 'CREDITO', status: 'PENDENTE' }, data: { status: 'CANCELADO', resultado: 'Venda fechada' } })
   const lead = await prisma.lead.update({
