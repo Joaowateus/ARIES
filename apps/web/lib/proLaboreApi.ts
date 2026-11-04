@@ -316,6 +316,10 @@ export interface Venda {
   vendedorId?: string | null
   vendedor?: { id: string; nome: string } | null
   observacao?: string | null
+  // Placa da moto (ABC1234 / ABC1D23); a mesma placa em pouco tempo avisa venda repetida.
+  placa?: string | null
+  // Lead do CRM ligado a esta venda (null = lançada direto, sem lead).
+  lead?: { id: string; nomeCliente: string } | null
   // Preenchido quando a comissão já foi paga ao vendedor.
   pagamentoComissaoId?: string | null
   pagamentoComissao?: { id: string; numero: number; pagoEm: string } | null
@@ -324,6 +328,9 @@ export interface Venda {
   pagamentoProLabore?: { id: string; numero: number; pagoEm: string } | null
   criadoEm: string
 }
+
+export interface FechamentoMesVendas { mes: string; fechado: boolean; fechadoEm: string | null; historico: Array<{ acao: 'FECHAR' | 'REABRIR'; em: string; por: string | null }>; vendas: number; receita: number; semLead: number }
+export interface VendaParecida { id: string; data: string; valorVenda: number; placa: string | null; observacao: string | null; vendedor: string | null }
 
 export type FormaPagamentoComissao = 'PIX' | 'DINHEIRO' | 'TRANSFERENCIA' | 'OUTRO'
 // COMISSAO = comissão paga ao vendedor; PROLABORE = retirada do pró-labore do dono.
@@ -545,9 +552,11 @@ export const proLaboreApi = {
   },
   vendas: {
     listar: (ano?: number) => request<Venda[]>(`/pro-labore/vendas${ano ? `?ano=${ano}` : ''}`),
-    criar: (data: { data: string; valorVenda: number; valorProLabore: number; vendedorId?: string; valorComissao?: number; observacao?: string }) =>
+    criar: (data: { data: string; valorVenda: number; valorProLabore: number; vendedorId?: string; valorComissao?: number; observacao?: string; placa?: string; confirmarRepetida?: boolean }) =>
       request<Venda>('/pro-labore/vendas', { method: 'POST', body: JSON.stringify(data) }),
-    editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; vendedorId?: string | null; valorComissao?: number | null; observacao?: string }) =>
+    fechamentos: (ano: number) => request<FechamentoMesVendas[]>(`/pro-labore/vendas/fechamentos?ano=${ano}`),
+    alterarFechamento: (mes: string, acao: 'fechar' | 'reabrir') => request<FechamentoMesVendas[]>('/pro-labore/vendas/fechamentos', { method: 'POST', body: JSON.stringify({ mes, acao }) }),
+    editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; vendedorId?: string | null; valorComissao?: number | null; observacao?: string; placa?: string | null; confirmarRepetida?: boolean }) =>
       request<Venda>(`/pro-labore/vendas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/vendas/${id}`, { method: 'DELETE' }),
   },
@@ -586,7 +595,7 @@ export const proLaboreApi = {
     desfazerAvanco: (id: string) => request<Lead>(`/pro-labore/leads/${id}/desfazer-avanco`, { method: 'POST' }),
     mudarEstagio: (id: string, estagio: EstagioLead, perda?: { motivoPerda: MotivoPerda; notaPerda?: string; temperatura?: Temperatura }) =>
       request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio, ...perda }) }),
-    converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; valorComissao?: number; observacao?: string }) =>
+    converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; valorComissao?: number; observacao?: string; placa?: string; confirmarRepetida?: boolean }) =>
       request<{ lead: Lead; venda: Venda }>(`/pro-labore/leads/${id}/converter`, { method: 'POST', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/leads/${id}`, { method: 'DELETE' }),
   },

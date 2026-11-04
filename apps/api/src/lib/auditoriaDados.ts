@@ -106,7 +106,7 @@ export async function auditarDados(usuarioId: string) {
   const origem = await idsAntigos(usuarioId)
   const antigos = Object.fromEntries(ORDEM.map(t => [t, origem.de(t)])) as Record<TipoAchado, Set<string>>
   const [vendas, pagamentos, lancamentos, leads] = await Promise.all([
-    prisma.venda.findMany({ where: { usuarioId }, select: { id: true, data: true, valorVenda: true, valorProLabore: true, valorComissao: true, vendedorId: true, observacao: true, pagamentoComissaoId: true, pagamentoProLaboreId: true, criadoEm: true, vendedor: { select: { nome: true } }, lead: { select: { id: true } } } }),
+    prisma.venda.findMany({ where: { usuarioId }, select: { id: true, data: true, valorVenda: true, valorProLabore: true, valorComissao: true, vendedorId: true, observacao: true, placa: true, pagamentoComissaoId: true, pagamentoProLaboreId: true, criadoEm: true, vendedor: { select: { nome: true } }, lead: { select: { id: true } } } }),
     prisma.pagamentoComissao.findMany({ where: { usuarioId, canceladoEm: null }, select: { id: true, tipo: true, numero: true, pagoEm: true, valorTotal: true, vendedorId: true, recebedor: true, vendedor: { select: { nome: true } } } }),
     prisma.lancamentoFinanceiro.findMany({ where: { usuarioId, canceladoEm: null }, select: { id: true, categoria: true, numero: true, pagoEm: true, valorTotal: true, favorecido: true, vendedorId: true, descricao: true } }),
     prisma.lead.findMany({ where: { usuarioId }, select: { id: true, nomeCliente: true, telefone: true, criadoEm: true, estagio: true, vendaId: true, fechadoEm: true } }),
@@ -121,7 +121,7 @@ export async function auditarDados(usuarioId: string) {
   const emPar = new Set<string>()
   // 1º pela placa da moto na observação: a mesma moto vendida duas vezes é a mesma venda, mesmo com valor diferente
   // (ex.: R$ 24.400 no banco antigo e R$ 26.400 relançada aqui). Fica a que está ligada ao lead do CRM; você pode trocar.
-  const comPlaca = vs.map(v => ({ ...v, placa: placaDe(v.observacao) })).filter(v => v.placa)
+  const comPlaca = vs.map(v => ({ ...v, placa: v.placa ?? placaDe(v.observacao) })).filter(v => v.placa)
   for (const p of parear(comPlaca, v => v.placa!, () => true, mesmoVendedor)) {
     emPar.add(p.a.id); emPar.add(p.n.id)
     const ficaAntiga = !!p.a.lead && !p.n.lead
