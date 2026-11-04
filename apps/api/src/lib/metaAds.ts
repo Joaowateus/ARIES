@@ -2,6 +2,9 @@
 // anúncio acessíveis pelo token, insights diários por anúncio e alcance de
 // um período. Tudo "de leitura" (permissão ads_read).
 import { MENSAGEM_APP_BLOQUEADO, causaDoErroMeta } from './metaConexao'
+import { exigirSaidaPermitida } from './ambiente'
+// No ambiente de teste nada chega à Meta (as credenciais copiadas nem são usadas).
+const fetch: typeof globalThis.fetch = (...a) => { exigirSaidaPermitida('Meta'); return globalThis.fetch(...a) }
 
 const GRAPH_BASE = process.env.META_GRAPH_BASE ?? 'https://graph.facebook.com'
 const VERSAO = process.env.META_GRAPH_VERSION ?? 'v23.0'

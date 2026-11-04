@@ -4261,3 +4261,20 @@ model FechamentoMesVendas {
   @@unique([usuarioId, mes])
   @@map("pro_labore_fechamentos_mes_vendas")
 }
+
+// Cópia de segurança (exportação de todas as tabelas para o armazenamento
+// privado) e restauração (só no ambiente de teste ou com liberação explícita).
+// Esta tabela fica fora da própria cópia e não é apagada na restauração.
+model CopiaSeguranca {
+  id          String    @id @default(cuid())
+  tipo        String    @default("EXPORTACAO") // EXPORTACAO | RESTAURACAO
+  status      String    @default("EM_ANDAMENTO") // EM_ANDAMENTO | CONCLUIDA | ERRO
+  autor       String?
+  estado      Json
+  manifesto   Json?
+  erro        String?
+  iniciadoEm  DateTime  @default(now())
+  concluidoEm DateTime?
+
+  @@map("pro_labore_copias_seguranca")
+}

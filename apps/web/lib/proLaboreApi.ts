@@ -333,6 +333,13 @@ export interface Venda {
   criadoEm: string
 }
 
+export interface CopiaSeguranca {
+  id: string; tipo: 'EXPORTACAO' | 'RESTAURACAO'; status: 'EM_ANDAMENTO' | 'CONCLUIDA' | 'ERRO'; autor: string | null; iniciadoEm: string; concluidoEm: string | null; erro: string | null
+  tabelas?: number; tabelasFeitas?: number; linhas: number; bytes?: number; migracao?: string | null
+  passos?: number; passosFeitos?: number; falhas?: number; ultimasFalhas?: Array<{ tabela: string; erro: string }>
+  conferencia?: Array<{ tabela: string; esperadas: number; restauradas: number }> | null
+  origem?: { copiaId: string; geradaEm: string; migracao: string | null; migracaoDestino: string | null }
+}
 export interface PontoConferencia { tipo: string; gravidade: 'alta' | 'media' | 'baixa'; texto: string; onde: 'auditoria' | 'vendas' | 'crm' }
 export interface ConferenciaMensal { geradoEm: string; meses: Array<{ mes: string; fechado: boolean; vendas: number; receita: number; pontos: PontoConferencia[] }>; pendentes: Array<{ mes: string; pontos: number; fechado: boolean }> }
 export interface FechamentoMesVendas { mes: string; fechado: boolean; fechadoEm: string | null; historico: Array<{ acao: 'FECHAR' | 'REABRIR'; em: string; por: string | null }>; vendas: number; receita: number; semLead: number }
@@ -889,6 +896,16 @@ export const proLaboreApi = {
   },
   // Saúde do sistema (dono): tamanho do banco contra o limite do plano.
   sistema: {
+    ambiente: () => request<{ ambiente: 'teste' | 'producao'; restauracaoPermitida: boolean }>('/pro-labore/sistema/ambiente'),
+    copias: {
+      listar: () => request<CopiaSeguranca[]>('/pro-labore/sistema/copias'),
+      iniciar: () => request<CopiaSeguranca>('/pro-labore/sistema/copias', { method: 'POST', body: '{}' }),
+      rodada: (id: string) => request<CopiaSeguranca>(`/pro-labore/sistema/copias/${id}/rodada`, { method: 'POST', body: '{}' }),
+      ver: (id: string) => request<{ geradaEm: string; migracao: string | null; totalLinhas: number; bytes: number; tabelas: Array<{ nome: string; linhas: number; partes: number }> }>(`/pro-labore/sistema/copias/${id}`),
+      link: (id: string) => request<{ link: string; validoAte: string }>(`/pro-labore/sistema/copias/${id}/link`, { method: 'POST', body: '{}' }),
+      restaurar: (link: string, chave: string, autor: string) => request<{ id: string; sessao: string }>('/pro-labore/sistema/copias/restaurar', { method: 'POST', body: JSON.stringify({ link, chave, autor }) }),
+      rodadaRestauracao: (id: string, sessao: string) => request<CopiaSeguranca>(`/pro-labore/sistema/copias/restaurar/${id}/rodada`, { method: 'POST', body: '{}', headers: { 'x-sessao-restauracao': sessao } }),
+    },
     banco: () => request<SaudeBanco>('/pro-labore/sistema/banco'),
     // Espaço do banco: o que ocupa e o que dá para liberar (rodadas).
     espaco: () => request<EspacoBanco>('/pro-labore/sistema/espaco'),

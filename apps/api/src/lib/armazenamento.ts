@@ -166,3 +166,25 @@ export async function baixarEGuardarImagem(usuarioId: string, url: string, prazo
     clearTimeout(timer)
   }
 }
+
+// --- Arquivos de sistema (cópia de segurança): caminho exato, só no Supabase ---
+
+export async function gravarArquivoSistema(caminho: string, mime: string, dados: Buffer) {
+  if (!supabaseConfigurado()) throw new Error('O armazenamento do Supabase não está configurado (SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY)')
+  return gravarNoSupabase(caminho, mime, dados)
+}
+export async function lerArquivoSistema(endereco: string) {
+  return lerDoSupabase(endereco)
+}
+/** Link temporário (assinado) para baixar um arquivo privado sem a chave. */
+export async function linkTemporario(endereco: string, segundos: number): Promise<string> {
+  const s = supabase()
+  if (!s) throw new Error('O armazenamento do Supabase não está configurado')
+  const caminho = endereco.replace(/^supabase:\/\//, '')
+  const r = await fetch(`${s.url}/storage/v1/object/sign/${caminhoSeguro(caminho)}`, { method: 'POST', headers: { ...cabecalhos(s.chave), 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: segundos }) })
+  if (!r.ok) throw new Error(`Supabase recusou o link (${r.status})`)
+  const j = (await r.json()) as { signedURL?: string; signedUrl?: string }
+  const rel = j.signedURL ?? j.signedUrl
+  if (!rel) throw new Error('Supabase não devolveu o link')
+  return /^https?:/.test(rel) ? rel : `${s.url}/storage/v1${rel.startsWith('/') ? '' : '/'}${rel}`
+}

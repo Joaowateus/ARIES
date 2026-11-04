@@ -9,6 +9,7 @@ import { AgenteWhatsapp } from './_agente/AgenteWhatsapp'
 import { ImportacaoNeon } from './_importacao/ImportacaoNeon'
 import { EspacoBanco } from './_espaco/EspacoBanco'
 import { AuditoriaDados } from './_auditoria/AuditoriaDados'
+import { CopiaSeguranca } from './_copia/CopiaSeguranca'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -193,6 +194,7 @@ export default function ProLaboreConfiguracoesPage() {
     <div>
       <PageHeader eyebrow="Sistema" title="Configurações" subtitle="O Aries no WhatsApp, teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
 
+      <CopiaSeguranca />
       <EspacoBanco />
       <AuditoriaDados />
 
