@@ -89,7 +89,7 @@ export function Fila({ pessoa, irPara }: { pessoa?: string; irPara: (a: AbaCopil
         <ol className="cp-fila-lista">
           {lista.map(i => {
             const u = urgencia(i.prioridade)
-            const linkConversa = i.conversaId ? `/pro-labore/assistente?aba=whatsapp&conversa=${i.conversaId}` : null
+            const linkConversa = i.conversaId ? `/pro-labore/whatsapp?conversa=${i.conversaId}` : null
             return (
               <li key={i.chave} className={`cp-fila-item ${u.classe}`} data-fila-item={i.motivo.tipo}>
                 <span className={`cp-fila-urg ${u.classe}`} title={`Prioridade ${i.prioridade} de 100`}>{u.rotulo}</span>

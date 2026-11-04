@@ -58,7 +58,7 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeE
   const desfazivel = avancoDesfazivel(lead)
   const conversa = lead.conversa
   const whats = lead.telefone && soDigitos(lead.telefone).length >= 10 ? `https://wa.me/${soDigitos(lead.telefone).replace(/^(?!55)/, '55')}` : null
-  const linkConversa = conversa ? `/pro-labore/assistente?aba=whatsapp&conversa=${conversa.id}${lead.vendedorId ? `&vendedor=${lead.vendedorId}` : ''}` : null
+  const linkConversa = conversa ? `/pro-labore/whatsapp?conversa=${conversa.id}${lead.vendedorId ? `&vendedor=${lead.vendedorId}` : ''}` : null
   const aberto = !lead.vendaId && lead.estagio !== 'PERDIDO'
 
   return (

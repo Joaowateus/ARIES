@@ -30,7 +30,7 @@ export function Conversas({ pessoa, inicial, somenteLeitura }: { pessoa?: string
         <p className="cp-sub">{lista.conectado
           ? 'Quando um lead chamar e o assistente passar a conversa para você, ela aparece aqui com a sugestão de resposta.'
           : 'O copiloto lê as conversas de lead que passam pelo Assistente Comercial. Conversas pessoais nunca são lidas.'}</p>
-        {!lista.conectado && <p style={{ marginTop: 10 }}><Link className="pl-btn pl-btn-ghost" href="/pro-labore/assistente">Conectar o WhatsApp no Assistente Comercial</Link></p>}
+        {!lista.conectado && <p style={{ marginTop: 10 }}><Link className="pl-btn pl-btn-ghost" href="/pro-labore/whatsapp">Conectar o WhatsApp</Link></p>}
       </div>
     )
   }

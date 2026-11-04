@@ -59,7 +59,7 @@ export function FaixaWhatsapp({ gestao, versao, onMudou }: { gestao: boolean; ve
   if (!d || !d.vendedores.length) return null
   const mudou = () => { setRecarga(r => r + 1); onMudou?.() }
   const conferido = d.ultimaVarreduraEm ? ` Conferido no WhatsApp às ${new Date(d.ultimaVarreduraEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.` : ''
-  const linkConectar = gestao ? '/pro-labore/assistente?aba=whatsapp' : '/pro-labore/assistente'
+  const linkConectar = '/pro-labore/whatsapp'
 
   // Sem o servidor do WhatsApp (Evolution) ninguém consegue conectar: diz o
   // que falta em vez de esconder a faixa.
