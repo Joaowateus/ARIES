@@ -410,6 +410,10 @@ export interface MesPainel {
   custoPorLead: number | null
   funil: { leads: number; abordados: number; negociacao: number; proposta: number; fechamento: number }
   conversaoLeadVenda: number
+  // Leads que chegaram a Negociação (conversa de compra), mesmo perdidos depois.
+  leadsQualificados?: number
+  conversaoQualificadoVenda?: number
+  custoPorLeadQualificado?: number | null
   vendedores: VendedorRanking[]
 }
 
