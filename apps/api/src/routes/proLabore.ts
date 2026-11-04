@@ -336,6 +336,7 @@ const parametrosSchema = z.object({
   metaFaturamentoAnual: z.number().positive('Meta deve ser positiva').optional(),
   metaMensalPadrao: z.number().positive('Meta deve ser positiva').optional(),
   custoPorLeadTopo: z.number().nonnegative('Custo deve ser positivo ou zero').optional(),
+  diasLeadParado: z.number().int().min(1, 'Mínimo de 1 dia').max(90, 'Máximo de 90 dias').optional(),
   fraseMotivacional: z.string().max(280, 'Frase muito longa').optional(),
   agendaLimiarBomPct: z.number().min(0).max(100).optional(),
   agendaLimiarAtencaoPct: z.number().min(0).max(100).optional(),
@@ -1094,11 +1095,20 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
     res.json(atual)
     return
   }
+  // Sem o motivo, a perda não ensina nada: é ele que mostra onde e por que o funil perde.
+  if (parse.data.estagio === 'PERDIDO' && !parse.data.motivoPerda) {
+    res.status(400).json({ error: 'Escolha o motivo da perda' })
+    return
+  }
+  if (parse.data.estagio === 'PERDIDO' && parse.data.motivoPerda === 'OUTRO' && !parse.data.notaPerda) {
+    res.status(400).json({ error: 'Com o motivo "Outro", explique em uma frase o que aconteceu' })
+    return
+  }
 
   const fechadoEm = parse.data.estagio === 'FECHADO' || parse.data.estagio === 'PERDIDO' ? new Date() : null
   // Perdido sai do funil para a Reativação; voltar de lá conta como reativação.
   const perda = parse.data.estagio === 'PERDIDO'
-    ? { perdidoEm: new Date(), motivoPerda: parse.data.motivoPerda ?? null, notaPerda: parse.data.notaPerda || null, temperatura: parse.data.temperatura ?? null }
+    ? { perdidoEm: new Date(), motivoPerda: parse.data.motivoPerda ?? null, estagioPerda: atual.estagio, notaPerda: parse.data.notaPerda || null, temperatura: parse.data.temperatura ?? null }
     : atual.estagio === 'PERDIDO' ? { reativadoEm: new Date(), reativacoes: { increment: 1 } } : {}
   // Saiu do funil (fechou ou perdeu): as ligações pendentes param.
   if (parse.data.estagio === 'FECHADO' || parse.data.estagio === 'PERDIDO') {
@@ -1382,6 +1392,8 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     vejaEquipe ? prisma.vendedor.findMany({ where: { usuarioId, vende: true } }) : Promise.resolve([]),
     prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioAno, lte: fimAno } }, include: { historico: { select: { estagioNovo: true } } } }),
   ])
+  // Perdas do ano pela data em que o lead foi perdido: em que etapa estava e por quê.
+  const perdidosAno = await prisma.lead.findMany({ where: { ...leadWhereBase(req), perdidoEm: { gte: inicioAno, lte: fimAno } }, select: { perdidoEm: true, motivoPerda: true, estagioPerda: true, vendedorId: true } })
 
   // `vendasTodas`/`leadsTodos` já vêm restritos ao próprio vendedor quando
   // quem pede é um VENDEDOR (vendaWhereBase/leadWhereBase cuidam disso). O
@@ -1428,6 +1440,14 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     // Lead qualificado: chegou a Negociação (houve conversa de compra), mesmo que depois tenha sido perdido.
     // Separa quem só mandou mensagem de quem de fato negociou — o topo do funil conta os dois.
     const leadsQualificados = leadsDoMes.filter(l => !!l.vendaId || estagioAtingiu(l.estagio, 'NEGOCIACAO') || l.historico.some(h => ['NEGOCIACAO', 'PROPOSTA', 'FECHADO'].includes(h.estagioNovo))).length
+    const perdasDoMes = new Map<string, { etapa: string; motivo: string; n: number }>()
+    for (const l of perdidosAno) {
+      if (l.perdidoEm!.getUTCMonth() !== mes || (vendedorIdFiltro && l.vendedorId !== vendedorIdFiltro)) continue
+      const k = `${l.estagioPerda ?? 'DESCONHECIDA'}|${l.motivoPerda ?? 'SEM_MOTIVO'}`
+      const atual = perdasDoMes.get(k) ?? { etapa: l.estagioPerda ?? 'DESCONHECIDA', motivo: l.motivoPerda ?? 'SEM_MOTIVO', n: 0 }
+      atual.n++; perdasDoMes.set(k, atual)
+    }
+    const perdas = [...perdasDoMes.values()].sort((a, b) => b.n - a.n)
     const conversaoQualificadoVenda = leadsQualificados > 0 ? (quantidadeVendas / leadsQualificados) * 100 : 0
     const custoPorLeadQualificado = gastoAnuncios > 0 && leadsQualificados > 0 ? gastoAnuncios / leadsQualificados : null
 
@@ -1454,7 +1474,7 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
       receita, proLaboreSacado, comissaoPaga, quantidadeVendas, ticketMedio,
       gastoAnuncios, gastoFonte, gastoAtualizadoEm: papel === 'DONO' ? gastoMes?.atualizadoEm ?? null : null, roas, cac, custoPorLead,
       funil, conversaoLeadVenda,
-      leadsQualificados, conversaoQualificadoVenda, custoPorLeadQualificado: papel === 'DONO' ? custoPorLeadQualificado : null,
+      leadsQualificados, conversaoQualificadoVenda, perdas, custoPorLeadQualificado: papel === 'DONO' ? custoPorLeadQualificado : null,
       vendedores: rankingVendedores,
     }
   })

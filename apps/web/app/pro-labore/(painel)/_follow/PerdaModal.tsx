@@ -23,8 +23,9 @@ export function PerdaModal({ nomeCliente, onFechar, onConfirmar }: {
     return () => window.removeEventListener('keydown', esc)
   }, [onFechar])
 
+  const precisaNota = motivo === 'OUTRO' && !nota.trim()
   async function confirmar() {
-    if (!motivo) return
+    if (!motivo || precisaNota) return
     setSalvando(true); setErro('')
     try { await onConfirmar({ motivoPerda: motivo, notaPerda: nota.trim() || undefined, temperatura }); onFechar() } catch (e) { setErro((e as Error).message) } finally { setSalvando(false) }
   }
@@ -51,11 +52,11 @@ export function PerdaModal({ nomeCliente, onFechar, onConfirmar }: {
           </div>
           <small className="fw-legenda">{TEMPERATURA[temperatura].dica}</small>
         </div>
-        <div className="pl-field"><label htmlFor="fw-nota-perda">Observação (opcional)</label><textarea id="fw-nota-perda" className="pl-input" rows={2} maxLength={2000} value={nota} onChange={e => setNota(e.target.value)} placeholder="Ex.: quer comprar depois de receber o 13º" /></div>
+        <div className="pl-field"><label htmlFor="fw-nota-perda">{motivo === 'OUTRO' ? 'O que aconteceu? (obrigatório com “Outro motivo”)' : 'Observação (opcional)'}</label><textarea id="fw-nota-perda" className="pl-input" rows={2} maxLength={2000} value={nota} onChange={e => setNota(e.target.value)} placeholder="Ex.: quer comprar depois de receber o 13º" /></div>
         {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
         <div className="fw-botoes">
           <button type="button" className="pl-btn pl-btn-ghost" onClick={onFechar}>Cancelar</button>
-          <button type="button" className="pl-btn pl-btn-primary" disabled={!motivo || salvando} onClick={confirmar}>{salvando ? 'Salvando…' : 'Enviar para a Reativação'}</button>
+          <button type="button" className="pl-btn pl-btn-primary" disabled={!motivo || precisaNota || salvando} onClick={confirmar}>{salvando ? 'Salvando…' : 'Enviar para a Reativação'}</button>
         </div>
       </div>
     </div>

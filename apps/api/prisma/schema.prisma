@@ -1105,6 +1105,9 @@ model ParametroLiquidez {
   // semana) usada pra auditar a equipe de Social Media — comparação
   // simples de "quanto devia vs quanto saiu".
   metaPostagensSemanais     Int     @default(3)
+  // Lead em Negociação ou Proposta sem mudar de etapa há mais que isso (e sem
+  // follow agendado) aparece como parado no CRM.
+  diasLeadParado            Int     @default(5)
 
   // ===== Limiares da Auditoria comercial da Agenda (todos parametrizáveis —
   // nada disso pode ficar hardcoded no front, pra permitir calibrar por
@@ -1350,6 +1353,8 @@ model Lead {
   // temperatura (FRIO | MORNO | QUENTE). Reativar devolve ao funil e conta
   // em `reativacoes`; o motivo fica guardado como histórico.
   motivoPerda      String?
+  // Etapa em que o lead estava quando foi perdido (onde o funil perde).
+  estagioPerda     String?
   notaPerda        String?
   perdidoEm        DateTime?
   temperatura      String?

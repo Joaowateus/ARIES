@@ -63,8 +63,15 @@ const MS_POR_DIA = 24 * 60 * 60 * 1000
 // estágio na imensa maioria dos casos — editar outros campos também atualiza
 // isso, mas é uma aproximação boa o bastante pra um indicador visual, sem
 // precisar de um endpoint novo só pra ler o histórico de estágio já salvo.
+// Dias desde a última mudança de etapa (ou desde a entrada, se nunca mudou).
 function diasParado(lead: Lead): number {
-  return Math.floor((Date.now() - new Date(lead.atualizadoEm).getTime()) / MS_POR_DIA)
+  const desde = lead.historico?.length ? lead.historico[lead.historico.length - 1].criadoEm : lead.criadoEm
+  return Math.floor((Date.now() - new Date(desde).getTime()) / MS_POR_DIA)
+}
+const ETAPAS_DECISAO: EstagioLead[] = ['NEGOCIACAO', 'PROPOSTA']
+/** Em Negociação/Proposta sem mudar de etapa há mais que o limite e sem follow agendado: está esfriando sem ninguém cuidar. */
+function leadParado(lead: Lead, limite: number) {
+  return ETAPAS_DECISAO.includes(lead.estagio) && !lead.vendaId && !lead.follows?.length && diasParado(lead) > limite
 }
 
 function tempoParado(dias: number): string {
@@ -204,6 +211,7 @@ export default function ProLaboreLeadsPage() {
   })
   const [perdaAberta, setPerdaAberta] = useState<Lead | null>(null)
   const [filtroFollow, setFiltroFollow] = useState<'' | 'ATRASADO' | 'HOJE'>('')
+  const [filtroParado, setFiltroParado] = useState(false)
   // Etiqueta da jornada (posta pelo Assistente): filtra só os cards do Kanban.
   const [filtroEtiqueta, setFiltroEtiqueta] = useState('')
   // Custo por lead automático: gasto do mês (Tráfego/Indicadores) ÷ leads do mês.
@@ -678,10 +686,13 @@ export default function ProLaboreLeadsPage() {
   const situacaoDe = (l: Lead) => (l.follows?.[0] ? situacaoFollow(l.follows[0]).tipo : null)
   const followsAtrasados = leadsAtivos.filter(l => situacaoDe(l) === 'ATRASADO').length
   const followsHoje = leadsAtivos.filter(l => situacaoDe(l) === 'HOJE').length
+  const limiteParado = parametro?.diasLeadParado ?? 5
+  const parados = leadsAtivos.filter(l => leadParado(l, limiteParado))
   const contagemEtiquetas = ORDEM_ETIQUETAS.map(e => ({ e, n: leadsAtivos.filter(l => l.etiquetas?.includes(e)).length })).filter(x => x.n > 0)
   const painelLead = painelId ? leads.find(l => l.id === painelId) ?? null : null
   const leadsAtivosOrdenados = [...leadsAtivos]
     .filter(l => !filtroFollow || situacaoDe(l) === filtroFollow)
+    .filter(l => !filtroParado || leadParado(l, limiteParado))
     .filter(l => !filtroEtiqueta || l.etiquetas?.includes(filtroEtiqueta))
     .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
@@ -985,6 +996,12 @@ export default function ProLaboreLeadsPage() {
         </div>
       ) : (
         <>
+          {(parados.length > 0 || filtroParado) && (
+            <div className="pl-alert" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }} role="status" data-aviso-parados>
+              <span><b>{parados.length} {parados.length === 1 ? 'lead parado' : 'leads parados'} em Negociação ou Proposta</b> há mais de {limiteParado} dias, sem follow agendado. É aqui que o funil mais perde: agende o próximo contato, avance ou registre o motivo da perda.</span>
+              <button type="button" className={`pl-chip ${filtroParado ? 'active' : ''}`} aria-pressed={filtroParado} onClick={() => setFiltroParado(f => !f)} data-filtro-parados>{filtroParado ? 'Ver todos os cards' : 'Ver só os parados'}</button>
+            </div>
+          )}
           {(followsAtrasados > 0 || followsHoje > 0 || filtroFollow) && (
             <div className="fw-faixa" role="group" aria-label="Follows do dia">
               <span className="pl-hint">Follows:</span>
@@ -1042,6 +1059,7 @@ export default function ProLaboreLeadsPage() {
                         vejaEquipe={vejaEquipe}
                         densidade={densidade}
                         destaque={filtroEtiqueta || undefined}
+                        limiteParado={limiteParado}
                         dragging={draggingId === lead.id}
                         onPointerDown={e => onPointerDownCard(e, lead)}
                         onAbrir={() => setPainelId(lead.id)}
@@ -1301,7 +1319,7 @@ function avancoAutomaticoRecente(lead: Lead) {
 // lead, que abre com um clique no card. No modo "detalhado" o card mostra
 // também o telefone e mais etiquetas.
 function KanbanCard({
-  lead, estagio, isDono, vejaEquipe, densidade, destaque, dragging, onPointerDown, onAbrir, onNotas, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
+  lead, estagio, isDono, vejaEquipe, densidade, destaque, limiteParado = 5, dragging, onPointerDown, onAbrir, onNotas, onMudarEstagio, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao,
 }: {
   lead: Lead
   estagio: EstagioLead
@@ -1310,6 +1328,7 @@ function KanbanCard({
   densidade: Densidade
   // Etiqueta filtrada: aparece primeiro no card.
   destaque?: string
+  limiteParado?: number
   dragging: boolean
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
   onAbrir: () => void
@@ -1337,8 +1356,8 @@ function KanbanCard({
     onMudarEstagio(destino)
   }
   const dias = diasParado(lead)
-  // "Esfriando" — mais de uma semana sem avançar.
-  const parado = dias >= 7 && !lead.vendaId
+  // "Esfriando": em Negociação/Proposta, passou do limite da conta sem follow; nas outras etapas, uma semana sem avançar.
+  const parado = ETAPAS_DECISAO.includes(estagio) ? leadParado(lead, limiteParado) : dias >= 7 && !lead.vendaId
   const viaWhatsapp = lead.origemCadastro === 'WHATSAPP'
   const faixa = typeof lead.pontuacao === 'number' ? (lead.pontuacao >= 70 ? 'quente' : lead.pontuacao >= 40 ? 'morno' : 'frio') : ''
   const etiquetas = lead.etiquetas?.filter(e => e !== 'QUENTE') ?? []
