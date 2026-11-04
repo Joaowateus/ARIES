@@ -11,6 +11,7 @@ import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } f
 import { PageHeader } from '../PageHeader'
 import { FechamentoDiario } from './_fechamento/FechamentoDiario'
 import { AvisoConferencia } from './_conferencia/AvisoConferencia'
+import { PerdasDoMes } from './_perdas/PerdasDoMes'
 
 // --pl-accent fica de fora da rotação: ele inverte de claro pra escuro (e
 // vice-versa) entre os temas, e o texto do avatar é sempre branco fixo —
@@ -582,6 +583,7 @@ export default function ProLaboreDashboardPage() {
           onCustoLeadSalvo={custoPorLeadTopo => setParametro(p => (p ? { ...p, custoPorLeadTopo } : p))}
         />
       </div>
+      {vejaEquipe && atual.perdas && <PerdasDoMes perdas={atual.perdas} rotuloMes={`${atual.label} ${atual.ano}`} />}
 
       {vejaEquipe && (
         <>

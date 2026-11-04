@@ -118,6 +118,8 @@ export interface ParametroLiquidez {
   // pra derivar sozinho, cadastrada manualmente. Alimenta o custo por lead
   // calculado em cada etapa mais funda (FunilJourney).
   custoPorLeadTopo: number
+  // Lead em Negociação/Proposta sem mudar de etapa há mais que isso (sem follow) aparece como parado.
+  diasLeadParado?: number
   fraseMotivacional?: string | null
   // Limiares da Auditoria comercial da Agenda — todos parametrizáveis pela
   // tela de Configurações, nada disso é fixo no código.
@@ -412,6 +414,8 @@ export interface MesPainel {
   conversaoLeadVenda: number
   // Leads que chegaram a Negociação (conversa de compra), mesmo perdidos depois.
   leadsQualificados?: number
+  // Perdas do mês: em que etapa o lead estava e o motivo.
+  perdas?: Array<{ etapa: string; motivo: string; n: number }>
   conversaoQualificadoVenda?: number
   custoPorLeadQualificado?: number | null
   vendedores: VendedorRanking[]

@@ -20,6 +20,7 @@ export default function ProLaboreConfiguracoesPage() {
   const [tetoComissaoR, setTetoComissaoR] = useState('')
   const [metaAnual, setMetaAnual] = useState('')
   const [metaMensalPadrao, setMetaMensalPadrao] = useState('')
+  const [diasLeadParado, setDiasLeadParado] = useState('5')
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -61,6 +62,7 @@ export default function ProLaboreConfiguracoesPage() {
       setTetoComissaoR(String(p.tetoComissaoRenegociacao))
       setMetaAnual(String(p.metaFaturamentoAnual))
       setMetaMensalPadrao(String(p.metaMensalPadrao))
+      setDiasLeadParado(String(p.diasLeadParado ?? 5))
       setLimiarBom(String(p.agendaLimiarBomPct))
       setLimiarAtencao(String(p.agendaLimiarAtencaoPct))
       setLimiarEfetividade(String(p.agendaLimiarEfetividadeAltaPct))
@@ -92,6 +94,7 @@ export default function ProLaboreConfiguracoesPage() {
         tetoComissaoRenegociacao: Number(tetoComissaoR),
         metaFaturamentoAnual: Number(metaAnual),
         metaMensalPadrao: Number(metaMensalPadrao),
+        diasLeadParado: Number(diasLeadParado),
       })
       setTeto(String(atualizado.tetoProLaborePorVenda))
       setTetoComissao(String(atualizado.tetoComissaoPadrao))
@@ -99,6 +102,7 @@ export default function ProLaboreConfiguracoesPage() {
       setTetoComissaoR(String(atualizado.tetoComissaoRenegociacao))
       setMetaAnual(String(atualizado.metaFaturamentoAnual))
       setMetaMensalPadrao(String(atualizado.metaMensalPadrao))
+      setDiasLeadParado(String(atualizado.diasLeadParado ?? 5))
       setSucesso(true)
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -236,6 +240,12 @@ export default function ProLaboreConfiguracoesPage() {
             <label>Meta mensal padrão por vendedor (R$)</label>
             <input type="number" step="0.01" min="0.01" className="pl-input" value={metaMensalPadrao} onChange={e => setMetaMensalPadrao(e.target.value)} required />
             <span className="pl-hint">Vendedor não vê a meta anual — no lugar, vê essa meta mensal (ou a individual dele, se definida em Vendedores) — hoje: {formatMoeda(Number(metaMensalPadrao) || 0)}</span>
+          </div>
+
+          <div className="pl-field">
+            <label>Lead parado em Negociação/Proposta após (dias)</label>
+            <input type="number" step="1" min="1" max="90" className="pl-input" value={diasLeadParado} onChange={e => setDiasLeadParado(e.target.value)} required data-campo-dias-parado />
+            <span className="pl-hint">Sem mudar de etapa e sem follow agendado por mais que isso, o lead aparece como parado no CRM</span>
           </div>
         </div>
 
