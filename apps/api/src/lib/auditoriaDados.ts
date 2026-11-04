@@ -109,7 +109,9 @@ export async function auditarDados(usuarioId: string) {
   // Vendas
   const vs = vendas.map(v => ({ ...v, quando: v.data, antigo: antigos.vendas.has(v.id) }))
   const regVenda = (v: (typeof vs)[number]): RegistroAuditoria => ({ id: v.id, data: v.data.toISOString(), valor: v.valorVenda, rotulo: v.vendedor?.nome ?? 'Sem vendedor', detalhe: v.observacao, antigo: v.antigo })
-  const paresVendas = parear(vs, v => String(centavos(v.valorVenda)), (a, n) => !a.vendedorId || !n.vendedorId || a.vendedorId === n.vendedorId, (a, n) => a.vendedorId === n.vendedorId)
+  // Vendedor: mesmo cadastro ou mesmo nome (a vendedora pode ter ficado com dois cadastros); diferente também entra, como provável.
+  const mesmoVendedor = (a: (typeof vs)[number], n: (typeof vs)[number]) => !a.vendedorId || !n.vendedorId || a.vendedorId === n.vendedorId || norm(a.vendedor?.nome) === norm(n.vendedor?.nome)
+  const paresVendas = parear(vs, v => String(centavos(v.valorVenda)), () => true, mesmoVendedor)
   const emPar = new Set<string>()
   for (const p of paresVendas) {
     emPar.add(p.a.id); emPar.add(p.n.id)
@@ -117,7 +119,7 @@ export async function auditarDados(usuarioId: string) {
     const alta = p.d <= 3 && p.dono && !outroMes
     achados.push({
       chave: `vendas:${p.a.id}:${p.n.id}`, tipo: 'vendas', remover: regVenda(p.a), manter: regVenda(p.n),
-      motivo: `Mesma venda no banco antigo e lançada aqui: mesmo valor${p.dono ? ' e vendedor' : ''}, ${quantosDias(p.d)}${outroMes ? ' (em outro mês)' : ''}.`,
+      motivo: `Mesma venda no banco antigo e lançada aqui: mesmo valor${p.dono ? ' e vendedor' : ', mas vendedor diferente'}, ${quantosDias(p.d)}${outroMes ? ' (em outro mês)' : ''}.`,
       confianca: alta ? 'alta' : 'media', sugerido: true, diasDiferenca: Math.round(p.d), mesRemovido: mesDe(p.a.data), mesMantido: mesDe(p.n.data),
     })
   }
@@ -293,6 +295,13 @@ export async function corrigirDados(usuarioId: string, entrada: { chaves: string
   const dataAntiga = new Set(entrada.dataAntiga ?? [])
   const { achados } = await auditarDados(usuarioId)
   const fila = achados.filter(a => pedidas.has(a.chave))
+  // Revisão manual: vendas que você escolheu tirar na lista do mês (sem par).
+  const manuais = [...pedidas].filter(c => c.startsWith('manual:vendas:')).map(c => c.slice('manual:vendas:'.length))
+  if (manuais.length) {
+    const existem = await prisma.venda.findMany({ where: { usuarioId, id: { in: manuais } }, select: { id: true, data: true, valorVenda: true } })
+    const jaNaFila = new Set(fila.map(a => a.remover.id))
+    for (const v of existem) if (!jaNaFila.has(v.id)) fila.push({ chave: `manual:vendas:${v.id}`, tipo: 'vendas', remover: { id: v.id, data: v.data.toISOString(), valor: v.valorVenda, rotulo: '', detalhe: null, antigo: false }, manter: null, motivo: 'Escolhida na revisão do mês', confianca: 'conferir', sugerido: false, diasDiferenca: 0, mesRemovido: mesDe(v.data), mesMantido: null })
+  }
   let correcao = entrada.correcaoId ? await prisma.correcaoAuditoria.findFirst({ where: { id: entrada.correcaoId, usuarioId, desfeitaEm: null } }) : null
   correcao ??= await prisma.correcaoAuditoria.create({ data: { usuarioId, backup: { removidos: [], alterados: [] } } })
   const backup = correcao.backup as unknown as Backup
@@ -340,4 +349,21 @@ export async function desfazerCorrecao(usuarioId: string, correcaoId: string, pr
   }
   await prisma.correcaoAuditoria.update({ where: { id: c.id }, data: { backup: b as unknown as object, ...(b.desfeitoAte === 0 ? { desfeitaEm: new Date() } : {}) } })
   return { restantes: b.desfeitoAte }
+}
+
+/** Todas as vendas de um mês, com a origem de cada uma, para revisar uma a uma. */
+export async function vendasDoMes(usuarioId: string, mes: string) {
+  if (!/^\d{4}-\d{2}$/.test(mes)) throw new ErroAuditoria(400, 'Mês inválido')
+  const [ano, m] = mes.split('-').map(Number)
+  const origem = await idsAntigos(usuarioId)
+  const antigos = origem.de('vendas')
+  const vendas = await prisma.venda.findMany({
+    where: { usuarioId, data: { gte: new Date(Date.UTC(ano, m - 1, 1)), lt: new Date(Date.UTC(ano, m, 1)) } },
+    select: { id: true, data: true, valorVenda: true, valorProLabore: true, valorComissao: true, observacao: true, criadoEm: true, pagamentoComissaoId: true, vendedor: { select: { nome: true } }, lead: { select: { nomeCliente: true } } },
+    orderBy: [{ data: 'asc' }, { valorVenda: 'desc' }],
+  })
+  return {
+    mes,
+    vendas: vendas.map(v => ({ id: v.id, data: v.data.toISOString(), valor: v.valorVenda, proLabore: v.valorProLabore, comissao: v.valorComissao ?? 0, vendedor: v.vendedor?.nome ?? null, cliente: v.lead?.nomeCliente ?? null, observacao: v.observacao, lancadaEm: v.criadoEm.toISOString(), comissaoPaga: !!v.pagamentoComissaoId, antigo: antigos.has(v.id) })),
+  }
 }

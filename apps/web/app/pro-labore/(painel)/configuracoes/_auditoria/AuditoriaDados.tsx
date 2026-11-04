@@ -5,7 +5,7 @@
 // lado a lado; você confere, escolhe e corrige. Tudo que sai fica guardado e a
 // correção pode ser desfeita.
 import { useEffect, useMemo, useState } from 'react'
-import { proLaboreApi, type AchadoAuditoria, type AuditoriaDados as Dados, type TipoAchadoAuditoria } from '@/lib/proLaboreApi'
+import { proLaboreApi, type AchadoAuditoria, type AuditoriaDados as Dados, type TipoAchadoAuditoria, type VendaRevisao } from '@/lib/proLaboreApi'
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const dia = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
@@ -142,7 +142,8 @@ export function AuditoriaDados() {
           </tbody>
         </table>
       </div>
-      <p className="pl-hint" style={{ marginTop: 6 }}>“Corrigida” considera os itens marcados como repetidos com o banco antigo. Toque no mês para ver só os dele.</p>
+      <p className="pl-hint" style={{ marginTop: 6 }}>“Corrigida” considera os itens marcados como repetidos com o banco antigo. Toque no mês para ver os repetidos dele e a lista completa das vendas do mês.</p>
+      {mes && <RevisaoMes key={mes + (dados.geradoEm)} mes={mes} onFechar={() => setMes('')} onCorrigido={() => void carregar()} />}
 
       {totalAchados > 0 && (
         <>
@@ -218,6 +219,69 @@ function Registro({ titulo, r, tipo }: { titulo: string; r: AchadoAuditoria['rem
       <div><b>{dia(r.data)}</b>{tipo !== 'leads' && <> · <b>{brl(r.valor)}</b></>}</div>
       <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.rotulo}</div>
       {r.detalhe && <div className="pl-hint" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.detalhe}</div>}
+    </div>
+  )
+}
+
+// Revisão manual: todas as vendas do mês, com a origem, para tirar uma a uma o que não é verdade.
+function RevisaoMes({ mes, onFechar, onCorrigido }: { mes: string; onFechar: () => void; onCorrigido: () => void }) {
+  const [vendas, setVendas] = useState<VendaRevisao[] | null>(null)
+  const [tirar, setTirar] = useState<Set<string>>(new Set())
+  const [ocupado, setOcupado] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
+  useEffect(() => { proLaboreApi.sistema.auditoria.vendasDoMes(mes).then(r => setVendas(r.vendas)).catch(e => setMsg({ ok: false, texto: e instanceof Error ? e.message : 'Não foi possível carregar' })) }, [mes])
+  if (!vendas) return msg ? <div className="pl-alert pl-alert-error" role="alert">{msg.texto}</div> : <p className="pl-hint">Carregando as vendas de {nomeMes(mes)}…</p>
+  const total = vendas.reduce((s, v) => s + v.valor, 0)
+  const fica = vendas.filter(v => !tirar.has(v.id))
+  const antigas = vendas.filter(v => v.antigo).length
+
+  async function remover() {
+    const ids = [...tirar]
+    if (!ids.length || !window.confirm(`Tirar ${ids.length} ${ids.length === 1 ? 'venda' : 'vendas'} de ${nomeMes(mes)}? Elas ficam guardadas e dá para desfazer depois.`)) return
+    setOcupado(true); setMsg(null)
+    try {
+      let pend = ids.map(id => `manual:vendas:${id}`), correcaoId: string | null = null, feitos = 0
+      for (let i = 0; i < 50 && pend.length; i++) {
+        const r = await proLaboreApi.sistema.auditoria.corrigir({ chaves: pend, dataAntiga: [], correcaoId })
+        correcaoId = r.correcaoId; feitos += r.feitos; pend = r.restantes
+      }
+      setMsg({ ok: true, texto: `Pronto: ${feitos} ${feitos === 1 ? 'venda tirada' : 'vendas tiradas'} de ${nomeMes(mes)}.` })
+      setTirar(new Set())
+      setVendas((await proLaboreApi.sistema.auditoria.vendasDoMes(mes)).vendas)
+      onCorrigido()
+    } catch (e) { setMsg({ ok: false, texto: e instanceof Error ? e.message : 'Não foi possível tirar' }) }
+    finally { setOcupado(false) }
+  }
+
+  return (
+    <div className="pl-card" style={{ padding: 14, marginTop: 12 }} data-revisao-mes={mes}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'baseline' }}>
+        <b>Todas as vendas de {nomeMes(mes)}: {vendas.length} · {brl(total)}</b>
+        <button type="button" className="pl-btn pl-btn-ghost" onClick={onFechar}>Fechar</button>
+      </div>
+      <p className="pl-hint" style={{ margin: '6px 0 10px' }}>{antigas} vieram do banco antigo e {vendas.length - antigas} foram lançadas aqui. Marque as que não são verdade (repetidas ou de outro mês) e veja o total ficar certo antes de tirar.</p>
+      <div className="pl-table-wrap">
+        <table className="pl-table">
+          <thead><tr><th>Tirar</th><th>Data</th><th style={{ textAlign: 'right' }}>Valor</th><th>Vendedor</th><th>Cliente / observação</th><th>Origem</th></tr></thead>
+          <tbody>
+            {vendas.map(v => (
+              <tr key={v.id} data-venda-revisao={v.id} style={tirar.has(v.id) ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>
+                <td><input type="checkbox" checked={tirar.has(v.id)} onChange={() => setTirar(s => { const n = new Set(s); if (n.has(v.id)) n.delete(v.id); else n.add(v.id); return n })} aria-label="Tirar esta venda" /></td>
+                <td>{dia(v.data)}</td>
+                <td style={{ textAlign: 'right' }}>{brl(v.valor)}</td>
+                <td>{v.vendedor ?? <span className="pl-hint">Sem vendedor</span>}</td>
+                <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[v.cliente, v.observacao].filter(Boolean).join(' · ') || '—'}</td>
+                <td><span className="pl-chip">{v.antigo ? 'Banco antigo' : `Lançada aqui em ${new Date(v.lancadaEm).toLocaleDateString('pt-BR')}`}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+        <span>Fica: <b data-total-fica>{fica.length} vendas · {brl(fica.reduce((s, v) => s + v.valor, 0))}</b></span>
+        <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado || !tirar.size} onClick={() => void remover()} data-tirar-vendas>{ocupado ? 'Tirando…' : `Tirar ${tirar.size} ${tirar.size === 1 ? 'venda' : 'vendas'}`}</button>
+      </div>
+      {msg && <div className={`pl-alert ${msg.ok ? 'pl-alert-success' : 'pl-alert-error'}`} style={{ marginTop: 10 }} role={msg.ok ? 'status' : 'alert'}>{msg.texto}</div>}
     </div>
   )
 }

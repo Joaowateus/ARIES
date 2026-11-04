@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma'
 import { requireDono, requireProLaboreAuth } from '../middleware/authProLabore'
 import { tamanhoDoBanco } from '../lib/bancoDisponivel'
 import { ErroEspaco, liberarEspaco, painelEspaco } from '../lib/espacoBanco'
-import { ErroAuditoria, auditarDados, corrigirDados, desfazerCorrecao } from '../lib/auditoriaDados'
+import { ErroAuditoria, auditarDados, vendasDoMes, corrigirDados, desfazerCorrecao } from '../lib/auditoriaDados'
 import { ErroImportacao, descartarImportacao, rodarImportacao, simularImportacao, statusImportacao } from '../lib/importacaoNeon'
 
 const router = Router()
@@ -65,6 +65,13 @@ router.delete('/sistema/importacao-neon', ...dono, async (req: Request, res: Res
 // Auditoria dos dados: repetidos depois da importação, mês a mês (só lê).
 router.get('/sistema/auditoria', ...dono, async (req: Request, res: Response) => {
   res.json(await auditarDados(req.proLaboreUser!.sub))
+})
+
+router.get('/sistema/auditoria/vendas', ...dono, async (req: Request, res: Response) => {
+  try { res.json(await vendasDoMes(req.proLaboreUser!.sub, String(req.query.mes ?? ''))) } catch (e) {
+    if (e instanceof ErroAuditoria) { res.status(e.status).json({ error: e.message }); return }
+    throw e
+  }
 })
 
 // Corrige os itens escolhidos (uma rodada com tempo limitado; a tela chama de novo enquanto houver restantes).
