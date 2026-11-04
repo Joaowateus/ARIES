@@ -125,12 +125,13 @@ export function AuditoriaDados() {
       <h3 style={{ margin: '14px 0 8px', fontSize: 14 }}>Mês a mês: como está e como fica</h3>
       <div className="pl-table-wrap">
         <table className="pl-table" data-auditoria-meses>
-          <thead><tr><th>Mês</th><th style={{ textAlign: 'right' }}>Vendas</th><th style={{ textAlign: 'right' }}>Receita hoje</th><th style={{ textAlign: 'right' }}>Repetidas</th><th style={{ textAlign: 'right' }}>Receita corrigida</th><th style={{ textAlign: 'right' }}>Lucro corrigido</th><th style={{ textAlign: 'right' }}>Comissões corrigidas</th><th style={{ textAlign: 'right' }}>Leads (repetidos)</th></tr></thead>
+          <thead><tr><th>Mês</th><th style={{ textAlign: 'right' }}>Vendas</th><th style={{ textAlign: 'right' }}>Fechados no CRM</th><th style={{ textAlign: 'right' }}>Receita hoje</th><th style={{ textAlign: 'right' }}>Repetidas</th><th style={{ textAlign: 'right' }}>Receita corrigida</th><th style={{ textAlign: 'right' }}>Lucro corrigido</th><th style={{ textAlign: 'right' }}>Comissões corrigidas</th><th style={{ textAlign: 'right' }}>Leads (repetidos)</th></tr></thead>
           <tbody>
             {dados.meses.map(m => (
               <tr key={m.mes} data-mes-auditoria={m.mes} style={m.repetidas || m.leadsRepetidos ? { background: 'var(--pl-surface-2, rgba(255,200,0,0.06))' } : undefined}>
                 <td><button type="button" className="pl-link" style={{ background: 'none', border: 0, padding: 0, color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }} onClick={() => { setMes(m.mes); setLimite(POR_PAGINA) }}>{nomeMes(m.mes)}</button></td>
                 <td style={{ textAlign: 'right' }}>{m.vendas}{m.repetidas ? ` → ${m.vendasCorrigidas}` : ''}</td>
+                <td style={{ textAlign: 'right' }}>{m.fechadosCrm}{m.vendas > m.fechadosCrm && <span className="pl-hint"> ({m.vendasSemLead} sem lead)</span>}</td>
                 <td style={{ textAlign: 'right' }}>{brl(m.receita)}</td>
                 <td style={{ textAlign: 'right' }}>{m.repetidas ? <b>{m.repetidas} · {brl(m.receitaRepetida)}</b> : '—'}</td>
                 <td style={{ textAlign: 'right' }}>{m.repetidas ? <b>{brl(m.receitaCorrigida)}</b> : brl(m.receita)}</td>
@@ -226,10 +227,11 @@ function Registro({ titulo, r, tipo }: { titulo: string; r: AchadoAuditoria['rem
 // Revisão manual: todas as vendas do mês, com a origem, para tirar uma a uma o que não é verdade.
 function RevisaoMes({ mes, onFechar, onCorrigido }: { mes: string; onFechar: () => void; onCorrigido: () => void }) {
   const [vendas, setVendas] = useState<VendaRevisao[] | null>(null)
+  const [fechadosCrm, setFechadosCrm] = useState(0)
   const [tirar, setTirar] = useState<Set<string>>(new Set())
   const [ocupado, setOcupado] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
-  useEffect(() => { proLaboreApi.sistema.auditoria.vendasDoMes(mes).then(r => setVendas(r.vendas)).catch(e => setMsg({ ok: false, texto: e instanceof Error ? e.message : 'Não foi possível carregar' })) }, [mes])
+  useEffect(() => { proLaboreApi.sistema.auditoria.vendasDoMes(mes).then(r => { setVendas(r.vendas); setFechadosCrm(r.fechadosCrm) }).catch(e => setMsg({ ok: false, texto: e instanceof Error ? e.message : 'Não foi possível carregar' })) }, [mes])
   if (!vendas) return msg ? <div className="pl-alert pl-alert-error" role="alert">{msg.texto}</div> : <p className="pl-hint">Carregando as vendas de {nomeMes(mes)}…</p>
   const total = vendas.reduce((s, v) => s + v.valor, 0)
   const fica = vendas.filter(v => !tirar.has(v.id))
@@ -247,7 +249,7 @@ function RevisaoMes({ mes, onFechar, onCorrigido }: { mes: string; onFechar: () 
       }
       setMsg({ ok: true, texto: `Pronto: ${feitos} ${feitos === 1 ? 'venda tirada' : 'vendas tiradas'} de ${nomeMes(mes)}.` })
       setTirar(new Set())
-      setVendas((await proLaboreApi.sistema.auditoria.vendasDoMes(mes)).vendas)
+      const nova = await proLaboreApi.sistema.auditoria.vendasDoMes(mes); setVendas(nova.vendas); setFechadosCrm(nova.fechadosCrm)
       onCorrigido()
     } catch (e) { setMsg({ ok: false, texto: e instanceof Error ? e.message : 'Não foi possível tirar' }) }
     finally { setOcupado(false) }
@@ -259,10 +261,11 @@ function RevisaoMes({ mes, onFechar, onCorrigido }: { mes: string; onFechar: () 
         <b>Todas as vendas de {nomeMes(mes)}: {vendas.length} · {brl(total)}</b>
         <button type="button" className="pl-btn pl-btn-ghost" onClick={onFechar}>Fechar</button>
       </div>
-      <p className="pl-hint" style={{ margin: '6px 0 10px' }}>{antigas} vieram do banco antigo e {vendas.length - antigas} foram lançadas aqui. Marque as que não são verdade (repetidas ou de outro mês) e veja o total ficar certo antes de tirar.</p>
+      <p className="pl-hint" style={{ margin: '6px 0 10px' }}>{antigas} vieram do banco antigo e {vendas.length - antigas} foram lançadas aqui. No CRM, <b>{fechadosCrm} {fechadosCrm === 1 ? 'lead foi fechado' : 'leads foram fechados'}</b> neste mês; {vendas.filter(v => !v.noCrm).length} das vendas não estão ligadas a nenhum lead. Marque as que não são verdade (repetidas ou de outro mês) e veja o total ficar certo antes de tirar.</p>
+      {vendas.some(v => !v.noCrm) && <button type="button" className="pl-btn pl-btn-ghost" style={{ marginBottom: 10 }} onClick={() => setTirar(new Set(vendas.filter(v => !v.noCrm).map(v => v.id)))} data-marcar-sem-crm>Marcar as que não estão no CRM ({vendas.filter(v => !v.noCrm).length})</button>}
       <div className="pl-table-wrap">
         <table className="pl-table">
-          <thead><tr><th>Tirar</th><th>Data</th><th style={{ textAlign: 'right' }}>Valor</th><th>Vendedor</th><th>Cliente / observação</th><th>Origem</th></tr></thead>
+          <thead><tr><th>Tirar</th><th>Data</th><th style={{ textAlign: 'right' }}>Valor</th><th>Vendedor</th><th>Cliente / observação</th><th>No CRM</th><th>Origem</th></tr></thead>
           <tbody>
             {vendas.map(v => (
               <tr key={v.id} data-venda-revisao={v.id} style={tirar.has(v.id) ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>
@@ -271,6 +274,7 @@ function RevisaoMes({ mes, onFechar, onCorrigido }: { mes: string; onFechar: () 
                 <td style={{ textAlign: 'right' }}>{brl(v.valor)}</td>
                 <td>{v.vendedor ?? <span className="pl-hint">Sem vendedor</span>}</td>
                 <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[v.cliente, v.observacao].filter(Boolean).join(' · ') || '—'}</td>
+                <td>{v.noCrm ? 'Sim' : <span className="pl-hint">Não</span>}</td>
                 <td><span className="pl-chip">{v.antigo ? 'Banco antigo' : `Lançada aqui em ${new Date(v.lancadaEm).toLocaleDateString('pt-BR')}`}</span></td>
               </tr>
             ))}
