@@ -44,7 +44,7 @@ import { faixaNota } from '../lib/assistenteNota'
 import { iaLigada as copilotoIaLigada, sugerirResposta, type SugestaoIA } from '../lib/copilotoIA'
 import { sugestaoModelo } from '../lib/copilotoModelos'
 import { memoriaParaIA } from '../lib/copiloto'
-import { funilDoMesDashboard } from '../lib/jornada'
+import { estagioAtingiu, funilDoMesDashboard } from '../lib/jornada'
 import { gastoDoMes, gastosDoPeriodo, type GastoDoMes } from '../lib/gastoAnuncios'
 import { MOTIVOS_PERDA, TEMPERATURAS, leadWhereBase } from '../lib/escopoLead'
 
@@ -1380,7 +1380,7 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
       ? gastosDoPeriodo(usuarioId, `${anoNum}-01`, `${anoNum}-12`)
       : Promise.resolve(new Map<string, GastoDoMes>()),
     vejaEquipe ? prisma.vendedor.findMany({ where: { usuarioId, vende: true } }) : Promise.resolve([]),
-    prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioAno, lte: fimAno } } }),
+    prisma.lead.findMany({ where: { ...leadWhereBase(req), criadoEm: { gte: inicioAno, lte: fimAno } }, include: { historico: { select: { estagioNovo: true } } } }),
   ])
 
   // `vendasTodas`/`leadsTodos` já vêm restritos ao próprio vendedor quando
@@ -1425,6 +1425,11 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     const conversaoLeadVenda = funil.leads > 0 ? (quantidadeVendas / funil.leads) * 100 : 0
     // Custo por lead automático: gasto do mês ÷ leads do mês (os mesmos do funil).
     const custoPorLead = gastoAnuncios > 0 && funil.leads > 0 ? gastoAnuncios / funil.leads : null
+    // Lead qualificado: chegou a Negociação (houve conversa de compra), mesmo que depois tenha sido perdido.
+    // Separa quem só mandou mensagem de quem de fato negociou — o topo do funil conta os dois.
+    const leadsQualificados = leadsDoMes.filter(l => !!l.vendaId || estagioAtingiu(l.estagio, 'NEGOCIACAO') || l.historico.some(h => ['NEGOCIACAO', 'PROPOSTA', 'FECHADO'].includes(h.estagioNovo))).length
+    const conversaoQualificadoVenda = leadsQualificados > 0 ? (quantidadeVendas / leadsQualificados) * 100 : 0
+    const custoPorLeadQualificado = gastoAnuncios > 0 && leadsQualificados > 0 ? gastoAnuncios / leadsQualificados : null
 
     // Ranking sempre da equipe inteira (vendasTodasDoMes) — comparar
     // vendedores é o próprio propósito do card, então o filtro universal
@@ -1449,6 +1454,7 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
       receita, proLaboreSacado, comissaoPaga, quantidadeVendas, ticketMedio,
       gastoAnuncios, gastoFonte, gastoAtualizadoEm: papel === 'DONO' ? gastoMes?.atualizadoEm ?? null : null, roas, cac, custoPorLead,
       funil, conversaoLeadVenda,
+      leadsQualificados, conversaoQualificadoVenda, custoPorLeadQualificado: papel === 'DONO' ? custoPorLeadQualificado : null,
       vendedores: rankingVendedores,
     }
   })

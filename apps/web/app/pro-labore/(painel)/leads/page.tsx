@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { proLaboreApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
+import { metaDefinida } from '@/lib/metaFunil'
 import { AvisoRepetida, parecidasDoErro } from '../vendas/AvisoRepetida'
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
@@ -79,7 +80,7 @@ function hojeIso() {
 }
 
 function rotuloMetaCrm(meta: MetaFunilProLabore | undefined): string {
-  if (!meta) return 'Meta: —'
+  if (!metaDefinida(meta)) return 'Sem meta'
   if (meta.tipoMeta === 'MAXIMO_CUSTO') return `Meta: ${formatMoeda(meta.metaCusto ?? 0)} (máx.)`
   if (meta.tipoMeta === 'MAXIMO_PERDA') return `Meta: ${formatPct(meta.metaPct)} (máx.)`
   return `Meta: ${formatPct(meta.metaPct)} (mín.)`
@@ -750,7 +751,7 @@ export default function ProLaboreLeadsPage() {
     const custoPorLead = custoPorLeadTopo > 0 && conversaoTotal > 0 ? custoPorLeadTopo / conversaoTotal : null
     const meta = metaPorEtapa.get(col.estagio)
     let statusOk: boolean | null = null
-    if (meta) {
+    if (metaDefinida(meta)) {
       if (meta.tipoMeta === 'MAXIMO_PERDA') statusOk = perdaPct == null ? null : perdaPct <= meta.metaPct
       else if (meta.tipoMeta === 'MAXIMO_CUSTO') statusOk = meta.metaCusto == null || custoPorLead == null ? null : custoPorLead <= meta.metaCusto
       else statusOk = conversaoTotal >= meta.metaPct
@@ -942,7 +943,7 @@ export default function ProLaboreLeadsPage() {
                 ) : (
                   <div className="pl-stage-conv" style={{ marginTop: 6 }}>
                     {isDono ? (
-                      <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(d.estagio)}>{rotuloMetaCrm(d.meta)} ✎</span>
+                      <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(d.estagio)} data-meta-etapa={metaDefinida(d.meta) ? 'definida' : 'vazia'}>{metaDefinida(d.meta) ? `${rotuloMetaCrm(d.meta)} ✎` : 'Definir meta ✎'}</span>
                     ) : (
                       <span>{rotuloMetaCrm(d.meta)}</span>
                     )}

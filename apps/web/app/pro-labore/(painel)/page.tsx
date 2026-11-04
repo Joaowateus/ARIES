@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, PainelProLabore, MesPainel, VendedorRanking, ParametroLiquidez, Vendedor, Lead, TipoLead, PERIODOS_RECEITA, ReceitaPeriodo, ReceitaDetalhada, PontoReceita, MetaFunilProLabore, TipoMetaFunilPL, ETAPAS_FUNIL_PL } from '@/lib/proLaboreApi'
+import { metaDefinida } from '@/lib/metaFunil'
 import { formatMoeda, formatMoedaCompacta, formatPct } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { useCountUp } from '@/lib/useCountUp'
@@ -30,17 +31,18 @@ function initials(nome: string) {
 function delta(curr: number, prev: number | undefined, invert = false) {
   if (prev === undefined || prev === 0) return null
   const d = ((curr - prev) / prev) * 100
-  const up = invert ? d <= 0 : d >= 0
-  return { pct: Math.abs(d), up }
+  // A seta mostra para onde o número foi; a cor, se isso é bom (gasto e custo: cair é bom).
+  const bom = invert ? d <= 0 : d >= 0
+  return { pct: Math.abs(d), subiu: d >= 0, bom }
 }
 
 function DeltaChip({ curr, prev, invert }: { curr: number; prev: number | undefined; invert?: boolean }) {
   const d = delta(curr, prev, invert)
   if (!d) return null
   return (
-    <span className={`pl-delta ${d.up ? 'up' : 'down'}`}>
+    <span className={`pl-delta ${d.bom ? 'up' : 'down'}`} data-delta={d.subiu ? 'subiu' : 'caiu'} title={`${d.subiu ? 'Subiu' : 'Caiu'} ${d.pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% — ${d.bom ? 'bom' : 'ruim'} para este indicador`}>
       <svg viewBox="0 0 10 10" fill="none">
-        {d.up
+        {d.subiu
           ? <path d="M5 8.5V1.5M5 1.5L1.5 5M5 1.5L8.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           : <path d="M5 1.5V8.5M5 8.5L1.5 5M5 8.5L8.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />}
       </svg>
@@ -332,10 +334,12 @@ export default function ProLaboreDashboardPage() {
           { label: 'Comissões pagas', format: formatMoeda, color: 'var(--pl-accent-4)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
           { label: 'Gasto com anúncios', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true, nota: notaGasto(atual) },
           { label: 'ROAS', format: formatRoas, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas, nota: 'Receita do mês ÷ gasto com anúncios' },
-          ...(atual.custoPorLead != null ? [{ label: 'Custo por lead', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.custoPorLead, prev: anterior?.custoPorLead ?? undefined, invert: true, nota: 'Gasto do mês ÷ leads do mês (CRM)' }] : []),
+          ...(atual.custoPorLead != null ? [{ label: 'Custo por lead', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.custoPorLead, prev: anterior?.custoPorLead ?? undefined, invert: true, nota: 'Gasto do mês ÷ todos os leads do mês (inclui quem só mandou mensagem)' }] : []),
+          ...(atual.custoPorLeadQualificado != null ? [{ label: 'Custo por lead qualificado', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.custoPorLeadQualificado, prev: anterior?.custoPorLeadQualificado ?? undefined, invert: true, nota: 'Gasto do mês ÷ leads que chegaram a Negociação' }] : []),
         ]
       : []),
     { label: 'Conversão lead→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
+    ...(atual.leadsQualificados != null ? [{ label: 'Conversão qualificado→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoQualificadoVenda ?? 0, prev: anterior?.conversaoQualificadoVenda, nota: `${atual.leadsQualificados} de ${atual.funil.leads} leads chegaram a Negociação` }] : []),
   ]
 
   // Rótulo do período em vista — mesmo usado na nota ao lado do filtro,
@@ -1128,7 +1132,7 @@ function PeriodoCalendarioFiltro({
 
 /* ============ FUNIL COMERCIAL ============ */
 function rotuloMetaPL(meta: MetaFunilProLabore | undefined): string {
-  if (!meta) return 'Meta: —'
+  if (!metaDefinida(meta)) return 'Sem meta'
   if (meta.tipoMeta === 'MAXIMO_CUSTO') return `Meta: ${formatMoeda(meta.metaCusto ?? 0)} (máx.)`
   if (meta.tipoMeta === 'MAXIMO_PERDA') return `Meta: ${formatPct(meta.metaPct)} (máx.)`
   return `Meta: ${formatPct(meta.metaPct)} (mín.)`
@@ -1229,7 +1233,7 @@ function FunilJourney({
     const meta = metaPorEtapa.get(stage.etapa)
 
     let statusOk: boolean | null = null
-    if (meta) {
+    if (metaDefinida(meta)) {
       if (meta.tipoMeta === 'MAXIMO_PERDA') statusOk = perdaPct == null ? null : perdaPct <= meta.metaPct
       else if (meta.tipoMeta === 'MAXIMO_CUSTO') statusOk = meta.metaCusto == null || custoPorLead == null ? null : custoPorLead <= meta.metaCusto
       else statusOk = conversaoTotal >= meta.metaPct
@@ -1398,7 +1402,7 @@ function FunilJourney({
             ) : (
               <div className="pl-stage-conv" style={{ marginTop: 6 }}>
                 {isDono ? (
-                  <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(d.etapa)}>{rotuloMetaPL(d.meta)} ✎</span>
+                  <span className="pl-link-action" onClick={() => iniciarEdicaoMeta(d.etapa)} data-meta-etapa={metaDefinida(d.meta) ? 'definida' : 'vazia'}>{metaDefinida(d.meta) ? `${rotuloMetaPL(d.meta)} ✎` : 'Definir meta ✎'}</span>
                 ) : (
                   <span>{rotuloMetaPL(d.meta)}</span>
                 )}
