@@ -8,6 +8,8 @@ import { tamanhoDoBanco } from '../lib/bancoDisponivel'
 import { ErroEspaco, liberarEspaco, painelEspaco } from '../lib/espacoBanco'
 import { ErroAuditoria, auditarDados, vendasDoMes, corrigirDados, desfazerCorrecao } from '../lib/auditoriaDados'
 import { conferirMeses } from '../lib/conferenciaMensal'
+import { ErroCopia, iniciarExportacao, iniciarRestauracao, linkDaCopia, listarCopias, manifestoDaCopia, restauracaoPermitida, rodadaExportacao, rodadaRestauracao } from '../lib/copiaSeguranca'
+import { ambienteDeTeste } from '../lib/ambiente'
 import { ErroImportacao, descartarImportacao, rodarImportacao, simularImportacao, statusImportacao } from '../lib/importacaoNeon'
 
 const router = Router()
@@ -95,6 +97,51 @@ router.post('/sistema/auditoria/desfazer', ...dono, async (req: Request, res: Re
     if (e instanceof ErroAuditoria) { res.status(e.status).json({ error: e.message }); return }
     throw e
   }
+})
+
+// --- Cópia de segurança e ambiente de teste ---
+function falhaCopia(res: Response, e: unknown) {
+  if (e instanceof ErroCopia) { res.status(e.status).json({ error: e.message }); return }
+  throw e
+}
+
+// Público (sem login): a tela precisa saber se está no ambiente de teste antes de alguém entrar.
+router.get('/sistema/ambiente', (_req: Request, res: Response) => {
+  res.json({ ambiente: ambienteDeTeste() ? 'teste' : 'producao', restauracaoPermitida: restauracaoPermitida() })
+})
+
+router.get('/sistema/copias', ...dono, async (_req: Request, res: Response) => {
+  res.json(await listarCopias())
+})
+// Começa (ou continua a de agora há pouco) e roda a primeira rodada.
+router.post('/sistema/copias', ...dono, async (req: Request, res: Response) => {
+  try {
+    const u = await prisma.proLaboreUsuario.findUnique({ where: { id: req.proLaboreUser!.sub }, select: { nome: true, email: true } })
+    const id = await iniciarExportacao(u?.nome ?? u?.email ?? null)
+    res.json(await rodadaExportacao(id))
+  } catch (e) { falhaCopia(res, e) }
+})
+router.post('/sistema/copias/:id/rodada', ...dono, async (req: Request, res: Response) => {
+  try { res.json(await rodadaExportacao(String(req.params.id))) } catch (e) { falhaCopia(res, e) }
+})
+router.get('/sistema/copias/:id', ...dono, async (req: Request, res: Response) => {
+  const m = await manifestoDaCopia(String(req.params.id))
+  if (!m) { res.status(404).json({ error: 'Cópia não encontrada ou ainda em andamento' }); return }
+  res.json(m)
+})
+// Link temporário (6 h) para restaurar no ambiente de teste. Só aparece na tela de quem pediu.
+router.post('/sistema/copias/:id/link', ...dono, async (req: Request, res: Response) => {
+  try { res.json(await linkDaCopia(String(req.params.id))) } catch (e) { falhaCopia(res, e) }
+})
+
+// Restauração: no ambiente de teste o banco começa vazio (ninguém consegue entrar), então
+// ela não usa login: pede a CHAVE_RESTAURACAO cadastrada na Vercel e depois segue por uma
+// sessão própria. Na produção só funciona com PERMITIR_RESTAURACAO=1.
+router.post('/sistema/copias/restaurar', async (req: Request, res: Response) => {
+  try { res.json(await iniciarRestauracao(String(req.body?.link ?? ''), String(req.body?.chave ?? ''), typeof req.body?.autor === 'string' ? req.body.autor.slice(0, 80) : null)) } catch (e) { falhaCopia(res, e) }
+})
+router.post('/sistema/copias/restaurar/:id/rodada', async (req: Request, res: Response) => {
+  try { res.json(await rodadaRestauracao(String(req.params.id), String(req.headers['x-sessao-restauracao'] ?? ''))) } catch (e) { falhaCopia(res, e) }
 })
 
 export default router

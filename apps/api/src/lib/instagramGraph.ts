@@ -11,6 +11,9 @@
 // segue com as outras — em vez de zerar tudo por causa de uma só.
 
 import { AsyncLocalStorage } from 'async_hooks'
+import { exigirSaidaPermitida } from './ambiente'
+// No ambiente de teste nada chega à Meta (as credenciais copiadas nem são usadas).
+const fetch: typeof globalThis.fetch = (...a) => { exigirSaidaPermitida('Meta'); return globalThis.fetch(...a) }
 
 // Sobrescrevível só pra rodar o sync local contra um servidor simulado.
 const GRAPH_BASE = process.env.INSTAGRAM_GRAPH_BASE ?? 'https://graph.instagram.com'
