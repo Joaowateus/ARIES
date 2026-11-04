@@ -17,6 +17,14 @@ import { gerarPlanoDeCrescimento, MetasCrescimento, MetricasNegocio } from '../l
 import { randomBytes } from 'crypto'
 import { logger } from '../lib/logger'
 import { origemPorCodigo } from '../lib/smAtribuicao'
+import { ErroRegraVenda, alterarFechamento, exigirMesAberto, exigirSemRepetida, fechamentosDoAno, resolverPlaca } from '../lib/regrasVenda'
+
+/** Responde os erros das regras de venda (placa, repetida, mês fechado); devolve true se respondeu. */
+function responderRegraVenda(res: Response, e: unknown) {
+  if (!(e instanceof ErroRegraVenda)) return false
+  res.status(e.status).json({ error: e.message, codigo: e.codigo, ...(e.dados ?? {}) })
+  return true
+}
 import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
@@ -580,6 +588,7 @@ router.delete('/vendedores/:id/acesso', requireProLaboreAuth, requireDono, async
 
 const VENDA_INCLUDE = {
   vendedor: { select: { id: true, nome: true } },
+  lead: { select: { id: true, nomeCliente: true } },
   pagamentoComissao: { select: { id: true, numero: true, pagoEm: true } },
   pagamentoProLabore: { select: { id: true, numero: true, pagoEm: true } },
 } satisfies Prisma.VendaInclude
@@ -606,6 +615,22 @@ const criarVendaSchema = z.object({
   vendedorId: z.string().optional(),
   valorComissao: z.number().min(0, 'Comissão não pode ser negativa').optional(),
   observacao: z.string().optional(),
+  placa: z.string().optional(),
+  confirmarRepetida: z.boolean().optional(),
+})
+
+// Fechamento do mês (só o dono): o mês conferido não aceita venda nova, edição nem exclusão.
+router.get('/vendas/fechamentos', requireProLaboreAuth, requireModulo('vendas', 'VER'), async (req: Request, res: Response) => {
+  const ano = Number(req.query.ano) || new Date().getUTCFullYear()
+  res.json(await fechamentosDoAno(req.proLaboreUser!.sub, ano))
+})
+router.post('/vendas/fechamentos', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const acao = req.body?.acao === 'reabrir' ? 'reabrir' : 'fechar'
+  try {
+    const usuario = await prisma.proLaboreUsuario.findUnique({ where: { id: req.proLaboreUser!.sub }, select: { nome: true, email: true } })
+    await alterarFechamento(req.proLaboreUser!.sub, String(req.body?.mes ?? ''), acao, usuario?.nome ?? usuario?.email ?? null)
+    res.json(await fechamentosDoAno(req.proLaboreUser!.sub, Number(String(req.body.mes).slice(0, 4))))
+  } catch (e) { if (!responderRegraVenda(res, e)) throw e }
 })
 
 router.post('/vendas', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
@@ -651,6 +676,14 @@ router.post('/vendas', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), 
     }
   }
 
+  const dataVenda = new Date(parse.data.data)
+  let placa: string | null
+  try {
+    placa = resolverPlaca(parse.data.placa, parse.data.observacao)
+    await exigirMesAberto(usuarioId, dataVenda)
+    await exigirSemRepetida(usuarioId, { placa, valorVenda, data: dataVenda, vendedorId }, parse.data.confirmarRepetida)
+  } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
+
   // Código do post colado na observação (#P-..., #BIO): a venda fica creditada ao post.
   const origemPost = await origemPorCodigo(usuarioId, parse.data.observacao)
   const venda = await prisma.venda.create({
@@ -658,7 +691,8 @@ router.post('/vendas', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), 
       usuarioId,
       vendedorId,
       ...origemPost,
-      data: new Date(parse.data.data),
+      placa,
+      data: dataVenda,
       valorVenda,
       valorProLabore,
       valorComissao,
@@ -675,6 +709,8 @@ const editarVendaSchema = z.object({
   vendedorId: z.string().nullable().optional(),
   valorComissao: z.number().min(0, 'Comissão não pode ser negativa').nullable().optional(),
   observacao: z.string().optional(),
+  placa: z.string().nullable().optional(),
+  confirmarRepetida: z.boolean().optional(),
 })
 
 router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
@@ -694,6 +730,13 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITA
     res.status(403).json({ error: 'Seu acesso registra só as suas vendas.' })
     return
   }
+  let placaNova = atual.placa
+  try {
+    await exigirMesAberto(usuarioId, atual.data)
+    if (parse.data.placa !== undefined) placaNova = resolverPlaca(parse.data.placa ?? '', parse.data.observacao ?? atual.observacao)
+    else if (!atual.placa && parse.data.observacao !== undefined) placaNova = resolverPlaca(null, parse.data.observacao)
+    if (placaNova && placaNova !== atual.placa) await exigirSemRepetida(usuarioId, { placa: placaNova, valorVenda: atual.valorVenda, data: atual.data, ignorarId: atual.id }, parse.data.confirmarRepetida)
+  } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
 
   if (parse.data.vendedorId) {
     const vendedor = await prisma.vendedor.findFirst({ where: { id: parse.data.vendedorId, usuarioId } })
@@ -754,6 +797,7 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITA
       vendedorId: parse.data.vendedorId === undefined ? atual.vendedorId : parse.data.vendedorId,
       valorComissao: valorComissaoEfetivo ?? null,
       observacao: parse.data.observacao ?? atual.observacao,
+      placa: placaNova,
     },
     include: VENDA_INCLUDE,
   })
@@ -766,6 +810,7 @@ router.delete('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDIT
     res.status(404).json({ error: 'Venda não encontrada' })
     return
   }
+  try { await exigirMesAberto(atual.usuarioId, atual.data) } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
   await prisma.venda.delete({ where: { id: atual.id } })
   // A venda saiu dos comprovantes: refaz o total (ou cancela o comprovante vazio).
   if (atual.pagamentoComissaoId) await recalcularPagamentoComissao(prisma, atual.pagamentoComissaoId)
@@ -1100,6 +1145,8 @@ const converterLeadSchema = z.object({
   valorProLabore: z.number().positive('Valor de pró-labore deve ser positivo'),
   valorComissao: z.number().min(0, 'Comissão não pode ser negativa').optional(),
   observacao: z.string().optional(),
+  placa: z.string().optional(),
+  confirmarRepetida: z.boolean().optional(),
 })
 
 // Fecha um lead gerando a venda correspondente — é a única forma "oficial"
@@ -1150,13 +1197,22 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
     }
   }
 
+  const dataVenda = new Date(parse.data.data)
+  let placa: string | null
+  try {
+    placa = resolverPlaca(parse.data.placa, parse.data.observacao ?? atual.modeloInteresse)
+    await exigirMesAberto(usuarioId, dataVenda)
+    await exigirSemRepetida(usuarioId, { placa, valorVenda, data: dataVenda, vendedorId: atual.vendedorId }, parse.data.confirmarRepetida)
+  } catch (e) { if (responderRegraVenda(res, e)) return; throw e }
+
   const venda = await prisma.venda.create({
     data: {
       usuarioId,
       vendedorId: atual.vendedorId,
+      placa,
       // A venda herda a origem do lead (seção 3.5).
       origem: atual.origem, postCode: atual.postCode, midiaId: atual.midiaId, canalEntrada: atual.canalEntrada,
-      data: new Date(parse.data.data),
+      data: dataVenda,
       valorVenda,
       valorProLabore,
       valorComissao,

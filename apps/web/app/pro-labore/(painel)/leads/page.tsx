@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL } from '@/lib/proLaboreApi'
+import { proLaboreApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
+import { AvisoRepetida, parecidasDoErro } from '../vendas/AvisoRepetida'
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
@@ -246,7 +247,8 @@ export default function ProLaboreLeadsPage() {
   const [erro, setErro] = useState('')
 
   const [convertendoId, setConvertendoId] = useState<string | null>(null)
-  const [convertForm, setConvertForm] = useState({ data: hojeIso(), valorVenda: '', valorProLabore: '', valorComissao: '', observacao: '' })
+  const [convertRepetida, setConvertRepetida] = useState<{ mensagem: string; parecidas: VendaParecida[] } | null>(null)
+  const [convertForm, setConvertForm] = useState({ data: hojeIso(), valorVenda: '', valorProLabore: '', valorComissao: '', observacao: '', placa: '' })
   const [convertErro, setConvertErro] = useState('')
   const [convertSalvando, setConvertSalvando] = useState(false)
 
@@ -552,7 +554,8 @@ export default function ProLaboreLeadsPage() {
   function abrirConversao(lead: Lead) {
     if (!isDono) return
     setConvertendoId(lead.id)
-    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(tetoProLaboreEfetivo(lead)), valorComissao: lead.vendedorId ? String(tetoComissaoEfetivo(lead)) : '', observacao: '' })
+    setConvertForm({ data: hojeIso(), valorVenda: '', valorProLabore: String(tetoProLaboreEfetivo(lead)), valorComissao: lead.vendedorId ? String(tetoComissaoEfetivo(lead)) : '', observacao: '', placa: '' })
+    setConvertRepetida(null)
     setConvertErro('')
   }
 
@@ -568,9 +571,9 @@ export default function ProLaboreLeadsPage() {
     setConvertForm(f => ({ ...f, valorVenda: valor, valorProLabore: String(sugestao) }))
   }
 
-  async function converter() {
+  async function converter(confirmarRepetida = false) {
     if (!convertendoId) return
-    setConvertErro('')
+    setConvertErro(''); setConvertRepetida(null)
     setConvertSalvando(true)
     try {
       await proLaboreApi.leads.converter(convertendoId, {
@@ -579,11 +582,14 @@ export default function ProLaboreLeadsPage() {
         valorProLabore: Number(convertForm.valorProLabore),
         valorComissao: leadConvertendo?.vendedorId && convertForm.valorComissao !== '' ? Number(convertForm.valorComissao) : undefined,
         observacao: convertForm.observacao || undefined,
+        placa: convertForm.placa || undefined, confirmarRepetida,
       })
       fecharConversao()
       carregar()
     } catch (err: unknown) {
-      setConvertErro(err instanceof Error ? err.message : 'Erro ao converter lead em venda')
+      const aviso = parecidasDoErro(err)
+      if (aviso) setConvertRepetida(aviso)
+      else setConvertErro(err instanceof Error ? err.message : 'Erro ao converter lead em venda')
     } finally {
       setConvertSalvando(false)
     }
@@ -1190,13 +1196,18 @@ export default function ProLaboreLeadsPage() {
                 </div>
               )}
               <div className="pl-field">
+                <label>Placa da moto</label>
+                <input className="pl-input" value={convertForm.placa} onChange={e => setConvertForm(f => ({ ...f, placa: e.target.value.toUpperCase() }))} placeholder="ABC1D23" maxLength={8} data-campo-placa-conversao />
+              </div>
+              <div className="pl-field">
                 <label>Observação (opcional)</label>
                 <input className="pl-input" value={convertForm.observacao} onChange={e => setConvertForm(f => ({ ...f, observacao: e.target.value }))} placeholder={`Convertido do lead: ${leadConvertendo.nomeCliente}`} />
               </div>
             </div>
             {convertErro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{convertErro}</div>}
+            {convertRepetida && <AvisoRepetida aviso={convertRepetida} ocupado={convertSalvando} onCancelar={() => setConvertRepetida(null)} onConfirmar={() => void converter(true)} />}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button type="button" className="pl-btn pl-btn-primary" disabled={convertSalvando} onClick={converter}>
+              <button type="button" className="pl-btn pl-btn-primary" disabled={convertSalvando} onClick={() => void converter()}>
                 {convertSalvando ? 'Convertendo...' : 'Confirmar venda'}
               </button>
               <button type="button" className="pl-btn pl-btn-ghost" onClick={fecharConversao}>Cancelar</button>

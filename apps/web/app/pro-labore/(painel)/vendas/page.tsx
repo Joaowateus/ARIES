@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { temAcesso, proLaboreApi, Venda, ParametroLiquidez, Vendedor, type TipoPagamentoVenda } from '@/lib/proLaboreApi'
+import { temAcesso, proLaboreApi, Venda, ParametroLiquidez, Vendedor, type TipoPagamentoVenda, type VendaParecida } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
 import RegistrarPagamento, { abrirComprovante, valorPago } from './RegistrarPagamento'
+import { AvisoRepetida, parecidasDoErro } from './AvisoRepetida'
+import { FechamentoMes } from './FechamentoMes'
 
 const MESES_MAP: Record<string, number> = {
   jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
@@ -65,8 +67,10 @@ export default function ProLaboreVendasPage() {
   const [salvando, setSalvando] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
-  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '' })
+  const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '' })
 
+  const [repetida, setRepetida] = useState<{ mensagem: string; parecidas: VendaParecida[] } | null>(null)
+  const [mesesFechados, setMesesFechados] = useState<Set<string>>(new Set())
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [apagandoSelecao, setApagandoSelecao] = useState(false)
 
@@ -120,9 +124,9 @@ export default function ProLaboreVendasPage() {
     })
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setErro('')
+  async function handleSubmit(e: React.FormEvent | null, confirmarRepetida = false) {
+    e?.preventDefault()
+    setErro(''); setRepetida(null)
     setSalvando(true)
     try {
       const valorVenda = Number(form.valorVenda)
@@ -134,15 +138,18 @@ export default function ProLaboreVendasPage() {
           valorVenda, valorProLabore, vendedorId: form.vendedorId || null,
           valorComissao: form.vendedorId ? valorComissao ?? 0 : null,
           observacao: form.observacao || undefined,
+          placa: form.placa || null, confirmarRepetida,
         })
       } else {
-        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, vendedorId, valorComissao, observacao: form.observacao || undefined })
+        await proLaboreApi.vendas.criar({ data: form.data, valorVenda, valorProLabore, vendedorId, valorComissao, observacao: form.observacao || undefined, placa: form.placa || undefined, confirmarRepetida })
       }
-      setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '' })
+      setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '' })
       setEditandoId(null)
       carregar()
     } catch (err: unknown) {
-      setErro(err instanceof Error ? err.message : 'Erro ao salvar venda')
+      const aviso = parecidasDoErro(err)
+      if (aviso) setRepetida(aviso)
+      else setErro(err instanceof Error ? err.message : 'Erro ao salvar venda')
     } finally {
       setSalvando(false)
     }
@@ -157,12 +164,13 @@ export default function ProLaboreVendasPage() {
       vendedorId: v.vendedorId ?? '',
       valorComissao: v.valorComissao != null ? String(v.valorComissao) : '',
       observacao: v.observacao ?? '',
+      placa: v.placa ?? '',
     })
   }
 
   function cancelarEdicao() {
     setEditandoId(null)
-    setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '' })
+    setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '' })
   }
 
   async function remover(id: string) {
@@ -379,6 +387,8 @@ export default function ProLaboreVendasPage() {
     <div>
       <PageHeader eyebrow="Gestão" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} actions={<FechamentoDiario modulo="VENDAS" />} />
 
+      {isDono && <FechamentoMes podeAlterar={usuario?.papel === 'DONO'} onMudou={setMesesFechados} />}
+
       {podeEditar && <>
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-title" style={{ marginBottom: 14 }}>{editandoId ? 'Editar venda' : 'Nova venda'}</div>
@@ -411,12 +421,18 @@ export default function ProLaboreVendasPage() {
             </div>
           )}
           <div className="pl-field">
+            <label>Placa da moto</label>
+            <input type="text" className="pl-input" value={form.placa} onChange={e => setForm(f => ({ ...f, placa: e.target.value.toUpperCase() }))} placeholder="ABC1D23" maxLength={8} data-campo-placa />
+            <span className="pl-hint">Avisa se a mesma moto já foi lançada</span>
+          </div>
+          <div className="pl-field">
             <label>Observação (opcional)</label>
             <input type="text" className="pl-input" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: cliente / modelo" />
           </div>
         </div>
 
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{erro}</div>}
+        {repetida && <AvisoRepetida aviso={repetida} ocupado={salvando} onCancelar={() => setRepetida(null)} onConfirmar={() => void handleSubmit(null, true)} />}
 
         <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
           <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : editandoId ? 'Salvar alterações' : 'Registrar venda'}</button>
@@ -605,7 +621,10 @@ export default function ProLaboreVendasPage() {
                     <td>
                       <input type="checkbox" checked={selecionadas.has(v.id)} onChange={() => toggleSelecao(v.id)} style={{ accentColor: 'var(--pl-accent-3)' }} />
                     </td>
-                    <td>{formatData(v.data)}</td>
+                    <td>
+                      {formatData(v.data)}
+                      {!v.lead && <div className="pl-hint" style={{ fontSize: 11 }} title="Lançada direto em Vendas, sem lead no CRM">sem lead</div>}
+                    </td>
                     <td>{v.vendedor?.nome ?? '—'}</td>
                     <td className="pl-right">{formatMoeda(v.valorVenda)}</td>
                     <td className="pl-right" style={{ color: 'var(--pl-accent-3)', fontWeight: 700 }}>{formatMoeda(v.valorProLabore)}</td>
@@ -613,10 +632,12 @@ export default function ProLaboreVendasPage() {
                     <td className="pl-right" style={{ color: 'var(--pl-accent-4)', fontWeight: 700 }}>{v.valorComissao != null ? formatMoeda(v.valorComissao) : '—'}</td>
                     <td className="pl-cms-celula">{celulaPagamento('COMISSAO', v)}</td>
                     <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore - (v.valorComissao ?? 0))}</td>
-                    <td>{v.observacao || '—'}</td>
+                    <td>{v.placa && <span className="pl-chip" style={{ marginRight: 6 }}>{v.placa}</span>}{v.observacao || (v.placa ? '' : '—')}</td>
                     <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
-                      <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>
-                      <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
+                      {mesesFechados.has(v.data.slice(0, 7)) ? <span className="pl-hint" title="Mês fechado: reabra em Fechamento do mês para mudar">Mês fechado</span> : <>
+                        <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>
+                        <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
+                      </>}
                     </td>
                   </tr>
                 ))}

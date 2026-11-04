@@ -1202,6 +1202,9 @@ model Venda {
   postCode             String?
   midiaId              String?
   canalEntrada         String?
+  // Placa da moto (ABC1234 ou ABC1D23): a mesma placa vendida duas vezes em
+  // pouco tempo é aviso de venda lançada em dobro.
+  placa                String?
   criadoEm             DateTime @default(now())
   atualizadoEm         DateTime @updatedAt
 
@@ -1212,6 +1215,7 @@ model Venda {
   lead               Lead?
 
   @@index([usuarioId, data])
+  @@index([usuarioId, placa])
   @@index([vendedorId])
   @@index([pagamentoComissaoId])
   @@index([pagamentoProLaboreId])
@@ -4229,4 +4233,18 @@ model CorrecaoAuditoria {
 
   @@index([usuarioId, criadoEm])
   @@map("pro_labore_correcoes_auditoria")
+}
+
+// Fechamento do mês de vendas: conferido e fechado, o mês não aceita venda
+// nova, edição nem exclusão até ser reaberto (cada fechar/reabrir fica no histórico).
+model FechamentoMesVendas {
+  id        String    @id @default(cuid())
+  usuarioId String
+  mes       String // AAAA-MM
+  fechadoEm DateTime?
+  historico Json      @default("[]")
+  criadoEm  DateTime  @default(now())
+
+  @@unique([usuarioId, mes])
+  @@map("pro_labore_fechamentos_mes_vendas")
 }
