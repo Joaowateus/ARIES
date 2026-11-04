@@ -143,7 +143,7 @@ function NovaAnalise({ follow, lead, onMudou, onFechar }: { follow: FollowLead; 
   }
   const reabrir = () => rodar(async () => {
     const r = await proLaboreApi.follows.reabrirCredito(follow.id)
-    router.push(`/pro-labore/assistente?aba=whatsapp&conversa=${r.conversaId}&vendedor=${r.vendedorId}`)
+    router.push(`/pro-labore/whatsapp?conversa=${r.conversaId}&vendedor=${r.vendedorId}`)
   }, () => undefined)
   const remarcar = () => rodar(() => proLaboreApi.assistente.novaAnalise(ctx!.conversaId, 30))
 

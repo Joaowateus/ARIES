@@ -1,15 +1,23 @@
 'use client'
 
-// Assistente Comercial. Para a gestão (dono e supervisor) é a Central de
-// Inteligência da operação, com o assistente do WhatsApp como uma das abas;
-// para o vendedor continua sendo o assistente do próprio WhatsApp.
+// Central de Inteligência da operação (gestão), no item Análise do menu.
+// O assistente do WhatsApp ganhou a própria tela (/pro-labore/whatsapp): o
+// vendedor e os links antigos (?aba=whatsapp) vão para lá.
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { Central } from './_central/Central'
-import { WhatsApp } from './_componentes/WhatsApp'
 
 export default function ProLaboreAssistentePage() {
   const { usuario } = useProLaboreAuth()
-  if (!usuario) return <div className="pl-hint">Carregando…</div>
-  if (usuario.papel === 'DONO' || usuario.papel === 'SUPERVISOR') return <Central />
-  return <WhatsApp />
+  const router = useRouter()
+  const gestao = usuario?.papel === 'DONO' || usuario?.papel === 'SUPERVISOR'
+  const paraWhatsApp = !!usuario && (!gestao || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('aba') === 'whatsapp'))
+  useEffect(() => {
+    if (!paraWhatsApp) return
+    const q = new URLSearchParams(window.location.search); q.delete('aba')
+    router.replace(`/pro-labore/whatsapp${q.toString() ? `?${q}` : ''}`)
+  }, [paraWhatsApp, router])
+  if (!usuario || paraWhatsApp) return <div className="pl-hint">Carregando…</div>
+  return <Central />
 }

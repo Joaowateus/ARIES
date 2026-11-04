@@ -31,7 +31,6 @@ const ABAS: Array<{ valor: AbaCentral; rotulo: string }> = [
   { valor: 'reuniao', rotulo: 'Reunião' },
   { valor: 'fechamentos', rotulo: 'Fechamentos' },
   { valor: 'premissas', rotulo: 'Premissas' },
-  { valor: 'whatsapp', rotulo: 'WhatsApp' },
 ]
 // Abas que leem o retrato da Central (as outras buscam o que precisam).
 const USA_CENTRAL: AbaCentral[] = ['visao', 'metas', 'aquisicao', 'departamentos', 'plano', 'premissas']
@@ -74,8 +73,8 @@ export function Central() {
   return (
     <div className="ic">
       <PageHeader
-        eyebrow="Vendas · Central de inteligência"
-        title="Assistente Comercial"
+        eyebrow="Análise"
+        title="Central de Inteligência"
         subtitle="O cérebro analítico da operação: lê a Jornada de compra, Tráfego, Social Media, Vendas, Financeiro e Equipe, compara com as metas, explica onde está o gargalo e acompanha o plano de ação até o resultado"
         actions={<BotaoPdf versoes={[
           { rotulo: 'Completo (gestão)', descricao: 'Tudo, com o financeiro do mês', montar: () => montarPdf(true) },

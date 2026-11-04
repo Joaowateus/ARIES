@@ -15,69 +15,86 @@ import type { LigacaoAgora } from '@/lib/proLaboreApi'
 
 // `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
 // paraEquipe: aparece para toda a equipe mesmo sem o módulo (a página mostra a versão pessoal).
-interface NavItem { href: string; label: string; icon: NavIconName; modulo?: string; donoOnly?: boolean; hideFromVendedor?: boolean; paraEquipe?: boolean }
+// gestao: só dono e supervisor (a página é da gestão, mesmo com o módulo liberado).
+interface NavPagina { href: string; label: string; modulo?: string; donoOnly?: boolean; hideFromVendedor?: boolean; paraEquipe?: boolean; gestao?: boolean }
+// Item do menu: uma página só ou várias páginas juntas, que viram abas no topo da tela.
+interface NavItem extends NavPagina { icon: NavIconName; abas?: NavPagina[] }
 interface NavGroup { label: string | null; items: NavItem[] }
 
-// Abas organizadas por trabalho (antes, "Operação" juntava 11 itens):
-// Vendas (o dia a dia comercial), Rotina, Marketing, Gestão (números e
-// dinheiro), Equipe e Sistema.
+// Menu enxuto (fase 6): o que é do mesmo trabalho fica num item só, com abas
+// no topo — CRM (Funil e Perdidos), Meu dia (Agenda e Ligações), Análise
+// (Central de Inteligência, Plano de Crescimento e Indicadores) e Equipe
+// (Vendedores, Acessos e Ocorrências). Os endereços antigos continuam valendo.
 const NAV_GROUPS: NavGroup[] = [
   { label: null, items: [
     { href: '/pro-labore', label: 'Dashboard', icon: 'home', modulo: 'painel' },
   ] },
   { label: 'Vendas', items: [
-    { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm' },
-    // Lembretes de ligação (avulsos e cadências) com auditoria; mesmo escopo do CRM.
-    { href: '/pro-labore/ligacoes', label: 'Ligações', icon: 'phone', modulo: 'crm' },
+    { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm', abas: [
+      { href: '/pro-labore/leads', label: 'Funil', modulo: 'crm' },
+      { href: '/pro-labore/reativacao', label: 'Perdidos (Reativação)', modulo: 'crm' },
+    ] },
+    // Agenda do dia e os lembretes de ligação (avulsos e cadências), lado a lado.
+    { href: '/pro-labore/agenda', label: 'Meu dia', icon: 'calendar', abas: [
+      { href: '/pro-labore/agenda', label: 'Agenda', modulo: 'agenda' },
+      { href: '/pro-labore/ligacoes', label: 'Ligações', modulo: 'crm' },
+    ] },
+    // Cada vendedor tem o próprio assistente, ligado ao próprio número (escopo no backend).
+    { href: '/pro-labore/whatsapp', label: 'WhatsApp', icon: 'chat', modulo: 'assistente' },
     // Cada pessoa tem o próprio copiloto (o escopo é feito no backend); o dono vê o da equipe.
-    { href: '/pro-labore/copiloto', label: 'Copiloto Comercial', icon: 'spark', modulo: 'copiloto' },
-    // Sem donoOnly/hideFromVendedor de propósito — cada vendedor tem o
-    // próprio assistente, ligado ao próprio número, então todo mundo
-    // precisa enxergar a própria aba (o escopo por pessoa é feito no backend).
-    { href: '/pro-labore/assistente', label: 'Assistente Comercial', icon: 'chat', modulo: 'assistente' },
-    { href: '/pro-labore/reativacao', label: 'Reativação', icon: 'refresh', modulo: 'crm' },
+    { href: '/pro-labore/copiloto', label: 'Copiloto', icon: 'spark', modulo: 'copiloto' },
   ] },
-  { label: 'Rotina', items: [
-    { href: '/pro-labore/agenda', label: 'Agenda', icon: 'calendar', modulo: 'agenda' },
-    // Sem donoOnly/hideFromVendedor: bloco pessoal de reuniões/anotações,
-    // cada um só vê o próprio (escopo feito no backend).
-    { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic', modulo: 'reunioes' },
-    { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook', modulo: 'anotacoes' },
+  { label: 'Gestão', items: [
+    { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', modulo: 'vendas', donoOnly: true },
+    // Salários, investimentos, custos e outros gastos, com recibo.
+    { href: '/pro-labore/financeiro', label: 'Financeiro', icon: 'wallet', modulo: 'financeiro', donoOnly: true },
+    { href: '/pro-labore/assistente', label: 'Análise', icon: 'compass', abas: [
+      { href: '/pro-labore/assistente', label: 'Central de Inteligência', modulo: 'assistente', gestao: true },
+      { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', modulo: 'planoCrescimento', donoOnly: true },
+      { href: '/pro-labore/indicadores', label: 'Indicadores', modulo: 'indicadores', donoOnly: true },
+    ] },
   ] },
   { label: 'Marketing', items: [
     // Sem donoOnly: cada pessoa conecta o próprio Instagram e só vê o dela.
     { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', modulo: 'socialMedia' },
     { href: '/pro-labore/trafego', label: 'Tráfego', icon: 'funnel', modulo: 'trafego', donoOnly: true },
   ] },
-  { label: 'Gestão', items: [
-    { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', modulo: 'vendas', donoOnly: true },
-    // Salários, investimentos, custos e outros gastos, com recibo.
-    { href: '/pro-labore/financeiro', label: 'Financeiro', icon: 'wallet', modulo: 'financeiro', donoOnly: true },
-    { href: '/pro-labore/indicadores', label: 'Indicadores', icon: 'chart', modulo: 'indicadores', donoOnly: true },
-    { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', icon: 'compass', modulo: 'planoCrescimento', donoOnly: true },
+  { label: 'Rotina', items: [
+    // Bloco pessoal de reuniões/anotações, cada um só vê o próprio (escopo no backend).
+    { href: '/pro-labore/reunioes', label: 'Reuniões', icon: 'mic', modulo: 'reunioes' },
+    { href: '/pro-labore/anotacoes', label: 'Anotações', icon: 'notebook', modulo: 'anotacoes' },
   ] },
   { label: 'Equipe', items: [
-    { href: '/pro-labore/vendedores', label: 'Vendedores', icon: 'users', modulo: 'vendedores', donoOnly: true },
-    // Ocorrências: a gestão é do dono e de quem tem o módulo; o resto da
-    // equipe abre a mesma aba e vê só as próprias (Minhas ocorrências).
-    { href: '/pro-labore/ocorrencias', label: 'Ocorrências', icon: 'flag', modulo: 'ocorrencias', paraEquipe: true },
-    // Tela 07 da especificação do Social Media: o que o papel enxerga e o convite.
-    { href: '/pro-labore/equipe/acessos', label: 'Acessos e permissões', icon: 'shield', donoOnly: true },
+    { href: '/pro-labore/vendedores', label: 'Equipe', icon: 'users', abas: [
+      { href: '/pro-labore/vendedores', label: 'Vendedores', modulo: 'vendedores', donoOnly: true },
+      { href: '/pro-labore/equipe/acessos', label: 'Acessos e permissões', donoOnly: true },
+      // A gestão é do dono e de quem tem o módulo; o resto da equipe vê só as próprias.
+      { href: '/pro-labore/ocorrencias', label: 'Ocorrências', modulo: 'ocorrencias', paraEquipe: true },
+    ] },
   ] },
   { label: 'Sistema', items: [
     { href: '/pro-labore/configuracoes', label: 'Configurações', icon: 'gear', modulo: 'configuracoes', donoOnly: true },
   ] },
 ]
+// Nomes antigos que a busca (Ctrl+K) continua achando.
+const APELIDOS: Record<string, string[]> = {
+  '/pro-labore/whatsapp': ['Assistente Comercial'],
+  '/pro-labore/copiloto': ['Copiloto Comercial'],
+  '/pro-labore/reativacao': ['Reativação'],
+  '/pro-labore/assistente': ['Assistente Comercial (gestão)'],
+}
+const paginasDo = (item: NavItem): NavPagina[] => item.abas ?? [item]
+const bate = (pathname: string, href: string) => pathname === href || (href !== '/pro-labore' && pathname.startsWith(`${href}/`))
 
 // Aviso no topo quando o acesso à área é só para ver.
 const AVISO_SO_VER: Record<string, string> = {
   agenda: 'Você pode ver e concluir as suas tarefas. Criar e mudar tarefas depende do gestor.',
 }
 
-// Módulo da página aberta: o item do menu com o caminho mais longo que bate.
-function itemDaPagina(pathname: string): NavItem | undefined {
-  return NAV_GROUPS.flatMap(g => g.items)
-    .filter(i => pathname === i.href || (i.href !== '/pro-labore' && pathname.startsWith(`${i.href}/`)))
+// Módulo da página aberta: a página do menu com o caminho mais longo que bate.
+function itemDaPagina(pathname: string): NavPagina | undefined {
+  return NAV_GROUPS.flatMap(g => g.items.flatMap(paginasDo))
+    .filter(i => bate(pathname, i.href))
     .sort((a, b) => b.href.length - a.href.length)[0]
 }
 
@@ -217,9 +234,10 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   // Acessos da equipe: o menu mostra só os módulos liberados para esse login.
   // Sem o mapa (sessão antiga em cache), vale a regra fixa de antes.
   const acessos = isDono ? null : usuario.acessos ?? null
-  const nivelDe = (item?: NavItem) => (!item?.modulo || !acessos ? null : acessos[item.modulo] ?? 'NENHUM')
+  const nivelDe = (item?: NavPagina) => (!item?.modulo || !acessos ? null : acessos[item.modulo] ?? 'NENHUM')
   const daEquipe = usuario.papel === 'VENDEDOR' || usuario.papel === 'SUPERVISOR'
-  const podeVerItem = (item: NavItem) => {
+  const podeVerItem = (item: NavPagina) => {
+    if (item.gestao && !isDono && usuario.papel !== 'SUPERVISOR') return false
     if (isDono) return true
     if (item.paraEquipe && daEquipe) return true
     if (acessos) return item.modulo ? nivelDe(item) !== 'NENHUM' : !item.donoOnly
@@ -232,12 +250,25 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const grupos = [
     // Social Media: volta para o espaço dele, acima das ferramentas liberadas.
     ...(usuario.papel === 'SOCIAL_MEDIA' ? [{ label: null, items: [{ href: '/pro-labore/sm', label: 'Social Media', icon: 'at' as NavIconName }] }] : []),
-    ...NAV_GROUPS.map(grupo => ({ ...grupo, items: grupo.items.filter(podeVerItem) })),
+    ...NAV_GROUPS.map(grupo => ({
+      ...grupo,
+      // Item com abas: aparece se alguma aba é liberada e abre na primeira liberada.
+      items: grupo.items.flatMap((item): NavItem[] => {
+        if (!item.abas) return podeVerItem(item) ? [item] : []
+        const abas = item.abas.filter(podeVerItem)
+        return abas.length ? [{ ...item, href: abas[0].href, abas }] : []
+      }),
+    })),
   ].filter(grupo => grupo.items.length > 0)
   const itensVisiveis = grupos.flatMap(g => g.items)
-  const paginaAtual = itensVisiveis.find(item => item.href === pathname)
-  const grupoAtual = grupos.find(g => g.items.some(item => item.href === itemAtual?.href))?.label ?? null
-  const podeCrm = itensVisiveis.some(item => item.href === '/pro-labore/leads')
+  const paginasVisiveis = itensVisiveis.flatMap(paginasDo)
+  const itemDoMenuAtual = itemAtual ? itensVisiveis.find(i => paginasDo(i).some(p => p.href === itemAtual.href)) : undefined
+  const ativo = (item: NavItem) => item === itemDoMenuAtual
+  const paginaAtual = itemAtual && bate(pathname, itemAtual.href) ? paginasVisiveis.find(p => p.href === itemAtual.href) : undefined
+  const grupoAtual = grupos.find(g => g.items.includes(itemDoMenuAtual as NavItem))?.label ?? null
+  const abasDoTopo = itemDoMenuAtual?.abas && itemDoMenuAtual.abas.length > 1 ? itemDoMenuAtual.abas : null
+  const temPagina = (item: NavItem, href: string) => paginasDo(item).some(p => p.href === href)
+  const podeCrm = paginasVisiveis.some(item => item.href === '/pro-labore/leads')
   const abrirPaleta = () => { setMenuAberto(false); window.dispatchEvent(new Event('pl-abrir-paleta')) }
   const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : usuario.papel === 'SOCIAL_MEDIA' ? 'social media' : null
 
@@ -288,7 +319,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`pl-sidebar-link ${pathname === item.href || (item.href !== '/pro-labore' && pathname.startsWith(`${item.href}/`)) ? 'active' : ''}`}
+                    className={`pl-sidebar-link ${ativo(item) ? 'active' : ''}`}
                     title={sidebarColapsada ? item.label : undefined}
                   >
                     <NavIcon name={item.icon} />
@@ -299,10 +330,10 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                     {item.href === '/pro-labore/social-media' && avisosSocial.length > 0 && (
                       <span className="pl-nav-alerta" title={avisosSocial.join(' · ')} aria-label={`${avisosSocial.length} ${avisosSocial.length === 1 ? 'aviso' : 'avisos'} do Instagram`}>!</span>
                     )}
-                    {item.href === '/pro-labore/leads' && followsDia.atrasados + followsDia.hoje > 0 && (
+                    {temPagina(item, '/pro-labore/leads') && followsDia.atrasados + followsDia.hoje > 0 && (
                       <span className={`pl-nav-pedidos ${followsDia.atrasados > 0 ? 'pl-nav-follow-atrasado' : ''}`} title={[followsDia.atrasados && `${followsDia.atrasados} follow${followsDia.atrasados > 1 ? 's' : ''} atrasado${followsDia.atrasados > 1 ? 's' : ''}`, followsDia.hoje && `${followsDia.hoje} para hoje`].filter(Boolean).join(' · ')} data-follows-menu>{followsDia.atrasados + followsDia.hoje}</span>
                     )}
-                    {item.href === '/pro-labore/ligacoes' && ligacoesDia.atrasadas + ligacoesDia.hoje > 0 && (
+                    {temPagina(item, '/pro-labore/ligacoes') && ligacoesDia.atrasadas + ligacoesDia.hoje > 0 && (
                       <span className={`pl-nav-pedidos ${ligacoesDia.atrasadas > 0 ? 'pl-nav-follow-atrasado' : ''}`} title={[ligacoesDia.atrasadas && `${ligacoesDia.atrasadas} atrasada${ligacoesDia.atrasadas > 1 ? 's' : ''}`, ligacoesDia.hoje && `${ligacoesDia.hoje} para hoje`].filter(Boolean).join(' · ')} data-ligacoes-menu>{ligacoesDia.atrasadas + ligacoesDia.hoje}</span>
                     )}
                     {item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 && pedidosReuniao > 0 && (
@@ -332,7 +363,11 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
       </aside>
 
       {menuAberto && <div className="pl-sidebar-backdrop" onClick={() => setMenuAberto(false)} />}
-      <PaletaComandos itens={itensVisiveis.map(({ href, label }) => ({ href, label }))} podeCrm={podeCrm} />
+      <PaletaComandos itens={[
+        ...itensVisiveis.map(({ href, label }) => ({ href, label })),
+        ...itensVisiveis.flatMap(i => (i.abas && i.abas.length > 1 ? i.abas.map(a => ({ href: a.href, label: `${i.label} · ${a.label}` })) : [])),
+        ...paginasVisiveis.flatMap(p => (APELIDOS[p.href] ?? []).map(label => ({ href: p.href, label }))),
+      ]} podeCrm={podeCrm} />
       <AvisoLigacao itens={ligacoesAgora} onMudou={() => setVersaoBarra(v => v + 1)} />
 
       <div className="pl-main">
@@ -342,7 +377,8 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
           </button>
           <div className="pl-breadcrumb">
             <span>{grupoAtual ?? 'Pró-Labore'}</span>
-            {paginaAtual && <><span aria-hidden="true">/</span><b>{paginaAtual.label}</b></>}
+            {itemDoMenuAtual && <><span aria-hidden="true">/</span><b>{itemDoMenuAtual.label}</b></>}
+            {abasDoTopo && paginaAtual && <><span aria-hidden="true">/</span><b>{paginaAtual.label}</b></>}
           </div>
           <div className="pl-topbar-acoes">
             <button type="button" className="pl-topo-busca" onClick={abrirPaleta} aria-label="Buscar aba, lead ou ação" data-abrir-paleta>
@@ -365,6 +401,16 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
               {isDono && <AvisoBanco />}
               {nivelAtual === 'VER' && itemAtual?.modulo !== 'painel' && (
                 <div className="pl-alert pl-so-ver" role="status">{AVISO_SO_VER[itemAtual!.modulo!] ?? `Seu acesso a ${itemAtual!.label} é só para ver: dá para consultar, mas não mudar nada.`}</div>
+              )}
+              {abasDoTopo && (
+                <nav className="pl-hub-abas" aria-label={itemDoMenuAtual!.label} data-abas-topo>
+                  {abasDoTopo.map(a => (
+                    <Link key={a.href} href={a.href} className={a.href === itemAtual?.href ? 'ativo' : ''} aria-current={a.href === itemAtual?.href ? 'page' : undefined}>
+                      {a.label}
+                      {a.href === '/pro-labore/ligacoes' && ligacoesDia.atrasadas + ligacoesDia.hoje > 0 && <span className="pl-hub-abas-n">{ligacoesDia.atrasadas + ligacoesDia.hoje}</span>}
+                    </Link>
+                  ))}
+                </nav>
               )}
               {children}
             </>
