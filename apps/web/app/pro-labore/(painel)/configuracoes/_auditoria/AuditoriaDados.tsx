@@ -27,6 +27,7 @@ export function AuditoriaDados() {
   const [mes, setMes] = useState('')
   const [marcados, setMarcados] = useState<Set<string>>(new Set())
   const [dataAntiga, setDataAntiga] = useState<Set<string>>(new Set())
+  const [inverter, setInverter] = useState<Set<string>>(new Set())
   const [limite, setLimite] = useState(POR_PAGINA)
   const [ocupado, setOcupado] = useState<'corrigir' | 'desfazer' | null>(null)
   const [andamento, setAndamento] = useState<string | null>(null)
@@ -39,7 +40,7 @@ export function AuditoriaDados() {
       const d = await proLaboreApi.sistema.auditoria.ver()
       setDados(d)
       setMarcados(new Set(d.achados.filter(a => a.sugerido).map(a => a.chave)))
-      setDataAntiga(new Set())
+      setDataAntiga(new Set()); setInverter(new Set())
       const primeiro = TIPOS.find(t => d.resumo[t.tipo].total > 0)
       if (primeiro) setTipo(primeiro.tipo)
     } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível auditar') }
@@ -67,7 +68,7 @@ export function AuditoriaDados() {
     try {
       for (let i = 0; i < 300 && pendentes.length; i++) {
         try {
-          const r = await proLaboreApi.sistema.auditoria.corrigir({ chaves: pendentes, dataAntiga: [...dataAntiga], correcaoId })
+          const r = await proLaboreApi.sistema.auditoria.corrigir({ chaves: pendentes, dataAntiga: [...dataAntiga], inverter: [...inverter], correcaoId })
           correcaoId = r.correcaoId; feitos += r.feitos; falhas += r.falhas.length; pendentes = r.restantes; tentativas = 0
           setAndamento(`${feitos} de ${chaves.length} corrigidos…`)
         } catch (e) {
@@ -175,14 +176,21 @@ export function AuditoriaDados() {
                       <span className="pl-hint">{a.motivo}</span>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
-                      <Registro titulo={`Sai${a.remover.antigo ? ' (banco antigo)' : ''}`} r={a.remover} tipo={a.tipo} />
-                      {a.manter && <Registro titulo={`Fica${a.manter.antigo ? ' (banco antigo)' : ' (lançado aqui)'}`} r={a.manter} tipo={a.tipo} />}
+                      {(() => {
+                        const inv = inverter.has(a.chave) && !!a.manter
+                        const sai = inv ? a.manter! : a.remover, fica = inv ? a.remover : a.manter
+                        const origem = (r: typeof a.remover) => (r.antigo ? ' (banco antigo)' : ' (lançado aqui)')
+                        return <>
+                          <Registro titulo={`Sai${origem(sai)}`} r={sai} tipo={a.tipo} />
+                          {fica && <Registro titulo={`Fica${origem(fica)}`} r={fica} tipo={a.tipo} />}
+                        </>
+                      })()}
                     </div>
-                    {a.tipo === 'vendas' && a.manter && dia(a.manter.data) !== dia(a.remover.data) && a.confianca !== 'conferir' && (
-                      <div style={{ marginTop: 8, display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 13 }} onClick={e => e.stopPropagation()}>
-                        <span className="pl-hint">Data que fica:</span>
-                        <label><input type="radio" name={`data-${a.chave}`} checked={!dataAntiga.has(a.chave)} onChange={() => setDataAntiga(s => { const n = new Set(s); n.delete(a.chave); return n })} /> {dia(a.manter.data)} (lançada aqui)</label>
-                        <label><input type="radio" name={`data-${a.chave}`} checked={dataAntiga.has(a.chave)} onChange={() => setDataAntiga(s => new Set(s).add(a.chave))} data-usar-data-antiga /> {dia(a.remover.data)} (banco antigo)</label>
+                    {a.tipo === 'vendas' && a.manter && (dia(a.manter.data) !== dia(a.remover.data) || a.manter.valor !== a.remover.valor) && (
+                      <div style={{ marginTop: 8, display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 13 }} onClick={e => e.stopPropagation()} data-qual-fica>
+                        <span className="pl-hint">Qual fica (com o valor e a data dela):</span>
+                        <label><input type="radio" name={`fica-${a.chave}`} checked={!inverter.has(a.chave)} onChange={() => setInverter(s => { const n = new Set(s); n.delete(a.chave); return n })} /> {dia(a.manter.data)} · {brl(a.manter.valor)}{a.manter.antigo ? ' (banco antigo)' : ' (lançada aqui)'}</label>
+                        <label><input type="radio" name={`fica-${a.chave}`} checked={inverter.has(a.chave)} onChange={() => setInverter(s => new Set(s).add(a.chave))} data-fica-outra /> {dia(a.remover.data)} · {brl(a.remover.valor)}{a.remover.antigo ? ' (banco antigo)' : ' (lançada aqui)'}</label>
                       </div>
                     )}
                   </div>
