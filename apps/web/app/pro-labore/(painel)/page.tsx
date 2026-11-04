@@ -9,6 +9,7 @@ import { useCountUp } from '@/lib/useCountUp'
 import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
 import { PageHeader } from '../PageHeader'
 import { FechamentoDiario } from './_fechamento/FechamentoDiario'
+import { AvisoConferencia } from './_conferencia/AvisoConferencia'
 
 // --pl-accent fica de fora da rotação: ele inverte de claro pra escuro (e
 // vice-versa) entre os temas, e o texto do avatar é sempre branco fixo —
@@ -358,6 +359,7 @@ export default function ProLaboreDashboardPage() {
   return (
     <div>
       <PageHeader eyebrow="Visão geral" title="Dashboard" subtitle="Receita, lucro, funil e produção da equipe em um só lugar" />
+      {isDono && <AvisoConferencia />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div className="pl-period-row pl-faixa-rola" ref={faixaMeses}>

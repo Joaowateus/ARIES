@@ -329,6 +329,8 @@ export interface Venda {
   criadoEm: string
 }
 
+export interface PontoConferencia { tipo: string; gravidade: 'alta' | 'media' | 'baixa'; texto: string; onde: 'auditoria' | 'vendas' | 'crm' }
+export interface ConferenciaMensal { geradoEm: string; meses: Array<{ mes: string; fechado: boolean; vendas: number; receita: number; pontos: PontoConferencia[] }>; pendentes: Array<{ mes: string; pontos: number; fechado: boolean }> }
 export interface FechamentoMesVendas { mes: string; fechado: boolean; fechadoEm: string | null; historico: Array<{ acao: 'FECHAR' | 'REABRIR'; em: string; por: string | null }>; vendas: number; receita: number; semLead: number }
 export interface VendaParecida { id: string; data: string; valorVenda: number; placa: string | null; observacao: string | null; vendedor: string | null }
 
@@ -880,6 +882,7 @@ export const proLaboreApi = {
     espaco: () => request<EspacoBanco>('/pro-labore/sistema/espaco'),
     liberarEspaco: (acao: 'eventos' | 'imagens' | 'midias' | 'compactar' | 'vercel') => request<EspacoBanco & { rodada: { feitos: number; restantes: number } }>('/pro-labore/sistema/espaco/liberar', { method: 'POST', body: JSON.stringify({ acao }) }),
     // Importação do histórico do banco antigo (Neon): simulação e rodadas.
+    conferencia: () => request<ConferenciaMensal>('/pro-labore/sistema/conferencia'),
     auditoria: {
       ver: () => request<AuditoriaDados>('/pro-labore/sistema/auditoria'),
       vendasDoMes: (mes: string) => request<{ mes: string; vendas: VendaRevisao[]; fechadosCrm: number }>(`/pro-labore/sistema/auditoria/vendas?mes=${mes}`),
