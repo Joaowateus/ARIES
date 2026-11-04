@@ -4216,3 +4216,17 @@ model ImportacaoNeon {
 
   @@map("pro_labore_importacoes_neon")
 }
+
+// Auditoria dos dados (Configurações): cada correção guarda uma cópia de tudo
+// que removeu ou alterou, para poder desfazer.
+model CorrecaoAuditoria {
+  id         String    @id @default(cuid())
+  usuarioId  String
+  quantidade Int       @default(0)
+  backup     Json
+  criadoEm   DateTime  @default(now())
+  desfeitaEm DateTime?
+
+  @@index([usuarioId, criadoEm])
+  @@map("pro_labore_correcoes_auditoria")
+}

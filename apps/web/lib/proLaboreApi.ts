@@ -871,6 +871,11 @@ export const proLaboreApi = {
     espaco: () => request<EspacoBanco>('/pro-labore/sistema/espaco'),
     liberarEspaco: (acao: 'eventos' | 'imagens' | 'midias' | 'compactar' | 'vercel') => request<EspacoBanco & { rodada: { feitos: number; restantes: number } }>('/pro-labore/sistema/espaco/liberar', { method: 'POST', body: JSON.stringify({ acao }) }),
     // Importação do histórico do banco antigo (Neon): simulação e rodadas.
+    auditoria: {
+      ver: () => request<AuditoriaDados>('/pro-labore/sistema/auditoria'),
+      corrigir: (corpo: { chaves: string[]; dataAntiga: string[]; correcaoId: string | null }) => request<{ correcaoId: string; feitos: number; falhas: Array<{ chave: string; erro: string }>; restantes: string[] }>('/pro-labore/sistema/auditoria/corrigir', { method: 'POST', body: JSON.stringify(corpo) }),
+      desfazer: (correcaoId: string) => request<{ restantes: number }>('/pro-labore/sistema/auditoria/desfazer', { method: 'POST', body: JSON.stringify({ correcaoId }) }),
+    },
     importacaoNeon: {
       ver: () => request<ImportacaoNeon>('/pro-labore/sistema/importacao-neon'),
       simular: () => request<ImportacaoNeon>('/pro-labore/sistema/importacao-neon/simular', { method: 'POST', body: '{}' }),
@@ -3402,6 +3407,11 @@ export interface Reativacao {
   resumo: { total: number; followsPendentes: number; reativados30d: number; porMotivo: Array<{ motivo: MotivoPerda | 'SEM_MOTIVO'; n: number }>; porTemperatura: Array<{ temperatura: Temperatura | 'SEM_TEMPERATURA'; n: number }> }
 }
 
+export type TipoAchadoAuditoria = 'vendas' | 'pagamentos' | 'financeiro' | 'leads'
+export interface RegistroAuditoria { id: string; data: string; valor: number; rotulo: string; detalhe: string | null; antigo: boolean }
+export interface AchadoAuditoria { chave: string; tipo: TipoAchadoAuditoria; remover: RegistroAuditoria; manter: RegistroAuditoria | null; motivo: string; confianca: 'alta' | 'media' | 'conferir'; sugerido: boolean; diasDiferenca: number; mesRemovido: string; mesMantido: string | null }
+export interface MesAuditoria { mes: string; vendas: number; receita: number; proLabore: number; comissao: number; vendasAntigas: number; repetidas: number; receitaRepetida: number; receitaCorrigida: number; proLaboreCorrigido: number; comissaoCorrigida: number; vendasCorrigidas: number; leads: number; leadsRepetidos: number }
+export interface AuditoriaDados { origemConhecida: boolean; geradoEm: string; resumo: Record<TipoAchadoAuditoria, { total: number; sugeridos: number }>; meses: MesAuditoria[]; achados: AchadoAuditoria[]; ultimaCorrecao: { id: string; criadoEm: string; quantidade: number } | null }
 export interface ImportacaoNeonTabela { tabela: string; rotulo: string | null; total: number; jaExistem: number; casados: number; renumerados?: number; novos: number; de: string | null; ate: string | null; colunasIgnoradas: number }
 export interface ImportacaoNeon {
   configurado: boolean
