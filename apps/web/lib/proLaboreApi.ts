@@ -874,7 +874,7 @@ export const proLaboreApi = {
     auditoria: {
       ver: () => request<AuditoriaDados>('/pro-labore/sistema/auditoria'),
       vendasDoMes: (mes: string) => request<{ mes: string; vendas: VendaRevisao[]; fechadosCrm: number }>(`/pro-labore/sistema/auditoria/vendas?mes=${mes}`),
-      corrigir: (corpo: { chaves: string[]; dataAntiga: string[]; correcaoId: string | null }) => request<{ correcaoId: string; feitos: number; falhas: Array<{ chave: string; erro: string }>; restantes: string[] }>('/pro-labore/sistema/auditoria/corrigir', { method: 'POST', body: JSON.stringify(corpo) }),
+      corrigir: (corpo: { chaves: string[]; dataAntiga: string[]; inverter?: string[]; correcaoId: string | null }) => request<{ correcaoId: string; feitos: number; falhas: Array<{ chave: string; erro: string }>; restantes: string[] }>('/pro-labore/sistema/auditoria/corrigir', { method: 'POST', body: JSON.stringify(corpo) }),
       desfazer: (correcaoId: string) => request<{ restantes: number }>('/pro-labore/sistema/auditoria/desfazer', { method: 'POST', body: JSON.stringify({ correcaoId }) }),
     },
     importacaoNeon: {

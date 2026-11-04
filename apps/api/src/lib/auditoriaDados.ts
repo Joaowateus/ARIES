@@ -57,6 +57,12 @@ const dias = (a: Date, b: Date) => Math.abs(a.getTime() - b.getTime()) / 86_400_
 const mesDe = (d: Date) => d.toISOString().slice(0, 7)
 const diaDe = (d: Date) => d.toISOString().slice(0, 10)
 const norm = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/\s+/g, ' ')
+const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+/** Placa (antiga ABC1234 ou Mercosul ABC1D23) escrita na observação da venda. */
+export function placaDe(texto: string | null | undefined) {
+  const m = (texto ?? '').toUpperCase().match(/(?:^|[^A-Z0-9])([A-Z]{3})[-\s]?([0-9][A-Z0-9][0-9]{2})(?![A-Z0-9])/)
+  return m ? m[1] + m[2] : null
+}
 /** Telefone comparável: só dígitos, sem o 55 do Brasil e sem o nono dígito. */
 export function telefoneCanonico(t: string | null | undefined) {
   let d = (t ?? '').replace(/\D/g, '')
@@ -112,8 +118,23 @@ export async function auditarDados(usuarioId: string) {
   const regVenda = (v: (typeof vs)[number]): RegistroAuditoria => ({ id: v.id, data: v.data.toISOString(), valor: v.valorVenda, rotulo: v.vendedor?.nome ?? 'Sem vendedor', detalhe: v.observacao, antigo: v.antigo })
   // Vendedor: mesmo cadastro ou mesmo nome (a vendedora pode ter ficado com dois cadastros); diferente também entra, como provável.
   const mesmoVendedor = (a: (typeof vs)[number], n: (typeof vs)[number]) => !a.vendedorId || !n.vendedorId || a.vendedorId === n.vendedorId || norm(a.vendedor?.nome) === norm(n.vendedor?.nome)
-  const paresVendas = parear(vs, v => String(centavos(v.valorVenda)), () => true, mesmoVendedor)
   const emPar = new Set<string>()
+  // 1º pela placa da moto na observação: a mesma moto vendida duas vezes é a mesma venda, mesmo com valor diferente
+  // (ex.: R$ 24.400 no banco antigo e R$ 26.400 relançada aqui). Fica a que está ligada ao lead do CRM; você pode trocar.
+  const comPlaca = vs.map(v => ({ ...v, placa: placaDe(v.observacao) })).filter(v => v.placa)
+  for (const p of parear(comPlaca, v => v.placa!, () => true, mesmoVendedor)) {
+    emPar.add(p.a.id); emPar.add(p.n.id)
+    const ficaAntiga = !!p.a.lead && !p.n.lead
+    const [sai, fica] = ficaAntiga ? [p.n, p.a] : [p.a, p.n]
+    const mesmoValor = centavos(p.a.valorVenda) === centavos(p.n.valorVenda)
+    const outroMes = mesDe(p.a.data) !== mesDe(p.n.data)
+    achados.push({
+      chave: `vendas:${sai.id}:${fica.id}`, tipo: 'vendas', remover: regVenda(sai), manter: regVenda(fica),
+      motivo: `Mesma moto (placa ${p.a.placa}) no banco antigo e lançada aqui, ${quantosDias(p.d)}${outroMes ? ' (em outro mês)' : ''}${mesmoValor ? '' : `, com valores diferentes (${brl(p.a.valorVenda)} no antigo e ${brl(p.n.valorVenda)} aqui): escolha qual fica`}.${ficaAntiga ? ' Fica a ligada ao lead do CRM.' : ''}`,
+      confianca: p.d <= 7 ? 'alta' : 'media', sugerido: true, diasDiferenca: Math.round(p.d), mesRemovido: mesDe(sai.data), mesMantido: mesDe(fica.data),
+    })
+  }
+  const paresVendas = parear(vs.filter(v => !emPar.has(v.id)), v => String(centavos(v.valorVenda)), () => true, mesmoVendedor)
   for (const p of paresVendas) {
     emPar.add(p.a.id); emPar.add(p.n.id)
     const outroMes = mesDe(p.a.data) !== mesDe(p.n.data)
@@ -294,12 +315,14 @@ async function corrigirUm(tx: Tx, b: Backup, a: Achado, usarDataAntiga: boolean)
   }
 }
 
-export async function corrigirDados(usuarioId: string, entrada: { chaves: string[]; dataAntiga?: string[]; correcaoId?: string | null }, prazoMs = 12_000) {
+export async function corrigirDados(usuarioId: string, entrada: { chaves: string[]; dataAntiga?: string[]; inverter?: string[]; correcaoId?: string | null }, prazoMs = 12_000) {
   const inicio = Date.now()
   const pedidas = new Set(entrada.chaves)
   const dataAntiga = new Set(entrada.dataAntiga ?? [])
   const { achados } = await auditarDados(usuarioId)
-  const fila = achados.filter(a => pedidas.has(a.chave))
+  const inverter = new Set(entrada.inverter ?? [])
+  // "Fica a outra": troca qual sai e qual fica (só em pares de venda).
+  const fila = achados.filter(a => pedidas.has(a.chave)).map(a => (inverter.has(a.chave) && a.tipo === 'vendas' && a.manter ? { ...a, remover: a.manter, manter: a.remover } : a))
   // Revisão manual: vendas que você escolheu tirar na lista do mês (sem par).
   const manuais = [...pedidas].filter(c => c.startsWith('manual:vendas:')).map(c => c.slice('manual:vendas:'.length))
   if (manuais.length) {

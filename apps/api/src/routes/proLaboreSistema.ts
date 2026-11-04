@@ -80,7 +80,8 @@ router.post('/sistema/auditoria/corrigir', ...dono, async (req: Request, res: Re
   const dataAntiga = Array.isArray(req.body?.dataAntiga) ? req.body.dataAntiga.filter((c: unknown) => typeof c === 'string') : []
   if (!chaves.length) { res.status(400).json({ error: 'Escolha ao menos um item' }); return }
   const correcaoId = typeof req.body?.correcaoId === 'string' ? req.body.correcaoId : null
-  res.json(await corrigirDados(req.proLaboreUser!.sub, { chaves, dataAntiga, correcaoId }))
+  const inverter = Array.isArray(req.body?.inverter) ? req.body.inverter.filter((c: unknown) => typeof c === 'string') : []
+  res.json(await corrigirDados(req.proLaboreUser!.sub, { chaves, dataAntiga, inverter, correcaoId }))
 })
 
 router.post('/sistema/auditoria/desfazer', ...dono, async (req: Request, res: Response) => {
