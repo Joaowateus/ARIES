@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma'
 import { requireDono, requireProLaboreAuth } from '../middleware/authProLabore'
 import { tamanhoDoBanco } from '../lib/bancoDisponivel'
 import { ErroEspaco, liberarEspaco, painelEspaco } from '../lib/espacoBanco'
+import { ErroAuditoria, auditarDados, corrigirDados, desfazerCorrecao } from '../lib/auditoriaDados'
 import { ErroImportacao, descartarImportacao, rodarImportacao, simularImportacao, statusImportacao } from '../lib/importacaoNeon'
 
 const router = Router()
@@ -59,6 +60,27 @@ router.post('/sistema/importacao-neon/importar', ...dono, async (req: Request, r
 router.delete('/sistema/importacao-neon', ...dono, async (req: Request, res: Response) => {
   await descartarImportacao(req.proLaboreUser!.sub)
   res.json(await statusImportacao(req.proLaboreUser!.sub))
+})
+
+// Auditoria dos dados: repetidos depois da importação, mês a mês (só lê).
+router.get('/sistema/auditoria', ...dono, async (req: Request, res: Response) => {
+  res.json(await auditarDados(req.proLaboreUser!.sub))
+})
+
+// Corrige os itens escolhidos (uma rodada com tempo limitado; a tela chama de novo enquanto houver restantes).
+router.post('/sistema/auditoria/corrigir', ...dono, async (req: Request, res: Response) => {
+  const chaves = Array.isArray(req.body?.chaves) ? req.body.chaves.filter((c: unknown) => typeof c === 'string').slice(0, 5000) : []
+  const dataAntiga = Array.isArray(req.body?.dataAntiga) ? req.body.dataAntiga.filter((c: unknown) => typeof c === 'string') : []
+  if (!chaves.length) { res.status(400).json({ error: 'Escolha ao menos um item' }); return }
+  const correcaoId = typeof req.body?.correcaoId === 'string' ? req.body.correcaoId : null
+  res.json(await corrigirDados(req.proLaboreUser!.sub, { chaves, dataAntiga, correcaoId }))
+})
+
+router.post('/sistema/auditoria/desfazer', ...dono, async (req: Request, res: Response) => {
+  try { res.json(await desfazerCorrecao(req.proLaboreUser!.sub, String(req.body?.correcaoId ?? ''))) } catch (e) {
+    if (e instanceof ErroAuditoria) { res.status(e.status).json({ error: e.message }); return }
+    throw e
+  }
 })
 
 export default router
