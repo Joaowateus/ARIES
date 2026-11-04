@@ -7,6 +7,7 @@ import { requireDono, requireProLaboreAuth } from '../middleware/authProLabore'
 import { tamanhoDoBanco } from '../lib/bancoDisponivel'
 import { ErroEspaco, liberarEspaco, painelEspaco } from '../lib/espacoBanco'
 import { ErroAuditoria, auditarDados, vendasDoMes, corrigirDados, desfazerCorrecao } from '../lib/auditoriaDados'
+import { conferirMeses } from '../lib/conferenciaMensal'
 import { ErroImportacao, descartarImportacao, rodarImportacao, simularImportacao, statusImportacao } from '../lib/importacaoNeon'
 
 const router = Router()
@@ -60,6 +61,11 @@ router.post('/sistema/importacao-neon/importar', ...dono, async (req: Request, r
 router.delete('/sistema/importacao-neon', ...dono, async (req: Request, res: Response) => {
   await descartarImportacao(req.proLaboreUser!.sub)
   res.json(await statusImportacao(req.proLaboreUser!.sub))
+})
+
+// Conferência automática dos números, mês a mês (só lê).
+router.get('/sistema/conferencia', ...dono, async (req: Request, res: Response) => {
+  res.json(await conferirMeses(req.proLaboreUser!.sub))
 })
 
 // Auditoria dos dados: repetidos depois da importação, mês a mês (só lê).
