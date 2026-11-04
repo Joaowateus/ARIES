@@ -48,6 +48,7 @@ export interface MesAuditoria {
   repetidas: number; receitaRepetida: number
   receitaCorrigida: number; proLaboreCorrigido: number; comissaoCorrigida: number; vendasCorrigidas: number
   leads: number; leadsRepetidos: number
+  fechadosCrm: number; vendasSemLead: number
 }
 
 const q = (n: string) => `"${n.replace(/"/g, '""')}"`
@@ -102,7 +103,7 @@ export async function auditarDados(usuarioId: string) {
     prisma.venda.findMany({ where: { usuarioId }, select: { id: true, data: true, valorVenda: true, valorProLabore: true, valorComissao: true, vendedorId: true, observacao: true, pagamentoComissaoId: true, pagamentoProLaboreId: true, criadoEm: true, vendedor: { select: { nome: true } }, lead: { select: { id: true } } } }),
     prisma.pagamentoComissao.findMany({ where: { usuarioId, canceladoEm: null }, select: { id: true, tipo: true, numero: true, pagoEm: true, valorTotal: true, vendedorId: true, recebedor: true, vendedor: { select: { nome: true } } } }),
     prisma.lancamentoFinanceiro.findMany({ where: { usuarioId, canceladoEm: null }, select: { id: true, categoria: true, numero: true, pagoEm: true, valorTotal: true, favorecido: true, vendedorId: true, descricao: true } }),
-    prisma.lead.findMany({ where: { usuarioId }, select: { id: true, nomeCliente: true, telefone: true, criadoEm: true, estagio: true, vendaId: true } }),
+    prisma.lead.findMany({ where: { usuarioId }, select: { id: true, nomeCliente: true, telefone: true, criadoEm: true, estagio: true, vendaId: true, fechadoEm: true } }),
   ])
   const achados: Achado[] = []
 
@@ -176,7 +177,7 @@ export async function auditarDados(usuarioId: string) {
   // Mês a mês (as mesmas contas do Dashboard: receita, pró-labore e comissão pela data da venda; leads pela criação).
   const meses = new Map<string, MesAuditoria>()
   const mes = (m: string) => {
-    if (!meses.has(m)) meses.set(m, { mes: m, vendas: 0, receita: 0, proLabore: 0, comissao: 0, vendasAntigas: 0, repetidas: 0, receitaRepetida: 0, receitaCorrigida: 0, proLaboreCorrigido: 0, comissaoCorrigida: 0, vendasCorrigidas: 0, leads: 0, leadsRepetidos: 0 })
+    if (!meses.has(m)) meses.set(m, { mes: m, vendas: 0, receita: 0, proLabore: 0, comissao: 0, vendasAntigas: 0, repetidas: 0, receitaRepetida: 0, receitaCorrigida: 0, proLaboreCorrigido: 0, comissaoCorrigida: 0, vendasCorrigidas: 0, leads: 0, leadsRepetidos: 0, fechadosCrm: 0, vendasSemLead: 0 })
     return meses.get(m)!
   }
   const sairao = new Set(achados.filter(a => a.sugerido).map(a => a.remover.id))
@@ -184,10 +185,14 @@ export async function auditarDados(usuarioId: string) {
     const m = mes(mesDe(v.data))
     m.vendas++; m.receita += v.valorVenda; m.proLabore += v.valorProLabore; m.comissao += v.valorComissao ?? 0
     if (v.antigo) m.vendasAntigas++
+    if (!v.lead) m.vendasSemLead++
     if (sairao.has(v.id)) { m.repetidas++; m.receitaRepetida += v.valorVenda }
     else { m.vendasCorrigidas++; m.receitaCorrigida += v.valorVenda; m.proLaboreCorrigido += v.valorProLabore; m.comissaoCorrigida += v.valorComissao ?? 0 }
   }
-  for (const l of leads) { const m = mes(mesDe(l.criadoEm)); m.leads++; if (sairao.has(l.id)) m.leadsRepetidos++ }
+  for (const l of leads) {
+    const m = mes(mesDe(l.criadoEm)); m.leads++; if (sairao.has(l.id)) m.leadsRepetidos++
+    if (l.estagio === 'FECHADO' && !sairao.has(l.id)) mes(mesDe(l.fechadoEm ?? l.criadoEm)).fechadosCrm++
+  }
   const arred = (n: number) => Math.round(n * 100) / 100
   const listaMeses = [...meses.values()].sort((a, b) => b.mes.localeCompare(a.mes)).map(m => ({ ...m, receita: arred(m.receita), proLabore: arred(m.proLabore), comissao: arred(m.comissao), receitaRepetida: arred(m.receitaRepetida), receitaCorrigida: arred(m.receitaCorrigida), proLaboreCorrigido: arred(m.proLaboreCorrigido), comissaoCorrigida: arred(m.comissaoCorrigida) }))
 
@@ -359,11 +364,12 @@ export async function vendasDoMes(usuarioId: string, mes: string) {
   const antigos = origem.de('vendas')
   const vendas = await prisma.venda.findMany({
     where: { usuarioId, data: { gte: new Date(Date.UTC(ano, m - 1, 1)), lt: new Date(Date.UTC(ano, m, 1)) } },
-    select: { id: true, data: true, valorVenda: true, valorProLabore: true, valorComissao: true, observacao: true, criadoEm: true, pagamentoComissaoId: true, vendedor: { select: { nome: true } }, lead: { select: { nomeCliente: true } } },
+    select: { id: true, data: true, valorVenda: true, valorProLabore: true, valorComissao: true, observacao: true, criadoEm: true, pagamentoComissaoId: true, vendedor: { select: { nome: true } }, lead: { select: { nomeCliente: true, estagio: true } } },
     orderBy: [{ data: 'asc' }, { valorVenda: 'desc' }],
   })
   return {
     mes,
-    vendas: vendas.map(v => ({ id: v.id, data: v.data.toISOString(), valor: v.valorVenda, proLabore: v.valorProLabore, comissao: v.valorComissao ?? 0, vendedor: v.vendedor?.nome ?? null, cliente: v.lead?.nomeCliente ?? null, observacao: v.observacao, lancadaEm: v.criadoEm.toISOString(), comissaoPaga: !!v.pagamentoComissaoId, antigo: antigos.has(v.id) })),
+    vendas: vendas.map(v => ({ id: v.id, data: v.data.toISOString(), valor: v.valorVenda, proLabore: v.valorProLabore, comissao: v.valorComissao ?? 0, vendedor: v.vendedor?.nome ?? null, cliente: v.lead?.nomeCliente ?? null, observacao: v.observacao, lancadaEm: v.criadoEm.toISOString(), comissaoPaga: !!v.pagamentoComissaoId, antigo: antigos.has(v.id), noCrm: !!v.lead })),
+    fechadosCrm: await prisma.lead.count({ where: { usuarioId, estagio: 'FECHADO', OR: [{ fechadoEm: { gte: new Date(Date.UTC(ano, m - 1, 1)), lt: new Date(Date.UTC(ano, m, 1)) } }, { fechadoEm: null, criadoEm: { gte: new Date(Date.UTC(ano, m - 1, 1)), lt: new Date(Date.UTC(ano, m, 1)) } }] } }),
   }
 }
