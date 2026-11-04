@@ -48,14 +48,14 @@ const numero = (v: string) => (v.trim() === '' ? null : Number(v.replace(/\./g, 
 
 interface Rascunho {
   modelo: string; marca: string; versao: string; ano: string; cor: string; km: string; cilindrada: string; preco: string
-  situacao: SituacaoMotoVitrine; destaques: string; ficha: ItemFichaMoto[]; fotos: string[]; videoUrl: string
+  situacao: SituacaoMotoVitrine; destaques: string; ficha: ItemFichaMoto[]; fotos: string[]; videoUrl: string; placa: string
 }
-const vazio: Rascunho = { modelo: '', marca: '', versao: '', ano: '', cor: '', km: '', cilindrada: '', preco: '', situacao: 'DISPONIVEL', destaques: '', ficha: [], fotos: [], videoUrl: '' }
+const vazio: Rascunho = { modelo: '', marca: '', versao: '', ano: '', cor: '', km: '', cilindrada: '', preco: '', situacao: 'DISPONIVEL', destaques: '', ficha: [], fotos: [], videoUrl: '', placa: '' }
 function rascunhoDe(m: MotoVitrine): Rascunho {
   const s = (v: number | string | null) => (v === null ? '' : String(v))
   return {
     modelo: m.modelo, marca: s(m.marca), versao: s(m.versao), ano: s(m.ano), cor: s(m.cor), km: s(m.km), cilindrada: s(m.cilindrada), preco: s(m.preco),
-    situacao: m.situacao, destaques: m.destaques.join(', '), ficha: m.ficha, fotos: m.fotos, videoUrl: s(m.videoUrl),
+    situacao: m.situacao, destaques: m.destaques.join(', '), ficha: m.ficha, fotos: m.fotos, videoUrl: s(m.videoUrl), placa: s(m.placa ?? null),
   }
 }
 function entradaDe(r: Rascunho): MotoVitrineEntrada {
@@ -63,7 +63,7 @@ function entradaDe(r: Rascunho): MotoVitrineEntrada {
   return {
     modelo: r.modelo.trim(), marca: t(r.marca), versao: t(r.versao), ano: numero(r.ano), cor: t(r.cor), km: numero(r.km), cilindrada: numero(r.cilindrada),
     preco: numero(r.preco), situacao: r.situacao, destaques: r.destaques.split(',').map(d => d.trim()).filter(Boolean),
-    ficha: r.ficha.filter(f => f.rotulo.trim() && f.valor.trim()), fotos: r.fotos, videoUrl: t(r.videoUrl),
+    ficha: r.ficha.filter(f => f.rotulo.trim() && f.valor.trim()), fotos: r.fotos, videoUrl: t(r.videoUrl), placa: t(r.placa),
   }
 }
 
@@ -150,6 +150,7 @@ function Editor({ moto, mostrarPreco, onFechar, onSalvo }: { moto: MotoVitrine |
           {campo('cor', 'Cor', { placeholder: 'Vermelha' })}
           {campo('km', 'Km', { inputMode: 'numeric', placeholder: '12000' })}
           {campo('cilindrada', 'Cilindrada (cc)', { inputMode: 'numeric', placeholder: '300' })}
+          {campo('placa', 'Placa (não vai ao cliente)', { placeholder: 'ABC1D23' })}
           <div className="pl-field">
             <label htmlFor="vt-situacao">Situação</label>
             <select id="vt-situacao" className="pl-input" value={r.situacao} onChange={e => mudar('situacao', e.target.value as SituacaoMotoVitrine)}>

@@ -1208,6 +1208,8 @@ model Venda {
   // Placa da moto (ABC1234 ou ABC1D23): a mesma placa vendida duas vezes em
   // pouco tempo é aviso de venda lançada em dobro.
   placa                String?
+  // Moto do estoque vendida (baixa automática; excluir a venda devolve ao estoque).
+  motoId               String?
   criadoEm             DateTime @default(now())
   atualizadoEm         DateTime @updatedAt
 
@@ -1215,10 +1217,12 @@ model Venda {
   vendedor           Vendedor?          @relation(fields: [vendedorId], references: [id])
   pagamentoComissao  PagamentoComissao? @relation("PagamentoDaComissao", fields: [pagamentoComissaoId], references: [id], onDelete: SetNull)
   pagamentoProLabore PagamentoComissao? @relation("PagamentoDoProLabore", fields: [pagamentoProLaboreId], references: [id], onDelete: SetNull)
+  moto               SmMotoEstoque?     @relation(fields: [motoId], references: [id], onDelete: SetNull)
   lead               Lead?
 
   @@index([usuarioId, data])
   @@index([usuarioId, placa])
+  @@index([motoId])
   @@index([vendedorId])
   @@index([pagamentoComissaoId])
   @@index([pagamentoProLaboreId])
@@ -2951,13 +2955,17 @@ model SmMotoEstoque {
   fotos          String[]  @default([]) // /pro-labore/imagens/<chave>; a 1ª é a capa
   videoUrl       String?
   enviosWhatsapp Int       @default(0)
+  // Placa: liga a moto à venda (a venda dá baixa no estoque sozinha). Não vai para a IA.
+  placa          String?
   criadoEm       DateTime  @default(now())
   atualizadoEm   DateTime  @updatedAt
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   pautas  SmPauta[]
+  vendas  Venda[]
 
   @@index([usuarioId, situacao])
+  @@index([usuarioId, placa])
   @@map("pro_labore_sm_motos_estoque")
 }
 

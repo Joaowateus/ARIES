@@ -322,6 +322,8 @@ export interface Venda {
   placa?: string | null
   // Lead do CRM ligado a esta venda (null = lançada direto, sem lead).
   lead?: { id: string; nomeCliente: string } | null
+  // Moto do estoque vendida (a venda deu baixa nela).
+  motoId?: string | null
   // Preenchido quando a comissão já foi paga ao vendedor.
   pagamentoComissaoId?: string | null
   pagamentoComissao?: { id: string; numero: number; pagoEm: string } | null
@@ -334,6 +336,7 @@ export interface Venda {
 export interface PontoConferencia { tipo: string; gravidade: 'alta' | 'media' | 'baixa'; texto: string; onde: 'auditoria' | 'vendas' | 'crm' }
 export interface ConferenciaMensal { geradoEm: string; meses: Array<{ mes: string; fechado: boolean; vendas: number; receita: number; pontos: PontoConferencia[] }>; pendentes: Array<{ mes: string; pontos: number; fechado: boolean }> }
 export interface FechamentoMesVendas { mes: string; fechado: boolean; fechadoEm: string | null; historico: Array<{ acao: 'FECHAR' | 'REABRIR'; em: string; por: string | null }>; vendas: number; receita: number; semLead: number }
+export interface MotoParaVenda { id: string; modelo: string; marca: string | null; ano: number | null; cor: string | null; versao: string | null; placa: string | null; preco: number | null; situacao: 'DISPONIVEL' | 'RESERVADA' | 'VENDIDA' }
 export interface VendaParecida { id: string; data: string; valorVenda: number; placa: string | null; observacao: string | null; vendedor: string | null }
 
 export type FormaPagamentoComissao = 'PIX' | 'DINHEIRO' | 'TRANSFERENCIA' | 'OUTRO'
@@ -562,8 +565,9 @@ export const proLaboreApi = {
   },
   vendas: {
     listar: (ano?: number) => request<Venda[]>(`/pro-labore/vendas${ano ? `?ano=${ano}` : ''}`),
-    criar: (data: { data: string; valorVenda: number; valorProLabore: number; vendedorId?: string; valorComissao?: number; observacao?: string; placa?: string; confirmarRepetida?: boolean }) =>
+    criar: (data: { data: string; valorVenda: number; valorProLabore: number; vendedorId?: string; valorComissao?: number; observacao?: string; placa?: string; motoId?: string; confirmarRepetida?: boolean }) =>
       request<Venda>('/pro-labore/vendas', { method: 'POST', body: JSON.stringify(data) }),
+    estoque: () => request<MotoParaVenda[]>('/pro-labore/vendas/estoque'),
     fechamentos: (ano: number) => request<FechamentoMesVendas[]>(`/pro-labore/vendas/fechamentos?ano=${ano}`),
     alterarFechamento: (mes: string, acao: 'fechar' | 'reabrir') => request<FechamentoMesVendas[]>('/pro-labore/vendas/fechamentos', { method: 'POST', body: JSON.stringify({ mes, acao }) }),
     editar: (id: string, data: { valorVenda?: number; valorProLabore?: number; vendedorId?: string | null; valorComissao?: number | null; observacao?: string; placa?: string | null; confirmarRepetida?: boolean }) =>
@@ -605,7 +609,7 @@ export const proLaboreApi = {
     desfazerAvanco: (id: string) => request<Lead>(`/pro-labore/leads/${id}/desfazer-avanco`, { method: 'POST' }),
     mudarEstagio: (id: string, estagio: EstagioLead, perda?: { motivoPerda: MotivoPerda; notaPerda?: string; temperatura?: Temperatura }) =>
       request<Lead>(`/pro-labore/leads/${id}/estagio`, { method: 'POST', body: JSON.stringify({ estagio, ...perda }) }),
-    converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; valorComissao?: number; observacao?: string; placa?: string; confirmarRepetida?: boolean }) =>
+    converter: (id: string, data: { data: string; valorVenda: number; valorProLabore: number; valorComissao?: number; observacao?: string; placa?: string; motoId?: string; confirmarRepetida?: boolean }) =>
       request<{ lead: Lead; venda: Venda }>(`/pro-labore/leads/${id}/converter`, { method: 'POST', body: JSON.stringify(data) }),
     remover: (id: string) => request<{ ok: boolean }>(`/pro-labore/leads/${id}`, { method: 'DELETE' }),
   },
@@ -1941,6 +1945,7 @@ export interface MotoVitrine {
   ficha: ItemFichaMoto[]
   fotos: string[]
   videoUrl: string | null
+  placa?: string | null
   entradaEm: string
   enviosWhatsapp: number
   nome: string
@@ -1968,7 +1973,7 @@ export interface DadosFollow {
   desempenho: { dias: number; paraVendedor: number; fluxos: Array<{ fluxo: SituacaoFollow; enviados: number; responderam: number }> }
 }
 export interface DadosVitrine { motos: MotoVitrine[]; config: ConfigVitrine; podeEditar: boolean }
-export type MotoVitrineEntrada = Partial<Pick<MotoVitrine, 'marca' | 'ano' | 'cor' | 'situacao' | 'versao' | 'km' | 'cilindrada' | 'preco' | 'destaques' | 'ficha' | 'fotos' | 'videoUrl'>> & { modelo?: string }
+export type MotoVitrineEntrada = Partial<Pick<MotoVitrine, 'marca' | 'ano' | 'cor' | 'situacao' | 'versao' | 'km' | 'cilindrada' | 'preco' | 'destaques' | 'ficha' | 'fotos' | 'videoUrl' | 'placa'>> & { modelo?: string }
 
 export interface SimulacaoAssistente {
   mensagens: string[]
@@ -2537,6 +2542,7 @@ export interface SmMotoEntrada {
   situacao?: 'DISPONIVEL' | 'RESERVADA' | 'VENDIDA'
   saidaEm?: string | null
   observacao?: string | null
+  placa?: string | null
 }
 
 export interface SmMoto extends Required<Omit<SmMotoEntrada, 'situacao'>> {

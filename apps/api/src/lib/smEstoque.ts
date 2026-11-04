@@ -3,7 +3,7 @@
 import { prisma } from './prisma'
 
 const DIA_MS = 24 * 3600 * 1000
-const SELECT_MOTO = { id: true, modelo: true, marca: true, ano: true, cor: true, entradaEm: true, situacao: true, saidaEm: true, observacao: true } as const
+const SELECT_MOTO = { id: true, modelo: true, marca: true, ano: true, cor: true, entradaEm: true, situacao: true, saidaEm: true, observacao: true, placa: true } as const
 
 export function statusEstoque(dias: number, posts: number): 'PARADA' | 'ATENCAO' | 'OK' {
   if (dias >= 30 && posts === 0) return 'PARADA'
