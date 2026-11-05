@@ -10,8 +10,16 @@ const { spawnSync } = require('child_process')
 
 const BANCO_FORA = /P1001|P1002|P1017|quota|Can't reach database server|Timed out|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|endpoint (is|has been) (disabled|suspended)/i
 
-// Sem DIRECT_URL (ex.: Neon), as migrações usam a própria DATABASE_URL.
 const env = { ...process.env }
+// Ambiente de teste (AMBIENTE=teste): migra o banco do teste (TESTE_DATABASE_URL). Sem ele, para
+// o build, para nunca migrar o banco da produção a partir de uma versão de teste.
+if ((env.AMBIENTE ?? '').trim().toLowerCase() === 'teste') {
+  if (!(env.TESTE_DATABASE_URL ?? '').trim()) { console.error('[migrar] AMBIENTE=teste sem TESTE_DATABASE_URL: build interrompido para não tocar no banco da produção.'); process.exit(1) }
+  env.DATABASE_URL = env.TESTE_DATABASE_URL.trim()
+  env.DIRECT_URL = (env.TESTE_DIRECT_URL ?? '').trim() || env.DATABASE_URL
+  console.log('[migrar] ambiente de teste: migrando o banco do teste')
+}
+// Sem DIRECT_URL (ex.: Neon), as migrações usam a própria DATABASE_URL.
 if (!env.DIRECT_URL && env.DATABASE_URL) env.DIRECT_URL = env.DATABASE_URL
 
 function migrar() {
