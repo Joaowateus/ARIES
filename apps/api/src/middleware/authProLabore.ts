@@ -3,6 +3,7 @@ import { verifyProLaboreToken, ProLaboreJwtPayload } from '../lib/jwtProLabore'
 import { prisma } from '../lib/prisma'
 import { TUDO, permissoesEfetivas } from '../lib/acessos'
 import { acessosPessoaisSM, vendedorDoMembro } from '../lib/smAcesso'
+import { comAutor } from '../lib/autorAuditoria'
 
 declare global {
   namespace Express {
@@ -49,7 +50,9 @@ export async function requireProLaboreAuth(req: Request, res: Response, next: Ne
     req.proLaboreUser = { ...payload, papel }
     req.acessos = permissoesEfetivas(papel, v.permissoes)
   }
-  next()
+  // Tudo que este pedido gravar leva o nome de quem está logado (auditoria).
+  const u = req.proLaboreUser
+  comAutor({ origem: 'USUARIO', id: u.vendedorId ?? u.sub, papel: u.papel }, () => next())
 }
 
 // Algumas rotas (parâmetros, gestão de vendedores, gastos com anúncio) são

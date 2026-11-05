@@ -1028,6 +1028,8 @@ model Vendedor {
   vendas                 Venda[]
   pagamentosComissao     PagamentoComissao[]
   leads                  Lead[]
+  leadsQualificacao      Lead[]                 @relation("QualificacaoDoLead")
+  leadsFechamento        Lead[]                 @relation("FechamentoDoLead")
   ocorrencias            Ocorrencia[]
   assistenteComercial    AssistenteComercial?
   socialMediaContas      SocialMediaConta[]
@@ -1157,6 +1159,16 @@ model ParametroLiquidez {
 
   usuario ProLaboreUsuario @relation(fields: [usuarioId], references: [id])
 
+  // --- Jornada de compra (Metas e premissas) ---
+  // Tempo máximo por etapa: { ETAPA: { valor, unidade: MINUTOS|HORAS|DIAS, fonte: HISTORICO|APROVADO|SEM_LIMITE } }.
+  jornadaTemposMaximos         Json?
+  // Critérios do Levantamento que liberam a passagem (modelo, pagamento, CNH, entrada).
+  jornadaCriteriosLevantamento Json?
+  // Faltas na visita sem remarcar até o lead ser perdido.
+  jornadaFaltasAtePerda        Int   @default(2)
+  // Prazos do Pós-venda a partir da confirmação da venda, em dias.
+  posVendaPrazos               Json?
+
   @@map("pro_labore_parametros")
 }
 
@@ -1212,6 +1224,15 @@ model Venda {
   motoId               String?
   criadoEm             DateTime @default(now())
   atualizadoEm         DateTime @updatedAt
+
+  // Confirmação do dono: só venda CONFIRMADA conta em faturamento,
+  // comissão e Dashboard. AGUARDANDO_CONFIRMACAO | CONFIRMADA | CANCELADA.
+  situacao           String    @default("CONFIRMADA")
+  confirmadaEm       DateTime?
+  confirmadaPor      String?
+  canceladaEm        DateTime?
+  motivoCancelamento String?
+  auditoriaAutor     String?
 
   usuario            ProLaboreUsuario   @relation(fields: [usuarioId], references: [id])
   vendedor           Vendedor?          @relation(fields: [vendedorId], references: [id])
@@ -1365,32 +1386,78 @@ model Lead {
   reativadoEm      DateTime?
   reativacoes      Int       @default(0)
 
-  usuario             ProLaboreUsuario       @relation(fields: [usuarioId], references: [id])
-  vendedor            Vendedor?              @relation(fields: [vendedorId], references: [id])
-  venda               Venda?                 @relation(fields: [vendaId], references: [id])
-  historico           LeadEstagioHistorico[]
-  follows             LeadFollow[]
-  notas               LeadNota[]
-  ligacoes            LigacaoTarefa[]
-  assistenteConversas AssistenteConversa[]
+  // --- Jornada de compra de 10 etapas (ARIES 2.0, PDF 01) ---
+  // Cliente (CLI) dono desta oportunidade: o mesmo telefone é sempre o mesmo cliente.
+  clienteId                 String?
+  // LEAD | ABORDADO | LEVANTAMENTO | MQL | SQL | NEGOCIACAO | PROPOSTA |
+  // AGENDAMENTO | VISITA | VENDA (nulo até a migração das 5 etapas).
+  etapa                     String?
+  fase                      String? // PRE_VENDA | VENDA | FECHAMENTO
+  // Dois responsáveis da jornada, além do operacional (vendedorId):
+  // qualificação (SDR) e fechamento (vendedor).
+  responsavelQualificacaoId String?
+  responsavelFechamentoId   String?
+  // Levantamento de necessidades
+  formaPagamento            String? // A_VISTA | FINANCIADO
+  situacaoCnh               String? // TEM | EM_PROCESSO | NAO_TEM
+  temEntrada                Boolean?
+  levantamentoCompleto      Boolean   @default(false)
+  vendaSemVisita            Boolean   @default(false)
+  // Lead que já existia antes da migração para as 10 etapas.
+  anteriorMigracao          Boolean   @default(false)
+  // Fechamento sem venda confirmada vira Proposta com esta marcação.
+  revisarEtapa              Boolean   @default(false)
+  // Destino aplicado pelo sistema a partir do motivo da perda.
+  destinoPerda              String?
+  // Etapa das 5 antigas (guardada na migração, para conferir e voltar atrás).
+  estagioLegado             String?
+  entrouNaEtapaEm           DateTime?
+  // Quem fez a última escrita (preenchido pelo sistema; lido pela auditoria).
+  auditoriaAutor            String?
+
+  usuario                 ProLaboreUsuario         @relation(fields: [usuarioId], references: [id])
+  vendedor                Vendedor?                @relation(fields: [vendedorId], references: [id])
+  venda                   Venda?                   @relation(fields: [vendaId], references: [id])
+  cliente                 Cliente?                 @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  responsavelQualificacao Vendedor?                @relation("QualificacaoDoLead", fields: [responsavelQualificacaoId], references: [id], onDelete: SetNull)
+  responsavelFechamento   Vendedor?                @relation("FechamentoDoLead", fields: [responsavelFechamentoId], references: [id], onDelete: SetNull)
+  propostas               LeadProposta[]
+  visitas                 LeadVisita[]
+  passagens               LeadPassagem[]
+  fichasCredito           AssistenteFichaCredito[]
+  historico               LeadEstagioHistorico[]
+  follows                 LeadFollow[]
+  notas                   LeadNota[]
+  ligacoes                LigacaoTarefa[]
+  assistenteConversas     AssistenteConversa[]
 
   @@index([usuarioId])
   @@index([usuarioId, estagio])
+  @@index([usuarioId, etapa])
   @@index([vendedorId])
+  @@index([clienteId])
+  @@index([responsavelQualificacaoId])
+  @@index([responsavelFechamentoId])
   @@map("pro_labore_leads")
 }
 
 // Trilha de transição de estágio do Lead — base pra conversão etapa-a-etapa
 // e tempo médio no funil, espelhando o EstagioHistorico do CRM principal.
 model LeadEstagioHistorico {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   leadId          String
   estagioAnterior String?
   estagioNovo     String
   // ASSISTENTE = avanço automático (com o motivo); null = mudança manual.
   origem          String?
   motivo          String?
-  criadoEm        DateTime @default(now())
+  // criadoEm = quando entrou na etapa; saiuEm = quando saiu (nulo = ainda nela).
+  criadoEm        DateTime  @default(now())
+  saiuEm          DateTime?
+  // Autor: USUARIO (com id e nome), AUTOMACAO, INTEGRACAO ou MIGRACAO.
+  autorOrigem     String?
+  autorId         String?
+  autorNome       String?
 
   lead Lead @relation(fields: [leadId], references: [id])
 
@@ -1429,6 +1496,7 @@ model LeadNota {
 model AgendaItem {
   id               String    @id @default(cuid())
   usuarioId        String
+  auditoriaAutor   String?
   titulo           String
   descricao        String?
   categoria        String // META | PROCESSO | AUDITORIA | PROTOCOLO | OUTRO | REUNIAO
@@ -2067,10 +2135,16 @@ model AssistenteFichaCredito {
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
 
+  // Oportunidade da ficha (preenchida pela conversa ou na migração).
+  leadId         String?
+  auditoriaAutor String?
+
   conversa AssistenteConversa         @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  lead     Lead?                      @relation(fields: [leadId], references: [id], onDelete: SetNull)
   analises AssistenteAnaliseCredito[]
 
   @@index([usuarioId])
+  @@index([leadId])
   @@map("pro_labore_assistente_fichas_credito")
 }
 
@@ -2089,6 +2163,13 @@ model AssistenteAnaliseCredito {
   enviadaAoClienteEm DateTime?
   criadoEm           DateTime  @default(now())
   atualizadoEm       DateTime  @updatedAt
+
+  // Quando a ficha foi enviada a este banco, a condição aprovada e até
+  // quando a aprovação vale (para avisar antes de vencer).
+  enviadaEm        DateTime?
+  condicaoAprovada String?
+  validadeAte      DateTime?
+  auditoriaAutor   String?
 
   ficha AssistenteFichaCredito @relation(fields: [fichaId], references: [id], onDelete: Cascade)
 
@@ -3924,18 +4005,19 @@ model CopilotoMensagem {
 // Sugestões de resposta para uma conversa de lead do WhatsApp e o que a
 // pessoa fez com elas (usou qual, mudou, o lead avançou depois).
 model CopilotoSugestao {
-  id            String    @id @default(cuid())
-  usuarioId     String
-  pessoa        String
-  conversaId    String
-  conteudo      Json
-  origem        String // IA | MODELO
-  usadaIndice   Int?
-  usadaEm       DateTime?
-  util          Boolean?
-  estagioNaHora String?
-  resultado     String? // AVANCOU | SEM_EFEITO
-  criadoEm      DateTime  @default(now())
+  id             String    @id @default(cuid())
+  usuarioId      String
+  auditoriaAutor String?
+  pessoa         String
+  conversaId     String
+  conteudo       Json
+  origem         String // IA | MODELO
+  usadaIndice    Int?
+  usadaEm        DateTime?
+  util           Boolean?
+  estagioNaHora  String?
+  resultado      String? // AVANCOU | SEM_EFEITO
+  criadoEm       DateTime  @default(now())
 
   @@index([usuarioId, pessoa])
   @@index([conversaId])
@@ -4106,26 +4188,27 @@ model IntelAuditoria {
 // Reativação): quando fazer, por onde e o que falar. Feito, guarda o
 // resultado (é o histórico de contatos do lead).
 model LeadFollow {
-  id           String    @id @default(cuid())
-  usuarioId    String
-  leadId       String
-  vendedorId   String? // quem deve fazer (o vendedor do lead quando foi agendado)
-  agendadoPara DateTime
-  canal        String? // WHATSAPP | LIGACAO | VISITA | EMAIL | OUTRO
-  nota         String?
+  id             String    @id @default(cuid())
+  usuarioId      String
+  auditoriaAutor String?
+  leadId         String
+  vendedorId     String? // quem deve fazer (o vendedor do lead quando foi agendado)
+  agendadoPara   DateTime
+  canal          String? // WHATSAPP | LIGACAO | VISITA | EMAIL | OUTRO
+  nota           String?
   // CONTATO = follow comum (um pendente por lead) | CREDITO = refazer a
   // pré-análise depois da recusa (só o vendedor; convive com o comum).
-  tipo         String    @default("CONTATO")
+  tipo           String    @default("CONTATO")
   // CREDITO: { conversaId, bancos: [nomes], recusadoEm } — nunca vai para a IA.
-  contexto     Json?
+  contexto       Json?
   // Aviso mandado ao vendedor no WhatsApp quando chegou o dia.
-  avisadoEm    DateTime?
-  status       String    @default("PENDENTE") // PENDENTE | FEITO | CANCELADO
-  feitoEm      DateTime?
-  resultado    String?
-  criadoPor    String?
-  criadoEm     DateTime  @default(now())
-  atualizadoEm DateTime  @updatedAt
+  avisadoEm      DateTime?
+  status         String    @default("PENDENTE") // PENDENTE | FEITO | CANCELADO
+  feitoEm        DateTime?
+  resultado      String?
+  criadoPor      String?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -4180,6 +4263,7 @@ model CadenciaLigacao {
 model LigacaoTarefa {
   id              String    @id @default(cuid())
   usuarioId       String
+  auditoriaAutor  String?
   leadId          String
   vendedorId      String? // quem deve ligar: o vendedor do lead (null = o dono)
   cadenciaId      String?
@@ -4277,4 +4361,164 @@ model CopiaSeguranca {
   concluidoEm DateTime?
 
   @@map("pro_labore_copias_seguranca")
+}
+
+// =====================================================================
+// ARIES 2.0 · PDF 01 — Nova jornada de compra
+// =====================================================================
+
+// Cliente (CLI): a pessoa, com ID permanente. Cada compra é uma
+// oportunidade (Lead) ligada a ele. O telefone normalizado (só dígitos,
+// com 55) é a chave: o mesmo telefone nunca vira cadastro duplicado.
+model Cliente {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  nome           String
+  telefone       String?
+  email          String?
+  endereco       String?
+  // "Pediu para não ser contatado": nunca recebe abordagem ativa, campanha nem sugestão.
+  bloqueado      Boolean   @default(false)
+  bloqueadoEm    DateTime?
+  motivoBloqueio String?
+  auditoriaAutor String?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
+
+  leads Lead[]
+
+  @@unique([usuarioId, telefone])
+  @@index([usuarioId])
+  @@map("pro_labore_clientes")
+}
+
+// Proposta registrada na etapa Proposta (preço, entrada, parcela, prazo, validade).
+model LeadProposta {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  leadId         String
+  preco          Float
+  entrada        Float?
+  parcela        Float?
+  prazo          Int?
+  validade       DateTime?
+  enviadaEm      DateTime?
+  respondidaEm   DateTime?
+  resultado      String? // ACEITA | RECUSADA | SEM_RESPOSTA
+  autorId        String?
+  auditoriaAutor String?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([usuarioId, criadoEm])
+  @@map("pro_labore_lead_propostas")
+}
+
+// Visita à loja: marcada no Agendamento, check-in na Visita confirmada.
+model LeadVisita {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  leadId         String
+  vendedorId     String?
+  marcadaPara    DateTime
+  confirmadaEm   DateTime? // confirmação na véspera
+  checkinEm      DateTime? // hora de chegada
+  falta          Boolean   @default(false)
+  remarcacoes    Int       @default(0)
+  resultado      String?
+  resultadoEm    DateTime?
+  auditoriaAutor String?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([usuarioId, marcadaPara])
+  @@map("pro_labore_lead_visitas")
+}
+
+// Passagem do SDR para o vendedor (e devolução com motivo).
+model LeadPassagem {
+  id              String    @id @default(cuid())
+  usuarioId       String
+  leadId          String
+  sdrId           String?
+  vendedorId      String?
+  passadaEm       DateTime  @default(now())
+  resumo          String?
+  devolvida       Boolean   @default(false)
+  devolvidaEm     DateTime?
+  motivoDevolucao String?
+  auditoriaAutor  String?
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([usuarioId, passadaEm])
+  @@map("pro_labore_lead_passagens")
+}
+
+// Disponibilidade e posição no rodízio de cada pessoa, por papel.
+model RodizioLead {
+  id               String    @id @default(cuid())
+  usuarioId        String
+  vendedorId       String
+  papel            String // SDR | VENDEDOR
+  disponivel       Boolean   @default(true)
+  posicao          Int       @default(0)
+  ultimoRecebidoEm DateTime?
+  auditoriaAutor   String?
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+
+  @@unique([vendedorId, papel])
+  @@index([usuarioId, papel])
+  @@map("pro_labore_rodizio_leads")
+}
+
+// Cada vez que alguém vê o CPF ou a data de nascimento completos (só na
+// ficha de crédito). Imutável: o banco recusa alteração e exclusão.
+model AcessoDadoSensivel {
+  id        String   @id @default(cuid())
+  usuarioId String
+  leadId    String?
+  fichaId   String?
+  dado      String // CPF | NASCIMENTO
+  quemId    String
+  quemNome  String?
+  quemPapel String?
+  em        DateTime @default(now())
+
+  @@index([usuarioId, em])
+  @@index([leadId])
+  @@map("pro_labore_acessos_dado_sensivel")
+}
+
+// Trilha de auditoria (PDF 00, P5): gravada pelo próprio banco a cada
+// escrita em Cliente, Oportunidade, Atividade, Recomendação e nas
+// estruturas da jornada. Um evento por campo alterado. Imutável: o banco
+// recusa alteração e exclusão; correções geram novos eventos. CPF e data
+// de nascimento entram mascarados.
+model EventoAuditoria {
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tabela        String
+  registroId    String
+  acao          String // CRIACAO | ALTERACAO | EXCLUSAO
+  campo         String?
+  valorAnterior String?
+  valorNovo     String?
+  autorOrigem   String // USUARIO | AUTOMACAO | INTEGRACAO | MIGRACAO | SISTEMA
+  autorId       String?
+  autorPapel    String?
+  em            DateTime @default(now())
+
+  @@index([tabela, registroId, em])
+  @@index([em])
+  @@map("pro_labore_eventos_auditoria")
 }
