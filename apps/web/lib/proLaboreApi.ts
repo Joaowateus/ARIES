@@ -3499,5 +3499,6 @@ export interface SimulacaoJornada {
 }
 export interface StatusJornada {
   total: number; migrados: number; pendentes: number; clientes: number; semCliente: number
+  jornada: Array<{ etapa: string; fase: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'; ativos: number; perdidos: number }>
   conferencia: Array<{ de: string | null; para: string | null; revisarEtapa: boolean; n: number }>
 }

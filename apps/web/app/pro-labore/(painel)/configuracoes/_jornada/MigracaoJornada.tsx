@@ -28,6 +28,7 @@ const ORDEM_NOVA = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACA
 const posicao = (lista: string[], v: string | null) => { const i = lista.indexOf((v ?? '').replace(/ .*/, '')); return i < 0 ? 99 : i }
 const naOrdem = <T,>(itens: T[], de: (t: T) => string | null, para: (t: T) => string | null) =>
   [...itens].sort((a, b) => posicao(ORDEM_ANTIGA, de(a)) - posicao(ORDEM_ANTIGA, de(b)) || posicao(ORDEM_NOVA, para(a)) - posicao(ORDEM_NOVA, para(b)))
+const FASE: Record<string, string> = { PRE_VENDA: 'Pré-venda', VENDA: 'Venda', FECHAMENTO: 'Fechamento' }
 const nomeEtapa = (s: string) => {
   const [de, para] = s.split('→')
   if (de === 'PERDIDO') return `Perdido → continua perdido, marcado na etapa ${ETAPA[para] ?? para}`
@@ -104,6 +105,14 @@ export function MigracaoJornada() {
               {(st?.migrados ?? 0) > 0 && <button type="button" className="pl-btn pl-btn-ghost" disabled={ocupado} onClick={() => void rodar('desfazer')} data-desfazer-migracao>Desfazer</button>}
             </>) : <p className="pl-hint" data-sim-bloqueada>Na produção a migração só roda depois do teste e da sua liberação; aqui fica só a simulação.</p>}
           </div>
+          {st && st.migrados > 0 && (
+            <div style={{ marginTop: 16 }} data-jornada-10>
+              <div className="pl-eyebrow">Como ficou a nova jornada ({num(st.migrados)} leads migrados{st.pendentes ? `, faltam ${num(st.pendentes)}` : ''})</div>
+              <table className="pl-table"><thead><tr><th>Fase</th><th>Etapa</th><th style={{ textAlign: 'right' }}>No funil</th><th style={{ textAlign: 'right' }}>Perdidos nela</th></tr></thead>
+                <tbody>{st.jornada.map((j, i) => <tr key={j.etapa}><td>{FASE[j.fase]}</td><td>{i + 1}. {ETAPA[j.etapa]}</td><td style={{ textAlign: 'right' }}>{num(j.ativos)}</td><td style={{ textAlign: 'right' }}>{num(j.perdidos)}</td></tr>)}</tbody></table>
+              <p className="pl-hint">Levantamento, MQL, SQL, Agendamento e Visita começam vazias: no funil antigo não havia essas etapas, então nenhum lead entra nelas pela migração. Os leads passam por elas daqui para a frente, conforme avançam. O quadro do CRM com as 10 colunas é a próxima parte (passo 5); até lá, as telas continuam com as 5 etapas.</p>
+            </div>
+          )}
           {st && st.migrados > 0 && (
             <div style={{ marginTop: 12 }} data-conferencia-migracao>
               <div className="pl-eyebrow">Conferência ({num(st.migrados)} de {num(st.total)} migrados · {num(st.clientes)} clientes{st.semCliente ? ` · ${num(st.semCliente)} sem cliente` : ''})</div>

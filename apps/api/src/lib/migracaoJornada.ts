@@ -13,7 +13,7 @@ import { prisma } from './prisma'
 import { ambienteDeTeste } from './ambiente'
 import { comAutor } from './autorAuditoria'
 import { telefoneCanonico } from './auditoriaDados'
-import { destinoDoMotivo, faseDa, type Etapa } from './etapasJornada'
+import { ETAPAS, destinoDoMotivo, faseDa, type Etapa } from './etapasJornada'
 
 export class ErroMigracao extends Error { constructor(readonly status: number, message: string) { super(message) } }
 export const migracaoPermitida = () => ambienteDeTeste() || process.env.PERMITIR_MIGRACAO_JORNADA === '1'
@@ -133,8 +133,14 @@ export async function statusMigracao(usuarioId: string) {
     prisma.lead.groupBy({ by: ['estagioLegado', 'etapa', 'revisarEtapa'], where: { usuarioId, anteriorMigracao: true }, _count: { _all: true } }),
   ])
   const semCliente = await prisma.lead.count({ where: { usuarioId, etapa: { not: null }, clienteId: null } })
+  const porEtapa = await prisma.lead.groupBy({ by: ['etapa', 'estagio'], where: { usuarioId, etapa: { not: null } }, _count: { _all: true } })
+  const jornada = ETAPAS.map(e => ({
+    etapa: e, fase: faseDa(e),
+    ativos: porEtapa.filter(p => p.etapa === e && p.estagio !== 'PERDIDO').reduce((t, p) => t + p._count._all, 0),
+    perdidos: porEtapa.filter(p => p.etapa === e && p.estagio === 'PERDIDO').reduce((t, p) => t + p._count._all, 0),
+  }))
   return {
-    total, migrados, pendentes: total - migrados, clientes, semCliente,
+    total, migrados, pendentes: total - migrados, clientes, semCliente, jornada,
     conferencia: cruzado.map(c => ({ de: c.estagioLegado, para: c.etapa, revisarEtapa: c.revisarEtapa, n: c._count._all })).sort((a, b) => b.n - a.n),
   }
 }
