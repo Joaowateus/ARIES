@@ -13,7 +13,7 @@ import { ErroWhatsapp, enviarTexto } from '../lib/whatsappEvolution'
 import { atualizarNota, avaliarJornada } from '../lib/assistenteMotor'
 import { lerConfig, primeiroNome } from '../lib/assistenteRoteiro'
 import { vitrineDaLoja } from '../lib/assistenteRespostas'
-import { mascararCpf, mascararNascimento, registrarAcesso } from '../lib/dadoSensivel'
+import { registrarAcesso } from '../lib/dadoSensivel'
 import { ResultadoSimulacao, STATUS_ANALISE, formatarCpf, lerCpf, lerNascimento, textoAprovacao, textoFicha } from '../lib/assistenteSimulacao'
 import { agendarNovaAnalise, reabrirPreAnalise, semAprovacao, sincronizarFollowCredito } from '../lib/followCredito'
 
@@ -68,7 +68,7 @@ async function resposta(conversa: Conversa, completo = false) {
       id: f.id, cpf: formatarCpf(f.cpf), nascimento: f.nascimento, origem: f.origem,
       ...(completo ? { cpfCompleto: formatarCpf(f.cpf), nascimentoCompleto: f.nascimento } : {}), consentimento, criadoEm: f.criadoEm,
       texto: textoFicha({
-        nome: conversa.lead?.nomeCliente ?? conversa.nomeContato, telefone: conversa.numeroContato, cpf: completo ? f.cpf : mascararCpf(f.cpf), nascimento: completo || !f.nascimento ? f.nascimento : mascararNascimento(f.nascimento),
+        nome: conversa.lead?.nomeCliente ?? conversa.nomeContato, telefone: conversa.numeroContato, cpf: f.cpf, nascimento: f.nascimento,
         renda: sim?.renda ?? null, moto: sim?.moto ?? conversa.lead?.modeloInteresse ?? null, valor: sim?.valor ?? null, entrada: sim?.entrada ?? null,
         autorizadoEm: consentimento.em ? new Date(consentimento.em) : f.criadoEm,
       }),

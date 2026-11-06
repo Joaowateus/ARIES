@@ -57,7 +57,6 @@ import proLaboreIntelRoutes from './routes/proLaboreIntel'
 import proLaboreSistemaRoutes from './routes/proLaboreSistema'
 import proLaboreJornadaRoutes from './routes/proLaboreJornada'
 import { comAutor } from './lib/autorAuditoria'
-import { mascararResposta } from './lib/dadoSensivel'
 import proLaboreFollowRoutes from './routes/proLaboreFollow'
 import proLaboreLeadNotasRoutes from './routes/proLaboreLeadNotas'
 import proLaboreAssistenteMidiaRoutes from './routes/proLaboreAssistenteMidia'
@@ -102,8 +101,6 @@ app.set('trust proxy', 1)
 
 // Security headers
 app.use(helmet())
-// CPF e data de nascimento saem mascarados em toda resposta (PDF 01).
-app.set('json replacer', mascararResposta)
 
 // Comprime toda resposta JSON (o /painel, em especial, manda um ano inteiro
 // de dados mês a mês) — sem isso cada resposta trafega maior do que
