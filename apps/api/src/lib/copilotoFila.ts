@@ -1,5 +1,6 @@
 // Copiloto Comercial: coleta da fila de "próxima melhor ação" no banco. As
 // regras (motivos, pesos, próximo passo) ficam em copilotoFilaRegras.ts.
+import { SEM_CLIENTE_BLOQUEADO } from './etapasJornada'
 import { prisma } from './prisma'
 import { ESTAGIOS_ABERTOS, escopoDa, primeiroNome, rankEstagio } from './copilotoFatos'
 import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
@@ -27,7 +28,7 @@ export async function filaDoCopiloto(usuarioId: string, pessoa: string, agora = 
   const filtroVend = esc.vendedorIds ? { vendedorId: { in: esc.vendedorIds } } : {}
   const [leads, conversas, vendedores] = await Promise.all([
     prisma.lead.findMany({
-      where: { usuarioId, ...filtroVend, vendaId: null, estagio: { in: [...ESTAGIOS_ABERTOS] } },
+      where: { usuarioId, ...filtroVend, vendaId: null, estagio: { in: [...ESTAGIOS_ABERTOS] }, ...SEM_CLIENTE_BLOQUEADO },
       select: {
         id: true, nomeCliente: true, estagio: true, modeloInteresse: true, vendedorId: true, pontuacao: true, etiquetas: true, criadoEm: true, atualizadoEm: true,
         historico: { select: { criadoEm: true, estagioNovo: true }, orderBy: { criadoEm: 'desc' }, take: 20 },

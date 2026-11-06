@@ -162,7 +162,13 @@ export async function registrarPerda(l: LeadJornada, motivo: string, nota?: stri
   await prisma.leadEstagioHistorico.create({ data: { leadId: l.id, estagioAnterior: etapa, estagioNovo: 'PERDIDO', motivo } })
   if (motivo === 'PEDIU_NAO_CONTATO') {
     const c = await prisma.lead.findUnique({ where: { id: l.id }, select: { clienteId: true } })
-    if (c?.clienteId) await prisma.cliente.update({ where: { id: c.clienteId }, data: { bloqueado: true, bloqueadoEm: agora, motivoBloqueio: 'Pediu para não ser contatado' } })
+    if (c?.clienteId) {
+      await prisma.cliente.update({ where: { id: c.clienteId }, data: { bloqueado: true, bloqueadoEm: agora, motivoBloqueio: 'Pediu para não ser contatado' } })
+      // Nada agendado continua: follows e ligações de todas as oportunidades do cliente param.
+      const doCliente = { lead: { clienteId: c.clienteId }, status: 'PENDENTE' }
+      await prisma.leadFollow.updateMany({ where: doCliente, data: { status: 'CANCELADO', resultado: 'Cliente pediu para não ser contatado' } })
+      await prisma.ligacaoTarefa.updateMany({ where: doCliente, data: { status: 'CANCELADA' } })
+    }
   }
   return destino
 }

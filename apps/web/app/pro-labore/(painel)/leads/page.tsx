@@ -1035,7 +1035,7 @@ export default function ProLaboreLeadsPage() {
             <QuadroJornada
               leads={leadsAtivosOrdenados}
               vejaEquipe={vejaEquipe}
-              onAbrir={id => setPainelId(id)}
+              onAbrir={id => { if (!leads.find(l => l.id === id)?.somenteLeitura) setPainelId(id) }}
               onAtualizar={carregar}
               onRegistrarVenda={lead => abrirConversao(lead)}
             />

@@ -1,6 +1,7 @@
 // Follow-up do CRM (botão Follow no card) e a Reativação (os perdidos, fora
 // do funil, com tudo o que se sabia deles). O lead perdido continua com
 // estagio PERDIDO, então as contas do funil não mudam.
+import { DESTINOS_FORA_DA_REATIVACAO, SEM_CLIENTE_BLOQUEADO } from '../lib/etapasJornada'
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
@@ -211,7 +212,8 @@ router.get('/reativacao', requireProLaboreAuth, requireModulo('crm', 'VER'), asy
   const escopo = leadWhereBase(req, typeof req.query.vendedorId === 'string' && req.query.vendedorId ? req.query.vendedorId : undefined)
   const desde30 = new Date(Date.now() - 30 * DIA)
   const [leads, reativados] = await Promise.all([
-    prisma.lead.findMany({ where: { ...escopo, estagio: 'PERDIDO' }, include: LEAD_REATIVACAO, orderBy: [{ perdidoEm: 'desc' }, { atualizadoEm: 'desc' }] }),
+    // Encerradas e descartadas (jornada nova) e clientes bloqueados não entram na Reativação.
+    prisma.lead.findMany({ where: { ...escopo, estagio: 'PERDIDO', ...SEM_CLIENTE_BLOQUEADO, AND: [{ OR: [{ destinoPerda: null }, { destinoPerda: { notIn: DESTINOS_FORA_DA_REATIVACAO } }] }] }, include: LEAD_REATIVACAO, orderBy: [{ perdidoEm: 'desc' }, { atualizadoEm: 'desc' }] }),
     prisma.lead.count({ where: { ...escopo, reativadoEm: { gte: desde30 }, estagio: { not: 'PERDIDO' } } }),
   ])
   const porMotivo = new Map<string, number>(), porTemperatura = new Map<string, number>()

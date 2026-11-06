@@ -64,3 +64,8 @@ export function destinoDoMotivo(motivo: string): DestinoPerda | null {
   for (const [d, ms] of Object.entries(DESTINOS)) if (ms.includes(motivo)) return d as DestinoPerda
   return null
 }
+
+/** Cliente bloqueado ("pediu para não ser contatado") nunca recebe abordagem ativa, campanha nem sugestão. */
+export const SEM_CLIENTE_BLOQUEADO = { NOT: { cliente: { is: { bloqueado: true } } } }
+/** Perdas que não voltam: encerradas e descartadas não entram na Reativação. */
+export const DESTINOS_FORA_DA_REATIVACAO = ['ENCERRADA', 'DESCARTADA']

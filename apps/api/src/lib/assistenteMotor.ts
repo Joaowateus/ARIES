@@ -19,6 +19,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { avancarPorFatos } from './jornadaRegras'
+import { DESTINOS_FORA_DA_REATIVACAO, SEM_CLIENTE_BLOQUEADO } from './etapasJornada'
 import { logger } from './logger'
 import { agenteDaPessoa, enviarComoPessoa } from './agenteEnvio'
 import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
@@ -561,12 +562,12 @@ function conversasDoFollow(assistenteIds: string[], agora: Date, resgate: boolea
   const abertas: Prisma.AssistenteConversaWhereInput = {
     assistenteId: { in: assistenteIds }, tipo: 'LEAD', status: 'ASSUMIDA', followParado: null,
     ultimaMensagemEm: { gte: new Date(agora.getTime() - 40 * DIA_MS) },
-    lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null } },
+    lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null, ...SEM_CLIENTE_BLOQUEADO } },
   }
   // Resgate: perdido nos últimos 200 dias, numa conversa que o vendedor já tinha assumido.
   const perdidas: Prisma.AssistenteConversaWhereInput = {
     assistenteId: { in: assistenteIds }, tipo: 'LEAD', followParado: null, assumidaEm: { not: null },
-    lead: { is: { estagio: 'PERDIDO', vendaId: null, perdidoEm: { gte: new Date(agora.getTime() - 200 * DIA_MS) }, OR: [{ motivoPerda: null }, { motivoPerda: { notIn: PERDA_SEM_RESGATE } }] } },
+    lead: { is: { estagio: 'PERDIDO', vendaId: null, perdidoEm: { gte: new Date(agora.getTime() - 200 * DIA_MS) }, OR: [{ motivoPerda: null }, { motivoPerda: { notIn: PERDA_SEM_RESGATE } }], ...SEM_CLIENTE_BLOQUEADO, AND: [{ OR: [{ destinoPerda: null }, { destinoPerda: { notIn: DESTINOS_FORA_DA_REATIVACAO } }] }] } },
   }
   return prisma.assistenteConversa.findMany({
     where: resgate ? { OR: [abertas, perdidas] } : abertas,

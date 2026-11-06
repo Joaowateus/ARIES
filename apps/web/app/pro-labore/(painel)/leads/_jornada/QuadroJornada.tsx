@@ -120,6 +120,12 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                       <div className="pl-kanban-cards">
                         {cards.length === 0 && <div className="pl-kanban-empty">Nenhum lead nesta etapa</div>}
                         {cards.map(l => {
+                          if (l.somenteLeitura) return (
+                            <div key={l.id} className="pl-kanban-card pl-kc" data-card={l.id} data-somente-leitura title="Você passou este lead ao vendedor: aqui aparece só a etapa e o resultado">
+                              <span className="pl-kanban-card-name pl-kc-nome">{l.nomeCliente}</span>
+                              <div className="pl-hint">Passado a {l.vendedor?.nome ?? 'vendedor'} · {l.resultado === 'VENDIDO' ? 'vendido' : l.resultado === 'PERDIDO' ? 'perdido' : 'em andamento'}</div>
+                            </div>
+                          )
                           const prox = proxima(l)
                           const limite = estourou(l, premissas)
                           return (

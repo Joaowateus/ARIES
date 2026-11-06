@@ -265,6 +265,9 @@ export interface Lead {
   vendaSemVisita?: boolean
   anteriorMigracao?: boolean
   destinoPerda?: string | null
+  // SDR: lead que ele passou adiante (já na fase de Venda) — só a etapa e o resultado.
+  somenteLeitura?: boolean
+  resultado?: 'VENDIDO' | 'PERDIDO' | 'EM_ANDAMENTO'
   nomeCliente: string
   telefone?: string | null
   email?: string | null

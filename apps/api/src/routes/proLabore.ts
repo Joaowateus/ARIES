@@ -46,7 +46,7 @@ import { sugestaoModelo } from '../lib/copilotoModelos'
 import { memoriaParaIA } from '../lib/copiloto'
 import { estagioAtingiu, funilDoMesDashboard } from '../lib/jornada'
 import { gastoDoMes, gastosDoPeriodo, type GastoDoMes } from '../lib/gastoAnuncios'
-import { MOTIVOS_PERDA, TEMPERATURAS, leadWhereBase } from '../lib/escopoLead'
+import { MOTIVOS_PERDA, TEMPERATURAS, leadWhereBase, leadsPassadosDoSdr } from '../lib/escopoLead'
 import { SITUACOES_VISIVEIS } from '../lib/vendaConfirmada'
 import { ehMascarado } from '../lib/dadoSensivel'
 import { criarPosVenda } from '../lib/jornadaAtividades'
@@ -898,7 +898,7 @@ router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (r
       // CPF, nascimento e e-mail que o cliente escreveu não aparecem na tela do CRM.
       conversa: c ? { id: c.id, status: c.status, ultimaMensagemEm: c.ultimaMensagemEm, ultima: m ? { ...m, texto: mascararDadosPessoais(m.texto).slice(0, 400) } : null } : null,
     }
-  }))
+  }).concat(await leadsPassadosDoSdr(req) as never[]))
 })
 
 // Faixa do CRM: o WhatsApp de quem já está conectado (leads entram sozinhos)
