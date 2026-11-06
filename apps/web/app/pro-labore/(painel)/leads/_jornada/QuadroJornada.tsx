@@ -3,18 +3,27 @@
 // Quadro do CRM na jornada de 10 etapas (PDF 01, seção 7): colunas em três
 // fases, tempo do lead na etapa, mover só com o critério cumprido (a tela
 // mostra o que falta), levantamento e perda pelo motivo da etapa.
-import { useState } from 'react'
-import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi } from '@/lib/proLaboreApi'
+import { useEffect, useState } from 'react'
+import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type PremissasJornada } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, FASES, NOME_ETAPA, NOME_MOTIVO, NOME_DESTINO } from '@/lib/etapasJornada'
 
 const MS_HORA = 3_600_000
 function tempoNaEtapa(l: Lead) {
   const desde = l.entrouNaEtapaEm ?? l.criadoEm
   const h = Math.max(0, (Date.now() - new Date(desde).getTime()) / MS_HORA)
-  if (h < 1) return 'agora'
+  if (h < 1) { const m = Math.floor(h * 60); return m < 1 ? 'agora' : `${m} min` }
   if (h < 24) return `${Math.floor(h)} h`
   const d = Math.floor(h / 24)
   return d === 1 ? '1 dia' : `${d} dias`
+}
+const MS: Record<string, number> = { MINUTOS: 60_000, HORAS: MS_HORA, DIAS: 24 * MS_HORA }
+const UN: Record<string, string> = { MINUTOS: 'min', HORAS: 'h', DIAS: 'd' }
+/** Passou do tempo máximo da etapa (Metas e premissas)? */
+function estourou(l: Lead, p: PremissasJornada | null) {
+  const t = p?.temposMaximos[(l.etapa ?? 'LEAD') as EtapaJornada]
+  if (!t || t.valor == null) return null
+  const desde = new Date(l.entrouNaEtapaEm ?? l.criadoEm).getTime()
+  return { parado: Date.now() - desde > t.valor * MS[t.unidade], max: `${t.valor} ${UN[t.unidade]}` }
 }
 const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 
@@ -37,6 +46,8 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [perda, setPerda] = useState<{ lead: Lead; motivos: string[] } | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [premissas, setPremissas] = useState<PremissasJornada | null>(null)
+  useEffect(() => { proLaboreApi.jornada.premissas().then(setPremissas).catch(() => setPremissas(null)) }, [])
 
   const visiveis = FASES.filter(f => fase === 'TUDO' || f.id === fase)
   const porEtapa = (e: EtapaJornada) => leads.filter(l => (l.etapa ?? 'LEAD') === e)
@@ -108,6 +119,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                         {cards.length === 0 && <div className="pl-kanban-empty">Nenhum lead nesta etapa</div>}
                         {cards.map(l => {
                           const prox = proxima(l)
+                          const limite = estourou(l, premissas)
                           return (
                             <div
                               key={l.id} className="pl-kanban-card pl-kc" draggable data-card={l.id}
@@ -116,7 +128,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
                                 <span className="pl-kanban-card-name pl-kc-nome">{l.nomeCliente}</span>
-                                <span className="pl-kanban-card-time" title="Tempo nesta etapa">{tempoNaEtapa(l)}</span>
+                                <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máximo ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
                               </div>
                               {vejaEquipe && l.vendedor?.nome && <div className="pl-hint">{l.vendedor.nome}</div>}
                               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>

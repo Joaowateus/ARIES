@@ -7,6 +7,7 @@ import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { requireModulo } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
 import { ETAPAS } from '../lib/etapasJornada'
+import { premissas, salvarPremissas } from '../lib/jornadaPremissas'
 import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
 import { MOTIVOS_CANCELAMENTO, cancelarVenda, confirmarVenda, checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
 import { requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
@@ -208,6 +209,23 @@ router.patch('/jornada/analises/:id', ...editar, async (req: Request, res: Respo
     // Banco aprovou: o lead vai para SQL sozinho (fato que o sistema vê).
     res.json({ ok: true, avancou: await avancarPorFatos(l.id) })
   } catch (e) { falha(res, e) }
+})
+
+// --- Metas e premissas da jornada (o dono edita) ---
+router.get('/jornada/premissas', ...ver, async (req: Request, res: Response) => {
+  res.json(await premissas(req.proLaboreUser!.sub))
+})
+const tempoSchema = z.object({ valor: z.number().int().positive().nullable(), unidade: z.enum(['MINUTOS', 'HORAS', 'DIAS']) })
+const premissasSchema = z.object({
+  temposMaximos: z.record(z.string(), tempoSchema).refine(o => Object.keys(o).every(k => (ETAPAS as readonly string[]).includes(k)), 'Etapa inválida').optional(),
+  criteriosLevantamento: z.array(z.enum(['modelo', 'pagamento', 'cnh', 'entrada'])).min(1, 'Escolha ao menos um critério').optional(),
+  faltasAtePerda: z.number().int().min(1).max(10).optional(),
+  posVendaPrazos: z.object({ entrega: z.number().int().min(0), documentacao: z.number().int().min(0), primeiraRevisao: z.number().int().min(0) }).optional(),
+})
+router.put('/jornada/premissas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const p = premissasSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  res.json(await salvarPremissas(req.proLaboreUser!.sub, p.data as Parameters<typeof salvarPremissas>[1]))
 })
 
 // --- Rodízio (dono e supervisor) ---

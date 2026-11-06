@@ -633,6 +633,9 @@ export const proLaboreApi = {
       request<{ ok: boolean; resultado: unknown }>(`/pro-labore/jornada/leads/${id}/${acao}`, { method: 'POST', body: JSON.stringify(body) }),
     rodizio: () => request<PessoaRodizio[]>('/pro-labore/jornada/rodizio'),
     credito: () => request<LeadCredito[]>('/pro-labore/jornada/credito'),
+    premissas: () => request<PremissasJornada>('/pro-labore/jornada/premissas'),
+    salvarPremissas: (d: { temposMaximos?: Partial<Record<EtapaJornada, { valor: number | null; unidade: UnidadeTempo }>>; criteriosLevantamento?: string[]; faltasAtePerda?: number; posVendaPrazos?: { entrega: number; documentacao: number; primeiraRevisao: number } }) =>
+      request<PremissasJornada>('/pro-labore/jornada/premissas', { method: 'PUT', body: JSON.stringify(d) }),
     analise: (id: string, data: { status?: 'A_ENVIAR' | 'EM_ANALISE' | 'APROVADA' | 'RECUSADA'; validadeAte?: string | null; condicaoAprovada?: string | null; enviada?: boolean }) =>
       request<{ ok: boolean; avancou: string | null }>(`/pro-labore/jornada/analises/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     vendasAguardando: () => request<Array<{ id: string; data: string; valorVenda: number; placa: string | null; vendedor: { nome: string } | null; lead: { id: string; nomeCliente: string } | null }>>('/pro-labore/jornada/vendas/aguardando'),
@@ -3568,4 +3571,11 @@ export interface LeadCredito {
   id: string; nomeCliente: string; etapa: 'MQL' | 'SQL'; entrouNaEtapaEm: string | null; modeloInteresse: string | null; vendedor: { nome: string } | null
   fichaId: string | null; conversaId: string | null
   analises: Array<{ id: string; banco: string; status: string; enviadaEm: string | null; respondidoEm: string | null; validadeAte: string | null; condicaoAprovada: string | null; venceEmDias: number | null }>
+}
+export type UnidadeTempo = 'MINUTOS' | 'HORAS' | 'DIAS'
+export interface PremissasJornada {
+  temposMaximos: Record<EtapaJornada, { valor: number | null; unidade: UnidadeTempo; fonte: 'HISTORICO' | 'APROVADO' | 'SEM_LIMITE' | 'DATA_MARCADA' | 'VALIDADE'; sugerido?: number | null }>
+  criteriosLevantamento: string[]
+  faltasAtePerda: number
+  posVendaPrazos: { entrega: number; documentacao: number; primeiraRevisao: number }
 }
