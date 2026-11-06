@@ -907,6 +907,13 @@ export const proLaboreApi = {
       rodadaRestauracao: (id: string, sessao: string) => request<CopiaSeguranca>(`/pro-labore/sistema/copias/restaurar/${id}/rodada`, { method: 'POST', body: '{}', headers: { 'x-sessao-restauracao': sessao } }),
     },
     banco: () => request<SaudeBanco>('/pro-labore/sistema/banco'),
+    // Migração para a jornada de 10 etapas (PDF 01): simulação, rodadas e desfazer.
+    jornada: {
+      simulacao: () => request<SimulacaoJornada>('/pro-labore/sistema/jornada/simulacao'),
+      status: () => request<StatusJornada>('/pro-labore/sistema/jornada/status'),
+      rodada: () => request<StatusJornada>('/pro-labore/sistema/jornada/rodada', { method: 'POST', body: '{}' }),
+      desfazer: () => request<StatusJornada>('/pro-labore/sistema/jornada/desfazer/rodada', { method: 'POST', body: '{}' }),
+    },
     // Espaço do banco: o que ocupa e o que dá para liberar (rodadas).
     espaco: () => request<EspacoBanco>('/pro-labore/sistema/espaco'),
     liberarEspaco: (acao: 'eventos' | 'imagens' | 'midias' | 'compactar' | 'vercel') => request<EspacoBanco & { rodada: { feitos: number; restantes: number } }>('/pro-labore/sistema/espaco/liberar', { method: 'POST', body: JSON.stringify({ acao }) }),
@@ -3477,4 +3484,20 @@ export interface EspacoBanco {
   compactaveisMB: number
   tabelas: Array<{ tabela: string; rotulo: string | null; mb: number; linhas: number }>
   liberar: Record<'eventos' | 'imagens' | 'midias', { quantidade: number; mb: number }>
+}
+
+export interface SimulacaoJornada {
+  permitido: boolean
+  total: number; jaMigrados: number; aMigrar: number
+  porEstagioAntigo: Record<string, number>; porEtapaNova: Record<string, number>
+  pares: Array<{ de: string; n: number }>
+  revisarEtapa: number; perdidos: number
+  motivos: Array<{ antigo: string; novo: string; destino: string; n: number }>
+  levantamento: { aVista: number; financiado: number; semInformacao: number }
+  clientes: { jaExistem: number; aCriar: number; comTelefone: number; semTelefone: number; telefonesRepetidos: number; leadsJuntados: number; exemplos: Array<{ nome: string; telefone: string; leads: number }> }
+  conferencia: { leadsAntes: number; leadsDepois: number; nenhumPerdido: boolean }
+}
+export interface StatusJornada {
+  total: number; migrados: number; pendentes: number; clientes: number; semCliente: number
+  conferencia: Array<{ de: string | null; para: string | null; revisarEtapa: boolean; n: number }>
 }

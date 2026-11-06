@@ -1411,6 +1411,8 @@ model Lead {
   destinoPerda              String?
   // Etapa das 5 antigas (guardada na migração, para conferir e voltar atrás).
   estagioLegado             String?
+  // Motivo de perda das 5 etapas, guardado na migração (o novo fica em motivoPerda).
+  motivoPerdaLegado         String?
   entrouNaEtapaEm           DateTime?
   // Quem fez a última escrita (preenchido pelo sistema; lido pela auditoria).
   auditoriaAutor            String?

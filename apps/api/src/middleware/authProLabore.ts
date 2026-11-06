@@ -52,7 +52,7 @@ export async function requireProLaboreAuth(req: Request, res: Response, next: Ne
   }
   // Tudo que este pedido gravar leva o nome de quem está logado (auditoria).
   const u = req.proLaboreUser
-  comAutor({ origem: 'USUARIO', id: u.vendedorId ?? u.sub, papel: u.papel }, () => next())
+  comAutor({ origem: 'USUARIO', id: u.vendedorId ?? u.sub, papel: u.papel, nome: u.nome }, () => next())
 }
 
 // Algumas rotas (parâmetros, gestão de vendedores, gastos com anúncio) são

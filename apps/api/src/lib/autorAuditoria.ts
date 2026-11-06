@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Prisma } from '@prisma/client'
 
 export type OrigemAutor = 'USUARIO' | 'AUTOMACAO' | 'INTEGRACAO' | 'MIGRACAO' | 'SISTEMA'
-export interface Autor { origem: OrigemAutor; id?: string | null; papel?: string | null }
+export interface Autor { origem: OrigemAutor; id?: string | null; papel?: string | null; nome?: string | null }
 
 const contexto = new AsyncLocalStorage<Autor>()
 
@@ -37,8 +37,18 @@ type Dados = Record<string, unknown>
 const comCarimbo = (d: unknown, c: string): unknown =>
   Array.isArray(d) ? d.map(x => comCarimbo(x, c)) : d && typeof d === 'object' ? { ...(d as Dados), auditoriaAutor: c } : d
 
+const comAutorDaEtapa = (d: unknown, a: Autor): unknown =>
+  Array.isArray(d) ? d.map(x => comAutorDaEtapa(x, a)) : d && typeof d === 'object'
+    ? { autorOrigem: (d as Dados).origem === 'ASSISTENTE' ? 'AUTOMACAO' : a.origem, autorId: a.id ?? null, autorNome: a.nome ?? null, ...(d as Dados) }
+    : d
+
 /** Middleware do Prisma: põe o autor em toda criação e alteração dos modelos auditados. */
 export const middlewareAutor: Prisma.Middleware = async (params, next) => {
+  // Histórico de etapas: cada entrada guarda quem moveu (o banco fecha a anterior).
+  if (params.model === 'LeadEstagioHistorico' && (params.action === 'create' || params.action === 'createMany')) {
+    const a = params.args as Dados | undefined
+    if (a?.data) a.data = comAutorDaEtapa(a.data, autorAtual())
+  }
   if (params.model && MODELOS_AUDITADOS.has(params.model)) {
     const c = carimbo()
     const a = params.args as Dados | undefined
