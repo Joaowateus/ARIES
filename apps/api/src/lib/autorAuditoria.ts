@@ -30,7 +30,7 @@ export function carimbo(autor = autorAtual()) {
 export const MODELOS_AUDITADOS = new Set([
   'Cliente', 'Lead', 'LeadFollow', 'LigacaoTarefa', 'AgendaItem', 'CopilotoSugestao',
   'AssistenteFichaCredito', 'AssistenteAnaliseCredito', 'LeadProposta', 'LeadVisita',
-  'LeadPassagem', 'RodizioLead', 'Venda',
+  'LeadPassagem', 'RodizioLead', 'Venda', 'ReguaCobranca',
 ])
 
 type Dados = Record<string, unknown>

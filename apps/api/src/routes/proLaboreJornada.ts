@@ -12,6 +12,7 @@ import { conversaoPorEtapa } from '../lib/jornadaMetricas'
 import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
 import { MOTIVOS_CANCELAMENTO, cancelarVenda, confirmarVenda, checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
 import { requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
+import { ORIGENS_ATV, MODO_REGUA, configDaRegua, conferenciaDaMigracao } from '../lib/atividades'
 
 const router = Router()
 const ver = [requireProLaboreAuth, requireModulo('crm', 'VER')]
@@ -244,6 +245,42 @@ router.get('/jornada/rodizio', requireProLaboreAuth, requireDonoOuSupervisor, as
 })
 router.put('/jornada/rodizio/:vendedorId', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   try { await marcarDisponivel(req.proLaboreUser!.sub, String(req.params.vendedorId), !!req.body?.disponivel); res.json(await rodizioDaEquipe(req.proLaboreUser!.sub)) } catch (e) { falha(res, e) }
+})
+
+// --- Atividade (ATV) · PDF 02, 4.4 ---
+// Régua de cobrança por tipo de origem (só o dono edita).
+router.get('/atividades/regua', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  res.json({ modo: MODO_REGUA, origens: await configDaRegua(req.proLaboreUser!.sub) })
+})
+const reguaSchema = z.object({
+  lembreteMinAntes: z.number().int().min(0).max(1440),
+  segundoAlertaMin: z.number().int().min(15).max(1440),
+  escalonamentoMin: z.number().int().min(60).max(10080),
+  escalonarPara: z.enum(['SUPERVISOR', 'GESTOR', 'DONO']),
+}).refine(v => v.escalonamentoMin > v.segundoAlertaMin, { message: 'O escalonamento vem depois do segundo alerta' })
+router.put('/atividades/regua/:origem', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const origem = String(req.params.origem)
+  if (!(ORIGENS_ATV as readonly string[]).includes(origem)) { res.status(400).json({ error: 'Tipo de origem inválido' }); return }
+  const p = reguaSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  const usuarioId = req.proLaboreUser!.sub
+  await prisma.reguaCobranca.upsert({ where: { usuarioId_origemTipo: { usuarioId, origemTipo: origem } }, create: { usuarioId, origemTipo: origem, ...p.data }, update: p.data })
+  res.json({ modo: MODO_REGUA, origens: await configDaRegua(usuarioId) })
+})
+// Conferência da migração: total por tipo antes (tabelas atuais) e depois (ATV).
+router.get('/atividades/conferencia', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  res.json(await conferenciaDaMigracao(req.proLaboreUser!.sub))
+})
+// ATVs de uma oportunidade, com o que a régua registrou (para a ficha do lead).
+router.get('/atividades', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
+  const leadId = String(req.query.leadId ?? '')
+  if (!leadId) { res.status(400).json({ error: 'Informe a oportunidade' }); return }
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, ...leadWhereBase(req) }, select: { id: true } })
+  if (!lead) { res.status(404).json({ error: 'Oportunidade não encontrada' }); return }
+  res.json(await prisma.atividade.findMany({
+    where: { leadId }, orderBy: { prazo: 'desc' }, take: 200,
+    select: { codigo: true, tipo: true, origemTipo: true, prazo: true, canal: true, oQueFazer: true, status: true, resultado: true, executadaEm: true, autorExecucaoTipo: true, modeloTipo: true, reguaEstado: true, registrosRegua: { select: { etapa: true, previstoPara: true, registradoEm: true, modo: true, enviado: true }, orderBy: { previstoPara: 'asc' } } },
+  }))
 })
 
 export default router

@@ -4546,3 +4546,81 @@ model EventoAuditoria {
   @@index([em])
   @@map("pro_labore_eventos_auditoria")
 }
+
+// PDF 02 · 4.4 Atividade (ATV): entidade única de tarefas. Na semana em
+// paralelo o banco copia para cá cada follow, ligação, ocorrência de rotina
+// e follow automático do robô (gatilhos aries_atv_*). Código ATV-0001 é
+// gerado pelo banco a partir do número (não gravar).
+model Atividade {
+  id                String    @id @default(cuid())
+  numero            Int       @unique @default(autoincrement())
+  codigo            String?
+  usuarioId         String
+  auditoriaAutor    String?
+  tipo              String
+  // OPORTUNIDADE | RECOMENDACAO | ROTINA | REUNIAO | OCORRENCIA | PAUTA
+  origemTipo        String
+  origemId          String
+  leadId            String?
+  responsavelId     String?
+  prazo             DateTime
+  canal             String?
+  oQueFazer         String?
+  status            String    @default("PENDENTE") // PENDENTE | EXECUTADA | CANCELADA
+  resultado         String?
+  executadaEm       DateTime?
+  autorExecucao     String?
+  autorExecucaoTipo String? // PESSOA | AUTOMACAO
+  modeloTipo        String? // CADENCIA | ROTINA
+  modeloId          String?
+  exigeLocalizacao  Boolean   @default(false)
+  latitude          Float?
+  longitude         Float?
+  reguaEstado       String    @default("NAO_INICIADA") // NAO_INICIADA | LEMBRETE | ALERTA | ALERTA_2 | ESCALONADA | PARADA
+  registroTabela    String
+  registroId        String
+  criadoEm          DateTime  @default(now())
+  atualizadoEm      DateTime  @default(now())
+
+  registrosRegua ReguaRegistro[]
+
+  @@unique([registroTabela, registroId], map: "pro_labore_atividades_registro_key")
+  @@index([usuarioId, status, prazo], map: "pro_labore_atividades_fila_idx")
+  @@index([leadId], map: "pro_labore_atividades_lead_idx")
+  @@index([responsavelId, status, prazo], map: "pro_labore_atividades_resp_idx")
+  @@map("pro_labore_atividades")
+}
+
+// Régua de cobrança por tipo de origem (sem linha = padrão 4.4).
+model ReguaCobranca {
+  id               String   @id @default(cuid())
+  usuarioId        String
+  origemTipo       String
+  lembreteMinAntes Int      @default(30)
+  segundoAlertaMin Int      @default(120)
+  escalonamentoMin Int      @default(1440)
+  escalonarPara    String   @default("SUPERVISOR") // SUPERVISOR | GESTOR | DONO
+  auditoriaAutor   String?
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @default(now()) @updatedAt
+
+  @@unique([usuarioId, origemTipo], map: "pro_labore_regua_cobranca_key")
+  @@map("pro_labore_regua_cobranca")
+}
+
+// O que a régua mandaria (modo de registro) ou mandou. Só inclusão.
+model ReguaRegistro {
+  id             String   @id @default(cuid())
+  atividadeId    String
+  etapa          String // LEMBRETE | ALERTA | ALERTA_2 | ESCALONAMENTO
+  previstoPara   DateTime
+  registradoEm   DateTime @default(now())
+  destinatarioId String?
+  modo           String   @default("REGISTRO") // REGISTRO | ENVIO
+  enviado        Boolean  @default(false)
+
+  atividade Atividade @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+
+  @@unique([atividadeId, etapa], map: "pro_labore_regua_registros_key")
+  @@map("pro_labore_regua_registros")
+}

@@ -13,6 +13,7 @@ import { CopiaSeguranca } from './_copia/CopiaSeguranca'
 import { MigracaoJornada } from './_jornada/MigracaoJornada'
 import { RodizioLeads } from './_jornada/RodizioLeads'
 import { PremissasJornada } from './_jornada/PremissasJornada'
+import { ReguaCobranca } from './_jornada/ReguaCobranca'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -201,6 +202,7 @@ export default function ProLaboreConfiguracoesPage() {
       <MigracaoJornada />
       <RodizioLeads />
       <PremissasJornada podeEditar={usuario?.papel === 'DONO'} />
+      <ReguaCobranca podeEditar={usuario?.papel === 'DONO'} />
       <EspacoBanco />
       <AuditoriaDados />
 

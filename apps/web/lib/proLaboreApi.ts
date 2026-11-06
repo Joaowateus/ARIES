@@ -641,6 +641,9 @@ export const proLaboreApi = {
     rodizio: () => request<PessoaRodizio[]>('/pro-labore/jornada/rodizio'),
     credito: () => request<LeadCredito[]>('/pro-labore/jornada/credito'),
     premissas: () => request<PremissasJornada>('/pro-labore/jornada/premissas'),
+    regua: () => request<ReguaCobrancaResp>('/pro-labore/atividades/regua'),
+    salvarRegua: (origem: string, d: ConfigReguaCobranca) => request<ReguaCobrancaResp>(`/pro-labore/atividades/regua/${origem}`, { method: 'PUT', body: JSON.stringify(d) }),
+    conferenciaAtividades: () => request<Array<{ tipo: string; atual: number; atv: number; bate: boolean; semData: number; semAutor: number; semResultado: number }>>('/pro-labore/atividades/conferencia'),
     conversao: () => request<{ inicio: string; fim: string; etapas: Array<{ etapa: EtapaJornada; chegaram: number; seguiram: number; conversao: number | null }> }>('/pro-labore/jornada/conversao'),
     salvarPremissas: (d: { temposMaximos?: Partial<Record<EtapaJornada, { valor: number | null; unidade: UnidadeTempo }>>; criteriosLevantamento?: string[]; faltasAtePerda?: number; posVendaPrazos?: { entrega: number; documentacao: number; primeiraRevisao: number } }) =>
       request<PremissasJornada>('/pro-labore/jornada/premissas', { method: 'PUT', body: JSON.stringify(d) }),
@@ -3587,3 +3590,7 @@ export interface PremissasJornada {
   faltasAtePerda: number
   posVendaPrazos: { entrega: number; documentacao: number; primeiraRevisao: number }
 }
+
+// PDF 02 · régua de cobrança das Atividades (ATV), por tipo de origem.
+export interface ConfigReguaCobranca { lembreteMinAntes: number; segundoAlertaMin: number; escalonamentoMin: number; escalonarPara: 'SUPERVISOR' | 'GESTOR' | 'DONO' }
+export interface ReguaCobrancaResp { modo: 'REGISTRO' | 'ENVIO'; origens: Record<string, ConfigReguaCobranca> }

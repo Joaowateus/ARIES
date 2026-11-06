@@ -17,6 +17,7 @@ import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { avisarLigacoes } from '../lib/ligacoesAviso'
+import { gerarOcorrenciasDeRotina, rodarRegua } from '../lib/atividades'
 import { avisarFollowsCredito } from '../lib/followCredito'
 import { rodarReferencias } from '../lib/smReferencias'
 import { limparEventosAntigos } from '../lib/espacoBanco'
@@ -386,7 +387,10 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const ligacoes = await avisarLigacoes(agoraDoCron(req)).catch(e => { console.error('[ligacoes] aviso', e); return { avisosLigacao: 0 } })
   // Follow de crédito recusado: avisa o vendedor no dia da nova análise.
   const credito = await avisarFollowsCredito(agoraDoCron(req)).catch(e => { console.error('[follow] crédito', e); return { avisosCredito: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente, ...ligacoes, ...credito })
+  // PDF 02 · ATV: as ocorrências de hoje das rotinas e a régua de cobrança (modo de registro: anota, não envia).
+  const rotinas = await gerarOcorrenciasDeRotina(agoraDoCron(req)).catch(e => { console.error('[atv] rotinas', e); return { ocorrenciasRotina: 0 } })
+  const regua = await rodarRegua(agoraDoCron(req)).catch(e => { console.error('[atv] régua', e); return { reguaRegistros: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
