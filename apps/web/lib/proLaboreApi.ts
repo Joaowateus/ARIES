@@ -265,6 +265,10 @@ export interface Lead {
   vendaSemVisita?: boolean
   anteriorMigracao?: boolean
   destinoPerda?: string | null
+  origemTipo?: string | null
+  origemCampanha?: string | null
+  origemLista?: string | null
+  origemConfiabilidade?: string | null
   // SDR: lead que ele passou adiante (já na fase de Venda) — só a etapa e o resultado.
   somenteLeitura?: boolean
   resultado?: 'VENDIDO' | 'PERDIDO' | 'EM_ANDAMENTO'
@@ -649,7 +653,7 @@ export const proLaboreApi = {
   },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
-    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; tipoNegociacao?: TipoNegociacao; valorNegociacao: number; forcarDuplicado?: boolean }) =>
+    criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; origemLista?: 'INDICACAO' | 'LOJA_FISICA' | 'RETORNO_ESPONTANEO'; tipoNegociacao?: TipoNegociacao; valorNegociacao: number; forcarDuplicado?: boolean }) =>
       request<Lead>('/pro-labore/leads', { method: 'POST', body: JSON.stringify(data) }),
     capturaWhatsapp: () => request<CapturaWhatsappCrm>('/pro-labore/leads/captura-whatsapp'),
     foraDoCrm: () => request<{ dias: number; itens: ContatoForaDoCrm[] }>('/pro-labore/assistente/fora-do-crm'),

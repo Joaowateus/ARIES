@@ -1415,6 +1415,15 @@ model Lead {
   estagioLegado             String?
   // Motivo de perda das 5 etapas, guardado na migração (o novo fica em motivoPerda).
   motivoPerdaLegado         String?
+  // --- Origem da oportunidade (PDF 02, 4.5) — gravada na criação e não muda depois ---
+  origemTipo                String? // ANUNCIO | POST | DIRECT_COMENTARIO | ORGANICO | LISTA | DESCONHECIDA
+  origemCampanha            String?
+  origemConjunto            String?
+  origemAnuncio             String? // id do anúncio (clique para WhatsApp)
+  origemTituloAnuncio       String?
+  origemLista               String? // INDICACAO | LOJA_FISICA | RETORNO_ESPONTANEO
+  origemAutomatica          Boolean   @default(false)
+  origemConfiabilidade      String? // CONFIRMADO | INCOMPLETO
   entrouNaEtapaEm           DateTime?
   // Quem fez a última escrita (preenchido pelo sistema; lido pela auditoria).
   auditoriaAutor            String?
@@ -2103,6 +2112,9 @@ model AssistenteConversa {
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
   // | CONTATO_NOVO
+  // Anúncio do clique para WhatsApp que abriu a conversa (PDF 02, 4.5).
+  anuncioId            String?
+  anuncioTitulo        String?
   origem               String?
   etapaRoteiro         Int       @default(0)
   respostas            Json?

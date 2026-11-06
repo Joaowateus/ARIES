@@ -941,6 +941,8 @@ const criarLeadSchema = z.object({
   observacao: z.string().optional(),
   vendedorId: z.string().optional(),
   tipoLead: z.enum(TIPOS_LEAD).optional(),
+  // Origem da lista fechada (PDF 02, 4.5) quando não foi capturada sozinha.
+  origemLista: z.enum(['INDICACAO', 'LOJA_FISICA', 'RETORNO_ESPONTANEO']).optional(),
   tipoNegociacao: z.enum(TIPOS_NEGOCIACAO).optional(),
   valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero'),
   // Cadastra mesmo havendo lead aberto com o mesmo telefone (o vendedor confirmou).
@@ -955,6 +957,11 @@ router.post('/leads', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), asyn
   }
 
   const usuarioId = req.proLaboreUser!.sub
+  // Jornada nova: todo lead novo tem origem (anúncio, Instagram ou a lista fechada).
+  if (!parse.data.origemLista && !parse.data.tipoLead) {
+    const p = await prisma.parametroLiquidez.findUnique({ where: { usuarioId }, select: { jornadaAtivaEm: true } })
+    if (p?.jornadaAtivaEm) { res.status(400).json({ error: 'Escolha a origem do lead' }); return }
+  }
   const papel = req.proLaboreUser!.papel
   let vendedorId = parse.data.vendedorId
 
@@ -1008,6 +1015,7 @@ router.post('/leads', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), asyn
       endereco: parse.data.endereco,
       modeloInteresse: parse.data.modeloInteresse,
       observacao: parse.data.observacao,
+      origemLista: parse.data.origemLista,
       tipoLead: parse.data.tipoLead ?? (origemPost ? 'ORGANICO' : undefined),
       tipoNegociacao: parse.data.tipoNegociacao,
       valorNegociacao: parse.data.valorNegociacao,

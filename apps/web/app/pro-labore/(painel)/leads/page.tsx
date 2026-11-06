@@ -168,11 +168,13 @@ type FormLead = {
   observacao: string
   vendedorId: string
   tipoLead: TipoLead | ''
+  // Origem do lead novo (PDF 02): lista fechada, anúncio ou Instagram.
+  origem: string
   tipoNegociacao: TipoNegociacao | ''
   valorNegociacao: string
 }
 
-const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '', tipoNegociacao: '', valorNegociacao: '' }
+const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: '', endereco: '', modeloInteresse: '', observacao: '', vendedorId: '', tipoLead: '', origem: '', tipoNegociacao: '', valorNegociacao: '' }
 
 const paramDaUrl = (nome: string) => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(nome))
 
@@ -372,7 +374,8 @@ export default function ProLaboreLeadsPage() {
       modeloInteresse: form.modeloInteresse || undefined,
       observacao: form.observacao || undefined,
       vendedorId: form.vendedorId || undefined,
-      tipoLead: form.tipoLead || undefined,
+      tipoLead: form.origem === 'TRAFEGO' || form.origem === 'ORGANICO' ? form.origem : form.tipoLead || undefined,
+      origemLista: ['INDICACAO', 'LOJA_FISICA', 'RETORNO_ESPONTANEO'].includes(form.origem) ? form.origem as 'INDICACAO' | 'LOJA_FISICA' | 'RETORNO_ESPONTANEO' : undefined,
       valorNegociacao,
       })
     try {
@@ -436,6 +439,7 @@ export default function ProLaboreLeadsPage() {
       observacao: lead.observacao ?? '',
       vendedorId: lead.vendedorId ?? '',
       tipoLead: lead.tipoLead ?? '',
+      origem: '',
       tipoNegociacao: lead.tipoNegociacao ?? '',
       valorNegociacao: String(Math.round(lead.valorNegociacao * 100)),
     })
@@ -1166,10 +1170,14 @@ export default function ProLaboreLeadsPage() {
                 <span className="pl-hint">Quanto o cliente teria capacidade de gerar de faturamento</span>
               </div>
               <div className="pl-field">
-                <label>Canal (opcional)</label>
-                <select className="pl-select" value={form.tipoLead} onChange={e => setForm(f => ({ ...f, tipoLead: e.target.value as TipoLead | '' }))}>
-                  <option value="">— Não informado —</option>
-                  {TIPOS_LEAD.map(t => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
+                <label>Origem</label>
+                <select className="pl-select" value={form.origem} onChange={e => setForm(f => ({ ...f, origem: e.target.value }))} required data-origem-lead>
+                  <option value="">— Escolha de onde veio —</option>
+                  <option value="INDICACAO">Indicação</option>
+                  <option value="LOJA_FISICA">Loja física</option>
+                  <option value="RETORNO_ESPONTANEO">Retorno espontâneo</option>
+                  <option value="TRAFEGO">Anúncio (tráfego pago)</option>
+                  <option value="ORGANICO">Instagram (orgânico)</option>
                 </select>
               </div>
               {vejaEquipe && (
