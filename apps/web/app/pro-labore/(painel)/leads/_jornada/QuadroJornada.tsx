@@ -47,11 +47,14 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [premissas, setPremissas] = useState<PremissasJornada | null>(null)
-  useEffect(() => { proLaboreApi.jornada.premissas().then(setPremissas).catch(() => setPremissas(null)) }, [])
+  const [conversao, setConversao] = useState<Record<string, { chegaram: number; conversao: number | null }>>({})
+  useEffect(() => {
+    proLaboreApi.jornada.premissas().then(setPremissas).catch(() => setPremissas(null))
+    proLaboreApi.jornada.conversao().then(c => setConversao(Object.fromEntries(c.etapas.map(x => [x.etapa, x])))).catch(() => setConversao({}))
+  }, [leads.length])
 
   const visiveis = FASES.filter(f => fase === 'TUDO' || f.id === fase)
   const porEtapa = (e: EtapaJornada) => leads.filter(l => (l.etapa ?? 'LEAD') === e)
-  const daquiEmDiante = (i: number) => leads.filter(l => ETAPAS_JORNADA.indexOf((l.etapa ?? 'LEAD') as EtapaJornada) >= i).length
 
   async function mover(lead: Lead, destino: EtapaJornada, contatoFora?: boolean) {
     if (destino === lead.etapa) return
@@ -94,7 +97,6 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
               <div style={{ display: 'flex', gap: 10 }}>
                 {f.etapas.map(e => {
                   const i = ETAPAS_JORNADA.indexOf(e), cards = porEtapa(e)
-                  const base = daquiEmDiante(i), seguem = daquiEmDiante(i + 1)
                   const soma = cards.reduce((t, l) => t + (l.valorNegociacao || 0), 0)
                   return (
                     <div
@@ -108,7 +110,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                       <div className="pl-kanban-col-head">
                         <div>
                           <div className="pl-kanban-col-title">{i + 1}. {NOME_ETAPA[e]}</div>
-                          {e !== 'VENDA' && cards.length > 0 && base > 0 && <div className="pl-kanban-col-hint" title="Dos leads que chegaram até aqui, quantos já estão nas etapas seguintes">{Math.round((seguem / base) * 100)}% seguem adiante</div>}
+                          {e !== 'VENDA' && conversao[e]?.conversao != null && <div className="pl-kanban-col-hint" title={`Dos ${conversao[e].chegaram} leads que chegaram a esta etapa nos últimos 30 dias, quantos passaram à seguinte${e === 'MQL' || e === 'SQL' ? ' (sem os à vista)' : e === 'AGENDAMENTO' || e === 'VISITA' ? ' (sem as vendas sem visita)' : ''}`} data-conversao={e}>{conversao[e].conversao}% passam adiante · 30 dias</div>}
                         </div>
                         <div className="pl-kanban-col-lado">
                           <div className="pl-kanban-col-count pl-mono">{cards.length}</div>

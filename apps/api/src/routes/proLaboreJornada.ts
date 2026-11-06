@@ -8,6 +8,7 @@ import { requireModulo } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
 import { ETAPAS } from '../lib/etapasJornada'
 import { premissas, salvarPremissas } from '../lib/jornadaPremissas'
+import { conversaoPorEtapa } from '../lib/jornadaMetricas'
 import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
 import { MOTIVOS_CANCELAMENTO, cancelarVenda, confirmarVenda, checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
 import { requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
@@ -209,6 +210,15 @@ router.patch('/jornada/analises/:id', ...editar, async (req: Request, res: Respo
     // Banco aprovou: o lead vai para SQL sozinho (fato que o sistema vê).
     res.json({ ok: true, avancou: await avancarPorFatos(l.id) })
   } catch (e) { falha(res, e) }
+})
+
+// --- Conversão por etapa (pela data em que o lead chegou à etapa) ---
+router.get('/jornada/conversao', ...ver, async (req: Request, res: Response) => {
+  const { usuarioId, resto } = escopo(req)
+  const fim = typeof req.query.fim === 'string' ? new Date(req.query.fim) : new Date()
+  const inicio = typeof req.query.inicio === 'string' ? new Date(req.query.inicio) : new Date(fim.getTime() - 30 * 86_400_000)
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())) { res.status(400).json({ error: 'Período inválido' }); return }
+  res.json({ inicio, fim, etapas: await conversaoPorEtapa({ usuarioId, ...resto }, inicio, fim) })
 })
 
 // --- Metas e premissas da jornada (o dono edita) ---
