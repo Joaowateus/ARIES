@@ -186,7 +186,7 @@ export async function rodadaDesfazer(usuarioId: string) {
   await prisma.parametroLiquidez.updateMany({ where: { usuarioId }, data: { jornadaAtivaEm: null } })
   await comAutor({ origem: 'MIGRACAO' }, async () => {
     while (Date.now() - inicio < LIMITE_RODADA_MS) {
-      const lote = await prisma.lead.findMany({ where: { usuarioId, anteriorMigracao: true }, select: { id: true, estagio: true, motivoPerdaLegado: true }, take: LOTE })
+      const lote = await prisma.lead.findMany({ where: { usuarioId, anteriorMigracao: true }, select: { id: true, estagio: true, estagioLegado: true, motivoPerdaLegado: true }, take: LOTE })
       if (!lote.length) break
       for (const l of lote) {
         if (Date.now() - inicio > LIMITE_RODADA_MS) break
@@ -195,7 +195,8 @@ export async function rodadaDesfazer(usuarioId: string) {
           data: {
             etapa: null, fase: null, revisarEtapa: false, responsavelFechamentoId: null, formaPagamento: null, temEntrada: null,
             levantamentoCompleto: false, anteriorMigracao: false, estagioLegado: null, entrouNaEtapaEm: null, clienteId: null, destinoPerda: null,
-            ...(l.estagio === 'PERDIDO' ? { motivoPerda: l.motivoPerdaLegado, motivoPerdaLegado: null } : {}),
+            // Motivo antigo volta só para quem já estava perdido na migração.
+            ...(l.estagioLegado === 'PERDIDO' ? { motivoPerda: l.motivoPerdaLegado, motivoPerdaLegado: null } : {}),
           },
         })
       }

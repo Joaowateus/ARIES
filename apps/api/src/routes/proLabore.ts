@@ -1265,11 +1265,15 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
   await prisma.leadFollow.updateMany({ where: { leadId: atual.id, tipo: 'CREDITO', status: 'PENDENTE' }, data: { status: 'CANCELADO', resultado: 'Venda fechada' } })
   const lead = await prisma.lead.update({
     where: { id: atual.id },
-    data: { estagio: 'FECHADO', fechadoEm: new Date(), vendaId: venda.id },
+    data: {
+      estagio: 'FECHADO', fechadoEm: new Date(), vendaId: venda.id,
+      // Jornada de 10 etapas: entra em Venda; sem ter passado pela visita, marca "venda sem visita".
+      ...(atual.etapa ? { etapa: 'VENDA', fase: 'FECHAMENTO', entrouNaEtapaEm: new Date(), vendaSemVisita: atual.etapa !== 'VISITA', revisarEtapa: false } : {}),
+    },
     include: LEAD_INCLUDE,
   })
   await prisma.leadEstagioHistorico.create({
-    data: { leadId: atual.id, estagioAnterior: atual.estagio, estagioNovo: 'FECHADO' },
+    data: { leadId: atual.id, estagioAnterior: atual.etapa ?? atual.estagio, estagioNovo: atual.etapa ? 'VENDA' : 'FECHADO' },
   })
 
   res.status(201).json({ lead, venda })

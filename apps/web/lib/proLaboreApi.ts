@@ -253,6 +253,18 @@ export interface AgendaInicio {
 
 export interface Lead {
   id: string
+  // Jornada de 10 etapas (PDF 01): nulo enquanto a conta não foi migrada.
+  etapa?: EtapaJornada | null
+  fase?: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO' | null
+  entrouNaEtapaEm?: string | null
+  formaPagamento?: 'A_VISTA' | 'FINANCIADO' | null
+  situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null
+  temEntrada?: boolean | null
+  levantamentoCompleto?: boolean
+  revisarEtapa?: boolean
+  vendaSemVisita?: boolean
+  anteriorMigracao?: boolean
+  destinoPerda?: string | null
   nomeCliente: string
   telefone?: string | null
   email?: string | null
@@ -602,6 +614,14 @@ export const proLaboreApi = {
     resumo: (ano?: number) => request<GastoDoMes[]>(`/pro-labore/gastos-anuncios/resumo${ano ? `?ano=${ano}` : ''}`),
     salvar: (data: { mesReferencia: string; valor: number }) =>
       request<GastoAnuncioMensal>('/pro-labore/gastos-anuncios', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  // Jornada de 10 etapas: o que falta para avançar, mudar de etapa, levantamento e perda.
+  jornada: {
+    checklist: (id: string) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/checklist`),
+    mover: (id: string, etapa: EtapaJornada, contatoFora?: boolean) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/etapa`, { method: 'POST', body: JSON.stringify({ etapa, contatoFora }) }),
+    levantamento: (id: string, data: { modeloInteresse?: string | null; formaPagamento?: 'A_VISTA' | 'FINANCIADO' | null; situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null; temEntrada?: boolean | null }) =>
+      request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/levantamento`, { method: 'PATCH', body: JSON.stringify(data) }),
+    perda: (id: string, motivo: string, nota?: string) => request<{ ok: boolean; destino: string | null }>(`/pro-labore/jornada/leads/${id}/perda`, { method: 'POST', body: JSON.stringify({ motivo, nota }) }),
   },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
@@ -3501,4 +3521,12 @@ export interface StatusJornada {
   total: number; migrados: number; pendentes: number; clientes: number; semCliente: number
   jornada: Array<{ etapa: string; fase: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'; ativos: number; perdidos: number }>
   conferencia: Array<{ de: string | null; para: string | null; revisarEtapa: boolean; n: number }>
+}
+
+export type EtapaJornada = 'LEAD' | 'ABORDADO' | 'LEVANTAMENTO' | 'MQL' | 'SQL' | 'NEGOCIACAO' | 'PROPOSTA' | 'AGENDAMENTO' | 'VISITA' | 'VENDA'
+export interface ChecklistJornada {
+  etapa: EtapaJornada
+  proximas: Array<{ etapa: EtapaJornada; faltando: string[] }>
+  levantamentoFalta: string[]
+  motivos: string[]
 }
