@@ -4624,3 +4624,34 @@ model ReguaRegistro {
   @@unique([atividadeId, etapa], map: "pro_labore_regua_registros_key")
   @@map("pro_labore_regua_registros")
 }
+
+// PDF 02 · 4.2: versões da ficha de métrica aprovadas pelo dono (só inclusão).
+model MetricaVersao {
+  id            String    @id @default(cuid())
+  usuarioId     String
+  chave         String
+  versao        Int
+  ficha         Json
+  justificativa String
+  autorId       String
+  aprovadoPor   String?
+  aprovadoEm    DateTime?
+  criadoEm      DateTime  @default(now())
+
+  @@unique([usuarioId, chave, versao], map: "pro_labore_metricas_versoes_key")
+  @@map("pro_labore_metricas_versoes")
+}
+
+// Padrão da loja por métrica e dia (e retratos diários das métricas de "agora").
+model MetricaPadrao {
+  id        String   @id @default(cuid())
+  usuarioId String
+  chave     String
+  escopo    String
+  dia       DateTime @db.Date
+  valor     Float?
+  criadoEm  DateTime @default(now())
+
+  @@unique([usuarioId, chave, escopo, dia], map: "pro_labore_metricas_padrao_key")
+  @@map("pro_labore_metricas_padrao")
+}

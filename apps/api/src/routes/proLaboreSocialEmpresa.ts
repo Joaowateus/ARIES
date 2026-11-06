@@ -18,6 +18,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { avisarLigacoes } from '../lib/ligacoesAviso'
 import { gerarOcorrenciasDeRotina, rodarRegua } from '../lib/atividades'
+import { guardarRetratos } from '../lib/metricas'
 import { avisarFollowsCredito } from '../lib/followCredito'
 import { rodarReferencias } from '../lib/smReferencias'
 import { limparEventosAntigos } from '../lib/espacoBanco'
@@ -355,7 +356,9 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const referencias = await rodarReferencias(agora).catch(e => { console.error('[sm] referências', e); return { referenciasPerfis: 0, referenciasMotos: 0 } })
   // Os eventos brutos do Instagram já processados não ficam para sempre (espaço do banco).
   const eventosLimpos = await limparEventosAntigos(agora).catch(e => { console.error('[sm] limpeza de eventos', e); return { eventosApagados: 0 } })
-  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos })
+  // PDF 02 · dicionário de métricas: retrato do dia das métricas de "agora" (base das faixas).
+  const retratos = await guardarRetratos(agoraDoCron(req)).catch(e => { console.error('[metricas] retratos', e); return { retratosMetricas: 0 } })
+  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em

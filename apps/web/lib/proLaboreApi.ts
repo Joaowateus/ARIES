@@ -3594,3 +3594,31 @@ export interface PremissasJornada {
 // PDF 02 · régua de cobrança das Atividades (ATV), por tipo de origem.
 export interface ConfigReguaCobranca { lembreteMinAntes: number; segundoAlertaMin: number; escalonamentoMin: number; escalonarPara: 'SUPERVISOR' | 'GESTOR' | 'DONO' }
 export interface ReguaCobrancaResp { modo: 'REGISTRO' | 'ENVIO'; origens: Record<string, ConfigReguaCobranca> }
+
+// PDF 02 · dicionário de métricas (ficha única e leitura com a comparação padrão).
+export type UnidadeMetrica = 'QTD' | 'PCT' | 'BRL' | 'MIN' | 'DIAS' | 'X'
+export interface FichaMetrica {
+  chave: string; lote: 1 | 2; nome: string; definicao: string; formula: string; fonte: string; janela: string; comparacao: string
+  unidade: UnidadeMetrica; melhor: 'MAIOR' | 'MENOR' | 'NEUTRO'; aditiva: boolean; retrato?: boolean; responsavel: string; quemVe: string[]
+  faixas?: { bom: number; critico: number } | null; versao: number; aprovadoPor: string | null; aprovadoEm: string | null
+}
+export interface VersaoMetrica { id: string; versao: number; ficha: Partial<FichaMetrica>; justificativa: string; autorId: string; aprovadoPor: string | null; aprovadoEm: string | null; criadoEm: string }
+export interface PeriodoMetrica { inicio: string; fim: string }
+export interface LeituraMetrica {
+  chave: string; nome: string; unidade: UnidadeMetrica; melhor: 'MAIOR' | 'MENOR' | 'NEUTRO'; versao: number
+  periodo: PeriodoMetrica; valor: number | null; amostra?: number; detalhe?: unknown
+  anterior: { periodo: PeriodoMetrica; valor: number | null } | null
+  variacao: number | null; projecao: number | null; padrao: number | null; faixa: 'BOM' | 'ATENCAO' | 'CRITICO' | null
+}
+export const metricasApi = {
+  ler: (chaves: string[], periodo?: PeriodoMetrica, vendedorId?: string) => {
+    const q = new URLSearchParams({ chaves: chaves.join(',') })
+    if (periodo) { q.set('inicio', periodo.inicio); q.set('fim', periodo.fim) }
+    if (vendedorId) q.set('vendedorId', vendedorId)
+    return request<{ periodo: PeriodoMetrica; leituras: LeituraMetrica[] }>(`/pro-labore/metricas?${q}`)
+  },
+  fichas: () => request<FichaMetrica[]>('/pro-labore/metricas/fichas'),
+  ficha: (chave: string) => request<{ ficha: FichaMetrica; versoes: VersaoMetrica[] }>(`/pro-labore/metricas/fichas/${chave}`),
+  novaVersao: (chave: string, d: { nome?: string; definicao?: string; responsavel?: string; quemVe?: string[]; faixas?: { bom: number; critico: number } | null; justificativa: string }) =>
+    request<{ ficha: FichaMetrica; versoes: VersaoMetrica[] }>(`/pro-labore/metricas/fichas/${chave}`, { method: 'PUT', body: JSON.stringify(d) }),
+}

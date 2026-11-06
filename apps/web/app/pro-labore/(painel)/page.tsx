@@ -12,6 +12,8 @@ import { PageHeader } from '../PageHeader'
 import { FechamentoDiario } from './_fechamento/FechamentoDiario'
 import { AvisoConferencia } from './_conferencia/AvisoConferencia'
 import { PerdasDoMes } from './_perdas/PerdasDoMes'
+import { FaixaChip, FichaMetricaModal, rotuloPeriodo, useMetricas } from './_metricas/Metricas'
+import type { LeituraMetrica } from '@/lib/proLaboreApi'
 
 // --pl-accent fica de fora da rotação: ele inverte de claro pra escuro (e
 // vice-versa) entre os temas, e o texto do avatar é sempre branco fixo —
@@ -55,7 +57,7 @@ function DeltaChip({ curr, prev, invert }: { curr: number; prev: number | undefi
 // Extraído do .map() do grid de KPIs porque useCountUp é um hook — teria que
 // ser chamado dentro de um componente próprio pra cada card, não solto num
 // callback de array (regra dos hooks).
-function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel, nota }: {
+function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel, nota, leitura, onFicha }: {
   label: string
   format: (n: number) => React.ReactNode
   color: string
@@ -64,17 +66,29 @@ function KpiCard({ label, format, color, curr, prev, invert, anteriorLabel, nota
   invert?: boolean
   anteriorLabel?: string
   nota?: string
+  // PDF 02: com a leitura do dicionário, o número, a comparação (mesmo intervalo) e a faixa vêm da ficha.
+  leitura?: LeituraMetrica
+  onFicha?: () => void
 }) {
-  const animated = useCountUp(curr)
-  return (
-    <div className="pl-kpi" style={{ ['--k-color' as string]: color }}>
+  const valor = leitura ? leitura.valor ?? 0 : curr
+  const anterior = leitura ? leitura.anterior?.valor ?? undefined : prev
+  const animated = useCountUp(valor)
+  const corpo = (
+    <>
       <div className="pl-kpi-label">{label}</div>
-      <div className="pl-kpi-value">{format(animated)}</div>
+      <div className="pl-kpi-value">{leitura && leitura.valor == null ? '—' : format(animated)}</div>
       <div className="pl-kpi-foot">
-        <DeltaChip curr={curr} prev={prev} invert={invert} />
-        {anteriorLabel && <span className="pl-kpi-vs">vs. {anteriorLabel}</span>}
+        <DeltaChip curr={valor} prev={anterior} invert={invert} />
+        {leitura?.anterior ? <span className="pl-kpi-vs">vs. {rotuloPeriodo(leitura.anterior.periodo)}</span> : anteriorLabel && <span className="pl-kpi-vs">vs. {anteriorLabel}</span>}
+        {leitura && <FaixaChip faixa={leitura.faixa} />}
       </div>
+      {leitura?.projecao != null && <div className="pl-kpi-nota">Projeção de fechamento: {format(leitura.projecao)}</div>}
       {nota && <div className="pl-kpi-nota">{nota}</div>}
+    </>
+  )
+  return (
+    <div className="pl-kpi" style={{ ['--k-color' as string]: color }} data-kpi-metrica={leitura?.chave}>
+      {onFicha ? <button type="button" className="pl-kpi-ficha" onClick={onFicha} title="Ver a ficha da métrica">{corpo}</button> : corpo}
     </div>
   )
 }
@@ -236,6 +250,17 @@ export default function ProLaboreDashboardPage() {
   const meses = painel?.meses ?? []
   const atual = meses[selectedIdx]
   const anterior = selectedIdx > 0 ? meses[selectedIdx - 1] : undefined
+  // PDF 02: os KPIs do mês leem do dicionário de métricas — mês em andamento até hoje, comparado ao mesmo trecho do mês anterior.
+  const periodoKpi = useMemo(() => {
+    if (!atual) return null
+    const hoje = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10)
+    const ini = `${atual.ano}-${String(atual.mes + 1).padStart(2, '0')}-01`
+    const ult = `${atual.ano}-${String(atual.mes + 1).padStart(2, '0')}-${String(new Date(Date.UTC(atual.ano, atual.mes + 1, 0)).getUTCDate()).padStart(2, '0')}`
+    return { inicio: ini, fim: ult < hoje ? ult : hoje }
+  }, [atual])
+  const chavesKpi = isDono ? ['faturamento', 'pro_labore', 'ticket_medio', 'roas', 'custo_por_lead', 'conversao_lead_venda'] : ['faturamento', 'ticket_medio', 'conversao_lead_venda']
+  const leituras = useMetricas(chavesKpi, periodoKpi, vejaEquipe ? filtroVendedorId : undefined)
+  const [fichaAberta, setFichaAberta] = useState<string | null>(null)
   // No celular a faixa de meses rola de lado: abre já mostrando o mês escolhido.
   const faixaMeses = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -323,23 +348,23 @@ export default function ProLaboreDashboardPage() {
   const formatConversao = (n: number) => formatPct(n / 100)
 
   const kpis = [
-    { label: 'Receita do mês', format: formatMoeda, color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
+    { chave: 'faturamento', label: 'Receita do mês', format: formatMoeda, color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
     ...(isDono
-      ? [{ label: 'Lucro (pró-labore)', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }]
+      ? [{ chave: 'pro_labore', label: 'Lucro (pró-labore)', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }]
       : isSupervisor
         ? [] // não é dela nem da equipe como um todo — cada vendedor já vê a própria no Ranking
         : [{ label: 'Comissão do mês', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga }]),
-    { label: 'Ticket médio', format: formatMoeda, color: 'var(--pl-accent-4)', curr: atual.ticketMedio, prev: anterior?.ticketMedio },
+    { chave: 'ticket_medio', label: 'Ticket médio', format: formatMoeda, color: 'var(--pl-accent-4)', curr: atual.ticketMedio, prev: anterior?.ticketMedio },
     ...(isDono
       ? [
           { label: 'Comissões pagas', format: formatMoeda, color: 'var(--pl-accent-4)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga },
           { label: 'Gasto com anúncios', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.gastoAnuncios, prev: anterior?.gastoAnuncios, invert: true, nota: notaGasto(atual) },
-          { label: 'ROAS', format: formatRoas, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas, nota: 'Receita do mês ÷ gasto com anúncios' },
-          ...(atual.custoPorLead != null ? [{ label: 'Custo por lead', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.custoPorLead, prev: anterior?.custoPorLead ?? undefined, invert: true, nota: 'Gasto do mês ÷ todos os leads do mês (inclui quem só mandou mensagem)' }] : []),
+          { chave: 'roas', label: 'ROAS', format: formatRoas, color: 'var(--pl-accent-5)', curr: atual.roas, prev: anterior?.roas, nota: 'Faturamento ÷ gasto com anúncios' },
+          ...(atual.custoPorLead != null ? [{ chave: 'custo_por_lead', label: 'Custo por lead', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.custoPorLead, prev: anterior?.custoPorLead ?? undefined, invert: true, nota: 'Gasto com anúncios ÷ leads novos de tráfego pago' }] : []),
           ...(atual.custoPorLeadQualificado != null ? [{ label: 'Custo por lead qualificado', format: formatMoeda, color: 'var(--pl-accent-2)', curr: atual.custoPorLeadQualificado, prev: anterior?.custoPorLeadQualificado ?? undefined, invert: true, nota: 'Gasto do mês ÷ leads que chegaram a Negociação' }] : []),
         ]
       : []),
-    { label: 'Conversão lead→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
+    { chave: 'conversao_lead_venda', label: 'Conversão lead→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoLeadVenda, prev: anterior?.conversaoLeadVenda },
     ...(atual.leadsQualificados != null ? [{ label: 'Conversão qualificado→venda', format: formatConversao, color: 'var(--pl-accent-6)', curr: atual.conversaoQualificadoVenda ?? 0, prev: anterior?.conversaoQualificadoVenda, nota: `${atual.leadsQualificados} de ${atual.funil.leads} leads chegaram a Negociação` }] : []),
   ]
 
@@ -381,9 +406,11 @@ export default function ProLaboreDashboardPage() {
 
       <div className="pl-kpi-grid" style={{ marginTop: 16 }}>
         {kpis.map(k => (
-          <KpiCard key={k.label} label={k.label} format={k.format} color={k.color} curr={k.curr} prev={k.prev} invert={k.invert} anteriorLabel={anterior?.label} nota={'nota' in k ? k.nota : undefined} />
+          <KpiCard key={k.label} label={k.label} format={k.format} color={k.color} curr={k.curr} prev={k.prev} invert={k.invert} anteriorLabel={anterior?.label} nota={'nota' in k ? k.nota : undefined}
+            leitura={'chave' in k && k.chave ? leituras[k.chave] : undefined} onFicha={'chave' in k && k.chave ? () => setFichaAberta(k.chave as string) : undefined} />
         ))}
       </div>
+      {fichaAberta && <FichaMetricaModal chave={fichaAberta} onFechar={() => setFichaAberta(null)} />}
 
       <AnoEMetas meses={meses} atual={atual} parametro={parametro} onParametroSalvo={setParametro} isDono={isDono} vejaEquipe={vejaEquipe} metaMensalVendedor={metaMensalVendedor} />
 
