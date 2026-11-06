@@ -1,6 +1,7 @@
-// CPF e data de nascimento (PDF 01, seção 5): mascarados em todo o sistema e
-// nunca enviados à IA. Completos só dentro da ficha de crédito dos próprios
-// leads, e cada acesso fica registrado (tabela imutável).
+// CPF e data de nascimento. Decisão do dono (06/11/2026), alterando o PDF 00:
+// aparecem completos em todo o sistema, para todos os perfis. A IA continua
+// sem receber esses dados (sem exceção). A ficha de crédito aberta ainda
+// registra o acesso (tabela imutável).
 import { prisma } from './prisma'
 
 export function mascararCpf(v: string) {

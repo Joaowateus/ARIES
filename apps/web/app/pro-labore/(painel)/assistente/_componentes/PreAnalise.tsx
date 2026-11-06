@@ -86,8 +86,8 @@ function ModalPreAnalise({ conversaId, credito, conectado, onAtualizar, onFechar
             <div className="pl-si-ficha" data-ficha>
               <dl className="pl-as-dl">
                 <dt>CPF</dt>
-                <dd><span className="pl-mono" data-cpf>{completo?.cpfCompleto ?? ficha.cpf}</span> <button type="button" className="pl-vt-link" onClick={() => (completo ? setCompleto(null) : void abrirCompleto())} data-mostrar-cpf title="Cada vez que o CPF é mostrado, o acesso fica registrado">{completo ? 'esconder' : 'mostrar'}</button></dd>
-                <dt>Nascimento</dt><dd>{completo ? (completo.nascimentoCompleto ?? 'a confirmar com o cliente') : ficha.nascimento ?? 'a confirmar com o cliente'}</dd>
+                <dd><span className="pl-mono" data-cpf>{ficha.cpf}</span></dd>
+                <dt>Nascimento</dt><dd>{ficha.nascimento ?? 'a confirmar com o cliente'}</dd>
                 <dt>Autorização</dt>
                 <dd>{ficha.origem === 'ROBO' ? `pelo WhatsApp${ficha.consentimento.resposta ? `: “${ficha.consentimento.resposta}”` : ''}` : ficha.consentimento.resposta ?? 'registrada pelo vendedor'}{ficha.consentimento.em ? ` · ${quando(ficha.consentimento.em)}` : ''}</dd>
               </dl>
