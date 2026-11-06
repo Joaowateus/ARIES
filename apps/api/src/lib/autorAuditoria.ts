@@ -44,6 +44,13 @@ const comAutorDaEtapa = (d: unknown, a: Autor): unknown =>
 
 /** Middleware do Prisma: põe o autor em toda criação e alteração dos modelos auditados. */
 export const middlewareAutor: Prisma.Middleware = async (params, next) => {
+  // Mensagem escrita pela tela do sistema: quem da loja escreveu (PDF 02, 4.1).
+  if (params.model === 'AssistenteMensagem' && params.action === 'create') {
+    const a = params.args as Dados | undefined
+    const d = a?.data as Dados | undefined
+    const autor = autorAtual()
+    if (d && d.remetente === 'VENDEDOR' && !d.pessoaId && autor.origem === 'USUARIO' && autor.id) d.pessoaId = autor.id
+  }
   // Histórico de etapas: cada entrada guarda quem moveu (o banco fecha a anterior).
   if (params.model === 'LeadEstagioHistorico' && (params.action === 'create' || params.action === 'createMany')) {
     const a = params.args as Dados | undefined

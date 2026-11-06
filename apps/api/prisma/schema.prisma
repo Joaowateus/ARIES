@@ -2198,11 +2198,19 @@ model AssistenteMensagem {
   followFluxo String?
   criadoEm    DateTime @default(now())
 
+  // PDF 02 (4.1): hora exata no WhatsApp (recebida ou enviada), quem da loja
+  // escreveu (vendedor/dono) e se é a 1ª resposta de uma pessoa na conversa
+  // (base do "tempo de primeira resposta"; resposta do robô não conta).
+  enviadaEm              DateTime?
+  pessoaId               String?
+  primeiraRespostaHumana Boolean   @default(false)
+
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
   // Áudio ou foto que veio (ou saiu) pelo WhatsApp, para ouvir e ver na conversa.
   midia    AssistenteMidia?
 
   @@index([conversaId])
+  @@index([conversaId, primeiraRespostaHumana])
   @@map("pro_labore_assistente_mensagens")
 }
 

@@ -291,7 +291,7 @@ async function tratarMensagemDoVendedor(a: AssistenteCompleto, m: MensagemWhatsa
         data: {
           assistenteId: a.id, tipo: 'LEAD', robo: false, status: 'ASSUMIDA', assumidaEm: agora, leadId: lead.id,
           nomeContato: lead.nomeCliente, numeroContato: m.numero, jid: m.jid, ultimaMensagemEm: agora,
-          mensagens: { create: { remetente: 'VENDEDOR', texto: m.texto, providerId: m.id } },
+          mensagens: { create: { remetente: 'VENDEDOR', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined, pessoaId: a.vendedorId } },
         },
         select: { id: true },
       })
@@ -320,7 +320,7 @@ async function tratarMensagemDoVendedor(a: AssistenteCompleto, m: MensagemWhatsa
   }
   const agora = new Date()
   await prisma.$transaction([
-    prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'VENDEDOR', texto: m.texto, providerId: m.id } }),
+    prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'VENDEDOR', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined, pessoaId: a.vendedorId } }),
     prisma.assistenteConversa.update({
       where: { id: conversa.id },
       data: {
@@ -380,7 +380,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     if (conversa) {
       conversaTocada = conversa.id
       const esperandoResposta = perguntaJaEntregue(conversa.mensagens)
-      await tx.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id } })
+      await tx.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } })
       const base = {
         ultimaMensagemEm: new Date(), ...(m.nomePerfil && conversa.nomeContato === formatarTelefone(m.numero) && { nomeContato: m.nomePerfil }),
         // Cliente respondeu: o follow automático recomeça do zero; pediu para parar (com o vendedor), para de vez.
@@ -438,7 +438,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
             assistenteId: a.id, tipo: 'LEAD', robo: false, status: 'ASSUMIDA', leadId, origem: origemDoCadastro,
             nomeContato: m.nomePerfil ?? formatarTelefone(m.numero), numeroContato: m.numero, jid: m.jid,
             respostas: { _inicial: mascararDadosPessoais(m.texto) } as Prisma.InputJsonValue,
-            mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
+            mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } },
           },
           select: { id: true },
         })).id
@@ -452,7 +452,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
       data: {
         assistenteId: a.id, tipo: 'LEAD', nomeContato, numeroContato: m.numero, jid: m.jid, origem, leadId,
         ...dadosDoPasso(passo),
-        mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
+        mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } },
       },
     })
     conversaTocada = criada.id
@@ -1246,7 +1246,7 @@ async function tratarSuporte(a: AssistenteCompleto, m: MensagemWhatsapp) {
   const cfg = lerConfig(a.configuracao)
   const conversa = await conversaDeSuporte(a)
   try {
-    await prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id } })
+    await prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return // webhook repetido
     throw e
