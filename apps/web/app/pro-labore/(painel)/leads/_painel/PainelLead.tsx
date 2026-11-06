@@ -1,5 +1,6 @@
 'use client'
 
+import { QualidadeLead } from './QualidadeLead'
 import { JornadaPainel } from './JornadaPainel'
 
 // Painel lateral do lead (abre com um clique no card): tudo que saiu do card
@@ -79,6 +80,7 @@ export function PainelLead({ lead, onJornadaMudou, colunas, isDono, vejaEquipe, 
           <button type="button" className="pl-pn-fechar" onClick={onFechar} aria-label="Fechar painel">✕</button>
         </header>
 
+        <QualidadeLead leadId={lead.id} />
         {lead.etapa ? <JornadaPainel lead={lead} onMudou={() => onJornadaMudou?.()} /> : <>
         <ol className="pl-pn-etapas" aria-label="Etapa no funil">
           {colunas.map((c, i) => (

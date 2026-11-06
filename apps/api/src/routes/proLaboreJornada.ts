@@ -7,7 +7,7 @@ import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { requireModulo } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
 import { ETAPAS } from '../lib/etapasJornada'
-import { premissas, salvarPremissas } from '../lib/jornadaPremissas'
+import { historicoDeParametros, premissas, salvarPremissas } from '../lib/jornadaPremissas'
 import { conversaoPorEtapa } from '../lib/jornadaMetricas'
 import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
 import { MOTIVOS_CANCELAMENTO, cancelarVenda, confirmarVenda, checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
@@ -232,11 +232,20 @@ const premissasSchema = z.object({
   criteriosLevantamento: z.array(z.enum(['modelo', 'pagamento', 'cnh', 'entrada'])).min(1, 'Escolha ao menos um critério').optional(),
   faltasAtePerda: z.number().int().min(1).max(10).optional(),
   posVendaPrazos: z.object({ entrega: z.number().int().min(0), documentacao: z.number().int().min(0), primeiraRevisao: z.number().int().min(0) }).optional(),
+  volumeMinimoDetectores: z.number().int().min(1).max(1000).optional(),
+  metaDiariaSdr: z.number().min(0).max(1000).nullable().optional(),
+  // PDF 02 · 4.3: toda mudança de parâmetro tem justificativa.
+  justificativa: z.string().trim().min(5, 'Escreva por que mudou').max(500),
 })
 router.put('/jornada/premissas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const p = premissasSchema.safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
-  res.json(await salvarPremissas(req.proLaboreUser!.sub, p.data as Parameters<typeof salvarPremissas>[1]))
+  const { justificativa, ...mudanca } = p.data
+  res.json(await salvarPremissas(req.proLaboreUser!.sub, mudanca as Parameters<typeof salvarPremissas>[1], { autorId: req.proLaboreUser!.sub, justificativa }))
+})
+
+router.get('/jornada/premissas/historico', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  res.json(await historicoDeParametros(req.proLaboreUser!.sub))
 })
 
 // --- Rodízio (dono e supervisor) ---

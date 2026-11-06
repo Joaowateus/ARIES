@@ -1170,6 +1170,9 @@ model ParametroLiquidez {
   jornadaAtivaEm               DateTime?
   // Prazos do Pós-venda a partir da confirmação da venda, em dias.
   posVendaPrazos               Json?
+  // PDF 02 · 4.3: volume mínimo de casos para os detectores (onda 2) e meta diária do SDR (nula = pelo histórico).
+  volumeMinimoDetectores       Int       @default(10)
+  metaDiariaSdr                Float?
 
   @@map("pro_labore_parametros")
 }
@@ -4654,4 +4657,55 @@ model MetricaPadrao {
 
   @@unique([usuarioId, chave, escopo, dia], map: "pro_labore_metricas_padrao_key")
   @@map("pro_labore_metricas_padrao")
+}
+
+// PDF 02 · 4.3: histórico de mudança de parâmetro (autor, data, justificativa). Só inclusão.
+model ParametroHistorico {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  nome          String
+  valorAnterior Json?
+  valorNovo     Json?
+  origem        String // HISTORICO | MANUAL
+  justificativa String
+  autorId       String
+  criadoEm      DateTime @default(now())
+
+  @@index([usuarioId, nome, criadoEm], map: "pro_labore_parametros_historico_idx")
+  @@map("pro_labore_parametros_historico")
+}
+
+// PDF 02 · 4.8: classificação de confiabilidade por registro.
+model Confiabilidade {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  registroTabela String
+  registroId     String
+  classificacao  String // CONFIRMADO | INCOMPLETO | SUSPEITO
+  motivo         String?
+  regra          String?
+  avaliadoEm     DateTime @default(now())
+
+  @@unique([registroTabela, registroId], map: "pro_labore_confiabilidade_key")
+  @@index([usuarioId, classificacao], map: "pro_labore_confiabilidade_idx")
+  @@map("pro_labore_confiabilidade")
+}
+
+// PDF 02 · 4.8: correção orientada (o que falta, onde, quem corrige).
+model CorrecaoPendente {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  registroTabela String
+  registroId     String
+  leadId         String?
+  regra          String
+  classificacao  String // INCOMPLETO | SUSPEITO
+  oQueFalta      String
+  responsavelId  String?
+  status         String    @default("ABERTA") // ABERTA | RESOLVIDA
+  criadaEm       DateTime  @default(now())
+  resolvidaEm    DateTime?
+
+  @@index([usuarioId, status, responsavelId], map: "pro_labore_correcoes_idx")
+  @@map("pro_labore_correcoes_pendentes")
 }

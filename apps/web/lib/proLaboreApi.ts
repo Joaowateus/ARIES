@@ -645,7 +645,8 @@ export const proLaboreApi = {
     salvarRegua: (origem: string, d: ConfigReguaCobranca) => request<ReguaCobrancaResp>(`/pro-labore/atividades/regua/${origem}`, { method: 'PUT', body: JSON.stringify(d) }),
     conferenciaAtividades: () => request<Array<{ tipo: string; atual: number; atv: number; bate: boolean; semData: number; semAutor: number; semResultado: number }>>('/pro-labore/atividades/conferencia'),
     conversao: () => request<{ inicio: string; fim: string; etapas: Array<{ etapa: EtapaJornada; chegaram: number; seguiram: number; conversao: number | null }> }>('/pro-labore/jornada/conversao'),
-    salvarPremissas: (d: { temposMaximos?: Partial<Record<EtapaJornada, { valor: number | null; unidade: UnidadeTempo }>>; criteriosLevantamento?: string[]; faltasAtePerda?: number; posVendaPrazos?: { entrega: number; documentacao: number; primeiraRevisao: number } }) =>
+    historicoParametros: () => request<HistoricoParametro[]>('/pro-labore/jornada/premissas/historico'),
+    salvarPremissas: (d: { temposMaximos?: Partial<Record<EtapaJornada, { valor: number | null; unidade: UnidadeTempo }>>; criteriosLevantamento?: string[]; faltasAtePerda?: number; posVendaPrazos?: { entrega: number; documentacao: number; primeiraRevisao: number }; volumeMinimoDetectores?: number; metaDiariaSdr?: number | null; justificativa?: string }) =>
       request<PremissasJornada>('/pro-labore/jornada/premissas', { method: 'PUT', body: JSON.stringify(d) }),
     analise: (id: string, data: { status?: 'A_ENVIAR' | 'EM_ANALISE' | 'APROVADA' | 'RECUSADA'; validadeAte?: string | null; condicaoAprovada?: string | null; enviada?: boolean }) =>
       request<{ ok: boolean; avancou: string | null }>(`/pro-labore/jornada/analises/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -3589,7 +3590,10 @@ export interface PremissasJornada {
   criteriosLevantamento: string[]
   faltasAtePerda: number
   posVendaPrazos: { entrega: number; documentacao: number; primeiraRevisao: number }
+  volumeMinimoDetectores: number
+  metaDiariaSdr: { valor: number | null; sugerido: number | null; fonte: 'APROVADO' | 'HISTORICO' | 'SEM_HISTORICO' }
 }
+export interface HistoricoParametro { id: string; nome: string; valorAnterior: unknown; valorNovo: unknown; origem: 'HISTORICO' | 'MANUAL'; justificativa: string; autorId: string; criadoEm: string }
 
 // PDF 02 · régua de cobrança das Atividades (ATV), por tipo de origem.
 export interface ConfigReguaCobranca { lembreteMinAntes: number; segundoAlertaMin: number; escalonamentoMin: number; escalonarPara: 'SUPERVISOR' | 'GESTOR' | 'DONO' }
@@ -3621,4 +3625,17 @@ export const metricasApi = {
   ficha: (chave: string) => request<{ ficha: FichaMetrica; versoes: VersaoMetrica[] }>(`/pro-labore/metricas/fichas/${chave}`),
   novaVersao: (chave: string, d: { nome?: string; definicao?: string; responsavel?: string; quemVe?: string[]; faixas?: { bom: number; critico: number } | null; justificativa: string }) =>
     request<{ ficha: FichaMetrica; versoes: VersaoMetrica[] }>(`/pro-labore/metricas/fichas/${chave}`, { method: 'PUT', body: JSON.stringify(d) }),
+}
+
+// PDF 02 · 4.8 qualidade dos dados e 4.7 matriz de ações.
+export interface CorrecaoPendente { id: string; registroTabela: string; registroId: string; leadId: string | null; regra: string; problema: string; classificacao: 'INCOMPLETO' | 'SUSPEITO'; oQueFalta: string; responsavelId: string | null; responsavel: string; lead: string | null; status: 'ABERTA' | 'RESOLVIDA'; criadaEm: string; resolvidaEm: string | null }
+export const qualidadeApi = {
+  correcoes: (f: { responsavelId?: string; regra?: string; status?: 'ABERTA' | 'RESOLVIDA' } = {}) => {
+    const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][])
+    return request<{ regras: Record<string, { nome: string; classificacao: string }>; porRegra: Record<string, number>; porResponsavel: Array<{ responsavelId: string | null; nome: string; total: number }>; itens: CorrecaoPendente[] }>(`/pro-labore/qualidade/correcoes?${q}`)
+  },
+  avaliar: () => request<{ qualidadeAbertas: number; qualidadeResolvidas: number; qualidadeProblemas: number }>('/pro-labore/qualidade/avaliar', { method: 'POST', body: '{}' }),
+  doLead: (id: string) => request<{ classificacao: 'CONFIRMADO' | 'INCOMPLETO' | 'SUSPEITO'; correcoes: CorrecaoPendente[] }>(`/pro-labore/qualidade/leads/${id}`),
+  corrigirOrigem: (id: string, origemLista: 'INDICACAO' | 'LOJA_FISICA' | 'RETORNO_ESPONTANEO') => request<{ origemTipo: string; origemLista: string; origemConfiabilidade: string }>(`/pro-labore/qualidade/leads/${id}/origem`, { method: 'PUT', body: JSON.stringify({ origemLista }) }),
+  matriz: () => request<{ meuPerfil: string; acoes: Array<{ chave: string; nome: string; perfis: string[]; nota?: string }> }>('/pro-labore/qualidade/matriz'),
 }

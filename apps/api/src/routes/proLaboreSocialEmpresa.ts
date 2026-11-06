@@ -19,6 +19,7 @@ import { prisma } from '../lib/prisma'
 import { avisarLigacoes } from '../lib/ligacoesAviso'
 import { gerarOcorrenciasDeRotina, rodarRegua } from '../lib/atividades'
 import { guardarRetratos } from '../lib/metricas'
+import { avaliarTodas } from '../lib/qualidade'
 import { avisarFollowsCredito } from '../lib/followCredito'
 import { rodarReferencias } from '../lib/smReferencias'
 import { limparEventosAntigos } from '../lib/espacoBanco'
@@ -358,7 +359,9 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const eventosLimpos = await limparEventosAntigos(agora).catch(e => { console.error('[sm] limpeza de eventos', e); return { eventosApagados: 0 } })
   // PDF 02 · dicionário de métricas: retrato do dia das métricas de "agora" (base das faixas).
   const retratos = await guardarRetratos(agoraDoCron(req)).catch(e => { console.error('[metricas] retratos', e); return { retratosMetricas: 0 } })
-  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
+  // PDF 02 · 4.8: camada de qualidade (abre e resolve as correções pendentes).
+  const qualidade = await avaliarTodas(agoraDoCron(req)).catch(e => { console.error('[qualidade] avaliar', e); return { qualidadeAbertas: 0, qualidadeResolvidas: 0 } })
+  res.json({ ...qualidade, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em

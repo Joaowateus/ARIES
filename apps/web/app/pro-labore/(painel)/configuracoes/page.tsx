@@ -15,6 +15,8 @@ import { RodizioLeads } from './_jornada/RodizioLeads'
 import { PremissasJornada } from './_jornada/PremissasJornada'
 import { ReguaCobranca } from './_jornada/ReguaCobranca'
 import { DicionarioMetricas } from './_jornada/DicionarioMetricas'
+import { SaudeDados } from './_jornada/SaudeDados'
+import { MatrizAcoes } from './_jornada/MatrizAcoes'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -205,6 +207,8 @@ export default function ProLaboreConfiguracoesPage() {
       <PremissasJornada podeEditar={usuario?.papel === 'DONO'} />
       <ReguaCobranca podeEditar={usuario?.papel === 'DONO'} />
       <DicionarioMetricas podeEditar={usuario?.papel === 'DONO'} />
+      <SaudeDados podeReavaliar={usuario?.papel === 'DONO' || usuario?.papel === 'SUPERVISOR'} />
+      <MatrizAcoes />
       <EspacoBanco />
       <AuditoriaDados />
 
