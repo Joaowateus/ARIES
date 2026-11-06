@@ -253,6 +253,21 @@ export interface AgendaInicio {
 
 export interface Lead {
   id: string
+  // Jornada de 10 etapas (PDF 01): nulo enquanto a conta não foi migrada.
+  etapa?: EtapaJornada | null
+  fase?: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO' | null
+  entrouNaEtapaEm?: string | null
+  formaPagamento?: 'A_VISTA' | 'FINANCIADO' | null
+  situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null
+  temEntrada?: boolean | null
+  levantamentoCompleto?: boolean
+  revisarEtapa?: boolean
+  vendaSemVisita?: boolean
+  anteriorMigracao?: boolean
+  destinoPerda?: string | null
+  // SDR: lead que ele passou adiante (já na fase de Venda) — só a etapa e o resultado.
+  somenteLeitura?: boolean
+  resultado?: 'VENDIDO' | 'PERDIDO' | 'EM_ANDAMENTO'
   nomeCliente: string
   telefone?: string | null
   email?: string | null
@@ -311,6 +326,8 @@ export interface Lead {
 
 export interface Venda {
   id: string
+  // Jornada de 10 etapas: a venda do vendedor só conta depois que o dono confirma.
+  situacao?: 'CONFIRMADA' | 'AGUARDANDO_CONFIRMACAO' | 'CANCELADA'
   data: string
   valorVenda: number
   valorProLabore: number
@@ -603,6 +620,33 @@ export const proLaboreApi = {
     salvar: (data: { mesReferencia: string; valor: number }) =>
       request<GastoAnuncioMensal>('/pro-labore/gastos-anuncios', { method: 'PUT', body: JSON.stringify(data) }),
   },
+  // Jornada de 10 etapas: o que falta para avançar, mudar de etapa, levantamento e perda.
+  jornada: {
+    checklist: (id: string) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/checklist`),
+    mover: (id: string, etapa: EtapaJornada, contatoFora?: boolean) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/etapa`, { method: 'POST', body: JSON.stringify({ etapa, contatoFora }) }),
+    levantamento: (id: string, data: { modeloInteresse?: string | null; formaPagamento?: 'A_VISTA' | 'FINANCIADO' | null; situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null; temEntrada?: boolean | null }) =>
+      request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/levantamento`, { method: 'PATCH', body: JSON.stringify(data) }),
+    perda: (id: string, motivo: string, nota?: string) => request<{ ok: boolean; destino: string | null }>(`/pro-labore/jornada/leads/${id}/perda`, { method: 'POST', body: JSON.stringify({ motivo, nota }) }),
+    detalhe: (id: string) => request<DetalheJornada>(`/pro-labore/jornada/leads/${id}/detalhe`),
+    proposta: (id: string, data: { preco: number; entrada?: number | null; parcela?: number | null; prazo?: number | null; validade?: string | null; followEm?: string | null }) =>
+      request<{ proposta: PropostaLead; mensagem: string }>(`/pro-labore/jornada/leads/${id}/proposta`, { method: 'POST', body: JSON.stringify(data) }),
+    propostaEnviada: (propostaId: string) => request<{ ok: boolean }>(`/pro-labore/jornada/propostas/${propostaId}/enviada`, { method: 'POST', body: '{}' }),
+    respostaProposta: (propostaId: string, resultado: 'ACEITA' | 'RECUSADA' | 'SEM_RESPOSTA') => request<{ ok: boolean }>(`/pro-labore/jornada/propostas/${propostaId}/resposta`, { method: 'POST', body: JSON.stringify({ resultado }) }),
+    acao: (id: string, acao: 'visita' | 'checkin' | 'falta' | 'resultado-visita' | 'passar' | 'devolver', body: Record<string, unknown> = {}) =>
+      request<{ ok: boolean; resultado: unknown }>(`/pro-labore/jornada/leads/${id}/${acao}`, { method: 'POST', body: JSON.stringify(body) }),
+    rodizio: () => request<PessoaRodizio[]>('/pro-labore/jornada/rodizio'),
+    credito: () => request<LeadCredito[]>('/pro-labore/jornada/credito'),
+    premissas: () => request<PremissasJornada>('/pro-labore/jornada/premissas'),
+    conversao: () => request<{ inicio: string; fim: string; etapas: Array<{ etapa: EtapaJornada; chegaram: number; seguiram: number; conversao: number | null }> }>('/pro-labore/jornada/conversao'),
+    salvarPremissas: (d: { temposMaximos?: Partial<Record<EtapaJornada, { valor: number | null; unidade: UnidadeTempo }>>; criteriosLevantamento?: string[]; faltasAtePerda?: number; posVendaPrazos?: { entrega: number; documentacao: number; primeiraRevisao: number } }) =>
+      request<PremissasJornada>('/pro-labore/jornada/premissas', { method: 'PUT', body: JSON.stringify(d) }),
+    analise: (id: string, data: { status?: 'A_ENVIAR' | 'EM_ANALISE' | 'APROVADA' | 'RECUSADA'; validadeAte?: string | null; condicaoAprovada?: string | null; enviada?: boolean }) =>
+      request<{ ok: boolean; avancou: string | null }>(`/pro-labore/jornada/analises/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    vendasAguardando: () => request<Array<{ id: string; data: string; valorVenda: number; placa: string | null; vendedor: { nome: string } | null; lead: { id: string; nomeCliente: string } | null }>>('/pro-labore/jornada/vendas/aguardando'),
+    confirmarVenda: (id: string) => request<{ ok: boolean }>(`/pro-labore/jornada/vendas/${id}/confirmar`, { method: 'POST', body: '{}' }),
+    cancelarVenda: (id: string, motivo: 'CANCELADA_DESISTENCIA' | 'CREDITO_NAO_LIBERADO' | 'ERRO_REGISTRO') => request<{ ok: boolean }>(`/pro-labore/jornada/vendas/${id}/cancelar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
+    disponivel: (vendedorId: string, disponivel: boolean) => request<PessoaRodizio[]>(`/pro-labore/jornada/rodizio/${vendedorId}`, { method: 'PUT', body: JSON.stringify({ disponivel }) }),
+  },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
     criar: (data: { nomeCliente: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string; tipoLead?: TipoLead; tipoNegociacao?: TipoNegociacao; valorNegociacao: number; forcarDuplicado?: boolean }) =>
@@ -850,6 +894,8 @@ export const proLaboreApi = {
       request<SimulacaoDaConversa>(`/pro-labore/assistente/conversas/${id}/simulacao`, { method: 'POST', body: JSON.stringify(data) }),
     // Pré-análise de crédito: ficha autorizada e a resposta de cada banco.
     credito: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`),
+    // Ficha completa (CPF e nascimento sem máscara): cada abertura fica registrada.
+    creditoCompleto: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/completa`),
     salvarFicha: (id: string, data: { cpf: string; nascimento?: string | null; autorizado: true }) =>
       request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'PUT', body: JSON.stringify(data) }),
     apagarFicha: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'DELETE' }),
@@ -907,6 +953,13 @@ export const proLaboreApi = {
       rodadaRestauracao: (id: string, sessao: string) => request<CopiaSeguranca>(`/pro-labore/sistema/copias/restaurar/${id}/rodada`, { method: 'POST', body: '{}', headers: { 'x-sessao-restauracao': sessao } }),
     },
     banco: () => request<SaudeBanco>('/pro-labore/sistema/banco'),
+    // Migração para a jornada de 10 etapas (PDF 01): simulação, rodadas e desfazer.
+    jornada: {
+      simulacao: () => request<SimulacaoJornada>('/pro-labore/sistema/jornada/simulacao'),
+      status: () => request<StatusJornada>('/pro-labore/sistema/jornada/status'),
+      rodada: () => request<StatusJornada>('/pro-labore/sistema/jornada/rodada', { method: 'POST', body: '{}' }),
+      desfazer: () => request<StatusJornada>('/pro-labore/sistema/jornada/desfazer/rodada', { method: 'POST', body: '{}' }),
+    },
     // Espaço do banco: o que ocupa e o que dá para liberar (rodadas).
     espaco: () => request<EspacoBanco>('/pro-labore/sistema/espaco'),
     liberarEspaco: (acao: 'eventos' | 'imagens' | 'midias' | 'compactar' | 'vercel') => request<EspacoBanco & { rodada: { feitos: number; restantes: number } }>('/pro-labore/sistema/espaco/liberar', { method: 'POST', body: JSON.stringify({ acao }) }),
@@ -1103,8 +1156,8 @@ export const proLaboreApi = {
   // Acessos e permissões da equipe — só o dono.
   acessos: {
     listar: () => request<PainelAcessos>('/pro-labore/acessos'),
-    criar: (dados: NovoAcesso) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
-    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'documento' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>>) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    criar: (dados: NovoAcesso & { sdr?: boolean }) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
+    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'documento' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>> & { sdr?: boolean }) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
     senha: (id: string, senha: string) => request<{ ok: true }>(`/pro-labore/acessos/${id}/senha`, { method: 'POST', body: JSON.stringify({ senha }) }),
     remover: (id: string) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'DELETE' }),
   },
@@ -1892,8 +1945,11 @@ export interface CreditoConversa {
   ativa: boolean
   bancos: string[]
   ficha: {
+    id?: string
     cpf: string
     nascimento: string | null
+    cpfCompleto?: string
+    nascimentoCompleto?: string | null
     origem: 'ROBO' | 'VENDEDOR'
     consentimento: { em?: string; pergunta?: string; resposta?: string }
     criadoEm: string
@@ -3477,4 +3533,53 @@ export interface EspacoBanco {
   compactaveisMB: number
   tabelas: Array<{ tabela: string; rotulo: string | null; mb: number; linhas: number }>
   liberar: Record<'eventos' | 'imagens' | 'midias', { quantidade: number; mb: number }>
+}
+
+export interface SimulacaoJornada {
+  permitido: boolean
+  total: number; jaMigrados: number; aMigrar: number
+  porEstagioAntigo: Record<string, number>; porEtapaNova: Record<string, number>
+  pares: Array<{ de: string; n: number }>
+  revisarEtapa: number; perdidos: number
+  motivos: Array<{ antigo: string; novo: string; destino: string; n: number }>
+  levantamento: { aVista: number; financiado: number; semInformacao: number }
+  clientes: { jaExistem: number; aCriar: number; comTelefone: number; semTelefone: number; telefonesRepetidos: number; leadsJuntados: number; exemplos: Array<{ nome: string; telefone: string; leads: number }> }
+  conferencia: { leadsAntes: number; leadsDepois: number; nenhumPerdido: boolean }
+}
+export interface StatusJornada {
+  total: number; migrados: number; pendentes: number; clientes: number; semCliente: number
+  jornada: Array<{ etapa: string; fase: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'; ativos: number; perdidos: number }>
+  conferencia: Array<{ de: string | null; para: string | null; revisarEtapa: boolean; n: number }>
+}
+
+export type EtapaJornada = 'LEAD' | 'ABORDADO' | 'LEVANTAMENTO' | 'MQL' | 'SQL' | 'NEGOCIACAO' | 'PROPOSTA' | 'AGENDAMENTO' | 'VISITA' | 'VENDA'
+export interface ChecklistJornada {
+  etapa: EtapaJornada
+  proximas: Array<{ etapa: EtapaJornada; faltando: string[] }>
+  levantamentoFalta: string[]
+  motivos: string[]
+}
+export interface PropostaLead { id: string; preco: number; entrada: number | null; parcela: number | null; prazo: number | null; validade: string | null; enviadaEm: string | null; respondidaEm: string | null; resultado: string | null; criadoEm: string }
+export interface VisitaLead { id: string; marcadaPara: string; confirmadaEm: string | null; checkinEm: string | null; falta: boolean; remarcacoes: number; resultado: string | null }
+export interface DetalheJornada {
+  checklist: ChecklistJornada
+  propostas: PropostaLead[]
+  visitas: VisitaLead[]
+  passagens: Array<{ id: string; passadaEm: string; resumo: string | null; devolvida: boolean; motivoDevolucao: string | null; sdrNome: string | null; vendedorNome: string | null }>
+  atividades: Array<{ id: string; agendadoPara: string; nota: string | null }>
+  podePassar: boolean
+  podeDevolver: boolean
+}
+export interface PessoaRodizio { vendedorId: string; nome: string; papel: 'SDR' | 'VENDEDOR'; disponivel: boolean; ultimoRecebidoEm: string | null }
+export interface LeadCredito {
+  id: string; nomeCliente: string; etapa: 'MQL' | 'SQL'; entrouNaEtapaEm: string | null; modeloInteresse: string | null; vendedor: { nome: string } | null
+  fichaId: string | null; conversaId: string | null
+  analises: Array<{ id: string; banco: string; status: string; enviadaEm: string | null; respondidoEm: string | null; validadeAte: string | null; condicaoAprovada: string | null; venceEmDias: number | null }>
+}
+export type UnidadeTempo = 'MINUTOS' | 'HORAS' | 'DIAS'
+export interface PremissasJornada {
+  temposMaximos: Record<EtapaJornada, { valor: number | null; unidade: UnidadeTempo; fonte: 'HISTORICO' | 'APROVADO' | 'SEM_LIMITE' | 'DATA_MARCADA' | 'VALIDADE'; sugerido?: number | null }>
+  criteriosLevantamento: string[]
+  faltasAtePerda: number
+  posVendaPrazos: { entrega: number; documentacao: number; primeiraRevisao: number }
 }

@@ -10,6 +10,7 @@ import { ErroAuditoria, auditarDados, vendasDoMes, corrigirDados, desfazerCorrec
 import { conferirMeses } from '../lib/conferenciaMensal'
 import { ErroCopia, iniciarExportacao, iniciarRestauracao, linkDaCopia, listarCopias, manifestoDaCopia, restauracaoPermitida, rodadaExportacao, rodadaRestauracao } from '../lib/copiaSeguranca'
 import { ambienteDeTeste } from '../lib/ambiente'
+import { ErroMigracao, rodadaDesfazer, rodadaMigracao, simularMigracao, statusMigracao } from '../lib/migracaoJornada'
 import { ErroImportacao, descartarImportacao, rodarImportacao, simularImportacao, statusImportacao } from '../lib/importacaoNeon'
 
 const router = Router()
@@ -97,6 +98,25 @@ router.post('/sistema/auditoria/desfazer', ...dono, async (req: Request, res: Re
     if (e instanceof ErroAuditoria) { res.status(e.status).json({ error: e.message }); return }
     throw e
   }
+})
+
+// --- Migração para a jornada de 10 etapas (PDF 01, passo 4) ---
+function falhaMigracao(res: Response, e: unknown) {
+  if (e instanceof ErroMigracao) { res.status(e.status).json({ error: e.message }); return }
+  throw e
+}
+// Simulação: só lê. Mostra o resultado antes de qualquer gravação.
+router.get('/sistema/jornada/simulacao', ...dono, async (req: Request, res: Response) => {
+  res.json(await simularMigracao(req.proLaboreUser!.sub))
+})
+router.get('/sistema/jornada/status', ...dono, async (req: Request, res: Response) => {
+  res.json(await statusMigracao(req.proLaboreUser!.sub))
+})
+router.post('/sistema/jornada/rodada', ...dono, async (req: Request, res: Response) => {
+  try { res.json(await rodadaMigracao(req.proLaboreUser!.sub)) } catch (e) { falhaMigracao(res, e) }
+})
+router.post('/sistema/jornada/desfazer/rodada', ...dono, async (req: Request, res: Response) => {
+  try { res.json(await rodadaDesfazer(req.proLaboreUser!.sub)) } catch (e) { falhaMigracao(res, e) }
 })
 
 // --- Cópia de segurança e ambiente de teste ---

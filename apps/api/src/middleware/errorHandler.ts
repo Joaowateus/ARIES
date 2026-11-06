@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { logger } from '../lib/logger'
 import { MENSAGEM_BANCO_INDISPONIVEL, bancoIndisponivel } from '../lib/bancoDisponivel'
+import { ambienteDeTeste } from '../lib/ambiente'
 
 export interface AppError extends Error {
   statusCode?: number
@@ -25,9 +26,11 @@ export function errorHandler(err: AppError, req: Request, res: Response, _next: 
   res.status(statusCode).json({
     success: false,
     code,
-    message: statusCode >= 500 && process.env.NODE_ENV === 'production'
+    // No ambiente de teste a mensagem real aparece, para achar o problema
+    // antes de ir para a produção (lá continua genérica).
+    message: statusCode >= 500 && process.env.NODE_ENV === 'production' && !ambienteDeTeste()
       ? 'Erro interno do servidor'
-      : err.message,
+      : String(err.message ?? '').slice(0, 600),
     traceId,
   })
 }

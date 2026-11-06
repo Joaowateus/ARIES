@@ -3,6 +3,7 @@
 // Aries quando a pessoa conversa com ele (e deixou os avisos ligados); senão,
 // para o vendedor, no chat "Você" do WhatsApp dele. Junta as ligações da
 // mesma pessoa numa mensagem só. Roda no job de minuto (/sm/cron/minuto).
+import { SEM_CLIENTE_BLOQUEADO } from './etapasJornada'
 import { prisma } from './prisma'
 import { logger } from './logger'
 import { enviarComoPessoa } from './agenteEnvio'
@@ -58,8 +59,8 @@ export async function avisarLigacoes(agora = new Date()): Promise<{ avisosLigaca
   if (!dentroDoHorario(agora)) return { avisosLigacao: 0 }
   const sel = { id: true, usuarioId: true, vendedorId: true, agendadaPara: true, passo: true, totalPassos: true, instrucao: true, cadenciaId: true, lead: { select: { nomeCliente: true, telefone: true } } } as const
   const [avisos, lembretes] = await Promise.all([
-    prisma.ligacaoTarefa.findMany({ where: { status: 'PENDENTE', avisadaEm: null, agendadaPara: { lte: new Date(agora.getTime() + ANTECEDENCIA), gte: new Date(agora.getTime() - AVISO_ATE) } }, select: sel, orderBy: { agendadaPara: 'asc' }, take: 200 }),
-    prisma.ligacaoTarefa.findMany({ where: { status: 'PENDENTE', avisadaEm: { not: null }, relembradaEm: null, agendadaPara: { lte: new Date(agora.getTime() - LEMBRETE_DEPOIS), gte: new Date(agora.getTime() - LEMBRETE_ATE) } }, select: sel, orderBy: { agendadaPara: 'asc' }, take: 200 }),
+    prisma.ligacaoTarefa.findMany({ where: { status: 'PENDENTE', lead: SEM_CLIENTE_BLOQUEADO, avisadaEm: null, agendadaPara: { lte: new Date(agora.getTime() + ANTECEDENCIA), gte: new Date(agora.getTime() - AVISO_ATE) } }, select: sel, orderBy: { agendadaPara: 'asc' }, take: 200 }),
+    prisma.ligacaoTarefa.findMany({ where: { status: 'PENDENTE', lead: SEM_CLIENTE_BLOQUEADO, avisadaEm: { not: null }, relembradaEm: null, agendadaPara: { lte: new Date(agora.getTime() - LEMBRETE_DEPOIS), gte: new Date(agora.getTime() - LEMBRETE_ATE) } }, select: sel, orderBy: { agendadaPara: 'asc' }, take: 200 }),
   ])
   if (!avisos.length && !lembretes.length) return { avisosLigacao: 0 }
   const cadencias = [...new Set([...avisos, ...lembretes].map(l => l.cadenciaId).filter((x): x is string => !!x))]

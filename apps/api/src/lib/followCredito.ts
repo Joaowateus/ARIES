@@ -5,6 +5,7 @@
 // continua. É só do vendedor: nada vai para o cliente sozinho, e o nome dos
 // bancos fica no contexto do follow (fora da nota, que o Aries e o resumo
 // leem). Aprovou em algum banco: o follow pendente é cancelado.
+import { SEM_CLIENTE_BLOQUEADO } from './etapasJornada'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { logger } from './logger'
@@ -108,7 +109,7 @@ const dentroDoHorario = (agora: Date) => { const h = new Date(agora.getTime() - 
 export async function avisarFollowsCredito(agora = new Date()): Promise<{ avisosCredito: number }> {
   if (!dentroDoHorario(agora)) return { avisosCredito: 0 }
   const vencidos = await prisma.leadFollow.findMany({
-    where: { tipo: 'CREDITO', status: 'PENDENTE', avisadoEm: null, agendadoPara: { lte: agora, gte: new Date(agora.getTime() - 7 * DIA) } },
+    where: { tipo: 'CREDITO', status: 'PENDENTE', avisadoEm: null, agendadoPara: { lte: agora, gte: new Date(agora.getTime() - 7 * DIA) }, lead: SEM_CLIENTE_BLOQUEADO },
     select: { id: true, usuarioId: true, vendedorId: true, contexto: true, lead: { select: { id: true, nomeCliente: true } } },
     orderBy: { agendadoPara: 'asc' }, take: 100,
   })

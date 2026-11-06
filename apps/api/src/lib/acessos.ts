@@ -51,11 +51,14 @@ const com = (base: Permissoes, extra: Permissoes): Permissoes => ({ ...base, ...
 // O mesmo que vendedor e supervisor já viam antes desta tela.
 const PADRAO_VENDEDOR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', socialMedia: 'EDITAR', assistente: 'EDITAR', copiloto: 'EDITAR' })
 const PADRAO_SUPERVISOR = com(PADRAO_VENDEDOR, { agenda: 'EDITAR', ocorrencias: 'EDITAR' })
+// SDR (PDF 01): pré-venda e crédito. Sem Vendas, Financeiro nem as cifras do dono.
+const PADRAO_SDR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', assistente: 'EDITAR', copiloto: 'EDITAR' })
 
 export interface PerfilPronto { chave: string; rotulo: string; descricao: string; escopo: Escopo; vende: boolean; permissoes: Permissoes }
 
 export const PERFIS: PerfilPronto[] = [
   { chave: 'VENDEDOR', rotulo: 'Vendedor', descricao: 'Só a própria produção: os próprios leads, tarefas e resultados.', escopo: 'PROPRIO', vende: true, permissoes: PADRAO_VENDEDOR },
+  { chave: 'SDR', rotulo: 'SDR (pré-venda)', descricao: 'Qualifica os leads (Lead a SQL), trabalha no Crédito e passa ao vendedor. Não vê valores de vendas, pró-labore nem comissões.', escopo: 'PROPRIO', vende: true, permissoes: PADRAO_SDR },
   { chave: 'SUPERVISOR', rotulo: 'Supervisor', descricao: 'Vê a equipe toda no CRM e no Dashboard, cuida da agenda e das ocorrências.', escopo: 'EQUIPE', vende: true, permissoes: PADRAO_SUPERVISOR },
   { chave: 'GERENTE', rotulo: 'Gerente', descricao: 'Toca a operação: tudo liberado, menos mexer nas configurações.', escopo: 'EQUIPE', vende: false,
     permissoes: com(Object.fromEntries(MODULOS.map(m => [m.chave, m.niveis.includes('EDITAR') ? 'EDITAR' : 'VER'])) as Permissoes, { configuracoes: 'VER' }) },

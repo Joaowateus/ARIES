@@ -143,6 +143,13 @@ interface EstadoRestauracao {
   falhas: Array<{ tabela: string; erro: string }>; conferencia?: Array<{ tabela: string; esperadas: number; restauradas: number }>
 }
 
+// A restauração copia os registros como estão: não gera eventos de auditoria
+// novos (os eventos originais vêm na própria cópia).
+const semAuditoria = (sql: string, ...valores: unknown[]) => prisma.$transaction([
+  prisma.$executeRawUnsafe(`SELECT set_config('aries.sem_auditoria', '1', true)`),
+  prisma.$executeRawUnsafe(sql, ...valores),
+]).then(([, n]) => n)
+
 export const restauracaoPermitida = () => ambienteDeTeste() || process.env.PERMITIR_RESTAURACAO === '1'
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex')
 
@@ -225,7 +232,7 @@ export async function rodadaRestauracao(id: string, sessao: string, prazoMs = 12
     if (p.tipo === 'INSERIR') {
       // Colunas que apontam para a própria tabela entram vazias e são ligadas no passo seguinte.
       const cols = daCopia.filter(k => !(p.colunas ?? []).includes(k))
-      const inserir = (lote: Array<Record<string, unknown>>) => prisma.$executeRawUnsafe(`INSERT INTO ${q(p.tabela)} (${cols.map(q).join(', ')}) SELECT ${cols.map(q).join(', ')} FROM json_populate_recordset(NULL::${q(p.tabela)}, $1::json) ON CONFLICT DO NOTHING`, JSON.stringify(lote))
+      const inserir = (lote: Array<Record<string, unknown>>) => semAuditoria(`INSERT INTO ${q(p.tabela)} (${cols.map(q).join(', ')}) SELECT ${cols.map(q).join(', ')} FROM json_populate_recordset(NULL::${q(p.tabela)}, $1::json) ON CONFLICT DO NOTHING`, JSON.stringify(lote))
       for (let i = 0; i < linhas.length; i += 200) {
         const lote = linhas.slice(i, i + 200)
         try { e.inseridas[p.tabela] = (e.inseridas[p.tabela] ?? 0) + await inserir(lote) } catch {
@@ -240,7 +247,7 @@ export async function rodadaRestauracao(id: string, sessao: string, prazoMs = 12
       const cols = (p.colunas ?? []).filter(k => doDestino.has(k))
       if (cols.length) {
         try {
-          await prisma.$executeRawUnsafe(`UPDATE ${q(p.tabela)} t SET ${cols.map(k => `${q(k)} = j.${q(k)}`).join(', ')} FROM json_populate_recordset(NULL::${q(p.tabela)}, $1::json) j WHERE t.id = j.id`, JSON.stringify(linhas.map(l => Object.fromEntries([['id', l.id], ...cols.map(k => [k, l[k]])]))))
+          await semAuditoria(`UPDATE ${q(p.tabela)} t SET ${cols.map(k => `${q(k)} = j.${q(k)}`).join(', ')} FROM json_populate_recordset(NULL::${q(p.tabela)}, $1::json) j WHERE t.id = j.id`, JSON.stringify(linhas.map(l => Object.fromEntries([['id', l.id], ...cols.map(k => [k, l[k]])]))))
         } catch (err) { e.falhas.push({ tabela: p.tabela, erro: `vínculos: ${(err instanceof Error ? err.message : String(err)).split('\n').filter(Boolean).slice(-1)[0].slice(0, 180)}` }) }
       }
     }

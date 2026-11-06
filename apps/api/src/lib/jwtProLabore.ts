@@ -8,6 +8,8 @@ export interface ProLaboreJwtPayload {
   nome: string
   papel: 'DONO' | 'VENDEDOR' | 'SUPERVISOR' | 'SOCIAL_MEDIA'
   vendedorId?: string
+  // SDR (pré-venda): vendedor que vê também os leads que qualifica.
+  sdr?: boolean
   smMembroId?: string
 }
 

@@ -32,6 +32,7 @@ const NAV_GROUPS: NavGroup[] = [
   { label: 'Vendas', items: [
     { href: '/pro-labore/leads', label: 'CRM', icon: 'kanban', modulo: 'crm', abas: [
       { href: '/pro-labore/leads', label: 'Funil', modulo: 'crm' },
+      { href: '/pro-labore/credito', label: 'Crédito', modulo: 'crm' },
       { href: '/pro-labore/reativacao', label: 'Perdidos (Reativação)', modulo: 'crm' },
     ] },
     // Agenda do dia e os lembretes de ligação (avulsos e cadências), lado a lado.

@@ -46,7 +46,10 @@ import { sugestaoModelo } from '../lib/copilotoModelos'
 import { memoriaParaIA } from '../lib/copiloto'
 import { estagioAtingiu, funilDoMesDashboard } from '../lib/jornada'
 import { gastoDoMes, gastosDoPeriodo, type GastoDoMes } from '../lib/gastoAnuncios'
-import { MOTIVOS_PERDA, TEMPERATURAS, leadWhereBase } from '../lib/escopoLead'
+import { MOTIVOS_PERDA, TEMPERATURAS, leadWhereBase, leadsPassadosDoSdr } from '../lib/escopoLead'
+import { SITUACOES_VISIVEIS } from '../lib/vendaConfirmada'
+import { ehMascarado } from '../lib/dadoSensivel'
+import { criarPosVenda } from '../lib/jornadaAtividades'
 
 const router = Router()
 
@@ -601,8 +604,9 @@ router.get('/vendas', requireProLaboreAuth, requireModulo('vendas', 'VER'), asyn
     where.data = { gte: inicioDoAnoUTC(Number(ano)), lte: fimDoAnoUTC(Number(ano)) }
   }
 
+  // A lista mostra também as que aguardam a confirmação do dono (com o selo).
   const vendas = await prisma.venda.findMany({
-    where,
+    where: { ...where, ...SITUACOES_VISIVEIS },
     include: VENDA_INCLUDE,
     orderBy: { data: 'desc' },
   })
@@ -894,7 +898,7 @@ router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (r
       // CPF, nascimento e e-mail que o cliente escreveu não aparecem na tela do CRM.
       conversa: c ? { id: c.id, status: c.status, ultimaMensagemEm: c.ultimaMensagemEm, ultima: m ? { ...m, texto: mascararDadosPessoais(m.texto).slice(0, 400) } : null } : null,
     }
-  }))
+  }).concat(await leadsPassadosDoSdr(req) as never[]))
 })
 
 // Faixa do CRM: o WhatsApp de quem já está conectado (leads entram sozinhos)
@@ -999,7 +1003,8 @@ router.post('/leads', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), asyn
       nomeCliente: parse.data.nomeCliente,
       telefone: parse.data.telefone,
       email: parse.data.email,
-      cpf: parse.data.cpf,
+      // CPF que voltou mascarado da tela não sobrescreve o verdadeiro.
+    ...(ehMascarado(parse.data.cpf) ? {} : { cpf: parse.data.cpf }),
       endereco: parse.data.endereco,
       modeloInteresse: parse.data.modeloInteresse,
       observacao: parse.data.observacao,
@@ -1054,7 +1059,8 @@ router.patch('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR'),
     nomeCliente: parse.data.nomeCliente,
     telefone: parse.data.telefone,
     email: parse.data.email,
-    cpf: parse.data.cpf,
+    // CPF que voltou mascarado da tela não sobrescreve o verdadeiro.
+    ...(ehMascarado(parse.data.cpf) ? {} : { cpf: parse.data.cpf }),
     endereco: parse.data.endereco,
     modeloInteresse: parse.data.modeloInteresse,
     observacao: parse.data.observacao,
@@ -1113,6 +1119,11 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
   }
   if (atual.estagio === parse.data.estagio) {
     res.json(atual)
+    return
+  }
+  // Lead da jornada de 10 etapas: muda pelo quadro novo, com critério (só reativar continua aqui).
+  if (atual.etapa && !(atual.estagio === 'PERDIDO' && parse.data.estagio !== 'PERDIDO')) {
+    res.status(409).json({ error: 'Este lead está na nova jornada de 10 etapas: mude a etapa pelo quadro novo do CRM.', codigo: 'JORNADA_10' })
     return
   }
   // Sem o motivo, a perda não ensina nada: é ele que mostra onde e por que o funil perde.
@@ -1185,7 +1196,14 @@ const converterLeadSchema = z.object({
 // vendas divergirem. Marcar o estágio como FECHADO manualmente ainda é
 // possível (ex: negócio fechado fora da esteira), só não cria a venda.
 // Exclusivo do dono — é ele quem registra vendas e paga comissão.
-router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
+// Jornada de 10 etapas: o vendedor registra a venda (fica aguardando a
+// confirmação do dono); fora dela, continua exigindo o acesso a Vendas.
+const vendasOuJornada = async (req: Request, res: Response, next: NextFunction) => {
+  const l = await prisma.lead.findFirst({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub }, select: { etapa: true } })
+  if (l?.etapa) { next(); return }
+  return requireModulo('vendas', 'EDITAR')(req, res, next)
+}
+router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), vendasOuJornada, async (req: Request, res: Response) => {
   const parse = converterLeadSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: parse.error.issues[0].message })
@@ -1251,6 +1269,8 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
       valorProLabore,
       valorComissao,
       observacao: parse.data.observacao ?? `Convertido do lead: ${atual.nomeCliente}`,
+      // Jornada de 10 etapas: o vendedor registra e o dono confirma (o dono registrando já confirma).
+      ...(atual.etapa && req.proLaboreUser!.papel !== 'DONO' ? { situacao: 'AGUARDANDO_CONFIRMACAO', confirmadaEm: null } : { confirmadaEm: new Date(), confirmadaPor: req.proLaboreUser!.nome ?? null }),
     },
     include: VENDA_INCLUDE,
   })
@@ -1260,12 +1280,18 @@ router.post('/leads/:id/converter', requireProLaboreAuth, requireModulo('crm', '
   await prisma.leadFollow.updateMany({ where: { leadId: atual.id, tipo: 'CREDITO', status: 'PENDENTE' }, data: { status: 'CANCELADO', resultado: 'Venda fechada' } })
   const lead = await prisma.lead.update({
     where: { id: atual.id },
-    data: { estagio: 'FECHADO', fechadoEm: new Date(), vendaId: venda.id },
+    data: {
+      estagio: 'FECHADO', fechadoEm: new Date(), vendaId: venda.id,
+      // Jornada de 10 etapas: entra em Venda; sem ter passado pela visita, marca "venda sem visita".
+      ...(atual.etapa ? { etapa: 'VENDA', fase: 'FECHAMENTO', entrouNaEtapaEm: new Date(), vendaSemVisita: atual.etapa !== 'VISITA', revisarEtapa: false } : {}),
+    },
     include: LEAD_INCLUDE,
   })
   await prisma.leadEstagioHistorico.create({
-    data: { leadId: atual.id, estagioAnterior: atual.estagio, estagioNovo: 'FECHADO' },
+    data: { leadId: atual.id, estagioAnterior: atual.etapa ?? atual.estagio, estagioNovo: atual.etapa ? 'VENDA' : 'FECHADO' },
   })
+  // Venda da jornada registrada pelo dono já nasce confirmada: o Pós-venda começa agora.
+  if (atual.etapa && venda.situacao === 'CONFIRMADA') await criarPosVenda({ id: atual.id, usuarioId, vendedorId: atual.vendedorId }, new Date())
 
   res.status(201).json({ lead, venda })
 })

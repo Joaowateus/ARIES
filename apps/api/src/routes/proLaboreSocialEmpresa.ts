@@ -6,6 +6,7 @@
 // A conta da empresa é a mesma linha de SocialMediaConta do dono (titular
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
+import { faltasVencidas } from '../lib/jornadaAtividades'
 import { Router, Request, Response } from 'express'
 import { aprenderTodas } from '../lib/assistenteAprendizado'
 import { verificarAvancos } from '../lib/assistenteRespostas'
@@ -323,9 +324,11 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   const abertas = await recalcularEtiquetasAbertas(200, agoraDoCron(req)).catch(e => { console.error('[assistente] etiquetas abertas', e); return { etiquetasAbertas: 0 } })
   // CPF, nascimento e e-mail escritos na observação de leads antigos: para os campos, mascarados no texto.
   const higiene = await higienizarObservacoes(300).catch(e => { console.error('[assistente] observações', e); return { observacoesLimpas: 0 } })
+  // Jornada: visita que passou da hora sem check-in conta como falta.
+  const faltas = await faltasVencidas(100, agoraDoCron(req)).catch(e => { console.error('[jornada] faltas', e); return { faltasAutomaticas: 0 } })
   // Assistente pessoal: o resumo da manhã no chat "Você" de cada vendedor.
   const manha = await enviarResumosDaManha(agoraDoCron(req)).catch(e => { console.error('[assistente] resumo da manhã', e); return { resumosManha: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return

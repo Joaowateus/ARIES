@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { QuadroJornada } from './_jornada/QuadroJornada'
 import { createPortal } from 'react-dom'
 import { proLaboreApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
 import { metaDefinida } from '@/lib/metaFunil'
@@ -682,6 +683,8 @@ export default function ProLaboreLeadsPage() {
     .filter(passaFiltrosBase)
     .filter(l => !filtroPeriodo || dentroDoPeriodo(l.criadoEm, filtroPeriodo))
   const leadsAtivos = leadsFiltrados.filter(l => l.estagio !== 'PERDIDO')
+  // Conta migrada para a jornada de 10 etapas: o quadro novo substitui o de 5 colunas.
+  const jornada10 = leads.some(l => !!l.etapa)
   const totalPerdidos = leads.filter(l => l.estagio === 'PERDIDO').length
   // Follows pendentes dos leads em andamento: atrasados e de hoje viram atalhos de filtro.
   const situacaoDe = (l: Lead) => (l.follows?.[0] ? situacaoFollow(l.follows[0]).tipo : null)
@@ -1028,6 +1031,15 @@ export default function ProLaboreLeadsPage() {
               ))}
             </div>
           </div>
+          {jornada10 ? (
+            <QuadroJornada
+              leads={leadsAtivosOrdenados}
+              vejaEquipe={vejaEquipe}
+              onAbrir={id => { if (!leads.find(l => l.id === id)?.somenteLeitura) setPainelId(id) }}
+              onAtualizar={carregar}
+              onRegistrarVenda={lead => abrirConversao(lead)}
+            />
+          ) : (
           <div className="pl-kanban">
             {COLUNAS.map(col => {
               const leadsDaColuna = leadsAtivosOrdenados.filter(l => l.estagio === col.estagio)
@@ -1080,6 +1092,7 @@ export default function ProLaboreLeadsPage() {
               )
             })}
           </div>
+          )}
 
         </>
       )}
@@ -1087,6 +1100,7 @@ export default function ProLaboreLeadsPage() {
       {painelLead && (
         <PainelLead
           lead={painelLead}
+          onJornadaMudou={carregar}
           colunas={COLUNAS}
           isDono={isDono}
           vejaEquipe={vejaEquipe}

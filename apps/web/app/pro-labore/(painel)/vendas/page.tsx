@@ -1,5 +1,6 @@
 'use client'
 
+import { VendasAguardando } from './VendasAguardando'
 import { useEffect, useState, useCallback } from 'react'
 import { temAcesso, proLaboreApi, Venda, ParametroLiquidez, Vendedor, type TipoPagamentoVenda, type VendaParecida } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
@@ -388,6 +389,7 @@ export default function ProLaboreVendasPage() {
   return (
     <div>
       <PageHeader eyebrow="Gestão" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} actions={<FechamentoDiario modulo="VENDAS" />} />
+      {usuario?.papel === 'DONO' && <VendasAguardando onMudou={carregar} />}
 
       {isDono && <FechamentoMes podeAlterar={usuario?.papel === 'DONO'} onMudou={setMesesFechados} />}
 
@@ -638,7 +640,7 @@ export default function ProLaboreVendasPage() {
                     <td className="pl-right" style={{ color: 'var(--pl-accent-4)', fontWeight: 700 }}>{v.valorComissao != null ? formatMoeda(v.valorComissao) : '—'}</td>
                     <td className="pl-cms-celula">{celulaPagamento('COMISSAO', v)}</td>
                     <td className="pl-right">{formatMoeda(v.valorVenda - v.valorProLabore - (v.valorComissao ?? 0))}</td>
-                    <td>{v.placa && <span className="pl-chip" style={{ marginRight: 6 }}>{v.placa}</span>}{v.observacao || (v.placa ? '' : '—')}</td>
+                    <td>{v.situacao === 'AGUARDANDO_CONFIRMACAO' && <span className="pl-chip" style={{ marginRight: 6 }} title="Só conta depois da confirmação do dono" data-chip-aguardando>aguardando confirmação</span>}{v.placa && <span className="pl-chip" style={{ marginRight: 6 }}>{v.placa}</span>}{v.observacao || (v.placa ? '' : '—')}</td>
                     <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
                       {mesesFechados.has(v.data.slice(0, 7)) ? <span className="pl-hint" title="Mês fechado: reabra em Fechamento do mês para mudar">Mês fechado</span> : <>
                         <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>

@@ -14,12 +14,25 @@ export function exigirSaidaPermitida(servico: string) {
 // No ambiente de teste, o banco e o armazenamento vêm das variáveis TESTE_* (a Vercel não deixa
 // repetir DATABASE_URL só para uma branch quando ela já vale para Production e Preview).
 export const VARIAVEIS_DE_TESTE = ['DATABASE_URL', 'DIRECT_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'FRONTEND_URL'] as const
+/**
+ * O banco de teste (Supabase gratuito) aceita poucas conexões: cada cópia da
+ * API em execução fica com só uma. Pela porta 6543 (pooler de transação),
+ * liga também o modo pgbouncer que o Prisma exige ali.
+ */
+export function comPoucasConexoes(url: string) {
+  const extra: string[] = []
+  if (/:6543\//.test(url) && !/[?&]pgbouncer=/.test(url)) extra.push('pgbouncer=true')
+  if (!/[?&]connection_limit=/.test(url)) extra.push('connection_limit=1')
+  return extra.length ? `${url}${url.includes('?') ? '&' : '?'}${extra.join('&')}` : url
+}
+
 export function usarVariaveisDeTeste(env: NodeJS.ProcessEnv = process.env) {
   if ((env.AMBIENTE ?? '').trim().toLowerCase() !== 'teste') return
   // Sem o banco de teste, recusa subir: nunca usar o banco da produção por engano.
   if (!env.TESTE_DATABASE_URL?.trim()) throw new Error('Ambiente de teste sem TESTE_DATABASE_URL: recusado para não usar o banco da produção')
   for (const k of VARIAVEIS_DE_TESTE) if (env[`TESTE_${k}`]?.trim()) env[k] = env[`TESTE_${k}`]!.trim()
   if (!env.TESTE_DIRECT_URL?.trim()) env.DIRECT_URL = env.DATABASE_URL
+  env.DATABASE_URL = comPoucasConexoes(env.DATABASE_URL!)
   // Armazenamento da produção nunca é usado no teste: sem o do teste, fica sem armazenamento.
   if (!env.TESTE_SUPABASE_URL?.trim()) { delete env.SUPABASE_URL; delete env.SUPABASE_SERVICE_ROLE_KEY }
 }

@@ -18,6 +18,8 @@
 
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
+import { avancarPorFatos } from './jornadaRegras'
+import { DESTINOS_FORA_DA_REATIVACAO, SEM_CLIENTE_BLOQUEADO } from './etapasJornada'
 import { logger } from './logger'
 import { agenteDaPessoa, enviarComoPessoa } from './agenteEnvio'
 import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
@@ -503,7 +505,7 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
     },
   })
   if (!conversa || conversa.tipo !== 'LEAD' || !conversa.leadId) return null
-  const lead = await prisma.lead.findUnique({ where: { id: conversa.leadId }, select: { id: true, nomeCliente: true, estagio: true, etiquetas: true, avancosDesfeitos: true, vendaId: true } })
+  const lead = await prisma.lead.findUnique({ where: { id: conversa.leadId }, select: { id: true, nomeCliente: true, estagio: true, etapa: true, etiquetas: true, avancosDesfeitos: true, vendaId: true } })
   if (!lead) return null
   const cfg = lerConfig(conversa.assistente.configuracao)
   const doContato = conversa.mensagens.filter(m => m.remetente === 'CONTATO')
@@ -517,6 +519,8 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
   await prisma.assistenteConversa.update({ where: { id: conversaId }, data: { etiquetasEm: agora } })
 
   if (opcoes.avancar === false || lead.vendaId || lead.estagio === 'FECHADO' || lead.estagio === 'PERDIDO') return { etiquetas, avanco: null }
+  // Jornada de 10 etapas: avança só por fatos (pessoa da loja respondeu, simulação enviada, banco aprovou).
+  if (lead.etapa) { await avancarPorFatos(lead.id).catch(e => logger.warn({ err: e }, 'jornada: falha no avanço por fatos')); return { etiquetas, avanco: null } }
   const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId: conversa.assistente.vendedor.usuarioId }, select: { avancoAutomatico: true } })
   if (loja && !loja.avancoAutomatico) return { etiquetas, avanco: null }
   const historico = await prisma.leadEstagioHistorico.findMany({ where: { leadId: lead.id, criadoEm: { gte: new Date(agora.getTime() - 7 * DIA_MS) } } })
@@ -558,12 +562,12 @@ function conversasDoFollow(assistenteIds: string[], agora: Date, resgate: boolea
   const abertas: Prisma.AssistenteConversaWhereInput = {
     assistenteId: { in: assistenteIds }, tipo: 'LEAD', status: 'ASSUMIDA', followParado: null,
     ultimaMensagemEm: { gte: new Date(agora.getTime() - 40 * DIA_MS) },
-    lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null } },
+    lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null, ...SEM_CLIENTE_BLOQUEADO } },
   }
   // Resgate: perdido nos últimos 200 dias, numa conversa que o vendedor já tinha assumido.
   const perdidas: Prisma.AssistenteConversaWhereInput = {
     assistenteId: { in: assistenteIds }, tipo: 'LEAD', followParado: null, assumidaEm: { not: null },
-    lead: { is: { estagio: 'PERDIDO', vendaId: null, perdidoEm: { gte: new Date(agora.getTime() - 200 * DIA_MS) }, OR: [{ motivoPerda: null }, { motivoPerda: { notIn: PERDA_SEM_RESGATE } }] } },
+    lead: { is: { estagio: 'PERDIDO', vendaId: null, perdidoEm: { gte: new Date(agora.getTime() - 200 * DIA_MS) }, OR: [{ motivoPerda: null }, { motivoPerda: { notIn: PERDA_SEM_RESGATE } }], ...SEM_CLIENTE_BLOQUEADO, AND: [{ OR: [{ destinoPerda: null }, { destinoPerda: { notIn: DESTINOS_FORA_DA_REATIVACAO } }] }] } },
   }
   return prisma.assistenteConversa.findMany({
     where: resgate ? { OR: [abertas, perdidas] } : abertas,

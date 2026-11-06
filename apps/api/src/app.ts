@@ -55,6 +55,9 @@ import proLaboreSmCentralRoutes from './routes/proLaboreSmCentral'
 import proLaboreCopilotoRoutes from './routes/proLaboreCopiloto'
 import proLaboreIntelRoutes from './routes/proLaboreIntel'
 import proLaboreSistemaRoutes from './routes/proLaboreSistema'
+import proLaboreJornadaRoutes from './routes/proLaboreJornada'
+import { comAutor } from './lib/autorAuditoria'
+import { mascararResposta } from './lib/dadoSensivel'
 import proLaboreFollowRoutes from './routes/proLaboreFollow'
 import proLaboreLeadNotasRoutes from './routes/proLaboreLeadNotas'
 import proLaboreAssistenteMidiaRoutes from './routes/proLaboreAssistenteMidia'
@@ -99,6 +102,8 @@ app.set('trust proxy', 1)
 
 // Security headers
 app.use(helmet())
+// CPF e data de nascimento saem mascarados em toda resposta (PDF 01).
+app.set('json replacer', mascararResposta)
 
 // Comprime toda resposta JSON (o /painel, em especial, manda um ano inteiro
 // de dados mês a mês) — sem isso cada resposta trafega maior do que
@@ -107,6 +112,15 @@ app.use(compression())
 
 // Request ID — must be first so all middleware/handlers can use it
 app.use(requestId)
+
+// Autor padrão das escritas (auditoria): webhooks são integração, rotinas
+// agendadas são automação; pedidos com login trocam pelo usuário no
+// requireProLaboreAuth.
+app.use((req, _res, next) => {
+  const p = req.path
+  const origem = /webhook/i.test(p) ? 'INTEGRACAO' : /cron|\/rotinas\/|\/jobs?\//i.test(p) ? 'AUTOMACAO' : 'SISTEMA'
+  comAutor({ origem }, () => next())
+})
 
 // Structured HTTP logging
 app.use(pinoHttp({
@@ -240,6 +254,7 @@ app.use('/pro-labore', proLaboreSmCentralRoutes)
 app.use('/pro-labore', proLaboreCopilotoRoutes)
 app.use('/pro-labore', proLaboreIntelRoutes)
 app.use('/pro-labore', proLaboreSistemaRoutes)
+app.use('/pro-labore', proLaboreJornadaRoutes)
 app.use('/pro-labore', proLaboreFollowRoutes)
 app.use('/pro-labore', proLaboreLeadNotasRoutes)
 app.use('/pro-labore', proLaboreAssistenteMidiaRoutes)

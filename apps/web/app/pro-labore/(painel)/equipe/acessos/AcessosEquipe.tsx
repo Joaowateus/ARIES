@@ -67,7 +67,7 @@ export function AcessosEquipe() {
       {!dados ? <Card><CardEsqueleto linhas={4} /></Card> : dados.acessos.length === 0 ? (
         <Card>
           <EstadoVazio titulo="Ninguém além de você tem login ainda" acao={<Botao variante="pri" onClick={novo}>Criar o primeiro acesso</Botao>}>
-            Crie um acesso para cada pessoa e escolha um perfil pronto (Vendedor, Supervisor, Gerente, Financeiro, Marketing ou Só leitura). Depois dá para ajustar módulo por módulo.
+            Crie um acesso para cada pessoa e escolha um perfil pronto (Vendedor, SDR, Supervisor, Gerente, Financeiro, Marketing ou Só leitura). Depois dá para ajustar módulo por módulo.
           </EstadoVazio>
         </Card>
       ) : (
@@ -120,12 +120,12 @@ function Editor({ dados, inicial, aoFechar, aoSalvar }: { dados: PainelAcessos; 
     setErro(null); setSalvando(true)
     try {
       if (r.id) {
-        const d = await proLaboreApi.acessos.editar(r.id, { nome: r.nome.trim(), email: r.email.trim(), documento: r.documento.trim() || null, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes })
+        const d = await proLaboreApi.acessos.editar(r.id, { nome: r.nome.trim(), email: r.email.trim(), documento: r.documento.trim() || null, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes, sdr: perfilAtual?.chave === 'SDR' })
         aoSalvar(d, `Acesso de ${r.nome.trim()} atualizado. Já vale.`)
       } else {
         const d = await proLaboreApi.acessos.criar({
           ...(r.vendedorId ? { vendedorId: r.vendedorId } : { nome: r.nome.trim() }),
-          email: r.email.trim(), documento: r.documento.trim() || null, senha: r.senha, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes,
+          email: r.email.trim(), documento: r.documento.trim() || null, senha: r.senha, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes, sdr: perfilAtual?.chave === 'SDR',
         })
         const nome = r.vendedorId ? dados.semLogin.find(p => p.id === r.vendedorId)?.nome : r.nome.trim()
         aoSalvar(d, `Acesso de ${nome} criado. Passe o e-mail e a senha para a pessoa.`)
