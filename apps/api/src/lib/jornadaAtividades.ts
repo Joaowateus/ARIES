@@ -8,10 +8,11 @@ import { ErroJornada, moverEtapa, registrarPerda } from './jornadaRegras'
 import type { Etapa } from './etapasJornada'
 
 type LeadBase = { id: string; usuarioId: string; etapa: string | null; estagio: string; vendaId: string | null; modeloInteresse: string | null; formaPagamento: string | null; situacaoCnh: string | null; temEntrada: boolean | null; responsavelQualificacaoId: string | null; responsavelFechamentoId: string | null; vendedorId: string | null }
-export type AtividadeJornada = 'PRIMEIRO_CONTATO' | 'FOLLOW_PROPOSTA' | 'CONFIRMAR_VISITA' | 'VISITA' | 'REMARCAR_VISITA' | 'RESULTADO_VISITA'
+export type AtividadeJornada = 'PRIMEIRO_CONTATO' | 'FOLLOW_PROPOSTA' | 'CONFIRMAR_VISITA' | 'VISITA' | 'REMARCAR_VISITA' | 'RESULTADO_VISITA' | 'POS_ENTREGA' | 'POS_DOCUMENTACAO' | 'POS_REVISAO'
 const TITULO: Record<AtividadeJornada, string> = {
   PRIMEIRO_CONTATO: 'Primeiro contato', FOLLOW_PROPOSTA: 'Follow da proposta', CONFIRMAR_VISITA: 'Confirmar visita',
   VISITA: 'Visita', REMARCAR_VISITA: 'Remarcar visita', RESULTADO_VISITA: 'Registrar resultado da visita',
+  POS_ENTREGA: 'Pós-venda: entrega', POS_DOCUMENTACAO: 'Pós-venda: documentação', POS_REVISAO: 'Pós-venda: primeira revisão',
 }
 const HORA = 3_600_000, DIA = 24 * HORA
 
@@ -21,7 +22,7 @@ export async function criarAtividade(l: LeadBase, atividade: AtividadeJornada, q
   return prisma.leadFollow.create({
     data: {
       usuarioId: l.usuarioId, leadId: l.id, vendedorId: vendedorId ?? l.vendedorId, agendadoPara: quando, tipo: 'JORNADA',
-      canal: atividade.includes('VISITA') ? 'VISITA' : 'WHATSAPP', nota: nota ? `${TITULO[atividade]}: ${nota}` : TITULO[atividade],
+      canal: atividade.includes('VISITA') ? 'VISITA' : atividade.startsWith('POS_') ? 'OUTRO' : 'WHATSAPP', nota: nota ? `${TITULO[atividade]}: ${nota}` : TITULO[atividade],
       contexto: { atividade }, criadoPor: autorAtual().id ?? null,
     },
   })
@@ -185,4 +186,70 @@ export async function devolverAoSdr(l: LeadBase, motivo: string) {
   await prisma.lead.update({ where: { id: l.id }, data: { vendedorId: p.sdrId ?? l.vendedorId } })
   if (['NEGOCIACAO', 'SQL', 'LEVANTAMENTO'].includes(l.etapa ?? '') && l.etapa !== volta) await moverEtapa({ ...l }, volta)
   return { volta }
+}
+
+// --- Venda: confirmação do dono, cancelamento e pós-venda ---
+
+const PRAZOS_PADRAO = { entrega: 3, documentacao: 15, primeiraRevisao: 180 }
+
+/** O dono confirma: a venda passa a contar e o Pós-venda começa. */
+export async function confirmarVenda(usuarioId: string, vendaId: string, quem: string | null) {
+  const v = await prisma.venda.findFirst({ where: { id: vendaId, usuarioId, situacao: 'AGUARDANDO_CONFIRMACAO' }, select: { id: true, lead: { select: { id: true, usuarioId: true, vendedorId: true } } } })
+  if (!v) throw new ErroJornada(404, 'Venda não encontrada ou já confirmada')
+  const agora = new Date()
+  await prisma.venda.update({ where: { id: v.id }, data: { situacao: 'CONFIRMADA', confirmadaEm: agora, confirmadaPor: quem } })
+  if (v.lead) await criarPosVenda(v.lead, agora)
+}
+
+export async function criarPosVenda(lead: { id: string; usuarioId: string; vendedorId: string | null }, desde: Date) {
+  const p = await prisma.parametroLiquidez.findUnique({ where: { usuarioId: lead.usuarioId }, select: { posVendaPrazos: true } })
+  const prazos = { ...PRAZOS_PADRAO, ...((p?.posVendaPrazos as Partial<typeof PRAZOS_PADRAO> | null) ?? {}) }
+  const base = { ...lead, etapa: 'VENDA', estagio: 'FECHADO', vendaId: null, modeloInteresse: null, formaPagamento: null, situacaoCnh: null, temEntrada: null, responsavelQualificacaoId: null, responsavelFechamentoId: null } as LeadBase
+  await criarAtividade(base, 'POS_ENTREGA', new Date(desde.getTime() + prazos.entrega * DIA))
+  await criarAtividade(base, 'POS_DOCUMENTACAO', new Date(desde.getTime() + prazos.documentacao * DIA))
+  await criarAtividade(base, 'POS_REVISAO', new Date(desde.getTime() + prazos.primeiraRevisao * DIA))
+}
+
+export const MOTIVOS_CANCELAMENTO = ['CANCELADA_DESISTENCIA', 'CREDITO_NAO_LIBERADO', 'ERRO_REGISTRO'] as const
+/**
+ * Cancela a venda (motivos da etapa Venda). Erro de registro devolve o lead
+ * à etapa anterior e não conta como perda; os outros motivos perdem o lead
+ * com o destino da tabela. A moto volta ao estoque.
+ */
+export async function cancelarVenda(usuarioId: string, vendaId: string, motivo: typeof MOTIVOS_CANCELAMENTO[number]) {
+  const v = await prisma.venda.findFirst({ where: { id: vendaId, usuarioId, situacao: { in: ['AGUARDANDO_CONFIRMACAO', 'CONFIRMADA'] } }, select: { id: true, motoId: true, pagamentoComissaoId: true, pagamentoProLaboreId: true, lead: { select: { id: true } } } })
+  if (!v) throw new ErroJornada(404, 'Venda não encontrada')
+  if (v.pagamentoComissaoId || v.pagamentoProLaboreId) throw new ErroJornada(409, 'Esta venda já tem comissão ou pró-labore pago: desfaça o pagamento antes de cancelar')
+  await prisma.venda.update({ where: { id: v.id }, data: { situacao: 'CANCELADA', canceladaEm: new Date(), motivoCancelamento: motivo } })
+  if (v.motoId) await prisma.smMotoEstoque.updateMany({ where: { id: v.motoId, situacao: 'VENDIDA' }, data: { situacao: 'DISPONIVEL', saidaEm: null } })
+  if (!v.lead) return
+  await prisma.leadFollow.updateMany({ where: { leadId: v.lead.id, tipo: 'JORNADA', status: 'PENDENTE', contexto: { path: ['atividade'], string_starts_with: 'POS_' } }, data: { status: 'CANCELADO', resultado: 'Venda cancelada' } })
+  const anterior = await prisma.leadEstagioHistorico.findFirst({ where: { leadId: v.lead.id, estagioNovo: 'VENDA' }, orderBy: { criadoEm: 'desc' }, select: { estagioAnterior: true } })
+  const volta = (['NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA'].includes(anterior?.estagioAnterior ?? '') ? anterior!.estagioAnterior : 'PROPOSTA') as Etapa
+  await prisma.lead.update({ where: { id: v.lead.id }, data: { vendaId: null, etapa: volta, fase: 'VENDA', estagio: volta === 'NEGOCIACAO' ? 'NEGOCIACAO' : 'PROPOSTA', fechadoEm: null, vendaSemVisita: false, entrouNaEtapaEm: new Date() } })
+  await prisma.leadEstagioHistorico.create({ data: { leadId: v.lead.id, estagioAnterior: 'VENDA', estagioNovo: volta, motivo } })
+  if (motivo !== 'ERRO_REGISTRO') {
+    const l = await prisma.lead.findUnique({ where: { id: v.lead.id }, select: { id: true, usuarioId: true, nomeCliente: true, etapa: true, estagio: true, vendaId: true, modeloInteresse: true, formaPagamento: true, situacaoCnh: true, temEntrada: true, responsavelQualificacaoId: true, responsavelFechamentoId: true, vendedorId: true } })
+    // A perda conta na etapa Venda (o motivo é dela), com o destino da tabela.
+    if (l) await registrarPerda({ ...l, etapa: 'VENDA' }, motivo)
+  }
+}
+
+/**
+ * Agendamento vencido (PDF 01): passada a hora marcada (com 2 h de tolerância)
+ * sem check-in, a visita conta como falta — gera a remarcação ou, no limite
+ * de faltas, a perda. Roda no job de hora em hora, com autor automação.
+ */
+export async function faltasVencidas(limite = 100, agora = new Date()) {
+  const vencidas = await prisma.leadVisita.findMany({
+    where: { checkinEm: null, falta: false, marcadaPara: { lt: new Date(agora.getTime() - 2 * HORA) }, lead: { etapa: 'AGENDAMENTO', estagio: { not: 'PERDIDO' } } },
+    select: { leadId: true }, take: limite,
+  })
+  let faltas = 0
+  for (const v of vencidas) {
+    const l = await prisma.lead.findUnique({ where: { id: v.leadId }, select: { id: true, usuarioId: true, etapa: true, estagio: true, vendaId: true, modeloInteresse: true, formaPagamento: true, situacaoCnh: true, temEntrada: true, responsavelQualificacaoId: true, responsavelFechamentoId: true, vendedorId: true } })
+    if (!l) continue
+    await comAutor({ origem: 'AUTOMACAO' }, () => registrarFalta(l)).then(() => faltas++).catch(e => console.error('[jornada] falta automática', e))
+  }
+  return { faltasAutomaticas: faltas }
 }

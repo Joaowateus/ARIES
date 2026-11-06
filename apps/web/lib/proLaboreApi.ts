@@ -323,6 +323,8 @@ export interface Lead {
 
 export interface Venda {
   id: string
+  // Jornada de 10 etapas: a venda do vendedor só conta depois que o dono confirma.
+  situacao?: 'CONFIRMADA' | 'AGUARDANDO_CONFIRMACAO' | 'CANCELADA'
   data: string
   valorVenda: number
   valorProLabore: number
@@ -630,6 +632,9 @@ export const proLaboreApi = {
     acao: (id: string, acao: 'visita' | 'checkin' | 'falta' | 'resultado-visita' | 'passar' | 'devolver', body: Record<string, unknown> = {}) =>
       request<{ ok: boolean; resultado: unknown }>(`/pro-labore/jornada/leads/${id}/${acao}`, { method: 'POST', body: JSON.stringify(body) }),
     rodizio: () => request<PessoaRodizio[]>('/pro-labore/jornada/rodizio'),
+    vendasAguardando: () => request<Array<{ id: string; data: string; valorVenda: number; placa: string | null; vendedor: { nome: string } | null; lead: { id: string; nomeCliente: string } | null }>>('/pro-labore/jornada/vendas/aguardando'),
+    confirmarVenda: (id: string) => request<{ ok: boolean }>(`/pro-labore/jornada/vendas/${id}/confirmar`, { method: 'POST', body: '{}' }),
+    cancelarVenda: (id: string, motivo: 'CANCELADA_DESISTENCIA' | 'CREDITO_NAO_LIBERADO' | 'ERRO_REGISTRO') => request<{ ok: boolean }>(`/pro-labore/jornada/vendas/${id}/cancelar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
     disponivel: (vendedorId: string, disponivel: boolean) => request<PessoaRodizio[]>(`/pro-labore/jornada/rodizio/${vendedorId}`, { method: 'PUT', body: JSON.stringify({ disponivel }) }),
   },
   leads: {
@@ -879,6 +884,8 @@ export const proLaboreApi = {
       request<SimulacaoDaConversa>(`/pro-labore/assistente/conversas/${id}/simulacao`, { method: 'POST', body: JSON.stringify(data) }),
     // Pré-análise de crédito: ficha autorizada e a resposta de cada banco.
     credito: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`),
+    // Ficha completa (CPF e nascimento sem máscara): cada abertura fica registrada.
+    creditoCompleto: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito/completa`),
     salvarFicha: (id: string, data: { cpf: string; nascimento?: string | null; autorizado: true }) =>
       request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'PUT', body: JSON.stringify(data) }),
     apagarFicha: (id: string) => request<CreditoConversa>(`/pro-labore/assistente/conversas/${id}/credito`, { method: 'DELETE' }),
@@ -1928,8 +1935,11 @@ export interface CreditoConversa {
   ativa: boolean
   bancos: string[]
   ficha: {
+    id?: string
     cpf: string
     nascimento: string | null
+    cpfCompleto?: string
+    nascimentoCompleto?: string | null
     origem: 'ROBO' | 'VENDEDOR'
     consentimento: { em?: string; pergunta?: string; resposta?: string }
     criadoEm: string

@@ -81,20 +81,20 @@ export function MigracaoJornada() {
           <p data-sim-resumo><b>{num(sim.total)}</b> leads · <b>{num(sim.aMigrar)}</b> a migrar · {num(sim.jaMigrados)} já migrados.{' '}
             {sim.conferencia.nenhumPerdido ? <span className="pl-chip" style={{ color: "var(--pl-success, #2a7)" }}>nenhum lead fica de fora</span> : <span className="pl-chip" style={{ color: "var(--pl-danger, #c33)" }}>a soma não fecha</span>}</p>
           {sim.aMigrar > 0 && (
-            <div className="pl-grid-2" style={{ gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
               <div>
                 <div className="pl-eyebrow">Etapa antiga → etapa nova{sim.jaMigrados > 0 ? ' · só o que falta migrar' : ''}</div>
-                <table className="pl-table" data-sim-pares><tbody>{naOrdem(sim.pares, p => p.de.split('→')[0], p => p.de.split('→')[1]).map(p => <tr key={p.de}><td>{nomeEtapa(p.de)}</td><td style={{ textAlign: 'right' }}>{num(p.n)}</td></tr>)}</tbody></table>
+                <div style={{ overflowX: 'auto' }}><table className="pl-table" data-sim-pares><tbody>{naOrdem(sim.pares, p => p.de.split('→')[0], p => p.de.split('→')[1]).map(p => <tr key={p.de}><td>{nomeEtapa(p.de)}</td><td style={{ textAlign: 'right' }}>{num(p.n)}</td></tr>)}</tbody></table></div>
                 {sim.revisarEtapa > 0 && <p className="pl-hint">{num(sim.revisarEtapa)} fechados sem venda confirmada vão para Proposta com a marcação “revisar etapa”, para o vendedor posicionar.</p>}
                 <p className="pl-hint">Levantamento: {num(sim.levantamento.aVista)} à vista e {num(sim.levantamento.financiado)} financiados pelas etiquetas da conversa; {num(sim.levantamento.semInformacao)} sem informação. Todos ficam com o levantamento incompleto (falta a CNH).</p>
               </div>
               <div>
                 <div className="pl-eyebrow">Clientes</div>
                 <p data-sim-clientes><b>{num(sim.clientes.aCriar)}</b> clientes a criar ({num(sim.clientes.comTelefone)} por telefone, {num(sim.clientes.semTelefone)} leads sem telefone). {num(sim.clientes.telefonesRepetidos)} telefones têm mais de um lead: {num(sim.clientes.leadsJuntados)} leads viram oportunidades desses clientes.</p>
-                {sim.clientes.exemplos.length > 0 && <table className="pl-table"><tbody>{sim.clientes.exemplos.map(c => <tr key={c.telefone + c.nome}><td>{c.nome}</td><td>{c.telefone}</td><td style={{ textAlign: 'right' }}>{c.leads} leads</td></tr>)}</tbody></table>}
+                {sim.clientes.exemplos.length > 0 && <div style={{ overflowX: 'auto' }}><table className="pl-table"><tbody>{sim.clientes.exemplos.map(c => <tr key={c.telefone + c.nome}><td>{c.nome}</td><td>{c.telefone}</td><td style={{ textAlign: 'right' }}>{c.leads} leads</td></tr>)}</tbody></table></div>}
                 {sim.perdidos > 0 && (<>
                   <div className="pl-eyebrow" style={{ marginTop: 12 }}>Perdidos ({num(sim.perdidos)}): motivo antigo → novo → destino</div>
-                  <table className="pl-table" data-sim-motivos><tbody>{sim.motivos.map(m => <tr key={m.antigo + m.novo}><td>{MOTIVO[m.antigo] ?? m.antigo}</td><td>{MOTIVO[m.novo] ?? m.novo}</td><td>{DESTINO[m.destino] ?? m.destino}</td><td style={{ textAlign: 'right' }}>{num(m.n)}</td></tr>)}</tbody></table>
+                  <div style={{ overflowX: 'auto' }}><table className="pl-table" data-sim-motivos><tbody>{sim.motivos.map(m => <tr key={m.antigo + m.novo}><td>{MOTIVO[m.antigo] ?? m.antigo}</td><td>{MOTIVO[m.novo] ?? m.novo}</td><td>{DESTINO[m.destino] ?? m.destino}</td><td style={{ textAlign: 'right' }}>{num(m.n)}</td></tr>)}</tbody></table></div>
                 </>)}
               </div>
             </div>
@@ -108,16 +108,16 @@ export function MigracaoJornada() {
           {st && st.migrados > 0 && (
             <div style={{ marginTop: 16 }} data-jornada-10>
               <div className="pl-eyebrow">Como ficou a nova jornada ({num(st.migrados)} leads migrados{st.pendentes ? `, faltam ${num(st.pendentes)}` : ''})</div>
-              <table className="pl-table"><thead><tr><th>Fase</th><th>Etapa</th><th style={{ textAlign: 'right' }}>No funil</th><th style={{ textAlign: 'right' }}>Perdidos nela</th></tr></thead>
-                <tbody>{st.jornada.map((j, i) => <tr key={j.etapa}><td>{FASE[j.fase]}</td><td>{i + 1}. {ETAPA[j.etapa]}</td><td style={{ textAlign: 'right' }}>{num(j.ativos)}</td><td style={{ textAlign: 'right' }}>{num(j.perdidos)}</td></tr>)}</tbody></table>
+              <div style={{ overflowX: 'auto' }}><table className="pl-table"><thead><tr><th>Fase</th><th>Etapa</th><th style={{ textAlign: 'right' }}>No funil</th><th style={{ textAlign: 'right' }}>Perdidos nela</th></tr></thead>
+                <tbody>{st.jornada.map((j, i) => <tr key={j.etapa}><td>{FASE[j.fase]}</td><td>{i + 1}. {ETAPA[j.etapa]}</td><td style={{ textAlign: 'right' }}>{num(j.ativos)}</td><td style={{ textAlign: 'right' }}>{num(j.perdidos)}</td></tr>)}</tbody></table></div>
               <p className="pl-hint">Levantamento, MQL, SQL, Agendamento e Visita começam vazias: no funil antigo não havia essas etapas, então nenhum lead entra nelas pela migração. Os leads passam por elas daqui para a frente, conforme avançam. O quadro do CRM com as 10 colunas é a próxima parte (passo 5); até lá, as telas continuam com as 5 etapas.</p>
             </div>
           )}
           {st && st.migrados > 0 && (
             <div style={{ marginTop: 12 }} data-conferencia-migracao>
               <div className="pl-eyebrow">Conferência ({num(st.migrados)} de {num(st.total)} migrados · {num(st.clientes)} clientes{st.semCliente ? ` · ${num(st.semCliente)} sem cliente` : ''})</div>
-              <table className="pl-table"><thead><tr><th>Etapa antiga</th><th>Etapa nova</th><th style={{ textAlign: 'right' }}>Leads</th></tr></thead>
-                <tbody>{naOrdem(st.conferencia, c => c.de, c => c.para).map(c => <tr key={`${c.de}${c.para}${c.revisarEtapa}`}><td>{ETAPA[c.de ?? ''] ?? c.de}</td><td>{ETAPA[c.para ?? ''] ?? c.para}{c.revisarEtapa ? ' (revisar etapa)' : ''}</td><td style={{ textAlign: 'right' }}>{num(c.n)}</td></tr>)}</tbody></table>
+              <div style={{ overflowX: 'auto' }}><table className="pl-table"><thead><tr><th>Etapa antiga</th><th>Etapa nova</th><th style={{ textAlign: 'right' }}>Leads</th></tr></thead>
+                <tbody>{naOrdem(st.conferencia, c => c.de, c => c.para).map(c => <tr key={`${c.de}${c.para}${c.revisarEtapa}`}><td>{ETAPA[c.de ?? ''] ?? c.de}</td><td>{ETAPA[c.para ?? ''] ?? c.para}{c.revisarEtapa ? ' (revisar etapa)' : ''}</td><td style={{ textAlign: 'right' }}>{num(c.n)}</td></tr>)}</tbody></table></div>
             </div>
           )}
         </>

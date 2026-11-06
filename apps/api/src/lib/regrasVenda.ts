@@ -40,8 +40,8 @@ const DIA = 86_400_000
 export async function vendasParecidas(usuarioId: string, v: { placa: string | null; valorVenda: number; data: Date; vendedorId?: string | null; ignorarId?: string }) {
   const select = { id: true, data: true, valorVenda: true, placa: true, observacao: true, vendedor: { select: { nome: true } } } as const
   const achadas = v.placa
-    ? await prisma.venda.findMany({ where: { usuarioId, placa: v.placa, data: { gte: new Date(v.data.getTime() - 60 * DIA), lte: new Date(v.data.getTime() + 60 * DIA) }, ...(v.ignorarId ? { id: { not: v.ignorarId } } : {}) }, select, take: 5 })
-    : await prisma.venda.findMany({ where: { usuarioId, valorVenda: { gte: v.valorVenda - 0.005, lte: v.valorVenda + 0.005 }, vendedorId: v.vendedorId ?? null, data: { gte: new Date(v.data.getTime() - 3 * DIA), lte: new Date(v.data.getTime() + 3 * DIA) }, ...(v.ignorarId ? { id: { not: v.ignorarId } } : {}) }, select, take: 5 })
+    ? await prisma.venda.findMany({ where: { usuarioId, situacao: { not: 'CANCELADA' }, placa: v.placa, data: { gte: new Date(v.data.getTime() - 60 * DIA), lte: new Date(v.data.getTime() + 60 * DIA) }, ...(v.ignorarId ? { id: { not: v.ignorarId } } : {}) }, select, take: 5 })
+    : await prisma.venda.findMany({ where: { usuarioId, situacao: { not: 'CANCELADA' }, valorVenda: { gte: v.valorVenda - 0.005, lte: v.valorVenda + 0.005 }, vendedorId: v.vendedorId ?? null, data: { gte: new Date(v.data.getTime() - 3 * DIA), lte: new Date(v.data.getTime() + 3 * DIA) }, ...(v.ignorarId ? { id: { not: v.ignorarId } } : {}) }, select, take: 5 })
   return achadas.map(a => ({ id: a.id, data: a.data.toISOString(), valorVenda: a.valorVenda, placa: a.placa, observacao: a.observacao, vendedor: a.vendedor?.nome ?? null }))
 }
 

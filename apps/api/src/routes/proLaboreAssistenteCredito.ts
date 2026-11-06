@@ -13,6 +13,7 @@ import { ErroWhatsapp, enviarTexto } from '../lib/whatsappEvolution'
 import { atualizarNota, avaliarJornada } from '../lib/assistenteMotor'
 import { lerConfig, primeiroNome } from '../lib/assistenteRoteiro'
 import { vitrineDaLoja } from '../lib/assistenteRespostas'
+import { mascararCpf, mascararNascimento, registrarAcesso } from '../lib/dadoSensivel'
 import { ResultadoSimulacao, STATUS_ANALISE, formatarCpf, lerCpf, lerNascimento, textoAprovacao, textoFicha } from '../lib/assistenteSimulacao'
 import { agendarNovaAnalise, reabrirPreAnalise, semAprovacao, sincronizarFollowCredito } from '../lib/followCredito'
 
@@ -49,7 +50,7 @@ async function recalcular(conversa: Conversa) {
   await sincronizarFollowCredito(conversa.id).catch(e => logger.warn({ err: e }, 'assistente: falha no follow de crédito'))
 }
 
-async function resposta(conversa: Conversa) {
+async function resposta(conversa: Conversa, completo = false) {
   const { simulacao: cfgSim } = await vitrineDaLoja(conversa.assistente.vendedor.usuarioId)
   const bancos = cfgSim?.bancos ?? []
   const f = await prisma.assistenteFichaCredito.findUnique({ where: { conversaId: conversa.id }, include: { analises: { orderBy: { criadoEm: 'asc' } } } })
@@ -64,9 +65,10 @@ async function resposta(conversa: Conversa) {
   return {
     ativa: !!cfgSim?.preAnalise, bancos,
     ficha: {
-      cpf: formatarCpf(f.cpf), nascimento: f.nascimento, origem: f.origem, consentimento, criadoEm: f.criadoEm,
+      id: f.id, cpf: formatarCpf(f.cpf), nascimento: f.nascimento, origem: f.origem,
+      ...(completo ? { cpfCompleto: formatarCpf(f.cpf), nascimentoCompleto: f.nascimento } : {}), consentimento, criadoEm: f.criadoEm,
       texto: textoFicha({
-        nome: conversa.lead?.nomeCliente ?? conversa.nomeContato, telefone: conversa.numeroContato, cpf: f.cpf, nascimento: f.nascimento,
+        nome: conversa.lead?.nomeCliente ?? conversa.nomeContato, telefone: conversa.numeroContato, cpf: completo ? f.cpf : mascararCpf(f.cpf), nascimento: completo || !f.nascimento ? f.nascimento : mascararNascimento(f.nascimento),
         renda: sim?.renda ?? null, moto: sim?.moto ?? conversa.lead?.modeloInteresse ?? null, valor: sim?.valor ?? null, entrada: sim?.entrada ?? null,
         autorizadoEm: consentimento.em ? new Date(consentimento.em) : f.criadoEm,
       }),
@@ -83,6 +85,20 @@ router.get('/assistente/conversas/:id/credito', ...ver, async (req: Request, res
   const conversa = await conversaAutorizada(req, res)
   if (!conversa) return
   res.json(await resposta(conversa))
+})
+
+// Ficha completa (CPF e nascimento sem máscara, e o texto para o portal do
+// banco): só aqui, e cada abertura fica registrada.
+router.get('/assistente/conversas/:id/credito/completa', ...ver, async (req: Request, res: Response) => {
+  const conversa = await conversaAutorizada(req, res)
+  if (!conversa) return
+  const r = await resposta(conversa, true)
+  if (r.ficha) {
+    const u = req.proLaboreUser!
+    const f = await prisma.assistenteFichaCredito.findUnique({ where: { conversaId: conversa.id }, select: { id: true, usuarioId: true, nascimento: true } })
+    if (f) await registrarAcesso({ usuarioId: f.usuarioId, leadId: conversa.leadId, fichaId: f.id, dados: f.nascimento ? ['CPF', 'NASCIMENTO'] : ['CPF'], quemId: u.vendedorId ?? u.sub, quemNome: u.nome, quemPapel: u.papel })
+  }
+  res.json(r)
 })
 
 // Ficha registrada pelo vendedor (cliente passou os dados por ligação ou na

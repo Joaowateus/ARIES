@@ -21,14 +21,14 @@ export function RodizioLeads() {
         <div className="pl-card-sub">Quem recebe as passagens do SDR (e, quando houver SDRs, os leads novos). Marque como indisponível quem estiver de folga ou ausente.</div>
       </div></div>
       {erro && <div className="pl-alert" role="alert">{erro}</div>}
-      <table className="pl-table"><thead><tr><th>Pessoa</th><th>Papel</th><th>Último lead recebido</th><th /></tr></thead>
+      <div style={{ overflowX: 'auto' }}><table className="pl-table"><thead><tr><th>Pessoa</th><th>Papel</th><th>Último lead recebido</th><th /></tr></thead>
         <tbody>{equipe.map(p => (
           <tr key={p.vendedorId}>
             <td>{p.nome}</td><td>{p.papel === 'SDR' ? 'SDR' : 'Vendedor'}</td>
             <td>{p.ultimoRecebidoEm ? new Date(p.ultimoRecebidoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
             <td style={{ textAlign: 'right' }}><button type="button" className={`pl-chip ${p.disponivel ? 'active' : ''}`} aria-pressed={p.disponivel} onClick={() => void alternar(p)} data-disponivel={p.vendedorId}>{p.disponivel ? 'Disponível' : 'Indisponível'}</button></td>
           </tr>
-        ))}</tbody></table>
+        ))}</tbody></table></div>
     </section>
   )
 }

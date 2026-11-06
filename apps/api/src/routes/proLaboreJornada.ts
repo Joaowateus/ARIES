@@ -8,8 +8,8 @@ import { requireModulo } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
 import { ETAPAS } from '../lib/etapasJornada'
 import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
-import { checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
-import { requireDonoOuSupervisor } from '../middleware/authProLabore'
+import { MOTIVOS_CANCELAMENTO, cancelarVenda, confirmarVenda, checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
+import { requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 
 const router = Router()
 const ver = [requireProLaboreAuth, requireModulo('crm', 'VER')]
@@ -146,6 +146,19 @@ router.post('/jornada/leads/:id/resultado-visita', ...editar, acaoDoLead((l, b) 
 }))
 router.post('/jornada/leads/:id/passar', ...editar, acaoDoLead((l, b) => passarAoVendedor(l, String(b.resumo ?? '').trim().slice(0, 2000))))
 router.post('/jornada/leads/:id/devolver', ...editar, acaoDoLead((l, b) => devolverAoSdr(l, String(b.motivo ?? ''))))
+
+// --- Venda: o dono confirma (ou cancela com o motivo da etapa Venda) ---
+router.get('/jornada/vendas/aguardando', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  res.json(await prisma.venda.findMany({ where: { usuarioId: req.proLaboreUser!.sub, situacao: 'AGUARDANDO_CONFIRMACAO' }, orderBy: { data: 'asc' }, select: { id: true, data: true, valorVenda: true, placa: true, vendedor: { select: { nome: true } }, lead: { select: { id: true, nomeCliente: true } } } }))
+})
+router.post('/jornada/vendas/:id/confirmar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  try { await confirmarVenda(req.proLaboreUser!.sub, String(req.params.id), req.proLaboreUser!.nome ?? null); res.json({ ok: true }) } catch (e) { falha(res, e) }
+})
+router.post('/jornada/vendas/:id/cancelar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const p = z.object({ motivo: z.enum(MOTIVOS_CANCELAMENTO) }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'Escolha o motivo do cancelamento' }); return }
+  try { await cancelarVenda(req.proLaboreUser!.sub, String(req.params.id), p.data.motivo); res.json({ ok: true }) } catch (e) { falha(res, e) }
+})
 
 // --- Rodízio (dono e supervisor) ---
 router.get('/jornada/rodizio', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {

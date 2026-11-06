@@ -9,7 +9,6 @@ import { proLaboreApi, type AnaliseCreditoBanco, type CreditoConversa, type Stat
 import { fmtReais, lerReais } from './util'
 
 const STATUS: Record<StatusAnaliseCredito, string> = { A_ENVIAR: 'A enviar', EM_ANALISE: 'Em análise', APROVADA: 'Aprovada', RECUSADA: 'Recusada' }
-const mascarar = (cpf: string) => `***.${cpf.slice(4, 7)}.${cpf.slice(8, 11)}-**`
 const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 const diaHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' às')
 const PRAZOS = [15, 30, 45, 60]
@@ -53,7 +52,8 @@ function ModalPreAnalise({ conversaId, credito, conectado, onAtualizar, onFechar
   onAtualizar: (c: CreditoConversa) => void
   onFechar: () => void
 }) {
-  const [mostrarCpf, setMostrarCpf] = useState(false)
+  // Completo (CPF, nascimento e o texto para o portal) só sob pedido: cada abertura fica registrada.
+  const [completo, setCompleto] = useState<CreditoConversa['ficha'] | null>(null)
   const [copiada, setCopiada] = useState(false)
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)
@@ -65,9 +65,15 @@ function ModalPreAnalise({ conversaId, credito, conectado, onAtualizar, onFechar
     try { onAtualizar(await fn()) } catch (e) { setErro((e as Error).message) } finally { setOcupado(false) }
   }
 
+  async function abrirCompleto() {
+    try { const r = await proLaboreApi.assistente.creditoCompleto(conversaId); setCompleto(r.ficha); return r.ficha } catch (e) { setErro((e as Error).message); return null }
+  }
   async function copiar() {
     if (!ficha) return
-    try { await navigator.clipboard.writeText(ficha.texto); setCopiada(true) } catch { setErro('Não deu para copiar: selecione o texto da ficha.') }
+    try {
+      const c = completo ?? (await abrirCompleto())
+      if (c) { await navigator.clipboard.writeText(c.texto); setCopiada(true) }
+    } catch { setErro('Não deu para copiar: selecione o texto da ficha.') }
   }
 
   return (
@@ -80,8 +86,8 @@ function ModalPreAnalise({ conversaId, credito, conectado, onAtualizar, onFechar
             <div className="pl-si-ficha" data-ficha>
               <dl className="pl-as-dl">
                 <dt>CPF</dt>
-                <dd><span className="pl-mono" data-cpf>{mostrarCpf ? ficha.cpf : mascarar(ficha.cpf)}</span> <button type="button" className="pl-vt-link" onClick={() => setMostrarCpf(m => !m)} data-mostrar-cpf>{mostrarCpf ? 'esconder' : 'mostrar'}</button></dd>
-                <dt>Nascimento</dt><dd>{ficha.nascimento ?? 'a confirmar com o cliente'}</dd>
+                <dd><span className="pl-mono" data-cpf>{completo?.cpfCompleto ?? ficha.cpf}</span> <button type="button" className="pl-vt-link" onClick={() => (completo ? setCompleto(null) : void abrirCompleto())} data-mostrar-cpf title="Cada vez que o CPF é mostrado, o acesso fica registrado">{completo ? 'esconder' : 'mostrar'}</button></dd>
+                <dt>Nascimento</dt><dd>{completo ? (completo.nascimentoCompleto ?? 'a confirmar com o cliente') : ficha.nascimento ?? 'a confirmar com o cliente'}</dd>
                 <dt>Autorização</dt>
                 <dd>{ficha.origem === 'ROBO' ? `pelo WhatsApp${ficha.consentimento.resposta ? `: “${ficha.consentimento.resposta}”` : ''}` : ficha.consentimento.resposta ?? 'registrada pelo vendedor'}{ficha.consentimento.em ? ` · ${quando(ficha.consentimento.em)}` : ''}</dd>
               </dl>
