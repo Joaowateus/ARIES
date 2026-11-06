@@ -49,16 +49,16 @@ const DESTINOS: Record<DestinoPerda, string[]> = {
   DESCARTADA: ['NAO_E_LEAD', 'ERRO_REGISTRO'],
   ENCERRADA: ['CONTATO_INVALIDO', 'SEM_INTERESSE', 'PEDIU_NAO_CONTATO'],
   REATIVACAO_SEM_RESPOSTA: ['NUNCA_RESPONDEU', 'PAROU_DE_RESPONDER', 'FALTOU_NAO_REMARCOU'],
-  REATIVACAO_INTERESSE: ['SO_PESQUISANDO', 'SEM_CNH', 'SEM_ENTRADA', 'ACHOU_CARO', 'NAO_GOSTOU_MOTO'],
+  REATIVACAO_INTERESSE: ['NAO_AUTORIZOU', 'SO_PESQUISANDO', 'SEM_CNH', 'SEM_ENTRADA', 'ACHOU_CARO', 'NAO_GOSTOU_MOTO'],
   REATIVACAO_NEGOCIACAO: ['DESISTIU', 'DESISTIU_SIMULACAO', 'NAO_ACEITOU_CONDICAO', 'CONDICAO_NAO_FECHOU', 'DOCUMENTACAO_PENDENTE', 'APROVACAO_VENCEU', 'DESISTIU_APROVACAO', 'CANCELADA_DESISTENCIA'],
   REATIVACAO_RETOMADA: ['RECUSADO_TODOS_BANCOS', 'CREDITO_NAO_LIBERADO', 'MOTO_INDISPONIVEL', 'COMPROU_OUTRO_LUGAR'],
   REATIVACAO_OUTRO: ['OUTRO_ANTERIOR_MIGRACAO'],
 }
 /**
- * Destino do motivo. "Desistiu depois da simulação" não está na tabela do
- * PDF: o dono decidiu Reativação · negociação interrompida (06/11/2026).
- * "Não autorizou a análise" também não está e fica sem destino (null) até
- * o dono decidir.
+ * Destino do motivo. Dois motivos do MQL não estão na tabela do PDF e
+ * foram decididos pelo dono (06/11/2026): "Desistiu depois da simulação" →
+ * Reativação · negociação interrompida; "Não autorizou a análise" →
+ * Reativação · interesse não convertido.
  */
 export function destinoDoMotivo(motivo: string): DestinoPerda | null {
   for (const [d, ms] of Object.entries(DESTINOS)) if (ms.includes(motivo)) return d as DestinoPerda
