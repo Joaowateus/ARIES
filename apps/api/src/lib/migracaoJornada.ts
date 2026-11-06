@@ -174,6 +174,8 @@ export async function rodadaMigracao(usuarioId: string) {
       }
     }
   })
+  // Tudo migrado: a conta passa a usar a jornada nova (lead novo já entra em Lead).
+  if (!(await prisma.lead.count({ where: { usuarioId, etapa: null } }))) await prisma.parametroLiquidez.updateMany({ where: { usuarioId, jornadaAtivaEm: null }, data: { jornadaAtivaEm: new Date() } })
   return statusMigracao(usuarioId)
 }
 
@@ -181,6 +183,7 @@ export async function rodadaMigracao(usuarioId: string) {
 export async function rodadaDesfazer(usuarioId: string) {
   if (!migracaoPermitida()) throw new ErroMigracao(403, 'Desfazer a migração só é possível onde ela pode rodar (ambiente de teste).')
   const inicio = Date.now()
+  await prisma.parametroLiquidez.updateMany({ where: { usuarioId }, data: { jornadaAtivaEm: null } })
   await comAutor({ origem: 'MIGRACAO' }, async () => {
     while (Date.now() - inicio < LIMITE_RODADA_MS) {
       const lote = await prisma.lead.findMany({ where: { usuarioId, anteriorMigracao: true }, select: { id: true, estagio: true, motivoPerdaLegado: true }, take: LOTE })

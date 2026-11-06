@@ -1165,7 +1165,9 @@ model ParametroLiquidez {
   // Critérios do Levantamento que liberam a passagem (modelo, pagamento, CNH, entrada).
   jornadaCriteriosLevantamento Json?
   // Faltas na visita sem remarcar até o lead ser perdido.
-  jornadaFaltasAtePerda        Int   @default(2)
+  jornadaFaltasAtePerda        Int       @default(2)
+  // Quando a conta passou para a jornada de 10 etapas (fim da migração). Lead novo já entra em Lead.
+  jornadaAtivaEm               DateTime?
   // Prazos do Pós-venda a partir da confirmação da venda, em dias.
   posVendaPrazos               Json?
 

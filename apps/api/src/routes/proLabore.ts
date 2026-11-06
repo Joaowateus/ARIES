@@ -1115,6 +1115,11 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
     res.json(atual)
     return
   }
+  // Lead da jornada de 10 etapas: muda pelo quadro novo, com critério (só reativar continua aqui).
+  if (atual.etapa && !(atual.estagio === 'PERDIDO' && parse.data.estagio !== 'PERDIDO')) {
+    res.status(409).json({ error: 'Este lead está na nova jornada de 10 etapas: mude a etapa pelo quadro novo do CRM.', codigo: 'JORNADA_10' })
+    return
+  }
   // Sem o motivo, a perda não ensina nada: é ele que mostra onde e por que o funil perde.
   if (parse.data.estagio === 'PERDIDO' && !parse.data.motivoPerda) {
     res.status(400).json({ error: 'Escolha o motivo da perda' })

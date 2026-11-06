@@ -18,6 +18,7 @@
 
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
+import { avancarPorFatos } from './jornadaRegras'
 import { logger } from './logger'
 import { agenteDaPessoa, enviarComoPessoa } from './agenteEnvio'
 import { diaBrasilia, inicioDoDiaBrasilia } from './socialMediaSync'
@@ -503,7 +504,7 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
     },
   })
   if (!conversa || conversa.tipo !== 'LEAD' || !conversa.leadId) return null
-  const lead = await prisma.lead.findUnique({ where: { id: conversa.leadId }, select: { id: true, nomeCliente: true, estagio: true, etiquetas: true, avancosDesfeitos: true, vendaId: true } })
+  const lead = await prisma.lead.findUnique({ where: { id: conversa.leadId }, select: { id: true, nomeCliente: true, estagio: true, etapa: true, etiquetas: true, avancosDesfeitos: true, vendaId: true } })
   if (!lead) return null
   const cfg = lerConfig(conversa.assistente.configuracao)
   const doContato = conversa.mensagens.filter(m => m.remetente === 'CONTATO')
@@ -517,6 +518,8 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
   await prisma.assistenteConversa.update({ where: { id: conversaId }, data: { etiquetasEm: agora } })
 
   if (opcoes.avancar === false || lead.vendaId || lead.estagio === 'FECHADO' || lead.estagio === 'PERDIDO') return { etiquetas, avanco: null }
+  // Jornada de 10 etapas: avança só por fatos (pessoa da loja respondeu, simulação enviada, banco aprovou).
+  if (lead.etapa) { await avancarPorFatos(lead.id).catch(e => logger.warn({ err: e }, 'jornada: falha no avanço por fatos')); return { etiquetas, avanco: null } }
   const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId: conversa.assistente.vendedor.usuarioId }, select: { avancoAutomatico: true } })
   if (loja && !loja.avancoAutomatico) return { etiquetas, avanco: null }
   const historico = await prisma.leadEstagioHistorico.findMany({ where: { leadId: lead.id, criadoEm: { gte: new Date(agora.getTime() - 7 * DIA_MS) } } })
