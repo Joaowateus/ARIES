@@ -160,6 +160,56 @@ router.post('/jornada/vendas/:id/cancelar', requireProLaboreAuth, requireDono, a
   try { await cancelarVenda(req.proLaboreUser!.sub, String(req.params.id), p.data.motivo); res.json({ ok: true }) } catch (e) { falha(res, e) }
 })
 
+// --- Aba Crédito: leads em MQL e SQL, fichas por banco e validade das aprovações ---
+router.get('/jornada/credito', ...ver, async (req: Request, res: Response) => {
+  const { usuarioId, resto } = escopo(req)
+  const leads = await prisma.lead.findMany({
+    where: { usuarioId, ...resto, etapa: { in: ['MQL', 'SQL'] }, estagio: { not: 'PERDIDO' } },
+    select: { id: true, nomeCliente: true, etapa: true, entrouNaEtapaEm: true, modeloInteresse: true, vendedor: { select: { nome: true } } },
+    orderBy: { entrouNaEtapaEm: 'asc' }, take: 300,
+  })
+  const ids = leads.map(l => l.id)
+  const fichas = ids.length ? await prisma.assistenteFichaCredito.findMany({
+    where: { OR: [{ leadId: { in: ids } }, { conversa: { leadId: { in: ids } } }] },
+    select: { id: true, leadId: true, conversaId: true, conversa: { select: { leadId: true } }, analises: { orderBy: { criadoEm: 'asc' }, select: { id: true, banco: true, status: true, enviadaEm: true, respondidoEm: true, validadeAte: true, condicaoAprovada: true, parcela: true, entrada: true, prazo: true } } },
+  }) : []
+  const agora = Date.now()
+  res.json(leads.map(l => {
+    const f = fichas.find(x => x.leadId === l.id || x.conversa?.leadId === l.id)
+    const analises = (f?.analises ?? []).map(a => ({ ...a, venceEmDias: a.validadeAte ? Math.ceil((a.validadeAte.getTime() - agora) / 86_400_000) : null }))
+    return { ...l, fichaId: f?.id ?? null, conversaId: f?.conversaId ?? null, analises }
+  }))
+})
+const analiseSchema = z.object({
+  status: z.enum(['A_ENVIAR', 'EM_ANALISE', 'APROVADA', 'RECUSADA']).optional(),
+  validadeAte: data.nullable().optional(),
+  condicaoAprovada: z.string().trim().max(500).nullable().optional(),
+  enviada: z.boolean().optional(),
+})
+router.patch('/jornada/analises/:id', ...editar, async (req: Request, res: Response) => {
+  const p = analiseSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  try {
+    const { usuarioId, resto } = escopo(req)
+    const a = await prisma.assistenteAnaliseCredito.findFirst({ where: { id: String(req.params.id), usuarioId }, select: { id: true, ficha: { select: { leadId: true, conversa: { select: { leadId: true } } } } } })
+    const leadId = a?.ficha.leadId ?? a?.ficha.conversa?.leadId
+    if (!a || !leadId) throw new ErroJornada(404, 'Análise não encontrada')
+    const l = await leadDaJornada(usuarioId, leadId, resto)
+    const d = p.data
+    await prisma.assistenteAnaliseCredito.update({
+      where: { id: a.id },
+      data: {
+        ...(d.status ? { status: d.status, ...(['APROVADA', 'RECUSADA'].includes(d.status) ? { respondidoEm: new Date() } : {}) } : {}),
+        ...(d.enviada ? { enviadaEm: new Date(), ...(d.status ? {} : { status: 'EM_ANALISE' }) } : {}),
+        ...(d.validadeAte !== undefined ? { validadeAte: d.validadeAte } : {}),
+        ...(d.condicaoAprovada !== undefined ? { condicaoAprovada: d.condicaoAprovada } : {}),
+      },
+    })
+    // Banco aprovou: o lead vai para SQL sozinho (fato que o sistema vê).
+    res.json({ ok: true, avancou: await avancarPorFatos(l.id) })
+  } catch (e) { falha(res, e) }
+})
+
 // --- Rodízio (dono e supervisor) ---
 router.get('/jornada/rodizio', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   res.json(await rodizioDaEquipe(req.proLaboreUser!.sub))

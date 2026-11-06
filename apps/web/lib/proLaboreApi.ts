@@ -632,6 +632,9 @@ export const proLaboreApi = {
     acao: (id: string, acao: 'visita' | 'checkin' | 'falta' | 'resultado-visita' | 'passar' | 'devolver', body: Record<string, unknown> = {}) =>
       request<{ ok: boolean; resultado: unknown }>(`/pro-labore/jornada/leads/${id}/${acao}`, { method: 'POST', body: JSON.stringify(body) }),
     rodizio: () => request<PessoaRodizio[]>('/pro-labore/jornada/rodizio'),
+    credito: () => request<LeadCredito[]>('/pro-labore/jornada/credito'),
+    analise: (id: string, data: { status?: 'A_ENVIAR' | 'EM_ANALISE' | 'APROVADA' | 'RECUSADA'; validadeAte?: string | null; condicaoAprovada?: string | null; enviada?: boolean }) =>
+      request<{ ok: boolean; avancou: string | null }>(`/pro-labore/jornada/analises/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     vendasAguardando: () => request<Array<{ id: string; data: string; valorVenda: number; placa: string | null; vendedor: { nome: string } | null; lead: { id: string; nomeCliente: string } | null }>>('/pro-labore/jornada/vendas/aguardando'),
     confirmarVenda: (id: string) => request<{ ok: boolean }>(`/pro-labore/jornada/vendas/${id}/confirmar`, { method: 'POST', body: '{}' }),
     cancelarVenda: (id: string, motivo: 'CANCELADA_DESISTENCIA' | 'CREDITO_NAO_LIBERADO' | 'ERRO_REGISTRO') => request<{ ok: boolean }>(`/pro-labore/jornada/vendas/${id}/cancelar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
@@ -1146,8 +1149,8 @@ export const proLaboreApi = {
   // Acessos e permissões da equipe — só o dono.
   acessos: {
     listar: () => request<PainelAcessos>('/pro-labore/acessos'),
-    criar: (dados: NovoAcesso) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
-    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'documento' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>>) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    criar: (dados: NovoAcesso & { sdr?: boolean }) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
+    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'documento' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>> & { sdr?: boolean }) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
     senha: (id: string, senha: string) => request<{ ok: true }>(`/pro-labore/acessos/${id}/senha`, { method: 'POST', body: JSON.stringify({ senha }) }),
     remover: (id: string) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'DELETE' }),
   },
@@ -3561,3 +3564,8 @@ export interface DetalheJornada {
   podeDevolver: boolean
 }
 export interface PessoaRodizio { vendedorId: string; nome: string; papel: 'SDR' | 'VENDEDOR'; disponivel: boolean; ultimoRecebidoEm: string | null }
+export interface LeadCredito {
+  id: string; nomeCliente: string; etapa: 'MQL' | 'SQL'; entrouNaEtapaEm: string | null; modeloInteresse: string | null; vendedor: { nome: string } | null
+  fichaId: string | null; conversaId: string | null
+  analises: Array<{ id: string; banco: string; status: string; enviadaEm: string | null; respondidoEm: string | null; validadeAte: string | null; condicaoAprovada: string | null; venceEmDias: number | null }>
+}

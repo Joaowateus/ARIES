@@ -47,7 +47,7 @@ export async function requireProLaboreAuth(req: Request, res: Response, next: Ne
       return
     }
     const papel = v.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR'
-    req.proLaboreUser = { ...payload, papel }
+    req.proLaboreUser = { ...payload, papel, sdr: v.papel === 'SDR' }
     req.acessos = permissoesEfetivas(papel, v.permissoes)
   }
   // Tudo que este pedido gravar leva o nome de quem está logado (auditoria).

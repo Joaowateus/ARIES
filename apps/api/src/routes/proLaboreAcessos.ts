@@ -21,7 +21,7 @@ function resumo(v: Linha) {
   const escopo = escopoDoPapel(v.papel)
   const permissoes = permissoesEfetivas(v.papel, v.permissoes)
   const perfil = PERFIS.find(p => p.escopo === escopo && iguais(p.permissoes, permissoes))
-  return { id: v.id, nome: v.nome, email: v.email, documento: v.documento, ativo: v.ativo, vende: v.vende, escopo, permissoes, perfil: perfil?.chave ?? null, criadoEm: v.criadoEm }
+  return { id: v.id, nome: v.nome, email: v.email, documento: v.documento, ativo: v.ativo, vende: v.vende, escopo, permissoes, perfil: perfil?.chave ?? null, sdr: v.papel === 'SDR', criadoEm: v.criadoEm }
 }
 
 async function emailEmUso(email: string, ignorarVendedorId?: string) {
@@ -55,6 +55,7 @@ const criarSchema = z.object({
   documento: z.string().max(30).nullable().optional(), // CPF ou CNPJ
   senha: z.string().min(6, 'A senha precisa de ao menos 6 caracteres'),
   escopo: z.enum(['PROPRIO', 'EQUIPE']),
+  sdr: z.boolean().optional(),
   vende: z.boolean().default(true),
   permissoes: permissoesSchema,
 }).refine(d => d.vendedorId || d.nome, 'Informe o nome')
@@ -68,7 +69,7 @@ router.post('/acessos', requireProLaboreAuth, requireDono, async (req: Request, 
   const doc = normalizarDocumento(d.documento)
   if (!doc.ok) { res.status(400).json({ error: doc.erro }); return }
   const dados = {
-    ...(doc.valor ? { documento: doc.valor } : {}), email: d.email, senhaHash: await bcrypt.hash(d.senha, 10), papel: papelDoEscopo(d.escopo), vende: d.vende, permissoes: limparPermissoes(d.permissoes), ativo: true }
+    ...(doc.valor ? { documento: doc.valor } : {}), email: d.email, senhaHash: await bcrypt.hash(d.senha, 10), papel: d.sdr && d.escopo === 'PROPRIO' ? 'SDR' : papelDoEscopo(d.escopo), vende: d.vende, permissoes: limparPermissoes(d.permissoes), ativo: true }
   let id: string
   if (d.vendedorId) {
     const atual = await prisma.vendedor.findFirst({ where: { id: d.vendedorId, usuarioId } })
@@ -86,6 +87,7 @@ const editarSchema = z.object({
   email: z.string().trim().toLowerCase().email('E-mail inválido').optional(),
   documento: z.string().max(30).nullable().optional(), // CPF ou CNPJ
   escopo: z.enum(['PROPRIO', 'EQUIPE']).optional(),
+  sdr: z.boolean().optional(),
   vende: z.boolean().optional(),
   ativo: z.boolean().optional(),
   permissoes: permissoesSchema.optional(),
@@ -112,7 +114,7 @@ router.put('/acessos/:id', requireProLaboreAuth, requireDono, async (req: Reques
       ...(d.nome ? { nome: d.nome } : {}),
       ...(d.email ? { email: d.email } : {}),
       ...(d.documento !== undefined ? { documento: doc.valor } : {}),
-      ...(d.escopo ? { papel: papelDoEscopo(d.escopo) } : {}),
+      ...(d.escopo || d.sdr !== undefined ? { papel: (d.sdr ?? v.papel === 'SDR') && (d.escopo ?? escopoDoPapel(v.papel)) === 'PROPRIO' ? 'SDR' : papelDoEscopo(d.escopo ?? escopoDoPapel(v.papel)) } : {}),
       ...(d.vende !== undefined ? { vende: d.vende } : {}),
       ...(d.ativo !== undefined ? { ativo: d.ativo } : {}),
       ...(d.permissoes ? { permissoes: limparPermissoes(d.permissoes) } : {}),
