@@ -18,8 +18,10 @@ import { destinoDoMotivo, faseDa, type Etapa } from './etapasJornada'
 export class ErroMigracao extends Error { constructor(readonly status: number, message: string) { super(message) } }
 export const migracaoPermitida = () => ambienteDeTeste() || process.env.PERMITIR_MIGRACAO_JORNADA === '1'
 
+// O servidor (EUA) fica longe do banco (São Paulo): o tempo é conferido a
+// cada lead, para a rodada nunca passar do limite de 30 s da Vercel.
 const LIMITE_RODADA_MS = 12_000
-const LOTE = 100
+const LOTE = 25
 
 const DIRETO: Record<string, Etapa> = { LEAD: 'LEAD', ABORDADO: 'ABORDADO', NEGOCIACAO: 'NEGOCIACAO', PROPOSTA: 'PROPOSTA' }
 
@@ -148,6 +150,7 @@ export async function rodadaMigracao(usuarioId: string) {
       if (!lote.length) break
       const entradas = await entradaNaEtapa(lote.map(l => l.id))
       for (const l of lote) {
+        if (Date.now() - inicio > LIMITE_RODADA_MS) break
         const p = planoDoLead(l)
         const tel = telefoneCanonico(l.telefone)
         let clienteId = tel ? clientes.get(tel) : undefined
@@ -177,6 +180,7 @@ export async function rodadaDesfazer(usuarioId: string) {
       const lote = await prisma.lead.findMany({ where: { usuarioId, anteriorMigracao: true }, select: { id: true, estagio: true, motivoPerdaLegado: true }, take: LOTE })
       if (!lote.length) break
       for (const l of lote) {
+        if (Date.now() - inicio > LIMITE_RODADA_MS) break
         await prisma.lead.update({
           where: { id: l.id },
           data: {

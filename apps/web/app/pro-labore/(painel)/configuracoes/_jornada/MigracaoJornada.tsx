@@ -82,7 +82,7 @@ export function MigracaoJornada() {
           {sim.aMigrar > 0 && (
             <div className="pl-grid-2" style={{ gap: 16 }}>
               <div>
-                <div className="pl-eyebrow">Etapa antiga → etapa nova</div>
+                <div className="pl-eyebrow">Etapa antiga → etapa nova{sim.jaMigrados > 0 ? ' · só o que falta migrar' : ''}</div>
                 <table className="pl-table" data-sim-pares><tbody>{naOrdem(sim.pares, p => p.de.split('→')[0], p => p.de.split('→')[1]).map(p => <tr key={p.de}><td>{nomeEtapa(p.de)}</td><td style={{ textAlign: 'right' }}>{num(p.n)}</td></tr>)}</tbody></table>
                 {sim.revisarEtapa > 0 && <p className="pl-hint">{num(sim.revisarEtapa)} fechados sem venda confirmada vão para Proposta com a marcação “revisar etapa”, para o vendedor posicionar.</p>}
                 <p className="pl-hint">Levantamento: {num(sim.levantamento.aVista)} à vista e {num(sim.levantamento.financiado)} financiados pelas etiquetas da conversa; {num(sim.levantamento.semInformacao)} sem informação. Todos ficam com o levantamento incompleto (falta a CNH).</p>
@@ -100,7 +100,7 @@ export function MigracaoJornada() {
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
             {sim.permitido ? (<>
-              {sim.aMigrar > 0 && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void rodar('rodada')} data-aplicar-migracao>{ocupado ? 'Migrando…' : 'Aplicar a migração'}</button>}
+              {sim.aMigrar > 0 && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void rodar('rodada')} data-aplicar-migracao>{ocupado ? 'Migrando…' : sim.jaMigrados > 0 ? 'Continuar a migração' : 'Aplicar a migração'}</button>}
               {(st?.migrados ?? 0) > 0 && <button type="button" className="pl-btn pl-btn-ghost" disabled={ocupado} onClick={() => void rodar('desfazer')} data-desfazer-migracao>Desfazer</button>}
             </>) : <p className="pl-hint" data-sim-bloqueada>Na produção a migração só roda depois do teste e da sua liberação; aqui fica só a simulação.</p>}
           </div>
