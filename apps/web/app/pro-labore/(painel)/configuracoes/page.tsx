@@ -11,6 +11,7 @@ import { EspacoBanco } from './_espaco/EspacoBanco'
 import { AuditoriaDados } from './_auditoria/AuditoriaDados'
 import { CopiaSeguranca } from './_copia/CopiaSeguranca'
 import { MigracaoJornada } from './_jornada/MigracaoJornada'
+import { RodizioLeads } from './_jornada/RodizioLeads'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -197,6 +198,7 @@ export default function ProLaboreConfiguracoesPage() {
 
       <CopiaSeguranca />
       <MigracaoJornada />
+      <RodizioLeads />
       <EspacoBanco />
       <AuditoriaDados />
 

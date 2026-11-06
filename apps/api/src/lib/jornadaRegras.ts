@@ -30,12 +30,12 @@ export async function criteriosLevantamento(usuarioId: string): Promise<Criterio
 }
 
 interface LeadJornada {
-  id: string; usuarioId: string; etapa: string | null; estagio: string; vendaId: string | null
+  id: string; usuarioId: string; nomeCliente?: string; etapa: string | null; estagio: string; vendaId: string | null
   modeloInteresse: string | null; formaPagamento: string | null; situacaoCnh: string | null; temEntrada: boolean | null
   responsavelQualificacaoId: string | null; responsavelFechamentoId: string | null; vendedorId: string | null
 }
 const SELECT_JORNADA = {
-  id: true, usuarioId: true, etapa: true, estagio: true, vendaId: true, modeloInteresse: true, formaPagamento: true, situacaoCnh: true, temEntrada: true,
+  id: true, usuarioId: true, nomeCliente: true, etapa: true, estagio: true, vendaId: true, modeloInteresse: true, formaPagamento: true, situacaoCnh: true, temEntrada: true,
   responsavelQualificacaoId: true, responsavelFechamentoId: true, vendedorId: true,
 } as const
 
@@ -126,6 +126,8 @@ async function gravarEtapa(l: LeadJornada, destino: Etapa, extra: Record<string,
     where: { id: l.id },
     data: { etapa: destino, fase: faseDa(destino), estagio: ESTAGIO_LEGADO[destino], entrouNaEtapaEm: agora, revisarEtapa: false, ...extra },
   })
+  // O vendedor fez o primeiro contato: a atividade da passagem está cumprida.
+  if (destino === 'NEGOCIACAO') await prisma.leadFollow.updateMany({ where: { leadId: l.id, tipo: 'JORNADA', status: 'PENDENTE', contexto: { path: ['atividade'], equals: 'PRIMEIRO_CONTATO' } }, data: { status: 'FEITO', feitoEm: agora, resultado: 'Lead na Negociação' } })
   await prisma.leadEstagioHistorico.create({ data: { leadId: l.id, estagioAnterior: l.etapa ?? l.estagio, estagioNovo: destino, ...(motivo ? { motivo } : {}), ...(autorAtual().origem === 'AUTOMACAO' ? { origem: 'ASSISTENTE' } : {}) } })
 }
 

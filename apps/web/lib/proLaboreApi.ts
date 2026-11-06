@@ -622,6 +622,15 @@ export const proLaboreApi = {
     levantamento: (id: string, data: { modeloInteresse?: string | null; formaPagamento?: 'A_VISTA' | 'FINANCIADO' | null; situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null; temEntrada?: boolean | null }) =>
       request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/levantamento`, { method: 'PATCH', body: JSON.stringify(data) }),
     perda: (id: string, motivo: string, nota?: string) => request<{ ok: boolean; destino: string | null }>(`/pro-labore/jornada/leads/${id}/perda`, { method: 'POST', body: JSON.stringify({ motivo, nota }) }),
+    detalhe: (id: string) => request<DetalheJornada>(`/pro-labore/jornada/leads/${id}/detalhe`),
+    proposta: (id: string, data: { preco: number; entrada?: number | null; parcela?: number | null; prazo?: number | null; validade?: string | null; followEm?: string | null }) =>
+      request<{ proposta: PropostaLead; mensagem: string }>(`/pro-labore/jornada/leads/${id}/proposta`, { method: 'POST', body: JSON.stringify(data) }),
+    propostaEnviada: (propostaId: string) => request<{ ok: boolean }>(`/pro-labore/jornada/propostas/${propostaId}/enviada`, { method: 'POST', body: '{}' }),
+    respostaProposta: (propostaId: string, resultado: 'ACEITA' | 'RECUSADA' | 'SEM_RESPOSTA') => request<{ ok: boolean }>(`/pro-labore/jornada/propostas/${propostaId}/resposta`, { method: 'POST', body: JSON.stringify({ resultado }) }),
+    acao: (id: string, acao: 'visita' | 'checkin' | 'falta' | 'resultado-visita' | 'passar' | 'devolver', body: Record<string, unknown> = {}) =>
+      request<{ ok: boolean; resultado: unknown }>(`/pro-labore/jornada/leads/${id}/${acao}`, { method: 'POST', body: JSON.stringify(body) }),
+    rodizio: () => request<PessoaRodizio[]>('/pro-labore/jornada/rodizio'),
+    disponivel: (vendedorId: string, disponivel: boolean) => request<PessoaRodizio[]>(`/pro-labore/jornada/rodizio/${vendedorId}`, { method: 'PUT', body: JSON.stringify({ disponivel }) }),
   },
   leads: {
     listar: (estagio?: EstagioLead) => request<Lead[]>(`/pro-labore/leads${estagio ? `?estagio=${estagio}` : ''}`),
@@ -3530,3 +3539,15 @@ export interface ChecklistJornada {
   levantamentoFalta: string[]
   motivos: string[]
 }
+export interface PropostaLead { id: string; preco: number; entrada: number | null; parcela: number | null; prazo: number | null; validade: string | null; enviadaEm: string | null; respondidaEm: string | null; resultado: string | null; criadoEm: string }
+export interface VisitaLead { id: string; marcadaPara: string; confirmadaEm: string | null; checkinEm: string | null; falta: boolean; remarcacoes: number; resultado: string | null }
+export interface DetalheJornada {
+  checklist: ChecklistJornada
+  propostas: PropostaLead[]
+  visitas: VisitaLead[]
+  passagens: Array<{ id: string; passadaEm: string; resumo: string | null; devolvida: boolean; motivoDevolucao: string | null; sdrNome: string | null; vendedorNome: string | null }>
+  atividades: Array<{ id: string; agendadoPara: string; nota: string | null }>
+  podePassar: boolean
+  podeDevolver: boolean
+}
+export interface PessoaRodizio { vendedorId: string; nome: string; papel: 'SDR' | 'VENDEDOR'; disponivel: boolean; ultimoRecebidoEm: string | null }

@@ -1,5 +1,7 @@
 'use client'
 
+import { JornadaPainel } from './JornadaPainel'
+
 // Painel lateral do lead (abre com um clique no card): tudo que saiu do card
 // para ele ficar enxuto — contato, etapas, notas da negociação, nota e
 // etiquetas do assistente, follow, última mensagem do WhatsApp, observação
@@ -23,7 +25,8 @@ function avancoDesfazivel(lead: Lead) {
   return !!ultimo && ultimo.origem === 'ASSISTENTE' && ultimo.estagioNovo === lead.estagio && !lead.vendaId && Date.now() - new Date(ultimo.criadoEm).getTime() < 3 * 86_400_000
 }
 
-export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeEscrever, onContagemNotas, onLigacoesMudaram, onFechar, onMover, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao }: {
+export function PainelLead({ lead, onJornadaMudou, colunas, isDono, vejaEquipe, focarNota, podeEscrever, onContagemNotas, onLigacoesMudaram, onFechar, onMover, onConverter, onEditar, onPerdido, onFollow, onDesfazer, onRemover, onDefinirTipoNegociacao }: {
+  onJornadaMudou?: () => void
   lead: Lead
   colunas: Array<{ estagio: EstagioLead; titulo: string }>
   isDono: boolean
@@ -76,6 +79,7 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeE
           <button type="button" className="pl-pn-fechar" onClick={onFechar} aria-label="Fechar painel">✕</button>
         </header>
 
+        {lead.etapa ? <JornadaPainel lead={lead} onMudou={() => onJornadaMudou?.()} /> : <>
         <ol className="pl-pn-etapas" aria-label="Etapa no funil">
           {colunas.map((c, i) => (
             <li key={c.estagio} className={i < indice ? 'feita' : i === indice ? 'atual' : ''}>
@@ -85,10 +89,11 @@ export function PainelLead({ lead, colunas, isDono, vejaEquipe, focarNota, podeE
             </li>
           ))}
         </ol>
+        </>}
 
         {aberto && (
           <div className="pl-pn-acoes">
-            {proxima && proxima.estagio !== 'FECHADO' && <button type="button" className="pl-btn pl-btn-primary" onClick={() => onMover(proxima.estagio)} data-painel-avancar>Avançar para {proxima.titulo} →</button>}
+            {!lead.etapa && proxima && proxima.estagio !== 'FECHADO' && <button type="button" className="pl-btn pl-btn-primary" onClick={() => onMover(proxima.estagio)} data-painel-avancar>Avançar para {proxima.titulo} →</button>}
             {isDono && <button type="button" className="pl-btn pl-btn-primary pl-pn-converter" onClick={onConverter}>✓ Converter em venda</button>}
             <button type="button" className="pl-btn pl-btn-ghost" onClick={onFollow}>{follow ? 'Ver follow' : 'Agendar follow'}</button>
             {whats && <a className="pl-btn pl-btn-ghost" href={whats} target="_blank" rel="noreferrer">WhatsApp</a>}

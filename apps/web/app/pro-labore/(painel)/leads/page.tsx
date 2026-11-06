@@ -1100,6 +1100,7 @@ export default function ProLaboreLeadsPage() {
       {painelLead && (
         <PainelLead
           lead={painelLead}
+          onJornadaMudou={carregar}
           colunas={COLUNAS}
           isDono={isDono}
           vejaEquipe={vejaEquipe}
