@@ -110,7 +110,7 @@ export function MigracaoJornada() {
               <div className="pl-eyebrow">Como ficou a nova jornada ({num(st.migrados)} leads migrados{st.pendentes ? `, faltam ${num(st.pendentes)}` : ''})</div>
               <div style={{ overflowX: 'auto' }}><table className="pl-table"><thead><tr><th>Fase</th><th>Etapa</th><th style={{ textAlign: 'right' }}>No funil</th><th style={{ textAlign: 'right' }}>Perdidos nela</th></tr></thead>
                 <tbody>{st.jornada.map((j, i) => <tr key={j.etapa}><td>{FASE[j.fase]}</td><td>{i + 1}. {ETAPA[j.etapa]}</td><td style={{ textAlign: 'right' }}>{num(j.ativos)}</td><td style={{ textAlign: 'right' }}>{num(j.perdidos)}</td></tr>)}</tbody></table></div>
-              <p className="pl-hint">Levantamento, MQL, SQL, Agendamento e Visita começam vazias: no funil antigo não havia essas etapas, então nenhum lead entra nelas pela migração. Os leads passam por elas daqui para a frente, conforme avançam. O quadro do CRM com as 10 colunas é a próxima parte (passo 5); até lá, as telas continuam com as 5 etapas.</p>
+              <p className="pl-hint">Levantamento, MQL, SQL, Agendamento e Visita começam vazias: no funil antigo não havia essas etapas, então nenhum lead entra nelas pela migração. Os leads passam por elas daqui para a frente, conforme avançam. O CRM já mostra o quadro com as 10 colunas.</p>
             </div>
           )}
           {st && st.migrados > 0 && (
