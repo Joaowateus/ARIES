@@ -22,6 +22,12 @@ const DESTINO: Record<string, string> = {
   REATIVACAO_SEM_RESPOSTA: 'Reativação · sem resposta', REATIVACAO_INTERESSE: 'Reativação · interesse não convertido', REATIVACAO_NEGOCIACAO: 'Reativação · negociação interrompida',
   REATIVACAO_RETOMADA: 'Reativação · oportunidade de retomada', REATIVACAO_OUTRO: 'Reativação · outro (anterior à migração)',
 }
+// Ordem da jornada: etapas antigas (Lead → Fechamento, depois Perdido) e, dentro delas, as novas (1 a 10).
+const ORDEM_ANTIGA = ['LEAD', 'ABORDADO', 'NEGOCIACAO', 'PROPOSTA', 'FECHADO', 'PERDIDO']
+const ORDEM_NOVA = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA', 'VENDA']
+const posicao = (lista: string[], v: string | null) => { const i = lista.indexOf((v ?? '').replace(/ .*/, '')); return i < 0 ? 99 : i }
+const naOrdem = <T,>(itens: T[], de: (t: T) => string | null, para: (t: T) => string | null) =>
+  [...itens].sort((a, b) => posicao(ORDEM_ANTIGA, de(a)) - posicao(ORDEM_ANTIGA, de(b)) || posicao(ORDEM_NOVA, para(a)) - posicao(ORDEM_NOVA, para(b)))
 const nomeEtapa = (s: string) => {
   const [de, para] = s.split('→')
   if (de === 'PERDIDO') return `Perdido → continua perdido, marcado na etapa ${ETAPA[para] ?? para}`
@@ -77,7 +83,7 @@ export function MigracaoJornada() {
             <div className="pl-grid-2" style={{ gap: 16 }}>
               <div>
                 <div className="pl-eyebrow">Etapa antiga → etapa nova</div>
-                <table className="pl-table" data-sim-pares><tbody>{sim.pares.map(p => <tr key={p.de}><td>{nomeEtapa(p.de)}</td><td style={{ textAlign: 'right' }}>{num(p.n)}</td></tr>)}</tbody></table>
+                <table className="pl-table" data-sim-pares><tbody>{naOrdem(sim.pares, p => p.de.split('→')[0], p => p.de.split('→')[1]).map(p => <tr key={p.de}><td>{nomeEtapa(p.de)}</td><td style={{ textAlign: 'right' }}>{num(p.n)}</td></tr>)}</tbody></table>
                 {sim.revisarEtapa > 0 && <p className="pl-hint">{num(sim.revisarEtapa)} fechados sem venda confirmada vão para Proposta com a marcação “revisar etapa”, para o vendedor posicionar.</p>}
                 <p className="pl-hint">Levantamento: {num(sim.levantamento.aVista)} à vista e {num(sim.levantamento.financiado)} financiados pelas etiquetas da conversa; {num(sim.levantamento.semInformacao)} sem informação. Todos ficam com o levantamento incompleto (falta a CNH).</p>
               </div>
@@ -102,7 +108,7 @@ export function MigracaoJornada() {
             <div style={{ marginTop: 12 }} data-conferencia-migracao>
               <div className="pl-eyebrow">Conferência ({num(st.migrados)} de {num(st.total)} migrados · {num(st.clientes)} clientes{st.semCliente ? ` · ${num(st.semCliente)} sem cliente` : ''})</div>
               <table className="pl-table"><thead><tr><th>Etapa antiga</th><th>Etapa nova</th><th style={{ textAlign: 'right' }}>Leads</th></tr></thead>
-                <tbody>{st.conferencia.map(c => <tr key={`${c.de}${c.para}${c.revisarEtapa}`}><td>{ETAPA[c.de ?? ''] ?? c.de}</td><td>{ETAPA[c.para ?? ''] ?? c.para}{c.revisarEtapa ? ' (revisar etapa)' : ''}</td><td style={{ textAlign: 'right' }}>{num(c.n)}</td></tr>)}</tbody></table>
+                <tbody>{naOrdem(st.conferencia, c => c.de, c => c.para).map(c => <tr key={`${c.de}${c.para}${c.revisarEtapa}`}><td>{ETAPA[c.de ?? ''] ?? c.de}</td><td>{ETAPA[c.para ?? ''] ?? c.para}{c.revisarEtapa ? ' (revisar etapa)' : ''}</td><td style={{ textAlign: 'right' }}>{num(c.n)}</td></tr>)}</tbody></table>
             </div>
           )}
         </>
