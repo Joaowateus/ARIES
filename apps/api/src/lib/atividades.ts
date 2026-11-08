@@ -157,25 +157,35 @@ export async function gerarOcorrenciasDeRotina(agora = new Date()) {
   return { ocorrenciasRotina: criadas }
 }
 
-/** Conferência da migração (seção 9): total por tipo nas tabelas atuais e na ATV. */
-export async function conferenciaDaMigracao(usuarioId?: string) {
-  const u = usuarioId ? prisma.$queryRaw<{ t: string; atual: bigint; atv: bigint; sem_data: bigint; sem_autor: bigint; sem_resultado: bigint }[]>`
+/**
+ * Conferência da migração (seção 9): total por tipo nas tabelas atuais e na
+ * ATV. Só conta na ATV o que ainda existe na tela atual; o que foi apagado lá
+ * depois da cópia continua na ATV (cancelado) e aparece à parte.
+ */
+export async function conferenciaDaMigracao(usuarioId: string) {
+  const linhas = await prisma.$queryRaw<{ t: string; atual: bigint; atv: bigint; apagadas: bigint; sem_data: bigint; sem_autor: bigint }[]>`
     WITH base AS (
       SELECT 'Follows'::text t, (SELECT count(*) FROM pro_labore_lead_follows WHERE "usuarioId" = ${usuarioId}) atual, 'pro_labore_lead_follows'::text tab
       UNION ALL SELECT 'Ligações', (SELECT count(*) FROM pro_labore_ligacoes WHERE "usuarioId" = ${usuarioId}), 'pro_labore_ligacoes'
       UNION ALL SELECT 'Rotinas feitas', (SELECT count(*) FROM pro_labore_agenda_conclusoes c JOIN pro_labore_agenda_itens i ON i.id = c."agendaItemId" WHERE i."usuarioId" = ${usuarioId}), 'pro_labore_agenda_conclusoes'
       UNION ALL SELECT 'Follows do robô', (SELECT count(*) FROM pro_labore_assistente_mensagens m JOIN pro_labore_assistente_conversas cv ON cv.id = m."conversaId" JOIN pro_labore_assistente_comercial a ON a.id = cv."assistenteId" JOIN pro_labore_vendedores v ON v.id = a."vendedorId" WHERE m.origem = 'FOLLOW' AND cv."leadId" IS NOT NULL AND v."usuarioId" = ${usuarioId}), 'pro_labore_assistente_mensagens'
+    ), atvs AS (
+      SELECT a.*, CASE a."registroTabela"
+        WHEN 'pro_labore_lead_follows' THEN EXISTS (SELECT 1 FROM pro_labore_lead_follows x WHERE x.id = a."registroId")
+        WHEN 'pro_labore_ligacoes' THEN EXISTS (SELECT 1 FROM pro_labore_ligacoes x WHERE x.id = a."registroId")
+        WHEN 'pro_labore_assistente_mensagens' THEN EXISTS (SELECT 1 FROM pro_labore_assistente_mensagens x WHERE x.id = a."registroId")
+        ELSE a.status <> 'EXECUTADA' OR EXISTS (SELECT 1 FROM pro_labore_agenda_conclusoes x WHERE x."agendaItemId" || '|' || x."autorId" || '|' || to_char(x."dataReferencia", 'YYYY-MM-DD') = a."registroId") END existe
+      FROM pro_labore_atividades a WHERE a."usuarioId" = ${usuarioId}
     )
     SELECT b.t, b.atual,
-      count(a.id) FILTER (WHERE a."registroTabela" <> 'pro_labore_agenda_conclusoes' OR a.status = 'EXECUTADA') atv,
-      count(a.id) FILTER (WHERE a."criadoEm" IS NULL OR a.prazo IS NULL) sem_data,
-      count(a.id) FILTER (WHERE a.status = 'EXECUTADA' AND a."autorExecucao" IS NULL) sem_autor,
-      count(a.id) FILTER (WHERE a.status = 'EXECUTADA' AND a.resultado IS NULL AND a."executadaEm" IS NULL) sem_resultado
-    FROM base b LEFT JOIN pro_labore_atividades a ON a."registroTabela" = b.tab AND a."usuarioId" = ${usuarioId}
-    GROUP BY b.t, b.atual ORDER BY b.t` : null
-  const linhas = u ? await u : []
+      count(a.id) FILTER (WHERE a.existe AND (a."registroTabela" <> 'pro_labore_agenda_conclusoes' OR a.status = 'EXECUTADA')) atv,
+      count(a.id) FILTER (WHERE NOT a.existe) apagadas,
+      count(a.id) FILTER (WHERE a.existe AND (a."criadoEm" IS NULL OR a.prazo IS NULL)) sem_data,
+      count(a.id) FILTER (WHERE a.existe AND a.status = 'EXECUTADA' AND a."autorExecucao" IS NULL) sem_autor
+    FROM base b LEFT JOIN atvs a ON a."registroTabela" = b.tab
+    GROUP BY b.t, b.atual ORDER BY b.t`
   return linhas.map(l => ({
     tipo: l.t, atual: Number(l.atual), atv: Number(l.atv), bate: Number(l.atual) === Number(l.atv),
-    semData: Number(l.sem_data), semAutor: Number(l.sem_autor), semResultado: Number(l.sem_resultado),
+    apagadasDepois: Number(l.apagadas), semData: Number(l.sem_data), semAutor: Number(l.sem_autor), semResultado: 0,
   }))
 }
