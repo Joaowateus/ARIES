@@ -6,7 +6,7 @@
 // aprovar). Agendamento vai até a data marcada; SQL, pela validade da
 // aprovação. Só o dono muda.
 import { useEffect, useState } from 'react'
-import { proLaboreApi, type EtapaJornada, type PremissasJornada as Premissas, type UnidadeTempo } from '@/lib/proLaboreApi'
+import { proLaboreApi, type EtapaJornada, type HistoricoParametro, type PremissasJornada as Premissas, type UnidadeTempo } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, NOME_ETAPA } from '@/lib/etapasJornada'
 
 const FONTE: Record<string, string> = { HISTORICO: 'pelo histórico', APROVADO: 'definido por você', SEM_LIMITE: 'sem limite', DATA_MARCADA: 'até a data marcada', VALIDADE: 'pela validade da aprovação' }
@@ -17,11 +17,22 @@ export function PremissasJornada({ podeEditar }: { podeEditar: boolean }) {
   const [p, setP] = useState<Premissas | null>(null)
   const [tempos, setTempos] = useState<Partial<Record<EtapaJornada, string>>>({})
   const [msg, setMsg] = useState<string | null>(null)
-  useEffect(() => { proLaboreApi.jornada.premissas().then(setP).catch(() => setP(null)) }, [])
+  // PDF 02 · 4.3: toda mudança de parâmetro tem justificativa e fica no histórico.
+  const [justificativa, setJustificativa] = useState('')
+  const [historico, setHistorico] = useState<HistoricoParametro[]>([])
+  useEffect(() => {
+    proLaboreApi.jornada.premissas().then(setP).catch(() => setP(null))
+    proLaboreApi.jornada.historicoParametros().then(setHistorico).catch(() => setHistorico([]))
+  }, [])
   if (!p) return null
   async function salvar(d: Parameters<typeof proLaboreApi.jornada.salvarPremissas>[0]) {
     setMsg(null)
-    try { setP(await proLaboreApi.jornada.salvarPremissas(d)); setTempos({}); setMsg('Salvo.') } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível salvar') }
+    if (justificativa.trim().length < 5) { setMsg('Escreva por que está mudando antes de salvar.'); return }
+    try {
+      setP(await proLaboreApi.jornada.salvarPremissas({ ...d, justificativa }))
+      setTempos({}); setJustificativa(''); setMsg('Salvo.')
+      proLaboreApi.jornada.historicoParametros().then(setHistorico).catch(() => undefined)
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível salvar') }
   }
   const editaveis = ETAPAS_JORNADA.filter(e => !['AGENDAMENTO', 'VENDA'].includes(e))
   return (
@@ -30,6 +41,12 @@ export function PremissasJornada({ podeEditar }: { podeEditar: boolean }) {
         <div className="pl-card-title">Metas e premissas · jornada de compra</div>
         <div className="pl-card-sub">Passado o tempo máximo, o lead conta como parado na etapa (o card fica marcado). Os valores iniciais vêm do histórico da loja.</div>
       </div></div>
+      {podeEditar && (
+        <div className="pl-field" style={{ marginBottom: 10 }}>
+          <label>Por que está mudando (obrigatório para salvar)</label>
+          <input className="pl-input" value={justificativa} onChange={e => setJustificativa(e.target.value)} placeholder="Ex.: o time aumentou e o lead demora mais para ser abordado" data-justificativa-premissas />
+        </div>
+      )}
       <div style={{ overflowX: 'auto' }}>
         <table className="pl-table"><thead><tr><th>Etapa</th><th>Tempo máximo</th><th>Origem</th>{podeEditar && <th>Mudar para</th>}</tr></thead>
           <tbody>{ETAPAS_JORNADA.map((e, i) => {
@@ -77,6 +94,28 @@ export function PremissasJornada({ podeEditar }: { podeEditar: boolean }) {
           ))}
         </div>
       </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 16, marginTop: 16 }}>
+        <div>
+          <div className="pl-eyebrow">Meta diária do SDR (leads passados)</div>
+          <input className="pl-input" style={{ width: 90 }} type="number" min={0} step={0.1} disabled={!podeEditar} defaultValue={p.metaDiariaSdr.valor ?? ''} onBlur={ev => { const v = ev.target.value === '' ? null : Number(ev.target.value); if (v !== p.metaDiariaSdr.valor) void salvar({ metaDiariaSdr: v }) }} data-meta-sdr />
+          <div className="pl-hint">{p.metaDiariaSdr.sugerido != null ? `Pelo histórico do último mês: ${p.metaDiariaSdr.sugerido}/dia` : 'Sem histórico de passagens ainda'}{p.metaDiariaSdr.fonte === 'APROVADO' ? ' · definido por você' : ''}</div>
+        </div>
+        <div>
+          <div className="pl-eyebrow">Volume mínimo para os detectores</div>
+          <input className="pl-input" style={{ width: 90 }} type="number" min={1} disabled={!podeEditar} defaultValue={p.volumeMinimoDetectores} onBlur={ev => { const n = Number(ev.target.value); if (n && n !== p.volumeMinimoDetectores) void salvar({ volumeMinimoDetectores: n }) }} data-volume-minimo />
+          <div className="pl-hint">Casos no período para um detector disparar (usado a partir da onda 2)</div>
+        </div>
+      </div>
+      {historico.length > 0 && (
+        <details style={{ marginTop: 12 }} data-historico-parametros>
+          <summary className="pl-hint">Histórico de mudanças ({historico.length})</summary>
+          <ul style={{ paddingLeft: 18 }}>
+            {historico.slice(0, 30).map(h => (
+              <li key={h.id}>{new Date(h.criadoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })} · {h.nome}: {JSON.stringify(h.valorAnterior)} → {JSON.stringify(h.valorNovo)} · “{h.justificativa}”</li>
+            ))}
+          </ul>
+        </details>
+      )}
       {msg && <p className="pl-hint" role="status">{msg}</p>}
     </section>
   )

@@ -1170,6 +1170,9 @@ model ParametroLiquidez {
   jornadaAtivaEm               DateTime?
   // Prazos do Pós-venda a partir da confirmação da venda, em dias.
   posVendaPrazos               Json?
+  // PDF 02 · 4.3: volume mínimo de casos para os detectores (onda 2) e meta diária do SDR (nula = pelo histórico).
+  volumeMinimoDetectores       Int       @default(10)
+  metaDiariaSdr                Float?
 
   @@map("pro_labore_parametros")
 }
@@ -1415,6 +1418,15 @@ model Lead {
   estagioLegado             String?
   // Motivo de perda das 5 etapas, guardado na migração (o novo fica em motivoPerda).
   motivoPerdaLegado         String?
+  // --- Origem da oportunidade (PDF 02, 4.5) — gravada na criação e não muda depois ---
+  origemTipo                String? // ANUNCIO | POST | DIRECT_COMENTARIO | ORGANICO | LISTA | DESCONHECIDA
+  origemCampanha            String?
+  origemConjunto            String?
+  origemAnuncio             String? // id do anúncio (clique para WhatsApp)
+  origemTituloAnuncio       String?
+  origemLista               String? // INDICACAO | LOJA_FISICA | RETORNO_ESPONTANEO
+  origemAutomatica          Boolean   @default(false)
+  origemConfiabilidade      String? // CONFIRMADO | INCOMPLETO
   entrouNaEtapaEm           DateTime?
   // Quem fez a última escrita (preenchido pelo sistema; lido pela auditoria).
   auditoriaAutor            String?
@@ -2103,6 +2115,9 @@ model AssistenteConversa {
   resultado            String?
   // ANUNCIO (clique em anúncio pro WhatsApp) | GATILHO (frase de campanha)
   // | CONTATO_NOVO
+  // Anúncio do clique para WhatsApp que abriu a conversa (PDF 02, 4.5).
+  anuncioId            String?
+  anuncioTitulo        String?
   origem               String?
   etapaRoteiro         Int       @default(0)
   respostas            Json?
@@ -2198,11 +2213,19 @@ model AssistenteMensagem {
   followFluxo String?
   criadoEm    DateTime @default(now())
 
+  // PDF 02 (4.1): hora exata no WhatsApp (recebida ou enviada), quem da loja
+  // escreveu (vendedor/dono) e se é a 1ª resposta de uma pessoa na conversa
+  // (base do "tempo de primeira resposta"; resposta do robô não conta).
+  enviadaEm              DateTime?
+  pessoaId               String?
+  primeiraRespostaHumana Boolean   @default(false)
+
   conversa AssistenteConversa @relation(fields: [conversaId], references: [id])
   // Áudio ou foto que veio (ou saiu) pelo WhatsApp, para ouvir e ver na conversa.
   midia    AssistenteMidia?
 
   @@index([conversaId])
+  @@index([conversaId, primeiraRespostaHumana])
   @@map("pro_labore_assistente_mensagens")
 }
 
@@ -4525,4 +4548,164 @@ model EventoAuditoria {
   @@index([tabela, registroId, em])
   @@index([em])
   @@map("pro_labore_eventos_auditoria")
+}
+
+// PDF 02 · 4.4 Atividade (ATV): entidade única de tarefas. Na semana em
+// paralelo o banco copia para cá cada follow, ligação, ocorrência de rotina
+// e follow automático do robô (gatilhos aries_atv_*). Código ATV-0001 é
+// gerado pelo banco a partir do número (não gravar).
+model Atividade {
+  id                String    @id @default(cuid())
+  numero            Int       @unique @default(autoincrement())
+  codigo            String?
+  usuarioId         String
+  auditoriaAutor    String?
+  tipo              String
+  // OPORTUNIDADE | RECOMENDACAO | ROTINA | REUNIAO | OCORRENCIA | PAUTA
+  origemTipo        String
+  origemId          String
+  leadId            String?
+  responsavelId     String?
+  prazo             DateTime
+  canal             String?
+  oQueFazer         String?
+  status            String    @default("PENDENTE") // PENDENTE | EXECUTADA | CANCELADA
+  resultado         String?
+  executadaEm       DateTime?
+  autorExecucao     String?
+  autorExecucaoTipo String? // PESSOA | AUTOMACAO
+  modeloTipo        String? // CADENCIA | ROTINA
+  modeloId          String?
+  exigeLocalizacao  Boolean   @default(false)
+  latitude          Float?
+  longitude         Float?
+  reguaEstado       String    @default("NAO_INICIADA") // NAO_INICIADA | LEMBRETE | ALERTA | ALERTA_2 | ESCALONADA | PARADA
+  registroTabela    String
+  registroId        String
+  criadoEm          DateTime  @default(now())
+  atualizadoEm      DateTime  @default(now())
+
+  registrosRegua ReguaRegistro[]
+
+  @@unique([registroTabela, registroId], map: "pro_labore_atividades_registro_key")
+  @@index([usuarioId, status, prazo], map: "pro_labore_atividades_fila_idx")
+  @@index([leadId], map: "pro_labore_atividades_lead_idx")
+  @@index([responsavelId, status, prazo], map: "pro_labore_atividades_resp_idx")
+  @@map("pro_labore_atividades")
+}
+
+// Régua de cobrança por tipo de origem (sem linha = padrão 4.4).
+model ReguaCobranca {
+  id               String   @id @default(cuid())
+  usuarioId        String
+  origemTipo       String
+  lembreteMinAntes Int      @default(30)
+  segundoAlertaMin Int      @default(120)
+  escalonamentoMin Int      @default(1440)
+  escalonarPara    String   @default("SUPERVISOR") // SUPERVISOR | GESTOR | DONO
+  auditoriaAutor   String?
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @default(now()) @updatedAt
+
+  @@unique([usuarioId, origemTipo], map: "pro_labore_regua_cobranca_key")
+  @@map("pro_labore_regua_cobranca")
+}
+
+// O que a régua mandaria (modo de registro) ou mandou. Só inclusão.
+model ReguaRegistro {
+  id             String   @id @default(cuid())
+  atividadeId    String
+  etapa          String // LEMBRETE | ALERTA | ALERTA_2 | ESCALONAMENTO
+  previstoPara   DateTime
+  registradoEm   DateTime @default(now())
+  destinatarioId String?
+  modo           String   @default("REGISTRO") // REGISTRO | ENVIO
+  enviado        Boolean  @default(false)
+
+  atividade Atividade @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+
+  @@unique([atividadeId, etapa], map: "pro_labore_regua_registros_key")
+  @@map("pro_labore_regua_registros")
+}
+
+// PDF 02 · 4.2: versões da ficha de métrica aprovadas pelo dono (só inclusão).
+model MetricaVersao {
+  id            String    @id @default(cuid())
+  usuarioId     String
+  chave         String
+  versao        Int
+  ficha         Json
+  justificativa String
+  autorId       String
+  aprovadoPor   String?
+  aprovadoEm    DateTime?
+  criadoEm      DateTime  @default(now())
+
+  @@unique([usuarioId, chave, versao], map: "pro_labore_metricas_versoes_key")
+  @@map("pro_labore_metricas_versoes")
+}
+
+// Padrão da loja por métrica e dia (e retratos diários das métricas de "agora").
+model MetricaPadrao {
+  id        String   @id @default(cuid())
+  usuarioId String
+  chave     String
+  escopo    String
+  dia       DateTime @db.Date
+  valor     Float?
+  criadoEm  DateTime @default(now())
+
+  @@unique([usuarioId, chave, escopo, dia], map: "pro_labore_metricas_padrao_key")
+  @@map("pro_labore_metricas_padrao")
+}
+
+// PDF 02 · 4.3: histórico de mudança de parâmetro (autor, data, justificativa). Só inclusão.
+model ParametroHistorico {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  nome          String
+  valorAnterior Json?
+  valorNovo     Json?
+  origem        String // HISTORICO | MANUAL
+  justificativa String
+  autorId       String
+  criadoEm      DateTime @default(now())
+
+  @@index([usuarioId, nome, criadoEm], map: "pro_labore_parametros_historico_idx")
+  @@map("pro_labore_parametros_historico")
+}
+
+// PDF 02 · 4.8: classificação de confiabilidade por registro.
+model Confiabilidade {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  registroTabela String
+  registroId     String
+  classificacao  String // CONFIRMADO | INCOMPLETO | SUSPEITO
+  motivo         String?
+  regra          String?
+  avaliadoEm     DateTime @default(now())
+
+  @@unique([registroTabela, registroId], map: "pro_labore_confiabilidade_key")
+  @@index([usuarioId, classificacao], map: "pro_labore_confiabilidade_idx")
+  @@map("pro_labore_confiabilidade")
+}
+
+// PDF 02 · 4.8: correção orientada (o que falta, onde, quem corrige).
+model CorrecaoPendente {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  registroTabela String
+  registroId     String
+  leadId         String?
+  regra          String
+  classificacao  String // INCOMPLETO | SUSPEITO
+  oQueFalta      String
+  responsavelId  String?
+  status         String    @default("ABERTA") // ABERTA | RESOLVIDA
+  criadaEm       DateTime  @default(now())
+  resolvidaEm    DateTime?
+
+  @@index([usuarioId, status, responsavelId], map: "pro_labore_correcoes_idx")
+  @@map("pro_labore_correcoes_pendentes")
 }

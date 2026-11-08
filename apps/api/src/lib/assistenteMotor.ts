@@ -63,6 +63,8 @@ export interface MensagemWhatsapp {
   instanteMs: number | null
   veioDeAnuncio: boolean
   tituloAnuncio: string | null
+  // Id do anúncio (clique para WhatsApp) que a Meta manda na 1ª mensagem.
+  anuncioId: string | null
   // Endereço "@lid" sem o telefone ao lado: `numero` é só um identificador.
   semTelefone: boolean
   // Áudio ou foto: o arquivo é baixado depois (ver assistenteMidia).
@@ -133,6 +135,11 @@ function veioDeAnuncio(contextos: Obj[]): boolean {
 }
 
 // Título do anúncio do clique para WhatsApp (ex.: "Onix 2020") — vai pra observação do lead.
+function idDoAnuncio(contextos: Obj[]): string | null {
+  for (const c of contextos) { const id = str(obj(c.externalAdReply).sourceId)?.trim(); if (id) return id.slice(0, 64) }
+  return null
+}
+
 function tituloDoAnuncio(contextos: Obj[]): string | null {
   for (const c of contextos) {
     const ad = obj(c.externalAdReply)
@@ -174,6 +181,7 @@ export function lerMensagens(dadosBrutos: unknown): MensagemWhatsapp[] {
       instanteMs: Number.isFinite(ts) && ts > 0 ? (ts > 1e12 ? ts : ts * 1000) : null,
       veioDeAnuncio: veioDeAnuncio(contextos),
       tituloAnuncio: tituloDoAnuncio(contextos),
+      anuncioId: idDoAnuncio(contextos),
       semTelefone: jidTelefone.endsWith('@lid'),
       midia: midiaDaMensagem(message),
     })
@@ -291,7 +299,7 @@ async function tratarMensagemDoVendedor(a: AssistenteCompleto, m: MensagemWhatsa
         data: {
           assistenteId: a.id, tipo: 'LEAD', robo: false, status: 'ASSUMIDA', assumidaEm: agora, leadId: lead.id,
           nomeContato: lead.nomeCliente, numeroContato: m.numero, jid: m.jid, ultimaMensagemEm: agora,
-          mensagens: { create: { remetente: 'VENDEDOR', texto: m.texto, providerId: m.id } },
+          mensagens: { create: { remetente: 'VENDEDOR', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined, pessoaId: a.vendedorId } },
         },
         select: { id: true },
       })
@@ -320,7 +328,7 @@ async function tratarMensagemDoVendedor(a: AssistenteCompleto, m: MensagemWhatsa
   }
   const agora = new Date()
   await prisma.$transaction([
-    prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'VENDEDOR', texto: m.texto, providerId: m.id } }),
+    prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'VENDEDOR', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined, pessoaId: a.vendedorId } }),
     prisma.assistenteConversa.update({
       where: { id: conversa.id },
       data: {
@@ -380,7 +388,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     if (conversa) {
       conversaTocada = conversa.id
       const esperandoResposta = perguntaJaEntregue(conversa.mensagens)
-      await tx.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id } })
+      await tx.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } })
       const base = {
         ultimaMensagemEm: new Date(), ...(m.nomePerfil && conversa.nomeContato === formatarTelefone(m.numero) && { nomeContato: m.nomePerfil }),
         // Cliente respondeu: o follow automático recomeça do zero; pediu para parar (com o vendedor), para de vez.
@@ -435,10 +443,10 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
       if (leadId) {
         conversaTocada = (await tx.assistenteConversa.create({
           data: {
-            assistenteId: a.id, tipo: 'LEAD', robo: false, status: 'ASSUMIDA', leadId, origem: origemDoCadastro,
+            assistenteId: a.id, tipo: 'LEAD', robo: false, status: 'ASSUMIDA', leadId, origem: origemDoCadastro, anuncioId: m.anuncioId, anuncioTitulo: m.tituloAnuncio,
             nomeContato: m.nomePerfil ?? formatarTelefone(m.numero), numeroContato: m.numero, jid: m.jid,
             respostas: { _inicial: mascararDadosPessoais(m.texto) } as Prisma.InputJsonValue,
-            mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
+            mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } },
           },
           select: { id: true },
         })).id
@@ -450,9 +458,9 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     const passo = iniciarRoteiro(cfg, contexto(a, cfg, nomeContato), m.texto, baseDoRobo(nomeContato, {}))
     const criada = await tx.assistenteConversa.create({
       data: {
-        assistenteId: a.id, tipo: 'LEAD', nomeContato, numeroContato: m.numero, jid: m.jid, origem, leadId,
+        assistenteId: a.id, tipo: 'LEAD', nomeContato, numeroContato: m.numero, jid: m.jid, origem, leadId, anuncioId: m.anuncioId, anuncioTitulo: m.tituloAnuncio,
         ...dadosDoPasso(passo),
-        mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id } },
+        mensagens: { create: { remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } },
       },
     })
     conversaTocada = criada.id
@@ -1017,7 +1025,7 @@ export async function vincularOuCriarLead(
   usuarioId: string,
   vendedorId: string,
   cfg: ConfigAssistente,
-  conversa: { numeroContato: string; nomeContato: string; respostas: Prisma.JsonValue; origem: string | null; simulacao?: Prisma.JsonValue | null },
+  conversa: { numeroContato: string; nomeContato: string; respostas: Prisma.JsonValue; origem: string | null; simulacao?: Prisma.JsonValue | null; anuncioId?: string | null; anuncioTitulo?: string | null },
 ): Promise<string> {
   const final8 = conversa.numeroContato.slice(-8)
   const existentes = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -1050,6 +1058,7 @@ export async function vincularOuCriarLead(
       // Anúncio e frase de campanha = tráfego pago. Contato novo sem sinal
       // de campanha fica sem canal — o vendedor classifica.
       tipoLead: origemPost ? 'ORGANICO' : conversa.origem === 'ANUNCIO' || conversa.origem === 'GATILHO' ? 'TRAFEGO' : null,
+      ...(conversa.origem === 'ANUNCIO' && !origemPost ? { origemTipo: 'ANUNCIO', origemAnuncio: conversa.anuncioId, origemTituloAnuncio: conversa.anuncioTitulo, origemAutomatica: true } : {}),
     },
   })
   await prisma.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
@@ -1110,6 +1119,8 @@ async function capturarLead(tx: Prisma.TransactionClient, a: AssistenteCompleto,
       observacao,
       origemCadastro: 'WHATSAPP',
       tipoLead: origemPost ? 'ORGANICO' : origem === 'ANUNCIO' || origem === 'GATILHO' ? 'TRAFEGO' : null,
+      // Origem (PDF 02): capturada da mensagem do anúncio quando a Meta manda.
+      ...(origem === 'ANUNCIO' && !origemPost ? { origemTipo: 'ANUNCIO', origemAnuncio: m.anuncioId, origemTituloAnuncio: m.tituloAnuncio, origemAutomatica: true } : {}),
     },
   })
   await tx.leadEstagioHistorico.create({ data: { leadId: lead.id, estagioAnterior: null, estagioNovo: 'LEAD' } })
@@ -1246,7 +1257,7 @@ async function tratarSuporte(a: AssistenteCompleto, m: MensagemWhatsapp) {
   const cfg = lerConfig(a.configuracao)
   const conversa = await conversaDeSuporte(a)
   try {
-    await prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id } })
+    await prisma.assistenteMensagem.create({ data: { conversaId: conversa.id, remetente: 'CONTATO', texto: m.texto, providerId: m.id, enviadaEm: m.instanteMs ? new Date(m.instanteMs) : undefined } })
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return // webhook repetido
     throw e

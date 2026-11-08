@@ -56,6 +56,8 @@ import proLaboreCopilotoRoutes from './routes/proLaboreCopiloto'
 import proLaboreIntelRoutes from './routes/proLaboreIntel'
 import proLaboreSistemaRoutes from './routes/proLaboreSistema'
 import proLaboreJornadaRoutes from './routes/proLaboreJornada'
+import proLaboreMetricasRoutes from './routes/proLaboreMetricas'
+import proLaboreQualidadeRoutes from './routes/proLaboreQualidade'
 import { comAutor } from './lib/autorAuditoria'
 import proLaboreFollowRoutes from './routes/proLaboreFollow'
 import proLaboreLeadNotasRoutes from './routes/proLaboreLeadNotas'
@@ -252,6 +254,8 @@ app.use('/pro-labore', proLaboreCopilotoRoutes)
 app.use('/pro-labore', proLaboreIntelRoutes)
 app.use('/pro-labore', proLaboreSistemaRoutes)
 app.use('/pro-labore', proLaboreJornadaRoutes)
+app.use('/pro-labore', proLaboreMetricasRoutes)
+app.use('/pro-labore', proLaboreQualidadeRoutes)
 app.use('/pro-labore', proLaboreFollowRoutes)
 app.use('/pro-labore', proLaboreLeadNotasRoutes)
 app.use('/pro-labore', proLaboreAssistenteMidiaRoutes)

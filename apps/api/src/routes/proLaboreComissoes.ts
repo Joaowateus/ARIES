@@ -6,6 +6,7 @@
 //
 // As rotas /comissoes/* são as originais (só comissão) e continuam valendo;
 // /pagamentos-vendas/* recebem o `tipo` (COMISSAO | PROLABORE).
+import { requireAcao } from '../lib/matrizAcoes'
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
@@ -250,8 +251,8 @@ async function salvarDocumentoTitular(req: Request, res: Response) {
   res.json({ documento: documento || null })
 }
 
-router.post(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, registrar)
-router.post(['/pagamentos-vendas/desmarcar', '/comissoes/desmarcar'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, desmarcar)
+router.post(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, requireAcao('CONFIRMAR_VENDA_PAGAMENTO'), registrar)
+router.post(['/pagamentos-vendas/desmarcar', '/comissoes/desmarcar'], requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), requireEscopoEquipe, requireAcao('CONFIRMAR_VENDA_PAGAMENTO'), desmarcar)
 router.get(['/pagamentos-vendas', '/comissoes/pagamentos'], requireProLaboreAuth, requireModulo('vendas', 'VER'), requireEscopoEquipe, listar)
 router.put('/comissoes/documento-titular', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), salvarDocumentoTitular)
 router.get(['/pagamentos-vendas/:id', '/comissoes/pagamentos/:id'], requireProLaboreAuth, requireModulo('vendas', 'VER'), requireEscopoEquipe, comprovante)

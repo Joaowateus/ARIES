@@ -35,7 +35,7 @@ async function historico(usuarioId: string) {
 
 export async function premissas(usuarioId: string) {
   const [p, hist] = await Promise.all([
-    prisma.parametroLiquidez.findUnique({ where: { usuarioId }, select: { jornadaTemposMaximos: true, jornadaCriteriosLevantamento: true, jornadaFaltasAtePerda: true, posVendaPrazos: true } }),
+    prisma.parametroLiquidez.findUnique({ where: { usuarioId }, select: { jornadaTemposMaximos: true, jornadaCriteriosLevantamento: true, jornadaFaltasAtePerda: true, posVendaPrazos: true, volumeMinimoDetectores: true, metaDiariaSdr: true } }),
     historico(usuarioId),
   ])
   const salvos = (p?.jornadaTemposMaximos ?? {}) as Partial<Record<Etapa, TempoMaximo>>
@@ -57,7 +57,13 @@ export async function premissas(usuarioId: string) {
   // Proposta com limite mais curto que a Negociação.
   if (tempos.PROPOSTA.fonte === 'HISTORICO' && tempos.NEGOCIACAO.valor != null && tempos.PROPOSTA.valor != null && tempos.PROPOSTA.valor >= tempos.NEGOCIACAO.valor) tempos.PROPOSTA.valor = Math.max(1, tempos.NEGOCIACAO.valor - 1)
   const c = p?.jornadaCriteriosLevantamento as unknown
+  // PDF 02 · 4.3: meta diária do SDR = média diária de leads passados ao vendedor no último mês (quando houver histórico).
+  const desde = new Date(Date.now() - 30 * DIA)
+  const passados = await prisma.leadPassagem.count({ where: { usuarioId, passadaEm: { gte: desde } } })
+  const metaSugerida = passados > 0 ? Math.round((passados / 30) * 10) / 10 : null
   return {
+    volumeMinimoDetectores: p?.volumeMinimoDetectores ?? 10,
+    metaDiariaSdr: { valor: p?.metaDiariaSdr ?? metaSugerida, sugerido: metaSugerida, fonte: p?.metaDiariaSdr != null ? 'APROVADO' : metaSugerida != null ? 'HISTORICO' : 'SEM_HISTORICO' },
     temposMaximos: tempos,
     criteriosLevantamento: (Array.isArray(c) && c.length ? c : CRITERIOS_PADRAO) as CriterioLevantamento[],
     faltasAtePerda: p?.jornadaFaltasAtePerda ?? 2,
@@ -71,14 +77,39 @@ export async function limitesEmMs(usuarioId: string) {
   return Object.fromEntries(ETAPAS.map(e => [e, temposMaximos[e].valor != null ? temposMaximos[e].valor! * EM_MS[temposMaximos[e].unidade] : null])) as Record<Etapa, number | null>
 }
 
-export async function salvarPremissas(usuarioId: string, d: { temposMaximos?: Partial<Record<Etapa, { valor: number | null; unidade: Unidade }>>; criteriosLevantamento?: CriterioLevantamento[]; faltasAtePerda?: number; posVendaPrazos?: { entrega: number; documentacao: number; primeiraRevisao: number } }) {
+type MudancaPremissas = { temposMaximos?: Partial<Record<Etapa, { valor: number | null; unidade: Unidade }>>; criteriosLevantamento?: CriterioLevantamento[]; faltasAtePerda?: number; posVendaPrazos?: { entrega: number; documentacao: number; primeiraRevisao: number }; volumeMinimoDetectores?: number; metaDiariaSdr?: number | null }
+/** Salva as premissas (só o dono) e registra cada parâmetro mudado com autor, data e justificativa (PDF 02, 4.3). */
+export async function salvarPremissas(usuarioId: string, d: MudancaPremissas, quem?: { autorId: string; justificativa: string }) {
+  const antes = await premissas(usuarioId)
   const atual = await prisma.parametroLiquidez.findUnique({ where: { usuarioId }, select: { jornadaTemposMaximos: true } })
   const tempos = { ...((atual?.jornadaTemposMaximos ?? {}) as object) } as Record<string, TempoMaximo>
   for (const [e, t] of Object.entries(d.temposMaximos ?? {})) if (t) tempos[e] = { valor: t.valor, unidade: t.unidade, fonte: 'APROVADO' }
+  const extra = {
+    ...(d.criteriosLevantamento ? { jornadaCriteriosLevantamento: d.criteriosLevantamento } : {}),
+    ...(d.faltasAtePerda ? { jornadaFaltasAtePerda: d.faltasAtePerda } : {}),
+    ...(d.posVendaPrazos ? { posVendaPrazos: d.posVendaPrazos } : {}),
+    ...(d.volumeMinimoDetectores ? { volumeMinimoDetectores: d.volumeMinimoDetectores } : {}),
+    ...(d.metaDiariaSdr !== undefined ? { metaDiariaSdr: d.metaDiariaSdr } : {}),
+  }
   await prisma.parametroLiquidez.upsert({
     where: { usuarioId },
-    create: { usuarioId, jornadaTemposMaximos: tempos as object, ...(d.criteriosLevantamento ? { jornadaCriteriosLevantamento: d.criteriosLevantamento } : {}), ...(d.faltasAtePerda ? { jornadaFaltasAtePerda: d.faltasAtePerda } : {}), ...(d.posVendaPrazos ? { posVendaPrazos: d.posVendaPrazos } : {}) },
-    update: { jornadaTemposMaximos: tempos as object, ...(d.criteriosLevantamento ? { jornadaCriteriosLevantamento: d.criteriosLevantamento } : {}), ...(d.faltasAtePerda ? { jornadaFaltasAtePerda: d.faltasAtePerda } : {}), ...(d.posVendaPrazos ? { posVendaPrazos: d.posVendaPrazos } : {}) },
+    create: { usuarioId, jornadaTemposMaximos: tempos as object, ...extra },
+    update: { jornadaTemposMaximos: tempos as object, ...extra },
   })
+  if (quem) {
+    const linhas: Array<{ nome: string; antes: unknown; depois: unknown; origem: string }> = []
+    for (const [e, t] of Object.entries(d.temposMaximos ?? {})) if (t) linhas.push({ nome: `tempoMaximo.${e}`, antes: antes.temposMaximos[e as Etapa], depois: { valor: t.valor, unidade: t.unidade }, origem: 'MANUAL' })
+    if (d.criteriosLevantamento) linhas.push({ nome: 'criteriosLevantamento', antes: antes.criteriosLevantamento, depois: d.criteriosLevantamento, origem: 'MANUAL' })
+    if (d.faltasAtePerda) linhas.push({ nome: 'faltasAtePerda', antes: antes.faltasAtePerda, depois: d.faltasAtePerda, origem: 'MANUAL' })
+    if (d.posVendaPrazos) linhas.push({ nome: 'posVendaPrazos', antes: antes.posVendaPrazos, depois: d.posVendaPrazos, origem: 'MANUAL' })
+    if (d.volumeMinimoDetectores) linhas.push({ nome: 'volumeMinimoDetectores', antes: antes.volumeMinimoDetectores, depois: d.volumeMinimoDetectores, origem: 'MANUAL' })
+    if (d.metaDiariaSdr !== undefined) linhas.push({ nome: 'metaDiariaSdr', antes: antes.metaDiariaSdr.valor, depois: d.metaDiariaSdr ?? antes.metaDiariaSdr.sugerido, origem: d.metaDiariaSdr == null ? 'HISTORICO' : 'MANUAL' })
+    const mudou = linhas.filter(l => JSON.stringify(l.antes) !== JSON.stringify(l.depois))
+    if (mudou.length) await prisma.parametroHistorico.createMany({ data: mudou.map(l => ({ usuarioId, nome: l.nome, valorAnterior: (l.antes ?? null) as object, valorNovo: (l.depois ?? null) as object, origem: l.origem, justificativa: quem.justificativa, autorId: quem.autorId })) })
+  }
   return premissas(usuarioId)
+}
+
+export async function historicoDeParametros(usuarioId: string, limite = 100) {
+  return prisma.parametroHistorico.findMany({ where: { usuarioId }, orderBy: { criadoEm: 'desc' }, take: limite })
 }

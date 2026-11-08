@@ -17,6 +17,9 @@ import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { avisarLigacoes } from '../lib/ligacoesAviso'
+import { gerarOcorrenciasDeRotina, rodarRegua } from '../lib/atividades'
+import { guardarRetratos } from '../lib/metricas'
+import { avaliarTodas } from '../lib/qualidade'
 import { avisarFollowsCredito } from '../lib/followCredito'
 import { rodarReferencias } from '../lib/smReferencias'
 import { limparEventosAntigos } from '../lib/espacoBanco'
@@ -354,7 +357,11 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const referencias = await rodarReferencias(agora).catch(e => { console.error('[sm] referências', e); return { referenciasPerfis: 0, referenciasMotos: 0 } })
   // Os eventos brutos do Instagram já processados não ficam para sempre (espaço do banco).
   const eventosLimpos = await limparEventosAntigos(agora).catch(e => { console.error('[sm] limpeza de eventos', e); return { eventosApagados: 0 } })
-  res.json({ ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos })
+  // PDF 02 · dicionário de métricas: retrato do dia das métricas de "agora" (base das faixas).
+  const retratos = await guardarRetratos(agoraDoCron(req)).catch(e => { console.error('[metricas] retratos', e); return { retratosMetricas: 0 } })
+  // PDF 02 · 4.8: camada de qualidade (abre e resolve as correções pendentes).
+  const qualidade = await avaliarTodas(agoraDoCron(req)).catch(e => { console.error('[qualidade] avaliar', e); return { qualidadeAbertas: 0, qualidadeResolvidas: 0 } })
+  res.json({ ...qualidade, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em
@@ -386,7 +393,10 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const ligacoes = await avisarLigacoes(agoraDoCron(req)).catch(e => { console.error('[ligacoes] aviso', e); return { avisosLigacao: 0 } })
   // Follow de crédito recusado: avisa o vendedor no dia da nova análise.
   const credito = await avisarFollowsCredito(agoraDoCron(req)).catch(e => { console.error('[follow] crédito', e); return { avisosCredito: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente, ...ligacoes, ...credito })
+  // PDF 02 · ATV: as ocorrências de hoje das rotinas e a régua de cobrança (modo de registro: anota, não envia).
+  const rotinas = await gerarOcorrenciasDeRotina(agoraDoCron(req)).catch(e => { console.error('[atv] rotinas', e); return { ocorrenciasRotina: 0 } })
+  const regua = await rodarRegua(agoraDoCron(req)).catch(e => { console.error('[atv] régua', e); return { reguaRegistros: 0 } })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
