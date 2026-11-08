@@ -18,7 +18,11 @@ const CAMPOS: Array<{ k: 'lembreteMinAntes' | 'segundoAlertaMin' | 'escalonament
 export function ReguaCobranca({ podeEditar }: { podeEditar: boolean }) {
   const [r, setR] = useState<ReguaCobrancaResp | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
-  useEffect(() => { proLaboreApi.jornada.regua().then(setR).catch(() => setR(null)) }, [])
+  const [conf, setConf] = useState<Awaited<ReturnType<typeof proLaboreApi.jornada.conferenciaAtividades>> | null>(null)
+  useEffect(() => {
+    proLaboreApi.jornada.regua().then(setR).catch(() => setR(null))
+    if (podeEditar) proLaboreApi.jornada.conferenciaAtividades().then(setConf).catch(() => setConf(null))
+  }, [podeEditar])
   if (!r) return null
   async function salvar(origem: string, d: ConfigReguaCobranca) {
     setMsg(null)
@@ -53,6 +57,15 @@ export function ReguaCobranca({ podeEditar }: { podeEditar: boolean }) {
           ))}</tbody></table>
       </div>
       <p className="pl-hint">Sem supervisor (ou gestor), o escalonamento vai para o dono. O tempo do lembrete (30 min) é o padrão provisório: o PDF não define.</p>
+      {conf && (
+        <div style={{ marginTop: 14 }} data-conferencia-atv>
+          <div className="pl-eyebrow">Conferência da migração das tarefas (antes × ATV)</div>
+          <table className="pl-table"><thead><tr><th>Tipo</th><th>Hoje</th><th>Na ATV</th><th>Sem data</th><th>Sem autor</th><th>Apagadas depois</th><th>Situação</th></tr></thead>
+            <tbody>{conf.map(l => (
+              <tr key={l.tipo} data-conf={l.tipo}><td>{l.tipo}</td><td>{l.atual}</td><td>{l.atv}</td><td>{l.semData}</td><td>{l.semAutor}</td><td>{l.apagadasDepois}</td><td>{l.bate && !l.semData && !l.semAutor ? 'Confere' : 'Diferente'}</td></tr>
+            ))}</tbody></table>
+        </div>
+      )}
       {msg && <p className="pl-hint" role="status">{msg}</p>}
     </section>
   )
