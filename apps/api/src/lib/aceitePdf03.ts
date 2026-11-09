@@ -21,7 +21,6 @@ export async function amostraUtilidade(usuarioId: string, tamanho = 20) {
 export async function aceitePdf03(usuarioId: string, agora = new Date()) {
   const recs = await prisma.recomendacao.findMany({ where: { usuarioId }, orderBy: { criadoEm: 'desc' }, take: 500 })
   const cfg = await configDetectores(usuarioId)
-  const sup = await prisma.vendedor.findFirst({ where: { usuarioId, ativo: true, papel: 'SUPERVISOR' }, select: { id: true } })
 
   // 1. Evidência: recalcula a métrica de cada REC aberta pelo dicionário (mesmo escopo e período).
   const evid = []
@@ -47,7 +46,9 @@ export async function aceitePdf03(usuarioId: string, agora = new Date()) {
   const atvAuto = await prisma.atividade.count({ where: { usuarioId, origemTipo: 'RECOMENDACAO', autorExecucaoTipo: 'AUTOMACAO' } })
   const niveis = DETECTORES.every(d => cfg[d.chave].nivelAutonomia === 1)
   // 7. Roteamento: achado sobre pessoa visível só para ela, supervisor e dono.
-  const vazou = recs.filter(r => (r.alvoTipo === 'PESSOA' || r.alvoTipo === 'CREDITO') && r.visivelPara.some(v => v !== r.alvoId && v !== usuarioId && v !== sup?.id)).length
+  // Vazamento = um colega (quem não é supervisor) vê achado sobre outra pessoa.
+  const supervisores = new Set((await prisma.vendedor.findMany({ where: { usuarioId, papel: 'SUPERVISOR' }, select: { id: true } })).map(v => v.id))
+  const vazou = recs.filter(r => (r.alvoTipo === 'PESSOA' || r.alvoTipo === 'CREDITO') && r.visivelPara.some(v => v !== r.alvoId && v !== usuarioId && !supervisores.has(v))).length
   const porTipo = Object.entries(recs.reduce<Record<string, number>>((s, r) => ({ ...s, [r.alvoTipo]: (s[r.alvoTipo] ?? 0) + 1 }), {})).map(([tipo, n]) => ({ tipo, n }))
   // 8. Escalonamento: orientações sem tratar que subiram ao supervisor pela régua.
   const [escal] = await prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) n FROM pro_labore_regua_registros r JOIN pro_labore_atividades a ON a.id = r."atividadeId" WHERE a."usuarioId" = ${usuarioId} AND a.tipo = 'TRATAR_RECOMENDACAO' AND r.etapa = 'ESCALONAMENTO'`
