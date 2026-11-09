@@ -71,6 +71,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/pro-labore/equipe/acessos', label: 'Acessos e permissões', donoOnly: true },
       // A gestão é do dono e de quem tem o módulo; o resto da equipe vê só as próprias.
       { href: '/pro-labore/ocorrencias', label: 'Ocorrências', modulo: 'ocorrencias', paraEquipe: true },
+      // PDF 02: Saúde dos dados e a auditoria — dono vê tudo, supervisor a da equipe.
+      { href: '/pro-labore/dados', label: 'Dados e auditoria', gestao: true },
     ] },
   ] },
   { label: 'Sistema', items: [
