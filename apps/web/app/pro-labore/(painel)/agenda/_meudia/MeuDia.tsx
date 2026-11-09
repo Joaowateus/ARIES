@@ -266,7 +266,7 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
         {dia === hoje && fila && (
           <aside className="pl-card md-agora" aria-label="Pedindo atenção agora" data-md-agora>
             <h3>Pedindo atenção agora</h3>
-            <p className="pl-hint">Do Copiloto: WhatsApp esperando, crédito aprovado, follows e sinais de compra.</p>
+            <p className="pl-hint">Do ARIES: WhatsApp esperando, crédito aprovado, follows e sinais de compra.</p>
             {agora.length === 0 ? <p className="md-vazio">Ninguém esperando por você agora.</p> : (
               <ol className="md-agora-lista">
                 {agora.map(i => (
@@ -281,7 +281,7 @@ export function MeuDia({ dia, onDia, rotinasDoDia, onAlternarRotina, vejaEquipe 
                 ))}
               </ol>
             )}
-            <a className="md-link" href="/pro-labore/copiloto">Ver tudo no Copiloto →</a>
+            <a className="md-link" href="/pro-labore/copiloto">Ver tudo no ARIES →</a>
           </aside>
         )}
       </div>

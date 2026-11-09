@@ -78,7 +78,7 @@ async function textoAgora(c: ContextoAgente, agora: Date, grupo?: 'WHATSAPP' | '
   return [
     grupo === 'WHATSAPP' ? '⏳ *Esperando resposta:*' : '🎯 *Por onde começar:*',
     top.map((i, k) => `${k + 1}. *${i.nome}*${i.vendedor ? ` (${i.vendedor})` : ''} — ${i.motivo.texto.charAt(0).toLowerCase()}${i.motivo.texto.slice(1)}\n   ↳ ${i.passo}`).join('\n'),
-    itens.length > top.length ? `E mais ${itens.length - top.length} na fila do Copiloto.` : '',
+    itens.length > top.length ? `E mais ${itens.length - top.length} na sua fila do Hoje.` : '',
   ].filter(Boolean).join('\n\n')
 }
 
@@ -116,7 +116,7 @@ async function textoEquipe(c: ContextoAgente, agora: Date): Promise<string> {
   if (!equipe.length) return 'Ainda não tenho números da equipe hoje. Os vendedores aparecem quando têm leads no CRM.'
   const ordem = [...equipe].sort((a, b) => b.indice - a.indice)
   return [
-    `👥 *A equipe hoje* (índice de execução do Copiloto)`,
+    `👥 *A equipe hoje* (índice de execução do ARIES)`,
     ordem.map(l => `• *${l.nome}* — ${l.indice} · ${l.carteira} em aberto${l.parados ? ` · ${l.parados} parados` : ''}${l.esperandoWhatsapp ? ` · ⏳ ${l.esperandoWhatsapp} esperando` : ''}`).join('\n'),
     ordem.length > 1 && ordem[ordem.length - 1].indice < 70 ? `Quem precisa de você primeiro: *${ordem[ordem.length - 1].nome}*.` : '',
   ].filter(Boolean).join('\n\n')
@@ -160,7 +160,7 @@ async function textoPlano(c: ContextoAgente, agora: Date): Promise<string> {
   const tela = await telaDoDia(c.usuarioId, pessoa, agora)
   const pend = (tela?.acoes ?? []).filter(a => a.status === 'PENDENTE')
   if (!pend.length) return '✅ Plano de hoje concluído. Se sobrar tempo: prospecção e estudo.'
-  return ['📋 *Seu plano de hoje* (do Copiloto)', pend.slice(0, 6).map((a, i) => `${i + 1}. ${a.texto}`).join('\n'), 'Para ver quem atender primeiro agora, mande *quem atendo agora*.'].join('\n\n')
+  return ['📋 *Seu plano de hoje* (do ARIES)', pend.slice(0, 6).map((a, i) => `${i + 1}. ${a.texto}`).join('\n'), 'Para ver quem atender primeiro agora, mande *quem atendo agora*.'].join('\n\n')
 }
 
 // ---------- Resumo da manhã ----------
@@ -225,7 +225,7 @@ export async function responderIntencao(c: ContextoAgente, i: Intencao, agora = 
       if (p.tipo === 'FOLLOWS') return textoAgora(c, agora, 'FOLLOW')
       if (p.tipo === 'QUENTES') return textoAgora(c, agora, 'COMPRA')
       if (p.tipo === 'LEAD') return textoLead(c, p.nome)
-      return 'Para essa eu preciso do seu WhatsApp de vendas ligado no Assistente Comercial. Enquanto isso, posso te mostrar *minha agenda* ou *quem atendo agora*.'
+      return 'Para essa eu preciso do seu WhatsApp de vendas ligado em Conversas. Enquanto isso, posso te mostrar *minha agenda* ou *quem atendo agora*.'
     }
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-// "Enviar relatório para o Assistente Comercial": o fechamento diário de cada
+// "Enviar relatório para o ARIES": o fechamento diário de cada
 // aba. A pessoa vê o resumo do dia montado com os mesmos cálculos da Central,
 // confere, escreve uma observação se quiser e confirma. Reenviar o mesmo dia
 // com os mesmos números não duplica nada; números diferentes viram a versão
@@ -32,7 +32,7 @@ export function FechamentoDiario({ modulo, compacto }: { modulo: IntelModuloRela
     <>
       <button type="button" className={`pl-btn pl-btn-ghost fd-botao${compacto ? ' compacto' : ''}`} onClick={() => setAberto(true)} data-fechamento={modulo}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" /></svg>
-        Enviar relatório para o Assistente Comercial
+        Enviar relatório para o ARIES
       </button>
       {aberto && <JanelaFechamento modulo={modulo} onFechar={() => setAberto(false)} />}
     </>
@@ -75,7 +75,7 @@ export function JanelaFechamento({ modulo, onFechar, onEnviado }: { modulo: Inte
       const r = await proLaboreApi.intel.confirmarRelatorio({ modulo, dia: p.dia, hash: p.hash, observacao: observacao.trim() || undefined })
       setResultado(r.duplicado
         ? { tipo: 'aviso', texto: `Este fechamento já estava enviado com os mesmos números (versão ${r.relatorio.versao}). Nada foi duplicado.` }
-        : { tipo: 'ok', texto: `Relatório enviado ao Assistente Comercial · versão ${r.relatorio.versao}${r.relatorio.versao > 1 ? ' (a anterior ficou no histórico)' : ''}.` })
+        : { tipo: 'ok', texto: `Relatório enviado ao ARIES · versão ${r.relatorio.versao}${r.relatorio.versao > 1 ? ' (a anterior ficou no histórico)' : ''}.` })
       setConferido(false)
       setVersao(v => v + 1)
       onEnviado?.()
@@ -92,7 +92,7 @@ export function JanelaFechamento({ modulo, onFechar, onEnviado }: { modulo: Inte
         <div className="fd-cab">
           <div>
             <div className="pl-eyebrow">Fechamento diário · {NOME_MODULO[modulo]}</div>
-            <h2 id="fd-titulo">Enviar relatório para o Assistente Comercial</h2>
+            <h2 id="fd-titulo">Enviar relatório para o ARIES</h2>
             <p className="fd-sub">Confira os números do dia. Ao confirmar, eles entram na Central como dado validado, com o seu nome e a hora.</p>
           </div>
           <button type="button" className="fd-fechar" onClick={onFechar} aria-label="Fechar">×</button>

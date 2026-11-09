@@ -17,6 +17,8 @@ import { enviarComoPessoa } from './agenteEnvio'
 import { responderIntencao, resumoDaManha, type ContextoAgente } from './agenteRespostas'
 import { classificarMensagemAgente, iaLigada } from './copilotoIA'
 import { conversarComCopiloto } from './copilotoChat'
+import { perguntar } from './pergunte'
+import { papelDoUsuario } from './papelHoje'
 import { EQUIPE, primeiroNome } from './copilotoFatos'
 
 export const DONO = 'DONO'
@@ -114,7 +116,7 @@ async function tratarMensagem(agente: AgenteWhatsapp, m: MensagemWhatsapp, agora
     if ((apresentados.get(chave) ?? 0) > agora.getTime() - 12 * H) return
     if (apresentados.size > 2000) for (const [k, t] of apresentados) if (t < agora.getTime() - 12 * H) apresentados.delete(k)
     apresentados.set(chave, agora.getTime())
-    await enviarComoPessoa(agente, contato, `Oi! Eu sou o *${agente.nome}*, assistente da equipe comercial. 🤖\n\nPara conversar comigo, gere o seu código no sistema (Copiloto › ${agente.nome} no WhatsApp) e me mande aqui, assim: *ARIES 123456*.`)
+    await enviarComoPessoa(agente, contato, `Oi! Eu sou o *${agente.nome}*, assistente da equipe comercial. 🤖\n\nPara conversar comigo, gere o seu código no sistema (Desenvolvimento › ${agente.nome} no WhatsApp) e me mande aqui, assim: *ARIES 123456*.`)
     return
   }
   await prisma.agenteMensagem.create({ data: { vinculoId: vinculo.id, direcao: 'ENTRADA', texto: m.texto.slice(0, 4000), intencao: intencao?.tipo ?? null, externoId: m.id ?? null } })
@@ -127,20 +129,40 @@ async function tratarMensagem(agente: AgenteWhatsapp, m: MensagemWhatsapp, agora
   if (i?.tipo === 'PAUSAR' || i?.tipo === 'RETOMAR') await prisma.agenteVinculo.update({ where: { id: vinculo.id }, data: { alertas: i.tipo === 'RETOMAR', manha: i.tipo === 'RETOMAR' } })
 
   let resposta: string
+  // PDF 04 · 4.4: no WhatsApp é o mesmo cérebro do Pergunte ao ARIES, com as mesmas regras
+  // (números do dicionário preenchidos pelo sistema, permissões de quem pergunta, "não sei").
+  const numeros = i ? null : await perguntarPeloWhatsapp(ctx, m.texto, agora).catch(() => null)
   if (i) resposta = await responderIntencao(ctx, i, agora)
+  else if (numeros && !numeros.naoSabe) resposta = numeros.texto
   else if (iaLigada()) {
     // Conversa livre (técnica de venda, como responder um cliente...): o mentor do Copiloto responde.
     const r = await conversarComCopiloto({ usuarioId: agente.usuarioId, pessoa: ctx.dono ? EQUIPE : ctx.pessoa, nome: ctx.nome }, m.texto)
     resposta = r.origem === 'IA' ? r.resposta : naoEntendi(ctx, m.texto)
-  } else resposta = naoEntendi(ctx, m.texto)
+  } else resposta = numeros?.texto ?? naoEntendi(ctx, m.texto)
   await enviarComoPessoa(agente, contato, resposta, { vinculoId: vinculo.id, intencao: i?.tipo ?? 'LIVRE' })
+}
+
+/** Pergunta sobre a operação pelo WhatsApp: mesma resposta do Pergunte ao ARIES, com métrica, período, comparação e link. */
+async function perguntarPeloWhatsapp(ctx: { usuarioId: string; pessoa: string; nome: string; dono: boolean }, texto: string, agora: Date) {
+  let papel: ReturnType<typeof papelDoUsuario> = 'DONO'
+  let vendedorId: string | null = null
+  if (!ctx.dono) {
+    const v = await prisma.vendedor.findUnique({ where: { id: ctx.pessoa }, select: { id: true, papel: true, funcao: true } })
+    if (!v) return null
+    vendedorId = v.id
+    papel = papelDoUsuario({ papel: v.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR', sdr: v.papel === 'SDR', funcao: v.funcao === 'GESTOR_TRAFEGO' || v.funcao === 'FINANCEIRO' ? v.funcao : null })
+  }
+  const r = await perguntar({ usuarioId: ctx.usuarioId, papel, id: vendedorId ?? ctx.usuarioId, vendedorId, nome: ctx.nome }, texto, 'WHATSAPP', agora)
+  const base = (process.env.FRONTEND_URL ?? '').replace(/\/$/, '')
+  const linhas = r.numeros.map(n => `• *${n.nome}* (${n.escopo}, ${n.periodoTexto}): ${n.valorTexto}${n.comparacao ? ` · antes: ${n.comparacao.valorTexto}` : ''}${n.meta ? ` · meta ${n.meta.valorTexto}` : ''}${base ? `\n  ${base}${n.link}` : ''}${n.aviso ? `\n  ⚠️ ${n.aviso}` : ''}`)
+  return { naoSabe: r.naoSabe, texto: [r.resposta, ...(linhas.length ? ['', ...linhas] : [])].join('\n') }
 }
 
 async function vincular(agente: AgenteWhatsapp, m: MensagemWhatsapp, codigo: string, agora: Date) {
   const v = await prisma.agenteVinculo.findUnique({ where: { agenteId_codigo: { agenteId: agente.id, codigo } } })
   const contato = contatoDa(m)
   if (!v) {
-    await enviarComoPessoa(agente, contato, 'Esse código não confere. 🤔 Gere um novo no sistema (Copiloto) e me mande de novo.')
+    await enviarComoPessoa(agente, contato, 'Esse código não confere. 🤔 Gere um novo no sistema (Desenvolvimento) e me mande de novo.')
     return
   }
   // O número passa a ser desta pessoa (se estava com outra, sai de lá) e o código não vale mais.

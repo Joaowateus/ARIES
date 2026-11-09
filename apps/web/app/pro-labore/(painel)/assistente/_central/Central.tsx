@@ -74,7 +74,7 @@ export function Central() {
     <div className="ic">
       <PageHeader
         eyebrow="Análise"
-        title="Central de Inteligência"
+        title="Relatórios"
         subtitle="O cérebro analítico da operação: lê a Jornada de compra, Tráfego, Social Media, Vendas, Financeiro e Equipe, compara com as metas, explica onde está o gargalo e acompanha o plano de ação até o resultado"
         actions={<BotaoPdf versoes={[
           { rotulo: 'Completo (gestão)', descricao: 'Tudo, com o financeiro do mês', montar: () => montarPdf(true) },

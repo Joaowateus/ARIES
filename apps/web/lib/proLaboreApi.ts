@@ -1165,8 +1165,8 @@ export const proLaboreApi = {
   // Acessos e permissões da equipe — só o dono.
   acessos: {
     listar: () => request<PainelAcessos>('/pro-labore/acessos'),
-    criar: (dados: NovoAcesso & { sdr?: boolean }) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
-    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'documento' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>> & { sdr?: boolean }) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    criar: (dados: NovoAcesso & { sdr?: boolean; funcao?: 'FINANCEIRO' | 'GESTOR_TRAFEGO' | null }) => request<PainelAcessos & { id: string }>('/pro-labore/acessos', { method: 'POST', body: JSON.stringify(dados) }),
+    editar: (id: string, dados: Partial<Pick<AcessoEquipe, 'nome' | 'email' | 'documento' | 'escopo' | 'vende' | 'ativo' | 'permissoes'>> & { sdr?: boolean; funcao?: 'FINANCEIRO' | 'GESTOR_TRAFEGO' | null }) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
     senha: (id: string, senha: string) => request<{ ok: true }>(`/pro-labore/acessos/${id}/senha`, { method: 'POST', body: JSON.stringify({ senha }) }),
     remover: (id: string) => request<PainelAcessos>(`/pro-labore/acessos/${id}`, { method: 'DELETE' }),
   },
@@ -3679,7 +3679,7 @@ export const recApi = {
   },
   minhas: () => request<Array<{ id: string; codigo: string | null; titulo: string; tipo: string; forca: ForcaRec; status: StatusRec; prazo: string; orientacao: string | null; acaoSugerida: string }>>('/pro-labore/recomendacoes/minhas'),
   detalhe: (id: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}`),
-  aceitar: (id: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/aceitar`, { method: 'POST', body: '{}' }),
+  aceitar: (id: string, atribuirA?: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/aceitar`, { method: 'POST', body: JSON.stringify(atribuirA ? { atribuirA } : {}) }),
   descartar: (id: string, motivo: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/descartar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
   concluirAtividade: (id: string, atvId: string, resultado: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/atividades/${atvId}/concluir`, { method: 'POST', body: JSON.stringify({ resultado }) }),
   avaliar: (id: string, resultado: 'MANTER' | 'AJUSTAR' | 'REVERTER', nota?: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/avaliar`, { method: 'POST', body: JSON.stringify({ resultado, nota }) }),
@@ -3708,4 +3708,90 @@ export interface AceitePdf03 {
   descarte: Passa & { descartadas: number; repeticoesEvitadas: number; voltaram: number }
   ciclo: Passa & { aceitas: number; comAtividades: number; encerradas: number }
   avaliacao: Passa & { avaliadas: number }; duplicidade: Passa & { juntadas: number }; auditoria: Passa & { semEvento: number }
+}
+
+// --- PDF 04 · Onda 3: Hoje, Lente, Pergunte ao ARIES, Atividades, piloto e uso ---
+export type PapelHoje = 'DONO' | 'SUPERVISOR' | 'SDR' | 'VENDEDOR' | 'SOCIAL_MEDIA' | 'TRAFEGO' | 'FINANCEIRO'
+export type StatusNumero = 'BOM' | 'ATENCAO' | 'CRITICO' | null
+export interface NumeroHoje {
+  chave: string; nome: string; unidade: string; melhor: string
+  periodo: PeriodoMetrica; tipoPeriodo: 'MES' | 'HOJE' | 'SEMANA' | 'AGORA'
+  valor: number | null; anterior: { periodo: PeriodoMetrica; valor: number | null } | null; variacao: number | null; projecao: number | null
+  alvo: { valor: number | null; rotulo: string } | null; status: StatusNumero; detalhe: unknown; naoDefinido: string | null
+  ficha?: { definicao: string; formula: string; fonte: string }
+}
+export interface ItemFilaHoje {
+  grupo: string; grupoNome: string; ordem: number; titulo: string; detalhe: string; quando: string | null
+  ref: { tipo: string; id: string } | null; href: string | null
+  acao: { rotulo: string; tipo: 'LINK' | 'PASSAR_AO_VENDEDOR' | 'CONCLUIR_ATV' | 'REC'; href?: string } | null
+  extensao?: boolean
+}
+export interface ItemLente {
+  tipo: 'REC' | 'RISCO' | 'NUMERO' | 'PAUTA'; id: string | null; codigo: string | null; achado: string; evidencia: string; forca: ForcaRec | null
+  acao: { rotulo: string; href?: string } | null; podeDescartar: boolean; podeAceitar: boolean; valores?: Record<string, number | null>
+}
+export interface Lente { titulo: string; itens: ItemLente[]; vazio: boolean; principal: LeituraMetrica | null; mensagem: string | null }
+export interface LinhaQuadro {
+  id: string; nome: string; papel: string
+  ritmo: { valor: number | null; rotulo: string }
+  tempoResposta: { valor: number | null; padrao: number | null; fora: boolean }
+  atrasadas: { valor: number | null; padrao: number | null; fora: boolean }
+  foraDoPadrao: boolean
+}
+export interface LinhaPainel { area: string; chave: string; texto: string; valor: number | null; unidade: string; alvo: number | null; ritmoPct: number | null; faixa: StatusNumero; href: string; extra?: { chave: string; valor: number | null; unidade: string }; detalhe?: Record<string, number> }
+export interface HojeDados {
+  papel: PapelHoje; nomePapel: string; pergunta: string; lenteDescricao: string
+  numeros: NumeroHoje[]; fila: ItemFilaHoje[]; ordemFila: Array<{ grupo: string; nome: string }>
+  lente: Lente; quadro: LinhaQuadro[] | null; painel: LinhaPainel[] | null; geradoEm: string
+}
+export interface AtividadeLista {
+  id: string; codigo: string | null; tipo: string; origemTipo: string; prazo: string; canal: string | null; oQueFazer: string | null
+  leadId: string | null; cliente: string | null; responsavel: string | null; concluiAqui: boolean; ondeConcluir: string | null
+}
+export interface NumeroResposta {
+  id: string; chave: string; nome: string; unidade: string; valor: number | null; valorTexto: string; periodo: PeriodoMetrica; periodoTexto: string
+  comparacao: { periodo: PeriodoMetrica; valor: number | null; valorTexto: string; variacao: number | null } | null
+  meta: { valor: number; valorTexto: string } | null; faixa: StatusNumero; escopo: string; link: string; aviso: string | null
+}
+export interface RespostaAries {
+  id: string; pergunta: string; resposta: string; naoSabe: boolean; onde: string | null; numeros: NumeroResposta[]
+  acaoProposta: { texto: string; prazo: string } | null; acoes: unknown[]; usouIa: boolean; criadoEm: string
+}
+export interface VersaoTelas { versao: 'NOVA' | 'ATUAL'; piloto: boolean; podeAlternar: boolean; liberadaEm: string | null; papel: PapelHoje; nomePapel: string }
+export interface PilotoPessoa { id: string; nome: string; papel: string; noPiloto: boolean; inicio: string | null; fim: string | null; versao: string | null }
+
+export const telasApi = {
+  hoje: () => request<HojeDados>('/pro-labore/hoje'),
+  lente: (aba: string) => request<Lente>(`/pro-labore/lente?aba=${encodeURIComponent(aba)}`),
+  equipeAtividades: (vendedorId: string) => request<Array<{ id: string; codigo: string | null; tipo: string; prazo: string; oQueFazer: string | null; leadId: string | null }>>(`/pro-labore/hoje/equipe/${vendedorId}/atividades`),
+  acaoSupervisor: (corpo: { acao: 'REDISTRIBUIR' | 'REPRIORIZAR' | 'INTERVIR' | 'PLANO'; de?: string; para?: string; atividadeId?: string; prazo?: string; vendedorId?: string; texto?: string }) =>
+    request<{ redistribuidas?: number; repriorizadas?: number; atividade?: { id: string; codigo: string | null } }>('/pro-labore/hoje/equipe/acao', { method: 'POST', body: JSON.stringify(corpo) }),
+  atividades: (pessoa?: string) => request<{ atrasadas: AtividadeLista[]; hoje: AtividadeLista[]; proximas: AtividadeLista[] }>(`/pro-labore/atividades/minhas${pessoa ? `?pessoa=${encodeURIComponent(pessoa)}` : ''}`),
+  concluirAtividade: (id: string, resultado: string) => request<unknown>(`/pro-labore/atividades/${id}/concluir`, { method: 'POST', body: JSON.stringify({ resultado }) }),
+  perguntar: (pergunta: string) => request<RespostaAries>('/pro-labore/pergunte', { method: 'POST', body: JSON.stringify({ pergunta }) }),
+  historicoPerguntas: () => request<Array<{ id: string; pergunta: string; resposta: string; naoSabe: boolean; valores: NumeroResposta[]; criadoEm: string }>>('/pro-labore/pergunte/historico'),
+  criarAcaoPergunta: (id: string, texto: string, prazo: string) => request<{ id: string; codigo: string | null }>(`/pro-labore/pergunte/${id}/acao`, { method: 'POST', body: JSON.stringify({ texto, prazo }) }),
+  registroIa: () => request<{ total: number; envios: Array<{ id: string; conversaId: string | null; finalidade: string; conteudo: string; criadoEm: string; seguro: boolean }> }>('/pro-labore/pergunte/registro-ia'),
+  versao: () => request<VersaoTelas>('/pro-labore/telas/versao'),
+  alternarVersao: (versao: 'NOVA' | 'ATUAL') => request<VersaoTelas>('/pro-labore/telas/versao', { method: 'POST', body: JSON.stringify({ versao }) }),
+  piloto: () => request<{ liberadaEm: string | null; pessoas: PilotoPessoa[] }>('/pro-labore/piloto'),
+  definirPiloto: (pessoaId: string, participa: boolean) => request<{ liberadaEm: string | null; pessoas: PilotoPessoa[] }>('/pro-labore/piloto', { method: 'PUT', body: JSON.stringify({ pessoaId, participa }) }),
+  liberarParaTodos: (justificativa: string) => request<{ liberadaEm: string }>('/pro-labore/piloto/liberar', { method: 'POST', body: JSON.stringify({ justificativa }) }),
+  usoAbrir: (aba: string, versao: 'NOVA' | 'ATUAL') => request<{ id: string }>('/pro-labore/uso', { method: 'POST', body: JSON.stringify({ aba, versao }) }),
+  usoAcao: (id: string, acao: string) => request<{ ok: boolean }>(`/pro-labore/uso/${id}/acao`, { method: 'POST', body: JSON.stringify({ acao }) }),
+  usoResumo: () => request<Array<{ aba: string; aberturas: number; pessoas: number; acoes: number; ultima: string }>>('/pro-labore/uso/resumo'),
+  aceite: () => request<AceitePdf04>('/pro-labore/telas-aceite'),
+  smHoje: () => request<{ ativo: boolean; pergunta?: string; numeros?: NumeroHoje[]; lente?: Lente }>('/pro-labore/sm/aries/hoje'),
+  orcamentoAnuncio: () => request<{ orcamentoAnuncioMensal: number | null }>('/pro-labore/orcamento-anuncio'),
+  salvarOrcamentoAnuncio: (valor: number | null, justificativa: string) => request<{ orcamentoAnuncioMensal: number | null }>('/pro-labore/orcamento-anuncio', { method: 'PUT', body: JSON.stringify({ valor, justificativa }) }),
+}
+
+type PassaN = { passa: boolean | null }
+export interface AceitePdf04 {
+  hoje: PassaN & { papeis: Array<{ papel: PapelHoje; nome: string; pessoa: string | null; numeros: Array<{ chave: string; nome: string; valor: number | null; dicionario: number | null; bate: boolean | null; naoDefinido: string | null }>; filaEmOrdem: boolean | null; itensFila: number; passa: boolean | null }> }
+  lente: PassaN & { abas: Array<{ aba: string; itens: number; soDaAba: boolean; vazia: boolean; mensagem: string | null; passa: boolean }>; execucoesAutomaticas: number; decididasSemPessoa: number }
+  pergunteNumeros: PassaN & { conversas: number; papeis: string[]; numeros: Array<{ pergunta: string; papel: string; metrica: string; valor: string; periodo: string; comparacao: string | null; link: string; completo: boolean; confere: boolean | null }> }
+  pergunteProtecao: PassaN & { envios: number; inseguros: Array<{ id: string; finalidade: string; criadoEm: string }> }
+  pergunteLimites: PassaN & { naoSabe: number; exemplosNaoSabe: Array<{ pergunta: string; resposta: string }>; perguntasSobreColega: number; nomesVazados: number }
+  sistemaAtual: PassaN & { noPiloto: number; aberturasTelasAtuais: number; aberturasTelasNovas: number }
 }

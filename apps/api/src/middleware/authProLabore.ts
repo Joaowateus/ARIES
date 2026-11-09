@@ -41,13 +41,13 @@ export async function requireProLaboreAuth(req: Request, res: Response, next: Ne
     req.acessos = { ...Object.fromEntries(Object.keys(TUDO).map(k => [k, 'NENHUM'])), ...(await acessosPessoaisSM(payload.sub)) } as typeof TUDO
   }
   if ((payload.papel === 'VENDEDOR' || payload.papel === 'SUPERVISOR') && payload.vendedorId) {
-    const v = await prisma.vendedor.findUnique({ where: { id: payload.vendedorId }, select: { usuarioId: true, ativo: true, email: true, senhaHash: true, papel: true, permissoes: true } })
+    const v = await prisma.vendedor.findUnique({ where: { id: payload.vendedorId }, select: { usuarioId: true, ativo: true, email: true, senhaHash: true, papel: true, permissoes: true, funcao: true } })
     if (!v || v.usuarioId !== payload.sub || !v.ativo || !v.email || !v.senhaHash) {
       res.status(401).json({ error: 'Seu acesso foi desativado. Fale com o gestor.' })
       return
     }
     const papel = v.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR'
-    req.proLaboreUser = { ...payload, papel, sdr: v.papel === 'SDR' }
+    req.proLaboreUser = { ...payload, papel, sdr: v.papel === 'SDR', funcao: v.funcao === 'GESTOR_TRAFEGO' || v.funcao === 'FINANCEIRO' ? v.funcao : null }
     req.acessos = permissoesEfetivas(papel, v.permissoes)
   }
   // Tudo que este pedido gravar leva o nome de quem está logado (auditoria).

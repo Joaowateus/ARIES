@@ -4391,3 +4391,73 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-faixa-critico { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 13%, transparent); }
 .pl-kpi-ficha { all: unset; cursor: pointer; display: block; width: 100%; }
 .pl-kpi-ficha:focus-visible { outline: 2px solid var(--pl-accent); outline-offset: 2px; border-radius: 8px; }
+
+/* ============ PDF 04 · Padrão de tela (PDF 00 Estrutura e design) ============
+   Cabeçalho (largura total) · Agora (até 3 números) · área de trabalho à
+   esquerda · Lente do ARIES à direita, sempre no mesmo lugar · detalhes
+   recolhidos no rodapé. Preto e prata na estrutura; verde, amarelo e
+   vermelho só para status. Mesmos tokens no claro e no escuro. */
+.ar-cabecalho { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--pl-border); }
+.ar-cabecalho h1 { font-size: 1.45rem; margin: 2px 0 4px; letter-spacing: -0.01em; }
+.ar-cabecalho .ar-pergunta { font-size: 1rem; color: var(--pl-ink); margin: 0; }
+.ar-cabecalho .ar-para-quem { font-size: .78rem; color: var(--pl-ink-muted); margin-top: 4px; }
+.ar-acao-principal { white-space: nowrap; }
+.ar-tela { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.ar-tela > .ar-trabalho { min-width: 0; }
+.ar-agora { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.ar-numero { text-align: left; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); background: var(--pl-surface); padding: 12px 14px; cursor: pointer; font: inherit; color: inherit; width: 100%; }
+.ar-numero:hover { border-color: var(--pl-border-strong); }
+.ar-numero:focus-visible { outline: none; box-shadow: var(--pl-ring); }
+.ar-numero .ar-num-nome { font-size: .76rem; color: var(--pl-ink-muted); display: flex; justify-content: space-between; gap: 6px; }
+.ar-numero .ar-num-valor { font-family: var(--pl-font-num); font-size: 1.55rem; font-weight: 600; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.ar-numero .ar-num-sub { font-size: .76rem; color: var(--pl-ink-muted); }
+.ar-status { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.ar-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ar-status-bom { color: var(--pl-good); background: color-mix(in srgb, var(--pl-good) 13%, transparent); }
+.ar-status-atencao { color: var(--pl-warning, #b7791f); background: color-mix(in srgb, var(--pl-warning, #b7791f) 14%, transparent); }
+.ar-status-critico { color: var(--pl-critical); background: color-mix(in srgb, var(--pl-critical) 13%, transparent); }
+.ar-lente { border: 1px solid var(--pl-border-strong); border-radius: var(--pl-radius-xl); background: var(--pl-surface); padding: 14px; position: sticky; top: 76px; }
+.ar-lente-titulo { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: .92rem; margin-bottom: 10px; }
+.ar-lente-titulo .ar-marca { width: 18px; height: 18px; border-radius: 5px; background: var(--pl-grad-brand); display: inline-block; }
+.ar-lente-item { border-top: 1px solid var(--pl-border); padding: 10px 0; }
+.ar-lente-item:first-of-type { border-top: 0; padding-top: 0; }
+.ar-lente-achado { font-weight: 600; font-size: .9rem; margin: 0 0 4px; }
+.ar-lente-evid { font-size: .8rem; color: var(--pl-ink-muted); margin: 0 0 8px; }
+.ar-lente-botoes { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ar-lente-vazio { font-size: .88rem; }
+.ar-detalhes { margin-top: 18px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); background: var(--pl-surface); }
+.ar-detalhes > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: .88rem; color: var(--pl-ink-muted); }
+.ar-detalhes[open] > summary { border-bottom: 1px solid var(--pl-border); }
+.ar-detalhes > .ar-detalhes-corpo { padding: 14px; }
+.ar-vazio { text-align: center; padding: 28px 16px; border: 1px dashed var(--pl-border-strong); border-radius: var(--pl-radius-lg); color: var(--pl-ink-muted); }
+.ar-vazio h3 { color: var(--pl-ink); margin: 0 0 6px; font-size: 1rem; }
+.ar-fila { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ar-fila-grupo { font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--pl-ink-muted); margin: 14px 0 6px; }
+.ar-fila-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid var(--pl-border); border-radius: var(--pl-radius-md); background: var(--pl-surface); padding: 10px 12px; }
+.ar-fila-item .ar-fila-texto { min-width: 0; }
+.ar-fila-item .ar-fila-titulo { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
+.ar-fila-item .ar-fila-det { font-size: .78rem; color: var(--pl-ink-muted); }
+.ar-fila-item.ar-extensao { border-style: dashed; opacity: .8; }
+.ar-quadro td.ar-fora { color: var(--pl-critical); font-weight: 600; }
+.ar-pergunte-bolha { border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); padding: 12px 14px; background: var(--pl-surface); margin-bottom: 10px; }
+.ar-pergunte-bolha.ar-eu { background: var(--pl-accent-soft); border-color: transparent; margin-left: auto; max-width: 80%; }
+.ar-pergunte-num { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: .8rem; border-top: 1px solid var(--pl-border); padding-top: 8px; margin-top: 8px; }
+.ar-atalho-aries { position: fixed; right: 18px; bottom: 18px; z-index: 60; }
+.ar-gaveta { position: fixed; inset: 0 0 0 auto; width: min(460px, 100vw); background: var(--pl-bg); border-left: 1px solid var(--pl-border); z-index: 70; display: flex; flex-direction: column; box-shadow: var(--pl-shadow-pop); }
+.ar-gaveta-corpo { flex: 1; overflow-y: auto; padding: 14px; }
+@media (max-width: 980px) {
+  .ar-tela { grid-template-columns: minmax(0, 1fr); }
+  .ar-lente { position: static; order: -1; }
+}
+@media (max-width: 560px) {
+  .ar-cabecalho h1 { font-size: 1.2rem; }
+  .ar-agora { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .ar-numero { padding: 8px; }
+  .ar-numero .ar-num-valor { font-size: 1.1rem; }
+  .ar-numero .ar-num-nome .ar-status { display: none; }
+  .ar-fila-item { flex-direction: column; align-items: stretch; }
+  .ar-fila-item .pl-btn { width: 100%; }
+  .ar-pergunte-bolha.ar-eu { max-width: 100%; }
+  .ar-atalho-aries { right: 10px; bottom: 10px; padding: 6px 10px; font-size: .78rem; opacity: .95; }
+  [data-hoje], [data-tela-padrao] { padding-bottom: 56px; }
+}

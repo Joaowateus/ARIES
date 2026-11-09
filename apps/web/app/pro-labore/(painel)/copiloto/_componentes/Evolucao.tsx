@@ -97,7 +97,7 @@ export function Evolucao({ pessoa }: { pessoa?: string }) {
         <div className="cp-kpi"><span>Sequência</span><b>{ev.sequencia}</b><small>{ev.sequencia === 1 ? 'dia seguido' : 'dias seguidos'} com o plano em ação</small></div>
         <div className="cp-kpi"><span>Estudos concluídos</span><b>{ev.estudosConcluidos}</b><small>na trilha</small></div>
       </div>
-      {serie.length < 2 && <p className="cp-legenda">A evolução ganha forma a partir do segundo dia: o copiloto guarda os números de cada dia e mostra a tendência aqui.</p>}
+      {serie.length < 2 && <p className="cp-legenda">A evolução ganha forma a partir do segundo dia: o ARIES guarda os números de cada dia e mostra a tendência aqui.</p>}
       <div className="cp-grade">
         <Linha titulo="Índice do dia" subtitulo="De 0 a 100: resposta, abordagem, carteira, agenda e avanços" pontos={serie.map(d => ({ dia: d.dia, valor: d.indice }))} fmt={v => num(v)} maxFixo={100} />
         <Linha titulo="Leads parados" subtitulo="Sem movimento além do prazo do estágio · quanto menor, melhor" pontos={serie.map(d => ({ dia: d.dia, valor: d.parados }))} fmt={v => num(v)} inteiro />
@@ -106,7 +106,7 @@ export function Evolucao({ pessoa }: { pessoa?: string }) {
       </div>
 
       <section className="cp-card">
-        <div className="cp-card-cab"><div><h2>O que funciona com você</h2><p className="cp-sub">Medido: das ações feitas, em quantas o lead avançou ou a conversa foi respondida depois. É assim que o copiloto aprende a ordem do seu plano.</p></div></div>
+        <div className="cp-card-cab"><div><h2>O que funciona com você</h2><p className="cp-sub">Medido: das ações feitas, em quantas o lead avançou ou a conversa foi respondida depois. É assim que o ARIES aprende a ordem do seu plano.</p></div></div>
         {tipos.length === 0 ? <p className="cp-legenda">Ainda sem ações verificadas. O efeito de cada ação é conferido no dia seguinte.</p> : (
           <div className="cp-tabela-rola">
             <table className="cp-tabela" style={{ minWidth: 420 }}>

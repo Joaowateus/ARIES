@@ -44,13 +44,13 @@ export function Chat({ nome, somenteLeitura }: { nome: string; somenteLeitura: b
   return (
     <section className="cp-card cp-chat" aria-label="Conversa com o copiloto">
       <div>
-        <h2>Converse com o seu copiloto</h2>
+        <h2>Converse com o ARIES</h2>
         <p className="cp-sub">Pergunte sobre os seus números, peça uma mensagem para um cliente, uma técnica ou um plano. {iaLigada ? 'Ele responde com base na sua produção e no que já aprendeu com você.' : 'A conversa livre usa a IA, que não está ligada; mesmo assim, "lembre que ..." funciona.'}</p>
       </div>
       <div className="cp-chat-thread" aria-live="polite">
         {msgs == null ? <p className="pl-hint">Carregando…</p> : msgs.length === 0 ? <p className="cp-legenda">Oi, {nome}! Comece por uma das sugestões abaixo ou escreva o que precisar.</p>
           : msgs.map(m => <div key={m.id} className={`cp-chat-msg ${m.autor === 'USUARIO' ? 'usuario' : 'copiloto'}`}>{m.texto}</div>)}
-        {enviando && <span className="cp-escrevendo">O copiloto está pensando…</span>}
+        {enviando && <span className="cp-escrevendo">O ARIES está pensando…</span>}
         <div ref={fim} />
       </div>
       {aviso && <div className="pl-alert pl-alert-success" role="status">{aviso}</div>}
@@ -58,7 +58,7 @@ export function Chat({ nome, somenteLeitura }: { nome: string; somenteLeitura: b
         <>
           <div className="cp-sugestoes-chat">{SUGESTOES.map(s => <button key={s} type="button" className="pl-chip" onClick={() => enviar(s)} disabled={enviando}>{s}</button>)}</div>
           <form className="cp-chat-form" onSubmit={e => { e.preventDefault(); enviar(texto) }}>
-            <textarea className="pl-input" value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escreva para o copiloto…" maxLength={1500} aria-label="Mensagem para o copiloto"
+            <textarea className="pl-input" value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escreva para o ARIES…" maxLength={1500} aria-label="Mensagem para o ARIES"
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(texto) } }} />
             <button type="submit" className="pl-btn pl-btn-primary" disabled={enviando || !texto.trim()}>Enviar</button>
           </form>

@@ -225,7 +225,7 @@ export async function telaDoDia(usuarioId: string, pessoa: string, agora = new D
 
 export function textoWhatsapp(nome: string, r: Relatorio, acoes: Array<{ texto: string }>, indice: number): string {
   return [
-    `🧭 *Copiloto — seu dia*`,
+    `🧭 *ARIES — seu dia*`,
     '',
     r.resumo,
     '',
@@ -236,7 +236,7 @@ export function textoWhatsapp(nome: string, r: Relatorio, acoes: Array<{ texto: 
     '',
     `*Dica:* ${r.dica.titulo} — ${r.dica.tecnica}`,
     '',
-    `Bom trabalho, ${nome}! O relatório completo está na aba Copiloto do sistema.`,
+    `Bom trabalho, ${nome}! O relatório completo está no sistema (Hoje e Desenvolvimento).`,
   ].join('\n')
 }
 

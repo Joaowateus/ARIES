@@ -11,6 +11,7 @@ import {
   esperaDesde, quandoCurto, useToast, type Tom,
 } from '../_ui'
 import { useEspacoSM } from './EspacoSM'
+import { AriesNoSm } from './AriesNoSm'
 
 const fmtNum = (n: number) => n.toLocaleString('pt-BR')
 const fmtMult = (n: number) => `${n.toFixed(1).replace('.', ',')}×`
@@ -93,6 +94,7 @@ export default function HojePage() {
         aoAgir={() => { if (h.recepcao.visitaId && !h.recepcao.recolhida) proLaboreApi.sm.recepcao.recolher(h.recepcao.visitaId).catch(() => undefined) }}
         acoes={h.podeCriarPauta && <BotaoLink href="/pro-labore/sm/producao?nova=1" icone={<IcMais tamanho={16} />} title="Nova pauta (atalho: N)" atalho="N">Nova pauta</BotaoLink>}
       />
+      <AriesNoSm />
       {marco && <Comemoracao key={marco.chave} marco={marco} aoFechar={() => comemorado(marco.chave)} />}
       <div className="sm-hoje-corpo" onClickCapture={marcarAcao}>
 

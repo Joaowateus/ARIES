@@ -65,7 +65,7 @@ export function Memoria({ somenteLeitura, equipe }: { somenteLeitura: boolean; e
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, fontSize: 13.5, color: 'var(--pl-ink-1)' }}>
             <input type="checkbox" checked={rascunho.whats} onChange={e => setRascunho({ ...rascunho, whats: e.target.checked })} disabled={somenteLeitura || (!perfil.whatsappDisponivel && !rascunho.whats)} />
             Receber o resumo do dia no meu WhatsApp
-            {!perfil.whatsappDisponivel && <span className="cp-legenda">(precisa do WhatsApp conectado no Assistente Comercial)</span>}
+            {!perfil.whatsappDisponivel && <span className="cp-legenda">(precisa do WhatsApp conectado em Conversas)</span>}
           </label>
         )}
         {!somenteLeitura && <div style={{ marginTop: 12 }}><button type="button" className="pl-btn pl-btn-primary" onClick={salvarPerfil}>Salvar ajustes</button></div>}
@@ -73,7 +73,7 @@ export function Memoria({ somenteLeitura, equipe }: { somenteLeitura: boolean; e
       </section>
 
       <section className="cp-card" aria-label="Memória do copiloto">
-        <div className="cp-card-cab"><div><h2>O que o copiloto sabe de você</h2><p className="cp-sub">Fatos medidos nos seus resultados, o que você pediu e as leituras dele (hipóteses). Tudo aqui é usado nas análises; desligue ou apague o que não fizer sentido.</p></div></div>
+        <div className="cp-card-cab"><div><h2>O que o ARIES sabe de você</h2><p className="cp-sub">Fatos medidos nos seus resultados, o que você pediu e as leituras dele (hipóteses). Tudo aqui é usado nas análises; desligue ou apague o que não fizer sentido.</p></div></div>
         {!somenteLeitura && (
           <div className="cp-form-linha" style={{ marginBottom: 12 }}>
             <label>Tipo
@@ -87,7 +87,7 @@ export function Memoria({ somenteLeitura, equipe }: { somenteLeitura: boolean; e
             <button type="button" className="pl-btn pl-btn-ghost" onClick={adicionar} disabled={novo.texto.trim().length < 3}>Adicionar</button>
           </div>
         )}
-        {itens.length === 0 ? <p className="cp-legenda">Ainda vazio. O copiloto começa a anotar o que funciona com você a partir das ações feitas e do que você contar.</p> : (
+        {itens.length === 0 ? <p className="cp-legenda">Ainda vazio. O ARIES começa a anotar o que funciona com você a partir das ações feitas e do que você contar.</p> : (
           <ul className="cp-lista cp-memoria" style={{ gap: 0 }}>
             {itens.map(m => (
               <li key={m.id} className={m.ativa ? '' : 'inativa'} style={{ paddingLeft: 0 }}>

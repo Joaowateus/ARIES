@@ -78,13 +78,13 @@ export default function CopilotoPage() {
     <div className="cp">
       <PageHeader
         eyebrow="Vendas"
-        title="Copiloto Comercial"
+        title="ARIES · Desenvolvimento"
         subtitle="Seu mentor de vendas de todo dia: lê a sua produção no sistema, mostra onde você vai bem e onde está errando, monta o plano do dia e indica o que estudar e o que responder"
       />
 
       {isDono && pessoas && pessoas.length > 0 && (
         <div className="cp-topo">
-          <span className="pl-hint">Copiloto de</span>
+          <span className="pl-hint">Desenvolvimento de</span>
           <select className="pl-select-chip active" value={pessoa} onChange={e => abrirPessoa(e.target.value)} aria-label="Escolher de quem é o copiloto">
             {pessoas.map(p => <option key={p.pessoa} value={p.pessoa}>{p.nome}{p.indice != null ? ` · índice ${p.indice}` : ''}</option>)}
           </select>

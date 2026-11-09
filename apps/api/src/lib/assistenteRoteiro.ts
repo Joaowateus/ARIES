@@ -410,7 +410,7 @@ export function interpretarComando(texto: string): ComandoSuporte | null {
 }
 
 export const TEXTO_MENU = [
-  '🤖 *Assistente Comercial* — comandos (mande só a palavra):',
+  '🤖 *ARIES* — comandos (mande só a palavra):',
   '',
   '*resumo* — números de hoje',
   '*pendentes* — leads esperando você responder',

@@ -29,9 +29,13 @@ export function ProLaboreAuthProvider({ children }: { children: ReactNode }) {
       proLaboreApi.auth.me().then(u => {
         setUsuarioState(u)
         setUsuario(u)
-      }).catch(() => {
-        clearToken()
-        setUsuarioState(null)
+      }).catch((e: { status?: number }) => {
+        // Só sai quando o acesso não vale mais (401/404). Limite de requisições
+        // (429), queda de rede ou erro do servidor mantêm a sessão guardada.
+        if (e?.status === 401 || e?.status === 404) {
+          clearToken()
+          setUsuarioState(null)
+        }
       }).finally(() => setLoading(false))
     } else {
       setLoading(false)

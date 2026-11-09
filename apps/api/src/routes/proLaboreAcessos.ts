@@ -12,8 +12,8 @@ import { MODULOS, PERFIS, escopoDoPapel, limparPermissoes, papelDoEscopo, permis
 
 const router = Router()
 
-const SELECT = { id: true, nome: true, email: true, documento: true, ativo: true, vende: true, papel: true, permissoes: true, senhaHash: true, criadoEm: true } as const
-type Linha = { id: string; nome: string; email: string | null; documento: string | null; ativo: boolean; vende: boolean; papel: string; permissoes: unknown; senhaHash: string | null; criadoEm: Date }
+const SELECT = { id: true, nome: true, email: true, documento: true, ativo: true, vende: true, papel: true, permissoes: true, senhaHash: true, criadoEm: true, funcao: true } as const
+type Linha = { id: string; nome: string; email: string | null; documento: string | null; ativo: boolean; vende: boolean; papel: string; permissoes: unknown; senhaHash: string | null; criadoEm: Date; funcao: string | null }
 
 const iguais = (a: Permissoes, b: Permissoes) => MODULOS.every(m => a[m.chave] === b[m.chave])
 
@@ -21,7 +21,7 @@ function resumo(v: Linha) {
   const escopo = escopoDoPapel(v.papel)
   const permissoes = permissoesEfetivas(v.papel, v.permissoes)
   const perfil = PERFIS.find(p => p.escopo === escopo && iguais(p.permissoes, permissoes))
-  return { id: v.id, nome: v.nome, email: v.email, documento: v.documento, ativo: v.ativo, vende: v.vende, escopo, permissoes, perfil: perfil?.chave ?? null, sdr: v.papel === 'SDR', criadoEm: v.criadoEm }
+  return { id: v.id, nome: v.nome, email: v.email, documento: v.documento, ativo: v.ativo, vende: v.vende, escopo, permissoes, perfil: perfil?.chave ?? null, sdr: v.papel === 'SDR', funcao: v.funcao, criadoEm: v.criadoEm }
 }
 
 async function emailEmUso(email: string, ignorarVendedorId?: string) {
@@ -58,6 +58,8 @@ const criarSchema = z.object({
   sdr: z.boolean().optional(),
   vende: z.boolean().default(true),
   permissoes: permissoesSchema,
+  // PDF 04: função de quem não vende (define o Hoje e a exceção do P7 aprovada pelo dono).
+  funcao: z.enum(['GESTOR_TRAFEGO', 'FINANCEIRO']).nullable().optional(),
 }).refine(d => d.vendedorId || d.nome, 'Informe o nome')
 
 router.post('/acessos', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
@@ -69,7 +71,7 @@ router.post('/acessos', requireProLaboreAuth, requireDono, async (req: Request, 
   const doc = normalizarDocumento(d.documento)
   if (!doc.ok) { res.status(400).json({ error: doc.erro }); return }
   const dados = {
-    ...(doc.valor ? { documento: doc.valor } : {}), email: d.email, senhaHash: await bcrypt.hash(d.senha, 10), papel: d.sdr && d.escopo === 'PROPRIO' ? 'SDR' : papelDoEscopo(d.escopo), vende: d.vende, permissoes: limparPermissoes(d.permissoes), ativo: true }
+    ...(doc.valor ? { documento: doc.valor } : {}), email: d.email, senhaHash: await bcrypt.hash(d.senha, 10), papel: d.sdr && d.escopo === 'PROPRIO' ? 'SDR' : papelDoEscopo(d.escopo), vende: d.vende, permissoes: limparPermissoes(d.permissoes), ativo: true, funcao: d.funcao ?? null }
   let id: string
   if (d.vendedorId) {
     const atual = await prisma.vendedor.findFirst({ where: { id: d.vendedorId, usuarioId } })
@@ -91,6 +93,7 @@ const editarSchema = z.object({
   vende: z.boolean().optional(),
   ativo: z.boolean().optional(),
   permissoes: permissoesSchema.optional(),
+  funcao: z.enum(['GESTOR_TRAFEGO', 'FINANCEIRO']).nullable().optional(),
 })
 
 async function doDono(req: Request, res: Response) {
@@ -118,6 +121,7 @@ router.put('/acessos/:id', requireProLaboreAuth, requireDono, async (req: Reques
       ...(d.vende !== undefined ? { vende: d.vende } : {}),
       ...(d.ativo !== undefined ? { ativo: d.ativo } : {}),
       ...(d.permissoes ? { permissoes: limparPermissoes(d.permissoes) } : {}),
+      ...(d.funcao !== undefined ? { funcao: d.funcao } : {}),
     },
   })
   res.json(await listar(req.proLaboreUser!.sub))

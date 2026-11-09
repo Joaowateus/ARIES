@@ -26,7 +26,7 @@ declare global { namespace Express { interface Request { intel?: Ctx } } }
 
 async function central(req: Request, res: Response, next: NextFunction): Promise<void> {
   const u = req.proLaboreUser!
-  if (u.papel !== 'DONO' && u.papel !== 'SUPERVISOR') { res.status(403).json({ error: 'A Central de Inteligência é da gestão (dono e quem vê a equipe).' }); return }
+  if (u.papel !== 'DONO' && u.papel !== 'SUPERVISOR') { res.status(403).json({ error: 'Os Relatórios da operação são da gestão (dono e quem vê a equipe).' }); return }
   const dono = u.papel === 'DONO'
   const a = req.acessos ?? {}
   const nome = dono ? (await prisma.proLaboreUsuario.findUnique({ where: { id: u.sub }, select: { nome: true } }))?.nome : (await prisma.vendedor.findUnique({ where: { id: u.vendedorId! }, select: { nome: true } }))?.nome

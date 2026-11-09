@@ -8,7 +8,7 @@ export const TABELAS_AUDITADAS: Record<string, string> = {
   pro_labore_leads: 'Oportunidade', pro_labore_clientes: 'Cliente', pro_labore_atividades: 'Atividade (ATV)',
   pro_labore_lead_follows: 'Follow', pro_labore_ligacoes: 'Ligação', pro_labore_lead_visitas: 'Visita',
   pro_labore_lead_propostas: 'Proposta', pro_labore_lead_passagens: 'Passagem ao vendedor', pro_labore_agenda_itens: 'Rotina da Agenda',
-  pro_labore_copiloto_sugestoes: 'Sugestão do Copiloto', pro_labore_vendas: 'Venda', pro_labore_assistente_fichas_credito: 'Ficha de crédito',
+  pro_labore_copiloto_sugestoes: 'Sugestão do ARIES', pro_labore_vendas: 'Venda', pro_labore_assistente_fichas_credito: 'Ficha de crédito',
   pro_labore_assistente_analises_credito: 'Análise de crédito', pro_labore_regua_cobranca: 'Régua de cobrança',
 }
 export const TABELAS_DA_EQUIPE = ['pro_labore_leads', 'pro_labore_clientes', 'pro_labore_atividades', 'pro_labore_lead_follows', 'pro_labore_ligacoes', 'pro_labore_lead_visitas', 'pro_labore_lead_propostas', 'pro_labore_lead_passagens', 'pro_labore_agenda_itens']

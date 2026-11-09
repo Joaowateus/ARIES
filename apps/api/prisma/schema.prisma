@@ -1016,6 +1016,8 @@ model Vendedor {
   // Falso para quem tem login mas não vende (gerente, financeiro,
   // marketing): fica fora do ranking e do rodízio de leads.
   vende                Boolean  @default(true)
+  // PDF 04: GESTOR_TRAFEGO | FINANCEIRO (nulo = pelo papel). Define o Hoje e a exceção do P7.
+  funcao               String?
   // Salário lembrado pelo "Pagar salários" do Financeiro (vem preenchido).
   salarioBase          Float?
   // CPF ou CNPJ, já formatado: identifica a pessoa nos comprovantes de
@@ -1177,6 +1179,8 @@ model ParametroLiquidez {
   reguaModo                    String    @default("REGISTRO")
   // PDF 03: SILENCIOSO (RECs só para dono e supervisor) | NORMAL (roteamento ligado pelo dono).
   recRoteamento                String    @default("SILENCIOSO")
+  orcamentoAnuncioMensal       Float?
+  telasNovasParaTodosEm        DateTime?
 
   @@map("pro_labore_parametros")
 }
@@ -4822,4 +4826,77 @@ model RecomendacaoAvaliacao {
 
   @@unique([recomendacaoId, avaliadorId], map: "pro_labore_rec_avaliacoes_key")
   @@map("pro_labore_recomendacoes_avaliacoes")
+}
+
+// PDF 04 · Onda 3 — Telas
+model HojeConfig {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  papel          String
+  numeros        String[] @default([])
+  fila           String[] @default([])
+  lente          String?
+  auditoriaAutor String?
+  atualizadoEm   DateTime @default(now())
+
+  @@unique([usuarioId, papel], map: "pro_labore_hoje_config_key")
+  @@map("pro_labore_hoje_config")
+}
+
+model PergunteConversa {
+  id        String   @id @default(cuid())
+  usuarioId String
+  pessoaId  String
+  papel     String
+  canal     String   @default("TELA")
+  pergunta  String
+  metricas  Json     @default("[]")
+  valores   Json     @default("[]")
+  resposta  String
+  naoSabe   Boolean  @default(false)
+  acoes     Json     @default("[]")
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId, pessoaId, criadoEm], map: "pro_labore_pergunte_conversas_idx")
+  @@map("pro_labore_pergunte_conversas")
+}
+
+model IaEnvio {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  conversaId String?
+  finalidade String
+  conteudo   String
+  criadoEm   DateTime @default(now())
+
+  @@index([usuarioId, criadoEm], map: "pro_labore_ia_envios_idx")
+  @@map("pro_labore_ia_envios")
+}
+
+model UsoTela {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  pessoaId   String
+  papel      String
+  aba        String
+  versao     String   @default("ATUAL")
+  abertaEm   DateTime @default(now())
+  acoes      Int      @default(0)
+  ultimaAcao String?
+
+  @@index([usuarioId, aba, abertaEm], map: "pro_labore_uso_telas_idx")
+  @@map("pro_labore_uso_telas")
+}
+
+model PilotoParticipante {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  pessoaId       String
+  versao         String    @default("NOVA")
+  inicio         DateTime  @default(now())
+  fim            DateTime?
+  auditoriaAutor String?
+
+  @@unique([usuarioId, pessoaId], map: "pro_labore_piloto_key")
+  @@map("pro_labore_piloto")
 }

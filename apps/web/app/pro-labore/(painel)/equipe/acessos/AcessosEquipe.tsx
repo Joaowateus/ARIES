@@ -120,12 +120,12 @@ function Editor({ dados, inicial, aoFechar, aoSalvar }: { dados: PainelAcessos; 
     setErro(null); setSalvando(true)
     try {
       if (r.id) {
-        const d = await proLaboreApi.acessos.editar(r.id, { nome: r.nome.trim(), email: r.email.trim(), documento: r.documento.trim() || null, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes, sdr: perfilAtual?.chave === 'SDR' })
+        const d = await proLaboreApi.acessos.editar(r.id, { nome: r.nome.trim(), email: r.email.trim(), documento: r.documento.trim() || null, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes, sdr: perfilAtual?.chave === 'SDR', funcao: funcaoDoPerfil(perfilAtual?.chave) })
         aoSalvar(d, `Acesso de ${r.nome.trim()} atualizado. Já vale.`)
       } else {
         const d = await proLaboreApi.acessos.criar({
           ...(r.vendedorId ? { vendedorId: r.vendedorId } : { nome: r.nome.trim() }),
-          email: r.email.trim(), documento: r.documento.trim() || null, senha: r.senha, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes, sdr: perfilAtual?.chave === 'SDR',
+          email: r.email.trim(), documento: r.documento.trim() || null, senha: r.senha, escopo: r.escopo, vende: r.vende, permissoes: r.permissoes, sdr: perfilAtual?.chave === 'SDR', funcao: funcaoDoPerfil(perfilAtual?.chave),
         })
         const nome = r.vendedorId ? dados.semLogin.find(p => p.id === r.vendedorId)?.nome : r.nome.trim()
         aoSalvar(d, `Acesso de ${nome} criado. Passe o e-mail e a senha para a pessoa.`)
@@ -259,4 +259,10 @@ function Editor({ dados, inicial, aoFechar, aoSalvar }: { dados: PainelAcessos; 
       </div>
     </div>
   )
+}
+
+// PDF 04: o perfil Financeiro e o de Gestor de tráfego definem o Hoje da pessoa
+// (e a exceção do P7 aprovada pelo dono: gasto com anúncio e comissões a pagar).
+function funcaoDoPerfil(chave?: string): 'FINANCEIRO' | 'GESTOR_TRAFEGO' | null {
+  return chave === 'FINANCEIRO' ? 'FINANCEIRO' : chave === 'MARKETING' ? 'GESTOR_TRAFEGO' : null
 }

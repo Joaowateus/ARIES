@@ -4,7 +4,8 @@
 // período e comparação), força (hipótese nunca vira certeza), impacto
 // (sempre estimativa), ação, roteamento, atividades, avaliação e histórico.
 import { useEffect, useState } from 'react'
-import { recApi, type RecDetalhe } from '@/lib/proLaboreApi'
+import { useProLaboreAuth } from '@/lib/proLaboreAuth'
+import { proLaboreApi, recApi, type RecDetalhe } from '@/lib/proLaboreApi'
 
 export const FORCA = { COMPROVADA: { nome: 'Evidência comprovada', classe: 'pl-faixa-bom' }, PADRAO: { nome: 'Padrão observado', classe: 'pl-faixa-atencao' }, HIPOTESE: { nome: 'Hipótese', classe: 'pl-faixa-critico' } } as const
 export const STATUS: Record<string, string> = { NOVA: 'Nova', ACEITA: 'Aceita', DESCARTADA: 'Descartada', EM_EXECUCAO: 'Em execução', AVALIADA: 'Avaliada', ENCERRADA: 'Encerrada' }
@@ -27,7 +28,13 @@ export function DetalheRec({ id, onFechar, onMudou, avaliarPertinencia }: { id: 
   const [erro, setErro] = useState<string | null>(null)
   const [motivo, setMotivo] = useState('')
   const [nota, setNota] = useState('')
+  // PDF 04 · "Aceitar e atribuir": a gestão escolhe quem executa as atividades.
+  const { usuario } = useProLaboreAuth()
+  const gestao = usuario?.papel === 'DONO' || usuario?.papel === 'SUPERVISOR'
+  const [equipe, setEquipe] = useState<Array<{ id: string; nome: string }>>([])
+  const [atribuir, setAtribuir] = useState('')
   useEffect(() => { recApi.detalhe(id).then(setR).catch(e => setErro(e instanceof Error ? e.message : 'Indisponível')) }, [id])
+  useEffect(() => { if (gestao) proLaboreApi.vendedores.listar().then(v => setEquipe(v.filter(x => x.ativo).map(x => ({ id: x.id, nome: x.nome })))).catch(() => setEquipe([])) }, [gestao])
   async function agir(fn: () => Promise<RecDetalhe | { ok: boolean }>) {
     setErro(null)
     try { const x = await fn(); if ('id' in x) setR(x as RecDetalhe); else setR(await recApi.detalhe(id)); onMudou?.() } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível') }
@@ -62,7 +69,12 @@ export function DetalheRec({ id, onFechar, onMudou, avaliarPertinencia }: { id: 
             {r.podeDecidir && (
               <div style={{ display: 'grid', gap: 6 }} data-decidir>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button type="button" className="pl-btn pl-btn-primary" onClick={() => void agir(() => recApi.aceitar(r.id))} data-aceitar>Aceitar e criar as atividades</button>
+                  {gestao && equipe.length > 0 && (
+                    <select className="pl-input" style={{ width: 'auto' }} value={atribuir} onChange={e => setAtribuir(e.target.value)} aria-label="Atribuir a" data-atribuir>
+                      <option value="">Atribuir a: {r.destinatario ?? 'quem recebeu'}</option>{equipe.map(p => <option key={p.id} value={p.id}>Atribuir a: {p.nome}</option>)}
+                    </select>
+                  )}
+                  <button type="button" className="pl-btn pl-btn-primary" onClick={() => void agir(() => recApi.aceitar(r.id, atribuir || undefined))} data-aceitar>{gestao ? 'Aceitar e atribuir' : 'Aceitar e criar as atividades'}</button>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <input className="pl-input" style={{ flex: '1 1 240px' }} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo do descarte (obrigatório)" data-motivo />
