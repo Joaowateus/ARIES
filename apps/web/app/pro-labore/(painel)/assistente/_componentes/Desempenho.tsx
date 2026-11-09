@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { FaixaChip, FichaMetricaModal, useMetricas } from '../../_metricas/Metricas'
 import type { ResumoAssistente } from '@/lib/proLaboreApi'
 import { CartaoViz, EstadoTooltip, LinhaTip, Tooltip, Vazio, fmtDiaMes, fmtNum, fmtPct, ticksBonitos, useLargura } from '../../social-media/_componentes/viz'
 import { ORIGEM, RESULTADO, ROTULO_ESTAGIO, fmtMinutos } from './util'
@@ -15,9 +16,13 @@ function Kpi({ rotulo, valor, nota, destaque }: { rotulo: string; valor: string;
   )
 }
 
-export function KpisAssistente({ resumo }: { resumo: ResumoAssistente }) {
+export function KpisAssistente({ resumo, vendedorId }: { resumo: ResumoAssistente; vendedorId?: string }) {
   const t = resumo.totais
   const tr = resumo.tempoResposta
+  // PDF 02: o tempo de primeira resposta vem da ficha do dicionário (mesmo período da tela).
+  const periodo = resumo.periodo.inicio && resumo.periodo.fim ? { inicio: resumo.periodo.inicio.slice(0, 10), fim: resumo.periodo.fim.slice(0, 10) } : null
+  const tpr = useMetricas(['tempo_primeira_resposta'], periodo, vendedorId).tempo_primeira_resposta
+  const [ficha, setFicha] = useState(false)
   return (
     <div className="pl-sv-kpis pl-as-kpis">
       <Kpi rotulo="Leads atendidos" valor={fmtNum(t.atendidos)} nota={`Contatos novos que o assistente recebeu em ${resumo.periodo.dias} dias`} />
@@ -32,11 +37,24 @@ export function KpisAssistente({ resumo }: { resumo: ResumoAssistente }) {
         destaque={t.aguardandoAgora > 0}
         nota={t.aguardandoAgora > 0 ? 'Leads prontos pra atendimento — responda pelo WhatsApp ou pela aba Conversas' : 'Nenhum lead parado na fila'}
       />
-      <Kpi
-        rotulo="Tempo até você responder"
-        valor={fmtMinutos(tr.medianaMin)}
-        nota={tr.amostras > 0 ? `Mediana de ${tr.amostras} conversa${tr.amostras > 1 ? 's' : ''} · ${fmtPct(tr.ate15MinPct, 0)} em até 15 min` : 'Aparece quando você assumir a primeira conversa'}
-      />
+      {tpr ? (
+        <div data-kpi-metrica="tempo_primeira_resposta">
+          <button type="button" className="pl-kpi-ficha" onClick={() => setFicha(true)} title="Ver a ficha da métrica">
+            <Kpi
+              rotulo="Tempo de primeira resposta"
+              valor={tpr.valor != null ? fmtMinutos(tpr.valor) : '—'}
+              nota={<>{tpr.amostra ? `Mediana de ${tpr.amostra} conversa${tpr.amostra > 1 ? 's' : ''} (1ª mensagem do cliente → 1ª resposta de uma pessoa)` : 'Aparece quando alguém da loja responder a primeira conversa'} <FaixaChip faixa={tpr.faixa} /></>}
+            />
+          </button>
+          {ficha && <FichaMetricaModal chave="tempo_primeira_resposta" onFechar={() => setFicha(false)} />}
+        </div>
+      ) : (
+        <Kpi
+          rotulo="Tempo até você responder"
+          valor={fmtMinutos(tr.medianaMin)}
+          nota={tr.amostras > 0 ? `Mediana de ${tr.amostras} conversa${tr.amostras > 1 ? 's' : ''} · ${fmtPct(tr.ate15MinPct, 0)} em até 15 min` : 'Aparece quando você assumir a primeira conversa'}
+        />
+      )}
       <Kpi rotulo="Leads no CRM" valor={fmtNum(t.leadsNoCrm)} nota="Criados ou ligados pelo assistente" />
       <Kpi rotulo="Vendas fechadas" valor={fmtNum(t.vendas)} nota="Leads do assistente que chegaram a “Fechado” no CRM" />
     </div>
