@@ -642,6 +642,7 @@ export const proLaboreApi = {
     credito: () => request<LeadCredito[]>('/pro-labore/jornada/credito'),
     premissas: () => request<PremissasJornada>('/pro-labore/jornada/premissas'),
     regua: () => request<ReguaCobrancaResp>('/pro-labore/atividades/regua'),
+    modoRegua: (modo: 'REGISTRO' | 'ENVIO', justificativa: string) => request<ReguaCobrancaResp>('/pro-labore/atividades/regua-modo', { method: 'PUT', body: JSON.stringify({ modo, justificativa }) }),
     salvarRegua: (origem: string, d: ConfigReguaCobranca) => request<ReguaCobrancaResp>(`/pro-labore/atividades/regua/${origem}`, { method: 'PUT', body: JSON.stringify(d) }),
     conferenciaAtividades: () => request<Array<{ tipo: string; atual: number; atv: number; bate: boolean; apagadasDepois: number; semData: number; semAutor: number; semResultado: number }>>('/pro-labore/atividades/conferencia'),
     conversao: () => request<{ inicio: string; fim: string; etapas: Array<{ etapa: EtapaJornada; chegaram: number; seguiram: number; conversao: number | null }> }>('/pro-labore/jornada/conversao'),

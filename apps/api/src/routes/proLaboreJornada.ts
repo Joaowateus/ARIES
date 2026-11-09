@@ -12,7 +12,7 @@ import { conversaoPorEtapa } from '../lib/jornadaMetricas'
 import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
 import { MOTIVOS_CANCELAMENTO, cancelarVenda, confirmarVenda, checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
 import { requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
-import { ORIGENS_ATV, MODO_REGUA, configDaRegua, conferenciaDaMigracao } from '../lib/atividades'
+import { ORIGENS_ATV, configDaRegua, conferenciaDaMigracao, modoDaRegua } from '../lib/atividades'
 
 const router = Router()
 const ver = [requireProLaboreAuth, requireModulo('crm', 'VER')]
@@ -259,7 +259,7 @@ router.put('/jornada/rodizio/:vendedorId', requireProLaboreAuth, requireDonoOuSu
 // --- Atividade (ATV) · PDF 02, 4.4 ---
 // Régua de cobrança por tipo de origem (só o dono edita).
 router.get('/atividades/regua', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
-  res.json({ modo: MODO_REGUA, origens: await configDaRegua(req.proLaboreUser!.sub) })
+  res.json({ modo: await modoDaRegua(req.proLaboreUser!.sub), origens: await configDaRegua(req.proLaboreUser!.sub) })
 })
 const reguaSchema = z.object({
   lembreteMinAntes: z.number().int().min(0).max(1440),
@@ -274,7 +274,20 @@ router.put('/atividades/regua/:origem', requireProLaboreAuth, requireDono, async
   if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
   const usuarioId = req.proLaboreUser!.sub
   await prisma.reguaCobranca.upsert({ where: { usuarioId_origemTipo: { usuarioId, origemTipo: origem } }, create: { usuarioId, origemTipo: origem, ...p.data }, update: p.data })
-  res.json({ modo: MODO_REGUA, origens: await configDaRegua(usuarioId) })
+  res.json({ modo: await modoDaRegua(usuarioId), origens: await configDaRegua(usuarioId) })
+})
+// Ligar o envio da régua (fim da semana em paralelo) ou voltar ao modo de registro. Só o dono, com justificativa.
+const modoSchema = z.object({ modo: z.enum(['REGISTRO', 'ENVIO']), justificativa: z.string().trim().min(5, 'Escreva por que mudou').max(500) })
+router.put('/atividades/regua-modo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const p = modoSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  const usuarioId = req.proLaboreUser!.sub
+  const antes = await modoDaRegua(usuarioId)
+  if (antes !== p.data.modo) {
+    await prisma.parametroLiquidez.upsert({ where: { usuarioId }, create: { usuarioId, reguaModo: p.data.modo }, update: { reguaModo: p.data.modo } })
+    await prisma.parametroHistorico.create({ data: { usuarioId, nome: 'reguaModo', valorAnterior: antes, valorNovo: p.data.modo, origem: 'MANUAL', justificativa: p.data.justificativa, autorId: usuarioId } })
+  }
+  res.json({ modo: await modoDaRegua(usuarioId), origens: await configDaRegua(usuarioId) })
 })
 // Conferência da migração: total por tipo antes (tabelas atuais) e depois (ATV).
 router.get('/atividades/conferencia', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {

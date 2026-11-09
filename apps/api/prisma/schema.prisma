@@ -1173,6 +1173,8 @@ model ParametroLiquidez {
   // PDF 02 · 4.3: volume mínimo de casos para os detectores (onda 2) e meta diária do SDR (nula = pelo histórico).
   volumeMinimoDetectores       Int       @default(10)
   metaDiariaSdr                Float?
+  // PDF 02 · régua de cobrança: REGISTRO (só anota) | ENVIO (manda pelo WhatsApp). Só o dono liga.
+  reguaModo                    String    @default("REGISTRO")
 
   @@map("pro_labore_parametros")
 }

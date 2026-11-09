@@ -18,6 +18,7 @@ const CAMPOS: Array<{ k: 'lembreteMinAntes' | 'segundoAlertaMin' | 'escalonament
 export function ReguaCobranca({ podeEditar }: { podeEditar: boolean }) {
   const [r, setR] = useState<ReguaCobrancaResp | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [motivo, setMotivo] = useState('')
   const [conf, setConf] = useState<Awaited<ReturnType<typeof proLaboreApi.jornada.conferenciaAtividades>> | null>(null)
   useEffect(() => {
     proLaboreApi.jornada.regua().then(setR).catch(() => setR(null))
@@ -34,7 +35,7 @@ export function ReguaCobranca({ podeEditar }: { podeEditar: boolean }) {
         <div className="pl-card-title">Régua de cobrança · atividades</div>
         <div className="pl-card-sub">
           Lembrete antes do vencimento, alerta no vencimento, novo alerta e escalonamento. Para quando a atividade é feita.
-          {r.modo === 'REGISTRO' && <> <strong>Semana em paralelo: a régua só registra o que mandaria, sem enviar.</strong></>}
+          {r.modo === 'REGISTRO' ? <> <strong>Semana em paralelo: a régua só registra o que mandaria, sem enviar.</strong></> : <> <strong>Envio ligado: os avisos saem pelo WhatsApp (Aries ou chat &quot;Você&quot;), das 7h às 21h.</strong></>}
         </div>
       </div></div>
       <div style={{ overflowX: 'auto' }}>
@@ -56,7 +57,15 @@ export function ReguaCobranca({ podeEditar }: { podeEditar: boolean }) {
             </tr>
           ))}</tbody></table>
       </div>
-      <p className="pl-hint">Sem supervisor (ou gestor), o escalonamento vai para o dono. O tempo do lembrete (30 min) é o padrão provisório: o PDF não define.</p>
+      {podeEditar && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0' }} data-modo-regua={r.modo}>
+          <input className="pl-input" style={{ flex: '1 1 260px' }} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder={r.modo === 'REGISTRO' ? 'Por que ligar o envio (ex.: fim da semana em paralelo)' : 'Por que voltar só a registrar'} data-motivo-modo />
+          <button type="button" className={`pl-btn ${r.modo === 'REGISTRO' ? 'pl-btn-primary' : ''}`} disabled={motivo.trim().length < 5}
+            onClick={async () => { setMsg(null); try { setR(await proLaboreApi.jornada.modoRegua(r.modo === 'REGISTRO' ? 'ENVIO' : 'REGISTRO', motivo)); setMotivo(''); setMsg('Modo da régua alterado.') } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }}
+            data-trocar-modo>{r.modo === 'REGISTRO' ? 'Ligar o envio' : 'Voltar a só registrar'}</button>
+        </div>
+      )}
+      <p className="pl-hint">Ligações já têm o aviso na hora e 30 min depois: a régua não repete esses dois para elas. Sem supervisor (ou gestor), o escalonamento vai para o dono. O tempo do lembrete (30 min) é o padrão provisório: o PDF não define.</p>
       {conf && (
         <div style={{ marginTop: 14 }} data-conferencia-atv>
           <div className="pl-eyebrow">Conferência da migração das tarefas (antes × ATV)</div>
