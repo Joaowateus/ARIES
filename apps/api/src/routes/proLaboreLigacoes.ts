@@ -1,6 +1,7 @@
 // Ligações: lembretes por lead (avulsos ou de cadência), o "Ligar" que fica
 // registrado, o resultado obrigatório, a auditoria do dono e as cadências.
 // Escopo igual ao dos leads: o vendedor só vê as ligações dos leads dele.
+import { daAtv, leadsVisiveis, naOrdem } from '../lib/atvLeitura'
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
@@ -41,11 +42,9 @@ async function ligacaoDoPedido(req: Request, res: Response) {
 router.get('/ligacoes/pendentes', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
   const filtro = typeof req.query.vendedorId === 'string' && req.query.vendedorId ? req.query.vendedorId : undefined
   const ate = new Date(Date.now() + 8 * DIA)
-  const lista = await prisma.ligacaoTarefa.findMany({
-    where: { status: 'PENDENTE', agendadaPara: { lt: ate }, lead: { ...leadWhereBase(req, filtro) } },
-    orderBy: { agendadaPara: 'asc' }, take: 300,
-    select: { ...SELECT, lead: LEAD_RESUMO },
-  })
+  // A ATV decide quais ligações e em que ordem; os detalhes (discagens, cadência…) vêm da ligação.
+  const ordem = await daAtv({ tabela: 'pro_labore_ligacoes', usuarioId: req.proLaboreUser!.sub, leadIds: await leadsVisiveis(leadWhereBase(req, filtro)), status: 'PENDENTE', prazoAntes: ate, limite: 300 })
+  const lista = naOrdem(ordem, await prisma.ligacaoTarefa.findMany({ where: { id: { in: ordem.map(o => o.registroId) } }, select: { ...SELECT, lead: LEAD_RESUMO } }))
   res.json(comCadencia(lista, await nomesDasCadencias(req.proLaboreUser!.sub, lista.map(l => l.cadenciaId))))
 })
 
@@ -54,7 +53,8 @@ router.get('/leads/:id/ligacoes', requireProLaboreAuth, requireModulo('crm', 'VE
   const lead = await prisma.lead.findFirst({ where: { id: String(req.params.id), ...leadWhereBase(req) }, select: { id: true } })
   if (!lead) { res.status(404).json({ error: 'Lead não encontrado' }); return }
   const [lista, cadencias] = await Promise.all([
-    prisma.ligacaoTarefa.findMany({ where: { leadId: lead.id }, orderBy: { agendadaPara: 'desc' }, select: SELECT }),
+    daAtv({ tabela: 'pro_labore_ligacoes', usuarioId: req.proLaboreUser!.sub, leadId: lead.id, ordem: 'desc' })
+      .then(async ordem => naOrdem(ordem, await prisma.ligacaoTarefa.findMany({ where: { id: { in: ordem.map(o => o.registroId) } }, select: SELECT }))),
     prisma.cadenciaLigacao.findMany({ where: { usuarioId: req.proLaboreUser!.sub, ativa: true }, orderBy: { nome: 'asc' }, select: { id: true, nome: true, passos: true } }),
   ])
   res.json({

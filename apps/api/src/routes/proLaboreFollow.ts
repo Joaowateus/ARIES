@@ -15,6 +15,7 @@ import { lerConfigFollow } from '../lib/assistenteFollow'
 import { ContextoCredito, reabrirPreAnalise } from '../lib/followCredito'
 import { atualizarNota, avaliarJornada } from '../lib/assistenteMotor'
 import { logger } from '../lib/logger'
+import { contarNaAtv, daAtv, leadsVisiveis, naOrdem } from '../lib/atvLeitura'
 
 const router = Router()
 const DIA = 864e5
@@ -27,32 +28,33 @@ const FOLLOW_SELECT = { id: true, agendadoPara: true, canal: true, nota: true, t
 
 // ---------- Follow ----------
 
-/** Contagem para o selo do menu e o aviso do CRM: atrasados (antes de hoje) e de hoje. */
+/** Contagem para o selo do menu e o aviso do CRM: atrasados (antes de hoje) e de hoje. Lê da ATV. */
 router.get('/follows/contagem', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
   const hoje = inicioHojeBR(), amanha = new Date(hoje.getTime() + DIA)
-  const lead = { ...leadWhereBase(req) }
+  const base = { tabela: 'pro_labore_lead_follows' as const, usuarioId: req.proLaboreUser!.sub, leadIds: await leadsVisiveis(leadWhereBase(req)), status: 'PENDENTE' as const }
   const [atrasados, deHoje] = await Promise.all([
-    prisma.leadFollow.count({ where: { status: 'PENDENTE', agendadoPara: { lt: hoje }, lead } }),
-    prisma.leadFollow.count({ where: { status: 'PENDENTE', agendadoPara: { gte: hoje, lt: amanha }, lead } }),
+    contarNaAtv({ ...base, prazoAntes: hoje }),
+    contarNaAtv({ ...base, prazoDesde: hoje, prazoAntes: amanha }),
   ])
   res.json({ atrasados, hoje: deHoje })
 })
 
-/** Follows pendentes (atrasados, de hoje e próximos 7 dias) com o resumo do lead. */
+/** Follows pendentes (atrasados, de hoje e próximos 7 dias) com o resumo do lead. A ATV decide quais e em que ordem. */
 router.get('/follows', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
   const ate = new Date(inicioHojeBR().getTime() + 8 * DIA)
+  const ordem = await daAtv({ tabela: 'pro_labore_lead_follows', usuarioId: req.proLaboreUser!.sub, leadIds: await leadsVisiveis(leadWhereBase(req)), status: 'PENDENTE', prazoAntes: ate, limite: 200 })
   const follows = await prisma.leadFollow.findMany({
-    where: { status: 'PENDENTE', agendadoPara: { lt: ate }, lead: { ...leadWhereBase(req) } },
-    orderBy: { agendadoPara: 'asc' }, take: 200,
+    where: { id: { in: ordem.map(o => o.registroId) } },
     select: { ...FOLLOW_SELECT, lead: { select: { id: true, nomeCliente: true, telefone: true, estagio: true, modeloInteresse: true, vendedor: { select: { id: true, nome: true } } } } },
   })
-  res.json(follows)
+  res.json(naOrdem(ordem, follows))
 })
 
 router.get('/leads/:id/follows', requireProLaboreAuth, requireModulo('crm', 'VER'), async (req: Request, res: Response) => {
   const lead = await prisma.lead.findFirst({ where: { id: String(req.params.id), ...leadWhereBase(req) }, select: { id: true } })
   if (!lead) { res.status(404).json({ error: 'Lead não encontrado' }); return }
-  res.json(await prisma.leadFollow.findMany({ where: { leadId: lead.id }, orderBy: { agendadoPara: 'desc' }, select: FOLLOW_SELECT }))
+  const ordem = await daAtv({ tabela: 'pro_labore_lead_follows', usuarioId: req.proLaboreUser!.sub, leadId: lead.id, ordem: 'desc' })
+  res.json(naOrdem(ordem, await prisma.leadFollow.findMany({ where: { id: { in: ordem.map(o => o.registroId) } }, select: FOLLOW_SELECT })))
 })
 
 const novoFollowSchema = z.object({
