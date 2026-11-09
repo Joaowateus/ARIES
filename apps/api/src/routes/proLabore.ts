@@ -1843,13 +1843,20 @@ router.get('/agenda-conclusoes', requireProLaboreAuth, requireModulo('agenda', '
     return
   }
 
-  const conclusoes = await prisma.agendaConclusao.findMany({
+  // PDF 02: a ATV decide quais ocorrências estão feitas (chave item|pessoa|dia); o selo e a hora vêm da conclusão.
+  const feitas = await prisma.atividade.findMany({
     where: {
-      dataReferencia: { gte: inicioData, lte: fimData },
-      item: { usuarioId },
-      ...(vejaEquipe ? {} : { autorId: autorIdAtual(req) }),
+      usuarioId, registroTabela: 'pro_labore_agenda_conclusoes', status: 'EXECUTADA',
+      prazo: { gte: new Date(inicioData.getTime() + 3 * 3600e3), lt: new Date(fimData.getTime() + 27 * 3600e3) },
+      ...(vejaEquipe ? {} : { responsavelId: autorIdAtual(req) }),
     },
+    select: { registroId: true },
+    orderBy: { prazo: 'asc' },
   })
+  const chaves = feitas.map(f => { const [agendaItemId, autorId, dia] = f.registroId.split('|'); return { agendaItemId, autorId, dataReferencia: new Date(`${dia}T00:00:00.000Z`) } })
+  const conclusoes = chaves.length
+    ? await prisma.agendaConclusao.findMany({ where: { OR: chaves, dataReferencia: { gte: inicioData, lte: fimData }, item: { usuarioId } } })
+    : []
   res.json(conclusoes)
 })
 
