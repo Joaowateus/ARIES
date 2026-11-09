@@ -20,6 +20,8 @@ import { avisarLigacoes } from '../lib/ligacoesAviso'
 import { gerarOcorrenciasDeRotina, rodarRegua } from '../lib/atividades'
 import { guardarRetratos } from '../lib/metricas'
 import { avaliarTodas } from '../lib/qualidade'
+import { rodarDetectoresTodas } from '../lib/recomendacoes'
+import { ajusteMensalTodas } from '../lib/ajusteMensal'
 import { avisarFollowsCredito } from '../lib/followCredito'
 import { rodarReferencias } from '../lib/smReferencias'
 import { limparEventosAntigos } from '../lib/espacoBanco'
@@ -331,7 +333,9 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   const faltas = await faltasVencidas(100, agoraDoCron(req)).catch(e => { console.error('[jornada] faltas', e); return { faltasAutomaticas: 0 } })
   // Assistente pessoal: o resumo da manhã no chat "Você" de cada vendedor.
   const manha = await enviarResumosDaManha(agoraDoCron(req)).catch(e => { console.error('[assistente] resumo da manhã', e); return { resumosManha: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas })
+  // PDF 03: Meta em risco a cada hora (as RECs abertas do mês não se repetem).
+  const metaRisco = await rodarDetectoresTodas(agoraDoCron(req), ['meta_em_risco']).catch(e => { console.error('[detectores] meta', e); return { recsCriadas: 0 } })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas, metaEmRisco: metaRisco.recsCriadas })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
@@ -361,7 +365,11 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const retratos = await guardarRetratos(agoraDoCron(req)).catch(e => { console.error('[metricas] retratos', e); return { retratosMetricas: 0 } })
   // PDF 02 · 4.8: camada de qualidade (abre e resolve as correções pendentes).
   const qualidade = await avaliarTodas(agoraDoCron(req)).catch(e => { console.error('[qualidade] avaliar', e); return { qualidadeAbertas: 0, qualidadeResolvidas: 0 } })
-  res.json({ ...qualidade, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
+  // PDF 03: os detectores rodam depois da qualidade (para juntar o que ela já apontou), uma vez por dia.
+  const detectores = await rodarDetectoresTodas(agoraDoCron(req), ['resposta_lenta', 'funil_parado', 'etapa_travando', 'atividades_acumuladas', 'credito_emperrado', 'anuncio_encarecendo']).catch(e => { console.error('[detectores] dia', e); return { recsCriadas: 0 } })
+  // PDF 03 · 4.4: no dia 1º, as sugestões de ajuste do mês que fechou (só valem com a aprovação do dono).
+  const ajuste = await ajusteMensalTodas(agoraDoCron(req)).catch(e => { console.error('[ajuste mensal]', e); return { sugestoesAjuste: 0 } })
+  res.json({ ...qualidade, ...detectores, ...ajuste, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em

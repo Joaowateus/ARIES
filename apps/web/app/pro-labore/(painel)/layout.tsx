@@ -51,6 +51,8 @@ const NAV_GROUPS: NavGroup[] = [
     { href: '/pro-labore/financeiro', label: 'Financeiro', icon: 'wallet', modulo: 'financeiro', donoOnly: true },
     { href: '/pro-labore/assistente', label: 'Análise', icon: 'compass', abas: [
       { href: '/pro-labore/assistente', label: 'Central de Inteligência', modulo: 'assistente', gestao: true },
+      // PDF 03: Recomendações do ARIES (dono e supervisor).
+      { href: '/pro-labore/recomendacoes', label: 'Recomendações', gestao: true },
       { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', modulo: 'planoCrescimento', donoOnly: true },
       { href: '/pro-labore/indicadores', label: 'Indicadores', modulo: 'indicadores', donoOnly: true },
     ] },
