@@ -10,6 +10,7 @@ import { leadWhereBase } from '../lib/escopoLead'
 import { REGRAS, avaliar } from '../lib/qualidade'
 import { ACOES, perfilDe } from '../lib/matrizAcoes'
 import { aceitePdf02 } from '../lib/aceitePdf02'
+import { TABELAS_AUDITADAS, TABELAS_DA_EQUIPE, trilha } from '../lib/trilhaAuditoria'
 import { requireDono } from '../middleware/authProLabore'
 
 const router = Router()
@@ -75,6 +76,21 @@ router.put('/qualidade/leads/:id/origem', requireProLaboreAuth, requireModulo('c
 // Matriz de ações (4.7), para consulta em Configurações.
 router.get('/qualidade/matriz', requireProLaboreAuth, async (req: Request, res: Response) => {
   res.json({ meuPerfil: perfilDe(req.proLaboreUser!), acoes: Object.entries(ACOES).map(([chave, a]) => ({ chave, ...a })) })
+})
+
+// Trilha de auditoria (4.7 "ver a auditoria"): dono vê tudo; supervisor, a da equipe.
+router.get('/auditoria/eventos', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const papel = req.proLaboreUser!.papel
+  const q = req.query
+  const dia = (v: unknown, fim = false) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(new Date(`${v}T03:00:00.000Z`).getTime() + (fim ? 86_400_000 : 0)) : undefined)
+  const itens = await trilha(req.proLaboreUser!.sub, papel, {
+    tabela: typeof q.tabela === 'string' && q.tabela ? q.tabela : undefined,
+    registroId: typeof q.registroId === 'string' && q.registroId ? q.registroId : undefined,
+    autorId: typeof q.autorId === 'string' && q.autorId ? q.autorId : undefined,
+    desde: dia(q.desde), ate: dia(q.ate, true),
+  })
+  const tabelas = papel === 'DONO' ? Object.keys(TABELAS_AUDITADAS) : TABELAS_DA_EQUIPE
+  res.json({ tabelas: tabelas.map(t => ({ chave: t, nome: TABELAS_AUDITADAS[t] })), itens })
 })
 
 // PDF 02 · seção 9: teste de aceite calculado na produção (só o dono).

@@ -3638,6 +3638,10 @@ export const qualidadeApi = {
   doLead: (id: string) => request<{ classificacao: 'CONFIRMADO' | 'INCOMPLETO' | 'SUSPEITO'; correcoes: CorrecaoPendente[] }>(`/pro-labore/qualidade/leads/${id}`),
   corrigirOrigem: (id: string, origemLista: 'INDICACAO' | 'LOJA_FISICA' | 'RETORNO_ESPONTANEO') => request<{ origemTipo: string; origemLista: string; origemConfiabilidade: string }>(`/pro-labore/qualidade/leads/${id}/origem`, { method: 'PUT', body: JSON.stringify({ origemLista }) }),
   aceitePdf02: () => request<AceitePdf02>('/pro-labore/qualidade/aceite-pdf02'),
+  trilha: (f: { tabela?: string; registroId?: string; desde?: string; ate?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][])
+    return request<{ tabelas: Array<{ chave: string; nome: string }>; itens: EventoAuditoria[] }>(`/pro-labore/auditoria/eventos?${q}`)
+  },
   matriz: () => request<{ meuPerfil: string; acoes: Array<{ chave: string; nome: string; perfis: string[]; nota?: string }> }>('/pro-labore/qualidade/matriz'),
 }
 
@@ -3649,3 +3653,5 @@ export interface AceitePdf02 {
   regua: { porEtapa: Record<string, number>; depoisDeFeita: number; foraDoTempo: number; passa: boolean }
   origem: { porTipo: Array<{ tipo: string; total: number }>; semOrigem: number; desconhecidas: number; passa: boolean }
 }
+
+export interface EventoAuditoria { id: string; tabela: string; oQue: string; registroId: string; acao: 'CRIACAO' | 'ALTERACAO' | 'EXCLUSAO'; campo: string | null; valorAnterior: string | null; valorNovo: string | null; autorOrigem: string; quem: string; em: string }
