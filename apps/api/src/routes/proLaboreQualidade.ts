@@ -9,6 +9,8 @@ import { requireModulo } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
 import { REGRAS, avaliar } from '../lib/qualidade'
 import { ACOES, perfilDe } from '../lib/matrizAcoes'
+import { aceitePdf02 } from '../lib/aceitePdf02'
+import { requireDono } from '../middleware/authProLabore'
 
 const router = Router()
 const vejaEquipe = (req: Request) => ['DONO', 'SUPERVISOR'].includes(req.proLaboreUser!.papel)
@@ -73,6 +75,11 @@ router.put('/qualidade/leads/:id/origem', requireProLaboreAuth, requireModulo('c
 // Matriz de ações (4.7), para consulta em Configurações.
 router.get('/qualidade/matriz', requireProLaboreAuth, async (req: Request, res: Response) => {
   res.json({ meuPerfil: perfilDe(req.proLaboreUser!), acoes: Object.entries(ACOES).map(([chave, a]) => ({ chave, ...a })) })
+})
+
+// PDF 02 · seção 9: teste de aceite calculado na produção (só o dono).
+router.get('/qualidade/aceite-pdf02', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  res.json(await aceitePdf02(req.proLaboreUser!.sub))
 })
 
 export default router
