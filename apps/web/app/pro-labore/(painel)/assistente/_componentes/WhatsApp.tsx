@@ -171,7 +171,7 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
           {aba === 'visao' && (
             !resumoAtual ? <div className="pl-hint">Carregando…</div> : (
               <div className="pl-as-visao">
-                <KpisAssistente resumo={resumoAtual} />
+                <KpisAssistente resumo={resumoAtual} vendedorId={vendedorId} />
                 {resumoAtual.totais.aguardandoAgora > 0 && (
                   <button type="button" className="pl-as-fila" onClick={() => setAba('conversas')}>
                     <b>{resumoAtual.totais.aguardandoAgora} lead{resumoAtual.totais.aguardandoAgora > 1 ? 's' : ''} esperando resposta</b>
