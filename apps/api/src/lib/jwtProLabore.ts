@@ -11,6 +11,8 @@ export interface ProLaboreJwtPayload {
   // SDR (pré-venda): vendedor que vê também os leads que qualifica.
   sdr?: boolean
   smMembroId?: string
+  // PDF 04: função de quem não vende (lida do banco a cada pedido; não vai no token).
+  funcao?: 'GESTOR_TRAFEGO' | 'FINANCEIRO' | null
 }
 
 export function signProLaboreToken(payload: ProLaboreJwtPayload): string {

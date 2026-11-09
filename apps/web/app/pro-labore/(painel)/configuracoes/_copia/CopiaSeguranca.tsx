@@ -96,7 +96,7 @@ export function CopiaSeguranca() {
       {detalhe && (
         <div className="pl-table-wrap" style={{ marginTop: 12, maxHeight: 320, overflow: 'auto' }}>
           <table className="pl-table"><thead><tr><th>Tabela</th><th style={{ textAlign: 'right' }}>Registros</th></tr></thead>
-            <tbody>{detalhe.tabelas.map(t => <tr key={t.nome}><td>{t.nome.replace(/^pro_labore_/, '').replace(/_/g, ' ')}</td><td style={{ textAlign: 'right' }}>{num(t.linhas)}</td></tr>)}</tbody>
+            <tbody>{detalhe.tabelas.map(t => <tr key={t.nome}><td>{t.nome.replace(/^pro_labore_/, '').replace(/copiloto/g, 'aries').replace(/_/g, ' ')}</td><td style={{ textAlign: 'right' }}>{num(t.linhas)}</td></tr>)}</tbody>
           </table>
         </div>
       )}

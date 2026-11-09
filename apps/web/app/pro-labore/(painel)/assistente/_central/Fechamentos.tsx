@@ -38,7 +38,7 @@ export function Fechamentos() {
     <>
       <section className="ic-card">
         <div className="ic-cab">
-          <div><h2>Fechamento de hoje</h2><p className="ic-sub">Cada aba tem o botão &quot;Enviar relatório para o Assistente Comercial&quot;. Também dá para enviar daqui. Reenviar com os mesmos números não duplica; números novos viram outra versão.</p></div>
+          <div><h2>Fechamento de hoje</h2><p className="ic-sub">Cada aba tem o botão &quot;Enviar relatório para o ARIES&quot;. Também dá para enviar daqui. Reenviar com os mesmos números não duplica; números novos viram outra versão.</p></div>
         </div>
         {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
         <div className="ic-fontes">

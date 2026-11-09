@@ -107,7 +107,7 @@ export function Hoje({ dados, pessoa, escrevendo, onDados, irPara, abrirPessoa, 
                   {a.refTipo === 'CONVERSA' && a.refId && <button type="button" className="cp-link" onClick={() => irPara('conversas', a.refId!)}>Abrir e sugerir resposta</button>}
                   {a.refTipo === 'LEAD' && (a.refId ? <a className="cp-link" href={`/pro-labore/leads?lead=${a.refId}`}>Abrir o lead</a> : <Link className="cp-link" href="/pro-labore/leads">Abrir o CRM</Link>)}
                   {a.refTipo === 'AGENDA' && <Link className="cp-link" href="/pro-labore/agenda">Abrir a agenda</Link>}
-                  {a.refTipo === 'VENDEDOR' && a.refId && <button type="button" className="cp-link" onClick={() => abrirPessoa(a.refId!)}>Ver o copiloto dele</button>}
+                  {a.refTipo === 'VENDEDOR' && a.refId && <button type="button" className="cp-link" onClick={() => abrirPessoa(a.refId!)}>Ver o desenvolvimento dele</button>}
                   {a.tipo === 'ESTUDO' && <button type="button" className="cp-link" onClick={() => irPara('estudar')}>Abrir a trilha</button>}
                   {!ro && a.status === 'PENDENTE' && <button type="button" className="cp-link mudo" onClick={() => marcar(a, 'IGNORADA')}>Dispensar</button>}
                   {!ro && a.status === 'IGNORADA' && <button type="button" className="cp-link mudo" onClick={() => marcar(a, 'PENDENTE')}>Voltar</button>}
@@ -173,7 +173,7 @@ export function Hoje({ dados, pessoa, escrevendo, onDados, irPara, abrirPessoa, 
 
       {equipe && f.equipe && f.equipe.length > 0 && (
         <section className="cp-card" aria-label="Equipe">
-          <div className="cp-card-cab"><div><h2>A equipe hoje</h2><p className="cp-sub">Do menor para o maior índice: quem precisa de você primeiro. Clique no nome para abrir o copiloto da pessoa.</p></div></div>
+          <div className="cp-card-cab"><div><h2>A equipe hoje</h2><p className="cp-sub">Do menor para o maior índice: quem precisa de você primeiro. Clique no nome para abrir o desenvolvimento da pessoa.</p></div></div>
           <div className="cp-tabela-rola">
             <table className="cp-tabela">
               <thead><tr><th>Pessoa</th><th className="num">Índice</th><th className="num">Em aberto</th><th className="num">Parados</th><th className="num">Sem abordar</th><th className="num">Novos 7d</th><th className="num">Avanços 7d</th><th className="num">Novo → abordado</th><th className="num">1ª abordagem</th><th className="num">Agenda</th><th className="num">WhatsApp esperando</th></tr></thead>

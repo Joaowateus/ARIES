@@ -55,7 +55,7 @@ router.get('/recomendacoes/:id', requireProLaboreAuth, async (req: Request, res:
   try { res.json(await detalhe(String(req.params.id), quem(req))) } catch (e) { falha(res, e) }
 })
 router.post('/recomendacoes/:id/aceitar', requireProLaboreAuth, async (req: Request, res: Response) => {
-  try { res.json(await aceitar(String(req.params.id), quem(req))) } catch (e) { falha(res, e) }
+  try { res.json(await aceitar(String(req.params.id), quem(req), new Date(), typeof req.body?.atribuirA === 'string' ? req.body.atribuirA : null)) } catch (e) { falha(res, e) }
 })
 router.post('/recomendacoes/:id/descartar', requireProLaboreAuth, async (req: Request, res: Response) => {
   try { res.json(await descartar(String(req.params.id), quem(req), String(req.body?.motivo ?? ''))) } catch (e) { falha(res, e) }

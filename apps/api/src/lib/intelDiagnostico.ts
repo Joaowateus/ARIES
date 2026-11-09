@@ -206,7 +206,7 @@ export function gerarDiagnosticos(d: DadosCentral, extras: { acoesAtrasadas: num
       chave: 'whats-esperando', departamento: 'COMERCIAL', severidade: 'ALTO', problema: 'Leads qualificados esperando resposta no WhatsApp.',
       evidencia: `${eq.whatsapp.esperando} conversas esperando o vendedor agora.`, meta: '0', atual: String(eq.whatsapp.esperando), diferenca: String(eq.whatsapp.esperando),
       hipoteses: ['Vendedor fora do WhatsApp no horário.', 'Aviso do assistente não visto.'], confianca: 'ALTA', impacto: { vendas: null, faturamento: null, texto: 'Lead qualificado que espera esfria.' },
-      acao: 'Responder hoje as conversas esperando (o Copiloto de cada vendedor sugere a resposta).', indicador: { chave: 'whats_esperando', nome: 'Conversas esperando resposta', atual: eq.whatsapp.esperando, meta: 0, melhorQuando: 'MENOR', unidade: 'NUM' }, peso: eq.whatsapp.esperando,
+      acao: 'Responder hoje as conversas esperando (o ARIES sugere a resposta a cada vendedor).', indicador: { chave: 'whats_esperando', nome: 'Conversas esperando resposta', atual: eq.whatsapp.esperando, meta: 0, melhorQuando: 'MENOR', unidade: 'NUM' }, peso: eq.whatsapp.esperando,
     })
     const linhas = eq.linhas.filter(l => l.carteira >= 10 && l.conversaoLeadAbordado != null)
     const media = linhas.length ? linhas.reduce((s, l) => s + (l.conversaoLeadAbordado as number), 0) / linhas.length : null

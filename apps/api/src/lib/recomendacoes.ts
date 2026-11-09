@@ -19,7 +19,7 @@ export async function modoRoteamento(usuarioId: string): Promise<Roteamento> {
 }
 
 async function supervisorDe(usuarioId: string): Promise<string | null> {
-  const s = await prisma.vendedor.findFirst({ where: { usuarioId, ativo: true, papel: 'SUPERVISOR' }, select: { id: true }, orderBy: { criadoEm: 'asc' } })
+  const s = await prisma.vendedor.findFirst({ where: { usuarioId, ativo: true, papel: 'SUPERVISOR', funcao: null, vende: true }, select: { id: true }, orderBy: { criadoEm: 'asc' } })
   return s?.id ?? null
 }
 
@@ -147,14 +147,20 @@ const ACOES_POR_DETECTOR: Record<string, string[]> = {
 const autorDe = (quem: { id: string; papel: string }) => `USUARIO|${quem.id}|${quem.papel}|rec`
 
 /** Aceitar: só quem recebeu pelo roteamento (ou o dono). Cria as Atividades com a REC como origem. */
-export async function aceitar(recId: string, quem: { id: string; papel: string; usuarioId: string }, agora = new Date()) {
+export async function aceitar(recId: string, quem: { id: string; papel: string; usuarioId: string }, agora = new Date(), atribuirA?: string | null) {
   const rec = await prisma.recomendacao.findFirst({ where: { id: recId, usuarioId: quem.usuarioId } })
   if (!rec || !podeVerRec(rec, quem)) throw new ErroRec(404, 'Recomendação não encontrada')
   if (rec.status !== 'NOVA') throw new ErroRec(409, 'Esta recomendação já foi tratada')
   if (!podeDecidir(rec, quem)) throw new ErroRec(403, 'Só quem recebeu a recomendação pode aceitar ou descartar')
   const antes = await indicador(rec, { inicio: diaBrt(agora.getTime() - 14 * DIA), fim: diaBrt(agora.getTime() - DIA) }, agora)
   const passos = (ACOES_POR_DETECTOR[rec.detector] ?? [rec.acaoSugerida]).slice(0, rec.tipo === 'FUNCIONANDO' ? 1 : 3)
-  const resp = rec.destinatarioId ?? quem.usuarioId
+  // PDF 04 · "Aceitar e atribuir": dono e supervisor escolhem quem executa (alguém ativo da conta).
+  let resp = rec.destinatarioId ?? quem.usuarioId
+  if (atribuirA && (quem.papel === 'DONO' || quem.papel === 'SUPERVISOR')) {
+    const p = await prisma.vendedor.findFirst({ where: { id: atribuirA, usuarioId: quem.usuarioId, ativo: true }, select: { id: true } })
+    if (!p) throw new ErroRec(400, 'Pessoa não encontrada para atribuir')
+    resp = p.id
+  }
   await prisma.$transaction([
     prisma.recomendacao.update({ where: { id: rec.id }, data: { status: 'ACEITA', aceitaEm: agora, decididoPor: quem.id, indicadorAntes: antes as unknown as Prisma.InputJsonValue, auditoriaAutor: autorDe(quem) } }),
     prisma.atividade.createMany({

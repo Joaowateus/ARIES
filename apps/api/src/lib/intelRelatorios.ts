@@ -37,7 +37,7 @@ function indicadoresDo(modulo: ModuloRelatorio, dia: DadosCentral, mes: DadosCen
       ind('fechados_dia', 'Fechamentos no dia (CRM)', c.FECHADO, 'NUM', f, 'leads que alcançaram Fechado no dia', 'CRM'),
       ind('leads_mes', 'Leads no mês', mes.metas.leadsNecessarios.geradosNoMes, 'NUM', 'Jornada de compra (CRM)', 'leads criados do dia 1 até hoje', 'CRM', mes.metas.leadsNecessarios.comConversaoAtual),
       ...mes.funil.referencia.conversoes.map((v, i) => ind(`conv_${i}`, ['Lead → abordado', 'Abordado → negociação', 'Negociação → proposta', 'Proposta → fechamento'][i], v == null ? null : v * 100, 'PCT', 'Coorte de referência (90 a 7 dias)', 'avançaram ÷ elegíveis da etapa anterior', 'REALIZADO', mes.funil.metasConversao[i] * 100)),
-      ind('sem_abordar', 'Leads novos sem abordagem', mes.equipe?.semAbordar ?? null, 'NUM', 'Copiloto (CRM)', 'leads em Novo há mais de 1 dia', 'CRM', 0),
+      ind('sem_abordar', 'Leads novos sem abordagem', mes.equipe?.semAbordar ?? null, 'NUM', 'ARIES (CRM)', 'leads em Novo há mais de 1 dia', 'CRM', 0),
     ]
   }
   if (modulo === 'TRAFEGO') {

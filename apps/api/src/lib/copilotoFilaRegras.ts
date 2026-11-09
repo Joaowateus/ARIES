@@ -83,7 +83,7 @@ const PASSO_PARADO: Record<string, string> = {
 export function motivosDe(e: EntradaFila): MotivoFila[] {
   const m: MotivoFila[] = []
   const tem = (t: string) => e.etiquetas.includes(t)
-  if (e.conversa?.situacao === 'ESPERANDO') m.push({ tipo: 'WHATS_ESPERANDO', texto: `Esperando sua resposta no WhatsApp há ${tempo(e.conversa.horas)}`, passo: 'Responda agora: quem responde em minutos vende mais. O Copiloto sugere a mensagem.' })
+  if (e.conversa?.situacao === 'ESPERANDO') m.push({ tipo: 'WHATS_ESPERANDO', texto: `Esperando sua resposta no WhatsApp há ${tempo(e.conversa.horas)}`, passo: 'Responda agora: quem responde em minutos vende mais. O ARIES sugere a mensagem.' })
   if (e.conversa?.situacao === 'SEM_RESPOSTA') m.push({ tipo: 'WHATS_SEM_RESPOSTA', texto: `A última mensagem é do cliente, sem resposta há ${tempo(e.conversa.horas)}`, passo: 'Retome com uma pergunta sobre o que ele precisa para decidir.' })
   if (tem('CREDITO_APROVADO')) m.push({ tipo: 'CREDITO_APROVADO', texto: 'Crédito aprovado na pré-análise', passo: 'Ligue e marque a assinatura ou a visita: é a venda mais perto de fechar.' })
   if (e.follow) {

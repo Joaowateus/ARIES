@@ -103,7 +103,7 @@ export function ImportacaoNeon() {
               <tbody>
                 {visiveis.map(t => (
                   <tr key={t.tabela} data-tabela-neon={t.tabela}>
-                    <td>{t.rotulo ?? <span className="pl-hint">{t.tabela.replace(/^pro_labore_/, '').replace(/_/g, ' ')}</span>}</td>
+                    <td>{t.rotulo ?? <span className="pl-hint">{t.tabela.replace(/^pro_labore_/, '').replace(/copiloto/g, 'aries').replace(/_/g, ' ')}</span>}</td>
                     <td style={{ textAlign: 'right' }}>{num(t.total)}</td>
                     <td style={{ textAlign: 'right' }}>{num(t.jaExistem)}</td>
                     <td style={{ textAlign: 'right' }}>{num(t.casados)}</td>

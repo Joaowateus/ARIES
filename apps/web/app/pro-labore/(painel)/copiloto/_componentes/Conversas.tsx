@@ -29,7 +29,7 @@ export function Conversas({ pessoa, inicial, somenteLeitura }: { pessoa?: string
         <h3>{lista.conectado ? 'Nenhuma conversa de lead pedindo atenção' : 'O WhatsApp ainda não está ligado ao sistema'}</h3>
         <p className="cp-sub">{lista.conectado
           ? 'Quando um lead chamar e o assistente passar a conversa para você, ela aparece aqui com a sugestão de resposta.'
-          : 'O copiloto lê as conversas de lead que passam pelo Assistente Comercial. Conversas pessoais nunca são lidas.'}</p>
+          : 'O ARIES lê as conversas de lead que passam por Conversas. Conversas pessoais nunca são lidas.'}</p>
         {!lista.conectado && <p style={{ marginTop: 10 }}><Link className="pl-btn pl-btn-ghost" href="/pro-labore/whatsapp">Conectar o WhatsApp</Link></p>}
       </div>
     )

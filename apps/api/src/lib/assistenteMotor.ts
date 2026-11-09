@@ -1038,7 +1038,7 @@ export async function vincularOuCriarLead(
   const respostas = (conversa.respostas ?? {}) as Record<string, string>
   const resumo = linhasDaConversa(cfg, conversa).map(l => `${l.rotulo}: ${l.valor}`)
   const observacao = [
-    `Pré-atendido pelo Assistente Comercial no WhatsApp${conversa.origem ? ` (origem: ${ROTULO_ORIGEM[conversa.origem] ?? conversa.origem})` : ''}.`,
+    `Pré-atendido pelo ARIES no WhatsApp${conversa.origem ? ` (origem: ${ROTULO_ORIGEM[conversa.origem] ?? conversa.origem})` : ''}.`,
     respostas._inicial ? `Primeira mensagem: "${mascararDadosPessoais(respostas._inicial)}"` : null,
     ...resumo,
   ].filter(Boolean).join('\n')
@@ -1214,14 +1214,14 @@ async function completarLead(leadId: string, cfg: ConfigAssistente, conversa: { 
   const resumo = linhasDaConversa(cfg, conversa).map(l => `${l.rotulo}: ${l.valor}`)
   const nome = respostaDoCampo(cfg, respostas, 'nomeCompleto')
   const nomeAutomatico = [conversa.nomeContato, formatarTelefone(conversa.numeroContato)].includes(lead.nomeCliente)
-  const jaTemResumo = lead.observacao?.includes('Pré-atendido pelo Assistente Comercial')
+  const jaTemResumo = lead.observacao?.includes('Pré-atendido pelo ARIES')
   await prisma.lead.update({
     where: { id: leadId },
     data: {
       ...(nome && nomeAutomatico && { nomeCliente: nome }),
       ...(!lead.modeloInteresse && { modeloInteresse: respostaDoCampo(cfg, respostas, 'modeloInteresse') }),
       ...(!jaTemResumo && resumo.length && {
-        observacao: [lead.observacao, 'Pré-atendido pelo Assistente Comercial no WhatsApp:', ...resumo].filter(Boolean).join('\n'),
+        observacao: [lead.observacao, 'Pré-atendido pelo ARIES no WhatsApp:', ...resumo].filter(Boolean).join('\n'),
       }),
     },
   })

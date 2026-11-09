@@ -12,6 +12,10 @@ import { AvisoBanco } from './_banco/AvisoBanco'
 import { PaletaComandos } from './_comando/PaletaComandos'
 import { AvisoLigacao } from './_ligacoes/AvisoLigacao'
 import type { LigacaoAgora } from '@/lib/proLaboreApi'
+import { telasApi, type PapelHoje, type VersaoTelas } from '@/lib/proLaboreApi'
+import { ABAS, GRUPOS, abaDaRota, type AbaAries } from '@/lib/abasAries'
+import { TelaPadrao, TelasContext } from './_padrao/Padrao'
+import { AtalhoAries } from './_padrao/PergunteChat'
 
 // `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
 // paraEquipe: aparece para toda a equipe mesmo sem o módulo (a página mostra a versão pessoal).
@@ -43,14 +47,14 @@ const NAV_GROUPS: NavGroup[] = [
     // Cada vendedor tem o próprio assistente, ligado ao próprio número (escopo no backend).
     { href: '/pro-labore/whatsapp', label: 'WhatsApp', icon: 'chat', modulo: 'assistente' },
     // Cada pessoa tem o próprio copiloto (o escopo é feito no backend); o dono vê o da equipe.
-    { href: '/pro-labore/copiloto', label: 'Copiloto', icon: 'spark', modulo: 'copiloto' },
+    { href: '/pro-labore/copiloto', label: 'ARIES', icon: 'spark', modulo: 'copiloto' },
   ] },
   { label: 'Gestão', items: [
     { href: '/pro-labore/vendas', label: 'Vendas', icon: 'cart', modulo: 'vendas', donoOnly: true },
     // Salários, investimentos, custos e outros gastos, com recibo.
     { href: '/pro-labore/financeiro', label: 'Financeiro', icon: 'wallet', modulo: 'financeiro', donoOnly: true },
     { href: '/pro-labore/assistente', label: 'Análise', icon: 'compass', abas: [
-      { href: '/pro-labore/assistente', label: 'Central de Inteligência', modulo: 'assistente', gestao: true },
+      { href: '/pro-labore/assistente', label: 'Relatórios', modulo: 'assistente', gestao: true },
       // PDF 03: Recomendações do ARIES (dono e supervisor).
       { href: '/pro-labore/recomendacoes', label: 'Recomendações', gestao: true },
       { href: '/pro-labore/plano-crescimento', label: 'Plano de Crescimento', modulo: 'planoCrescimento', donoOnly: true },
@@ -83,10 +87,17 @@ const NAV_GROUPS: NavGroup[] = [
 ]
 // Nomes antigos que a busca (Ctrl+K) continua achando.
 const APELIDOS: Record<string, string[]> = {
-  '/pro-labore/whatsapp': ['Assistente Comercial'],
-  '/pro-labore/copiloto': ['Copiloto Comercial'],
+  '/pro-labore/whatsapp': ['Conversas'],
+  '/pro-labore/copiloto': ['Desenvolvimento'],
   '/pro-labore/reativacao': ['Reativação'],
-  '/pro-labore/assistente': ['Assistente Comercial (gestão)'],
+  '/pro-labore/assistente': ['Relatórios da operação'],
+}
+// PDF 04 · ícone de cada aba do menu novo (7 grupos).
+const ICONE_ABA: Record<string, NavIconName> = {
+  hoje: 'home', pergunte: 'spark', recomendacoes: 'flag', crm: 'kanban', conversas: 'chat', credito: 'shield', atividades: 'calendar', reativacao: 'refresh',
+  'estoque-demanda': 'cart', 'pos-venda': 'file', trafego: 'funnel', 'social-media': 'at', 'origem-vendas': 'chart', equipe: 'users', desenvolvimento: 'compass',
+  'rotina-auditoria': 'shield', ocorrencias: 'flag', reunioes: 'mic', 'vendas-pagamentos': 'cart', financeiro: 'wallet', 'metas-premissas': 'chart',
+  'plano-crescimento': 'chart', relatorios: 'file', playbook: 'notebook', 'base-conhecimento': 'notebook', anotacoes: 'notebook', configuracoes: 'gear',
 }
 const paginasDo = (item: NavItem): NavPagina[] => item.abas ?? [item]
 const bate = (pathname: string, href: string) => pathname === href || (href !== '/pro-labore' && pathname.startsWith(`${href}/`))
@@ -164,6 +175,23 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     return () => { cancelado = true; clearInterval(t); document.removeEventListener('visibilitychange', buscar) }
   }, [usuario, versaoBarra])
   const [gruposColapsados, setGruposColapsados] = useState<string[]>([])
+  // PDF 04 · piloto: versão das telas desta pessoa (nova ou atual) e o registro de uso de cada aba.
+  const [telas, setTelas] = useState<VersaoTelas | null>(null)
+  const [usoId, setUsoId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!usuario || usuario.papel === 'SOCIAL_MEDIA') return
+    telasApi.versao().then(setTelas).catch(() => setTelas(null))
+  }, [usuario])
+  const nova = telas?.versao === 'NOVA'
+  useEffect(() => {
+    if (!usuario || usuario.papel === 'SOCIAL_MEDIA' || !telas) return
+    const aba = abaDaRota(pathname)
+    let vivo = true
+    telasApi.usoAbrir(aba?.chave ?? pathname.replace('/pro-labore', '') ?? 'inicio', telas.versao).then(r => { if (vivo) setUsoId(r.id) }).catch(() => undefined)
+    return () => { vivo = false }
+  }, [pathname, telas, usuario])
+  // Versão nova: a tela inicial é o Hoje do papel.
+  useEffect(() => { if (nova && pathname === '/pro-labore') router.replace('/pro-labore/hoje') }, [nova, pathname, router])
 
   useEffect(() => {
     if (localStorage.getItem(CHAVE_SIDEBAR_COLAPSADA) === '1') setSidebarColapsada(true)
@@ -206,10 +234,10 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   // Sem o Dashboard liberado, a entrada do sistema vira o primeiro módulo que a pessoa tem.
   useEffect(() => {
     const a = usuario && usuario.papel !== 'DONO' ? usuario.acessos : null
-    if (!a || pathname !== '/pro-labore' || (a.painel ?? 'NENHUM') !== 'NENHUM') return
+    if (!a || nova || pathname !== '/pro-labore' || (a.painel ?? 'NENHUM') !== 'NENHUM') return
     const primeiro = NAV_GROUPS.flatMap(g => g.items).find(i => i.modulo && (a[i.modulo] ?? 'NENHUM') !== 'NENHUM')
     if (primeiro) router.replace(primeiro.href)
-  }, [usuario, pathname, router])
+  }, [usuario, pathname, router, nova])
 
   // fecha a gaveta (mobile) ao trocar de página
   useEffect(() => { setMenuAberto(false) }, [pathname])
@@ -252,7 +280,16 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const nivelModulo = nivelDe(itemAtual)
   // Sem o módulo, a aba "para a equipe" abre na versão pessoal em vez de bloquear.
   const nivelAtual = nivelModulo === 'NENHUM' && itemAtual?.paraEquipe && daEquipe ? null : nivelModulo
-  const grupos = [
+  // PDF 04 · menu novo: 7 grupos com os nomes aprovados (versão do piloto e, depois da liberação, de todos).
+  const papelHoje: PapelHoje | null = telas?.papel ?? null
+  const podeAba = (a: AbaAries) => {
+    if (isDono) return true
+    if (a.papeis && (!papelHoje || !a.papeis.includes(papelHoje))) return false
+    if (a.modulo && acessos) return (acessos[a.modulo] ?? 'NENHUM') !== 'NENHUM'
+    return true
+  }
+  const gruposNovos = GRUPOS.map(g => ({ label: g as string | null, items: ABAS.filter(a => a.grupo === g && podeAba(a)).map(a => ({ href: a.href, label: a.nome, icon: ICONE_ABA[a.chave] ?? 'home', modulo: a.modulo } as NavItem)) })).filter(g => g.items.length)
+  const gruposAntigos = [
     // Social Media: volta para o espaço dele, acima das ferramentas liberadas.
     ...(usuario.papel === 'SOCIAL_MEDIA' ? [{ label: null, items: [{ href: '/pro-labore/sm', label: 'Social Media', icon: 'at' as NavIconName }] }] : []),
     ...NAV_GROUPS.map(grupo => ({
@@ -265,13 +302,15 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
       }),
     })),
   ].filter(grupo => grupo.items.length > 0)
+  const grupos = nova ? gruposNovos : gruposAntigos
   const itensVisiveis = grupos.flatMap(g => g.items)
   const paginasVisiveis = itensVisiveis.flatMap(paginasDo)
   const itemDoMenuAtual = itemAtual ? itensVisiveis.find(i => paginasDo(i).some(p => p.href === itemAtual.href)) : undefined
-  const ativo = (item: NavItem) => item === itemDoMenuAtual
+  const abaAtual = nova ? abaDaRota(pathname) : null
+  const ativo = (item: NavItem) => (nova ? !!abaAtual && item.href === abaAtual.href : item === itemDoMenuAtual)
   const paginaAtual = itemAtual && bate(pathname, itemAtual.href) ? paginasVisiveis.find(p => p.href === itemAtual.href) : undefined
-  const grupoAtual = grupos.find(g => g.items.includes(itemDoMenuAtual as NavItem))?.label ?? null
-  const abasDoTopo = itemDoMenuAtual?.abas && itemDoMenuAtual.abas.length > 1 ? itemDoMenuAtual.abas : null
+  const grupoAtual = nova ? abaAtual?.grupo ?? null : grupos.find(g => g.items.includes(itemDoMenuAtual as NavItem))?.label ?? null
+  const abasDoTopo = !nova && itemDoMenuAtual?.abas && itemDoMenuAtual.abas.length > 1 ? itemDoMenuAtual.abas : null
   const temPagina = (item: NavItem, href: string) => paginasDo(item).some(p => p.href === href)
   const podeCrm = paginasVisiveis.some(item => item.href === '/pro-labore/leads')
   const abrirPaleta = () => { setMenuAberto(false); window.dispatchEvent(new Event('pl-abrir-paleta')) }
@@ -382,7 +421,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
           </button>
           <div className="pl-breadcrumb">
             <span>{grupoAtual ?? 'Pró-Labore'}</span>
-            {itemDoMenuAtual && <><span aria-hidden="true">/</span><b>{itemDoMenuAtual.label}</b></>}
+            {nova ? abaAtual && <><span aria-hidden="true">/</span><b>{abaAtual.nome}</b></> : itemDoMenuAtual && <><span aria-hidden="true">/</span><b>{itemDoMenuAtual.label}</b></>}
             {abasDoTopo && paginaAtual && <><span aria-hidden="true">/</span><b>{paginaAtual.label}</b></>}
           </div>
           <div className="pl-topbar-acoes">
@@ -391,6 +430,13 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
               <span>Buscar…</span>
               <kbd>Ctrl K</kbd>
             </button>
+            {telas?.podeAlternar && (
+              <button type="button" className="pl-btn" style={{ padding: '4px 10px', fontSize: '.78rem' }} data-alternar-versao
+                onClick={() => { void telasApi.alternarVersao(nova ? 'ATUAL' : 'NOVA').then(v => { setTelas(t => (t ? { ...t, ...v } : t)); router.push(v.versao === 'NOVA' ? '/pro-labore/hoje' : '/pro-labore') }) }}
+                title={telas.piloto ? 'Você está no piloto das telas novas' : 'Alternar entre a versão nova e a atual (piloto)'}>
+                {nova ? 'Voltar às telas atuais' : 'Ver as telas novas'}
+              </button>
+            )}
             <PLThemeToggle />
           </div>
         </header>
@@ -417,7 +463,10 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                   ))}
                 </nav>
               )}
-              {children}
+              <TelasContext.Provider value={{ versao: nova ? 'NOVA' : 'ATUAL', usoId, registrarAcao: (acao: string) => { if (usoId) void telasApi.usoAcao(usoId, acao).catch(() => undefined) } }}>
+                {nova && abaAtual && !abaAtual.proprio && !pathname.startsWith('/pro-labore/aba/') ? <TelaPadrao aba={abaAtual}>{children}</TelaPadrao> : children}
+                {nova && <AtalhoAries />}
+              </TelasContext.Provider>
             </>
           )}
 

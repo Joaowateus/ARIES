@@ -47,7 +47,7 @@ async function contexto(req: Request, res: Response, next: NextFunction): Promis
   next()
 }
 const escrita = (req: Request, res: Response, next: NextFunction) => {
-  if (req.copiloto!.somenteLeitura) { res.status(403).json({ error: req.copiloto!.minha ? 'Seu acesso ao Copiloto é só para ver.' : 'O copiloto de cada vendedor é dele: aqui você só acompanha.' }); return }
+  if (req.copiloto!.somenteLeitura) { res.status(403).json({ error: req.copiloto!.minha ? 'Seu acesso ao Desenvolvimento é só para ver.' : 'O copiloto de cada vendedor é dele: aqui você só acompanha.' }); return }
   next()
 }
 const soDaPessoa = (req: Request, res: Response, next: NextFunction) => {
@@ -290,7 +290,7 @@ router.get('/copiloto/conversas/:id', ...base, async (req: Request, res: Respons
 
 router.post('/copiloto/conversas/:id/sugestao', ...base, async (req: Request, res: Response) => {
   const c = req.copiloto!
-  if (c.somenteLeitura && c.minha) { res.status(403).json({ error: 'Seu acesso ao Copiloto é só para ver.' }); return }
+  if (c.somenteLeitura && c.minha) { res.status(403).json({ error: 'Seu acesso ao Desenvolvimento é só para ver.' }); return }
   const cv = await conversaDa(c, String(req.params.id))
   if (!cv) { res.status(404).json({ error: 'Conversa não encontrada' }); return }
   const mensagens = [...cv.mensagens].reverse()

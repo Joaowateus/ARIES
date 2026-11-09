@@ -116,7 +116,7 @@ export function EspacoBanco() {
           <tbody>
             {dados.tabelas.map(t => (
               <tr key={t.tabela}>
-                <td>{t.rotulo ?? <span className="pl-hint">{t.tabela.replace(/^pro_labore_/, '').replace(/_/g, ' ')}</span>}</td>
+                <td>{t.rotulo ?? <span className="pl-hint">{t.tabela.replace(/^pro_labore_/, '').replace(/copiloto/g, 'aries').replace(/_/g, ' ')}</span>}</td>
                 <td style={{ textAlign: 'right' }}>{t.linhas > 0 ? num(t.linhas) : '—'}</td>
                 <td style={{ textAlign: 'right' }}>{num(t.mb)} MB</td>
               </tr>

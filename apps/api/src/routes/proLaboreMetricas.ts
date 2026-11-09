@@ -4,14 +4,15 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
+import { papelDoUsuario, veLoja } from '../lib/papelHoje'
 import { CHAVES, fichas, historicoDaFicha, ler, mesCorrente, novaVersao, podeVer, type Escopo, type Papel, type Periodo } from '../lib/metricas'
 
 const router = Router()
 
-const papelDe = (req: Request) => req.proLaboreUser!.papel as Papel
+const papelDe = (req: Request): Papel => papelDoUsuario(req.proLaboreUser!)
 function escopoDe(req: Request): Escopo {
   const papel = papelDe(req)
-  const vejaEquipe = papel === 'DONO' || papel === 'SUPERVISOR'
+  const vejaEquipe = veLoja(papel)
   const filtro = typeof req.query.vendedorId === 'string' && req.query.vendedorId ? req.query.vendedorId : null
   // Vendedor e SDR veem só a própria produção; dono e supervisor, a loja ou um vendedor escolhido.
   return { usuarioId: req.proLaboreUser!.sub, papel, vendedorId: vejaEquipe ? filtro : req.proLaboreUser!.vendedorId ?? '__nenhum__' }
@@ -39,7 +40,7 @@ const versaoSchema = z.object({
   nome: z.string().trim().min(2).max(80).optional(),
   definicao: z.string().trim().min(2).max(400).optional(),
   responsavel: z.string().trim().min(2).max(80).optional(),
-  quemVe: z.array(z.enum(['DONO', 'SUPERVISOR', 'SDR', 'VENDEDOR', 'SOCIAL_MEDIA'])).min(1).optional(),
+  quemVe: z.array(z.enum(['DONO', 'SUPERVISOR', 'SDR', 'VENDEDOR', 'SOCIAL_MEDIA', 'TRAFEGO', 'FINANCEIRO'])).min(1).optional(),
   faixas: z.object({ bom: z.number(), critico: z.number() }).nullable().optional(),
   justificativa: z.string().trim().min(5, 'Escreva por que mudou').max(500),
 })

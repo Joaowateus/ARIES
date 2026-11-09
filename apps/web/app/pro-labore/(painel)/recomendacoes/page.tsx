@@ -6,7 +6,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { recApi, type RecResumo } from '@/lib/proLaboreApi'
-import { PageHeader } from '../../PageHeader'
+import { abaPorChave } from '@/lib/abasAries'
+import { Cabecalho, Lente } from '../_padrao/Padrao'
 import { AREA, DetalheRec, ForcaChip, STATUS } from './DetalheRec'
 
 export default function RecomendacoesPage() {
@@ -18,8 +19,11 @@ export default function RecomendacoesPage() {
   const [msg, setMsg] = useState<string | null>(null)
   const carregar = useCallback(() => recApi.listar(f).then(setD).catch(() => setD(null)), [f])
   useEffect(() => { if (gestao) void carregar() }, [carregar, gestao])
+  // Vindo do Hoje ou da Lente (?rec=): abre o detalhe direto.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { const r = new URLSearchParams(window.location.search).get('rec'); if (r) setAberta(r) }, [])
   if (!usuario) return null
-  if (!gestao) return <div className="pl-empty pl-card"><h3 style={{ margin: 0 }}>Seu acesso não inclui essa área</h3><p>As orientações para você aparecem no Copiloto.</p></div>
+  if (!gestao) return <div className="pl-empty pl-card"><h3 style={{ margin: 0 }}>Seu acesso não inclui essa área</h3><p>As orientações para você aparecem no Hoje e em Desenvolvimento.</p></div>
   const destinatarios = [...new Map((d?.itens ?? []).filter(x => x.destinatarioId).map(x => [x.destinatarioId!, x.destinatario ?? x.destinatarioId!])).entries()]
   async function rodar() {
     setMsg(null)
@@ -27,7 +31,8 @@ export default function RecomendacoesPage() {
   }
   return (
     <div>
-      <PageHeader eyebrow="Análise" title="Recomendações" subtitle="Onde está o maior ganho que ainda não pegamos" />
+      <Cabecalho aba={abaPorChave('recomendacoes')!} />
+      <div className="ar-tela"><div className="ar-trabalho">
       {d?.modo === 'SILENCIOSO' && <div className="pl-alert" style={{ marginBottom: 12 }} data-modo-silencioso>Modo silencioso: as recomendações estão indo só para o dono e o supervisor. O roteamento para a equipe é ligado pelo dono em Configurações.</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
         <select className="pl-input" style={{ width: 'auto' }} value={f.area} onChange={e => setF({ ...f, area: e.target.value })} aria-label="Área" data-filtro-area>
@@ -60,6 +65,7 @@ export default function RecomendacoesPage() {
         </div>
       )}
       {aberta && <DetalheRec id={aberta} onFechar={() => setAberta(null)} onMudou={() => void carregar()} avaliarPertinencia />}
+      </div><Lente aba="recomendacoes" aoMudar={() => void carregar()} /></div>
     </div>
   )
 }

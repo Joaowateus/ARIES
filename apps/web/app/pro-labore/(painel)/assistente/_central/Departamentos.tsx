@@ -32,7 +32,7 @@ export function Departamentos({ d }: { d: IntelCentral }) {
       {eq && (
         <section className="ic-card">
           <div className="ic-cab">
-            <div><h2>Equipe comercial</h2><p className="ic-sub">Carteira e produtividade de cada vendedor (os mesmos números do Copiloto). Abordagem e tempo pela coorte de 30 dias.</p></div>
+            <div><h2>Equipe comercial</h2><p className="ic-sub">Carteira e produtividade de cada vendedor (os mesmos números do ARIES). Abordagem e tempo pela coorte de 30 dias.</p></div>
           </div>
           <div className="ic-kpis" style={{ marginBottom: 14 }}>
             <div className="ic-kpi"><span>Leads novos sem abordagem</span><b>{eq.semAbordar}</b></div>

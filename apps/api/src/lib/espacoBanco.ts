@@ -31,7 +31,7 @@ const ROTULOS: Record<string, string> = {
   pro_labore_sm_posts: 'Instagram: posts',
   pro_labore_sm_notificacoes: 'Avisos do Social Media',
   pro_labore_agente_mensagens: 'Mensagens do Aries no WhatsApp',
-  pro_labore_copiloto_dias: 'Copiloto: relatórios do dia',
+  pro_labore_copiloto_dias: 'ARIES: relatórios do dia',
   pro_labore_notas: 'Anotações',
   pro_labore_mapas_mentais: 'Mapas mentais',
   pro_labore_vendas: 'Vendas',
