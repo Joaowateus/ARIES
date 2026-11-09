@@ -33,7 +33,7 @@ export async function aceitePdf02(usuarioId: string, agora = new Date()) {
   // 2. As 20 conversas mais recentes com primeira resposta humana depois do corte.
   const conversas = await prisma.$queryRaw<Array<{ contato: string | null; vendedor: string | null; cliente: Date; resposta: Date }>>`
     SELECT cv."nomeContato" contato, v.nome vendedor,
-      (SELECT min(c."enviadaEm") FROM pro_labore_assistente_mensagens c WHERE c."conversaId" = r."conversaId" AND c.remetente = 'CONTATO' AND c."enviadaEm" <= r."enviadaEm") cliente,
+      (SELECT min(c."enviadaEm") FROM pro_labore_assistente_mensagens c WHERE c."conversaId" = r."conversaId" AND c.remetente = 'CONTATO' AND c."criadoEm" <= r."criadoEm") cliente,
       r."enviadaEm" resposta
     FROM pro_labore_assistente_mensagens r
     JOIN pro_labore_assistente_conversas cv ON cv.id = r."conversaId"
@@ -63,7 +63,7 @@ export async function aceitePdf02(usuarioId: string, agora = new Date()) {
   return {
     corte: CORTE_PDF02.toISOString(),
     metricas: { periodo: p, itens: metricas, passa: metricas.every(m => m.bate !== false && !m.erro) },
-    conversas: conversas.map(c => ({ contato: c.contato, vendedor: c.vendedor, clienteEm: c.cliente, respostaEm: c.resposta, minutos: c.cliente ? Math.round((c.resposta.getTime() - c.cliente.getTime()) / 6000) / 10 : null })),
+    conversas: conversas.map(c => ({ contato: c.contato, vendedor: c.vendedor, clienteEm: c.cliente, respostaEm: c.resposta, minutos: c.cliente ? Math.max(0, Math.round((c.resposta.getTime() - c.cliente.getTime()) / 6000) / 10) : null })),
     tarefas: { itens: tarefas, passa: tarefas.every(t => t.bate && !t.semData && !t.semAutor) },
     regua: { porEtapa: Object.fromEntries(regua.map(r => [r.etapa, Number(r.n)])), depoisDeFeita: Number(depoisDeFeita.n), foraDoTempo: Number(foraDoTempo.n), passa: Number(depoisDeFeita.n) === 0 && Number(foraDoTempo.n) === 0 },
     origem: { porTipo: origens.map(o => ({ tipo: o.tipo ?? 'SEM ORIGEM', total: Number(o.n) })), semOrigem, desconhecidas, passa: semOrigem === 0 },

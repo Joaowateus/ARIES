@@ -189,13 +189,14 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
   async tempo_primeira_resposta(e, p) {
     const { ini, fim } = instantes(p)
     const rs = await q<{ min: number }>(Prisma.sql`
-      SELECT EXTRACT(EPOCH FROM (r."enviadaEm" - (SELECT min(c."enviadaEm") FROM pro_labore_assistente_mensagens c WHERE c."conversaId" = r."conversaId" AND c.remetente = 'CONTATO' AND c."enviadaEm" <= r."enviadaEm"))) / 60 AS min
+      SELECT EXTRACT(EPOCH FROM (r."enviadaEm" - (SELECT min(c."enviadaEm") FROM pro_labore_assistente_mensagens c WHERE c."conversaId" = r."conversaId" AND c.remetente = 'CONTATO' AND c."criadoEm" <= r."criadoEm"))) / 60 AS min
       FROM pro_labore_assistente_mensagens r
       JOIN pro_labore_assistente_conversas cv ON cv.id = r."conversaId"
       JOIN pro_labore_assistente_comercial a ON a.id = cv."assistenteId"
       JOIN pro_labore_vendedores v ON v.id = a."vendedorId"
       WHERE r."primeiraRespostaHumana" AND r."enviadaEm" >= ${ini} AND r."enviadaEm" < ${fim} AND v."usuarioId" = ${e.usuarioId}${vend(e, Prisma.sql`a."vendedorId"`)}`)
-    const xs = rs.map(x => Number(x.min)).filter(x => Number.isFinite(x) && x >= 0)
+    // Sem mensagem do cliente antes: fica de fora. Diferença de relógio (resposta "antes" do cliente): conta como 0.
+    const xs = rs.filter(x => x.min != null).map(x => Math.max(0, Number(x.min))).filter(x => Number.isFinite(x))
     const m = mediana(xs)
     return { valor: m == null ? null : r2(m), amostra: xs.length }
   },
