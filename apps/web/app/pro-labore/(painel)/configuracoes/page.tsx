@@ -17,6 +17,7 @@ import { ReguaCobranca } from './_jornada/ReguaCobranca'
 import { DicionarioMetricas } from './_jornada/DicionarioMetricas'
 import { SaudeDados } from './_jornada/SaudeDados'
 import { MatrizAcoes } from './_jornada/MatrizAcoes'
+import { AceitePdf02 } from './_jornada/AceitePdf02'
 
 export default function ProLaboreConfiguracoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -209,6 +210,7 @@ export default function ProLaboreConfiguracoesPage() {
       <DicionarioMetricas podeEditar={usuario?.papel === 'DONO'} />
       <SaudeDados podeReavaliar={usuario?.papel === 'DONO' || usuario?.papel === 'SUPERVISOR'} />
       <MatrizAcoes />
+      {usuario?.papel === 'DONO' && <AceitePdf02 />}
       <EspacoBanco />
       <AuditoriaDados />
 

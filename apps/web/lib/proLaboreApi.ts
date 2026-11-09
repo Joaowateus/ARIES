@@ -3637,5 +3637,15 @@ export const qualidadeApi = {
   avaliar: () => request<{ qualidadeAbertas: number; qualidadeResolvidas: number; qualidadeProblemas: number }>('/pro-labore/qualidade/avaliar', { method: 'POST', body: '{}' }),
   doLead: (id: string) => request<{ classificacao: 'CONFIRMADO' | 'INCOMPLETO' | 'SUSPEITO'; correcoes: CorrecaoPendente[] }>(`/pro-labore/qualidade/leads/${id}`),
   corrigirOrigem: (id: string, origemLista: 'INDICACAO' | 'LOJA_FISICA' | 'RETORNO_ESPONTANEO') => request<{ origemTipo: string; origemLista: string; origemConfiabilidade: string }>(`/pro-labore/qualidade/leads/${id}/origem`, { method: 'PUT', body: JSON.stringify({ origemLista }) }),
+  aceitePdf02: () => request<AceitePdf02>('/pro-labore/qualidade/aceite-pdf02'),
   matriz: () => request<{ meuPerfil: string; acoes: Array<{ chave: string; nome: string; perfis: string[]; nota?: string }> }>('/pro-labore/qualidade/matriz'),
+}
+
+export interface AceitePdf02 {
+  corte: string
+  metricas: { periodo: { inicio: string; fim: string }; itens: Array<{ chave: string; nome: string; valor: number | null; original: number | null; bate: boolean | null; erro?: string }>; passa: boolean }
+  conversas: Array<{ contato: string | null; vendedor: string | null; clienteEm: string | null; respostaEm: string; minutos: number | null }>
+  tarefas: { itens: Array<{ tipo: string; atual: number; atv: number; bate: boolean; apagadasDepois: number; semData: number; semAutor: number }>; passa: boolean }
+  regua: { porEtapa: Record<string, number>; depoisDeFeita: number; foraDoTempo: number; passa: boolean }
+  origem: { porTipo: Array<{ tipo: string; total: number }>; semOrigem: number; desconhecidas: number; passa: boolean }
 }
