@@ -1494,8 +1494,9 @@ router.get('/painel', requireProLaboreAuth, requireModulo('painel', 'VER'), asyn
     // Regra oficial da Jornada de compra (lib/jornada.ts), a mesma que o Assistente Comercial usa.
     const { fonte: _fonte, ...funil } = funilDoMesDashboard(leadsDoMes, quantidadeVendas, funilRegistro)
     const conversaoLeadVenda = funil.leads > 0 ? (quantidadeVendas / funil.leads) * 100 : 0
-    // Custo por lead automático: gasto do mês ÷ leads do mês (os mesmos do funil).
-    const custoPorLead = gastoAnuncios > 0 && funil.leads > 0 ? gastoAnuncios / funil.leads : null
+    // Custo por lead (ficha do dicionário, PDF 02): gasto do mês ÷ leads novos de tráfego pago.
+    const leadsTrafego = leadsDoMes.filter(l => l.origemTipo === 'ANUNCIO' || l.tipoLead === 'TRAFEGO').length
+    const custoPorLead = gastoAnuncios > 0 && leadsTrafego > 0 ? gastoAnuncios / leadsTrafego : null
     // Lead qualificado: chegou a Negociação (houve conversa de compra), mesmo que depois tenha sido perdido.
     // Separa quem só mandou mensagem de quem de fato negociou — o topo do funil conta os dois.
     const leadsQualificados = leadsDoMes.filter(l => !!l.vendaId || estagioAtingiu(l.estagio, 'NEGOCIACAO') || l.historico.some(h => ['NEGOCIACAO', 'PROPOSTA', 'FECHADO'].includes(h.estagioNovo))).length

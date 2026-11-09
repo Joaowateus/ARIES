@@ -86,7 +86,8 @@ async function leadsCrmPorDia(usuarioId: string, inicio: string, fim: string, so
     where: {
       usuarioId,
       criadoEm: { gte: new Date(Date.parse(`${inicio}T00:00:00Z`) + OFFSET_BRASILIA_MS), lt: new Date(Date.parse(`${somarDias(fim, 1)}T00:00:00Z`) + OFFSET_BRASILIA_MS) },
-      ...(somenteTrafego ? { tipoLead: 'TRAFEGO' } : {}),
+      // Mesmo recorte da ficha "custo por lead" (PDF 02): leads de tráfego pago.
+      ...(somenteTrafego ? { OR: [{ tipoLead: 'TRAFEGO' }, { origemTipo: 'ANUNCIO' }] } : {}),
     },
     select: { criadoEm: true },
   })

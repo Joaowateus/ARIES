@@ -5,6 +5,8 @@
 // subindo é ruim, CTR subindo é bom), sempre com seta e sinal.
 import type { AnaliseTrafego } from '@/lib/proLaboreApi'
 import { compacto, moeda, num, pct } from './formato'
+import { useState } from 'react'
+import { FichaMetricaModal } from '../../_metricas/Metricas'
 
 type Bom = 'sobe' | 'desce' | 'neutro'
 
@@ -23,16 +25,25 @@ function Delta({ atual, anterior, bom, pontos }: { atual: number | null; anterio
   )
 }
 
-function Kpi({ rotulo, valor, nota, atual, anterior, bom, pontos, destaque }: {
+function Kpi({ rotulo, valor, nota, atual, anterior, bom, pontos, destaque, ficha }: {
   rotulo: string; valor: string; nota?: string
   atual: number | null; anterior: number | null; bom: Bom; pontos?: boolean; destaque?: boolean
+  // PDF 02: métrica do dicionário — tocar no número abre a ficha.
+  ficha?: string
 }) {
-  return (
-    <div className={`pl-kpi pl-sv-kpi ${destaque ? 'pl-tf-kpi-destaque' : ''}`}>
+  const [aberta, setAberta] = useState(false)
+  const corpo = (
+    <>
       <div className="pl-kpi-label">{rotulo}</div>
       <div className="pl-kpi-value">{valor}</div>
       <div className="pl-kpi-foot"><Delta atual={atual} anterior={anterior} bom={bom} pontos={pontos} /></div>
       {nota && <div className="pl-sv-kpi-nota">{nota}</div>}
+    </>
+  )
+  return (
+    <div className={`pl-kpi pl-sv-kpi ${destaque ? 'pl-tf-kpi-destaque' : ''}`} data-kpi-metrica={ficha}>
+      {ficha ? <button type="button" className="pl-kpi-ficha" onClick={() => setAberta(true)} title="Ver a ficha da métrica">{corpo}</button> : corpo}
+      {ficha && aberta && <FichaMetricaModal chave={ficha} onFechar={() => setAberta(false)} />}
     </div>
   )
 }
@@ -59,7 +70,7 @@ export default function KpisTrafego({ analise }: { analise: AnaliseTrafego }) {
       {t.lpv > 0 && <Kpi rotulo="Custo por visualização" valor={moeda(d.custoLpv, c)} nota={`${num(t.lpv)} visualizações da página`} atual={d.custoLpv} anterior={da.custoLpv} bom="desce" />}
       {t.leads > 0 && <Kpi rotulo="CPL (Meta)" valor={moeda(d.cpl, c)} nota={`${num(t.leads)} leads de formulário/site`} atual={d.cpl} anterior={da.cpl} bom="desce" />}
       {crm.leads != null && <Kpi rotulo="Leads no CRM" valor={num(crm.leads)} nota={crm.somenteTrafego ? 'Marcados como “Tráfego”' : 'Todos os cadastrados'} atual={crm.leads} anterior={crm.leadsAnterior} bom="sobe" />}
-      {crm.leads != null && <Kpi rotulo="Custo por lead (CRM)" valor={moeda(crm.custoReal, c)} nota="Investimento ÷ leads no CRM" atual={crm.custoReal} anterior={crm.leadsAnterior ? ta.gasto / crm.leadsAnterior : null} bom="desce" destaque />}
+      {crm.leads != null && <Kpi rotulo="Custo por lead (CRM)" valor={moeda(crm.custoReal, c)} nota={crm.somenteTrafego ? 'Investimento ÷ leads novos de tráfego pago' : 'Investimento ÷ todos os leads no CRM'} ficha={crm.somenteTrafego ? 'custo_por_lead' : undefined} atual={crm.custoReal} anterior={crm.leadsAnterior ? ta.gasto / crm.leadsAnterior : null} bom="desce" destaque />}
       {t.conversasProf2 > 0 && <Kpi rotulo="Conversas engajadas" valor={pct(d.taxaConversaEngajada)} nota={`${num(t.conversasProf2)} com 2+ mensagens · ${moeda(d.custoConversaEngajada, c)} cada`} atual={d.taxaConversaEngajada} anterior={da.taxaConversaEngajada} bom="sobe" pontos />}
       {t.cliquesSaida > 0 && <Kpi rotulo="CTR de saída" valor={pct(d.ctrSaida, 2)} nota={`${num(t.cliquesSaida)} cliques que saíram da Meta`} atual={d.ctrSaida} anterior={da.ctrSaida} bom="sobe" pontos />}
       {t.engajamento > 0 && <Kpi rotulo="Engajamento" valor={pct(d.taxaEngajamento, 2)} nota={`${compacto(t.engajamento)} interações · ${num(t.comentarios)} comentários · ${num(t.salvamentos)} salvos`} atual={d.taxaEngajamento} anterior={da.taxaEngajamento} bom="sobe" pontos />}
