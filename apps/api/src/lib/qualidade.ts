@@ -32,10 +32,23 @@ export async function detectar(usuarioId: string, agora = new Date()): Promise<P
     where: { usuarioId, perdidoEm: null, vendaId: null },
     select: { id: true, nomeCliente: true, telefone: true, vendedorId: true, etapa: true, formaPagamento: true, origemConfiabilidade: true, origemTipo: true },
   })
+  // Decisão do dono (09/11): a correção de origem só é pedida para lead em
+  // movimento — criado, com mudança de etapa ou com mensagem no WhatsApp nos
+  // últimos 30 dias. Lead de anúncio sem campanha identificada não gera
+  // pendência (a lista fechada não serve para ele): fica incompleto e conta
+  // como anúncio nas métricas.
+  const desde = new Date(agora.getTime() - 30 * DIA)
+  const emMovimento = new Set((await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT l.id FROM pro_labore_leads l
+    WHERE l."usuarioId" = ${usuarioId} AND l."perdidoEm" IS NULL AND l."vendaId" IS NULL AND l."origemConfiabilidade" = 'INCOMPLETO'
+      AND (l."criadoEm" >= ${desde}
+        OR EXISTS (SELECT 1 FROM pro_labore_lead_estagio_historico h WHERE h."leadId" = l.id AND h."criadoEm" >= ${desde})
+        OR EXISTS (SELECT 1 FROM pro_labore_assistente_conversas cv JOIN pro_labore_assistente_mensagens m ON m."conversaId" = cv.id
+                   WHERE cv."leadId" = l.id AND m.remetente IN ('CONTATO', 'VENDEDOR') AND m."enviadaEm" >= ${desde}))`).map(r => r.id))
   const porTelefone = new Map<string, typeof abertos>()
   for (const l of abertos) {
     const p = (r: string, falta: string) => out.push({ tabela: 'pro_labore_leads', id: l.id, leadId: l.id, regra: r, classificacao: REGRAS[r].classificacao, oQueFalta: falta, responsavelId: l.vendedorId ?? usuarioId })
-    if (l.origemConfiabilidade === 'INCOMPLETO') p('ORIGEM_NAO_IDENTIFICADA', l.origemTipo === 'ANUNCIO' ? 'Veio de anúncio, mas a campanha não foi identificada: confirme de onde o lead veio' : 'Escolha de onde o lead veio (indicação, loja física ou retorno espontâneo)')
+    if (l.origemConfiabilidade === 'INCOMPLETO' && l.origemTipo !== 'ANUNCIO' && emMovimento.has(l.id)) p('ORIGEM_NAO_IDENTIFICADA', 'Escolha de onde o lead veio (indicação, loja física ou retorno espontâneo)')
     if (!digitos(l.telefone)) p('LEAD_SEM_TELEFONE', 'Falta o telefone do cliente')
     if (!l.vendedorId) p('LEAD_SEM_RESPONSAVEL', 'Falta o responsável pelo lead')
     if (l.formaPagamento === 'A_VISTA' && (l.etapa === 'MQL' || l.etapa === 'SQL')) p('A_VISTA_EM_CREDITO', `Cliente à vista não passa por ${l.etapa}: confira a forma de pagamento ou a etapa`)
@@ -73,7 +86,12 @@ export async function avaliar(usuarioId: string, agora = new Date()) {
   const atuais = new Map(problemas.map(p => [chave(p.tabela, p.id, p.regra), p]))
   const abertas = await prisma.correcaoPendente.findMany({ where: { usuarioId, status: 'ABERTA' } })
   const jaAbertas = new Set(abertas.map(c => chave(c.registroTabela, c.registroId, c.regra)))
-  const resolver = abertas.filter(c => !atuais.has(chave(c.registroTabela, c.registroId, c.regra))).map(c => c.id)
+  const saem = abertas.filter(c => !atuais.has(chave(c.registroTabela, c.registroId, c.regra)))
+  // Origem que continua incompleta e saiu da lista pela regra do dono (lead parado ou de anúncio): dispensada, não resolvida.
+  const aindaIncompletos = new Set((await prisma.lead.findMany({ where: { id: { in: saem.filter(c => c.regra === 'ORIGEM_NAO_IDENTIFICADA').map(c => c.registroId) }, origemConfiabilidade: 'INCOMPLETO' }, select: { id: true } })).map(l => l.id))
+  const dispensar = saem.filter(c => c.regra === 'ORIGEM_NAO_IDENTIFICADA' && aindaIncompletos.has(c.registroId)).map(c => c.id)
+  const resolver = saem.filter(c => !dispensar.includes(c.id)).map(c => c.id)
+  if (dispensar.length) await prisma.correcaoPendente.updateMany({ where: { id: { in: dispensar } }, data: { status: 'DISPENSADA', resolvidaEm: agora } })
   if (resolver.length) await prisma.correcaoPendente.updateMany({ where: { id: { in: resolver } }, data: { status: 'RESOLVIDA', resolvidaEm: agora } })
   const novas = problemas.filter(p => !jaAbertas.has(chave(p.tabela, p.id, p.regra)))
   if (novas.length) await prisma.correcaoPendente.createMany({ data: novas.map(p => ({ usuarioId, registroTabela: p.tabela, registroId: p.id, leadId: p.leadId, regra: p.regra, classificacao: p.classificacao, oQueFalta: p.oQueFalta, responsavelId: p.responsavelId })), skipDuplicates: true })
@@ -95,7 +113,7 @@ export async function avaliar(usuarioId: string, agora = new Date()) {
     const dados = { classificacao: r.c, motivo: r.motivos.join('; '), regra: r.regras.join(','), avaliadoEm: agora }
     await prisma.confiabilidade.upsert({ where: { registroTabela_registroId: { registroTabela: r.tabela, registroId: r.id } }, create: { usuarioId, registroTabela: r.tabela, registroId: r.id, ...dados }, update: dados })
   }
-  return { qualidadeAbertas: novas.length, qualidadeResolvidas: resolver.length, qualidadeProblemas: problemas.length }
+  return { qualidadeAbertas: novas.length, qualidadeResolvidas: resolver.length, qualidadeDispensadas: dispensar.length, qualidadeProblemas: problemas.length }
 }
 
 /** Cron diário: avalia todas as contas. */

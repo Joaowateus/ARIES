@@ -4702,7 +4702,7 @@ model CorrecaoPendente {
   classificacao  String // INCOMPLETO | SUSPEITO
   oQueFalta      String
   responsavelId  String?
-  status         String    @default("ABERTA") // ABERTA | RESOLVIDA
+  status         String    @default("ABERTA") // ABERTA | RESOLVIDA | DISPENSADA (regra do dono, sem correção)
   criadaEm       DateTime  @default(now())
   resolvidaEm    DateTime?
 
