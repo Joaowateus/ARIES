@@ -148,7 +148,11 @@ export const mesCorrente = (agora = new Date()): Periodo => { const h = hojeBrt(
 
 // --- Cálculo ---
 
-export interface Escopo { usuarioId: string; vendedorId?: string | null; papel: Papel }
+export interface Escopo {
+  usuarioId: string; vendedorId?: string | null; papel: Papel
+  // PDF 03 · P4: detectores pedem a métrica sem os registros suspeitos (não servem de evidência).
+  semSuspeitos?: boolean
+}
 export interface Valor { valor: number | null; amostra?: number; detalhe?: unknown }
 
 const mediana = (xs: number[]) => {
@@ -160,6 +164,18 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 const pct = (a: number, b: number) => (b > 0 ? r2((a / b) * 100) : null)
 const vend = (e: Escopo, col = Prisma.sql`l."vendedorId"`) => (e.vendedorId ? Prisma.sql` AND ${col} = ${e.vendedorId}` : Prisma.empty)
 const q = <T>(s: Prisma.Sql) => prisma.$queryRaw<T[]>(s)
+/** Filtro dos suspeitos (camada de qualidade): o registro `col` da `tabela` não pode estar classificado como suspeito. */
+// Nos leads, o mesmo filtro tira também o cliente bloqueado (nunca entra em detector).
+const sus = (e: Escopo, col: Prisma.Sql, tabela: 'pro_labore_leads' | 'pro_labore_vendas') =>
+  e.semSuspeitos ? Prisma.sql` AND NOT EXISTS (SELECT 1 FROM pro_labore_confiabilidade cf WHERE cf."registroTabela" = ${tabela} AND cf."registroId" = ${col} AND cf.classificacao = 'SUSPEITO')${tabela === 'pro_labore_leads' ? Prisma.sql` AND NOT EXISTS (SELECT 1 FROM pro_labore_leads lb JOIN pro_labore_clientes cb ON cb.id = lb."clienteId" WHERE lb.id = ${col} AND cb.bloqueado)` : Prisma.empty}` : Prisma.empty
+const idsSuspeitos = async (e: Escopo) => {
+  if (!e.semSuspeitos) return []
+  const [sus, bloq] = await Promise.all([
+    prisma.confiabilidade.findMany({ where: { usuarioId: e.usuarioId, registroTabela: 'pro_labore_leads', classificacao: 'SUSPEITO' }, select: { registroId: true } }),
+    prisma.lead.findMany({ where: { usuarioId: e.usuarioId, cliente: { is: { bloqueado: true } } }, select: { id: true } }),
+  ])
+  return [...sus.map(r => r.registroId), ...bloq.map(l => l.id)]
+}
 const num = (x: unknown) => (x == null ? 0 : Number(x))
 
 async function gastoDoIntervalo(usuarioId: string, p: Periodo): Promise<number> {
@@ -183,7 +199,7 @@ async function gastoDoIntervalo(usuarioId: string, p: Periodo): Promise<number> 
 const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor>> = {
   async leads_novos(e, p) {
     const { ini, fim } = instantes(p)
-    const [r] = await q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim}${vend(e)}`)
+    const [r] = await q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}`)
     return { valor: num(r.n) }
   },
   async tempo_primeira_resposta(e, p) {
@@ -194,7 +210,7 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
       JOIN pro_labore_assistente_conversas cv ON cv.id = r."conversaId"
       JOIN pro_labore_assistente_comercial a ON a.id = cv."assistenteId"
       JOIN pro_labore_vendedores v ON v.id = a."vendedorId"
-      WHERE r."primeiraRespostaHumana" AND r."enviadaEm" >= ${ini} AND r."enviadaEm" < ${fim} AND v."usuarioId" = ${e.usuarioId}${vend(e, Prisma.sql`a."vendedorId"`)}`)
+      WHERE r."primeiraRespostaHumana" AND r."enviadaEm" >= ${ini} AND r."enviadaEm" < ${fim} AND v."usuarioId" = ${e.usuarioId}${vend(e, Prisma.sql`a."vendedorId"`)}${sus(e, Prisma.sql`cv."leadId"`, 'pro_labore_leads')}`)
     // Sem mensagem do cliente antes: fica de fora. Diferença de relógio (resposta "antes" do cliente): conta como 0.
     const xs = rs.filter(x => x.min != null).map(x => Math.max(0, Number(x.min))).filter(x => Number.isFinite(x))
     const m = mediana(xs)
@@ -205,12 +221,13 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     const [r] = await q<{ n: bigint; a: bigint }>(Prisma.sql`
       SELECT count(*) n, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM pro_labore_lead_estagio_historico h WHERE h."leadId" = l.id AND h."estagioNovo" IN ('ABORDADO','LEVANTAMENTO','MQL','SQL','NEGOCIACAO','PROPOSTA','AGENDAMENTO','VISITA','VENDA'))
         OR l.etapa IN ('ABORDADO','LEVANTAMENTO','MQL','SQL','NEGOCIACAO','PROPOSTA','AGENDAMENTO','VISITA','VENDA')) a
-      FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim}${vend(e)}`)
+      FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}`)
     return { valor: pct(num(r.a), num(r.n)), amostra: num(r.n), detalhe: { abordados: num(r.a), leads: num(r.n) } }
   },
   async conversao_por_etapa(e, p) {
     const { ini, fim } = instantes(p)
-    const etapas = await conversaoPorEtapa({ usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}) }, ini, fim)
+    const fora = await idsSuspeitos(e)
+    const etapas = await conversaoPorEtapa({ usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}), ...(fora.length ? { id: { notIn: fora } } : {}) }, ini, fim)
     const chegaram = etapas.reduce((s, x) => s + x.chegaram, 0), seguiram = etapas.reduce((s, x) => s + x.seguiram, 0)
     return { valor: pct(seguiram, chegaram), amostra: chegaram, detalhe: etapas }
   },
@@ -219,11 +236,11 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     return { valor: pct(v.valor ?? 0, l.valor ?? 0), amostra: l.valor ?? 0, detalhe: { vendas: v.valor, leads: l.valor } }
   },
   async vendas(e, p) {
-    const [r] = await q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_vendas l WHERE l."usuarioId" = ${e.usuarioId} AND l.situacao = 'CONFIRMADA' AND l.data >= ${dataDia(p.inicio)} AND l.data < ${dataDia(maisDias(p.fim, 1))}${vend(e)}`)
+    const [r] = await q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_vendas l WHERE l."usuarioId" = ${e.usuarioId} AND l.situacao = 'CONFIRMADA' AND l.data >= ${dataDia(p.inicio)} AND l.data < ${dataDia(maisDias(p.fim, 1))}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_vendas')}`)
     return { valor: num(r.n) }
   },
   async faturamento(e, p) {
-    const [r] = await q<{ s: number | null; n: bigint }>(Prisma.sql`SELECT sum(l."valorVenda") s, count(*) n FROM pro_labore_vendas l WHERE l."usuarioId" = ${e.usuarioId} AND l.situacao = 'CONFIRMADA' AND l.data >= ${dataDia(p.inicio)} AND l.data < ${dataDia(maisDias(p.fim, 1))}${vend(e)}`)
+    const [r] = await q<{ s: number | null; n: bigint }>(Prisma.sql`SELECT sum(l."valorVenda") s, count(*) n FROM pro_labore_vendas l WHERE l."usuarioId" = ${e.usuarioId} AND l.situacao = 'CONFIRMADA' AND l.data >= ${dataDia(p.inicio)} AND l.data < ${dataDia(maisDias(p.fim, 1))}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_vendas')}`)
     return { valor: r2(num(r.s)), amostra: num(r.n) }
   },
   async ticket_medio(e, p, agora) {
@@ -233,7 +250,7 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
   async leads_parados(e, _p, agora) {
     const limites = await limitesEmMs(e.usuarioId)
     const abertos = await prisma.lead.findMany({
-      where: { usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}), perdidoEm: null, vendaId: null, etapa: { not: null }, entrouNaEtapaEm: { not: null } },
+      where: { usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}), perdidoEm: null, vendaId: null, etapa: { not: null }, entrouNaEtapaEm: { not: null }, ...(e.semSuspeitos ? { id: { notIn: await idsSuspeitos(e) } } : {}) },
       select: { etapa: true, entrouNaEtapaEm: true },
     })
     const parados = abertos.filter(l => { const lim = limites[l.etapa as Etapa]; return lim != null && agora.getTime() - l.entrouNaEtapaEm!.getTime() > lim })
@@ -252,7 +269,7 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
         FROM pro_labore_assistente_fichas_credito fc
         JOIN pro_labore_assistente_analises_credito an ON an."fichaId" = fc.id AND an.status IN ('APROVADA','RECUSADA')
         LEFT JOIN pro_labore_leads l ON l.id = fc."leadId"
-        WHERE fc."usuarioId" = ${e.usuarioId}${vend(e)}
+        WHERE fc."usuarioId" = ${e.usuarioId}${vend(e)}${sus(e, Prisma.sql`fc."leadId"`, 'pro_labore_leads')}
         GROUP BY fc.id HAVING min(an."respondidoEm") >= ${ini} AND min(an."respondidoEm") < ${fim}
       ) x`)
     return { valor: pct(num(r.a), num(r.n)), amostra: num(r.n) }
@@ -261,7 +278,7 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     const { ini, fim } = instantes(p)
     const [gasto, [r]] = await Promise.all([
       gastoDoIntervalo(e.usuarioId, p),
-      q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim} AND (l."origemTipo" = 'ANUNCIO' OR l."tipoLead" = 'TRAFEGO')`),
+      q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim} AND (l."origemTipo" = 'ANUNCIO' OR l."tipoLead" = 'TRAFEGO')${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}`),
     ])
     const n = num(r.n)
     return { valor: gasto > 0 && n > 0 ? r2(gasto / n) : null, amostra: n, detalhe: { gasto, leadsTrafego: n } }

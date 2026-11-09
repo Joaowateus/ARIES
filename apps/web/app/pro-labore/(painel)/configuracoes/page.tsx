@@ -15,6 +15,8 @@ import { RodizioLeads } from './_jornada/RodizioLeads'
 import { PremissasJornada } from './_jornada/PremissasJornada'
 import { ReguaCobranca } from './_jornada/ReguaCobranca'
 import { DicionarioMetricas } from './_jornada/DicionarioMetricas'
+import { Detectores } from './_jornada/Detectores'
+import { AceitePdf03 } from './_jornada/AceitePdf03'
 import { MatrizAcoes } from './_jornada/MatrizAcoes'
 import { AceitePdf02 } from './_jornada/AceitePdf02'
 
@@ -207,7 +209,9 @@ export default function ProLaboreConfiguracoesPage() {
       <PremissasJornada podeEditar={usuario?.papel === 'DONO'} />
       <ReguaCobranca podeEditar={usuario?.papel === 'DONO'} />
       <DicionarioMetricas podeEditar={usuario?.papel === 'DONO'} />
+      <Detectores podeEditar={usuario?.papel === 'DONO'} />
       <MatrizAcoes />
+      {usuario?.papel === 'DONO' && <AceitePdf03 />}
       {usuario?.papel === 'DONO' && <AceitePdf02 />}
       <EspacoBanco />
       <AuditoriaDados />

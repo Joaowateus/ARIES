@@ -3656,3 +3656,56 @@ export interface AceitePdf02 {
 }
 
 export interface EventoAuditoria { id: string; tabela: string; oQue: string; registroId: string; acao: 'CRIACAO' | 'ALTERACAO' | 'EXCLUSAO'; campo: string | null; valorAnterior: string | null; valorNovo: string | null; autorOrigem: string; quem: string; em: string }
+
+// PDF 03 · Recomendações (REC) e detectores.
+export type ForcaRec = 'COMPROVADA' | 'PADRAO' | 'HIPOTESE'
+export type StatusRec = 'NOVA' | 'ACEITA' | 'DESCARTADA' | 'EM_EXECUCAO' | 'AVALIADA' | 'ENCERRADA'
+export interface MetricaEvidenciaRec { chave: string; nome: string; valor: number | null; anterior: number | null; periodo: { inicio: string; fim: string }; periodoAnterior: { inicio: string; fim: string } | null; amostra: number; padrao?: number | null; faixa?: string | null; unidade: string; detalhe?: unknown }
+export interface RecResumo { id: string; codigo: string | null; titulo: string; area: string; detector: string; tipo: 'PROBLEMA' | 'FUNCIONANDO'; forca: ForcaRec; impacto: { unidade: string; valor: number; texto: string } | null; status: StatusRec; prazo: string; destinatarioId: string | null; destinatario: string | null; alvoTipo: string; alvoId: string | null; criadoEm: string; resumo: string | null; acaoSugerida: string }
+export interface RecDetalhe extends Omit<RecResumo, 'resumo'> {
+  evidencia: { metricas: MetricaEvidenciaRec[]; casos: number; volumeMinimo: number; resumo: string; orientacao: string | null; alvoNome: string | null; regra: string }
+  nivelAutonomia: number; acompanham: (string | null)[]; motivoDescarte: string | null; indicadorAntes: { valor: number | null; periodo: { inicio: string; fim: string }; metrica?: string } | null
+  indicadorDepois: { valor: number | null; periodo: { inicio: string; fim: string }; diasDepois: number; periodoCurto: boolean; outrasMudancas: { recomendacoes: Array<{ codigo: string | null; titulo: string }>; parametros: Array<{ nome: string; criadoEm: string }> } } | null
+  resultado: 'MANTER' | 'AJUSTAR' | 'REVERTER' | null; resultadoNota: string | null; podeDecidir: boolean; minhaAvaliacao: { pertinente: boolean; comentario: string | null } | null
+  atividades: Array<{ id: string; codigo: string | null; tipo: string; oQueFazer: string | null; prazo: string; status: string; resultado: string | null; responsavel: string | null; executadaEm: string | null }>
+  historico: Array<{ acao: string; campo: string | null; valorAnterior: string | null; valorNovo: string | null; quem: string; em: string }>
+  executadaEm: string | null
+}
+export interface DetectorCfg { chave: string; nome: string; area: string; dispara: string; acao: string; roteamento: string; frequencia: string; ativo: boolean; nivelAutonomia: number; volumeMinimo: number; limite: number }
+export const recApi = {
+  listar: (f: { area?: string; status?: string; destinatarioId?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][])
+    return request<{ modo: 'SILENCIOSO' | 'NORMAL'; itens: RecResumo[] }>(`/pro-labore/recomendacoes?${q}`)
+  },
+  minhas: () => request<Array<{ id: string; codigo: string | null; titulo: string; tipo: string; forca: ForcaRec; status: StatusRec; prazo: string; orientacao: string | null; acaoSugerida: string }>>('/pro-labore/recomendacoes/minhas'),
+  detalhe: (id: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}`),
+  aceitar: (id: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/aceitar`, { method: 'POST', body: '{}' }),
+  descartar: (id: string, motivo: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/descartar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
+  concluirAtividade: (id: string, atvId: string, resultado: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/atividades/${atvId}/concluir`, { method: 'POST', body: JSON.stringify({ resultado }) }),
+  avaliar: (id: string, resultado: 'MANTER' | 'AJUSTAR' | 'REVERTER', nota?: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/avaliar`, { method: 'POST', body: JSON.stringify({ resultado, nota }) }),
+  encerrar: (id: string) => request<RecDetalhe>(`/pro-labore/recomendacoes/${id}/encerrar`, { method: 'POST', body: '{}' }),
+  pertinencia: (id: string, pertinente: boolean, comentario?: string) => request<{ ok: boolean }>(`/pro-labore/recomendacoes/${id}/pertinencia`, { method: 'POST', body: JSON.stringify({ pertinente, comentario }) }),
+  rodar: () => request<Array<{ detector: string; titulo: string; criada: boolean; motivo: string }>>('/pro-labore/recomendacoes/rodar', { method: 'POST', body: '{}' }),
+  detectores: () => request<{ modo: 'SILENCIOSO' | 'NORMAL'; detectores: DetectorCfg[] }>('/pro-labore/detectores'),
+  salvarDetector: (chave: string, d: { ativo?: boolean; volumeMinimo?: number; limite?: number; justificativa: string }) => request<{ modo: 'SILENCIOSO' | 'NORMAL'; detectores: DetectorCfg[] }>(`/pro-labore/detectores/${chave}`, { method: 'PUT', body: JSON.stringify(d) }),
+  sugestoes: () => request<SugestaoAjuste[]>('/pro-labore/sugestoes-ajuste'),
+  decidirSugestao: (id: string, aprovar: boolean) => request<SugestaoAjuste>(`/pro-labore/sugestoes-ajuste/${id}/${aprovar ? 'aprovar' : 'recusar'}`, { method: 'POST', body: '{}' }),
+  aceite: () => request<AceitePdf03>('/pro-labore/recomendacoes-aceite'),
+  roteamento: (modo: 'SILENCIOSO' | 'NORMAL', justificativa: string) => request<{ modo: 'SILENCIOSO' | 'NORMAL'; afetadas: number }>('/pro-labore/recomendacoes-roteamento', { method: 'PUT', body: JSON.stringify({ modo, justificativa }) }),
+}
+
+export interface SugestaoAjuste { id: string; mes: string; parametro: string; valorAtual: unknown; valorSugerido: unknown; justificativa: string; status: 'PENDENTE' | 'APROVADA' | 'RECUSADA'; decididoEm: string | null }
+type Passa = { passa: boolean | null }
+export interface AceitePdf03 {
+  total: number; modo: 'SILENCIOSO' | 'NORMAL'; porDetector: Array<{ chave: string; nome: string; total: number }>
+  evidencia: Passa & { itens: Array<{ codigo: string | null; titulo: string; chave?: string; valor: number | null; dicionario: number | null; bate: boolean | null }> }
+  utilidade: Passa & { amostra: Array<{ id: string; codigo: string | null; titulo: string; detector: string; forca: ForcaRec; status: StatusRec; avaliacoes: number; pertinentes: number }>; avaliacoes: number; pertinentes: number; pct: number | null }
+  volumeMinimo: Passa & { abaixo: number }; suspeitos: Passa & { comSuspeito: number }
+  forca: Passa & { semForca: number; porForca: Array<{ forca: string; n: number }> }
+  nivel1: Passa & { semPessoa: number; atvAuto: number; niveis: boolean }
+  roteamento: Passa & { porTipo: Array<{ tipo: string; n: number }>; vazou: number }
+  escalonamento: Passa & { escalonadas: number; tratarVencidas: number }
+  descarte: Passa & { descartadas: number; repeticoesEvitadas: number; voltaram: number }
+  ciclo: Passa & { aceitas: number; comAtividades: number; encerradas: number }
+  avaliacao: Passa & { avaliadas: number }; duplicidade: Passa & { juntadas: number }; auditoria: Passa & { semEvento: number }
+}

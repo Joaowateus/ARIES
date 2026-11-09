@@ -1175,6 +1175,8 @@ model ParametroLiquidez {
   metaDiariaSdr                Float?
   // PDF 02 · régua de cobrança: REGISTRO (só anota) | ENVIO (manda pelo WhatsApp). Só o dono liga.
   reguaModo                    String    @default("REGISTRO")
+  // PDF 03: SILENCIOSO (RECs só para dono e supervisor) | NORMAL (roteamento ligado pelo dono).
+  recRoteamento                String    @default("SILENCIOSO")
 
   @@map("pro_labore_parametros")
 }
@@ -4705,9 +4707,119 @@ model CorrecaoPendente {
   oQueFalta      String
   responsavelId  String?
   status         String    @default("ABERTA") // ABERTA | RESOLVIDA | DISPENSADA (regra do dono, sem correção)
+  // Detectores cujo achado foi juntado a esta correção (PDF 03: sem REC duplicada).
+  detectores     String[]  @default([])
   criadaEm       DateTime  @default(now())
   resolvidaEm    DateTime?
 
   @@index([usuarioId, status, responsavelId], map: "pro_labore_correcoes_idx")
   @@map("pro_labore_correcoes_pendentes")
+}
+
+// PDF 03 · Recomendação (REC-0001): achado do ARIES com evidência do
+// dicionário, força, impacto estimado, ação, roteamento, ciclo e resultado.
+// Código REC-0001 gerado pelo banco (não gravar). Auditoria imutável.
+model Recomendacao {
+  id              String    @id @default(cuid())
+  numero          Int       @unique @default(autoincrement())
+  codigo          String?
+  usuarioId       String
+  auditoriaAutor  String?
+  titulo          String
+  area            String
+  detector        String
+  tipo            String    @default("PROBLEMA")
+  evidencia       Json
+  forca           String
+  impacto         Json?
+  acaoSugerida    String
+  nivelAutonomia  Int       @default(1)
+  alvoTipo        String
+  alvoId          String?
+  destinatarioId  String?
+  acompanhaIds    String[]  @default([])
+  visivelPara     String[]  @default([])
+  prazo           DateTime
+  status          String    @default("NOVA")
+  motivoDescarte  String?
+  contexto        String
+  indicadorAntes  Json?
+  indicadorDepois Json?
+  resultado       String?
+  resultadoNota   String?
+  decididoPor     String?
+  aceitaEm        DateTime?
+  executadaEm     DateTime?
+  avaliadaEm      DateTime?
+  encerradaEm     DateTime?
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @default(now()) @updatedAt
+
+  avaliacoes RecomendacaoAvaliacao[]
+
+  @@index([usuarioId, status, criadoEm], map: "pro_labore_recomendacoes_idx")
+  @@index([usuarioId, contexto], map: "pro_labore_recomendacoes_ctx_idx")
+  @@map("pro_labore_recomendacoes")
+}
+
+model Detector {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  chave          String
+  ativo          Boolean  @default(true)
+  nivelAutonomia Int      @default(1)
+  volumeMinimo   Int?
+  limite         Float?
+  auditoriaAutor String?
+  atualizadoEm   DateTime @default(now()) @updatedAt
+
+  @@unique([usuarioId, chave], map: "pro_labore_detectores_key")
+  @@map("pro_labore_detectores")
+}
+
+model RecomendacaoMemoria {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  recomendacaoId String?
+  detector       String
+  contexto       String
+  acao           String
+  resultado      String?
+  detalhe        String?
+  em             DateTime @default(now())
+
+  @@index([usuarioId, contexto, em], map: "pro_labore_rec_memoria_idx")
+  @@map("pro_labore_recomendacoes_memoria")
+}
+
+model SugestaoAjuste {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  mes            String
+  parametro      String
+  valorAtual     Json?
+  valorSugerido  Json?
+  justificativa  String
+  status         String    @default("PENDENTE")
+  decididoPor    String?
+  decididoEm     DateTime?
+  auditoriaAutor String?
+  criadoEm       DateTime  @default(now())
+
+  @@unique([usuarioId, mes, parametro], map: "pro_labore_sugestoes_ajuste_key")
+  @@map("pro_labore_sugestoes_ajuste")
+}
+
+model RecomendacaoAvaliacao {
+  id             String   @id @default(cuid())
+  recomendacaoId String
+  avaliadorId    String
+  pertinente     Boolean
+  comentario     String?
+  em             DateTime @default(now())
+
+  recomendacao Recomendacao @relation(fields: [recomendacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([recomendacaoId, avaliadorId], map: "pro_labore_rec_avaliacoes_key")
+  @@map("pro_labore_recomendacoes_avaliacoes")
 }

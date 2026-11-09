@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { proLaboreApi, type CpHoje, type CpPessoa } from '@/lib/proLaboreApi'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
+import { OrientacoesAries } from './_componentes/OrientacoesAries'
 import { Hoje } from './_componentes/Hoje'
 import { Conversas } from './_componentes/Conversas'
 import { Estudos } from './_componentes/Estudos'
@@ -92,6 +93,8 @@ export default function CopilotoPage() {
       )}
 
       <MeuAgente />
+
+      <OrientacoesAries />
 
       <div className="cp-abas">
         <div className="pl-sv-tabs" role="tablist" aria-label="Seções do copiloto">
