@@ -8,6 +8,7 @@
 //   o segundo alerta e o escalonamento nos tempos certos, sem mandar nada.
 //   O envio de verdade só liga depois da liberação do dono (MODO_REGUA).
 import { prisma } from './prisma'
+import { avisarNoWhatsapp } from './ligacoesAviso'
 
 export const ETAPAS_REGUA = ['LEMBRETE', 'ALERTA', 'ALERTA_2', 'ESCALONAMENTO'] as const
 export type EtapaRegua = typeof ETAPAS_REGUA[number]
@@ -22,8 +23,13 @@ export const REGUA_PADRAO: ConfigRegua = { lembreteMinAntes: 30, segundoAlertaMi
 // Social Media escalona para o gestor (pauta); venda e reativação, para o supervisor comercial.
 const PADRAO_POR_ORIGEM: Partial<Record<OrigemAtv, Partial<ConfigRegua>>> = { PAUTA: { escalonarPara: 'GESTOR' } }
 
-// REGISTRO = só anota (semana em paralelo). ENVIO fica reservado para a liberação.
-export const MODO_REGUA: 'REGISTRO' | 'ENVIO' = 'REGISTRO'
+// REGISTRO = só anota (semana em paralelo). ENVIO = manda pelo WhatsApp; o dono liga em Configurações.
+export type ModoRegua = 'REGISTRO' | 'ENVIO'
+export const MODO_REGUA: ModoRegua = 'REGISTRO' // padrão de conta nova
+export async function modoDaRegua(usuarioId: string): Promise<ModoRegua> {
+  const p = await prisma.parametroLiquidez.findUnique({ where: { usuarioId }, select: { reguaModo: true } })
+  return p?.reguaModo === 'ENVIO' ? 'ENVIO' : 'REGISTRO'
+}
 
 const MIN = 60_000
 const HORA = 60 * MIN
@@ -73,16 +79,24 @@ async function destinoDoEscalonamento(usuarioId: string, para: ConfigRegua['esca
  */
 export async function rodarRegua(agora = new Date(), limite = 2000) {
   const configs = new Map<string, Record<OrigemAtv, ConfigRegua>>()
+  const modos = new Map<string, ModoRegua>()
   const destinos = new Map<string, string>()
+  const hBrt = new Date(agora.getTime() - 3 * HORA).getUTCHours()
+  const noHorario = hBrt >= 7 && hBrt < 21
   // Só o que já chegou na janela do maior lembrete possível (24 h à frente).
   const pendentes = await prisma.atividade.findMany({
     where: { status: 'PENDENTE', reguaEstado: { notIn: ['ESCALONADA', 'PARADA'] }, prazo: { lte: new Date(agora.getTime() + 24 * HORA) } },
-    select: { id: true, usuarioId: true, origemTipo: true, prazo: true, responsavelId: true, reguaEstado: true },
+    select: { id: true, usuarioId: true, origemTipo: true, tipo: true, prazo: true, responsavelId: true, reguaEstado: true, oQueFazer: true, codigo: true, leadId: true },
     orderBy: { prazo: 'asc' }, take: limite,
   })
-  let registros = 0
+  let registros = 0, enviados = 0
+  // Envio agrupado: uma mensagem por pessoa a cada rodada.
+  const fila = new Map<string, { usuarioId: string; destinatarioId: string; itens: Array<{ etapa: EtapaRegua; linha: { atividadeId: string; etapa: EtapaRegua; previstoPara: Date; destinatarioId: string | null; modo: ModoRegua }; a: (typeof pendentes)[number] }> }>()
   for (const a of pendentes) {
-    if (!configs.has(a.usuarioId)) configs.set(a.usuarioId, await configDaRegua(a.usuarioId))
+    if (!configs.has(a.usuarioId)) { configs.set(a.usuarioId, await configDaRegua(a.usuarioId)); modos.set(a.usuarioId, await modoDaRegua(a.usuarioId)) }
+    const modo = modos.get(a.usuarioId)!
+    // No modo envio, fora do horário (7h às 21h) a régua espera: às 7h manda só a etapa mais avançada.
+    if (modo === 'ENVIO' && !noHorario) continue
     const c = configs.get(a.usuarioId)![(a.origemTipo as OrigemAtv)] ?? REGUA_PADRAO
     const h = horariosDaRegua(a.prazo, c)
     // Só a etapa mais avançada que já venceu: quem atrasou 3 dias não
@@ -92,18 +106,47 @@ export async function rodarRegua(agora = new Date(), limite = 2000) {
     const etapa = vencidas[vencidas.length - 1]
     if (ETAPAS_REGUA.indexOf(etapa) <= ETAPAS_REGUA.indexOf(a.reguaEstado as EtapaRegua)) continue
     const destinatarioId = etapa === 'ESCALONAMENTO' ? await destinoDoEscalonamento(a.usuarioId, c.escalonarPara, destinos) : a.responsavelId
-    const criado = await prisma.reguaRegistro.createMany({
-      data: [{ atividadeId: a.id, etapa, previstoPara: h[etapa], destinatarioId, modo: MODO_REGUA, enviado: false }],
-      skipDuplicates: true,
-    })
+    // Ligação já tem o aviso na hora e o lembrete 30 min depois: a régua não repete o lembrete nem o alerta dela.
+    const repetiria = a.tipo === 'LIGACAO' && (etapa === 'LEMBRETE' || etapa === 'ALERTA')
+    const vaiEnviar = modo === 'ENVIO' && !repetiria && !!destinatarioId
     // Atualiza o estado só se ninguém registrou a execução nesse meio-tempo.
-    await prisma.atividade.updateMany({
-      where: { id: a.id, status: 'PENDENTE' },
+    const mudou = await prisma.atividade.updateMany({
+      where: { id: a.id, status: 'PENDENTE', reguaEstado: a.reguaEstado },
       data: { reguaEstado: etapa === 'ESCALONAMENTO' ? 'ESCALONADA' : etapa, auditoriaAutor: 'AUTOMACAO|||regua' },
     })
-    registros += criado.count
+    if (!mudou.count) continue // outra rodada já cuidou desta atividade
+    const linha = { atividadeId: a.id, etapa, previstoPara: h[etapa], destinatarioId, modo }
+    if (!vaiEnviar) {
+      const r = await prisma.reguaRegistro.createMany({ data: [{ ...linha, enviado: false }], skipDuplicates: true })
+      registros += r.count
+      continue
+    }
+    const k = `${a.usuarioId}|${destinatarioId}`
+    const g = fila.get(k) ?? { usuarioId: a.usuarioId, destinatarioId: destinatarioId!, itens: [] }
+    g.itens.push({ etapa, linha, a })
+    fila.set(k, g)
   }
-  return { reguaRegistros: registros }
+  for (const g of fila.values()) {
+    const leads = await prisma.lead.findMany({ where: { id: { in: g.itens.map(i => i.a.leadId).filter((x): x is string => !!x) } }, select: { id: true, nomeCliente: true } })
+    const nome = new Map(leads.map(l => [l.id, l.nomeCliente]))
+    const msg = mensagemDaRegua(g.itens.map(i => ({ etapa: i.etapa, codigo: i.a.codigo, oQueFazer: i.a.oQueFazer, prazo: i.a.prazo, cliente: i.a.leadId ? nome.get(i.a.leadId) ?? null : null, responsavelId: i.a.responsavelId })))
+    // O dono não é um vendedor: o aviso dele sai pelo próprio vínculo (vendedorId nulo).
+    const ok = await avisarNoWhatsapp(g.usuarioId, g.destinatarioId === g.usuarioId ? null : g.destinatarioId, msg).catch(() => false)
+    // O registro é só inclusão: grava já dizendo se a mensagem saiu.
+    const r = await prisma.reguaRegistro.createMany({ data: g.itens.map(i => ({ ...i.linha, enviado: ok })), skipDuplicates: true })
+    registros += r.count
+    if (ok) enviados += g.itens.length
+  }
+  return { reguaRegistros: registros, reguaEnviados: enviados }
+}
+
+const NOME_ETAPA: Record<EtapaRegua, string> = { LEMBRETE: '⏰ Vence em breve', ALERTA: '⚠️ Venceu agora', ALERTA_2: '⚠️ Atrasada há 2 h', ESCALONAMENTO: '🚨 Atrasada há mais de 24 h (escalonada)' }
+export function mensagemDaRegua(itens: Array<{ etapa: EtapaRegua; codigo: string | null; oQueFazer: string | null; prazo: Date; cliente: string | null; responsavelId: string | null }>): string {
+  const hora = (d: Date) => new Date(d.getTime() - 3 * HORA).toISOString().slice(11, 16)
+  const dia = (d: Date) => new Date(d.getTime() - 3 * HORA).toISOString().slice(0, 10).split('-').reverse().slice(0, 2).join('/')
+  const linhas = itens.slice(0, 8).map(i => `• ${NOME_ETAPA[i.etapa]} — *${i.oQueFazer ?? 'Atividade'}*${i.cliente ? ` (${i.cliente})` : ''} · prazo ${dia(i.prazo)} ${hora(i.prazo)} · ${i.codigo ?? ''}`)
+  const extra = itens.length > 8 ? [`… e mais ${itens.length - 8}.`] : []
+  return [`📋 *Atividades${itens.length > 1 ? ` (${itens.length})` : ''}*`, '', ...linhas, ...extra, '', 'Quando fizer, registre no sistema: os avisos param sozinhos.'].join('\n')
 }
 
 const dia = (d: Date) => d.toISOString().slice(0, 10)
