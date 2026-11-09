@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { QuadroJornada } from './_jornada/QuadroJornada'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
+import { proLaboreApi, metricasApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
 import { metaDefinida } from '@/lib/metaFunil'
 import { AvisoRepetida, parecidasDoErro } from '../vendas/AvisoRepetida'
 import { SeletorMoto } from '../vendas/SeletorMoto'
@@ -218,8 +218,8 @@ export default function ProLaboreLeadsPage() {
   const [filtroParado, setFiltroParado] = useState(false)
   // Etiqueta da jornada (posta pelo Assistente): filtra só os cards do Kanban.
   const [filtroEtiqueta, setFiltroEtiqueta] = useState('')
-  // Custo por lead automático: gasto do mês (Tráfego/Indicadores) ÷ leads do mês.
-  const [gastoMes, setGastoMes] = useState<number | null>(null)
+  // Custo por lead automático: a ficha do dicionário (gasto ÷ leads novos de tráfego pago no mês).
+  const [cplDicionario, setCplDicionario] = useState<{ valor: number; leads: number } | null>(null)
   const [mesCorrente] = useState(() => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7))
 
   function aplicarFiltroPeriodo() {
@@ -322,8 +322,10 @@ export default function ProLaboreLeadsPage() {
       .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v.filter(x => x.vende !== false)); setParametro(p); setMetasFunil(metas) })
       .finally(() => setLoading(false))
     if (isDono) {
-      const mes = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7)
-      proLaboreApi.gastosAnuncios.resumo(Number(mes.slice(0, 4))).then(r => setGastoMes(r.find(g => g.mes === mes)?.valor ?? null)).catch(() => setGastoMes(null))
+      const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)
+      metricasApi.ler(['custo_por_lead'], { inicio: `${hoje.slice(0, 8)}01`, fim: hoje })
+        .then(r => { const l = r.leituras[0]; setCplDicionario(l?.valor != null ? { valor: l.valor, leads: l.amostra ?? 0 } : null) })
+        .catch(() => setCplDicionario(null))
     }
   }, [vejaEquipe, isDono])
 
@@ -738,7 +740,7 @@ export default function ProLaboreLeadsPage() {
   // calculada em cima da contagem por estágio do próprio Kanban (respeitando
   // os filtros de canal/vendedor/período/busca já aplicados acima).
   const leadsDoMes = leads.filter(l => l.criadoEm.slice(0, 7) === mesCorrente).length
-  const custoAutomatico = isDono && gastoMes != null && gastoMes > 0 && leadsDoMes > 0 ? gastoMes / leadsDoMes : null
+  const custoAutomatico = isDono && cplDicionario ? cplDicionario.valor : null
   const custoPorLeadTopo = custoAutomatico ?? parametro?.custoPorLeadTopo ?? 0
   const metaPorEtapa = new Map<EstagioLead, MetaFunilProLabore>(metasFunil.map(m => [m.etapa, m]))
   const populacaoPorEtapa: Lead[][] = COLUNAS.map(col => populacaoFunilPorEtapa[col.estagio])
@@ -881,7 +883,7 @@ export default function ProLaboreLeadsPage() {
               <span className="pl-hint">Custo por lead (topo do funil):</span>
               {custoAutomatico != null ? (
                 <span style={{ fontWeight: 600 }} title="Gasto com anúncios do mês ÷ leads criados no mês. Atualiza sozinho.">
-                  {formatMoeda(custoAutomatico)} <span className="pl-hint" style={{ fontWeight: 500 }}>· automático (gasto do mês ÷ {leadsDoMes} leads do mês)</span>
+                  {formatMoeda(custoAutomatico)} <span className="pl-hint" style={{ fontWeight: 500 }}>· automático (gasto do mês ÷ {cplDicionario?.leads} leads de tráfego pago)</span>
                 </span>
               ) : editandoCustoLead ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
