@@ -175,7 +175,18 @@ router.put('/detectores-areas/:grupo', requireProLaboreAuth, requireDono, async 
     const anterior = GRUPOS[GRUPOS.indexOf(g) - 1]
     if (anterior && !(areas[anterior].ligada && areas[anterior].modo === 'NORMAL')) { res.status(409).json({ error: `Ligue uma área por vez: primeiro libere ${NOME_GRUPO[anterior]}` }); return }
   }
-  res.json(await mudarArea(req.proLaboreUser!.sub, g, { ligada: p.data.ligada, modo: p.data.modo }, p.data.justificativa, req.proLaboreUser!.sub))
+  const r = await mudarArea(req.proLaboreUser!.sub, g, { ligada: p.data.ligada, modo: p.data.modo }, p.data.justificativa, req.proLaboreUser!.sub)
+  // Ao ligar, os detectores da área já rodam (sem esperar o job do dia).
+  const rodada = p.data.ligada ? await rodarArea(req.proLaboreUser!.sub, g) : null
+  res.json({ ...r, ...(rodada ? { recsCriadas: rodada } : {}) })
+})
+const rodarArea = async (usuarioId: string, g: GrupoArea) => (await rodarDetectores(usuarioId, new Date(), DETECTORES_ONDA4.filter(d => d.grupo === g).map(d => d.chave)).catch(e => { console.error('[detectores] área', e); return [] })).filter(x => x.criada).length
+// Rodar agora os detectores de uma área ligada (o job do dia também roda).
+router.post('/detectores-areas/:grupo/rodar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const g = String(req.params.grupo) as GrupoArea
+  if (!GRUPOS.includes(g)) { res.status(404).json({ error: 'Área desconhecida' }); return }
+  if (!(await configAreas(req.proLaboreUser!.sub))[g].ligada) { res.status(409).json({ error: 'Ligue a área antes de rodar' }); return }
+  res.json({ recsCriadas: await rodarArea(req.proLaboreUser!.sub, g) })
 })
 // Boa prática: o supervisor decide compartilhar (sem nomes, ou reconhecendo a pessoa).
 router.post('/recomendacoes/:id/compartilhar', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
