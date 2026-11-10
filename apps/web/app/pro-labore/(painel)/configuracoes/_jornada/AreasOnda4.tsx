@@ -25,8 +25,9 @@ export function AreasOnda4() {
   async function mudar(g: string, d: { ligada?: boolean; modo?: 'SILENCIOSO' | 'NORMAL' }, texto: string) {
     if (just.trim().length < 5) { setMsg('Escreva o motivo (fica no histórico).'); return }
     if (!window.confirm(texto)) return
-    try { const r = await recApi.mudarArea(g, { ...d, justificativa: just.trim() }); setMsg(`Feito.${r.afetadas ? ` ${r.afetadas} recomendação(ões) abertas passaram a ir para quem deve agir.` : ''}`); setJust(''); carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
+    try { const r = await recApi.mudarArea(g, { ...d, justificativa: just.trim() }); setMsg(`Feito.${r.afetadas ? ` ${r.afetadas} recomendação(ões) abertas passaram a ir para quem deve agir.` : ''}${r.recsCriadas != null ? ` Os detectores rodaram: ${r.recsCriadas} recomendação(ões) nova(s).` : ''}`); setJust(''); carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
   }
+  async function rodarAgora(g: string) { setMsg('Rodando os detectores…'); try { const r = await recApi.rodarArea(g); setMsg(`Os detectores rodaram: ${r.recsCriadas} recomendação(ões) nova(s). Elas aparecem em Recomendações para quem pode ver.`); setAceite(x => { const y = { ...x }; delete y[g]; return y }) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }
   async function rodarAceite(g: string) { try { const a = await recApi.aceiteArea(g); setAceite(x => ({ ...x, [g]: a })) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }
   return (
     <section className="pl-card" id="areas-onda4" style={{ marginBottom: 20 }} data-areas-onda4>
@@ -47,6 +48,7 @@ export function AreasOnda4() {
             {!a.ligada && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void mudar(a.grupo, { ligada: true, modo: 'SILENCIOSO' }, `Ligar ${a.nome} em modo silencioso?`)} data-ligar-area={a.grupo}>Ligar (semana silenciosa)</button>}
             {a.ligada && a.modo === 'SILENCIOSO' && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void mudar(a.grupo, { modo: 'NORMAL' }, `Liberar ${a.nome}: as recomendações passam a ir para quem deve agir?`)} data-liberar-area={a.grupo}>Liberar o roteamento normal</button>}
             {a.ligada && <button type="button" className="pl-btn" onClick={() => void mudar(a.grupo, { ligada: false }, `Desligar ${a.nome}? Os detectores param; o que já existe continua.`)} data-desligar-area={a.grupo}>Desligar</button>}
+            {a.ligada && <button type="button" className="pl-btn" onClick={() => void rodarAgora(a.grupo)} data-rodar-area={a.grupo}>Rodar os detectores agora</button>}
             <button type="button" className="pl-btn" onClick={() => void rodarAceite(a.grupo)} data-aceite-area={a.grupo}>Rodar o aceite da seção 9</button>
           </div>
           <table className="pl-table"><thead><tr><th>Detector</th><th>Dispara quando</th><th>Vai para</th><th>Volume mínimo</th></tr></thead>
@@ -75,6 +77,7 @@ function AceiteDaArea({ a, abrir }: { a: AceiteArea; abrir: (id: string) => void
         {linha('Sistema atual', `${a.sistemaAtual.areasDesligadas.length} área(s) ainda desligada(s), ${a.sistemaAtual.recsDeAreasDesligadas} recomendação(ões) delas`, a.sistemaAtual.passa)}
       </tbody></table>
       <div className="pl-eyebrow" style={{ marginTop: 8 }}>Amostra de 10 para o teste de utilidade</div>
+      {!a.utilidade.amostra.length && <p className="pl-hint" data-amostra-vazia>Ainda não há recomendações desta área. Os detectores rodam uma vez por dia (ou use o botão Rodar os detectores agora); só geram recomendação quando o volume mínimo é atingido.</p>}
       <table className="pl-table"><tbody>{a.utilidade.amostra.map(r => (
         <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => abrir(r.id)} data-amostra-area={r.id}><td>{r.codigo}</td><td>{r.titulo}</td><td><ForcaChip forca={r.forca} /></td><td className="pl-hint">{r.avaliacoes ? `${r.pertinentes} de ${r.avaliacoes} pertinentes` : '—'}</td></tr>
       ))}</tbody></table>

@@ -3693,7 +3693,8 @@ export const recApi = {
   aceite: () => request<AceitePdf03>('/pro-labore/recomendacoes-aceite'),
   compartilhar: (id: string, comNome: boolean, texto?: string) => request<{ id: string }>(`/pro-labore/recomendacoes/${id}/compartilhar`, { method: 'POST', body: JSON.stringify({ comNome, texto }) }),
   areas: () => request<AreaOnda4[]>('/pro-labore/detectores-areas'),
-  mudarArea: (grupo: string, d: { ligada?: boolean; modo?: 'SILENCIOSO' | 'NORMAL'; justificativa: string }) => request<{ afetadas: number }>(`/pro-labore/detectores-areas/${grupo}`, { method: 'PUT', body: JSON.stringify(d) }),
+  mudarArea: (grupo: string, d: { ligada?: boolean; modo?: 'SILENCIOSO' | 'NORMAL'; justificativa: string }) => request<{ afetadas: number; recsCriadas?: number }>(`/pro-labore/detectores-areas/${grupo}`, { method: 'PUT', body: JSON.stringify(d) }),
+  rodarArea: (grupo: string) => request<{ recsCriadas: number }>(`/pro-labore/detectores-areas/${grupo}/rodar`, { method: 'POST' }),
   aceiteArea: (grupo: string) => request<AceiteArea>(`/pro-labore/detectores-areas/${grupo}/aceite`),
   roteamento: (modo: 'SILENCIOSO' | 'NORMAL', justificativa: string) => request<{ modo: 'SILENCIOSO' | 'NORMAL'; afetadas: number }>('/pro-labore/recomendacoes-roteamento', { method: 'PUT', body: JSON.stringify({ modo, justificativa }) }),
 }

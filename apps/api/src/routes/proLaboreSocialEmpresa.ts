@@ -21,6 +21,7 @@ import { gerarOcorrenciasDeRotina, rodarRegua } from '../lib/atividades'
 import { guardarRetratos } from '../lib/metricas'
 import { avaliarTodas } from '../lib/qualidade'
 import { rodarDetectoresTodas } from '../lib/recomendacoes'
+import { DETECTORES_ONDA4 } from '../lib/detectoresOnda4'
 import { ajusteMensalTodas } from '../lib/ajusteMensal'
 import { avisarFollowsCredito } from '../lib/followCredito'
 import { rodarReferencias } from '../lib/smReferencias'
@@ -365,8 +366,8 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const retratos = await guardarRetratos(agoraDoCron(req)).catch(e => { console.error('[metricas] retratos', e); return { retratosMetricas: 0 } })
   // PDF 02 · 4.8: camada de qualidade (abre e resolve as correções pendentes).
   const qualidade = await avaliarTodas(agoraDoCron(req)).catch(e => { console.error('[qualidade] avaliar', e); return { qualidadeAbertas: 0, qualidadeResolvidas: 0 } })
-  // PDF 03: os detectores rodam depois da qualidade (para juntar o que ela já apontou), uma vez por dia.
-  const detectores = await rodarDetectoresTodas(agoraDoCron(req), ['resposta_lenta', 'funil_parado', 'etapa_travando', 'atividades_acumuladas', 'credito_emperrado', 'anuncio_encarecendo']).catch(e => { console.error('[detectores] dia', e); return { recsCriadas: 0 } })
+  // PDF 03 e PDF 05 (só as áreas ligadas): os detectores rodam depois da qualidade (para juntar o que ela já apontou), uma vez por dia.
+  const detectores = await rodarDetectoresTodas(agoraDoCron(req), ['resposta_lenta', 'funil_parado', 'etapa_travando', 'atividades_acumuladas', 'credito_emperrado', 'anuncio_encarecendo', ...DETECTORES_ONDA4.map(d => d.chave)]).catch(e => { console.error('[detectores] dia', e); return { recsCriadas: 0 } })
   // PDF 03 · 4.4: no dia 1º, as sugestões de ajuste do mês que fechou (só valem com a aprovação do dono).
   const ajuste = await ajusteMensalTodas(agoraDoCron(req)).catch(e => { console.error('[ajuste mensal]', e); return { sugestoesAjuste: 0 } })
   res.json({ ...qualidade, ...detectores, ...ajuste, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
