@@ -126,7 +126,7 @@ export function AuditoriaDados() {
       <h3 style={{ margin: '14px 0 8px', fontSize: 14 }}>Mês a mês: como está e como fica</h3>
       <div className="pl-table-wrap">
         <table className="pl-table" data-auditoria-meses>
-          <thead><tr><th>Mês</th><th style={{ textAlign: 'right' }}>Vendas</th><th style={{ textAlign: 'right' }}>Fechados no CRM</th><th style={{ textAlign: 'right' }}>Receita hoje</th><th style={{ textAlign: 'right' }}>Repetidas</th><th style={{ textAlign: 'right' }}>Receita corrigida</th><th style={{ textAlign: 'right' }}>Lucro corrigido</th><th style={{ textAlign: 'right' }}>Comissões corrigidas</th><th style={{ textAlign: 'right' }}>Leads (repetidos)</th></tr></thead>
+          <thead><tr><th>Mês</th><th style={{ textAlign: 'right' }}>Vendas</th><th style={{ textAlign: 'right' }}>Fechados no CRM</th><th style={{ textAlign: 'right' }}>Receita hoje</th><th style={{ textAlign: 'right' }}>Repetidas</th><th style={{ textAlign: 'right' }}>Receita corrigida</th><th style={{ textAlign: 'right' }}>Pró-labore corrigido</th><th style={{ textAlign: 'right' }}>Comissões corrigidas</th><th style={{ textAlign: 'right' }}>Leads (repetidos)</th></tr></thead>
           <tbody>
             {dados.meses.map(m => (
               <tr key={m.mes} data-mes-auditoria={m.mes} style={m.repetidas || m.leadsRepetidos ? { background: 'var(--pl-surface-2, rgba(255,200,0,0.06))' } : undefined}>

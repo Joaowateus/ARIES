@@ -28,16 +28,17 @@ export function DicionarioMetricas({ podeEditar }: { podeEditar: boolean }) {
       setEditando(null); setMsg(`Versão ${r.ficha.versao} aprovada.`)
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível salvar') }
   }
-  const lote = (n: 1 | 2) => fichas.filter(f => f.lote === n)
+  const lote = (n: number) => fichas.filter(f => f.lote === n)
+  const NOMES_LOTE: Record<number, string> = { 1: 'Primeiro lote — comerciais', 2: 'Segundo lote — jornada', 3: 'Terceiro lote — telas por papel (PDF 04)', 4: 'Quarto lote — áreas da onda 4 (PDF 05)', 5: 'Quinto lote — Hoje do dono (Daily e Painel)' }
   return (
     <section className="pl-card" id="dicionario-metricas" style={{ marginBottom: 20 }} data-dicionario-metricas>
       <div className="pl-card-head"><div>
         <div className="pl-card-title">Dicionário de métricas</div>
         <div className="pl-card-sub">Cada número do sistema vem de uma ficha única. Toque na métrica para ver fórmula, fonte, faixas e versões.</div>
       </div></div>
-      {([1, 2] as const).map(n => (
+      {[1, 2, 3, 4, 5].filter(n => lote(n).length).map(n => (
         <div key={n} style={{ marginTop: 10 }}>
-          <div className="pl-eyebrow">{n === 1 ? 'Primeiro lote — comerciais' : 'Segundo lote — jornada'}</div>
+          <div className="pl-eyebrow">{NOMES_LOTE[n]}</div>
           <div style={{ overflowX: 'auto' }}>
             <table className="pl-table"><thead><tr><th>Métrica</th><th>Fonte</th><th>Responsável</th><th>Versão</th>{podeEditar && <th />}</tr></thead>
               <tbody>{lote(n).map(f => (

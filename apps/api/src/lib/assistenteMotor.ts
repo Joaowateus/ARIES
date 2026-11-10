@@ -1335,7 +1335,10 @@ export async function enviarResumosDaManha(agora = new Date()): Promise<{ resumo
     // Marca antes: duas rodadas juntas não mandam dois resumos.
     const marcado = await prisma.assistenteComercial.updateMany({ where: { id: a.id, OR: [{ resumoManhaEm: null }, { resumoManhaEm: { lt: hoje } }] }, data: { resumoManhaEm: agora } })
     if (!marcado.count) continue
-    const texto = await resumoDoDia(a, agora, `☀️ *Bom dia, ${primeiroNomeVendedor(a.vendedor.nome)}!* Seu dia até agora:`)
+    let texto = await resumoDoDia(a, agora, `☀️ *Bom dia, ${primeiroNomeVendedor(a.vendedor.nome)}!* Seu dia até agora:`)
+    // Ajuste 1: o supervisor recebe também a pauta do Daily (texto do código, sem as cifras do dono).
+    const sup = await prisma.vendedor.findFirst({ where: { id: a.vendedor.id, papel: 'SUPERVISOR', funcao: null }, select: { usuarioId: true } })
+    if (sup) { const { textoPautaDaManha } = await import('./daily'); const pauta = await textoPautaDaManha(sup.usuarioId, 'SUPERVISOR', a.vendedor.id, agora).catch(() => null); if (pauta) texto = `${texto}\n\n${pauta}` }
     const suporte = await conversaDeSuporte(a)
     await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, suporte.id, a.numeroWhatsapp!, [`${texto}\n\nPergunte o que precisar: mande *? ajuda*.`])
       .catch(e => logger.warn({ err: e }, 'assistente: falha no resumo da manhã'))

@@ -8,11 +8,45 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, telasApi, type HojeDados, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
 import { AgoraHoje, Cabecalho, Detalhes, Lente, StatusChip, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
+import { FraseDoDono } from './FraseDoDono'
+import { Daily } from './Daily'
+import { PainelDoDono } from './PainelDoDono'
+
+// Ajuste 1: o Hoje do dono (e do supervisor) tem três sub-abas: Hoje · Daily · Painel.
+type Sub = 'hoje' | 'daily' | 'painel'
+const SUBS: Array<{ valor: Sub; rotulo: string }> = [{ valor: 'hoje', rotulo: 'Hoje' }, { valor: 'daily', rotulo: 'Daily' }, { valor: 'painel', rotulo: 'Painel' }]
 
 export default function HojePage() {
+  const [papel, setPapel] = useState<string | null>(null)
+  const [sub, setSub] = useState<Sub>(() => {
+    const q = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('sub')
+    return q === 'daily' || q === 'painel' ? q : 'hoje'
+  })
+  function trocar(s: Sub) {
+    setSub(s)
+    const url = new URL(window.location.href)
+    if (s === 'hoje') url.searchParams.delete('sub'); else url.searchParams.set('sub', s)
+    window.history.replaceState(null, '', url.toString())
+  }
+  const comSubs = papel === 'DONO' || papel === 'SUPERVISOR'
+  return (
+    <div data-hoje-subabas={comSubs ? sub : undefined}>
+      {comSubs && (
+        <div className="pl-sv-tabs" role="tablist" aria-label="Partes do Hoje" style={{ marginBottom: 12 }} data-subabas-hoje>
+          {SUBS.map(x => <button key={x.valor} type="button" role="tab" aria-selected={sub === x.valor} className={sub === x.valor ? 'ativo' : ''} onClick={() => trocar(x.valor)} data-subaba={x.valor}>{x.rotulo}</button>)}
+        </div>
+      )}
+      {(!comSubs || sub === 'hoje') && <HojeDoPapel aoCarregar={setPapel} />}
+      {comSubs && sub === 'daily' && <Daily papel={papel!} />}
+      {comSubs && sub === 'painel' && <PainelDoDono papel={papel!} />}
+    </div>
+  )
+}
+
+function HojeDoPapel({ aoCarregar }: { aoCarregar: (papel: string) => void }) {
   const [d, setD] = useState<HojeDados | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const carregar = useCallback(() => { telasApi.hoje().then(x => { setD(x); setErro(null) }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar')) }, [])
+  const carregar = useCallback(() => { telasApi.hoje().then(x => { setD(x); setErro(null); aoCarregar(x.papel) }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar')) }, [aoCarregar])
   useEffect(() => { carregar() }, [carregar])
   if (erro) return <TelaVazia titulo="Não deu para montar o seu Hoje agora">{erro}</TelaVazia>
   if (!d) return <p className="pl-hint">Montando o seu Hoje…</p>
@@ -20,6 +54,7 @@ export default function HojePage() {
   const proxima = d.fila.find(i => i.acao && !i.extensao)
   return (
     <div data-hoje={d.papel}>
+      {d.papel === 'DONO' && <FraseDoDono />}
       <Cabecalho aba={ficha} acao={proxima?.acao?.href ? <Link className="pl-btn pl-btn-primary ar-acao-principal" href={proxima.acao.href} data-acao-principal>Fazer a próxima: {proxima.acao.rotulo}</Link> : undefined} />
       <div className="ar-tela">
         <div className="ar-trabalho">

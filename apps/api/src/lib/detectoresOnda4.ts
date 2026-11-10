@@ -98,7 +98,7 @@ const destino = (destinatarioId: string | null, acompanha: Array<string | null>)
 
 const ETAPAS_ALTAS = ['SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA']
 /** Perdidos na Reativação (sem encerrados, descartados e bloqueados), com o responsável pela recuperação. */
-async function perdidosNaReativacao(usuarioId: string) {
+export async function perdidosNaReativacao(usuarioId: string) {
   const leads = await prisma.lead.findMany({
     where: { usuarioId, estagio: 'PERDIDO', NOT: { cliente: { is: { bloqueado: true } } }, OR: [{ destinoPerda: null }, { destinoPerda: { notIn: ['ENCERRADA', 'DESCARTADA'] } }] },
     select: { id: true, nomeCliente: true, vendedorId: true, responsavelQualificacaoId: true, temperatura: true, destinoPerda: true, perdidoEm: true, historico: { select: { estagioNovo: true } } },
