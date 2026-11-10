@@ -11,6 +11,7 @@ import { AgoraHoje, Cabecalho, Detalhes, Lente, StatusChip, TelaVazia, fmtValor,
 import { FraseDoDono } from './FraseDoDono'
 import { Daily } from './Daily'
 import { PainelDoDono } from './PainelDoDono'
+import { DashboardAntigo } from '../_dashboard/DashboardAntigo'
 
 // Ajuste 1: o Hoje do dono (e do supervisor) tem três sub-abas: Hoje · Daily · Painel.
 type Sub = 'hoje' | 'daily' | 'painel'
@@ -38,7 +39,22 @@ export default function HojePage() {
       )}
       {(!comSubs || sub === 'hoje') && <HojeDoPapel aoCarregar={setPapel} />}
       {comSubs && sub === 'daily' && <Daily papel={papel!} />}
-      {comSubs && sub === 'painel' && <PainelDoDono papel={papel!} />}
+      {comSubs && sub === 'painel' && <PainelComGraficos papel={papel!} />}
+    </div>
+  )
+}
+
+// O Painel no visual de sempre (todos os gráficos do Dashboard, a Jornada com 10 etapas) e, recolhido no fim,
+// o Painel detalhado do Ajuste 1 (filtros por SDR, origem e forma de pagamento; ranking de SDRs; séries do dicionário).
+function PainelComGraficos({ papel }: { papel: string }) {
+  const [detalhado, setDetalhado] = useState(false)
+  return (
+    <div data-painel-graficos>
+      <DashboardAntigo comoPainel />
+      <div style={{ marginTop: 20 }}>
+        <button type="button" className="pl-btn" onClick={() => setDetalhado(d => !d)} aria-expanded={detalhado} data-abrir-detalhado>{detalhado ? 'Fechar o Painel detalhado' : 'Painel detalhado: filtros por SDR, origem e forma de pagamento'}</button>
+        {detalhado && <div style={{ marginTop: 12 }}><PainelDoDono papel={papel} /></div>}
+      </div>
     </div>
   )
 }
