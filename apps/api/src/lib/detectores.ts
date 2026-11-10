@@ -10,14 +10,18 @@ import { prisma } from './prisma'
 import { ETAPAS, NOME_ETAPA, type Etapa } from './etapasJornada'
 import { calcular, faixaDe, hojeBrt, mesCorrente, padraoDaLoja, periodoAnterior, type Escopo, type Periodo } from './metricas'
 import { limitesEmMs } from './jornadaPremissas'
+import { DETECTORES_ONDA4, detectarOnda4 } from './detectoresOnda4'
 
-export type Area = 'ATENDIMENTO' | 'FUNIL' | 'ATIVIDADES' | 'CREDITO' | 'ANUNCIOS' | 'RESULTADO'
+export type Area = 'ATENDIMENTO' | 'FUNIL' | 'ATIVIDADES' | 'CREDITO' | 'ANUNCIOS' | 'RESULTADO' | 'REATIVACAO' | 'MARKETING' | 'GESTAO' | 'PESSOAS'
 export type AlvoTipo = 'PESSOA' | 'EQUIPE' | 'ETAPA' | 'CREDITO' | 'BANCO' | 'ANUNCIOS' | 'RESULTADO'
+  | 'CAMPANHA' | 'ROTEIRO' | 'ANUNCIO' | 'CONTEUDO' | 'POST' | 'VENDA' | 'PAGAMENTO' | 'LANCAMENTO' | 'PILAR' | 'OCORRENCIA' | 'BOA_PRATICA' | 'DICA_EQUIPE'
 export type Forca = 'COMPROVADA' | 'PADRAO' | 'HIPOTESE'
 
 export interface DefDetector {
   chave: string; nome: string; area: Area; dispara: string; acao: string; metricas: string[]
   roteamento: string; frequencia: 'DIARIA' | 'HORARIA'
+  // PDF 05: área da onda 4 (sem: área comercial do PDF 03) e volume mínimo inicial próprio.
+  grupo?: 'REATIVACAO' | 'MARKETING' | 'GESTAO' | 'PESSOAS'; volumePadrao?: number
 }
 export const DETECTORES: DefDetector[] = [
   { chave: 'resposta_lenta', nome: 'Resposta lenta', area: 'ATENDIMENTO', dispara: 'O tempo de primeira resposta de uma pessoa ou da equipe piora contra o mesmo intervalo anterior', acao: 'Redistribuir a fila ou cobrar quem está atrasando', metricas: ['tempo_primeira_resposta'], roteamento: 'Pessoa: ela mesma (supervisor acompanha) · Equipe: supervisor (dono acompanha)', frequencia: 'DIARIA' },
@@ -28,6 +32,7 @@ export const DETECTORES: DefDetector[] = [
   { chave: 'anuncio_encarecendo', nome: 'Anúncio encarecendo', area: 'ANUNCIOS', dispara: 'O custo por lead sobe enquanto o ROAS cai', acao: 'Revisar criativos e verba com o gestor de tráfego', metricas: ['custo_por_lead', 'roas'], roteamento: 'Gestor de tráfego (hoje o dono)', frequencia: 'DIARIA' },
   { chave: 'meta_em_risco', nome: 'Meta em risco', area: 'RESULTADO', dispara: 'A previsão de fechamento do mês fica abaixo da meta', acao: 'Mostrar quantas vendas por dia faltam e onde agir no funil', metricas: ['previsao_fechamento', 'conversao_por_etapa'], roteamento: 'Dono e supervisor', frequencia: 'HORARIA' },
 ]
+DETECTORES.push(...DETECTORES_ONDA4)
 export const LIMITE_PADRAO = 0.2 // 20% de variação contra o mesmo intervalo anterior
 
 export interface ConfigDetector { chave: string; ativo: boolean; nivelAutonomia: number; volumeMinimo: number; limite: number }
@@ -39,7 +44,7 @@ export async function configDetectores(usuarioId: string): Promise<Record<string
   const volPadrao = p?.volumeMinimoDetectores ?? 10
   return Object.fromEntries(DETECTORES.map(d => {
     const l = linhas.find(x => x.chave === d.chave)
-    return [d.chave, { chave: d.chave, ativo: l?.ativo ?? true, nivelAutonomia: l?.nivelAutonomia ?? 1, volumeMinimo: l?.volumeMinimo ?? volPadrao, limite: l?.limite ?? LIMITE_PADRAO }]
+    return [d.chave, { chave: d.chave, ativo: l?.ativo ?? true, nivelAutonomia: l?.nivelAutonomia ?? 1, volumeMinimo: l?.volumeMinimo ?? d.volumePadrao ?? volPadrao, limite: l?.limite ?? LIMITE_PADRAO }]
   }))
 }
 
@@ -58,6 +63,9 @@ export interface Achado {
   forca: Forca
   impacto: { unidade: 'LEADS' | 'VENDAS' | 'FATURAMENTO'; valor: number; texto: string } | null
   contextoExtra?: string
+  // PDF 05: área da onda 4 e o roteamento da tabela da área (quem recebe e quem acompanha).
+  grupo?: 'REATIVACAO' | 'MARKETING' | 'GESTAO' | 'PESSOAS'
+  destino?: { destinatarioId: string | null; acompanha: string[] }
 }
 
 const DIA = 86_400_000
@@ -395,14 +403,17 @@ const RODAR: Record<string, (u: string, c: ConfigDetector, a: Date) => Promise<A
 }
 
 /** Roda os detectores ativos da conta e devolve os achados (ainda sem virar REC). */
-export async function detectar(usuarioId: string, agora = new Date(), quais?: string[]): Promise<Achado[]> {
+export async function detectar(usuarioId: string, agora = new Date(), quais?: string[], forcarAreas?: Array<'REATIVACAO' | 'MARKETING' | 'GESTAO' | 'PESSOAS'>): Promise<Achado[]> {
   const cfg = await configDetectores(usuarioId)
   const out: Achado[] = []
   for (const d of DETECTORES) {
+    if (d.grupo) continue
     if (quais && !quais.includes(d.chave)) continue
     const c = cfg[d.chave]
     if (!c.ativo) continue
     try { out.push(...await RODAR[d.chave](usuarioId, c, agora)) } catch (e) { console.error(`[detector] ${d.chave}`, e) }
   }
+  // PDF 05: os detectores das áreas da onda 4 (só as áreas ligadas pelo dono).
+  out.push(...await detectarOnda4(usuarioId, cfg, agora, quais, forcarAreas))
   return out
 }

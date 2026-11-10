@@ -33,10 +33,30 @@ export function AriesNoSm() {
             <div className="ar-lente-item" key={i}>
               <p className="ar-lente-achado">{it.achado}</p><p className="ar-lente-evid">{it.evidencia}</p>
               {it.acao?.href && <Link className="pl-btn" href={it.acao.href}>{it.acao.rotulo}</Link>}
+              {it.tipo === 'REC' && it.id && <AcoesRec id={it.id} />}
             </div>
           ))}
         </div>
       )}
     </section>
+  )
+}
+
+// PDF 05: achados de conteúdo vêm para o social media decidir (aceitar ou descartar com motivo).
+function AcoesRec({ id }: { id: string }) {
+  const [feito, setFeito] = useState<string | null>(null)
+  const [motivo, setMotivo] = useState('')
+  const [descartando, setDescartando] = useState(false)
+  if (feito) return <span className="pl-hint">{feito}</span>
+  return (
+    <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginLeft: 6 }}>
+      <button type="button" className="pl-btn pl-btn-primary" onClick={() => void telasApi.smRec(id, 'aceitar').then(() => setFeito('Aceita: as atividades foram criadas.')).catch(e => setFeito(e instanceof Error ? e.message : 'Não foi possível'))} data-sm-aceitar>Aceitar</button>
+      {!descartando ? <button type="button" className="pl-btn" onClick={() => setDescartando(true)}>Descartar com motivo</button> : (
+        <>
+          <input className="pl-input" style={{ width: 200 }} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo" aria-label="Motivo do descarte" />
+          <button type="button" className="pl-btn" onClick={() => void telasApi.smRec(id, 'descartar', motivo).then(() => setFeito('Descartada com motivo.')).catch(e => setFeito(e instanceof Error ? e.message : 'Não foi possível'))}>Descartar</button>
+        </>
+      )}
+    </span>
   )
 }

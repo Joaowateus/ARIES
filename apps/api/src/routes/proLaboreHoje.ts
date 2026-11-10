@@ -9,7 +9,7 @@ import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../m
 import { papelDoUsuario, NOME_PAPEL } from '../lib/papelHoje'
 import { CONFIG_PADRAO, ErroHoje, acaoDoSupervisor, configDoPapel, filaDoHoje, lenteDaAba, nomeDoGrupo, numerosDoHoje, painelDoDono, quadroDaEquipe, type Pessoa } from '../lib/hoje'
 import { alternarVersao, definirParticipante, liberarParaTodos, participantes, versaoDasTelas } from '../lib/piloto'
-import { concluirAtividade } from '../lib/recomendacoes'
+import { ErroRec, aceitar, concluirAtividade, descartar } from '../lib/recomendacoes'
 import { hojeBrt } from '../lib/metricas'
 import { criarAcao, envioSeguro, perguntar } from '../lib/pergunte'
 import { aceitePdf04 } from '../lib/aceitePdf04'
@@ -54,6 +54,18 @@ router.get('/sm/aries/hoje', requireProLaboreAuth, async (req: Request, res: Res
   const cfg = await configDoPapel(u.sub, 'SOCIAL_MEDIA')
   const [numeros, lente] = await Promise.all([numerosDoHoje(pessoa), lenteDaAba(pessoa, 'hoje')])
   res.json({ ativo: true, pergunta: cfg.pergunta, numeros, lente })
+})
+
+// PDF 05: o social media decide (aceitar ou descartar com motivo) os achados de conteúdo roteados para ele.
+router.post('/sm/aries/rec/:id/:acao', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const u = req.proLaboreUser!
+  if (u.papel !== 'SOCIAL_MEDIA' || !u.smMembroId) { res.status(403).json({ error: 'Só para o Social Media' }); return }
+  const q = { id: u.smMembroId, papel: 'VENDEDOR', usuarioId: u.sub }
+  try {
+    if (req.params.acao === 'aceitar') res.json(await aceitar(String(req.params.id), q))
+    else if (req.params.acao === 'descartar') res.json(await descartar(String(req.params.id), q, String(req.body?.motivo ?? '')))
+    else res.status(404).json({ error: 'Ação inválida' })
+  } catch (e) { if (e instanceof ErroRec) { res.status(e.status).json({ error: e.message }); return } throw e }
 })
 
 // Configuração do Hoje por papel (seção 5): o dono vê; a padrão é a aprovada no PDF.

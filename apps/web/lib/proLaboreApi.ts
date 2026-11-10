@@ -3691,6 +3691,10 @@ export const recApi = {
   sugestoes: () => request<SugestaoAjuste[]>('/pro-labore/sugestoes-ajuste'),
   decidirSugestao: (id: string, aprovar: boolean) => request<SugestaoAjuste>(`/pro-labore/sugestoes-ajuste/${id}/${aprovar ? 'aprovar' : 'recusar'}`, { method: 'POST', body: '{}' }),
   aceite: () => request<AceitePdf03>('/pro-labore/recomendacoes-aceite'),
+  compartilhar: (id: string, comNome: boolean, texto?: string) => request<{ id: string }>(`/pro-labore/recomendacoes/${id}/compartilhar`, { method: 'POST', body: JSON.stringify({ comNome, texto }) }),
+  areas: () => request<AreaOnda4[]>('/pro-labore/detectores-areas'),
+  mudarArea: (grupo: string, d: { ligada?: boolean; modo?: 'SILENCIOSO' | 'NORMAL'; justificativa: string }) => request<{ afetadas: number }>(`/pro-labore/detectores-areas/${grupo}`, { method: 'PUT', body: JSON.stringify(d) }),
+  aceiteArea: (grupo: string) => request<AceiteArea>(`/pro-labore/detectores-areas/${grupo}/aceite`),
   roteamento: (modo: 'SILENCIOSO' | 'NORMAL', justificativa: string) => request<{ modo: 'SILENCIOSO' | 'NORMAL'; afetadas: number }>('/pro-labore/recomendacoes-roteamento', { method: 'PUT', body: JSON.stringify({ modo, justificativa }) }),
 }
 
@@ -3781,6 +3785,7 @@ export const telasApi = {
   usoAcao: (id: string, acao: string) => request<{ ok: boolean }>(`/pro-labore/uso/${id}/acao`, { method: 'POST', body: JSON.stringify({ acao }) }),
   usoResumo: () => request<Array<{ aba: string; aberturas: number; pessoas: number; acoes: number; ultima: string }>>('/pro-labore/uso/resumo'),
   aceite: () => request<AceitePdf04>('/pro-labore/telas-aceite'),
+  smRec: (id: string, acao: 'aceitar' | 'descartar', motivo?: string) => request<unknown>(`/pro-labore/sm/aries/rec/${id}/${acao}`, { method: 'POST', body: JSON.stringify({ motivo }) }),
   smHoje: () => request<{ ativo: boolean; pergunta?: string; numeros?: NumeroHoje[]; lente?: Lente }>('/pro-labore/sm/aries/hoje'),
   orcamentoAnuncio: () => request<{ orcamentoAnuncioMensal: number | null }>('/pro-labore/orcamento-anuncio'),
   salvarOrcamentoAnuncio: (valor: number | null, justificativa: string) => request<{ orcamentoAnuncioMensal: number | null }>('/pro-labore/orcamento-anuncio', { method: 'PUT', body: JSON.stringify({ valor, justificativa }) }),
@@ -3794,4 +3799,24 @@ export interface AceitePdf04 {
   pergunteProtecao: PassaN & { envios: number; inseguros: Array<{ id: string; finalidade: string; criadoEm: string }> }
   pergunteLimites: PassaN & { naoSabe: number; exemplosNaoSabe: Array<{ pergunta: string; resposta: string }>; perguntasSobreColega: number; nomesVazados: number }
   sistemaAtual: PassaN & { noPiloto: number; aberturasTelasAtuais: number; aberturasTelasNovas: number }
+}
+
+// --- PDF 05 · Onda 4: áreas de detectores ---
+export interface AreaOnda4 {
+  grupo: 'REATIVACAO' | 'MARKETING' | 'GESTAO' | 'PESSOAS'; nome: string; responsavel: string
+  ligada: boolean; modo: 'SILENCIOSO' | 'NORMAL'; ligadaEm: string | null; liberadaEm: string | null
+  detectores: Array<{ chave: string; nome: string; dispara: string; acao: string; roteamento: string; ativo: boolean; volumeMinimo: number }>
+}
+type PassaA = { passa: boolean | null }
+export interface AceiteArea {
+  grupo: string; area: { ligada: boolean; modo: string }; responsavel: string | null; total: number
+  porDetector: Array<{ chave: string; nome: string; total: number }>
+  evidencia: PassaA & { itens: Array<{ codigo: string | null; titulo: string; valor: number | null; dicionario: number | null; bate: boolean | null }> }
+  utilidade: PassaA & { amostra: Array<{ id: string; codigo: string | null; titulo: string; detector: string; forca: ForcaRec; avaliacoes: number; pertinentes: number }>; avaliacoes: number; pertinentes: number; pct: number | null }
+  roteamento: PassaA & { itens: Array<{ codigo: string | null; detector: string; ok: boolean }> }
+  pessoas: (PassaA & { ocorrencias: number; dicas: number }) | null
+  gestaoSemIa: (PassaA & { envios: number; inseguros: number }) | null
+  reativacao: (PassaA & { comBloqueado: number; roteiros: number }) | null
+  duplicidade: PassaA & { juntadas: number }
+  sistemaAtual: PassaA & { areasDesligadas: string[]; recsDeAreasDesligadas: number }
 }

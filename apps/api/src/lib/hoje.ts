@@ -287,12 +287,12 @@ const impactoDe = (r: { impacto: unknown }) => Number((r.impacto as { valor?: nu
 export async function recsVisiveis(pessoa: Pessoa, filtro: Record<string, unknown> = {}, limite = 3): Promise<RecLente[]> {
   const quem = { id: pessoa.vendedorId ?? pessoa.usuarioId, papel: pessoa.papel === 'DONO' ? 'DONO' : pessoa.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR', usuarioId: pessoa.usuarioId }
   const recs = await prisma.recomendacao.findMany({
-    where: { usuarioId: pessoa.usuarioId, status: 'NOVA', ...(pessoa.papel === 'DONO' ? {} : pessoa.papel === 'TRAFEGO' ? { area: 'ANUNCIOS' } : { visivelPara: { has: quem.id } }), ...filtro },
+    where: { usuarioId: pessoa.usuarioId, status: 'NOVA', ...(pessoa.papel === 'DONO' ? {} : pessoa.papel === 'TRAFEGO' ? { OR: [{ area: 'ANUNCIOS' }, { visivelPara: { has: quem.id } }] } : { visivelPara: { has: quem.id } }), ...filtro },
     select: { id: true, codigo: true, titulo: true, area: true, forca: true, tipo: true, impacto: true, acaoSugerida: true, evidencia: true, status: true, alvoTipo: true, alvoId: true, destinatarioId: true, visivelPara: true },
     take: 200,
   })
   // O vendedor nunca vê achado sobre colega (mesma regra da aba Recomendações).
-  const vistas = pessoa.papel === 'TRAFEGO' ? recs.filter(r => r.alvoTipo === 'ANUNCIOS' || r.alvoTipo === 'EQUIPE') : recs.filter(r => podeVerRec(r, quem as Parameters<typeof podeVerRec>[1]))
+  const vistas = pessoa.papel === 'TRAFEGO' ? recs.filter(r => r.visivelPara.includes(quem.id) || r.alvoTipo === 'ANUNCIOS' || r.alvoTipo === 'EQUIPE') : recs.filter(r => podeVerRec(r, quem as Parameters<typeof podeVerRec>[1]))
   return vistas.sort((a, b) => impactoDe(b) - impactoDe(a)).slice(0, limite)
 }
 
@@ -320,14 +320,20 @@ export const ABA_LENTE: Record<string, { areas: string[]; alvos?: string[]; prin
   conversas: { areas: ['ATENDIMENTO'], principal: 'tempo_primeira_resposta' },
   credito: { areas: ['CREDITO'], principal: 'aprovacao_credito' },
   atividades: { areas: ['ATIVIDADES'], principal: 'atividades_atrasadas' },
-  reativacao: { areas: [], principal: 'leads_parados' },
-  trafego: { areas: ['ANUNCIOS'], principal: 'custo_por_lead' },
-  'vendas-pagamentos': { areas: ['RESULTADO'], principal: 'vendas' },
-  'origem-vendas': { areas: [], principal: 'faturamento_por_origem' },
-  equipe: { areas: ['ATENDIMENTO', 'ATIVIDADES'], alvos: ['PESSOA'], principal: 'tempo_primeira_resposta' },
-  financeiro: { areas: [], principal: 'saidas_financeiro' },
+  // PDF 05: cada área da onda 4 aparece na Lente das abas onde se age sobre ela.
+  reativacao: { areas: ['REATIVACAO'], principal: 'taxa_recuperacao' },
+  trafego: { areas: ['ANUNCIOS', 'MARKETING'], alvos: ['ANUNCIOS', 'ANUNCIO', 'CAMPANHA'], principal: 'custo_por_lead' },
+  'social-media': { areas: ['MARKETING'], alvos: ['CONTEUDO', 'POST'], principal: 'posts_publicados' },
+  'vendas-pagamentos': { areas: ['RESULTADO', 'GESTAO'], alvos: ['RESULTADO', 'EQUIPE', 'VENDA', 'PAGAMENTO', 'LANCAMENTO'], principal: 'vendas' },
+  'origem-vendas': { areas: ['MARKETING'], alvos: ['CAMPANHA', 'POST'], principal: 'faturamento_por_origem' },
+  equipe: { areas: ['ATENDIMENTO', 'ATIVIDADES', 'PESSOAS'], alvos: ['PESSOA', 'BOA_PRATICA', 'OCORRENCIA'], principal: 'tempo_primeira_resposta' },
+  desenvolvimento: { areas: ['PESSOAS'], alvos: ['PESSOA', 'DICA_EQUIPE'], principal: 'conversao_lead_venda' },
+  'rotina-auditoria': { areas: ['PESSOAS'], alvos: ['PESSOA'], principal: 'aderencia_agenda' },
+  ocorrencias: { areas: ['PESSOAS'], alvos: ['OCORRENCIA'], principal: null },
+  financeiro: { areas: ['GESTAO'], alvos: ['LANCAMENTO', 'PAGAMENTO'], principal: 'saidas_financeiro' },
+  'plano-crescimento': { areas: ['GESTAO'], alvos: ['PILAR'], principal: null },
   'metas-premissas': { areas: ['RESULTADO'], principal: 'previsao_fechamento' },
-  recomendacoes: { areas: ['ATENDIMENTO', 'FUNIL', 'ATIVIDADES', 'CREDITO', 'ANUNCIOS', 'RESULTADO'], principal: 'previsao_fechamento' },
+  recomendacoes: { areas: ['ATENDIMENTO', 'FUNIL', 'ATIVIDADES', 'CREDITO', 'ANUNCIOS', 'RESULTADO', 'REATIVACAO', 'MARKETING', 'GESTAO', 'PESSOAS'], principal: 'previsao_fechamento' },
 }
 
 async function principalDe(pessoa: Pessoa, chave: string | null, agora: Date): Promise<Leitura | null> {
@@ -355,7 +361,8 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
   let itens: ItemLente[] = []
   if (pessoa.papel === 'VENDEDOR' || pessoa.papel === 'SDR') {
     // Orientações individuais: o achado é sobre a própria pessoa.
-    const recs = await recsVisiveis(pessoa, { alvoTipo: { in: ['PESSOA', 'CREDITO'] }, alvoId: pessoa.vendedorId ?? '__nenhum__' }, pessoa.papel === 'SDR' ? 2 : 3)
+    // Orientações individuais (comercial, Reativação e Pessoas) e as boas práticas compartilhadas com a equipe (sem nomes).
+    const recs = await recsVisiveis(pessoa, { OR: [{ alvoTipo: { in: ['PESSOA', 'CREDITO'] }, alvoId: pessoa.vendedorId ?? '__nenhum__' }, { alvoTipo: 'DICA_EQUIPE' }] }, pessoa.papel === 'SDR' ? 2 : 3)
     itens = recs.map(r => recParaLente(r, pessoa))
     if (pessoa.papel === 'SDR') {
       const h = hojeBrt(agora), ini = new Date(new Date(`${h}T00:00:00Z`).getTime() - 6 * DIA).toISOString().slice(0, 10)
@@ -363,7 +370,8 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
       if (l) itens.push({ tipo: 'NUMERO', id: null, codigo: null, achado: `Taxa de devolução da semana: ${l.valor == null ? 'sem passagens' : `${l.valor}%`}`, evidencia: l.anterior?.valor != null ? `semana anterior: ${l.anterior.valor}%` : 'Leads devolvidos pelo vendedor ÷ leads passados', forca: null, acao: { rotulo: 'Ver as devoluções', href: '/pro-labore/leads' }, podeAceitar: false, podeDescartar: false })
     }
   } else if (pessoa.papel === 'SUPERVISOR') {
-    itens = (await recsVisiveis(pessoa, { alvoTipo: { in: ['EQUIPE', 'ETAPA'] } })).map(r => recParaLente(r, pessoa))
+    // Equipe e etapa, mais o que a onda 4 manda para ele (Reativação, ocorrências, boas práticas).
+    itens = (await recsVisiveis(pessoa, { OR: [{ alvoTipo: { in: ['EQUIPE', 'ETAPA'] } }, { destinatarioId: pessoa.vendedorId ?? '__nenhum__' }] })).map(r => recParaLente(r, pessoa))
   } else if (pessoa.papel === 'DONO') {
     // Três maiores riscos: métricas principais em faixa crítica; três maiores Recomendações por impacto.
     const chaves = ['previsao_fechamento', 'tempo_primeira_resposta', 'conversao_lead_venda', 'aprovacao_credito', 'leads_parados', 'atividades_atrasadas', 'custo_por_lead']
@@ -374,8 +382,10 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
       ...(await recsVisiveis(pessoa, {})).map(r => recParaLente(r, pessoa)),
     ]
   } else if (pessoa.papel === 'TRAFEGO') {
-    itens = (await recsVisiveis(pessoa, { area: 'ANUNCIOS' })).map(r => ({ ...recParaLente(r, pessoa), podeAceitar: false }))
+    itens = (await recsVisiveis(pessoa, { area: { in: ['ANUNCIOS', 'MARKETING'] } })).map(r => ({ ...recParaLente(r, pessoa), podeAceitar: r.destinatarioId === pessoa.vendedorId }))
   } else if (pessoa.papel === 'FINANCEIRO') {
+    // PDF 05: as Recomendações de Gestão roteadas para o financeiro vêm primeiro.
+    const gestao = (await recsVisiveis(pessoa, { area: 'GESTAO' }, 2)).map(r => recParaLente(r, pessoa))
     const mes = mesCorrente(agora)
     const [com, sai, vendasMes] = await Promise.all([
       ler('comissoes_a_pagar', { usuarioId: u, papel: 'FINANCEIRO' }, { inicio: hojeBrt(agora), fim: hojeBrt(agora) }, agora),
@@ -391,12 +401,16 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
     // Os valores (R$) entram pela tela, que formata a partir destes números do dicionário.
     ;(itens[0] as ItemLente & { valores?: unknown }).valores = { comissoesAgora: com.valor, previstas: Math.round(faltam), comissaoMedia: ticketCom._avg.valorComissao ?? null }
     ;(itens[1] as ItemLente & { valores?: unknown }).valores = { saidas: sai.valor, projecao: sai.projecao }
+    itens = [...gestao, ...itens].slice(0, 3)
   } else if (pessoa.papel === 'SOCIAL_MEDIA') {
+    // PDF 05: achados de conteúdo (Marketing) roteados para o social media.
+    const doSm = (await recsVisiveis(pessoa, { area: 'MARKETING' }, 2)).map(r => ({ ...recParaLente(r, pessoa), acao: { rotulo: r.acaoSugerida.length > 60 ? 'Ver a ação sugerida' : r.acaoSugerida } }))
     const paradas = await prisma.smMotoEstoque.findMany({ where: { usuarioId: u, situacao: 'DISPONIVEL', pautas: { none: { criadoEm: { gte: new Date(agora.getTime() - 30 * DIA) } } } }, orderBy: { criadoEm: 'asc' }, take: 2, select: { id: true, modelo: true, criadoEm: true } }).catch(() => [])
     itens = paradas.map(m => ({ tipo: 'PAUTA' as const, id: m.id, codigo: null, achado: `Pauta sugerida: ${m.modelo} parada no estoque`, evidencia: `no estoque há ${Math.round((agora.getTime() - m.criadoEm.getTime()) / DIA)} dias sem pauta no último mês`, forca: 'PADRAO', acao: { rotulo: 'Criar a pauta', href: '/pro-labore/sm' }, podeAceitar: false, podeDescartar: false }))
     const obj = await calcular('objecoes_frequentes', { usuarioId: u, papel: 'DONO' }, mesCorrente(agora), agora).catch(() => null)
     const top = (obj?.detalhe as Array<{ tipo?: string; rotulo?: string; n?: number }> | undefined)?.[0]
     if (top) itens.push({ tipo: 'PAUTA', id: null, codigo: null, achado: `Pauta sugerida pelas conversas: responder "${top.rotulo ?? top.tipo}"`, evidencia: `a objeção mais frequente nas conversas${top.n ? ` (${top.n} vezes)` : ''}`, forca: 'PADRAO', acao: { rotulo: 'Criar a pauta', href: '/pro-labore/sm' }, podeAceitar: false, podeDescartar: false })
+    itens = [...doSm, ...itens]
   }
   itens = itens.slice(0, pessoa.papel === 'DONO' ? 6 : 3)
   const principalChave = CONFIG_PADRAO[pessoa.papel].numeros[0]?.chave ?? null
