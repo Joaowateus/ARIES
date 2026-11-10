@@ -3603,7 +3603,7 @@ export interface ReguaCobrancaResp { modo: 'REGISTRO' | 'ENVIO'; origens: Record
 // PDF 02 · dicionário de métricas (ficha única e leitura com a comparação padrão).
 export type UnidadeMetrica = 'QTD' | 'PCT' | 'BRL' | 'MIN' | 'DIAS' | 'X'
 export interface FichaMetrica {
-  chave: string; lote: 1 | 2; nome: string; definicao: string; formula: string; fonte: string; janela: string; comparacao: string
+  chave: string; lote: 1 | 2 | 3 | 4 | 5; nome: string; definicao: string; formula: string; fonte: string; janela: string; comparacao: string
   unidade: UnidadeMetrica; melhor: 'MAIOR' | 'MENOR' | 'NEUTRO'; aditiva: boolean; retrato?: boolean; responsavel: string; quemVe: string[]
   faixas?: { bom: number; critico: number } | null; versao: number; aprovadoPor: string | null; aprovadoEm: string | null
 }
@@ -3820,4 +3820,72 @@ export interface AceiteArea {
   reativacao: (PassaA & { comBloqueado: number; roteiros: number }) | null
   duplicidade: PassaA & { juntadas: number }
   sistemaAtual: PassaA & { areasDesligadas: string[]; recsDeAreasDesligadas: number }
+}
+
+// --- Ajuste 1 · Hoje do dono: Daily e Painel ---
+export type BlocoDaily = 'RESULTADO' | 'PRE_VENDA' | 'CREDITO' | 'VENDEDORES' | 'TRAFEGO' | 'SOCIAL' | 'REATIVACAO' | 'GESTAO'
+export type ModoDaily = 'GESTAO' | 'EQUIPE'
+export type StatusFaixa = 'BOM' | 'ATENCAO' | 'CRITICO' | null
+export interface NumeroDaily {
+  chave: string; rotulo: string; unidade: string; melhor: string; periodo: { inicio: string; fim: string }; tipoPeriodo: string
+  valor: number | null; anterior: number | null; variacao: number | null; alvo: { valor: number | null; rotulo: string } | null; status: StatusFaixa
+  junto: { nome: string; valor: number | null } | null; porPessoa: Array<{ id: string; nome: string; valor: number | null }> | null
+  naoDefinido: string | null; ficha: { definicao: string; formula: string }
+}
+export interface BlocoPauta {
+  chave: BlocoDaily; nome: string; minutos: number; numeros: NumeroDaily[]
+  recs: Array<{ id: string; codigo: string | null; titulo: string; forca: string; impacto: string | null; acao: string; individual: boolean }>
+  atividades: Array<{ id: string; codigo: string | null; oQue: string; prazo: string; atrasada: boolean; responsavel: string; cliente: string | null }>
+  decididas: Array<{ id: string; codigo: string | null; oQue: string | null; prazo: string; responsavel: string }>
+  responsavelSugerido: string | null; semPessoa: string | null
+}
+export interface PautaDaily { modo: ModoDaily; geradoEm: string; papel: string; reuniao: { id: string; ata: unknown } | null; totalMinutos: number; blocos: BlocoPauta[]; equipe: Array<{ id: string; nome: string }> }
+export interface LeituraPainel { chave: string; nome: string; unidade: string; melhor: string; valor: number | null; anterior: { periodo: { inicio: string; fim: string }; valor: number | null } | null; variacao: number | null; projecao: number | null; status: StatusFaixa }
+export interface EtapaPainel {
+  etapa: string; nome: string; fase: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'; volume: number; conversao: number | null; conversaoHistorico: number | null; excluidos: number
+  perda: { pct: number | null; n: number; motivos: Array<{ motivo: string; nome: string; n: number }> }
+  tempoMediano: number | null; custo: number | null
+  valores: { oportunidade: number; proLaborePrevisto: number; comissaoPrevista: number; comissaoPerdida: number } | null
+  metas: { conversaoMin: number | null; perdaMax: number | null; custoMax: number | null; tempoMax: { valor: number | null; unidade: string; fonte: string }; tempoMaxDias: number | null }
+  status: { conversao: StatusFaixa; perda: StatusFaixa; tempo: StatusFaixa; custo: StatusFaixa }; situacao: StatusFaixa
+  rec: { id: string; codigo: string | null; titulo: string } | null; crm: string
+}
+export type SerieMensal = Array<{ mes: number; valor: number | null }>
+export interface PainelDono {
+  periodo: { inicio: string; fim: string }; papel: string; geradoEm: string
+  agora: { faturamento: LeituraPainel & { meta: number | null; statusMeta: StatusFaixa }; conversao: LeituraPainel | null; custoPorVenda: LeituraPainel | null }
+  jornada: { etapas: EtapaPainel[]; fases: Array<{ fase: string; nome: string; entraram: number; seguiram: number | null; conversao: number | null; perdidos: number; custo: number | null }>; gargalo: string | null; excluidos: { aVista: number; semVisita: number } }
+  indicadores: LeituraPainel[]
+  faturamento: { receitaMensal: SerieMensal; acumulado: number; metaAnual: number | null; statusMeta: StatusFaixa }
+  proLabore: { proLaboreMensal: SerieMensal | null; comissoesMensais: SerieMensal | null; jaPagoAosVendedores: number; detalhado: Array<{ nome: string; periodo: { inicio: string; fim: string }; receita: number | null; proLabore: number | null }> } | null
+  equipe: { vendedores: Array<{ id: string; nome: string; valor: number; vendas: number }>; sdrs: Array<{ id: string; nome: string; valor: number }> }
+  anuncios: { roasMensal: SerieMensal; custoPorLeadMensal: SerieMensal | null }
+  avisos: string[]
+}
+export interface FiltrosPainelWeb { inicio?: string; fim?: string; vendedorId?: string; sdrId?: string; origem?: string; formaPagamento?: string }
+export interface AceiteAjuste1 {
+  dia: string; mesConferido: { inicio: string; fim: string }
+  numeros: { contagens: Array<{ item: string; banco: number | null; dicionario: number | null; bate: boolean }>; daily: Array<{ bloco: string; numero: string; tela: number | null; dicionario: number | null; bate: boolean }>; painel: Array<{ numero: string; tela: number | null; dicionario: number | null; bate: boolean }>; passa: boolean }
+  jornada: { etapas: Array<{ etapa: string; volume: { tela: number; manual: number }; conversao: { tela: number | null; manual: number | null }; perda: { tela: number; manual: number }; custo: { tela: number | null; manual: number | null }; bate: boolean }>; total: number; passa: boolean }
+  modoEquipe: { individuais: number; porPessoa: number; atividadesPorPessoa: number; passa: boolean }
+  decidido: { reunioes: number; decisoes: number; comOrigemReuniao: number; passa: boolean | null }
+  comparacao: { periodo: { inicio: string; fim: string }; anterior: { inicio: string; fim: string }; menos100: string[]; passa: boolean }
+  cifras: { supervisorVe: string[]; passa: boolean }
+}
+const qs = (f: Record<string, string | undefined>) => { const s = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join('&'); return s ? `?${s}` : '' }
+export const dailyApi = {
+  pauta: (modo: ModoDaily, reuniao?: string | null) => request<PautaDaily>(`/pro-labore/daily/pauta${qs({ modo, reuniao: reuniao ?? undefined })}`),
+  iniciar: (modo: ModoDaily) => request<{ id: string; titulo: string; modo: ModoDaily }>('/pro-labore/daily/iniciar', { method: 'POST', body: JSON.stringify({ modo }) }),
+  decidir: (id: string, d: { bloco: BlocoDaily; texto: string; responsavelId: string | null; prazo: string }) => request<{ atividade: { id: string; codigo: string | null }; responsavel: string }>(`/pro-labore/daily/${id}/decidir`, { method: 'POST', body: JSON.stringify(d) }),
+  tratar: (id: string, d: { bloco: BlocoDaily; tipo: 'REC' | 'ATV' | 'NUMERO'; ref: string | null; texto: string; individual?: boolean }) => request<{ tratados: number }>(`/pro-labore/daily/${id}/tratar`, { method: 'POST', body: JSON.stringify(d) }),
+  bloco: (id: string, d: { bloco: BlocoDaily; segundos: number; pulado: boolean }) => request<unknown>(`/pro-labore/daily/${id}/bloco`, { method: 'POST', body: JSON.stringify(d) }),
+  encerrar: (id: string) => request<{ id: string; titulo: string; texto: string; decisoes: number }>(`/pro-labore/daily/${id}/encerrar`, { method: 'POST' }),
+  config: () => request<{ blocos: Array<{ chave: BlocoDaily; nome: string; minutos: number; ligado: boolean }> }>('/pro-labore/daily/config'),
+  salvarConfig: (blocos: Array<{ chave: BlocoDaily; minutos: number; ligado: boolean }>, justificativa: string) => request<unknown>('/pro-labore/daily/config', { method: 'PUT', body: JSON.stringify({ blocos, justificativa }) }),
+}
+export const painelDonoApi = {
+  painel: (f: FiltrosPainelWeb) => request<PainelDono>(`/pro-labore/painel-dono${qs(f as Record<string, string | undefined>)}`),
+  opcoes: () => request<{ vendedores: Array<{ id: string; nome: string }>; sdrs: Array<{ id: string; nome: string }>; origens: string[]; formasPagamento: string[] }>('/pro-labore/painel-dono/opcoes'),
+  salvarMeta: (etapa: string, m: { conversaoMin: number | null; perdaMax: number | null; custoMax: number | null; justificativa: string }) => request<unknown>(`/pro-labore/painel-dono/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(m) }),
+  aceite: (dia?: string) => request<AceiteAjuste1>(`/pro-labore/ajuste1/aceite${qs({ dia })}`),
 }

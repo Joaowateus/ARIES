@@ -350,7 +350,7 @@ export default function ProLaboreDashboardPage() {
   const kpis = [
     { chave: 'faturamento', label: 'Receita do mês', format: formatMoeda, color: 'var(--pl-accent)', curr: atual.receita, prev: anterior?.receita },
     ...(isDono
-      ? [{ chave: 'pro_labore', label: 'Lucro (pró-labore)', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }]
+      ? [{ chave: 'pro_labore', label: 'Pró-labore', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.proLaboreSacado, prev: anterior?.proLaboreSacado }]
       : isSupervisor
         ? [] // não é dela nem da equipe como um todo — cada vendedor já vê a própria no Ranking
         : [{ label: 'Comissão do mês', format: formatMoeda, color: 'var(--pl-accent-3)', curr: atual.comissaoPaga, prev: anterior?.comissaoPaga }]),
@@ -388,7 +388,7 @@ export default function ProLaboreDashboardPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Visão geral" title="Dashboard" subtitle="Receita, lucro, funil e produção da equipe em um só lugar" />
+      <PageHeader eyebrow="Visão geral" title="Dashboard" subtitle="Receita, pró-labore, funil e produção da equipe em um só lugar" />
       {isDono && <AvisoConferencia />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -417,7 +417,7 @@ export default function ProLaboreDashboardPage() {
       <div className="pl-section-head">
         <div>
           <div className="pl-eyebrow">Balanço financeiro</div>
-          <h2 className="pl-section-title">Receita, lucro e verba de anúncios</h2>
+          <h2 className="pl-section-title">Receita, pró-labore e verba de anúncios</h2>
         </div>
         <div className="pl-section-note">{meses[0].label}–{meses[meses.length - 1].label} {atual.ano} · clique num ponto do gráfico para inspecionar o mês</div>
       </div>
@@ -440,7 +440,7 @@ export default function ProLaboreDashboardPage() {
           <div className="pl-month-detail">
             <div>Mês selecionado<strong>{atualReceita.label} {atualReceita.ano}</strong></div>
             <div>Receita<strong>{formatMoeda(atualReceita.receita)}</strong></div>
-            {isDono && <div>Lucro<strong>{formatMoeda(atualReceita.proLaboreSacado)}</strong></div>}
+            {isDono && <div>Pró-labore<strong>{formatMoeda(atualReceita.proLaboreSacado)}</strong></div>}
             {!isDono && !isSupervisor && <div>Comissão<strong>{formatMoeda(atualReceita.comissaoPaga)}</strong></div>}
             <div>Vendas<strong>{atualReceita.quantidadeVendas}</strong></div>
             <div>Ticket médio<strong>{formatMoeda(atualReceita.ticketMedio)}</strong></div>
@@ -482,14 +482,14 @@ export default function ProLaboreDashboardPage() {
             <div className="pl-card">
               <div className="pl-card-head">
                 <div>
-                  <div className="pl-card-title">Lucro (pró-labore) mensal</div>
+                  <div className="pl-card-title">Pró-labore mensal</div>
                   <div className="pl-card-sub">Sacado por venda, até o teto configurado</div>
                 </div>
                 <FiltroVendedorCard vendedores={vendedores} valor={filtroLucroId} vendedorGeralId={filtroVendedorId} onChange={setFiltroLucroId} />
               </div>
               <LucroChart meses={mesesLucro} selectedIdx={selectedIdx} valorFn={m => m.proLaboreSacado} />
               <div className="pl-stat-strip">
-                <div className="pl-s"><div className="pl-l">Lucro/venda médio</div><div className="pl-v">{formatMoeda(atualLucro.quantidadeVendas > 0 ? atualLucro.proLaboreSacado / atualLucro.quantidadeVendas : 0)}</div></div>
+                <div className="pl-s"><div className="pl-l">Pró-labore/venda médio</div><div className="pl-v">{formatMoeda(atualLucro.quantidadeVendas > 0 ? atualLucro.proLaboreSacado / atualLucro.quantidadeVendas : 0)}</div></div>
                 <div className="pl-s"><div className="pl-l">Total no período</div><div className="pl-v">{formatMoeda(mesesLucro.reduce((s, m) => s + m.proLaboreSacado, 0))}</div></div>
               </div>
             </div>

@@ -26,7 +26,7 @@ export type Melhor = 'MAIOR' | 'MENOR' | 'NEUTRO'
 export type Papel = 'DONO' | 'SUPERVISOR' | 'SDR' | 'VENDEDOR' | 'SOCIAL_MEDIA' | 'TRAFEGO' | 'FINANCEIRO'
 export interface Ficha {
   chave: string
-  lote: 1 | 2 | 3 | 4
+  lote: 1 | 2 | 3 | 4 | 5
   // PDF 04: ponto de extensão (a fonte ainda não existe no sistema); a tela mostra o aviso.
   naoDefinido?: string
   nome: string
@@ -60,7 +60,7 @@ const JAN = 'Dia, semana, mês ou período escolhido'
 // O PDF não define o responsável de cada métrica: valores iniciais, ajustáveis pelo dono (nova versão da ficha).
 const RESP_COM = 'Supervisor comercial', RESP_DONO = 'Dono', RESP_SDR = 'SDR', RESP_VEND = 'Vendedor'
 
-const f = (chave: string, lote: 1 | 2 | 3 | 4, nome: string, definicao: string, formula: string, fonte: string, unidade: Unidade, melhor: Melhor, aditiva: boolean, responsavel: string, quemVe: Papel[], extra: Partial<Ficha> = {}): Ficha =>
+const f = (chave: string, lote: 1 | 2 | 3 | 4 | 5, nome: string, definicao: string, formula: string, fonte: string, unidade: Unidade, melhor: Melhor, aditiva: boolean, responsavel: string, quemVe: Papel[], extra: Partial<Ficha> = {}): Ficha =>
   ({ chave, lote, nome, definicao, formula, fonte, janela: JAN, comparacao: COMP, unidade, melhor, aditiva, responsavel, quemVe, ...extra })
 
 export const FICHAS_PADRAO: Ficha[] = [
@@ -78,7 +78,7 @@ export const FICHAS_PADRAO: Ficha[] = [
   f('aprovacao_credito', 1, 'Aprovação de crédito', 'Quantas fichas os bancos aprovam', 'Fichas aprovadas ÷ fichas com resposta dos bancos no período (ficha aprovada = ao menos um banco aprovou)', 'Crédito', 'PCT', 'MAIOR', false, RESP_COM, TODOS),
   f('custo_por_lead', 1, 'Custo por lead', 'Quanto custa cada lead de tráfego pago', 'Gasto com anúncios ÷ leads novos de tráfego pago (gasto real do Tráfego quando conectado; senão o digitado, proporcional aos dias)', 'Meta e CRM', 'BRL', 'MENOR', false, RESP_DONO, DONO_TRAFEGO),
   f('roas', 1, 'ROAS', 'Retorno do gasto com anúncios', 'Faturamento ÷ gasto com anúncios', 'Vendas e Meta', 'X', 'MAIOR', false, RESP_DONO, DONO_TRAFEGO),
-  f('pro_labore', 1, 'Pró-labore e comissão', 'O que o dono sacou das vendas', 'Soma do sacado em cada venda, dentro dos tetos', 'Vendas', 'BRL', 'MAIOR', true, RESP_DONO, SO_DONO),
+  f('pro_labore', 1, 'Pró-labore', 'O que o dono sacou das vendas', 'Soma do sacado em cada venda, dentro dos tetos', 'Vendas', 'BRL', 'MAIOR', true, RESP_DONO, SO_DONO),
   f('previsao_fechamento', 1, 'Previsão de fechamento do mês', 'Quanto o mês deve faturar', 'Realizado até hoje + projeção: média entre o ritmo do mês (realizado ÷ dias passados × dias restantes) e o funil aberto (oportunidades de Negociação a Visita × conversão delas em venda nos últimos 90 dias × ticket médio)', 'Calculada', 'BRL', 'MAIOR', false, RESP_DONO, GESTAO, { janela: 'Mês corrente' }),
   // Segundo lote — métricas da jornada
   f('tempo_na_etapa', 2, 'Tempo na etapa', 'Quanto tempo o lead fica em cada etapa', 'Mediana do tempo entre a entrada e a saída de cada etapa (saídas no período)', 'CRM', 'DIAS', 'MENOR', false, RESP_COM, TODOS),
@@ -124,6 +124,18 @@ export const FICHAS_PADRAO: Ficha[] = [
   f('avanco_por_campanha', 4, 'Avanço dos leads por campanha', 'Quantos leads de cada campanha avançam no funil', 'Leads criados no período com campanha de origem que chegaram a MQL ou além ÷ leads com campanha de origem (por campanha no detalhe)', 'CRM e Meta', 'PCT', 'MAIOR', false, RESP_DONO, ['DONO', 'TRAFEGO', 'SUPERVISOR']),
   f('aderencia_agenda', 4, 'Aderência à rotina', 'Quanto da rotina combinada a pessoa cumpriu no dia', 'Tarefas da Agenda feitas no próprio dia ÷ tarefas da Agenda dos dias do período (até ontem)', 'Agenda', 'PCT', 'MAIOR', false, RESP_COM, TODOS),
   f('atividades_feitas', 4, 'Atividades feitas', 'Atividades executadas', 'Atividades (ATV) executadas no período', 'Atividades', 'QTD', 'MAIOR', true, RESP_COM, TODOS),
+  // Quinto lote — Ajuste 1 (Hoje do dono: Daily e Painel).
+  f('aprovacoes_vencendo', 5, 'Aprovações que vencem em até 2 dias', 'Clientes aprovados no crédito cuja aprovação perde a validade nos próximos 2 dias', 'Leads em andamento com análise aprovada e validade entre agora e daqui a 2 dias', 'Crédito', 'QTD', 'MENOR', false, RESP_SDR, ['DONO', 'SUPERVISOR', 'SDR'], { retrato: true, janela: 'Agora' }),
+  f('visitas_do_dia', 5, 'Visitas do dia', 'Visitas marcadas para o dia', 'Visitas com data marcada no dia (sem as remarcadas para outro dia)', 'CRM', 'QTD', 'NEUTRO', true, RESP_VEND, TODOS),
+  f('propostas_sem_follow', 5, 'Propostas sem follow', 'Propostas enviadas sem próximo passo marcado', 'Leads em andamento na etapa Proposta sem nenhuma atividade pendente', 'CRM e Atividades', 'QTD', 'MENOR', false, RESP_VEND, TODOS, { retrato: true, janela: 'Agora' }),
+  f('sql_sem_contato', 5, 'SQL sem contato do vendedor', 'Aprovados passados ao vendedor que ainda não receberam o primeiro contato', 'Leads passados ao vendedor (não devolvidos) com a atividade Primeiro contato ainda pendente', 'CRM e Atividades', 'QTD', 'MENOR', false, RESP_VEND, TODOS, { retrato: true, janela: 'Agora' }),
+  f('prioridade_sem_atividade', 5, 'Prioridade alta sem atividade', 'Clientes perdidos de prioridade alta sem abordagem programada', 'Perdidos na Reativação que chegaram a SQL ou estavam quentes, sem atividade pendente (sem bloqueados)', 'Reativação e Atividades', 'QTD', 'MENOR', false, RESP_COM, GESTAO, { retrato: true, janela: 'Agora' }),
+  f('taxa_resposta_reativacao', 5, 'Taxa de resposta das campanhas de Reativação', 'Quantos clientes da Reativação responderam às mensagens do resgate', 'Conversas com mensagem do resgate enviada no período que tiveram resposta do cliente depois dela ÷ conversas com mensagem do resgate (por campanha no detalhe)', 'Conversas e Reativação', 'PCT', 'MAIOR', false, RESP_COM, GESTAO),
+  f('custo_por_venda', 5, 'Custo por venda', 'Quanto do gasto com anúncios cada venda de tráfego pago custou', 'Gasto com anúncios ÷ vendas confirmadas no período de leads de tráfego pago', 'Meta e Vendas', 'BRL', 'MENOR', false, RESP_DONO, DONO_TRAFEGO),
+  f('custo_por_etapa', 5, 'Custo por etapa', 'Quanto do gasto com anúncios cada lead de tráfego pago custou ao chegar a cada etapa', 'Gasto com anúncios ÷ leads de tráfego pago que chegaram à etapa no período (custo por lead, por MQL, por SQL, por visita e por venda no detalhe)', 'Meta e CRM', 'BRL', 'MENOR', false, RESP_DONO, DONO_TRAFEGO),
+  f('perda_por_etapa', 5, 'Perda por etapa', 'Quantos leads se perdem em cada etapa e por quê', 'Leads perdidos no período em cada etapa ÷ leads que chegaram à etapa no período (os 3 motivos mais frequentes no detalhe)', 'CRM', 'PCT', 'MENOR', false, RESP_COM, GESTAO),
+  f('valores_por_etapa', 5, 'Valores por etapa', 'Oportunidade, pró-labore e comissão em jogo em cada etapa', 'Oportunidade = soma do valor dos leads que chegaram à etapa no período; previstos = leads abertos na etapa × conversão da etapa até a venda (180 dias) × média por venda (pró-labore ou comissão); comissão perdida = perdidos na etapa no período × a mesma conversão × comissão média', 'CRM e Vendas', 'BRL', 'NEUTRO', false, RESP_DONO, SO_DONO),
+  f('comissoes_pagas', 5, 'Comissões pagas', 'Quanto foi pago aos vendedores em comissão', 'Soma dos pagamentos de comissão feitos no período, sem os cancelados', 'Vendas', 'BRL', 'NEUTRO', true, RESP_DONO, SO_DONO),
 ]
 export const CHAVES = FICHAS_PADRAO.map(x => x.chave)
 
@@ -182,7 +194,21 @@ export interface Escopo {
   usuarioId: string; vendedorId?: string | null; papel: Papel
   // PDF 03 · P4: detectores pedem a métrica sem os registros suspeitos (não servem de evidência).
   semSuspeitos?: boolean
+  // Ajuste 1 · Painel: filtros por SDR, origem e forma de pagamento (sobre o lead da oportunidade ou da venda).
+  filtros?: FiltrosEscopo
 }
+export interface FiltrosEscopo { sdrId?: string | null; origem?: string | null; formaPagamento?: string | null }
+const temFiltro = (e: Escopo) => !!(e.filtros?.sdrId || e.filtros?.origem || e.filtros?.formaPagamento)
+const condFiltro = (e: Escopo) => {
+  const x = e.filtros ?? {}
+  return Prisma.sql`${x.sdrId ? Prisma.sql` AND fl."responsavelQualificacaoId" = ${x.sdrId}` : Prisma.empty}${x.origem ? Prisma.sql` AND coalesce(fl."origemTipo", 'DESCONHECIDA') = ${x.origem}` : Prisma.empty}${x.formaPagamento ? Prisma.sql` AND fl."formaPagamento" = ${x.formaPagamento}` : Prisma.empty}`
+}
+/** Filtro do lead no formato do Prisma (consultas que não usam SQL direto). */
+export const whereFiltros = (e: Escopo) => ({
+  ...(e.filtros?.sdrId ? { responsavelQualificacaoId: e.filtros.sdrId } : {}),
+  ...(e.filtros?.origem ? (e.filtros.origem === 'DESCONHECIDA' ? { OR: [{ origemTipo: null }, { origemTipo: 'DESCONHECIDA' }] } : { origemTipo: e.filtros.origem }) : {}),
+  ...(e.filtros?.formaPagamento ? { formaPagamento: e.filtros.formaPagamento } : {}),
+})
 export interface Valor { valor: number | null; amostra?: number; detalhe?: unknown }
 
 const mediana = (xs: number[]) => {
@@ -196,7 +222,11 @@ const vend = (e: Escopo, col = Prisma.sql`l."vendedorId"`) => (e.vendedorId ? Pr
 const q = <T>(s: Prisma.Sql) => prisma.$queryRaw<T[]>(s)
 /** Filtro dos suspeitos (camada de qualidade): o registro `col` da `tabela` não pode estar classificado como suspeito. */
 // Nos leads, o mesmo filtro tira também o cliente bloqueado (nunca entra em detector).
-const sus = (e: Escopo, col: Prisma.Sql, tabela: 'pro_labore_leads' | 'pro_labore_vendas') =>
+const sus = (e: Escopo, col: Prisma.Sql, tabela: 'pro_labore_leads' | 'pro_labore_vendas') => Prisma.sql`${susBase(e, col, tabela)}${filtroDe(e, col, tabela)}`
+const filtroDe = (e: Escopo, col: Prisma.Sql, tabela: 'pro_labore_leads' | 'pro_labore_vendas') => (!temFiltro(e) ? Prisma.empty
+  : tabela === 'pro_labore_leads' ? Prisma.sql` AND EXISTS (SELECT 1 FROM pro_labore_leads fl WHERE fl.id = ${col}${condFiltro(e)})`
+    : Prisma.sql` AND EXISTS (SELECT 1 FROM pro_labore_leads fl WHERE fl."vendaId" = ${col}${condFiltro(e)})`)
+const susBase = (e: Escopo, col: Prisma.Sql, tabela: 'pro_labore_leads' | 'pro_labore_vendas') =>
   e.semSuspeitos ? Prisma.sql` AND NOT EXISTS (SELECT 1 FROM pro_labore_confiabilidade cf WHERE cf."registroTabela" = ${tabela} AND cf."registroId" = ${col} AND cf.classificacao = 'SUSPEITO')${tabela === 'pro_labore_leads' ? Prisma.sql` AND NOT EXISTS (SELECT 1 FROM pro_labore_leads lb JOIN pro_labore_clientes cb ON cb.id = lb."clienteId" WHERE lb.id = ${col} AND cb.bloqueado)` : Prisma.empty}` : Prisma.empty
 const idsSuspeitos = async (e: Escopo) => {
   if (!e.semSuspeitos) return []
@@ -224,6 +254,12 @@ async function gastoDoIntervalo(usuarioId: string, p: Periodo): Promise<number> 
     total += (g.valor * dias) / dm
   }
   return r2(total)
+}
+
+async function temGastoNoIntervalo(usuarioId: string, p: Periodo): Promise<boolean> {
+  const conta = await prisma.trafegoConta.findUnique({ where: { usuarioId }, select: { id: true } })
+  if (conta && (await gastoPorDia(conta.id, dataDia(p.inicio), dataDia(p.fim))).some(d => d.gasto > 0)) return true
+  return (await prisma.gastoAnuncioMensal.count({ where: { usuarioId, mesReferencia: { gte: dataDia(`${p.inicio.slice(0, 8)}01`), lte: dataDia(p.fim) } } })) > 0
 }
 
 const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor>> = {
@@ -257,9 +293,9 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
   async conversao_por_etapa(e, p) {
     const { ini, fim } = instantes(p)
     const fora = await idsSuspeitos(e)
-    const etapas = await conversaoPorEtapa({ usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}), ...(fora.length ? { id: { notIn: fora } } : {}) }, ini, fim)
+    const etapas = await conversaoPorEtapa({ usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}), ...whereFiltros(e), ...(fora.length ? { id: { notIn: fora } } : {}) }, ini, fim)
     const chegaram = etapas.reduce((s, x) => s + x.chegaram, 0), seguiram = etapas.reduce((s, x) => s + x.seguiram, 0)
-    return { valor: pct(seguiram, chegaram), amostra: chegaram, detalhe: etapas }
+    return { valor: pct(seguiram, chegaram), amostra: chegaram, detalhe: etapas.map(({ ids: _ids, ...x }) => x) }
   },
   async conversao_lead_venda(e, p, agora) {
     const [l, v] = await Promise.all([CALC.leads_novos(e, p, agora), CALC.vendas(e, p, agora)])
@@ -319,7 +355,7 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     return { valor: gasto > 0 ? r2((fat.valor ?? 0) / gasto) : null, detalhe: { gasto, faturamento: fat.valor } }
   },
   async pro_labore(e, p) {
-    const [r] = await q<{ s: number | null; n: bigint }>(Prisma.sql`SELECT sum(l."valorProLabore") s, count(*) n FROM pro_labore_vendas l WHERE l."usuarioId" = ${e.usuarioId} AND l.situacao = 'CONFIRMADA' AND l.data >= ${dataDia(p.inicio)} AND l.data < ${dataDia(maisDias(p.fim, 1))}${vend(e)}`)
+    const [r] = await q<{ s: number | null; n: bigint }>(Prisma.sql`SELECT sum(l."valorProLabore") s, count(*) n FROM pro_labore_vendas l WHERE l."usuarioId" = ${e.usuarioId} AND l.situacao = 'CONFIRMADA' AND l.data >= ${dataDia(p.inicio)} AND l.data < ${dataDia(maisDias(p.fim, 1))}${vend(e)}${filtroDe(e, Prisma.sql`l.id`, 'pro_labore_vendas')}`)
     return { valor: r2(num(r.s)), amostra: num(r.n) }
   },
   async previsao_fechamento(e, _p, agora) {
@@ -571,6 +607,9 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     return { valor: vendas + sugestoes + divergentes, detalhe: { vendasAConfirmar: vendas, pagamentosAAprovar: divergentes, sugestoes } }
   },
   async gasto_anuncio(e, p) {
+    // Ajuste 1: sem nenhuma fonte de gasto no período (Tráfego sem dados e nada digitado no mês), o número fica
+    // "sem dado" em vez de R$ 0 — é o que fazia aparecer "−100%" no começo do mês, antes de lançar o gasto.
+    if (!(await temGastoNoIntervalo(e.usuarioId, p))) return { valor: null, detalhe: { orcamentoMensal: (await prisma.parametroLiquidez.findUnique({ where: { usuarioId: e.usuarioId }, select: { orcamentoAnuncioMensal: true } }))?.orcamentoAnuncioMensal ?? null, semDado: true } }
     const gasto = await gastoDoIntervalo(e.usuarioId, p)
     const prm = await prisma.parametroLiquidez.findUnique({ where: { usuarioId: e.usuarioId }, select: { orcamentoAnuncioMensal: true } })
     return { valor: gasto, detalhe: { orcamentoMensal: prm?.orcamentoAnuncioMensal ?? null } }
@@ -634,6 +673,120 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     const n = await prisma.atividade.count({ where: { usuarioId: e.usuarioId, status: 'EXECUTADA', executadaEm: { gte: ini, lt: fim }, ...(e.vendedorId ? { responsavelId: e.vendedorId } : {}) } })
     return { valor: n }
   },
+  // --- Quinto lote (Ajuste 1) ---
+  async aprovacoes_vencendo(e, _p, agora) {
+    const ate = new Date(agora.getTime() + 2 * DIA_MS)
+    const sdr = e.vendedorId ? Prisma.sql` AND coalesce(l."responsavelQualificacaoId", l."vendedorId") = ${e.vendedorId}` : Prisma.empty
+    const rs = await q<{ id: string }>(Prisma.sql`
+      SELECT DISTINCT l.id FROM pro_labore_leads l JOIN pro_labore_assistente_fichas_credito fc ON fc."leadId" = l.id
+      JOIN pro_labore_assistente_analises_credito an ON an."fichaId" = fc.id AND an.status = 'APROVADA'
+      WHERE l."usuarioId" = ${e.usuarioId} AND l."perdidoEm" IS NULL AND l."vendaId" IS NULL AND an."validadeAte" >= ${agora} AND an."validadeAte" < ${ate}${sdr}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}`)
+    return { valor: rs.length, detalhe: { ids: rs.map(x => x.id) } }
+  },
+  async visitas_do_dia(e, p) {
+    const { ini, fim } = instantes(p)
+    const [r] = await q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_lead_visitas l WHERE l."usuarioId" = ${e.usuarioId} AND l."marcadaPara" >= ${ini} AND l."marcadaPara" < ${fim}${vend(e)}${sus(e, Prisma.sql`l."leadId"`, 'pro_labore_leads')}`)
+    return { valor: num(r.n) }
+  },
+  async propostas_sem_follow(e) {
+    const rs = await q<{ id: string }>(Prisma.sql`
+      SELECT l.id FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l.etapa = 'PROPOSTA' AND l."perdidoEm" IS NULL AND l."vendaId" IS NULL${vend(e)}
+        AND NOT EXISTS (SELECT 1 FROM pro_labore_atividades a WHERE a."leadId" = l.id AND a.status = 'PENDENTE')${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}`)
+    return { valor: rs.length, detalhe: { ids: rs.map(x => x.id) } }
+  },
+  async sql_sem_contato(e) {
+    const rs = await q<{ id: string }>(Prisma.sql`
+      SELECT DISTINCT l.id FROM pro_labore_leads l JOIN pro_labore_lead_passagens ps ON ps."leadId" = l.id AND NOT ps.devolvida
+      JOIN pro_labore_atividades a ON a."leadId" = l.id AND a.tipo = 'PRIMEIRO_CONTATO' AND a.status = 'PENDENTE'
+      WHERE l."usuarioId" = ${e.usuarioId} AND l."perdidoEm" IS NULL AND l."vendaId" IS NULL${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}`)
+    return { valor: rs.length, detalhe: { ids: rs.map(x => x.id) } }
+  },
+  async prioridade_sem_atividade(e) {
+    const { perdidosNaReativacao } = await import('./detectoresOnda4')
+    const altos = (await perdidosNaReativacao(e.usuarioId)).filter(l => l.alta && (!e.vendedorId || l.responsavel === e.vendedorId))
+    const comAtv = new Set((await prisma.atividade.findMany({ where: { usuarioId: e.usuarioId, status: 'PENDENTE', leadId: { in: altos.map(l => l.id) } }, select: { leadId: true } })).map(a => a.leadId))
+    const ids = altos.filter(l => !comAtv.has(l.id)).map(l => l.id)
+    return { valor: ids.length, amostra: altos.length, detalhe: { ids } }
+  },
+  async taxa_resposta_reativacao(e, p) {
+    const { ini, fim } = instantes(p)
+    const rs = await q<{ grupo: string | null; n: bigint; r: bigint }>(Prisma.sql`
+      SELECT x.grupo, count(*) n, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM pro_labore_assistente_mensagens c WHERE c."conversaId" = x.cid AND c.remetente = 'CONTATO' AND c."criadoEm" > x.em)) r
+      FROM (SELECT cv.id cid, coalesce(l."destinoPerda", 'OUTRO') grupo, min(m."criadoEm") em
+            FROM pro_labore_assistente_mensagens m JOIN pro_labore_assistente_conversas cv ON cv.id = m."conversaId" JOIN pro_labore_leads l ON l.id = cv."leadId"
+            WHERE l."usuarioId" = ${e.usuarioId} AND m.origem = 'FOLLOW' AND m."followFluxo" = 'REATIVACAO' AND m."criadoEm" >= ${ini} AND m."criadoEm" < ${fim}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}
+            GROUP BY 1, 2) x GROUP BY 1`)
+    const n = rs.reduce((t, x) => t + num(x.n), 0), r = rs.reduce((t, x) => t + num(x.r), 0)
+    return { valor: pct(r, n), amostra: n, detalhe: rs.map(x => ({ campanha: x.grupo, enviados: num(x.n), responderam: num(x.r), taxa: pct(num(x.r), num(x.n)) })) }
+  },
+  async custo_por_venda(e, p) {
+    const [gasto, [r]] = await Promise.all([
+      gastoDoIntervalo(e.usuarioId, p),
+      q<{ n: bigint }>(Prisma.sql`SELECT count(*) n FROM pro_labore_vendas l WHERE l."usuarioId" = ${e.usuarioId} AND l.situacao = 'CONFIRMADA' AND l.data >= ${dataDia(p.inicio)} AND l.data < ${dataDia(maisDias(p.fim, 1))}
+        AND EXISTS (SELECT 1 FROM pro_labore_leads pl WHERE pl."vendaId" = l.id AND (pl."origemTipo" = 'ANUNCIO' OR pl."tipoLead" = 'TRAFEGO'))${sus(e, Prisma.sql`l.id`, 'pro_labore_vendas')}`),
+    ])
+    const n = num(r.n)
+    return { valor: gasto > 0 && n > 0 ? r2(gasto / n) : null, amostra: n, detalhe: { gasto, vendasTrafego: n } }
+  },
+  async custo_por_etapa(e, p, agora) {
+    const { ini, fim } = instantes(p)
+    const [gasto, etapas, venda] = await Promise.all([
+      gastoDoIntervalo(e.usuarioId, p),
+      conversaoPorEtapa({ usuarioId: e.usuarioId, ...whereFiltros(e), AND: [{ OR: [{ origemTipo: 'ANUNCIO' }, { tipoLead: 'TRAFEGO' }] }] }, ini, fim),
+      CALC.custo_por_venda(e, p, agora),
+    ])
+    const det = [...etapas.map(x => ({ etapa: x.etapa, leads: x.chegaram, custo: gasto > 0 && x.chegaram > 0 ? r2(gasto / x.chegaram) : null })), { etapa: 'VENDA', leads: (venda.detalhe as { vendasTrafego: number }).vendasTrafego, custo: venda.valor }]
+    return { valor: venda.valor, amostra: det[0]?.leads ?? 0, detalhe: { gasto, etapas: det } }
+  },
+  async perda_por_etapa(e, p) {
+    const { ini, fim } = instantes(p)
+    const fora = await idsSuspeitos(e)
+    const [etapas, perdas] = await Promise.all([
+      conversaoPorEtapa({ usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}), ...whereFiltros(e), ...(fora.length ? { id: { notIn: fora } } : {}) }, ini, fim),
+      q<{ etapa: string; motivo: string | null; n: bigint }>(Prisma.sql`
+        SELECT coalesce(l."estagioPerda", l.etapa, 'LEAD') etapa, l."motivoPerda" motivo, count(*) n FROM pro_labore_leads l
+        WHERE l."usuarioId" = ${e.usuarioId} AND l."perdidoEm" >= ${ini} AND l."perdidoEm" < ${fim}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')} GROUP BY 1, 2`),
+    ])
+    const det = etapas.map(x => {
+      const ps = perdas.filter(r => r.etapa === x.etapa)
+      const n = ps.reduce((t, r) => t + num(r.n), 0)
+      const motivos = ps.map(r => ({ motivo: r.motivo ?? 'Sem motivo', n: num(r.n) })).sort((a, b) => b.n - a.n).slice(0, 3)
+      return { etapa: x.etapa, chegaram: x.chegaram, perdidos: n, pct: pct(n, x.chegaram), motivos }
+    })
+    const n = det.reduce((t, x) => t + x.perdidos, 0), base = etapas[0]?.chegaram ?? 0
+    return { valor: pct(n, base), amostra: base, detalhe: det }
+  },
+  async valores_por_etapa(e, p, agora) {
+    const { ini, fim } = instantes(p)
+    const desde = new Date(agora.getTime() - 180 * DIA_MS)
+    const fora = await idsSuspeitos(e)
+    const where = { usuarioId: e.usuarioId, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}), ...whereFiltros(e), ...(fora.length ? { id: { notIn: fora } } : {}) }
+    const [etapas, hist, medias, abertos, perdas] = await Promise.all([
+      conversaoPorEtapa(where, ini, fim),
+      conversaoPorEtapa(where, desde, agora),
+      prisma.venda.aggregate({ where: { usuarioId: e.usuarioId, situacao: 'CONFIRMADA', data: { gte: desde } }, _avg: { valorProLabore: true, valorComissao: true } }),
+      prisma.lead.groupBy({ by: ['etapa'], where: { ...where, perdidoEm: null, vendaId: null, etapa: { not: null } }, _count: true }),
+      prisma.lead.groupBy({ by: ['estagioPerda'], where: { ...where, perdidoEm: { gte: ini, lt: fim } }, _count: true }),
+    ])
+    const todosIds = [...new Set(etapas.flatMap(x => x.ids))]
+    const valorDe = new Map((await prisma.lead.findMany({ where: { id: { in: todosIds } }, select: { id: true, valorNegociacao: true } })).map(l => [l.id, l.valorNegociacao ?? 0]))
+    const histIds = [...new Set(hist.flatMap(x => x.ids))]
+    const vendidos = new Set((await prisma.lead.findMany({ where: { id: { in: histIds }, vendaId: { not: null } }, select: { id: true } })).map(l => l.id))
+    const pl = medias._avg.valorProLabore ?? 0, com = medias._avg.valorComissao ?? 0
+    const det = etapas.map(x => {
+      const h = hist.find(y => y.etapa === x.etapa)
+      const conv = h && h.chegaram ? h.ids.filter(id => vendidos.has(id)).length / h.chegaram : 0
+      const ab = abertos.find(a => a.etapa === x.etapa)?._count ?? 0
+      const perd = perdas.find(a => a.estagioPerda === x.etapa)?._count ?? 0
+      return { etapa: x.etapa, oportunidade: r2(x.ids.reduce((t, id) => t + (valorDe.get(id) ?? 0), 0)), abertos: ab, conversaoAteVenda: r2(conv * 100), proLaborePrevisto: r2(ab * conv * pl), comissaoPrevista: r2(ab * conv * com), perdidos: perd, comissaoPerdida: r2(perd * conv * com) }
+    })
+    return { valor: r2(det.reduce((t, x) => t + x.proLaborePrevisto, 0)), detalhe: { medias: { proLabore: r2(pl), comissao: r2(com) }, etapas: det } }
+  },
+  async comissoes_pagas(e, p) {
+    const { ini, fim } = instantes(p)
+    const r = await prisma.pagamentoComissao.aggregate({ where: { usuarioId: e.usuarioId, tipo: 'COMISSAO', canceladoEm: null, pagoEm: { gte: ini, lt: fim }, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}) }, _sum: { valorTotal: true }, _count: true })
+    return { valor: r2(r._sum.valorTotal ?? 0), amostra: r._count }
+  },
   async saidas_financeiro(e, p) {
     const { ini, fim } = instantes(p)
     const r = await prisma.lancamentoFinanceiro.aggregate({ where: { usuarioId: e.usuarioId, canceladoEm: null, pagoEm: { gte: ini, lt: fim } }, _sum: { valorTotal: true }, _count: true })
@@ -696,7 +849,7 @@ export async function calcular(chave: string, e: Escopo, p: Periodo, agora = new
 export async function padraoDaLoja(chave: string, e: Escopo, agora = new Date()): Promise<number | null> {
   const ficha = FICHAS_PADRAO.find(x => x.chave === chave)!
   const hoje = hojeBrt(agora)
-  const escopoChave = e.vendedorId ?? 'LOJA'
+  const escopoChave = `${e.vendedorId ?? 'LOJA'}${temFiltro(e) ? `|${e.filtros?.sdrId ?? ''}|${e.filtros?.origem ?? ''}|${e.filtros?.formaPagamento ?? ''}` : ''}`
   const salvo = await prisma.metricaPadrao.findUnique({ where: { usuarioId_chave_escopo_dia: { usuarioId: e.usuarioId, chave, escopo: escopoChave, dia: dataDia(hoje) } } })
   if (salvo) return salvo.valor
   let valor: number | null

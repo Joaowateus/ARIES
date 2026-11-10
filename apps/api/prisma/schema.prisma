@@ -1182,6 +1182,9 @@ model ParametroLiquidez {
   orcamentoAnuncioMensal       Float?
   telasNovasParaTodosEm        DateTime?
   areasDetectores              Json?
+  // Ajuste 1: blocos do Daily (ordem, tempo, ligado) e metas por etapa da jornada (conversão mínima, perda máxima, custo máximo).
+  dailyConfig                  Json?
+  metasEtapas                  Json?
 
   @@map("pro_labore_parametros")
 }
@@ -2472,6 +2475,10 @@ model Reuniao {
   duracaoSegundos     Int?
   nomeArquivoOriginal String?
   transcricao         String?
+  // Ajuste 1: ata do Daily (tipo DAILY), o modo em que a reunião rodou e quem conduziu.
+  ata                 Json?
+  modo                String?
+  autorId             String?
   criadoEm            DateTime @default(now())
   atualizadoEm        DateTime @updatedAt
 

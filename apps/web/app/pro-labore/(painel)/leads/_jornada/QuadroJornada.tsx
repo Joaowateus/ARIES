@@ -38,7 +38,10 @@ interface Props {
 type Aviso = { lead: Lead; destino: EtapaJornada; faltando: string[] } | null
 
 export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda }: Props) {
-  const [fase, setFase] = useState<'TUDO' | 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'>('TUDO')
+  const [fase, setFase] = useState<'TUDO' | 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'>(() => {
+    const e = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('etapa')
+    return FASES.find(x => (x.etapas as string[]).includes(e ?? ''))?.id ?? 'TUDO'
+  })
   const [arrastando, setArrastando] = useState<string | null>(null)
   const [sobre, setSobre] = useState<EtapaJornada | null>(null)
   const [aviso, setAviso] = useState<Aviso>(null)
@@ -48,6 +51,16 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [erro, setErro] = useState<string | null>(null)
   const [premissas, setPremissas] = useState<PremissasJornada | null>(null)
   const [conversao, setConversao] = useState<Record<string, { chegaram: number; conversao: number | null }>>({})
+  // Ajuste 1: o Painel do dono abre o CRM filtrado numa etapa (?etapa=): mostra a fase dela e leva até a coluna.
+  const [destaque] = useState<EtapaJornada | null>(() => {
+    const e = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('etapa') as EtapaJornada | null
+    return e && ETAPAS_JORNADA.includes(e) ? e : null
+  })
+  useEffect(() => {
+    if (!destaque) return
+    const t = setTimeout(() => document.querySelector(`[data-coluna="${destaque}"]`)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }), 300)
+    return () => clearTimeout(t)
+  }, [destaque])
   useEffect(() => {
     proLaboreApi.jornada.premissas().then(setPremissas).catch(() => setPremissas(null))
     proLaboreApi.jornada.conversao().then(c => setConversao(Object.fromEntries(c.etapas.map(x => [x.etapa, x])))).catch(() => setConversao({}))
@@ -102,7 +115,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                     <div
                       key={e} data-coluna={e}
                       className={`pl-kanban-col ${sobre === e ? 'drop-active' : ''}`}
-                      style={{ width: 236, flex: '0 0 236px' }}
+                      style={{ width: 236, flex: '0 0 236px', ...(destaque === e ? { boxShadow: '0 0 0 2px var(--pl-border-strong)' } : {}) }}
                       onDragOver={ev => { ev.preventDefault(); setSobre(e) }}
                       onDragLeave={() => setSobre(s => (s === e ? null : s))}
                       onDrop={ev => { ev.preventDefault(); setSobre(null); const l = leads.find(x => x.id === arrastando); if (l) void mover(l, e) }}

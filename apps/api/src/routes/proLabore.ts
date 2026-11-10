@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import { aplicarCadenciasDoLeadNovo, cancelarLigacoesDoLead } from '../lib/ligacoes'
 import { recalcularPagamentoComissao } from '../lib/comissoes'
 import { Prisma } from '@prisma/client'
+import { papelDoUsuario } from '../lib/papelHoje'
 import { signProLaboreToken } from '../lib/jwtProLabore'
 import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import { requireModulo, requireAlgumModulo, requireEscopoEquipe, permissoesEfetivas, escopoDoPapel, TUDO } from '../lib/acessos'
@@ -3690,7 +3691,7 @@ router.get('/assistente/resumo', requireProLaboreAuth, requireModulo('assistente
 // vinculadas a uma reunião. Estritamente privado por identidade logada —
 // mesmo o dono não vê o bloco pessoal de um vendedor, e vice-versa.
 
-const TIPOS_REUNIAO = ['REUNIAO', 'AULA', 'VIDEO', 'OUTRO'] as const
+const TIPOS_REUNIAO = ['REUNIAO', 'AULA', 'VIDEO', 'OUTRO', 'DAILY'] as const
 const CATEGORIAS_NOTA = ['TRABALHO', 'IDEIA', 'APRENDIZADO', 'OUTRO'] as const
 
 function reuniaoWhereBase(req: Request): { usuarioId: string; vendedorId: string | null } {
@@ -3699,10 +3700,18 @@ function reuniaoWhereBase(req: Request): { usuarioId: string; vendedorId: string
   return { usuarioId, vendedorId }
 }
 
+// Ajuste 1: as atas do Daily ficam em Reuniões. A do modo gestão (com números por pessoa) só para o dono e o
+// supervisor; a do modo equipe (só o que foi decidido) para toda a equipe.
+function reuniaoVisivel(req: Request): Prisma.ReuniaoWhereInput {
+  const papel = papelDoUsuario(req.proLaboreUser!)
+  const gestao = papel === 'DONO' || papel === 'SUPERVISOR'
+  return { OR: [reuniaoWhereBase(req), { usuarioId: req.proLaboreUser!.sub, tipo: 'DAILY', ...(gestao ? {} : { modo: 'EQUIPE' }) }] }
+}
+
 router.get('/reunioes', requireProLaboreAuth, requireModulo('reunioes', 'VER'), async (req: Request, res: Response) => {
   const { tipo } = req.query
   const reunioes = await prisma.reuniao.findMany({
-    where: { ...reuniaoWhereBase(req), ...(typeof tipo === 'string' && (TIPOS_REUNIAO as readonly string[]).includes(tipo) ? { tipo } : {}) },
+    where: { AND: [reuniaoVisivel(req), typeof tipo === 'string' && (TIPOS_REUNIAO as readonly string[]).includes(tipo) ? { tipo } : {}] },
     include: { _count: { select: { notas: true } } },
     orderBy: { data: 'desc' },
   })
@@ -3732,7 +3741,7 @@ router.post('/reunioes', requireProLaboreAuth, requireModulo('reunioes', 'EDITAR
 
 router.get('/reunioes/:id', requireProLaboreAuth, requireModulo('reunioes', 'VER'), async (req: Request, res: Response) => {
   const reuniao = await prisma.reuniao.findFirst({
-    where: { id: String(req.params.id), ...reuniaoWhereBase(req) },
+    where: { AND: [{ id: String(req.params.id) }, reuniaoVisivel(req)] },
     include: { notas: { orderBy: { criadoEm: 'asc' } } },
   })
   if (!reuniao) { res.status(404).json({ error: 'Reunião não encontrada' }); return }

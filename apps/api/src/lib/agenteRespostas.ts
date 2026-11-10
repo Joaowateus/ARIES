@@ -165,6 +165,13 @@ async function textoPlano(c: ContextoAgente, agora: Date): Promise<string> {
 
 // ---------- Resumo da manhã ----------
 
+async function pautaDoDaily(c: ContextoAgente, agora: Date): Promise<string> {
+  const { textoPautaDaManha } = await import('./daily')
+  if (c.dono) return (await textoPautaDaManha(c.usuarioId, 'DONO', null, agora).catch(() => null)) ?? ''
+  const v = await prisma.vendedor.findFirst({ where: { id: c.pessoa, usuarioId: c.usuarioId, papel: 'SUPERVISOR', funcao: null }, select: { id: true } })
+  return v ? (await textoPautaDaManha(c.usuarioId, 'SUPERVISOR', v.id, agora).catch(() => null)) ?? '' : ''
+}
+
 export async function resumoDaManha(c: ContextoAgente, agora = new Date()): Promise<string> {
   const [ag, fila] = await Promise.all([agendaDoDia(c, agora), filaDoCopiloto(c.usuarioId, pessoaCopiloto(c), agora, 20).catch(() => null)])
   const urgentes = (fila?.itens ?? []).filter(i => i.prioridade >= 85)
@@ -178,6 +185,8 @@ export async function resumoDaManha(c: ContextoAgente, agora = new Date()): Prom
       : '',
     // O dono também recebe como estão as vendas do mês.
     c.dono ? await textoVendas(c, agora) : '',
+    // Ajuste 1: dono e supervisor recebem a pauta do Daily (montada pelo código; sem cifras para o supervisor).
+    await pautaDoDaily(c, agora),
     'Quer a lista completa? Manda *minha agenda* ou *quem atendo agora*.',
   ]
   return partes.filter(Boolean).join('\n\n')
