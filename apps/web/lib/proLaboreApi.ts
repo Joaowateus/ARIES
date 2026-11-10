@@ -3863,6 +3863,8 @@ export interface PainelDono {
   avisos: string[]
 }
 export interface FiltrosPainelWeb { inicio?: string; fim?: string; vendedorId?: string; sdrId?: string; origem?: string; formaPagamento?: string }
+export const ITENS_AJUSTE1 = ['numeros', 'jornada', 'modoEquipe', 'decidido', 'comparacao', 'cifras'] as const
+export type ItemAjuste1 = typeof ITENS_AJUSTE1[number]
 export interface AceiteAjuste1 {
   dia: string; mesConferido: { inicio: string; fim: string }
   numeros: { contagens: Array<{ item: string; banco: number | null; dicionario: number | null; bate: boolean }>; daily: Array<{ bloco: string; numero: string; tela: number | null; dicionario: number | null; bate: boolean }>; painel: Array<{ numero: string; tela: number | null; dicionario: number | null; bate: boolean }>; passa: boolean }
@@ -3884,8 +3886,15 @@ export const dailyApi = {
   salvarConfig: (blocos: Array<{ chave: BlocoDaily; minutos: number; ligado: boolean }>, justificativa: string) => request<unknown>('/pro-labore/daily/config', { method: 'PUT', body: JSON.stringify({ blocos, justificativa }) }),
 }
 export const painelDonoApi = {
-  painel: (f: FiltrosPainelWeb) => request<PainelDono>(`/pro-labore/painel-dono${qs(f as Record<string, string | undefined>)}`),
+  // Duas chamadas em paralelo (cada uma cabe no tempo da função): o topo e as séries do ano.
+  painel: async (f: FiltrosPainelWeb) => {
+    const [topo, series] = await Promise.all([
+      request<PainelDono>(`/pro-labore/painel-dono${qs({ ...(f as Record<string, string | undefined>), parte: 'TOPO' })}`),
+      request<PainelDono>(`/pro-labore/painel-dono${qs({ ...(f as Record<string, string | undefined>), parte: 'SERIES' })}`),
+    ])
+    return { ...topo, faturamento: series.faturamento, proLabore: series.proLabore, equipe: series.equipe, anuncios: series.anuncios } as PainelDono
+  },
   opcoes: () => request<{ vendedores: Array<{ id: string; nome: string }>; sdrs: Array<{ id: string; nome: string }>; origens: string[]; formasPagamento: string[] }>('/pro-labore/painel-dono/opcoes'),
   salvarMeta: (etapa: string, m: { conversaoMin: number | null; perdaMax: number | null; custoMax: number | null; justificativa: string }) => request<unknown>(`/pro-labore/painel-dono/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(m) }),
-  aceite: (dia?: string) => request<AceiteAjuste1>(`/pro-labore/ajuste1/aceite${qs({ dia })}`),
+  aceiteItem: (item: ItemAjuste1, dia?: string) => request<Partial<AceiteAjuste1>>(`/pro-labore/ajuste1/aceite${qs({ dia, item })}`),
 }

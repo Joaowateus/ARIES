@@ -5,10 +5,10 @@ import { z } from 'zod'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import { papelDoUsuario } from '../lib/papelHoje'
 import { ErroDaily, NOME_BLOCO, configDaily, decidirDaily, encerrarDaily, iniciarDaily, pautaDaily, salvarConfigDaily, tempoDoBloco, tratarDaily, type BlocoChave, type Leitor } from '../lib/daily'
-import { ErroPainel, metasDasEtapas, opcoesDoPainel, painel, salvarMetaEtapa } from '../lib/painel'
+import { ErroPainel, PARTES, metasDasEtapas, opcoesDoPainel, painel, salvarMetaEtapa } from '../lib/painel'
 import { hojeBrt, mesCorrente } from '../lib/metricas'
 import { ETAPAS, type Etapa } from '../lib/etapasJornada'
-import { aceiteAjuste1 } from '../lib/aceiteAjuste1'
+import { ITENS_AJUSTE1, aceiteAjuste1, type ItemAjuste1 } from '../lib/aceiteAjuste1'
 
 const router = Router()
 const BLOCOS = Object.keys(NOME_BLOCO) as [BlocoChave, ...BlocoChave[]]
@@ -76,7 +76,7 @@ router.get('/painel-dono', requireProLaboreAuth, async (req: Request, res: Respo
   const fim = dia.safeParse(s('fim')).success ? s('fim')! : hojeBrt()
   if (inicio > fim) { res.status(400).json({ error: 'O início vem antes do fim' }); return }
   try {
-    res.json(await painel({ usuarioId: q.usuarioId, papel: q.papel as 'DONO' | 'SUPERVISOR' }, { inicio, fim }, { vendedorId: s('vendedorId'), sdrId: s('sdrId'), origem: s('origem'), formaPagamento: s('formaPagamento') }))
+    res.json(await painel({ usuarioId: q.usuarioId, papel: q.papel as 'DONO' | 'SUPERVISOR' }, { inicio, fim }, { vendedorId: s('vendedorId'), sdrId: s('sdrId'), origem: s('origem'), formaPagamento: s('formaPagamento') }, new Date(), PARTES[s('parte') === 'TOPO' ? 'TOPO' : s('parte') === 'SERIES' ? 'SERIES' : 'TUDO']))
   } catch (e) { falha(res, e) }
 })
 router.get('/painel-dono/opcoes', requireProLaboreAuth, async (req: Request, res: Response) => {
@@ -98,7 +98,9 @@ router.put('/painel-dono/metas/:etapa', requireProLaboreAuth, requireDono, async
 // --- Teste do Ajuste 1, calculado na própria produção ---
 router.get('/ajuste1/aceite', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const d = typeof req.query.dia === 'string' && dia.safeParse(req.query.dia).success ? String(req.query.dia) : null
-  res.json(await aceiteAjuste1(req.proLaboreUser!.sub, d))
+  const item = typeof req.query.item === 'string' && (ITENS_AJUSTE1 as readonly string[]).includes(req.query.item) ? req.query.item as ItemAjuste1 : undefined
+  if (!item) { res.status(400).json({ error: `Rode um item por vez: ${ITENS_AJUSTE1.join(', ')}` }); return }
+  res.json(await aceiteAjuste1(req.proLaboreUser!.sub, d, new Date(), item))
 })
 
 export default router

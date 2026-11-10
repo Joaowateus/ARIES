@@ -3,7 +3,7 @@
 // Ajuste 1 · Configurações: blocos do Daily (ordem, tempo e ligado; só o dono)
 // e o teste do Ajuste 1 calculado na produção.
 import { useEffect, useState } from 'react'
-import { dailyApi, painelDonoApi, type AceiteAjuste1, type BlocoDaily } from '@/lib/proLaboreApi'
+import { ITENS_AJUSTE1, dailyApi, painelDonoApi, type AceiteAjuste1, type BlocoDaily } from '@/lib/proLaboreApi'
 
 type Bloco = { chave: BlocoDaily; nome: string; minutos: number; ligado: boolean }
 
@@ -54,7 +54,17 @@ export function AceiteAjuste1Card() {
   const [dia, setDia] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [rodando, setRodando] = useState(false)
-  async function rodar() { setRodando(true); setMsg(null); try { setA(await painelDonoApi.aceite(dia || undefined)) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } finally { setRodando(false) } }
+  // Um item por chamada (cada um cabe no tempo da função); o cartão junta os resultados.
+  async function rodar() {
+    setRodando(true); setMsg(null)
+    let junto: Partial<AceiteAjuste1> = {}
+    const falhas: string[] = []
+    for (const [k, item] of ITENS_AJUSTE1.entries()) {
+      setMsg(`Conferindo ${k + 1} de ${ITENS_AJUSTE1.length}…`)
+      try { const r = await painelDonoApi.aceiteItem(item, dia || undefined); junto = { ...junto, ...Object.fromEntries(Object.entries(r).filter(([, v]) => v != null)) } } catch (e) { falhas.push(`${item}: ${e instanceof Error ? e.message : 'falhou'}`) }
+    }
+    setA(junto as AceiteAjuste1); setMsg(falhas.length ? `Não deu para conferir: ${falhas.join('; ')}` : null); setRodando(false)
+  }
   return (
     <section className="pl-card" id="aceite-ajuste1" style={{ marginBottom: 20 }} data-aceite-ajuste1-card>
       <div className="pl-card-head"><div>
@@ -67,7 +77,7 @@ export function AceiteAjuste1Card() {
         <button type="button" className="pl-btn pl-btn-primary" onClick={() => void rodar()} disabled={rodando} data-rodar-aceite-ajuste1>{rodando ? 'Calculando…' : a ? 'Rodar de novo' : 'Rodar o teste'}</button>
       </div>
       {msg && <p className="pl-hint" role="alert">{msg}</p>}
-      {a && (
+      {a && a.numeros && a.jornada && a.modoEquipe && a.decidido && a.comparacao && a.cifras && (
         <div data-aceite-ajuste1>
           <table className="pl-table" style={{ marginTop: 10 }}><thead><tr><th>Item</th><th>Medido</th><th /></tr></thead><tbody>
             <tr><td>Números do Painel e do Daily (dia {a.dia})</td><td>{a.numeros.contagens.filter(x => x.bate).length} de {a.numeros.contagens.length} contagens diretas batem · {a.numeros.daily.filter(x => x.bate).length} de {a.numeros.daily.length} números do Daily · {a.numeros.painel.filter(x => x.bate).length} de {a.numeros.painel.length} do Painel</td><td><Selo passa={a.numeros.passa} /></td></tr>
