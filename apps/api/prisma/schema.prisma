@@ -1181,6 +1181,7 @@ model ParametroLiquidez {
   recRoteamento                String    @default("SILENCIOSO")
   orcamentoAnuncioMensal       Float?
   telasNovasParaTodosEm        DateTime?
+  areasDetectores              Json?
 
   @@map("pro_labore_parametros")
 }

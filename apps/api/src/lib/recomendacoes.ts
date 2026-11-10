@@ -6,6 +6,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { calcular, type Escopo, type Periodo } from './metricas'
+import { DETECTORES_ONDA4, configAreas, responsavelDaArea, type GrupoArea } from './detectoresOnda4'
 import { DETECTORES, detectar, type Achado } from './detectores'
 
 const DIA = 86_400_000
@@ -43,6 +44,63 @@ async function visiveis(usuarioId: string, destinatarioId: string, acompanha: st
 }
 const ehIndividual = (alvoTipo: string) => alvoTipo === 'PESSOA' || alvoTipo === 'CREDITO'
 
+/** Onda 4: semana silenciosa = só o dono e o responsável da área; normal = quem recebe, quem acompanha e o dono. */
+async function visiveisDaArea(usuarioId: string, grupo: GrupoArea, destinatarioId: string, acompanha: string[], modo: Roteamento) {
+  if (modo === 'SILENCIOSO') { const resp = await responsavelDaArea(usuarioId, grupo); return [...new Set([usuarioId, ...(resp ? [resp] : [])])] }
+  return [...new Set([destinatarioId, ...acompanha, usuarioId])]
+}
+
+/** Ligar/desligar uma área e mudar o modo silencioso (só o dono, com justificativa e histórico). */
+export async function mudarArea(usuarioId: string, grupo: GrupoArea, mudanca: { ligada?: boolean; modo?: Roteamento }, justificativa: string, autorId: string) {
+  const atual = await configAreas(usuarioId)
+  const antes = atual[grupo]
+  const agora = new Date().toISOString()
+  const depois = {
+    ...antes,
+    ...(mudanca.ligada !== undefined ? { ligada: mudanca.ligada, ligadaEm: mudanca.ligada && !antes.ligada ? agora : antes.ligadaEm } : {}),
+    ...(mudanca.modo ? { modo: mudanca.modo, liberadaEm: mudanca.modo === 'NORMAL' && antes.modo !== 'NORMAL' ? agora : antes.liberadaEm } : {}),
+  }
+  const novo = { ...atual, [grupo]: depois }
+  await prisma.parametroLiquidez.upsert({ where: { usuarioId }, create: { usuarioId, areasDetectores: novo as unknown as Prisma.InputJsonValue }, update: { areasDetectores: novo as unknown as Prisma.InputJsonValue } })
+  await prisma.parametroHistorico.create({ data: { usuarioId, nome: `area.${grupo}`, valorAnterior: antes as unknown as Prisma.InputJsonValue, valorNovo: depois as unknown as Prisma.InputJsonValue, origem: 'MANUAL', justificativa, autorId } })
+  // Mudou o modo: as RECs abertas da área passam a ir para quem deve ver.
+  let afetadas = 0
+  if (mudanca.modo && mudanca.modo !== antes.modo) {
+    const chaves = DETECTORES_ONDA4.filter(d => d.grupo === grupo).map(d => d.chave)
+    const abertas = await prisma.recomendacao.findMany({ where: { usuarioId, status: 'NOVA', detector: { in: chaves } } })
+    for (const rec of abertas) {
+      const vis = await visiveisDaArea(usuarioId, grupo, rec.destinatarioId ?? usuarioId, rec.acompanhaIds, mudanca.modo)
+      await prisma.recomendacao.update({ where: { id: rec.id }, data: { visivelPara: vis, auditoriaAutor: 'AUTOMACAO|||roteamento-area' } })
+      if (mudanca.modo === 'NORMAL' && ehIndividual(rec.alvoTipo)) await criarAtvTratar(rec)
+      afetadas++
+    }
+  }
+  return { areas: novo, afetadas }
+}
+
+/** Boa prática (4.4.2): o supervisor decide compartilhar com a equipe, sem nomes (ou reconhecendo a pessoa). */
+export async function compartilharBoaPratica(recId: string, quem: Quem, comNome: boolean, texto?: string) {
+  const rec = await prisma.recomendacao.findFirst({ where: { id: recId, usuarioId: quem.usuarioId } })
+  if (!rec || !podeVerRec(rec, quem)) throw new ErroRec(404, 'Recomendação não encontrada')
+  if (rec.detector !== 'boa_pratica') throw new ErroRec(400, 'Só boa prática é compartilhada com a equipe')
+  if (quem.papel !== 'DONO' && quem.papel !== 'SUPERVISOR') throw new ErroRec(403, 'Quem decide compartilhar é o supervisor')
+  if (rec.status === 'NOVA') await aceitar(rec.id, quem)
+  const ev = rec.evidencia as { alvoNome?: string | null; metricas?: Array<{ detalhe?: { dica?: string } }> }
+  const dica = ev.metricas?.[0]?.detalhe?.dica ?? 'faz algo que funciona melhor que a média'
+  const nome = (ev.alvoNome ?? '').split(/\s+/)[0]
+  const titulo = comNome && nome ? `Reconhecimento: ${nome.charAt(0)}${nome.slice(1).toLowerCase()} ${dica}` : `Boa prática da equipe: ${texto?.trim() || `quem ${dica} vende mais. Vale copiar a forma de trabalhar.`}`
+  const equipe = await prisma.vendedor.findMany({ where: { usuarioId: quem.usuarioId, ativo: true }, select: { id: true } })
+  const dicaRec = await prisma.recomendacao.create({
+    data: {
+      usuarioId: quem.usuarioId, auditoriaAutor: autorDe(quem), titulo: titulo.slice(0, 200), area: 'PESSOAS', detector: 'boa_pratica', tipo: 'FUNCIONANDO',
+      evidencia: { metricas: [], casos: 0, volumeMinimo: 0, resumo: 'Aprendizado compartilhado pelo supervisor', origem: rec.id, comNome } as unknown as Prisma.InputJsonValue,
+      forca: rec.forca, acaoSugerida: 'Experimentar no seu dia a dia', nivelAutonomia: 1, alvoTipo: 'DICA_EQUIPE', alvoId: null,
+      destinatarioId: null, acompanhaIds: [], visivelPara: [...new Set([quem.usuarioId, ...equipe.map(e => e.id)])], prazo: new Date(Date.now() + 14 * DIA), contexto: `dica|${rec.id}`,
+    },
+  })
+  return dicaRec
+}
+
 export const contextoDe = (a: Pick<Achado, 'detector' | 'alvoTipo' | 'alvoId' | 'tipo' | 'contextoExtra'>) =>
   [a.detector, a.alvoTipo, a.alvoId ?? '-', a.tipo, a.contextoExtra ?? ''].join('|')
 
@@ -75,9 +133,16 @@ export async function criarDoAchado(usuarioId: string, a: Achado, agora = new Da
       return { criada: false, motivo: 'JUNTADA_A_CORRECAO' }
     }
   }
-  const modo = await modoRoteamento(usuarioId)
-  const r = await rotear(usuarioId, a)
-  const visivelPara = await visiveis(usuarioId, r.destinatarioId, r.acompanha, modo)
+  let modo = await modoRoteamento(usuarioId)
+  let r = await rotear(usuarioId, a)
+  let visivelPara = await visiveis(usuarioId, r.destinatarioId, r.acompanha, modo)
+  // PDF 05: áreas da onda 4 têm o próprio roteamento (tabela da área) e o próprio modo silencioso.
+  if (a.grupo) {
+    const area = (await configAreas(usuarioId))[a.grupo]
+    modo = area.modo
+    r = { destinatarioId: a.destino?.destinatarioId ?? usuarioId, acompanha: [...new Set(a.destino?.acompanha ?? [])] }
+    visivelPara = await visiveisDaArea(usuarioId, a.grupo, r.destinatarioId, r.acompanha, modo)
+  }
   const prazo = new Date(agora.getTime() + (ehIndividual(a.alvoTipo) ? PRAZO_DIAS.PESSOA : PRAZO_DIAS.OUTROS) * DIA)
   const def = DETECTORES.find(d => d.chave === a.detector)!
   const rec = await prisma.recomendacao.create({
@@ -108,7 +173,8 @@ async function criarAtvTratar(rec: { id: string; usuarioId: string; destinatario
 /** Ligar o roteamento normal (liberação do dono): as RECs abertas passam a ir para quem deve agir. */
 export async function mudarRoteamento(usuarioId: string, modo: Roteamento) {
   await prisma.parametroLiquidez.upsert({ where: { usuarioId }, create: { usuarioId, recRoteamento: modo }, update: { recRoteamento: modo } })
-  const abertas = await prisma.recomendacao.findMany({ where: { usuarioId, status: 'NOVA' } })
+  // Só as RECs da área comercial (PDF 03); as da onda 4 seguem o modo da própria área.
+  const abertas = await prisma.recomendacao.findMany({ where: { usuarioId, status: 'NOVA', detector: { notIn: DETECTORES_ONDA4.map(d => d.chave) } } })
   for (const rec of abertas) {
     const visivelPara = await visiveis(usuarioId, rec.destinatarioId ?? usuarioId, rec.acompanhaIds, modo)
     await prisma.recomendacao.update({ where: { id: rec.id }, data: { visivelPara, auditoriaAutor: 'AUTOMACAO|||roteamento' } })

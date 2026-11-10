@@ -26,7 +26,7 @@ export type Melhor = 'MAIOR' | 'MENOR' | 'NEUTRO'
 export type Papel = 'DONO' | 'SUPERVISOR' | 'SDR' | 'VENDEDOR' | 'SOCIAL_MEDIA' | 'TRAFEGO' | 'FINANCEIRO'
 export interface Ficha {
   chave: string
-  lote: 1 | 2 | 3
+  lote: 1 | 2 | 3 | 4
   // PDF 04: ponto de extensão (a fonte ainda não existe no sistema); a tela mostra o aviso.
   naoDefinido?: string
   nome: string
@@ -60,7 +60,7 @@ const JAN = 'Dia, semana, mês ou período escolhido'
 // O PDF não define o responsável de cada métrica: valores iniciais, ajustáveis pelo dono (nova versão da ficha).
 const RESP_COM = 'Supervisor comercial', RESP_DONO = 'Dono', RESP_SDR = 'SDR', RESP_VEND = 'Vendedor'
 
-const f = (chave: string, lote: 1 | 2 | 3, nome: string, definicao: string, formula: string, fonte: string, unidade: Unidade, melhor: Melhor, aditiva: boolean, responsavel: string, quemVe: Papel[], extra: Partial<Ficha> = {}): Ficha =>
+const f = (chave: string, lote: 1 | 2 | 3 | 4, nome: string, definicao: string, formula: string, fonte: string, unidade: Unidade, melhor: Melhor, aditiva: boolean, responsavel: string, quemVe: Papel[], extra: Partial<Ficha> = {}): Ficha =>
   ({ chave, lote, nome, definicao, formula, fonte, janela: JAN, comparacao: COMP, unidade, melhor, aditiva, responsavel, quemVe, ...extra })
 
 export const FICHAS_PADRAO: Ficha[] = [
@@ -117,6 +117,13 @@ export const FICHAS_PADRAO: Ficha[] = [
   f('posts_publicados', 3, 'Posts publicados', 'Posts que foram ao ar', 'Pautas publicadas no período (o detalhe traz as planejadas para o mesmo período)', 'Social Media', 'QTD', 'MAIOR', true, 'Social media', DONO_SM),
   f('leads_dos_posts', 3, 'Leads gerados pelos posts', 'Leads que chegaram por um post', 'Leads criados no período com o post de origem registrado', 'CRM e Social Media', 'QTD', 'MAIOR', true, 'Social media', DONO_SM),
   f('vendas_por_post', 3, 'Vendas por post', 'Quantas vendas cada post publicado trouxe', 'Vendas confirmadas com o post de origem registrado ÷ posts publicados no período', 'Vendas e Social Media', 'X', 'MAIOR', false, 'Social media', DONO_SM),
+  // Quarto lote — evidência dos detectores da onda 4 (PDF 05): formaliza números que o sistema já mostra.
+  f('taxa_recuperacao', 4, 'Taxa de recuperação da Reativação', 'Quantos perdidos da Reativação voltaram à jornada', 'Perdidos reativados no período ÷ perdidos que estavam na Reativação no período (sem encerrados, descartados e clientes bloqueados)', 'CRM e Reativação', 'PCT', 'MAIOR', false, RESP_COM, TODOS),
+  f('frequencia_anuncio', 4, 'Frequência dos anúncios', 'Quantas vezes, em média, a mesma pessoa viu o anúncio', 'Impressões ÷ alcance no período (por anúncio no detalhe)', 'Meta', 'X', 'MENOR', false, RESP_DONO, DONO_TRAFEGO),
+  f('ctr_anuncio', 4, 'Taxa de cliques dos anúncios', 'Quantos que viram o anúncio clicaram', 'Cliques ÷ impressões no período (por anúncio no detalhe)', 'Meta', 'PCT', 'MAIOR', false, RESP_DONO, DONO_TRAFEGO),
+  f('avanco_por_campanha', 4, 'Avanço dos leads por campanha', 'Quantos leads de cada campanha avançam no funil', 'Leads criados no período com campanha de origem que chegaram a MQL ou além ÷ leads com campanha de origem (por campanha no detalhe)', 'CRM e Meta', 'PCT', 'MAIOR', false, RESP_DONO, ['DONO', 'TRAFEGO', 'SUPERVISOR']),
+  f('aderencia_agenda', 4, 'Aderência à rotina', 'Quanto da rotina combinada a pessoa cumpriu no dia', 'Tarefas da Agenda feitas no próprio dia ÷ tarefas da Agenda dos dias do período (até ontem)', 'Agenda', 'PCT', 'MAIOR', false, RESP_COM, TODOS),
+  f('atividades_feitas', 4, 'Atividades feitas', 'Atividades executadas', 'Atividades (ATV) executadas no período', 'Atividades', 'QTD', 'MAIOR', true, RESP_COM, TODOS),
 ]
 export const CHAVES = FICHAS_PADRAO.map(x => x.chave)
 
@@ -582,6 +589,51 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
         AND abs(p."valorTotal" - coalesce((SELECT sum(v."valorComissao") FROM pro_labore_vendas v WHERE v."pagamentoComissaoId" = p.id), 0)) > 1`)
     return { valor: rs.length, detalhe: { ids: rs.map(x => x.id) } }
   },
+  // --- Quarto lote (PDF 05) ---
+  async taxa_recuperacao(e, p) {
+    const { ini, fim } = instantes(p)
+    const [r] = await q<{ base: bigint; rec: bigint }>(Prisma.sql`
+      SELECT count(*) base, count(*) FILTER (WHERE l."reativadoEm" >= ${ini} AND l."reativadoEm" < ${fim}) rec
+      FROM pro_labore_leads l LEFT JOIN pro_labore_clientes c ON c.id = l."clienteId"
+      WHERE l."usuarioId" = ${e.usuarioId} AND l."perdidoEm" IS NOT NULL AND l."perdidoEm" < ${fim} AND coalesce(c.bloqueado, false) = false
+        AND (l."destinoPerda" IS NULL OR l."destinoPerda" NOT IN ('ENCERRADA','DESCARTADA'))
+        AND (l.estagio = 'PERDIDO' OR l."reativadoEm" >= ${ini})${vend(e)}`)
+    return { valor: pct(num(r.rec), num(r.base)), amostra: num(r.base), detalhe: { reativados: num(r.rec), naReativacao: num(r.base) } }
+  },
+  async frequencia_anuncio(e, p) {
+    const rs = await insightsPorAnuncio(e.usuarioId, p)
+    const imp = rs.reduce((s, x) => s + x.impressoes, 0), alc = rs.reduce((s, x) => s + x.alcance, 0)
+    return { valor: alc > 0 ? r2(imp / alc) : null, amostra: imp, detalhe: rs.map(x => ({ adId: x.adId, adNome: x.adNome, frequencia: x.alcance ? r2(x.impressoes / x.alcance) : null, impressoes: x.impressoes })) }
+  },
+  async ctr_anuncio(e, p) {
+    const rs = await insightsPorAnuncio(e.usuarioId, p)
+    const imp = rs.reduce((s, x) => s + x.impressoes, 0), cli = rs.reduce((s, x) => s + x.cliques, 0)
+    return { valor: pct(cli, imp), amostra: imp, detalhe: rs.map(x => ({ adId: x.adId, adNome: x.adNome, ctr: pct(x.cliques, x.impressoes), cliques: x.cliques, impressoes: x.impressoes })) }
+  },
+  async avanco_por_campanha(e, p) {
+    const { ini, fim } = instantes(p)
+    const rs = await q<{ campanha: string; n: bigint; av: bigint }>(Prisma.sql`
+      SELECT l."origemCampanha" campanha, count(*) n,
+        count(*) FILTER (WHERE l.etapa IN ('MQL','SQL','NEGOCIACAO','PROPOSTA','AGENDAMENTO','VISITA','VENDA') OR EXISTS (SELECT 1 FROM pro_labore_lead_estagio_historico h WHERE h."leadId" = l.id AND h."estagioNovo" IN ('MQL','SQL','NEGOCIACAO','PROPOSTA','AGENDAMENTO','VISITA','VENDA'))) av
+      FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."origemCampanha" IS NOT NULL AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}
+      GROUP BY 1`)
+    const n = rs.reduce((s, x) => s + num(x.n), 0), av = rs.reduce((s, x) => s + num(x.av), 0)
+    return { valor: pct(av, n), amostra: n, detalhe: rs.map(x => ({ campanha: x.campanha, leads: num(x.n), avancaram: num(x.av), avanco: pct(num(x.av), num(x.n)) })) }
+  },
+  async aderencia_agenda(e, p, agora) {
+    const hoje = hojeBrt(agora)
+    const fimP = p.fim >= hoje ? maisDias(hoje, -1) : p.fim
+    if (fimP < p.inicio) return { valor: null, amostra: 0 }
+    const [r] = await q<{ n: bigint; ok: bigint }>(Prisma.sql`
+      SELECT count(*) n, count(*) FILTER (WHERE t."feitaEm" IS NOT NULL AND t."feitaEm" < t.dia + interval '27 hours') ok
+      FROM pro_labore_agenda_tarefas t WHERE t."usuarioId" = ${e.usuarioId} AND t.dia >= ${dataDia(p.inicio)} AND t.dia < ${dataDia(maisDias(fimP, 1))}${e.vendedorId ? Prisma.sql` AND t."autorId" = ${e.vendedorId}` : Prisma.empty}`)
+    return { valor: pct(num(r.ok), num(r.n)), amostra: num(r.n), detalhe: { feitas: num(r.ok), tarefas: num(r.n) } }
+  },
+  async atividades_feitas(e, p) {
+    const { ini, fim } = instantes(p)
+    const n = await prisma.atividade.count({ where: { usuarioId: e.usuarioId, status: 'EXECUTADA', executadaEm: { gte: ini, lt: fim }, ...(e.vendedorId ? { responsavelId: e.vendedorId } : {}) } })
+    return { valor: n }
+  },
   async saidas_financeiro(e, p) {
     const { ini, fim } = instantes(p)
     const r = await prisma.lancamentoFinanceiro.aggregate({ where: { usuarioId: e.usuarioId, canceladoEm: null, pagoEm: { gte: ini, lt: fim } }, _sum: { valorTotal: true }, _count: true })
@@ -608,6 +660,16 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     ])
     return { valor: posts > 0 ? r2(vendas / posts) : null, amostra: posts, detalhe: { vendas, posts } }
   },
+}
+
+/** Insights do Tráfego por anúncio no período (conta da loja conectada). */
+export async function insightsPorAnuncio(usuarioId: string, p: Periodo) {
+  const conta = await prisma.trafegoConta.findUnique({ where: { usuarioId }, select: { id: true } })
+  if (!conta) return []
+  const rs = await q<{ adId: string; adNome: string | null; campanha: string | null; impressoes: bigint; alcance: bigint; cliques: bigint }>(Prisma.sql`
+    SELECT i."adId", max(i."adNome") "adNome", max(i."campanhaNome") campanha, sum(i.impressoes) impressoes, sum(i.alcance) alcance, sum(i.cliques) cliques
+    FROM pro_labore_trafego_insights i WHERE i."contaId" = ${conta.id} AND i.data >= ${dataDia(p.inicio)} AND i.data < ${dataDia(maisDias(p.fim, 1))} GROUP BY 1`)
+  return rs.map(r => ({ adId: r.adId, adNome: r.adNome, campanha: r.campanha, impressoes: num(r.impressoes), alcance: num(r.alcance), cliques: num(r.cliques) }))
 }
 
 /** Meta de faturamento do mês: a do vendedor (ou o padrão da conta) no escopo pessoal; a da operação (anual ÷ 12) no da loja. */

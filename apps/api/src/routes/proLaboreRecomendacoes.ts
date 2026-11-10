@@ -9,10 +9,13 @@ import { requireProLaboreAuth, requireDono, requireDonoOuSupervisor } from '../m
 import { DETECTORES, configDetectores } from '../lib/detectores'
 import { aceitePdf03 } from '../lib/aceitePdf03'
 import { decidirSugestao, sugerirAjustes } from '../lib/ajusteMensal'
-import { ErroRec, aceitar, avaliar, concluirAtividade, descartar, detalhe, encerrar, modoRoteamento, mudarRoteamento, podeVerRec, rodarDetectores } from '../lib/recomendacoes'
+import { DETECTORES_ONDA4, GRUPOS, NOME_GRUPO, RESPONSAVEL_GRUPO, configAreas, type GrupoArea } from '../lib/detectoresOnda4'
+import { aceitePdf05 } from '../lib/aceitePdf05'
+import { ErroRec, compartilharBoaPratica, mudarArea, aceitar, avaliar, concluirAtividade, descartar, detalhe, encerrar, modoRoteamento, mudarRoteamento, podeVerRec, rodarDetectores } from '../lib/recomendacoes'
 
 const router = Router()
-const quem = (req: Request) => ({ id: req.proLaboreUser!.vendedorId ?? req.proLaboreUser!.sub, papel: req.proLaboreUser!.papel, usuarioId: req.proLaboreUser!.sub })
+// Gestor de tráfego e financeiro entram com escopo de equipe, mas nas Recomendações valem como pessoas (só o que é roteado para eles).
+const quem = (req: Request) => ({ id: req.proLaboreUser!.vendedorId ?? req.proLaboreUser!.sub, papel: req.proLaboreUser!.funcao ? 'VENDEDOR' : req.proLaboreUser!.papel, usuarioId: req.proLaboreUser!.sub })
 const falha = (res: Response, e: unknown) => {
   if (e instanceof ErroRec) { res.status(e.status).json({ error: e.message }); return }
   throw e
@@ -100,7 +103,7 @@ router.post('/recomendacoes/rodar', requireProLaboreAuth, requireDono, async (re
 // Detectores: lista com nível e volume mínimo; só o dono edita.
 router.get('/detectores', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
   const cfg = await configDetectores(req.proLaboreUser!.sub)
-  res.json({ modo: await modoRoteamento(req.proLaboreUser!.sub), detectores: DETECTORES.map(d => ({ ...d, ...cfg[d.chave] })) })
+  res.json({ modo: await modoRoteamento(req.proLaboreUser!.sub), detectores: DETECTORES.filter(d => !d.grupo).map(d => ({ ...d, ...cfg[d.chave] })) })
 })
 const detSchema = z.object({
   ativo: z.boolean().optional(),
@@ -153,6 +156,36 @@ router.post('/sugestoes-ajuste/:id/:decisao', requireProLaboreAuth, requireDono,
 // PDF 03 · seção 9: aceite calculado na produção (só o dono) e a amostra de utilidade.
 router.get('/recomendacoes-aceite', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   res.json(await aceitePdf03(req.proLaboreUser!.sub))
+})
+
+// PDF 05 · Áreas da onda 4: ligar/desligar e modo silencioso de cada uma (só o dono, com justificativa).
+router.get('/detectores-areas', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  const u = req.proLaboreUser!.sub
+  const [areas, cfg] = await Promise.all([configAreas(u), configDetectores(u)])
+  res.json(GRUPOS.map(g => ({ grupo: g, nome: NOME_GRUPO[g], responsavel: RESPONSAVEL_GRUPO[g], ...areas[g], detectores: DETECTORES_ONDA4.filter(d => d.grupo === g).map(d => ({ ...d, ...cfg[d.chave] })) })))
+})
+router.put('/detectores-areas/:grupo', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const g = String(req.params.grupo) as GrupoArea
+  if (!GRUPOS.includes(g)) { res.status(404).json({ error: 'Área desconhecida' }); return }
+  const p = z.object({ ligada: z.boolean().optional(), modo: z.enum(['SILENCIOSO', 'NORMAL']).optional(), justificativa: z.string().trim().min(5, 'Escreva por que mudou') }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  // Uma área por vez (PDF 05): só liga a próxima quando a anterior foi liberada (roteamento normal).
+  if (p.data.ligada) {
+    const areas = await configAreas(req.proLaboreUser!.sub)
+    const anterior = GRUPOS[GRUPOS.indexOf(g) - 1]
+    if (anterior && !(areas[anterior].ligada && areas[anterior].modo === 'NORMAL')) { res.status(409).json({ error: `Ligue uma área por vez: primeiro libere ${NOME_GRUPO[anterior]}` }); return }
+  }
+  res.json(await mudarArea(req.proLaboreUser!.sub, g, { ligada: p.data.ligada, modo: p.data.modo }, p.data.justificativa, req.proLaboreUser!.sub))
+})
+// Boa prática: o supervisor decide compartilhar (sem nomes, ou reconhecendo a pessoa).
+router.post('/recomendacoes/:id/compartilhar', requireProLaboreAuth, requireDonoOuSupervisor, async (req: Request, res: Response) => {
+  try { res.json(await compartilharBoaPratica(String(req.params.id), quem(req), req.body?.comNome === true, typeof req.body?.texto === 'string' ? req.body.texto : undefined)) } catch (e) { falha(res, e) }
+})
+
+router.get('/detectores-areas/:grupo/aceite', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const g = String(req.params.grupo) as GrupoArea
+  if (!GRUPOS.includes(g)) { res.status(404).json({ error: 'Área desconhecida' }); return }
+  res.json(await aceitePdf05(req.proLaboreUser!.sub, g))
 })
 
 export default router

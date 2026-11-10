@@ -9,7 +9,7 @@ import { proLaboreApi, recApi, type RecDetalhe } from '@/lib/proLaboreApi'
 
 export const FORCA = { COMPROVADA: { nome: 'Evidência comprovada', classe: 'pl-faixa-bom' }, PADRAO: { nome: 'Padrão observado', classe: 'pl-faixa-atencao' }, HIPOTESE: { nome: 'Hipótese', classe: 'pl-faixa-critico' } } as const
 export const STATUS: Record<string, string> = { NOVA: 'Nova', ACEITA: 'Aceita', DESCARTADA: 'Descartada', EM_EXECUCAO: 'Em execução', AVALIADA: 'Avaliada', ENCERRADA: 'Encerrada' }
-export const AREA: Record<string, string> = { ATENDIMENTO: 'Atendimento', FUNIL: 'Funil', ATIVIDADES: 'Atividades', CREDITO: 'Crédito', ANUNCIOS: 'Anúncios', RESULTADO: 'Resultado do mês' }
+export const AREA: Record<string, string> = { ATENDIMENTO: 'Atendimento', FUNIL: 'Funil', ATIVIDADES: 'Atividades', CREDITO: 'Crédito', ANUNCIOS: 'Anúncios', RESULTADO: 'Resultado do mês', REATIVACAO: 'Reativação', MARKETING: 'Marketing', GESTAO: 'Gestão', PESSOAS: 'Pessoas' }
 const UN: Record<string, (n: number) => string> = {
   MIN: n => `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} min`, PCT: n => `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`,
   BRL: n => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), X: n => `${n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}×`, QTD: n => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 }),
@@ -118,6 +118,13 @@ export function DetalheRec({ id, onFechar, onMudou, avaliarPertinencia }: { id: 
               </section>
             )}
 
+            {r.detector === 'boa_pratica' && r.alvoTipo === 'BOA_PRATICA' && gestao && (r.status === 'NOVA' || r.status === 'ACEITA') && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} data-compartilhar>
+                <span className="pl-hint" style={{ width: '100%' }}>Boa prática: você decide se vira aprendizado da equipe. Sem nomes e sem ranking, salvo se quiser reconhecer a pessoa.</span>
+                <button type="button" className="pl-btn pl-btn-primary" onClick={() => void agir(async () => { await recApi.compartilhar(r.id, false); return recApi.detalhe(r.id) })} data-compartilhar-sem-nome>Compartilhar com a equipe (sem nomes)</button>
+                <button type="button" className="pl-btn" onClick={() => void agir(async () => { await recApi.compartilhar(r.id, true); return recApi.detalhe(r.id) })} data-reconhecer>Reconhecer a pessoa</button>
+              </div>
+            )}
             {avaliarPertinencia && (
               <section data-pertinencia>
                 <div className="pl-eyebrow">Teste de utilidade: esta recomendação é pertinente?</div>
