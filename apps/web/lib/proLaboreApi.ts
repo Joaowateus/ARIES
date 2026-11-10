@@ -3887,6 +3887,7 @@ export const dailyApi = {
 }
 export const painelDonoApi = {
   // Duas chamadas em paralelo (cada uma cabe no tempo da função): o topo e as séries do ano.
+  topo: (f: FiltrosPainelWeb) => request<PainelDono>(`/pro-labore/painel-dono${qs({ ...(f as Record<string, string | undefined>), parte: 'TOPO' })}`),
   painel: async (f: FiltrosPainelWeb) => {
     const [topo, series] = await Promise.all([
       request<PainelDono>(`/pro-labore/painel-dono${qs({ ...(f as Record<string, string | undefined>), parte: 'TOPO' })}`),

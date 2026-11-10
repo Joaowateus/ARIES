@@ -151,7 +151,7 @@ function CartaoEtapa({ e, gargalo, dono, editar }: { e: EtapaPainel; gargalo: bo
   )
 }
 
-function EditarMetas({ e, fechar, aoSalvar }: { e: EtapaPainel; fechar: () => void; aoSalvar: () => void }) {
+export function EditarMetas({ e, fechar, aoSalvar }: { e: EtapaPainel; fechar: () => void; aoSalvar: () => void }) {
   const [c, setC] = useState(e.metas.conversaoMin?.toString() ?? ''), [p, setP] = useState(e.metas.perdaMax?.toString() ?? ''), [k, setK] = useState(e.metas.custoMax?.toString() ?? '')
   const [j, setJ] = useState(''), [msg, setMsg] = useState<string | null>(null)
   const n = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')))
