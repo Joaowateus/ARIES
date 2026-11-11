@@ -4513,3 +4513,92 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .jd-meta .pl-delta { flex: none; }
 .jd-det { overflow: hidden; }
 @media (max-width: 1180px) { [data-painel-graficos] :is(.pl-grid-2, .pl-grid-2b) { grid-template-columns: 1fr; } }
+
+/* ============ CRM organizado: largura da tela, uma linha por assunto, colunas alinhadas ============ */
+.pl-shell:has([data-tela-padrao="crm"]), .pl-shell:has([data-crm]) { max-width: 1720px; padding-left: 28px; padding-right: 28px; }
+.ar-topo-largo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr); gap: 10px; align-items: stretch; margin-bottom: 16px; }
+.ar-topo-largo .ar-agora { margin-bottom: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ar-topo-largo .ar-lente { position: static; padding: 12px 14px; display: flex; flex-direction: column; justify-content: center; }
+.ar-topo-largo .ar-lente-vazio .ar-numero { display: none; }
+.ar-topo-largo .ar-lente-vazio p { margin: 0 !important; }
+.ar-topo-largo .ar-lente > .pl-hint:last-child { margin-top: 6px !important; }
+.ar-tela-larga > .ar-trabalho { min-width: 0; }
+
+[data-crm] .pl-page-head:empty { display: none; }
+.crm-ferramentas { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; margin-bottom: 12px; }
+.crm-ferramentas .pl-search-wrap { flex: 1 1 auto; max-width: 560px; min-width: 0; }
+.crm-ferramentas .crm-novo { margin-left: auto; flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+
+.crm-resumo { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; margin-bottom: 14px; }
+.crm-resumo small { color: var(--pl-ink-muted); font-size: 12px; margin-right: 4px; }
+.crm-resumo-volume { font-size: 13px; color: var(--pl-ink-2); }
+.crm-resumo-volume b { color: var(--pl-ink-1); font-variant-numeric: tabular-nums; }
+.crm-resumo-sep { width: 1px; align-self: stretch; background: var(--pl-border); }
+.crm-resumo-fim { margin-left: auto; display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+.crm-metricas { margin-bottom: 16px; }
+.crm-custo-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+.crm-metricas-grade { display: grid; grid-template-columns: repeat(var(--etapas, 5), minmax(0, 1fr)); gap: 10px; }
+.crm-etapa { border: 1px solid var(--pl-border); border-radius: var(--pl-radius-lg); background: var(--pl-surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.crm-etapa.fora-meta { border-color: color-mix(in srgb, var(--pl-critical) 55%, var(--pl-border)); }
+.crm-etapa-nome { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-weight: 600; font-size: 13px; }
+.crm-etapa-nome .pl-mono { color: var(--pl-ink-muted); font-weight: 500; }
+.crm-linhas { margin: 0; display: grid; gap: 3px; padding-top: 8px; border-top: 1px solid var(--pl-border); }
+.crm-linhas > div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; min-width: 0; }
+.crm-linhas dt { color: var(--pl-ink-muted); white-space: nowrap; }
+.crm-linhas dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.crm-linhas .pl-crm-fin-perdida dd, .crm-linhas .pl-crm-fin-perdida dt { color: var(--pl-critical); }
+.crm-etapa-meta { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--pl-border); font-size: 12px; }
+.crm-etapa-meta .pl-stage-conv { margin-top: 0 !important; text-align: left; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.crm-atencao { display: flex; align-items: center; gap: 10px 22px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 10px; border: 1px solid var(--pl-border); border-left: 3px solid var(--pl-warning, #d97706); border-radius: var(--pl-radius-lg); background: var(--pl-surface); font-size: 13px; }
+.crm-atencao-item { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.crm-etiquetas { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.crm-etiquetas .pl-chip { padding: 3px 10px; font-size: 12px; }
+.crm-etiquetas .pl-chip .pl-mono { color: var(--pl-ink-muted); margin-left: 2px; }
+.crm-etiquetas .pl-chip.active .pl-mono { color: inherit; }
+
+.qj-barra { flex-wrap: wrap; }
+.qj-fases { display: flex; gap: 6px; flex-wrap: wrap; }
+.qj-dica { margin-left: auto; }
+.qj-rola { overflow-x: auto; padding-bottom: 8px; }
+.qj-trilho { display: flex; gap: 12px; min-width: 100%; }
+.qj-fase { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: min-content; }
+.qj-fase-nome { padding-left: 4px; }
+.qj-colunas { display: flex; gap: 10px; }
+.qj-colunas > .pl-kanban-col { flex: 1 1 0; min-width: 228px; max-width: 340px; }
+.qj-selos { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.qj-selos:empty { display: none; }
+.qj-selos .pl-chip { padding: 1px 7px; font-size: 11px; line-height: 1.5; }
+.qj-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.qj-acoes .pl-btn { padding: 4px 8px; font-size: 12px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; justify-content: center; }
+.qj-acoes .qj-avancar { grid-column: 1 / -1; }
+.qj-acoes > .pl-btn:only-child, .qj-acoes > .qj-avancar + .pl-btn:last-child { grid-column: 1 / -1; }
+
+@media (max-width: 1280px) {
+  .crm-metricas-grade { overflow-x: auto; grid-template-columns: repeat(var(--etapas, 5), minmax(170px, 1fr)); padding-bottom: 4px; }
+}
+@media (max-width: 1100px) {
+  .ar-topo-largo { grid-template-columns: minmax(0, 1fr); }
+  .crm-resumo-fim { margin-left: 0; }
+  .qj-dica { margin-left: 0; }
+}
+@media (max-width: 720px) {
+  .crm-ferramentas { flex-wrap: wrap; }
+  .crm-ferramentas .pl-search-wrap { flex-basis: 100%; }
+  .crm-resumo-sep { display: none; }
+  .ar-topo-largo .ar-agora { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* Topo largo: a Lente fica enxuta (achado e botões em linha) para os números não esticarem. */
+.ar-topo-largo { grid-template-columns: minmax(0, 2.4fr) minmax(300px, 1.3fr); align-items: stretch; }
+.ar-topo-largo .ar-agora .ar-numero { height: 100%; }
+.ar-topo-largo .ar-lente { justify-content: flex-start; gap: 4px; }
+.ar-topo-largo .ar-lente-titulo { margin-bottom: 2px; font-size: 13px; }
+.ar-topo-largo .ar-lente-item { padding: 4px 0; margin: 0; border: 0; }
+.ar-topo-largo .ar-lente-achado { margin: 0; font-size: 13px; }
+.ar-topo-largo .ar-lente-evid { margin: 2px 0 4px; font-size: 12px; }
+.ar-topo-largo .ar-lente-botoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.ar-topo-largo .ar-lente-botoes .pl-btn { font-size: 12px; padding: 3px 10px !important; }
+.ar-topo-largo .ar-lente > .pl-hint:last-child { font-size: 11px !important; }
+.crm-etiquetas > .pl-link-action { font-size: 12.5px; }
+@media (max-width: 720px) { .crm-metricas-grade { grid-template-columns: repeat(var(--etapas, 5), minmax(210px, 1fr)); } }

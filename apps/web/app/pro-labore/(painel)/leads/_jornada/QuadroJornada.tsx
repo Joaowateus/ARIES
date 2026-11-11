@@ -33,11 +33,12 @@ interface Props {
   onAbrir: (id: string) => void
   onAtualizar: () => void
   onRegistrarVenda: (lead: Lead) => void
+  extraBarra?: React.ReactNode
 }
 
 type Aviso = { lead: Lead; destino: EtapaJornada; faltando: string[] } | null
 
-export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda }: Props) {
+export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda, extraBarra }: Props) {
   const [fase, setFase] = useState<'TUDO' | 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'>(() => {
     const e = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('etapa')
     return FASES.find(x => (x.etapas as string[]).includes(e ?? ''))?.id ?? 'TUDO'
@@ -93,21 +94,22 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
 
   return (
     <div data-quadro-jornada>
-      <div className="pl-kanban-barra">
-        <div role="group" aria-label="Fases da jornada" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div className="pl-kanban-barra qj-barra">
+        <div role="group" aria-label="Fases da jornada" className="qj-fases">
           {([['TUDO', 'Jornada inteira'], ...FASES.map(f => [f.id, f.nome])] as Array<[typeof fase, string]>).map(([id, nome]) => (
             <button key={id} type="button" className={`pl-chip ${fase === id ? 'active' : ''}`} aria-pressed={fase === id} onClick={() => setFase(id)} data-fase={id}>{nome}</button>
           ))}
         </div>
-        <span className="pl-hint">Arraste o card ou use “Avançar”. Só passa quando o critério da etapa está cumprido.</span>
+        <span className="pl-hint qj-dica" title="Só passa quando o critério da etapa está cumprido.">Clique no card para ver tudo do lead · arraste ou use “Avançar”</span>
+        {extraBarra}
       </div>
       {erro && <div className="pl-alert" role="alert">{erro}</div>}
-      <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
-        <div style={{ display: 'flex', gap: 12, minWidth: 'min-content' }}>
+      <div className="qj-rola">
+        <div className="qj-trilho">
           {visiveis.map(f => (
-            <section key={f.id} data-fase-bloco={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div className="pl-eyebrow" style={{ paddingLeft: 4 }}>{f.nome}</div>
-              <div style={{ display: 'flex', gap: 10 }}>
+            <section key={f.id} data-fase-bloco={f.id} className="qj-fase" style={{ flexGrow: f.etapas.length }}>
+              <div className="pl-eyebrow qj-fase-nome">{f.nome}</div>
+              <div className="qj-colunas">
                 {f.etapas.map(e => {
                   const i = ETAPAS_JORNADA.indexOf(e), cards = porEtapa(e)
                   const soma = cards.reduce((t, l) => t + (l.valorNegociacao || 0), 0)
@@ -115,7 +117,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                     <div
                       key={e} data-coluna={e}
                       className={`pl-kanban-col ${sobre === e ? 'drop-active' : ''}`}
-                      style={{ width: 236, flex: '0 0 236px', ...(destaque === e ? { boxShadow: '0 0 0 2px var(--pl-border-strong)' } : {}) }}
+                      style={destaque === e ? { boxShadow: '0 0 0 2px var(--pl-border-strong)' } : undefined}
                       onDragOver={ev => { ev.preventDefault(); setSobre(e) }}
                       onDragLeave={() => setSobre(s => (s === e ? null : s))}
                       onDrop={ev => { ev.preventDefault(); setSobre(null); const l = leads.find(x => x.id === arrastando); if (l) void mover(l, e) }}
@@ -152,16 +154,16 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                                 <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máximo ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
                               </div>
                               {vejaEquipe && l.vendedor?.nome && <div className="pl-hint">{l.vendedor.nome}</div>}
-                              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                              <div className="qj-selos">
                                 {l.revisarEtapa && <span className="pl-chip" title="Fechado sem venda confirmada na migração: posicione na etapa certa">revisar etapa</span>}
                                 {l.formaPagamento === 'A_VISTA' && <span className="pl-chip">à vista</span>}
                                 {l.formaPagamento === 'FINANCIADO' && <span className="pl-chip">financiado</span>}
                                 {(e === 'LEVANTAMENTO' || e === 'ABORDADO') && !l.levantamentoCompleto && <span className="pl-chip">levantamento incompleto</span>}
                               </div>
-                              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }} onClick={ev => ev.stopPropagation()}>
-                                {prox && <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '2px 8px' }} disabled={ocupado} onClick={() => void mover(l, prox)} data-avancar>{prox === 'VENDA' ? 'Registrar venda' : `Avançar → ${NOME_ETAPA[prox]}`}</button>}
-                                {['ABORDADO', 'LEVANTAMENTO'].includes(e) && <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '2px 8px' }} onClick={() => setLevantamento(l)} data-levantamento>Levantamento</button>}
-                                {e !== 'VENDA' && <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '2px 8px' }} onClick={() => void abrirPerda(l)} data-perda>Perdido</button>}
+                              <div className="qj-acoes" onClick={ev => ev.stopPropagation()}>
+                                {prox && <button type="button" className="pl-btn pl-btn-ghost qj-avancar" disabled={ocupado} onClick={() => void mover(l, prox)} data-avancar title={prox === 'VENDA' ? 'Registrar venda' : `Avançar para ${NOME_ETAPA[prox]}`}>{prox === 'VENDA' ? 'Registrar venda' : `Avançar → ${NOME_ETAPA[prox]}`}</button>}
+                                {['ABORDADO', 'LEVANTAMENTO'].includes(e) && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setLevantamento(l)} data-levantamento>Levantamento</button>}
+                                {e !== 'VENDA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => void abrirPerda(l)} data-perda>Perdido</button>}
                               </div>
                             </div>
                           )

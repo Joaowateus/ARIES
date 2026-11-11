@@ -280,6 +280,7 @@ export default function ProLaboreLeadsPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   // Painel lateral do lead (clique no card) e a densidade dos cards (fica no navegador).
   const [painelId, setPainelId] = useState<string | null>(() => (paramDaUrl('follow') ? null : paramDaUrl('lead')))
+  const [todasEtiquetas, setTodasEtiquetas] = useState(false)
   const [densidade, setDensidadeEstado] = useState<Densidade>(() => {
     try { return typeof window !== 'undefined' && localStorage.getItem('pl_crm_densidade') === 'detalhado' ? 'detalhado' : 'compacto' } catch { return 'compacto' }
   })
@@ -808,23 +809,29 @@ export default function ProLaboreLeadsPage() {
   // O follow aberto pelo card ou, vindo do link (?lead=&follow=), o do lead do link assim que a lista chega.
   const alvoFollow = followAberto ?? (linkFollow ? leads.find(l => l.id === linkFollow.leadId) ?? null : null)
 
+  const foraDaMeta = stagesDados.filter(d => d.statusOk === false).length
+  const ETIQ_VISIVEIS = 8
+  const etiquetasMostradas = todasEtiquetas ? contagemEtiquetas : contagemEtiquetas.slice(0, ETIQ_VISIVEIS)
+  const temAtencao = parados.length > 0 || filtroParado || followsAtrasados > 0 || followsHoje > 0 || !!filtroFollow
+  const densidadeBotoes = (
+    <div className="pl-kanban-densidade" role="group" aria-label="Tamanho dos cards">
+      {(['compacto', 'detalhado'] as const).map(d => (
+        <button key={d} type="button" className={`pl-chip ${densidade === d ? 'active' : ''}`} aria-pressed={densidade === d} onClick={() => setDensidade(d)} data-densidade={d}>{d === 'compacto' ? 'Compacto' : 'Detalhado'}</button>
+      ))}
+    </div>
+  )
   return (
-    <div>
+    <div className="crm" data-crm>
       <PageHeader
         eyebrow="Vendas"
         title="Funil de vendas"
         subtitle={vejaEquipe ? 'Arraste os cards entre as etapas, use "Avançar" ou o menu de mover em cada card' : 'Seus leads, do primeiro contato ao fechamento'}
-        actions={
-          <button type="button" className="pl-btn pl-btn-primary" onClick={abrirNovoLead}>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-            Novo lead
-          </button>
-        }
       />
 
       <FaixaWhatsapp gestao={vejaEquipe} versao={leads.length} onMudou={carregar} />
 
-      <div className="pl-leads-toolbar">
+      {/* 1. Ferramentas: busca, filtros e o "Novo lead", numa linha só */}
+      <div className="pl-leads-toolbar crm-ferramentas">
         <div className="pl-search-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
           <input
@@ -850,36 +857,38 @@ export default function ProLaboreLeadsPage() {
           onLimparPeriodo={limparFiltroPeriodo}
           onSelecionarPreset={selecionarFiltroPreset}
         />
+        {filtroTextualAtivo && <button type="button" className="pl-link-action pl-leads-textlink" onClick={limparFiltros}>Limpar filtros</button>}
+        <button type="button" className="pl-btn pl-btn-primary crm-novo" onClick={abrirNovoLead} data-novo-lead>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+          Novo lead
+        </button>
       </div>
 
-      <div className="pl-section-note" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span>
-          {totalFiltrado} lead{totalFiltrado !== 1 ? 's' : ''} · {fechadosFiltrado} fechamento{fechadosFiltrado !== 1 ? 's' : ''} · {conversaoFiltrado.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% de conversão
-        </span>
-        {totalPerdidos > 0 && (
-          <Link className="pl-link-action pl-leads-textlink" href="/pro-labore/reativacao">Perdidos na Reativação ({totalPerdidos}) →</Link>
-        )}
-        {filtroTextualAtivo && (
-          <span className="pl-link-action pl-leads-textlink" onClick={limparFiltros}>Limpar filtros</span>
-        )}
-      </div>
-
+      {/* 2. Resumo: volume, conversão e R$ do funil numa barra só */}
       {!loading && (
-        <div className="pl-crm-resumo" data-metricas-resumo>
+        <div className="pl-crm-resumo crm-resumo" data-metricas-resumo>
+          <span className="crm-resumo-volume">
+            <b>{totalFiltrado.toLocaleString('pt-BR')}</b> lead{totalFiltrado !== 1 ? 's' : ''} · <b>{fechadosFiltrado}</b> fechamento{fechadosFiltrado !== 1 ? 's' : ''} · <b>{conversaoFiltrado.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b> de conversão
+          </span>
+          <span className="crm-resumo-sep" aria-hidden />
           <span><small>Oportunidade</small> <b className="pl-crm-fin-oportunidade">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
           <span><small>Comissão prevista</small> <b>{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPotencialRS, 0))}</b></span>
           <span><small>Comissão perdida</small> <b className="pl-crm-resumo-perda">{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPerdidaRS, 0))}</b></span>
-          {stagesDados.some(d => d.statusOk === false) && <span className="pl-delta down">{stagesDados.filter(d => d.statusOk === false).length} etapa{stagesDados.filter(d => d.statusOk === false).length > 1 ? 's' : ''} fora da meta</span>}
-          <button type="button" className="pl-link-action" onClick={alternarMetricas} aria-expanded={metricasAbertas} data-alternar-metricas>
-            {metricasAbertas ? 'Esconder métricas por etapa ▴' : 'Ver métricas por etapa ▾'}
-          </button>
+          <span className="crm-resumo-fim">
+            {foraDaMeta > 0 && <span className="pl-delta down">{foraDaMeta} etapa{foraDaMeta > 1 ? 's' : ''} fora da meta</span>}
+            {totalPerdidos > 0 && <Link className="pl-link-action pl-leads-textlink" href="/pro-labore/reativacao">Perdidos na Reativação ({totalPerdidos}) →</Link>}
+            <button type="button" className="pl-link-action" onClick={alternarMetricas} aria-expanded={metricasAbertas} data-alternar-metricas>
+              {metricasAbertas ? 'Esconder métricas por etapa ▴' : 'Ver métricas por etapa ▾'}
+            </button>
+          </span>
         </div>
       )}
 
+      {/* 3. Métricas por etapa: um cartão por etapa, mesmas linhas em todos */}
       {!loading && metricasAbertas && (
-        <>
+        <section className="crm-metricas" data-metricas-etapas>
           {isDono && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div className="crm-custo-topo">
               <span className="pl-hint">Custo por lead (topo do funil):</span>
               {custoAutomatico != null ? (
                 <span style={{ fontWeight: 600 }} title="Gasto com anúncios do mês ÷ leads criados no mês. Atualiza sozinho.">
@@ -903,43 +912,24 @@ export default function ProLaboreLeadsPage() {
               )}
             </div>
           )}
-
-          <div className="pl-crm-fin-row">
+          <div className="crm-metricas-grade" style={{ ['--etapas' as string]: stagesDados.length }}>
             {stagesDados.map(d => (
-              <div key={d.estagio} className="pl-crm-fin-card">
-                <div className="pl-crm-fin-item">
-                  <span>Oportunidade</span>
-                  <b className="pl-crm-fin-oportunidade">{formatMoeda(d.oportunidadeRS)}</b>
-                </div>
-                {isDono && (
-                  <div className="pl-crm-fin-item">
-                    <span>Pró-labore</span>
-                    <b>{formatMoeda(d.proLaborePotencialRS)}</b>
-                  </div>
-                )}
-                <div className="pl-crm-fin-item">
-                  <span>Comissão (Previsão)</span>
-                  <b>{formatMoeda(d.comissaoPotencialRS)}</b>
-                </div>
-                <div className="pl-crm-fin-item pl-crm-fin-perdida">
-                  <span>Comissão (Perdida)</span>
-                  <b>{formatMoeda(d.comissaoPerdidaRS)}</b>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="pl-crm-perf-row">
-            {stagesDados.map(d => (
-              <div key={d.estagio} className={`pl-crm-perf-card ${d.statusOk === false ? 'fora-meta' : ''}`}>
-                <div className="pl-stage-conv" style={{ marginTop: 0 }}>
-                  {d.i === 0 ? 'topo do funil' : <>conv. anterior <b>{(d.convFromPrev * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b></>}
-                </div>
-                {d.i > 0 && (
-                  <div className="pl-stage-conv">
-                    Perda <b>{d.perdaQuantidade} ({formatPct(d.perdaPct ?? 0)})</b>
-                  </div>
-                )}
+              <div key={d.estagio} className={`crm-etapa ${d.statusOk === false ? 'fora-meta' : ''}`} data-metrica-etapa={d.estagio}>
+                <div className="crm-etapa-nome">{d.titulo}<span className="pl-mono">{d.value.toLocaleString('pt-BR')}</span></div>
+                <dl className="crm-linhas">
+                  <div><dt>Oportunidade</dt><dd className="pl-crm-fin-oportunidade" title={formatMoeda(d.oportunidadeRS)}>{moedaCurta(d.oportunidadeRS)}</dd></div>
+                  {isDono && <div><dt>Pró-labore</dt><dd title={formatMoeda(d.proLaborePotencialRS)}>{moedaCurta(d.proLaborePotencialRS)}</dd></div>}
+                  <div><dt>Comissão prev.</dt><dd title={formatMoeda(d.comissaoPotencialRS)}>{moedaCurta(d.comissaoPotencialRS)}</dd></div>
+                  <div className="pl-crm-fin-perdida"><dt>Comissão perdida</dt><dd title={formatMoeda(d.comissaoPerdidaRS)}>{moedaCurta(d.comissaoPerdidaRS)}</dd></div>
+                </dl>
+                <dl className="crm-linhas">
+                  <div><dt>{d.i === 0 ? 'Topo do funil' : 'Conv. anterior'}</dt><dd>{d.i === 0 ? '—' : `${(d.convFromPrev * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}</dd></div>
+                  <div><dt>Perda</dt><dd>{d.i === 0 ? '—' : `${d.perdaQuantidade} (${formatPct(d.perdaPct ?? 0)})`}</dd></div>
+                  <div><dt>Custo/lead</dt><dd>{d.custoPorLead != null ? formatMoeda(d.custoPorLead) : '—'}</dd></div>
+                  <div><dt>Conv. em R$</dt><dd>{d.i > 0 && d.convAnteriorRS != null ? `${(d.convAnteriorRS * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</dd></div>
+                  <div><dt>Perda em R$</dt><dd title={d.perdaRS != null ? formatMoeda(d.perdaRS) : ''}>{d.i > 0 && d.perdaRS != null ? `${moedaCurta(d.perdaRS)} (${d.perdaPctRS != null ? formatPct(d.perdaPctRS) : '—'})` : '—'}</dd></div>
+                </dl>
+                <div className="crm-etapa-meta">
                 {editandoEtapaMeta === d.estagio ? (
                   <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
                     <select
@@ -971,28 +961,11 @@ export default function ProLaboreLeadsPage() {
                     {d.statusOk != null && <span className={`pl-delta ${d.statusOk ? 'up' : 'down'}`} style={{ marginLeft: 6 }}>{d.statusOk ? 'ok' : 'fora'}</span>}
                   </div>
                 )}
-                {d.custoPorLead != null && (
-                  <div className="pl-stage-conv">
-                    Custo/lead <b>{formatMoeda(d.custoPorLead)}</b>
-                  </div>
-                )}
-
-                {d.i > 0 && (
-                  <>
-                    <div className="pl-crm-perf-divider" />
-                    <div className="pl-crm-perf-subhead">Valores em R$</div>
-                    <div className="pl-stage-conv">
-                      conv. anterior (R$) <b>{d.convAnteriorRS != null ? `${(d.convAnteriorRS * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</b>
-                    </div>
-                    <div className="pl-stage-conv">
-                      Perda (R$) <b>{d.perdaRS != null ? <>{formatMoeda(d.perdaRS)} ({d.perdaPctRS != null ? formatPct(d.perdaPctRS) : '—'})</> : '—'}</b>
-                    </div>
-                  </>
-                )}
+                </div>
               </div>
             ))}
           </div>
-        </>
+        </section>
       )}
 
       {loading ? (
@@ -1006,37 +979,42 @@ export default function ProLaboreLeadsPage() {
         </div>
       ) : (
         <>
-          {(parados.length > 0 || filtroParado) && (
-            <div className="pl-alert" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }} role="status" data-aviso-parados>
-              <span><b>{parados.length} {parados.length === 1 ? 'lead parado' : 'leads parados'} em Negociação ou Proposta</b> há mais de {limiteParado} dias, sem follow agendado. É aqui que o funil mais perde: agende o próximo contato, avance ou registre o motivo da perda.</span>
-              <button type="button" className={`pl-chip ${filtroParado ? 'active' : ''}`} aria-pressed={filtroParado} onClick={() => setFiltroParado(f => !f)} data-filtro-parados>{filtroParado ? 'Ver todos os cards' : 'Ver só os parados'}</button>
+          {/* 4. O que pede atenção agora (parados e follows), numa faixa só */}
+          {temAtencao && (
+            <div className="crm-atencao" role="status" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
+              {(parados.length > 0 || filtroParado) && (
+                <span className="crm-atencao-item" title={`Parados há mais de ${limiteParado} dias em Negociação ou Proposta, sem follow agendado. É aqui que o funil mais perde: agende o próximo contato, avance ou registre o motivo da perda.`}>
+                  <b>{parados.length}</b> {parados.length === 1 ? 'parado' : 'parados'} em Negociação/Proposta há +{limiteParado} dias, sem follow
+                  <button type="button" className={`pl-chip ${filtroParado ? 'active' : ''}`} aria-pressed={filtroParado} onClick={() => setFiltroParado(f => !f)} data-filtro-parados>{filtroParado ? 'Ver todos os cards' : 'Ver só os parados'}</button>
+                </span>
+              )}
+              {(followsAtrasados > 0 || followsHoje > 0 || filtroFollow) && (
+                <span className="crm-atencao-item" role="group" aria-label="Follows do dia">
+                  Follows
+                  {followsAtrasados > 0 && <button type="button" className={`pl-chip atrasado ${filtroFollow === 'ATRASADO' ? 'active' : ''}`} aria-pressed={filtroFollow === 'ATRASADO'} onClick={() => setFiltroFollow(f => (f === 'ATRASADO' ? '' : 'ATRASADO'))}>{followsAtrasados} atrasado{followsAtrasados > 1 ? 's' : ''}</button>}
+                  {followsHoje > 0 && <button type="button" className={`pl-chip hoje ${filtroFollow === 'HOJE' ? 'active' : ''}`} aria-pressed={filtroFollow === 'HOJE'} onClick={() => setFiltroFollow(f => (f === 'HOJE' ? '' : 'HOJE'))}>{followsHoje} para hoje</button>}
+                  {filtroFollow && <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => setFiltroFollow('')}>Ver todos os cards</button>}
+                </span>
+              )}
             </div>
           )}
-          {(followsAtrasados > 0 || followsHoje > 0 || filtroFollow) && (
-            <div className="fw-faixa" role="group" aria-label="Follows do dia">
-              <span className="pl-hint">Follows:</span>
-              {followsAtrasados > 0 && <button type="button" className={`pl-chip atrasado ${filtroFollow === 'ATRASADO' ? 'active' : ''}`} aria-pressed={filtroFollow === 'ATRASADO'} onClick={() => setFiltroFollow(f => (f === 'ATRASADO' ? '' : 'ATRASADO'))}>{followsAtrasados} atrasado{followsAtrasados > 1 ? 's' : ''}</button>}
-              {followsHoje > 0 && <button type="button" className={`pl-chip hoje ${filtroFollow === 'HOJE' ? 'active' : ''}`} aria-pressed={filtroFollow === 'HOJE'} onClick={() => setFiltroFollow(f => (f === 'HOJE' ? '' : 'HOJE'))}>{followsHoje} para hoje</button>}
-              {filtroFollow && <span className="pl-link-action pl-leads-textlink" onClick={() => setFiltroFollow('')}>Ver todos os cards</span>}
-            </div>
-          )}
+          {/* 5. Etiquetas: uma linha, o resto em "+ mais" */}
           {(contagemEtiquetas.length > 0 || filtroEtiqueta) && (
-            <div className="fw-faixa" role="group" aria-label="Etiquetas da jornada" data-filtro-etiquetas>
-              <span className="pl-hint" title="Postas pelo Assistente a partir da conversa do WhatsApp">Etiquetas:</span>
-              {contagemEtiquetas.map(({ e, n }) => (
-                <button key={e} type="button" className={`pl-chip ${filtroEtiqueta === e ? 'active' : ''}`} aria-pressed={filtroEtiqueta === e} onClick={() => setFiltroEtiqueta(f => (f === e ? '' : e))}>{ROTULO_ETIQUETA[e]} · {n}</button>
+            <div className="crm-etiquetas" role="group" aria-label="Etiquetas da jornada" data-filtro-etiquetas>
+              <span className="pl-hint" title="Postas pelo Assistente a partir da conversa do WhatsApp">Etiquetas</span>
+              {etiquetasMostradas.map(({ e, n }) => (
+                <button key={e} type="button" className={`pl-chip ${filtroEtiqueta === e ? 'active' : ''}`} aria-pressed={filtroEtiqueta === e} onClick={() => setFiltroEtiqueta(f => (f === e ? '' : e))}>{ROTULO_ETIQUETA[e]} <span className="pl-mono">{n}</span></button>
               ))}
-              {filtroEtiqueta && <span className="pl-link-action pl-leads-textlink" onClick={() => setFiltroEtiqueta('')}>Ver todos os cards</span>}
+              {contagemEtiquetas.length > ETIQ_VISIVEIS && <button type="button" className="pl-link-action" onClick={() => setTodasEtiquetas(v => !v)} aria-expanded={todasEtiquetas} data-mais-etiquetas>{todasEtiquetas ? 'menos ▴' : `+ ${contagemEtiquetas.length - ETIQ_VISIVEIS} mais ▾`}</button>}
+              {filtroEtiqueta && <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => setFiltroEtiqueta('')}>Ver todos os cards</button>}
             </div>
           )}
-          <div className="pl-kanban-barra">
-            <span className="pl-hint">Clique no card para ver tudo do lead.</span>
-            <div className="pl-kanban-densidade" role="group" aria-label="Tamanho dos cards">
-              {(['compacto', 'detalhado'] as const).map(d => (
-                <button key={d} type="button" className={`pl-chip ${densidade === d ? 'active' : ''}`} aria-pressed={densidade === d} onClick={() => setDensidade(d)} data-densidade={d}>{d === 'compacto' ? 'Compacto' : 'Detalhado'}</button>
-              ))}
+          {!jornada10 && (
+            <div className="pl-kanban-barra">
+              <span className="pl-hint">Clique no card para ver tudo do lead.</span>
+              {densidadeBotoes}
             </div>
-          </div>
+          )}
           {jornada10 ? (
             <QuadroJornada
               leads={leadsAtivosOrdenados}
@@ -1044,6 +1022,7 @@ export default function ProLaboreLeadsPage() {
               onAbrir={id => { if (!leads.find(l => l.id === id)?.somenteLeitura) setPainelId(id) }}
               onAtualizar={carregar}
               onRegistrarVenda={lead => abrirConversao(lead)}
+              extraBarra={densidadeBotoes}
             />
           ) : (
           <div className="pl-kanban">
