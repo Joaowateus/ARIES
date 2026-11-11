@@ -408,7 +408,8 @@ export function DashboardAntigo({ comoPainel = false }: { comoPainel?: boolean }
         )}
       </div>
 
-      <div className="pl-kpi-grid" style={{ marginTop: 16 }}>
+      {/* Linhas iguais: até 5 por linha, divididos por igual (10 cartões = 2 × 5; 7 = 4 + 3). */}
+      <div className="pl-kpi-grid pl-kpi-grid-uniforme" style={{ marginTop: 16, ['--kpi-cols' as string]: kpis.length > 5 ? Math.ceil(kpis.length / 2) : kpis.length }}>
         {kpis.map(k => (
           <KpiCard key={k.label} label={k.label} format={k.format} color={k.color} curr={k.curr} prev={k.prev} invert={k.invert} anteriorLabel={anterior?.label} nota={'nota' in k ? k.nota : undefined}
             leitura={'chave' in k && k.chave ? leituras[k.chave] : undefined} onFicha={'chave' in k && k.chave ? () => setFichaAberta(k.chave as string) : undefined} />
@@ -828,9 +829,24 @@ function FraseMotivacional({ parametro, onSaved, isDono }: { parametro: Parametr
 }
 
 /* ============ GRÁFICO DE RECEITA (área, interativo) ============ */
+// Largura real do container: 1 unidade do SVG = 1px, altura fixa (nada estica nem sobra).
+function useLargura(inicial: number) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [w, setW] = useState(inicial)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(en => { const l = en[0]?.contentRect.width; if (l) setW(Math.round(l)) })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, w] as const
+}
+
 function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; selectedIdx: number; onSelect: (i: number) => void }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
-  const W = 720, H = 220, padL = 4, padR = 4, padT = 14, padB = 26
+  const [wrapRef, W] = useLargura(720)
+  const H = 220, padL = 4, padR = 4, padT = 14, padB = 26
   const plotW = W - padL - padR, plotH = H - padT - padB
   const maxV = Math.max(...meses.map(m => m.receita), 1) * 1.12
   const stepX = meses.length > 1 ? plotW / (meses.length - 1) : 0
@@ -844,8 +860,8 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
   const hover = hoverIdx !== null ? meses[hoverIdx] : null
 
   return (
-    <div className="pl-chart-wrap">
-      <svg className="pl-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+    <div className="pl-chart-wrap" ref={wrapRef}>
+      <svg className="pl-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: H }}>
         <defs>
           <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--pl-accent)" stopOpacity="0.35" />
@@ -889,7 +905,8 @@ function RevenueChart({ meses, selectedIdx, onSelect }: { meses: MesPainel[]; se
 // área de receita.
 function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
-  const W = 480, H = 230, padL = 4, padR = 40, padT = 14, padB = 22
+  const [wrapRef, W] = useLargura(480)
+  const H = 220, padL = 4, padR = 40, padT = 14, padB = 22
   const plotW = W - padL - padR, plotH = H - padT - padB
   // Receita e pró-labore usam escalas INDEPENDENTES (cada uma normalizada
   // ao próprio máximo) — se dividissem a mesma escala, pró-labore (sempre
@@ -934,8 +951,8 @@ function ReceitaPeriodoChart({ pontos }: { pontos: PontoReceita[] }) {
   const hover = hoverIdx !== null ? pontos[hoverIdx] : null
 
   return (
-    <div className="pl-chart-wrap">
-      <svg className="pl-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+    <div className="pl-chart-wrap" ref={wrapRef}>
+      <svg className="pl-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: H }}>
         <defs>
           <linearGradient id="recPeriodoGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--pl-accent)" stopOpacity="0.35" />
