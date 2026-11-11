@@ -5,9 +5,10 @@
 // vêm primeiro: é onde o cliente já conversou sobre comprar.
 import type { MesPainel } from '@/lib/proLaboreApi'
 import { MOTIVO_PERDA } from '../_follow/follow'
+import { NOME_ETAPA, NOME_MOTIVO } from '@/lib/etapasJornada'
 
-const ETAPA: Record<string, string> = { LEAD: 'Leads', ABORDADO: 'Abordados', NEGOCIACAO: 'Negociação', PROPOSTA: 'Proposta', DESCONHECIDA: 'Etapa não registrada' }
-const ORDEM = ['NEGOCIACAO', 'PROPOSTA', 'ABORDADO', 'LEAD', 'DESCONHECIDA']
+const ETAPA: Record<string, string> = { ...NOME_ETAPA, LEAD: 'Leads', ABORDADO: 'Abordados', NEGOCIACAO: 'Negociação', PROPOSTA: 'Proposta', DESCONHECIDA: 'Etapa não registrada' }
+const ORDEM = ['NEGOCIACAO', 'PROPOSTA', 'VISITA', 'AGENDAMENTO', 'SQL', 'MQL', 'LEVANTAMENTO', 'ABORDADO', 'LEAD', 'DESCONHECIDA']
 
 export function PerdasDoMes({ perdas, rotuloMes }: { perdas: NonNullable<MesPainel['perdas']>; rotuloMes: string }) {
   const total = perdas.reduce((s, p) => s + p.n, 0)
@@ -31,7 +32,7 @@ export function PerdasDoMes({ perdas, rotuloMes }: { perdas: NonNullable<MesPain
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><b>{ETAPA[e.etapa] ?? e.etapa}</b><span className="pl-hint">{e.n}</span></div>
               {e.itens.map(p => (
                 <div key={p.motivo} style={{ marginBottom: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 8 }}><span>{MOTIVO_PERDA[p.motivo as keyof typeof MOTIVO_PERDA] ?? p.motivo}</span><span className="pl-mono">{p.n}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 8 }}><span>{MOTIVO_PERDA[p.motivo as keyof typeof MOTIVO_PERDA] ?? NOME_MOTIVO[p.motivo] ?? p.motivo.toLowerCase().replace(/_/g, ' ')}</span><span className="pl-mono">{p.n}</span></div>
                   <div style={{ height: 6, borderRadius: 3, background: 'var(--pl-border)', overflow: 'hidden' }} aria-hidden="true"><span style={{ display: 'block', height: '100%', width: `${Math.round((p.n / e.n) * 100)}%`, background: 'var(--pl-ink-2, var(--pl-ink-1))', borderRadius: 3 }} /></div>
                 </div>
               ))}

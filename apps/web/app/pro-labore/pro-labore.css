@@ -4461,3 +4461,55 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .ar-atalho-aries { right: 10px; bottom: 10px; padding: 6px 10px; font-size: .78rem; opacity: .95; }
   [data-hoje], [data-tela-padrao] { padding-bottom: 56px; }
 }
+
+/* ===== Ajuste 1 · Painel do Hoje: largura, cartões em linhas iguais e Jornada de 10 etapas ===== */
+/* O Painel usa a largura da tela (10 etapas lado a lado); as outras abas mantêm a largura de leitura. */
+.pl-shell:has([data-painel-graficos]) { max-width: 1720px; padding-left: 28px; padding-right: 28px; }
+.pl-kpi-grid-uniforme { grid-template-columns: repeat(var(--kpi-cols, 5), minmax(0, 1fr)); }
+.pl-kpi-grid-uniforme .pl-kpi { display: flex; flex-direction: column; min-width: 0; }
+.pl-kpi-grid-uniforme .pl-kpi-nota { overflow-wrap: anywhere; }
+@media (max-width: 1180px) { .pl-kpi-grid-uniforme { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .pl-kpi-grid-uniforme { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Jornada: uma grade só de 10 colunas para todas as linhas (nomes, R$, funil, volumes, detalhes), sem
+   espaço entre colunas, para o centro de cada coluna cair no ponto da etapa no funil. */
+.jd-rola { overflow-x: auto; overflow-y: hidden; }
+.jd-grade { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); column-gap: 0; row-gap: 10px; min-width: 960px; }
+.jd-grade > * { min-width: 0; padding-inline: 4px; }
+.jd-aviso { margin: 0 0 10px; }
+.jd-fase { text-align: center; font-size: 11px; color: var(--pl-ink-muted); padding-bottom: 6px; border-bottom: 1px solid var(--pl-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jd-fase + .jd-fase { border-left: 1px solid var(--pl-border); }
+.jd-fase b { color: var(--pl-ink-1); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.jd-nome { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 4px; height: 52px; text-align: center; }
+.jd-nome a { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; line-height: 1.3; color: var(--pl-ink-1); text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.jd-nome a:hover { text-decoration: underline; }
+.jd-selo { font-size: 10.5px; padding: 1px 6px; }
+.jd-selo-vazio { height: 18px; }
+.jd-valores { display: flex; flex-direction: column; margin-inline: 4px; padding: 8px 8px 4px !important; border: 1px solid var(--pl-border); border-radius: 8px; background: var(--pl-surface-2); }
+.jd-valores span { font-size: 10.5px; color: var(--pl-ink-muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jd-valores b { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--pl-ink-1); }
+.jd-valores .jd-oport { color: var(--pl-accent-4); font-size: 13.5px; }
+.jd-funil { position: relative; height: 136px; padding: 0 !important; }
+.jd-faixa { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.jd-funil-pct { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: center; text-align: center; font-family: var(--pl-font-num); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .55); pointer-events: none; }
+.jd-volume { text-align: center; font-size: 20px; font-weight: 600; line-height: 1; }
+.jd-det { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; }
+.jd-det > div { display: flex; justify-content: space-between; gap: 4px; white-space: nowrap; }
+.jd-det > div > span { color: var(--pl-ink-muted); }
+.jd-det > div > b { font-variant-numeric: tabular-nums; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.jd-det .jd-motivo { display: block; color: var(--pl-ink-muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; }
+.jd-det .jd-meta { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 4px; margin-top: 4px; white-space: normal; }
+.jd-meta button { font-size: 11px; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; color: var(--pl-ink-1); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jd-meta .pl-delta { font-size: 10.5px; }
+@media (max-width: 1500px) { .jd-valores span { font-size: 10px; } .jd-valores b { font-size: 12px; } .jd-valores .jd-oport { font-size: 13px; } .jd-det { font-size: 11px; } }
+
+/* Painel do Hoje: proporções uniformes (cartões lado a lado na mesma largura e altura, vazios compactos). */
+[data-painel-graficos] .pl-grid-2, [data-painel-graficos] .pl-grid-2b { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+[data-painel-graficos] :is(.pl-grid-2, .pl-grid-2b) > .pl-card { display: flex; flex-direction: column; min-width: 0; }
+[data-painel-graficos] .pl-empty { padding: 24px 16px; }
+[data-painel-graficos] .pl-empty .pl-emoji { font-size: 22px; margin-bottom: 6px; }
+.jd-meta { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: nowrap; }
+.jd-meta button { flex: 1 1 auto; min-width: 0; }
+.jd-meta .pl-delta { flex: none; }
+.jd-det { overflow: hidden; }
+@media (max-width: 1180px) { [data-painel-graficos] :is(.pl-grid-2, .pl-grid-2b) { grid-template-columns: 1fr; } }
