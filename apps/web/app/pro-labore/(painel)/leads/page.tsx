@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { QuadroJornada } from './_jornada/QuadroJornada'
+import { CustosPorEtapa } from './_metricas/CustosPorEtapa'
 import { createPortal } from 'react-dom'
 import { proLaboreApi, metricasApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
 import { metaDefinida } from '@/lib/metaFunil'
@@ -299,14 +300,8 @@ export default function ProLaboreLeadsPage() {
   }, [])
   // Métricas por etapa (R$, conversão, metas): recolhidas num resumo de uma
   // linha para o quadro aparecer primeiro; a escolha fica no navegador.
-  const [metricasAbertas, setMetricasAbertas] = useState(() => {
-    try { return typeof window !== 'undefined' && localStorage.getItem('pl_crm_metricas') === 'aberto' } catch { return false }
-  })
-  const alternarMetricas = () => {
-    const nova = !metricasAbertas
-    setMetricasAbertas(nova)
-    try { localStorage.setItem('pl_crm_metricas', nova ? 'aberto' : 'fechado') } catch { /* sem armazenamento */ }
-  }
+  // O que saiu da tela principal (resumo, avisos, etiquetas, WhatsApp) abre nesta janela.
+  const [maisAberto, setMaisAberto] = useState(false)
   const setDensidade = (d: Densidade) => { setDensidadeEstado(d); try { localStorage.setItem('pl_crm_densidade', d) } catch { /* sem armazenamento */ } }
   const [dragOverCol, setDragOverCol] = useState<EstagioLead | null>(null)
   const dragRef = useRef<{ lead: Lead; startX: number; startY: number; dragging: boolean; colSobre: EstagioLead | null; abort: AbortController } | null>(null)
@@ -820,72 +815,10 @@ export default function ProLaboreLeadsPage() {
       ))}
     </div>
   )
-  return (
-    <div className="crm" data-crm>
-      <PageHeader
-        eyebrow="Vendas"
-        title="Funil de vendas"
-        subtitle={vejaEquipe ? 'Arraste os cards entre as etapas, use "Avançar" ou o menu de mover em cada card' : 'Seus leads, do primeiro contato ao fechamento'}
-      />
-
-      <FaixaWhatsapp gestao={vejaEquipe} versao={leads.length} onMudou={carregar} />
-
-      {/* 1. Ferramentas: busca, filtros e o "Novo lead", numa linha só */}
-      <div className="pl-leads-toolbar crm-ferramentas">
-        <div className="pl-search-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input
-            className="pl-input pl-search-input"
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por nome, telefone, e-mail, modelo..."
-          />
-        </div>
-        <FunilFiltro
-          vendedores={vejaEquipe ? vendedores : []}
-          vendedorId={filtroVendedorId}
-          vendedorGeralId=""
-          canal={filtroCanal}
-          onChangeVendedor={setFiltroVendedorId}
-          onChangeCanal={setFiltroCanal}
-          periodo={filtroPeriodo}
-          customInicio={filtroCustomInicio}
-          customFim={filtroCustomFim}
-          onChangeCustomInicio={setFiltroCustomInicio}
-          onChangeCustomFim={setFiltroCustomFim}
-          onAplicarPeriodo={aplicarFiltroPeriodo}
-          onLimparPeriodo={limparFiltroPeriodo}
-          onSelecionarPreset={selecionarFiltroPreset}
-        />
-        {filtroTextualAtivo && <button type="button" className="pl-link-action pl-leads-textlink" onClick={limparFiltros}>Limpar filtros</button>}
-        <button type="button" className="pl-btn pl-btn-primary crm-novo" onClick={abrirNovoLead} data-novo-lead>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-          Novo lead
-        </button>
-      </div>
-
-      {/* 2. Resumo: volume, conversão e R$ do funil numa barra só */}
-      {!loading && (
-        <div className="pl-crm-resumo crm-resumo" data-metricas-resumo>
-          <span className="crm-resumo-volume">
-            <b>{totalFiltrado.toLocaleString('pt-BR')}</b> lead{totalFiltrado !== 1 ? 's' : ''} · <b>{fechadosFiltrado}</b> fechamento{fechadosFiltrado !== 1 ? 's' : ''} · <b>{conversaoFiltrado.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b> de conversão
-          </span>
-          <span className="crm-resumo-sep" aria-hidden />
-          <span><small>Oportunidade</small> <b className="pl-crm-fin-oportunidade">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
-          <span><small>Comissão prevista</small> <b>{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPotencialRS, 0))}</b></span>
-          <span><small>Comissão perdida</small> <b className="pl-crm-resumo-perda">{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPerdidaRS, 0))}</b></span>
-          <span className="crm-resumo-fim">
-            {foraDaMeta > 0 && <span className="pl-delta down">{foraDaMeta} etapa{foraDaMeta > 1 ? 's' : ''} fora da meta</span>}
-            {totalPerdidos > 0 && <Link className="pl-link-action pl-leads-textlink" href="/pro-labore/reativacao">Perdidos na Reativação ({totalPerdidos}) →</Link>}
-            <button type="button" className="pl-link-action" onClick={alternarMetricas} aria-expanded={metricasAbertas} data-alternar-metricas>
-              {metricasAbertas ? 'Esconder métricas por etapa ▴' : 'Ver métricas por etapa ▾'}
-            </button>
-          </span>
-        </div>
-      )}
-
-      {/* 3. Métricas por etapa: um cartão por etapa, mesmas linhas em todos */}
-      {!loading && metricasAbertas && (
+  const avisosMais = parados.length + followsAtrasados
+  const filtrosDoMais = [filtroParado ? 'só os parados' : '', filtroFollow === 'ATRASADO' ? 'follows atrasados' : filtroFollow === 'HOJE' ? 'follows de hoje' : '', filtroEtiqueta ? ROTULO_ETIQUETA[filtroEtiqueta as keyof typeof ROTULO_ETIQUETA] : ''].filter(Boolean)
+  // O funil em 5 etapas (visão anterior): na tela para quem não abre o Painel; na janela "Mais do CRM" para a gestão.
+  const funilCinco = !loading && (
         <section className="crm-metricas" data-metricas-etapas>
           {isDono && (
             <div className="crm-custo-topo">
@@ -966,19 +899,91 @@ export default function ProLaboreLeadsPage() {
             ))}
           </div>
         </section>
+  )
+  return (
+    <div className="crm" data-crm>
+      <PageHeader
+        eyebrow="Vendas"
+        title="Funil de vendas"
+        subtitle={vejaEquipe ? 'Arraste os cards entre as etapas, use "Avançar" ou o menu de mover em cada card' : 'Seus leads, do primeiro contato ao fechamento'}
+      />
+
+      {/* Ferramentas: busca, filtro, "Mais do CRM" (o que saiu da tela) e "Novo lead" */}
+      <div className="pl-leads-toolbar crm-ferramentas">
+        <div className="pl-search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          <input
+            className="pl-input pl-search-input"
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar por nome, telefone, e-mail, modelo..."
+          />
+        </div>
+        <FunilFiltro
+          vendedores={vejaEquipe ? vendedores : []}
+          vendedorId={filtroVendedorId}
+          vendedorGeralId=""
+          canal={filtroCanal}
+          onChangeVendedor={setFiltroVendedorId}
+          onChangeCanal={setFiltroCanal}
+          periodo={filtroPeriodo}
+          customInicio={filtroCustomInicio}
+          customFim={filtroCustomFim}
+          onChangeCustomInicio={setFiltroCustomInicio}
+          onChangeCustomFim={setFiltroCustomFim}
+          onAplicarPeriodo={aplicarFiltroPeriodo}
+          onLimparPeriodo={limparFiltroPeriodo}
+          onSelecionarPreset={selecionarFiltroPreset}
+        />
+        {filtroTextualAtivo && <button type="button" className="pl-link-action pl-leads-textlink" onClick={limparFiltros}>Limpar filtros</button>}
+        <button type="button" className="pl-btn crm-mais" onClick={() => setMaisAberto(true)} aria-haspopup="dialog" data-abrir-mais-crm title="Resumo em R$, avisos, etiquetas, WhatsApp e o funil em 5 etapas">
+          Mais do CRM{avisosMais > 0 && <span className="crm-mais-n">{avisosMais}</span>}
+        </button>
+        <button type="button" className="pl-btn pl-btn-primary crm-novo" onClick={abrirNovoLead} data-novo-lead>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+          Novo lead
+        </button>
+      </div>
+
+
+      {filtrosDoMais.length > 0 && (
+        <div className="crm-filtros-ativos" role="status" data-filtros-ativos>
+          <span className="pl-hint">Mostrando</span>
+          {filtrosDoMais.map(f => <span key={f} className="pl-chip active">{f}</span>)}
+          <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => { setFiltroParado(false); setFiltroFollow(''); setFiltroEtiqueta('') }} data-limpar-filtros-mais>Ver todos os cards</button>
+        </div>
       )}
 
-      {loading ? (
-        <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
-      ) : totalFiltrado === 0 && filtroTextualAtivo ? (
-        <div className="pl-empty pl-card">
-          <div className="pl-emoji">🔍</div>
-          <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Nenhum lead encontrado</h3>
-          <p style={{ marginTop: 6 }}>Ajuste a busca ou os filtros pra ver os leads.</p>
-          <span className="pl-link-action pl-leads-textlink" style={{ marginTop: 14, display: 'inline-block' }} onClick={limparFiltros}>Limpar filtros</span>
+      {/* Custos e desempenho por etapa: as 10 etapas, sempre à vista */}
+      {!loading && (jornada10 && vejaEquipe
+        ? <CustosPorEtapa isDono={isDono} vendedorId={filtroVendedorId ?? ''} semDados={funilCinco} />
+        : funilCinco)}
+
+      {maisAberto && (
+        <div className="pl-modal-backdrop" role="dialog" aria-modal="true" aria-label="Mais do CRM" onClick={() => setMaisAberto(false)} data-mais-crm>
+          <div className="pl-card pl-modal-panel crm-mais-painel" onClick={e => e.stopPropagation()}>
+            <div className="crm-mais-cab">
+              <div><div className="pl-card-title">Mais do CRM</div><div className="pl-card-sub">Resumo em R$, avisos, etiquetas e o cadastro pelo WhatsApp. Os filtros daqui valem no quadro.</div></div>
+              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setMaisAberto(false)} data-fechar-mais-crm>Fechar</button>
+            </div>
+            <h4 className="crm-mais-titulo">Resumo do funil</h4>
+            {!loading && (
+        <div className="pl-crm-resumo crm-resumo" data-metricas-resumo>
+          <span className="crm-resumo-volume">
+            <b>{totalFiltrado.toLocaleString('pt-BR')}</b> lead{totalFiltrado !== 1 ? 's' : ''} · <b>{fechadosFiltrado}</b> fechamento{fechadosFiltrado !== 1 ? 's' : ''} · <b>{conversaoFiltrado.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b> de conversão
+          </span>
+          <span className="crm-resumo-sep" aria-hidden />
+          <span><small>Oportunidade</small> <b className="pl-crm-fin-oportunidade">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
+          <span><small>Comissão prevista</small> <b>{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPotencialRS, 0))}</b></span>
+          <span><small>Comissão perdida</small> <b className="pl-crm-resumo-perda">{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPerdidaRS, 0))}</b></span>
+          <span className="crm-resumo-fim">
+            {foraDaMeta > 0 && <span className="pl-delta down">{foraDaMeta} etapa{foraDaMeta > 1 ? 's' : ''} fora da meta</span>}
+            {totalPerdidos > 0 && <Link className="pl-link-action pl-leads-textlink" href="/pro-labore/reativacao">Perdidos na Reativação ({totalPerdidos}) →</Link>}
+          </span>
         </div>
-      ) : (
-        <>
+      )}
+            <h4 className="crm-mais-titulo">O que pede atenção</h4>
+            {!temAtencao && <p className="pl-hint">Nenhum lead parado nem follow atrasado.</p>}
           {/* 4. O que pede atenção agora (parados e follows), numa faixa só */}
           {temAtencao && (
             <div className="crm-atencao" role="status" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
@@ -1009,6 +1014,24 @@ export default function ProLaboreLeadsPage() {
               {filtroEtiqueta && <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => setFiltroEtiqueta('')}>Ver todos os cards</button>}
             </div>
           )}
+            <h4 className="crm-mais-titulo">Cadastro pelo WhatsApp</h4>
+      <FaixaWhatsapp gestao={vejaEquipe} versao={leads.length} onMudou={carregar} />
+            {jornada10 && vejaEquipe && (<><h4 className="crm-mais-titulo">Funil em 5 etapas (visão anterior)</h4>{funilCinco}</>)}
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
+      ) : totalFiltrado === 0 && filtroTextualAtivo ? (
+        <div className="pl-empty pl-card">
+          <div className="pl-emoji">🔍</div>
+          <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Nenhum lead encontrado</h3>
+          <p style={{ marginTop: 6 }}>Ajuste a busca ou os filtros pra ver os leads.</p>
+          <span className="pl-link-action pl-leads-textlink" style={{ marginTop: 14, display: 'inline-block' }} onClick={limparFiltros}>Limpar filtros</span>
+        </div>
+      ) : (
+        <>
           {!jornada10 && (
             <div className="pl-kanban-barra">
               <span className="pl-hint">Clique no card para ver tudo do lead.</span>

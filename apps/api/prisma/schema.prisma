@@ -1400,6 +1400,11 @@ model Lead {
   notaPerda        String?
   perdidoEm        DateTime?
   temperatura      String?
+  // CRM livre (Ajuste 2): o que faltava quando a pessoa avançou "mesmo assim"
+  // (vazio = critérios cumpridos) e a temperatura que o vendedor fixou à mão
+  // (FRIO | MORNO | QUENTE; nulo = calculada).
+  pendenciasEtapa   String[]  @default([])
+  temperaturaManual String?
   reativadoEm      DateTime?
   reativacoes      Int       @default(0)
 

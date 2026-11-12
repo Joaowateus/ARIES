@@ -1,3 +1,4 @@
+import { temperaturaDoLead } from '../lib/temperaturaLead'
 import { Router, Request, Response, NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
@@ -891,11 +892,14 @@ router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (r
       },
     },
   })
+  const agora = new Date()
   res.json(leads.map(({ assistenteConversas, ...l }) => {
     const c = assistenteConversas[0]
     const m = c?.mensagens[0]
     return {
       ...l,
+      // Quem merece atenção primeiro (frio, morno, quente), com o porquê.
+      calor: temperaturaDoLead({ ...l, ultimoContatoEm: c?.ultimaMensagemEm ?? null, followAtrasado: l.follows.some(f => f.agendadoPara < agora) }, agora),
       // CPF, nascimento e e-mail que o cliente escreveu não aparecem na tela do CRM.
       conversa: c ? { id: c.id, status: c.status, ultimaMensagemEm: c.ultimaMensagemEm, ultima: m ? { ...m, texto: mascararDadosPessoais(m.texto).slice(0, 400) } : null } : null,
     }
