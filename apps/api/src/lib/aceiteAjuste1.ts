@@ -116,7 +116,7 @@ export async function aceiteAjuste1(usuarioId: string, diaEscolhido: string | nu
   const decisoes = encerradas.flatMap(r => ((r.ata as { decisoes?: Array<{ atividadeId: string }> }).decisoes ?? []).map(x => x.atividadeId))
   const atvs = decisoes.length ? await prisma.atividade.findMany({ where: { id: { in: decisoes } }, select: { id: true, origemTipo: true } }) : []
 
-    decidido = { reunioes: encerradas.length, decisoes: decisoes.length, comOrigemReuniao: atvs.filter(a => a.origemTipo === 'REUNIAO').length, passa: encerradas.length ? decisoes.length > 0 && atvs.length === decisoes.length && atvs.every(a => a.origemTipo === 'REUNIAO') && encerradas.every(r => !!r.transcricao) : null }
+    decidido = { reunioes: encerradas.length, decisoes: decisoes.length, comOrigemReuniao: atvs.filter(a => a.origemTipo === 'REUNIAO').length, passa: !decisoes.length ? null /* Daily encerrado sem nenhum "Decidido": ainda não há o que conferir */ : atvs.length === decisoes.length && atvs.every(a => a.origemTipo === 'REUNIAO') && encerradas.every(r => !!r.transcricao) }
   }
 
   let comparacao = null
