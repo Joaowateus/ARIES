@@ -1003,7 +1003,7 @@ export default function ProLaboreLeadsPage() {
             <div className="crm-etiquetas" role="group" aria-label="Etiquetas da jornada" data-filtro-etiquetas>
               <span className="pl-hint" title="Postas pelo Assistente a partir da conversa do WhatsApp">Etiquetas</span>
               {etiquetasMostradas.map(({ e, n }) => (
-                <button key={e} type="button" className={`pl-chip ${filtroEtiqueta === e ? 'active' : ''}`} aria-pressed={filtroEtiqueta === e} onClick={() => setFiltroEtiqueta(f => (f === e ? '' : e))}>{ROTULO_ETIQUETA[e]} <span className="pl-mono">{n}</span></button>
+                <button key={e} type="button" className={`pl-chip ${filtroEtiqueta === e ? 'active' : ''}`} aria-pressed={filtroEtiqueta === e} onClick={() => setFiltroEtiqueta(f => (f === e ? '' : e))}>{ROTULO_ETIQUETA[e]} · {n}</button>
               ))}
               {contagemEtiquetas.length > ETIQ_VISIVEIS && <button type="button" className="pl-link-action" onClick={() => setTodasEtiquetas(v => !v)} aria-expanded={todasEtiquetas} data-mais-etiquetas>{todasEtiquetas ? 'menos ▴' : `+ ${contagemEtiquetas.length - ETIQ_VISIVEIS} mais ▾`}</button>}
               {filtroEtiqueta && <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => setFiltroEtiqueta('')}>Ver todos os cards</button>}
