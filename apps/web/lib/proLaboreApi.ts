@@ -261,6 +261,10 @@ export interface Lead {
   situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null
   temEntrada?: boolean | null
   levantamentoCompleto?: boolean
+  // CRM livre (Ajuste 2): o que faltava quando avançou "mesmo assim" e a temperatura (calculada ou fixada à mão).
+  pendenciasEtapa?: string[]
+  temperaturaManual?: Temperatura | null
+  calor?: { valor: Temperatura; pontos: number; manual: boolean; motivo: string }
   revisarEtapa?: boolean
   vendaSemVisita?: boolean
   anteriorMigracao?: boolean
@@ -627,7 +631,8 @@ export const proLaboreApi = {
   // Jornada de 10 etapas: o que falta para avançar, mudar de etapa, levantamento e perda.
   jornada: {
     checklist: (id: string) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/checklist`),
-    mover: (id: string, etapa: EtapaJornada, contatoFora?: boolean) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/etapa`, { method: 'POST', body: JSON.stringify({ etapa, contatoFora }) }),
+    mover: (id: string, etapa: EtapaJornada, contatoFora?: boolean, forcar?: boolean) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/etapa`, { method: 'POST', body: JSON.stringify({ etapa, contatoFora, forcar }) }),
+    temperatura: (id: string, temperatura: Temperatura | null) => request<{ ok: boolean }>(`/pro-labore/jornada/leads/${id}/temperatura`, { method: 'PATCH', body: JSON.stringify({ temperatura }) }),
     levantamento: (id: string, data: { modeloInteresse?: string | null; formaPagamento?: 'A_VISTA' | 'FINANCIADO' | null; situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null; temEntrada?: boolean | null }) =>
       request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/levantamento`, { method: 'PATCH', body: JSON.stringify(data) }),
     perda: (id: string, motivo: string, nota?: string) => request<{ ok: boolean; destino: string | null }>(`/pro-labore/jornada/leads/${id}/perda`, { method: 'POST', body: JSON.stringify({ motivo, nota }) }),
@@ -3567,6 +3572,7 @@ export interface ChecklistJornada {
   proximas: Array<{ etapa: EtapaJornada; faltando: string[] }>
   levantamentoFalta: string[]
   motivos: string[]
+  pendencias?: string[]
 }
 export interface PropostaLead { id: string; preco: number; entrada: number | null; parcela: number | null; prazo: number | null; validade: string | null; enviadaEm: string | null; respondidaEm: string | null; resultado: string | null; criadoEm: string }
 export interface VisitaLead { id: string; marcadaPara: string; confirmadaEm: string | null; checkinEm: string | null; falta: boolean; remarcacoes: number; resultado: string | null }

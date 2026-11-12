@@ -9,7 +9,7 @@ import { leadWhereBase } from '../lib/escopoLead'
 import { ETAPAS } from '../lib/etapasJornada'
 import { historicoDeParametros, premissas, salvarPremissas } from '../lib/jornadaPremissas'
 import { conversaoPorEtapa } from '../lib/jornadaMetricas'
-import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
+import { ErroJornada, avancarPorFatos, checklist, leadDaJornada, moverEtapa, registrarPerda, revisarPendencias } from '../lib/jornadaRegras'
 import { MOTIVOS_CANCELAMENTO, cancelarVenda, confirmarVenda, checkin, devolverAoSdr, marcarDisponivel, marcarVisita, passarAoVendedor, propostaEnviada, registrarFalta, registrarProposta, respostaDaProposta, resultadoDaVisita, rodizioDaEquipe } from '../lib/jornadaAtividades'
 import { requireDono, requireDonoOuSupervisor } from '../middleware/authProLabore'
 import { ORIGENS_ATV, configDaRegua, conferenciaDaMigracao, modoDaRegua } from '../lib/atividades'
@@ -19,27 +19,49 @@ const ver = [requireProLaboreAuth, requireModulo('crm', 'VER')]
 const editar = [requireProLaboreAuth, requireModulo('crm', 'EDITAR')]
 
 function falha(res: Response, e: unknown) {
-  if (e instanceof ErroJornada) { res.status(e.status).json({ error: e.message, faltando: e.faltando }); return }
+  if (e instanceof ErroJornada) { res.status(e.status).json({ error: e.message, faltando: e.faltando, podeForcar: e.podeForcar }); return }
   throw e
 }
 const escopo = (req: Request) => { const { usuarioId, ...resto } = leadWhereBase(req); return { usuarioId, resto } }
 
+// CRM livre: depois de qualquer ação no lead (proposta, visita, levantamento…), confere de novo
+// as pendências da etapa antes de responder, para o card já voltar sem o selo.
+router.use('/jornada/leads/:id', (req: Request, res: Response, next) => {
+  if (req.method === 'GET') { next(); return }
+  const id = String(req.params.id), json = res.json.bind(res)
+  res.json = ((corpo: unknown) => { if (res.statusCode >= 400) return json(corpo); void revisarPendencias(id).catch(() => undefined).finally(() => json(corpo)); return res }) as typeof res.json
+  next()
+})
+
 router.get('/jornada/leads/:id/checklist', ...ver, async (req: Request, res: Response) => {
   try {
     const { usuarioId, resto } = escopo(req)
+    await revisarPendencias(String(req.params.id)).catch(() => undefined)
     res.json(await checklist(await leadDaJornada(usuarioId, String(req.params.id), resto)))
   } catch (e) { falha(res, e) }
 })
 
-const moverSchema = z.object({ etapa: z.enum(ETAPAS), contatoFora: z.boolean().optional() })
+const moverSchema = z.object({ etapa: z.enum(ETAPAS), contatoFora: z.boolean().optional(), forcar: z.boolean().optional() })
 router.post('/jornada/leads/:id/etapa', ...editar, async (req: Request, res: Response) => {
   const p = moverSchema.safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: 'Etapa inválida' }); return }
   try {
     const { usuarioId, resto } = escopo(req)
     const l = await leadDaJornada(usuarioId, String(req.params.id), resto)
-    await moverEtapa(l, p.data.etapa, { contatoFora: p.data.contatoFora })
+    await moverEtapa(l, p.data.etapa, { contatoFora: p.data.contatoFora, forcar: p.data.forcar })
     res.json(await checklist(await leadDaJornada(usuarioId, l.id)))
+  } catch (e) { falha(res, e) }
+})
+
+// Temperatura fixada à mão (nulo = volta a ser calculada).
+router.patch('/jornada/leads/:id/temperatura', ...editar, async (req: Request, res: Response) => {
+  const p = z.object({ temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).nullable() }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'Temperatura inválida' }); return }
+  try {
+    const { usuarioId, resto } = escopo(req)
+    const l = await leadDaJornada(usuarioId, String(req.params.id), resto)
+    await prisma.lead.update({ where: { id: l.id }, data: { temperaturaManual: p.data.temperatura } })
+    res.json({ ok: true, temperaturaManual: p.data.temperatura })
   } catch (e) { falha(res, e) }
 })
 

@@ -1,10 +1,12 @@
 'use client'
 
 // Quadro do CRM na jornada de 10 etapas (PDF 01, seção 7): colunas em três
-// fases, tempo do lead na etapa, mover só com o critério cumprido (a tela
-// mostra o que falta), levantamento e perda pelo motivo da etapa.
+// fases, tempo do lead na etapa, levantamento e perda pelo motivo da etapa.
+// Ajuste 2 (CRM livre): o vendedor move o card para onde quiser; o sistema
+// mostra o que falta e deixa "avançar mesmo assim", guardando a pendência.
+// Cada card traz a temperatura (frio, morno, quente) e o próximo passo.
 import { useEffect, useState } from 'react'
-import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type PremissasJornada } from '@/lib/proLaboreApi'
+import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type PremissasJornada, type Temperatura } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, FASES, NOME_ETAPA, NOME_MOTIVO, NOME_DESTINO } from '@/lib/etapasJornada'
 
 const MS_HORA = 3_600_000
@@ -36,7 +38,33 @@ interface Props {
   extraBarra?: React.ReactNode
 }
 
-type Aviso = { lead: Lead; destino: EtapaJornada; faltando: string[] } | null
+type Aviso = { lead: Lead; destino: EtapaJornada; faltando: string[]; podeForcar: boolean } | null
+
+const NOME_TEMP: Record<Temperatura, string> = { QUENTE: 'Quente', MORNO: 'Morno', FRIO: 'Frio' }
+const ORDEM_TEMP: Record<Temperatura, number> = { QUENTE: 0, MORNO: 1, FRIO: 2 }
+const calorDe = (l: Lead): Temperatura => l.calor?.valor ?? 'MORNO'
+const pendencias = (l: Lead) => l.pendenciasEtapa ?? []
+const followAtrasado = (l: Lead) => (l.follows ?? []).some(f => new Date(f.agendadoPara).getTime() < Date.now())
+
+type Passo = { texto: string; acao: 'abrir' | 'levantamento' | 'mover' | 'venda' }
+/** A sugestão do que fazer agora com o lead (uma linha no card). */
+function proximoPasso(l: Lead): Passo | null {
+  const e = (l.etapa ?? 'LEAD') as EtapaJornada, p = pendencias(l)
+  if (p.length) return { texto: `Resolver: ${p[0].replace(/^Complete o levantamento: /, '')}`, acao: /levantamento/i.test(p[0]) ? 'levantamento' : 'abrir' }
+  if (followAtrasado(l)) return { texto: 'Follow atrasado: falar hoje', acao: 'abrir' }
+  switch (e) {
+    case 'LEAD': return { texto: 'Responder o cliente', acao: 'abrir' }
+    case 'ABORDADO': return { texto: 'Fazer o levantamento', acao: 'levantamento' }
+    case 'LEVANTAMENTO': return !l.levantamentoCompleto ? { texto: 'Completar o levantamento', acao: 'levantamento' } : l.formaPagamento === 'A_VISTA' ? { texto: 'Passar para a negociação', acao: 'mover' } : { texto: 'Enviar a simulação', acao: 'abrir' }
+    case 'MQL': return { texto: 'Enviar a ficha de crédito', acao: 'abrir' }
+    case 'SQL': return { texto: 'Abrir a negociação', acao: 'abrir' }
+    case 'NEGOCIACAO': return { texto: 'Registrar a proposta', acao: 'abrir' }
+    case 'PROPOSTA': return { texto: 'Marcar a visita', acao: 'abrir' }
+    case 'AGENDAMENTO': return { texto: 'Check-in quando o cliente chegar', acao: 'abrir' }
+    case 'VISITA': return { texto: 'Registrar a venda', acao: 'venda' }
+    default: return null
+  }
+}
 
 export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda, extraBarra }: Props) {
   const [fase, setFase] = useState<'TUDO' | 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'>(() => {
@@ -51,6 +79,9 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [premissas, setPremissas] = useState<PremissasJornada | null>(null)
+  const [filtroTemp, setFiltroTemp] = useState<Temperatura | ''>('')
+  const [soPendencia, setSoPendencia] = useState(false)
+  const [tempAberta, setTempAberta] = useState<string | null>(null)
   const [conversao, setConversao] = useState<Record<string, { chegaram: number; conversao: number | null }>>({})
   // Ajuste 1: o Painel do dono abre o CRM filtrado numa etapa (?etapa=): mostra a fase dela e leva até a coluna.
   const [destaque] = useState<EtapaJornada | null>(() => {
@@ -68,18 +99,32 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   }, [leads.length])
 
   const visiveis = FASES.filter(f => fase === 'TUDO' || f.id === fase)
-  const porEtapa = (e: EtapaJornada) => leads.filter(l => (l.etapa ?? 'LEAD') === e)
+  const naTela = leads.filter(l => (!filtroTemp || calorDe(l) === filtroTemp) && (!soPendencia || pendencias(l).length > 0))
+  // Dentro da coluna: quentes primeiro; no empate, quem tem mais pontos.
+  const porEtapa = (e: EtapaJornada) => naTela.filter(l => (l.etapa ?? 'LEAD') === e).sort((a, b) => ORDEM_TEMP[calorDe(a)] - ORDEM_TEMP[calorDe(b)] || (b.calor?.pontos ?? 0) - (a.calor?.pontos ?? 0))
+  const contTemp = (t: Temperatura) => leads.filter(l => !l.somenteLeitura && calorDe(l) === t).length
+  const comPendencia = leads.filter(l => pendencias(l).length > 0).length
+  async function definirTemp(lead: Lead, t: Temperatura | null) {
+    setTempAberta(null); setErro(null)
+    try { await proLaboreApi.jornada.temperatura(lead.id, t); onAtualizar() } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível mudar a temperatura') }
+  }
+  function seguir(l: Lead, p: Passo) {
+    if (p.acao === 'levantamento') setLevantamento(l)
+    else if (p.acao === 'venda') onRegistrarVenda(l)
+    else if (p.acao === 'mover') { const d = proxima(l); if (d) void mover(l, d) }
+    else onAbrir(l.id)
+  }
 
-  async function mover(lead: Lead, destino: EtapaJornada, contatoFora?: boolean) {
+  async function mover(lead: Lead, destino: EtapaJornada, contatoFora?: boolean, forcar?: boolean) {
     if (destino === lead.etapa) return
     if (destino === 'VENDA') { onRegistrarVenda(lead); return }
     setOcupado(true); setErro(null)
     try {
-      await proLaboreApi.jornada.mover(lead.id, destino, contatoFora)
+      await proLaboreApi.jornada.mover(lead.id, destino, contatoFora, forcar)
       setAviso(null); onAtualizar()
     } catch (e) {
-      const d = (e as ErroApi).dados as { faltando?: string[] } | undefined
-      if ((e as ErroApi).status === 422 && d?.faltando?.length) setAviso({ lead, destino, faltando: d.faltando })
+      const d = (e as ErroApi).dados as { faltando?: string[]; podeForcar?: boolean } | undefined
+      if ((e as ErroApi).status === 422 && d?.faltando?.length) setAviso({ lead, destino, faltando: d.faltando, podeForcar: !!d.podeForcar })
       else setErro(e instanceof Error ? e.message : 'Não foi possível mover')
     } finally { setOcupado(false) }
   }
@@ -102,6 +147,15 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
         </div>
         <span className="pl-hint qj-dica" title="Só passa quando o critério da etapa está cumprido.">Clique no card para ver tudo do lead · arraste ou use “Avançar”</span>
         {extraBarra}
+      </div>
+      <div className="qj-filtros" role="group" aria-label="Quem merece atenção" data-filtro-temperatura>
+        <span className="pl-hint">Atenção</span>
+        {(['QUENTE', 'MORNO', 'FRIO'] as const).map(t => (
+          <button key={t} type="button" className={`pl-chip qj-temp-chip qj-${t.toLowerCase()} ${filtroTemp === t ? 'active' : ''}`} aria-pressed={filtroTemp === t} onClick={() => setFiltroTemp(f => (f === t ? '' : t))} data-temp={t}><i aria-hidden />{NOME_TEMP[t]}s · {contTemp(t)}</button>
+        ))}
+        {(comPendencia > 0 || soPendencia) && <button type="button" className={`pl-chip ${soPendencia ? 'active' : ''}`} aria-pressed={soPendencia} onClick={() => setSoPendencia(v => !v)} data-filtro-pendencia title="Leads que avançaram de etapa faltando algum critério">Com pendência · {comPendencia}</button>}
+        {(filtroTemp || soPendencia) && <button type="button" className="pl-link-action" onClick={() => { setFiltroTemp(''); setSoPendencia(false) }}>Ver todos</button>}
+        <span className="pl-hint qj-filtros-dica">Em cada coluna, os quentes vêm primeiro.</span>
       </div>
       {erro && <div className="pl-alert" role="alert">{erro}</div>}
       <div className="qj-rola">
@@ -129,6 +183,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                         </div>
                         <div className="pl-kanban-col-lado">
                           <div className="pl-kanban-col-count pl-mono">{cards.length}</div>
+                          {cards.some(l => pendencias(l).length > 0) && <div className="qj-col-pend" title="Avançaram faltando algum critério" data-col-pendencias>{cards.filter(l => pendencias(l).length > 0).length} com pendência</div>}
                           {soma > 0 && <div className="pl-kanban-col-soma">{moeda(soma)}</div>}
                         </div>
                       </div>
@@ -143,18 +198,34 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                           )
                           const prox = proxima(l)
                           const limite = estourou(l, premissas)
+                          const temp = calorDe(l), pend = pendencias(l), passo = proximoPasso(l)
                           return (
                             <div
-                              key={l.id} className="pl-kanban-card pl-kc" draggable data-card={l.id}
+                              key={l.id} className={`pl-kanban-card pl-kc qj-card qj-${temp.toLowerCase()}`} draggable data-card={l.id} data-calor={temp}
                               onDragStart={() => setArrastando(l.id)} onDragEnd={() => setArrastando(null)}
                               onClick={() => onAbrir(l.id)} style={{ cursor: 'pointer' }}
                             >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                              <div className="qj-card-topo">
+                                <span className="qj-temp-wrap" onClick={ev => ev.stopPropagation()}>
+                                  <button type="button" className={`qj-temp qj-${temp.toLowerCase()}`} onClick={() => setTempAberta(t => (t === l.id ? null : l.id))} title={`${NOME_TEMP[temp]}: ${l.calor?.motivo ?? ''}. Clique para ajustar.`} aria-label={`Temperatura ${NOME_TEMP[temp]}`} aria-expanded={tempAberta === l.id} data-temperatura={temp}><i aria-hidden />{NOME_TEMP[temp]}{l.calor?.manual ? '*' : ''}</button>
+                                  {tempAberta === l.id && (
+                                    <span className="qj-temp-menu" role="menu" data-menu-temperatura>
+                                      {(['QUENTE', 'MORNO', 'FRIO'] as const).map(t => <button key={t} type="button" role="menuitem" onClick={() => void definirTemp(l, t)} data-definir-temp={t}>{NOME_TEMP[t]}</button>)}
+                                      <button type="button" role="menuitem" onClick={() => void definirTemp(l, null)} data-definir-temp="AUTO">Automática</button>
+                                    </span>
+                                  )}
+                                </span>
                                 <span className="pl-kanban-card-name pl-kc-nome">{l.nomeCliente}</span>
                                 <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máximo ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
                               </div>
-                              {vejaEquipe && l.vendedor?.nome && <div className="pl-hint">{l.vendedor.nome}</div>}
+                              {vejaEquipe && l.vendedor?.nome && <div className="pl-hint qj-dono">{l.vendedor.nome}</div>}
+                              {passo && (
+                                <button type="button" className="qj-passo" onClick={ev => { ev.stopPropagation(); seguir(l, passo) }} title={pend.length ? pend.join(' · ') : 'Sugestão do ARIES para este lead'} data-proximo-passo>
+                                  <span>Próximo</span>{passo.texto}
+                                </button>
+                              )}
                               <div className="qj-selos">
+                                {pend.length > 0 && <span className="pl-chip qj-pendente" title={pend.join(' · ')} data-pendencia>{pend.length === 1 ? '1 pendência' : `${pend.length} pendências`}</span>}
                                 {l.revisarEtapa && <span className="pl-chip" title="Fechado sem venda confirmada na migração: posicione na etapa certa">revisar etapa</span>}
                                 {l.formaPagamento === 'A_VISTA' && <span className="pl-chip">à vista</span>}
                                 {l.formaPagamento === 'FINANCIADO' && <span className="pl-chip">financiado</span>}
@@ -180,15 +251,18 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
 
       {aviso && (
         <div className="pl-modal-backdrop" role="dialog" aria-modal="true" data-aviso-criterio onClick={() => setAviso(null)}>
-          <div className="pl-modal-panel pl-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <h3 style={{ marginTop: 0 }}>Ainda não dá para mover para {NOME_ETAPA[aviso.destino]}</h3>
-            <p className="pl-hint">{aviso.lead.nomeCliente} · falta:</p>
-            <ul>{aviso.faltando.map(f => <li key={f}>{f}</li>)}</ul>
+          <div className="pl-modal-panel pl-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <h3 style={{ marginTop: 0 }}>{aviso.podeForcar ? `Antes de ir para ${NOME_ETAPA[aviso.destino]}` : `Não dá para mover para ${NOME_ETAPA[aviso.destino]}`}</h3>
+            <p className="pl-hint">{aviso.lead.nomeCliente} · {aviso.podeForcar ? 'o ideal é resolver isto primeiro. Você decide:' : 'motivo:'}</p>
+            <ul className="qj-faltas">{aviso.faltando.map(f => <li key={f}>{f}</li>)}</ul>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {aviso.faltando.some(f => /Confirme que você respondeu/.test(f)) && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void mover(aviso.lead, aviso.destino, true)} data-confirmar-contato>Confirmo que respondi o cliente</button>}
               {aviso.faltando.some(f => /levantamento|coleta/i.test(f)) && <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setLevantamento(aviso.lead); setAviso(null) }}>Preencher o levantamento</button>}
-              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setAviso(null)}>Fechar</button>
+              {aviso.podeForcar && !aviso.faltando.every(f => /levantamento|coleta|Confirme que você respondeu/i.test(f)) && <button type="button" className="pl-btn pl-btn-primary" onClick={() => { onAbrir(aviso.lead.id); setAviso(null) }} data-resolver-agora>Resolver agora</button>}
+              {aviso.podeForcar && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void mover(aviso.lead, aviso.destino, undefined, true)} data-avancar-mesmo-assim title="Move o card e deixa a pendência marcada no lead e no histórico">Avançar mesmo assim</button>}
+              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setAviso(null)}>{aviso.podeForcar ? 'Cancelar' : 'Fechar'}</button>
             </div>
+            {aviso.podeForcar && <p className="pl-hint" style={{ marginBottom: 0 }}>Se avançar mesmo assim, o card fica com o selo de pendência até você resolver.</p>}
           </div>
         </div>
       )}

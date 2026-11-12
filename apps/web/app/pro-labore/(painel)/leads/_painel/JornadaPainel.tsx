@@ -4,7 +4,7 @@
 // avançar, atividades da etapa, propostas, visitas com check-in e falta, e
 // a passagem do SDR para o vendedor (e a devolução, com motivo).
 import { useCallback, useEffect, useState } from 'react'
-import { proLaboreApi, type DetalheJornada, type ErroApi, type Lead } from '@/lib/proLaboreApi'
+import { proLaboreApi, type DetalheJornada, type ErroApi, type EtapaJornada, type Lead } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, NOME_ETAPA } from '@/lib/etapasJornada'
 
 const brl = (n: number | null) => (n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -20,6 +20,7 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
   const [resultado, setResultado] = useState('')
   const [resumo, setResumo] = useState('')
   const [motivo, setMotivo] = useState('')
+  const [destino, setDestino] = useState<EtapaJornada | ''>('')
 
   const carregar = useCallback(() => proLaboreApi.jornada.detalhe(lead.id).then(setD).catch(e => setErro(e instanceof Error ? e.message : 'Erro')), [lead.id])
   useEffect(() => { void carregar() }, [carregar])
@@ -39,14 +40,36 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
     <div data-jornada-painel>
       <section className="pl-pn-bloco">
         <h3>Jornada · {i + 1}. {NOME_ETAPA[etapa]}</h3>
+        {(d.checklist.pendencias ?? []).length > 0 && (
+          <div className="pn-pendencias" data-pendencias-painel>
+            <b>Pendente nesta etapa</b>
+            <ul>{d.checklist.pendencias!.map(p => <li key={p}>{p}</li>)}</ul>
+            <span className="pl-hint">O lead avançou assim mesmo. Quando você registrar o que falta, o selo some sozinho.</span>
+          </div>
+        )}
         {d.checklist.proximas.map(p => (
-          <div key={p.etapa} style={{ marginBottom: 6 }} data-proxima={p.etapa}>
-            <b>{NOME_ETAPA[p.etapa]}:</b>{' '}
-            {p.faltando.length ? <span className="pl-hint">falta {p.faltando.join(' · ')}</span> : (
+          <div key={p.etapa} className="pn-proxima" data-proxima={p.etapa}>
+            <b>{NOME_ETAPA[p.etapa]}</b>
+            {p.faltando.length ? (
+              <>
+                <span className="pl-hint">falta {p.faltando.join(' · ')}</span>
+                <button type="button" className="pl-btn" style={{ padding: '2px 10px' }} onClick={() => void executar(() => proLaboreApi.jornada.mover(lead.id, p.etapa, undefined, true))} title="Move o card e deixa a pendência marcada" data-painel-forcar={p.etapa}>Avançar mesmo assim</button>
+              </>
+            ) : (
               <button type="button" className="pl-btn pl-btn-primary" style={{ padding: '2px 10px' }} onClick={() => void executar(() => proLaboreApi.jornada.mover(lead.id, p.etapa))} data-painel-mover={p.etapa}>Avançar →</button>
             )}
           </div>
         ))}
+        {etapa !== 'VENDA' && (
+          <div className="pn-mover-livre" data-mover-livre>
+            <label className="pl-hint" htmlFor="pn-destino">Mover para outra etapa</label>
+            <select id="pn-destino" className="pl-select" value={destino} onChange={e => setDestino(e.target.value as EtapaJornada | '')}>
+              <option value="">Escolher…</option>
+              {ETAPAS_JORNADA.filter(e => e !== etapa && e !== 'VENDA').map(e => <option key={e} value={e}>{ETAPAS_JORNADA.indexOf(e) + 1}. {NOME_ETAPA[e]}</option>)}
+            </select>
+            <button type="button" className="pl-btn" disabled={!destino} onClick={() => { if (destino) void executar(() => proLaboreApi.jornada.mover(lead.id, destino, undefined, true)).then(() => setDestino('')) }} data-mover-livre-ok>Mover</button>
+          </div>
+        )}
         {d.atividades.length > 0 && (
           <div style={{ marginTop: 8 }} data-atividades>
             <div className="pl-eyebrow">Atividades</div>

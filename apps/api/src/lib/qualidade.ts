@@ -20,6 +20,7 @@ export const REGRAS: Record<string, { nome: string; classificacao: 'INCOMPLETO' 
   VENDA_SEM_NEGOCIACAO: { nome: 'Venda sem histórico de negociação', classificacao: 'SUSPEITO' },
   A_VISTA_EM_CREDITO: { nome: 'À vista em etapa de crédito', classificacao: 'SUSPEITO' },
   ATIVIDADE_SEM_RESULTADO: { nome: 'Atividade feita sem resultado', classificacao: 'INCOMPLETO' },
+  ETAPA_COM_PENDENCIA: { nome: 'Avançou de etapa com pendência', classificacao: 'INCOMPLETO' },
 }
 
 const DIA = 86_400_000
@@ -74,6 +75,9 @@ export async function detectar(usuarioId: string, agora = new Date()): Promise<P
   // Atividades feitas nos últimos 30 dias sem resultado.
   const atvs = await prisma.atividade.findMany({ where: { usuarioId, status: 'EXECUTADA', resultado: null, executadaEm: { gte: new Date(agora.getTime() - 30 * DIA) }, autorExecucaoTipo: 'PESSOA' }, select: { id: true, leadId: true, responsavelId: true, codigo: true } })
   for (const a of atvs) out.push({ tabela: 'pro_labore_atividades', id: a.id, leadId: a.leadId, regra: 'ATIVIDADE_SEM_RESULTADO', classificacao: 'INCOMPLETO', oQueFalta: `${a.codigo ?? 'Atividade'} marcada como feita sem resultado: registre o que aconteceu`, responsavelId: a.responsavelId ?? usuarioId })
+  // CRM livre (Ajuste 2): quem avançou "mesmo assim" continua contando na etapa, com a pendência à vista.
+  const pendentes = await prisma.lead.findMany({ where: { usuarioId, perdidoEm: null, vendaId: null, pendenciasEtapa: { isEmpty: false } }, select: { id: true, vendedorId: true, pendenciasEtapa: true } })
+  for (const l of pendentes) out.push({ tabela: 'pro_labore_leads', id: l.id, leadId: l.id, regra: 'ETAPA_COM_PENDENCIA', classificacao: 'INCOMPLETO', oQueFalta: `Avançou de etapa faltando: ${l.pendenciasEtapa.join('; ')}`.slice(0, 480), responsavelId: l.vendedorId ?? usuarioId })
   return out
 }
 
