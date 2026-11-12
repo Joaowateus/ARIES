@@ -4637,3 +4637,26 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pn-mover-livre { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--pl-border); }
 .pn-mover-livre .pl-select { width: auto; min-width: 180px; padding: 4px 8px; }
 @media (max-width: 1100px) { .qj-filtros-dica { margin-left: 0; } }
+
+/* ============ CRM: custos por etapa (10 etapas) à vista e janela "Mais do CRM" ============ */
+.crm-custos { margin-bottom: 18px; }
+.crm-custos-topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.crm-custos-cpl { font-size: 13px; color: var(--pl-ink-2); }
+.crm-custos-cpl b { color: var(--pl-ink-1); font-size: 15px; }
+.crm-custos-grade { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.crm-custos .crm-etapa-nome a { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.crm-custos .crm-etapa-nome a:hover { text-decoration: underline; }
+.crm-custos .crm-custo-valor { font-size: 13.5px; color: var(--pl-ink-1); }
+.crm-custos .crm-etapa-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.crm-custos .crm-etapa-meta button { background: none; border: 0; padding: 0; cursor: pointer; color: var(--pl-ink-1); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: 1 1 auto; }
+.crm-custos .crm-etapa-meta .pl-delta { flex: none; }
+.crm-mais { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; margin-left: auto; }
+.crm-ferramentas .crm-mais + .crm-novo { margin-left: 0; }
+.crm-mais-n { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--pl-critical); color: #fff; font-size: 11px; font-weight: 700; }
+.crm-filtros-ativos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.crm-mais-painel { width: min(1080px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 48px); overflow-y: auto; }
+.crm-mais-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+.crm-mais-titulo { margin: 18px 0 8px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--pl-ink-muted); font-weight: 600; }
+.crm-mais-painel .crm-resumo, .crm-mais-painel .crm-atencao, .crm-mais-painel .crm-etiquetas { margin-bottom: 8px; }
+@media (max-width: 1280px) { .crm-custos-grade { grid-template-columns: repeat(5, minmax(190px, 1fr)); overflow-x: auto; padding-bottom: 4px; } }
+@media (max-width: 720px) { .crm-mais { margin-left: 0; } }
