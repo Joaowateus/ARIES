@@ -173,6 +173,12 @@ export function TelaPadrao({ aba, children }: { aba: AbaAries; children: React.R
   return (
     <div data-tela-padrao={aba.chave}>
       <Cabecalho aba={aba} />
+      {aba.largo ? (
+        <div className="ar-tela-larga">
+          <div className="ar-topo-largo"><Agora chaves={aba.numeros} /><Lente aba={aba.lente} /></div>
+          <div className="ar-trabalho">{children}</div>
+        </div>
+      ) : (
       <div className="ar-tela">
         <div className="ar-trabalho">
           <Agora chaves={aba.numeros} />
@@ -180,6 +186,7 @@ export function TelaPadrao({ aba, children }: { aba: AbaAries; children: React.R
         </div>
         <Lente aba={aba.lente} />
       </div>
+      )}
     </div>
   )
 }

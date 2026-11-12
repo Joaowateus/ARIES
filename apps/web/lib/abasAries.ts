@@ -13,6 +13,8 @@ export interface AbaAries {
   modulo?: string
   // A própria página já monta o padrão (Hoje, Pergunte, Atividades, Recomendações).
   proprio?: boolean
+  /** Tela larga: números e Lente numa linha no topo, o trabalho ocupa a largura toda (ex.: CRM). */
+  largo?: boolean
   // Outras rotas que pertencem a esta aba.
   tambem?: string[]
 }
@@ -26,7 +28,7 @@ export const ABAS: AbaAries[] = [
   { chave: 'pergunte', nome: 'Pergunte ao ARIES', grupo: 'Início', href: '/pro-labore/pergunte', paraQuem: 'Todos', pergunta: 'O que está acontecendo na operação, e por quê?', acaoPrincipal: 'Fazer uma pergunta', numeros: [], lente: 'pergunte', proprio: true },
   { chave: 'recomendacoes', nome: 'Recomendações', grupo: 'Início', href: '/pro-labore/recomendacoes', paraQuem: 'Gestão', pergunta: 'Onde está o maior ganho que ainda não pegamos?', acaoPrincipal: 'Aceitar e atribuir uma recomendação', numeros: [], lente: 'recomendacoes', papeis: GESTAO, proprio: true },
   // Comercial
-  { chave: 'crm', nome: 'CRM', grupo: 'Comercial', href: '/pro-labore/leads', paraQuem: 'SDRs, vendedores, supervisão', pergunta: 'Em que etapa está cada cliente?', acaoPrincipal: 'Avançar o lead e agendar o próximo passo', numeros: ['leads_novos', 'taxa_abordagem', 'leads_parados'], lente: 'crm', papeis: COMERCIAL, modulo: 'crm' },
+  { chave: 'crm', nome: 'CRM', grupo: 'Comercial', href: '/pro-labore/leads', paraQuem: 'SDRs, vendedores, supervisão', pergunta: 'Em que etapa está cada cliente?', acaoPrincipal: 'Avançar o lead e agendar o próximo passo', numeros: ['leads_novos', 'taxa_abordagem', 'leads_parados'], lente: 'crm', papeis: COMERCIAL, modulo: 'crm', largo: true },
   { chave: 'conversas', nome: 'Conversas', grupo: 'Comercial', href: '/pro-labore/whatsapp', paraQuem: 'SDRs, vendedores', pergunta: 'Quem está esperando resposta?', acaoPrincipal: 'Responder', numeros: ['clientes_esperando', 'tempo_primeira_resposta', 'taxa_resposta'], lente: 'conversas', papeis: COMERCIAL, modulo: 'assistente' },
   { chave: 'credito', nome: 'Crédito', grupo: 'Comercial', href: '/pro-labore/credito', paraQuem: 'SDRs, gestão', pergunta: 'Qual ficha está parada e em qual banco?', acaoPrincipal: 'Enviar ou cobrar a ficha', numeros: ['fichas_aguardando_banco', 'aprovacao_credito', 'tempo_resposta_banco'], lente: 'credito', papeis: COMERCIAL, modulo: 'crm' },
   { chave: 'atividades', nome: 'Atividades', grupo: 'Comercial', href: '/pro-labore/atividades', paraQuem: 'Todos', pergunta: 'O que está atrasado ou vence hoje?', acaoPrincipal: 'Concluir e registrar o resultado', numeros: ['atividades_atrasadas'], lente: 'atividades', proprio: true, tambem: ['/pro-labore/ligacoes', '/pro-labore/agenda'] },
