@@ -984,7 +984,7 @@ export default function ProLaboreLeadsPage() {
             <div className="crm-atencao" role="status" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
               {(parados.length > 0 || filtroParado) && (
                 <span className="crm-atencao-item" title={`Parados há mais de ${limiteParado} dias em Negociação ou Proposta, sem follow agendado. É aqui que o funil mais perde: agende o próximo contato, avance ou registre o motivo da perda.`}>
-                  <b>{parados.length}</b> {parados.length === 1 ? 'parado' : 'parados'} em Negociação/Proposta há +{limiteParado} dias, sem follow
+                  <b>{parados.length}</b> {parados.length === 1 ? 'lead parado' : 'leads parados'} em Negociação ou Proposta há mais de {limiteParado} dias, sem follow agendado
                   <button type="button" className={`pl-chip ${filtroParado ? 'active' : ''}`} aria-pressed={filtroParado} onClick={() => setFiltroParado(f => !f)} data-filtro-parados>{filtroParado ? 'Ver todos os cards' : 'Ver só os parados'}</button>
                 </span>
               )}
