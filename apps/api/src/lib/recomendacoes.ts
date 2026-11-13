@@ -3,6 +3,7 @@
 // junção com a camada de qualidade, ciclo (nova → aceita/descartada → em
 // execução → avaliada → encerrada), Atividades geradas e memória.
 // Nível 1: nada aqui executa ação sozinho; aceitar só cria as Atividades.
+import { lerExpediente, prazoNoExpediente } from './expediente'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { calcular, type Escopo, type Periodo } from './metricas'
@@ -143,7 +144,8 @@ export async function criarDoAchado(usuarioId: string, a: Achado, agora = new Da
     r = { destinatarioId: a.destino?.destinatarioId ?? usuarioId, acompanha: [...new Set(a.destino?.acompanha ?? [])] }
     visivelPara = await visiveisDaArea(usuarioId, a.grupo, r.destinatarioId, r.acompanha, modo)
   }
-  const prazo = new Date(agora.getTime() + (ehIndividual(a.alvoTipo) ? PRAZO_DIAS.PESSOA : PRAZO_DIAS.OUTROS) * DIA)
+  // PDF 06 · correção 9: o prazo vence no fim do expediente do dia, nunca de madrugada.
+  const prazo = prazoNoExpediente(agora, ehIndividual(a.alvoTipo) ? PRAZO_DIAS.PESSOA : PRAZO_DIAS.OUTROS, await lerExpediente(usuarioId))
   const def = DETECTORES.find(d => d.chave === a.detector)!
   const rec = await prisma.recomendacao.create({
     data: {
@@ -227,12 +229,13 @@ export async function aceitar(recId: string, quem: { id: string; papel: string; 
     if (!p) throw new ErroRec(400, 'Pessoa não encontrada para atribuir')
     resp = p.id
   }
+  const exp = await lerExpediente(rec.usuarioId)
   await prisma.$transaction([
     prisma.recomendacao.update({ where: { id: rec.id }, data: { status: 'ACEITA', aceitaEm: agora, decididoPor: quem.id, indicadorAntes: antes as unknown as Prisma.InputJsonValue, auditoriaAutor: autorDe(quem) } }),
     prisma.atividade.createMany({
       data: passos.map((t, i) => ({
         usuarioId: rec.usuarioId, auditoriaAutor: autorDe(quem), tipo: 'ACAO_RECOMENDACAO', origemTipo: 'RECOMENDACAO', origemId: rec.id,
-        responsavelId: resp, prazo: new Date(agora.getTime() + (i + 1) * 2 * DIA), oQueFazer: `${rec.codigo ?? 'REC'} · ${t}`,
+        responsavelId: resp, prazo: prazoNoExpediente(agora, (i + 1) * 2, exp), oQueFazer: `${rec.codigo ?? 'REC'} · ${t}`,
         registroTabela: 'pro_labore_recomendacoes', registroId: `${rec.id}|acao${i + 1}`,
       })),
       skipDuplicates: true,

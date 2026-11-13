@@ -5,6 +5,8 @@
 // - comparando a janela (últimos 14 dias fechados) com o mesmo intervalo anterior;
 // - no nível 1: só criam a Recomendação, nunca executam nada.
 // A REC é criada por lib/recomendacoes (roteamento, contexto, memória).
+import { situacaoDaMeta, textoMetaEmRisco } from './metaCoerente'
+import { fmtValor } from './formato'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { ETAPAS, NOME_ETAPA, type Etapa } from './etapasJornada'
@@ -366,33 +368,30 @@ async function anuncioEncarecendo(usuarioId: string, cfg: ConfigDetector, agora:
 // ----------------------------------------------------------------------------
 // 7. Meta em risco: previsão de fechamento do mês abaixo da meta
 async function metaEmRisco(usuarioId: string, cfg: ConfigDetector, agora: Date): Promise<Achado[]> {
-  const e: Escopo = { usuarioId, papel: 'DONO', semSuspeitos: true }
+  // PDF 06 · correção 4: a mesma situação da meta que o Hoje e o Daily mostram (mesma previsão, mesmo escopo, mesma meta).
+  const e: Escopo = { usuarioId, papel: 'DONO' }
   const mes = mesCorrente(agora)
-  const p = await prisma.parametroLiquidez.findUnique({ where: { usuarioId }, select: { metaFaturamentoAnual: true } })
-  const meta = (p?.metaFaturamentoAnual ?? 0) / 12
-  if (meta <= 0) return []
-  const [prev, leads, conv, ticket] = await Promise.all([
-    calcular('previsao_fechamento', e, mes, agora), calcular('leads_novos', e, mes, agora),
-    calcular('conversao_por_etapa', e, mes, agora), calcular('ticket_medio', e, { inicio: new Date(agora.getTime() - 90 * DIA).toISOString().slice(0, 10), fim: hojeBrt(agora) }, agora),
-  ])
+  const s = await situacaoDaMeta(usuarioId, agora)
+  if (s.meta == null || s.meta <= 0) return []
+  const [leads, conv] = await Promise.all([calcular('leads_novos', e, mes, agora), calcular('conversao_por_etapa', e, mes, agora)])
   const casos = leads.valor ?? 0
-  if (casos < cfg.volumeMinimo || prev.valor == null || prev.valor >= meta) return []
-  const d = prev.detalhe as { realizado: number; diasRestantes: number }
-  const faltam = Math.max(0, meta - d.realizado)
-  const vendasDia = ticket.valor && d.diasRestantes > 0 ? r1(faltam / ticket.valor / d.diasRestantes) : null
+  // Começo do mês: com menos de 5 dias, a projeção ainda não diz nada (não dispara).
+  if (casos < cfg.volumeMinimo || s.previsao == null || s.cobre || s.diasPassados < 5) return []
   type L = { etapa: string; chegaram: number; conversao: number | null }
   const pior = (conv.detalhe as L[]).filter(x => x.conversao != null && x.chegaram >= cfg.volumeMinimo).sort((x, y) => (x.conversao ?? 0) - (y.conversao ?? 0))[0]
+  const piorTxt = pior ? { nome: NOME_ETAPA[pior.etapa as Etapa], conversao: pior.conversao ?? 0 } : null
   return [{
     detector: 'meta_em_risco', area: 'RESULTADO', tipo: 'PROBLEMA',
     titulo: 'Meta do mês em risco',
-    acaoSugerida: `${vendasDia != null ? `Faltam cerca de ${vendasDia} venda(s) por dia até o fim do mês. ` : ''}${pior ? `Onde agir: a etapa ${NOME_ETAPA[pior.etapa as Etapa]} tem a menor conversão do mês (${pior.conversao}%).` : 'Concentrar o time nas oportunidades de Negociação a Visita.'}`,
+    acaoSugerida: textoMetaEmRisco(s, piorTxt),
     alvoTipo: 'RESULTADO', alvoId: mes.inicio.slice(0, 7),
     evidencia: {
-      metricas: [{ chave: 'previsao_fechamento', nome: 'Previsão de fechamento do mês', valor: prev.valor, anterior: r2(meta), periodo: mes, periodoAnterior: null, amostra: casos, unidade: 'BRL', detalhe: { ...d, meta: r2(meta), vendasPorDiaQueFaltam: vendasDia, piorEtapa: pior?.etapa ?? null } }],
-      casos, volumeMinimo: cfg.volumeMinimo, resumo: `previsão ${r2(prev.valor)} contra a meta ${r2(meta)}`,
-    },
-    forca: d.diasRestantes <= 10 ? 'PADRAO' : 'HIPOTESE',
-    impacto: { unidade: 'FATURAMENTO', valor: r2(meta - prev.valor), texto: 'diferença entre a meta e a previsão (estimativa)' },
+      metricas: [{ chave: 'previsao_fechamento', nome: 'Previsão de fechamento do mês', valor: s.previsao, anterior: r2(s.meta), periodo: mes, periodoAnterior: null, amostra: casos, unidade: 'BRL', detalhe: { realizado: s.realizado, diasRestantes: s.diasRestantes, diasUteis: s.diasUteis, meta: r2(s.meta), faltamVendas: s.faltamVendas, ritmo: s.ritmo, piorEtapa: pior?.etapa ?? null } }],
+      casos, volumeMinimo: cfg.volumeMinimo, resumo: `previsão ${fmtValor(s.previsao, 'BRL')} contra a meta ${fmtValor(s.meta, 'BRL')} (${s.pct ?? '—'}%)`,
+      piorEtapaTexto: piorTxt,
+    } as Achado['evidencia'],
+    forca: s.diasRestantes <= 10 ? 'PADRAO' : 'HIPOTESE',
+    impacto: { unidade: 'FATURAMENTO', valor: r2(s.meta - s.previsao), texto: 'diferença entre a meta e a previsão (estimativa)' },
     contextoExtra: mes.inicio.slice(0, 7),
   }]
 }

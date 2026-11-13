@@ -8,6 +8,8 @@ import { prisma } from './prisma'
 import { calcular, fichas, hojeBrt, ler, mesCorrente, metaDoMes, padraoDaLoja, faixaDe, type Escopo, type Leitura, type Periodo } from './metricas'
 import { NOME_ETAPA, type Etapa } from './etapasJornada'
 import { premissas } from './jornadaPremissas'
+import { fmtValor } from './formato'
+import { lerExpediente, prazoNoExpediente } from './expediente'
 import { podeVerRec } from './recomendacoes'
 import type { PapelHoje } from './papelHoje'
 
@@ -367,7 +369,7 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
     if (pessoa.papel === 'SDR') {
       const h = hojeBrt(agora), ini = new Date(new Date(`${h}T00:00:00Z`).getTime() - 6 * DIA).toISOString().slice(0, 10)
       const l = await ler('taxa_devolucao', { usuarioId: u, papel: 'SDR', vendedorId: pessoa.vendedorId ?? '__nenhum__' }, { inicio: ini, fim: h }, agora).catch(() => null)
-      if (l) itens.push({ tipo: 'NUMERO', id: null, codigo: null, achado: `Taxa de devolução da semana: ${l.valor == null ? 'sem passagens' : `${l.valor}%`}`, evidencia: l.anterior?.valor != null ? `semana anterior: ${l.anterior.valor}%` : 'Leads devolvidos pelo vendedor ÷ leads passados', forca: null, acao: { rotulo: 'Ver as devoluções', href: '/pro-labore/leads' }, podeAceitar: false, podeDescartar: false })
+      if (l) itens.push({ tipo: 'NUMERO', id: null, codigo: null, achado: `Taxa de devolução da semana: ${l.valor == null ? 'sem passagens' : fmtValor(l.valor, 'PCT')}`, evidencia: l.anterior?.valor != null ? `semana anterior: ${fmtValor(l.anterior.valor, 'PCT')}` : 'Leads devolvidos pelo vendedor ÷ leads passados', forca: null, acao: { rotulo: 'Ver as devoluções', href: '/pro-labore/leads' }, podeAceitar: false, podeDescartar: false })
     }
   } else if (pessoa.papel === 'SUPERVISOR') {
     // Equipe e etapa, mais o que a onda 4 manda para ele (Reativação, ocorrências, boas práticas).
@@ -378,7 +380,7 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
     const leituras = await Promise.all(chaves.map(c => principalDe(pessoa, c, agora)))
     const riscos = leituras.filter((l): l is Leitura => !!l && l.faixa === 'CRITICO').slice(0, 3)
     itens = [
-      ...riscos.map(l => ({ tipo: 'RISCO' as const, id: null, codigo: null, achado: `${l.nome} em faixa crítica`, evidencia: l.anterior?.valor != null ? `agora ${l.valor} contra ${l.anterior.valor} no mesmo intervalo anterior` : `padrão da loja: ${l.padrao ?? 'sem histórico'}`, forca: null, acao: { rotulo: 'Perguntar ao ARIES por quê', href: `/pro-labore/pergunte?q=${encodeURIComponent(`Por que ${l.nome.toLowerCase()} está crítico?`)}` }, podeAceitar: false, podeDescartar: false })),
+      ...riscos.map(l => ({ tipo: 'RISCO' as const, id: null, codigo: null, achado: `${l.nome} em faixa crítica`, evidencia: l.anterior?.valor != null ? `agora ${fmtValor(l.valor, l.unidade)}; mesmo período do mês anterior: ${fmtValor(l.anterior.valor, l.unidade)}` : `padrão da loja: ${l.padrao != null ? fmtValor(l.padrao, l.unidade) : 'sem histórico'}`, forca: null, acao: { rotulo: 'Perguntar ao ARIES por quê', href: `/pro-labore/pergunte?q=${encodeURIComponent(`Por que ${l.nome.toLowerCase()} está crítico?`)}` }, podeAceitar: false, podeDescartar: false })),
       ...(await recsVisiveis(pessoa, {})).map(r => recParaLente(r, pessoa)),
     ]
   } else if (pessoa.papel === 'TRAFEGO') {
@@ -479,7 +481,7 @@ export async function acaoDoSupervisor(pessoa: Pessoa, corpo: { acao: string; de
     const atv = await prisma.atividade.create({
       data: {
         usuarioId: u, auditoriaAutor: autor(pessoa), tipo: intervir ? 'INTERVENCAO_SUPERVISOR' : 'PLANO_DE_ACAO', origemTipo: 'ROTINA', origemId: `hoje-supervisor|${alvo.id}`,
-        responsavelId: intervir ? pessoa.vendedorId : alvo.id, prazo: new Date(agora.getTime() + (intervir ? 2 * H : 3 * DIA)),
+        responsavelId: intervir ? pessoa.vendedorId : alvo.id, prazo: intervir ? new Date(agora.getTime() + 2 * H) : prazoNoExpediente(agora, 3, await lerExpediente(u)),
         oQueFazer: intervir ? `Intervir com ${primeiro(alvo.nome)}: ${texto}` : `Plano de ação: ${texto}`,
         registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
       },
