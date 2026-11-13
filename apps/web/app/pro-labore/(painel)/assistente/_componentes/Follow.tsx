@@ -1,5 +1,7 @@
 'use client'
 
+import { CadenciasRobo } from './CadenciasRobo'
+
 // Aba "Follow" do Assistente: os fluxos automáticos para quem sumiu, cada um
 // pelo ponto da negociação em que o cliente parou (sem resposta, depois da
 // simulação, depois da aprovação e o resgate de perdido), com foto da moto,
@@ -216,6 +218,7 @@ export function Follow() {
 
   return (
     <div className="pl-fu" data-follow>
+      <CadenciasRobo editavel={editavel} />
       <div className="pl-card pl-fu-topo">
         <div>
           <div className="pl-card-title">Follow automático</div>
@@ -300,7 +303,7 @@ export function Follow() {
                 {dados.ultimos.map(u => (
                   <li key={u.id}>
                     <div className="pl-fu-fila-topo"><b>{u.conversa.nomeContato}</b><span>{new Date(u.criadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>
-                    {u.followFluxo && <div className="pl-fu-fila-quando"><span className="fu-tag">{FLUXO[u.followFluxo].rotulo}</span></div>}
+                    {u.followFluxo && <div className="pl-fu-fila-quando"><span className="fu-tag">{FLUXO[u.followFluxo as keyof typeof FLUXO]?.rotulo ?? "Cadência do vendedor"}</span></div>}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {u.midiaUrl && <img className="pl-fu-mini" src={urlArquivoApi(u.midiaUrl)} alt="" />}
                     <p>{u.texto}</p>

@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, type DetalheJornada, type ErroApi, type EtapaJornada, type Lead } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, NOME_ETAPA } from '@/lib/etapasJornada'
+import { FollowRoboModal, SeloRobo } from '../_jornada/FollowRobo'
 
 const brl = (n: number | null) => (n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
 const quando = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—')
@@ -78,6 +79,8 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
         )}
         {erro && <div className="pl-alert" role="alert" style={{ marginTop: 8 }}>{erro}</div>}
       </section>
+
+      <PreVendaRobo lead={lead} onMudou={onMudou} />
 
       {(d.podePassar || d.podeDevolver || d.passagens.length > 0) && (
         <section className="pl-pn-bloco" data-passagem>
@@ -152,5 +155,46 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
         </section>
       )}
     </div>
+  )
+}
+
+const NOME_CNH: Record<string, string> = { TEM: 'tem CNH', EM_PROCESSO: 'tirando a CNH', NAO_TEM: 'sem CNH' }
+/** Pré-venda do robô (Ajuste 3): a ficha que ele levantou, o robô (pausar/retomar) e o follow pelo robô. */
+function PreVendaRobo({ lead, onMudou }: { lead: Lead; onMudou: () => void }) {
+  const [abrirFollow, setAbrirFollow] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const lv = lead.levantamento ?? {}
+  const pv = lead.preVenda
+  const temFicha = !!(lead.modeloInteresse || lead.formaPagamento || lead.situacaoCnh || lv.entradaValor || lv.parcelaDesejada)
+  if (!pv && !temFicha) return null
+  async function agir(fn: () => Promise<unknown>) { setErro(null); try { await fn(); onMudou() } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível') } }
+  const cad = pv?.cadencia
+  const linhas: Array<[string, string]> = [
+    ['Moto', lead.modeloInteresse ?? '—'],
+    ['Pagamento', lead.formaPagamento === 'A_VISTA' ? 'à vista' : lead.formaPagamento === 'FINANCIADO' ? 'financiado' : '—'],
+    ...(lead.formaPagamento !== 'A_VISTA' ? [['Entrada', lead.temEntrada === false ? 'sem entrada' : lv.entradaValor ? brl(lv.entradaValor) : lead.temEntrada ? 'tem (valor a confirmar)' : '—'] as [string, string]] : []),
+    ...(lv.parcelaDesejada ? [['Parcela que cabe', `até ${brl(lv.parcelaDesejada)}/mês`] as [string, string]] : []),
+    ...(lv.prazoMeses ? [['Prazo', `${lv.prazoMeses} meses`] as [string, string]] : []),
+    ['CNH', lead.situacaoCnh ? NOME_CNH[lead.situacaoCnh] ?? lead.situacaoCnh : '—'],
+    ...(lv.troca ? [['Troca', lv.troca] as [string, string]] : []),
+    ...(lv.cidade ? [['Cidade', lv.cidade] as [string, string]] : []),
+    ...(lv.melhorHorario ? [['Melhor horário', lv.melhorHorario] as [string, string]] : []),
+  ]
+  return (
+    <section className="pl-pn-bloco" data-prevenda-robo>
+      <h3>Pré-venda do robô{lv.prontoEm ? ' · pronto para simular' : ''}</h3>
+      <SeloRobo lead={lead} />
+      <dl className="pn-ficha" data-ficha-simular>{linhas.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      <div className="pn-robo-botoes">
+        {pv?.robo && pv.robo.codigo !== 'PAUSADO' && pv.robo.codigo === 'COLETANDO' && <button type="button" className="pl-btn" onClick={() => void agir(() => proLaboreApi.jornada.robo(lead.id, 'pausar'))} data-pausar-robo>Pausar robô</button>}
+        {pv?.robo?.codigo === 'PAUSADO' && <button type="button" className="pl-btn" onClick={() => void agir(() => proLaboreApi.jornada.robo(lead.id, 'retomar'))} data-retomar-robo>Retomar robô</button>}
+        {cad?.status === 'ATIVO' && <button type="button" className="pl-btn" onClick={() => void agir(() => proLaboreApi.jornada.mudarCadencia(lead.id, 'pausar'))} data-pausar-cadencia>Pausar follow</button>}
+        {cad?.status === 'PAUSADO' && <button type="button" className="pl-btn" onClick={() => void agir(() => proLaboreApi.jornada.mudarCadencia(lead.id, 'retomar'))} data-retomar-cadencia>Retomar follow</button>}
+        {(cad?.status === 'ATIVO' || cad?.status === 'PAUSADO') && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => void agir(() => proLaboreApi.jornada.mudarCadencia(lead.id, 'cancelar'))} data-cancelar-cadencia>Cancelar follow</button>}
+        {cad?.status !== 'ATIVO' && cad?.status !== 'PAUSADO' && <button type="button" className="pl-btn pl-btn-primary" onClick={() => setAbrirFollow(true)} data-abrir-follow-robo>Follow pelo robô</button>}
+      </div>
+      {erro && <div className="pl-alert" role="alert">{erro}</div>}
+      {abrirFollow && <FollowRoboModal leads={[{ id: lead.id, nome: lead.nomeCliente }]} fechar={() => setAbrirFollow(false)} aoAplicar={onMudou} />}
+    </section>
   )
 }

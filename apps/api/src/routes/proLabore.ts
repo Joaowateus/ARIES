@@ -1,3 +1,5 @@
+import { situacaoDoRobo } from '../lib/assistenteCadenciaCrm'
+import { faltaParaSimular } from '../lib/assistentePreVenda'
 import { ErroJornada, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
 import { motivoNovo } from '../lib/migracaoJornada'
 import type { Etapa } from '../lib/etapasJornada'
@@ -43,7 +45,7 @@ import {
 import { montarResumoAssistente } from '../lib/assistenteResumo'
 import { ResultadoSimulacao, lerValor, resumoSimulacao } from '../lib/assistenteSimulacao'
 import { mascararDadosPessoais } from '../lib/assistenteCaptura'
-import { baseParaRobo, montarSimulacao, motoComPreco, registrarUso, respostasAtivas, respostasDaLojaParaIA, respostasParaIA, simuladorDoRobo, sugestoesDaBase, textoParaIA, ultimasDoCliente, vitrineDaLoja, SELECT_MOTO_VITRINE, paraVitrine } from '../lib/assistenteRespostas'
+import { baseParaRobo, montarSimulacao, motoComPreco, registrarUso, respostasAtivas, respostasDaLojaParaIA, respostasParaIA, sugestoesDaBase, textoParaIA, ultimasDoCliente, vitrineDaLoja, SELECT_MOTO_VITRINE, paraVitrine } from '../lib/assistenteRespostas'
 import { acharMotos, fichaParaIA, fichaTexto, nomeDaMoto } from '../lib/assistenteVitrine'
 import { faixaNota } from '../lib/assistenteNota'
 import { iaLigada as copilotoIaLigada, sugerirResposta, type SugestaoIA } from '../lib/copilotoIA'
@@ -891,7 +893,7 @@ router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (r
       // Painel do lead: a última conversa do WhatsApp e a última mensagem.
       assistenteConversas: {
         orderBy: { ultimaMensagemEm: 'desc' }, take: 1,
-        select: { id: true, status: true, ultimaMensagemEm: true, mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, select: { remetente: true, texto: true, criadoEm: true } } },
+        select: { id: true, status: true, ultimaMensagemEm: true, robo: true, pausadoEm: true, prontoEm: true, resultado: true, etapaRoteiro: true, cadencia: true, mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, select: { remetente: true, texto: true, criadoEm: true } } },
       },
     },
   })
@@ -902,6 +904,8 @@ router.get('/leads', requireProLaboreAuth, requireModulo('crm', 'VER'), async (r
     return {
       ...l,
       // Quem merece atenção primeiro (frio, morno, quente), com o porquê.
+      // Pré-venda do robô (Ajuste 3): o que ele está fazendo e a cadência de follow escolhida.
+      preVenda: situacaoDoRobo(c, faltaParaSimular({ modeloInteresse: l.modeloInteresse, motoId: ((l.levantamento ?? {}) as { motoId?: string }).motoId ?? null, formaPagamento: l.formaPagamento as 'A_VISTA' | 'FINANCIADO' | null, temEntrada: l.temEntrada, situacaoCnh: l.situacaoCnh as never, troca: null, entradaValor: null, parcelaDesejada: null, prazoMeses: null, cidade: null, melhorHorario: null })),
       calor: temperaturaDoLead({ ...l, ultimoContatoEm: c?.ultimaMensagemEm ?? null, followAtrasado: l.follows.some(f => f.agendadoPara < agora) }, agora),
       // CPF, nascimento e e-mail que o cliente escreveu não aparecem na tela do CRM.
       conversa: c ? { id: c.id, status: c.status, ultimaMensagemEm: c.ultimaMensagemEm, ultima: m ? { ...m, texto: mascararDadosPessoais(m.texto).slice(0, 400) } : null } : null,
@@ -3669,7 +3673,7 @@ router.post('/assistente/simular', requireProLaboreAuth, requireModulo('assisten
   const [itens, vitrine] = await Promise.all([respostasAtivas(req.proLaboreUser!.sub), vitrineDaLoja(req.proLaboreUser!.sub)])
   const base = baseParaRobo(itens, { ...ctx, moto: parse.data.estado ? respostaDoCampoAssistente(cfg, parse.data.estado.respostas, 'modeloInteresse') : null }, vitrine)
   const passo = parse.data.estado
-    ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx, base, simuladorDoRobo(cfg, ctx, vitrine))
+    ? avancarRoteiroAssistente(cfg, parse.data.estado, parse.data.texto, ctx, base) // pré-venda (Ajuste 3): o robô não simula
     : iniciarRoteiroAssistente(cfg, ctx, parse.data.texto, base)
   const usado = passo.conhecimentoUsado ? itens.find(i => i.id === passo.conhecimentoUsado) : null
   const motoUsada = passo.motoUsada ? vitrine.motos.find(m => m.id === passo.motoUsada) : null

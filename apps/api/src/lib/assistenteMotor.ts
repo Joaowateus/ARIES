@@ -19,6 +19,8 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { avancarPorFatos } from './jornadaRegras'
+import { sincronizarLevantamento, linhasDaFicha, criarAtividadeDoBastao } from './assistentePreVendaCrm'
+import { lerCadenciaDaConversa, quandoDoPasso, rotuloCadencia, type CadenciaDaConversa } from './assistenteCadencia'
 import { DESTINOS_FORA_DA_REATIVACAO, SEM_CLIENTE_BLOQUEADO } from './etapasJornada'
 import { logger } from './logger'
 import { agenteDaPessoa, enviarComoPessoa } from './agenteEnvio'
@@ -31,9 +33,9 @@ import { aplicarCadenciasDoLeadNovo } from './ligacoes'
 import { origemPorCodigo } from './smAtribuicao'
 import {
   ConfigAssistente, ContextoRoteiro, Desfecho, EstadoRoteiro, MidiaPasso, PassoRoteiro, TEXTO_MENU,
-  avancarRoteiro, casaGatilho, complementarResposta, desiste, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo,
+  avancarRoteiro, casaGatilho, complementarResposta, desiste, interpretarComando, iniciarRoteiro, lerConfig, linhasResumo, respostaDoCampo, textoPergunta,
 } from './assistenteRoteiro'
-import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, simuladorDoRobo, vitrineDaLoja } from './assistenteRespostas'
+import { ItemAtivo, VitrineLoja, baseParaRobo, registrarUso, respostasAtivas, vitrineDaLoja } from './assistenteRespostas'
 import { ResultadoSimulacao, formatarCpf, leituraCredito, resumoSimulacao } from './assistenteSimulacao'
 import { calcularNota } from './assistenteNota'
 import { Avanco, Etiqueta, ROTULO_ETAPA, etiquetasDoLead, proximaEtapa, rebaixadoHaPouco } from './assistenteJornada'
@@ -393,11 +395,12 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
         ultimaMensagemEm: new Date(), ...(m.nomePerfil && conversa.nomeContato === formatarTelefone(m.numero) && { nomeContato: m.nomePerfil }),
         // Cliente respondeu: o follow automático recomeça do zero; pediu para parar (com o vendedor), para de vez.
         ...(conversa.followPasso > 0 && { followPasso: 0 }),
+        ...(conversa.retomadas > 0 && { retomadas: 0 }),
         ...(conversa.status !== 'ATIVA' && !conversa.followParado && desiste(m.texto) && { followParado: 'PEDIU_PARAR' }),
       }
       const estado: EstadoRoteiro = { etapa: conversa.etapaRoteiro, respostas: (conversa.respostas ?? {}) as Record<string, string> }
       if (dados) await aplicarDadosDoCliente(tx, { usuarioId: a.vendedor.usuarioId, conversaId: conversa.id, leadId: conversa.leadId, bancos: vitrine?.simulacao?.bancos ?? [], dados })
-      if (conversa.status !== 'ATIVA' || !a.atendimentoAutomatico || opcoes.semRobo) {
+      if (conversa.status !== 'ATIVA' || !a.atendimentoAutomatico || opcoes.semRobo || conversa.pausadoEm) {
         // Mensagem que o robô perdeu (chegou atrasada): a conversa passa para o vendedor.
         const passa = opcoes.semRobo && conversa.status === 'ATIVA'
         await tx.assistenteConversa.update({ where: { id: conversa.id }, data: { ...base, ...(passa && { status: 'AGUARDANDO_VENDEDOR', aguardandoVendedorEm: new Date() }) } })
@@ -415,7 +418,8 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
         await tx.assistenteConversa.update({ where: { id: conversa.id }, data: base })
         return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo: null, mensagensAvulsas: [TEXTO_SO_TEXTO], nomeContato, origem: conversa.origem }
       }
-      const passo = avancarRoteiro(cfg, estado, m.texto, contexto(a, cfg, nomeContato), baseDoRobo(nomeContato, estado.respostas), simuladorDoRobo(cfg, contexto(a, cfg, nomeContato), vitrine))
+      // Pré-venda (Ajuste 3): o robô não simula nem pede CPF; entrega a ficha pronta para o vendedor simular.
+      const passo = avancarRoteiro(cfg, estado, m.texto, contexto(a, cfg, nomeContato), baseDoRobo(nomeContato, estado.respostas))
       await tx.assistenteConversa.update({ where: { id: conversa.id }, data: { ...base, ...dadosDoPasso(passo) } })
       if (passo.ficha) await salvarFichaDoPasso(tx, conversa.id, a.vendedor.usuarioId, passo.ficha, vitrine?.simulacao?.bancos ?? [])
       return { conversaId: conversa.id, jid: conversa.jid ?? m.jid, passo, mensagensAvulsas: [], nomeContato, origem: conversa.origem }
@@ -486,6 +490,8 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     }
   }
   if (conversaTocada) {
+    await sincronizarLevantamento(conversaTocada).catch(e => logger.warn({ err: e }, 'pré-venda: falha ao gravar o levantamento no lead'))
+    await pararCadenciaPorResposta(a, cfg, conversaTocada).catch(e => logger.warn({ err: e }, 'pré-venda: falha ao parar a cadência'))
     await atualizarNota(cfg, conversaTocada).catch(e => logger.warn({ err: e }, 'assistente: falha ao calcular a nota do lead'))
     await avaliarJornada(conversaTocada).catch(e => logger.warn({ err: e }, 'assistente: falha na jornada do lead'))
   }
@@ -555,7 +561,7 @@ export async function avaliarJornada(conversaId: string, opcoes: { avancar?: boo
 // ---------- Follow automático (ver assistenteFollow.ts) ----------
 
 const SELECT_CONVERSA_FOLLOW = {
-  id: true, assistenteId: true, nomeContato: true, jid: true, numeroContato: true, respostas: true, followPasso: true, followUltimoEm: true, followFluxo: true, simulacao: true,
+  id: true, assistenteId: true, nomeContato: true, jid: true, numeroContato: true, respostas: true, followPasso: true, followUltimoEm: true, followFluxo: true, simulacao: true, cadencia: true,
   lead: { select: { id: true, usuarioId: true, vendedorId: true, estagio: true, modeloInteresse: true, perdidoEm: true } },
   ficha: { select: { analises: { where: { enviadaAoClienteEm: { not: null } }, select: { enviadaAoClienteEm: true } } } },
   mensagens: { orderBy: { criadoEm: 'desc' as const }, take: 40, select: { remetente: true, criadoEm: true } },
@@ -663,6 +669,8 @@ export async function rodarFollows(agora = new Date(), prazoMs = 8000): Promise<
       let hoje = await prisma.assistenteMensagem.count({ where: { origem: 'FOLLOW', criadoEm: { gte: inicioDoDiaBrt(agora) }, conversa: { assistenteId: a.id } } })
       for (const c of await conversasDoFollow([a.id], agora, resgate)) {
         if (hoje >= cfgF.tetoDiario || Date.now() - inicio > prazoMs) break
+        // O vendedor escolheu uma cadência para este cliente: ela vale no lugar do follow automático.
+        if (lerCadenciaDaConversa(c.cadencia)?.status === 'ATIVO') continue
         const plano = planoDoFollow(cfgF, c)
         if (!plano) continue
         if (fimDoFluxo({ fluxo: plano.fluxo, passo: plano.passo, ultimoFollowEm: c.followUltimoEm, agora })) {
@@ -1002,18 +1010,27 @@ async function concluirAtendimento(a: AssistenteCompleto, cfg: ConfigAssistente,
   // CPF da ficha autorizada completa o lead (se ainda não tinha).
   const ficha = await prisma.assistenteFichaCredito.findUnique({ where: { conversaId }, select: { cpf: true } })
   if (ficha && leadId) await prisma.lead.updateMany({ where: { id: leadId, OR: [{ cpf: null }, { cpf: '' }] }, data: { cpf: formatarCpf(ficha.cpf) } })
+  // Pré-venda (Ajuste 3): a ficha vai para o lead e o vendedor recebe o bastão (atividade + aviso).
+  const fichaPv = leadId ? await sincronizarLevantamento(conversaId).catch(() => null) : null
+  if (leadId && fichaPv && conversa.resultado !== 'DESISTIU') {
+    await criarAtividadeDoBastao(leadId, fichaPv).catch(e => logger.warn({ err: e }, 'pré-venda: falha ao criar a atividade do bastão'))
+    await prisma.assistenteConversa.update({ where: { id: conversaId }, data: { prontoEm: new Date() } })
+    await prisma.lead.update({ where: { id: leadId }, data: { levantamento: { ...((await prisma.lead.findUnique({ where: { id: leadId }, select: { levantamento: true } }))?.levantamento as object ?? {}), prontoEm: new Date().toISOString() } } })
+  }
   if (cfg.avisarVendedor && a.numeroWhatsapp) {
     const respostas = (conversa.respostas ?? {}) as Record<string, string>
-    const linhas = linhasDaConversa(cfg, conversa)
+    const linhas = fichaPv ? linhasDaFicha(fichaPv).map(l => { const [rotulo, ...v] = l.split(': '); return { rotulo, valor: v.join(': ') } }) : linhasDaConversa(cfg, conversa)
+    const pronta = !!fichaPv && !fichaPv.falta.length
     const texto = [
-      conversa.resultado === 'PEDIU_ATENDENTE' ? '🔔 *Lead pediu pra falar com você*' : '🔔 *Novo lead qualificado*',
+      conversa.resultado === 'PEDIU_ATENDENTE' ? '🔔 *Lead pediu pra falar com você*' : pronta ? (fichaPv!.levantamento.formaPagamento === 'A_VISTA' ? '🏁 *Pronto para a proposta à vista*' : '🏁 *Pronto para simular*') : '🔔 *Novo lead qualificado*',
       `*${conversa.nomeContato}* · wa.me/${conversa.numeroContato}`,
       conversa.origem ? `Origem: ${ROTULO_ORIGEM[conversa.origem] ?? conversa.origem}` : null,
       respostas._inicial ? `Primeira mensagem: "${mascararDadosPessoais(respostas._inicial).slice(0, 140)}"` : null,
       linhas.length ? '' : null,
       ...linhas.map(l => `• ${l.rotulo}: ${l.valor}`),
+      fichaPv?.falta.length ? `• Falta: ${fichaPv.falta.join(', ')}` : null,
       '',
-      leadId ? 'Já está no CRM como lead. ' : '',
+      leadId ? (pronta ? 'A ficha está no CRM e a atividade "Simular" já está no seu dia. ' : 'Já está no CRM como lead. ') : '',
       'Responda direto na conversa dele — o assistente sai de cena assim que você escrever.',
     ].filter(l => l !== null).join('\n').replace(/\n{3,}/g, '\n\n')
     const suporte = await conversaDeSuporte(a)
@@ -1395,4 +1412,165 @@ function tempoDesde(d: Date): string {
   const h = Math.round(min / 60)
   if (h < 24) return `há ${h}h`
   return `há ${Math.round(h / 24)} dia(s)`
+}
+
+// ---------- Pré-venda (Ajuste 3): cadência escolhida pelo vendedor e retomada do roteiro ----------
+
+const HORA_MS = 3_600_000
+
+/** O cliente respondeu: a cadência do vendedor para e ele é avisado (no CRM e no chat "Você"). */
+export async function pararCadenciaPorResposta(a: AssistenteCompleto, cfg: ConfigAssistente, conversaId: string) {
+  const c = await prisma.assistenteConversa.findUnique({ where: { id: conversaId }, select: { id: true, cadencia: true, leadId: true, nomeContato: true, mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, select: { remetente: true, texto: true } } } })
+  const cad = lerCadenciaDaConversa(c?.cadencia)
+  if (!c || !cad || (cad.status !== 'ATIVO' && cad.status !== 'PAUSADO')) return
+  const ultima = c.mensagens[0]
+  if (ultima?.remetente !== 'CONTATO') return
+  const parou = desiste(ultima.texto)
+  const fim: CadenciaDaConversa = { ...cad, status: parou ? 'CANCELADO' : 'PAROU_RESPOSTA', proximoEm: null, motivoFim: parou ? 'Cliente pediu para parar' : 'Cliente respondeu' }
+  await prisma.assistenteConversa.update({ where: { id: c.id }, data: { cadencia: fim as unknown as Prisma.InputJsonValue } })
+  if (parou || !c.leadId) return
+  const lead = await prisma.lead.findUnique({ where: { id: c.leadId }, select: { id: true, usuarioId: true, vendedorId: true } })
+  if (lead) await prisma.leadFollow.create({ data: { usuarioId: lead.usuarioId, leadId: lead.id, vendedorId: lead.vendedorId, agendadoPara: new Date(), tipo: 'JORNADA', canal: 'WHATSAPP', nota: `Respondeu ao follow do robô (${cad.nome}): "${mascararDadosPessoais(ultima.texto).slice(0, 160)}"`, contexto: { atividade: 'RESPOSTA_CADENCIA' } } })
+  if (cfg.avisarVendedor && a.numeroWhatsapp) {
+    const suporte = await conversaDeSuporte(a)
+    await enviarDoAssistente(a, { ...cfg, atrasoSegundos: 0 }, suporte.id, a.numeroWhatsapp, [`💬 *${c.nomeContato}* respondeu ao follow do robô (${cad.nome}). Parei a cadência: é com você!`]).catch(() => undefined)
+  }
+}
+
+/**
+ * Rodada do cron: manda o passo devido das cadências escolhidas pelo vendedor,
+ * no horário e no teto diário da loja, no máximo 1 mensagem por dia por cliente.
+ */
+export async function rodarCadencias(agora = new Date(), prazoMs = 6000): Promise<{ cadenciasEnviadas: number; cadenciasConcluidas: number }> {
+  const inicio = Date.now()
+  let enviadas = 0, concluidas = 0
+  const assistentes = await prisma.assistenteComercial.findMany({
+    where: { status: 'CONECTADO', instancia: { not: null }, conversas: { some: { cadencia: { path: ['status'], equals: 'ATIVO' } } } },
+    include: { vendedor: { select: { id: true, nome: true, usuarioId: true } } },
+  })
+  for (const a of assistentes) {
+    const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId: a.vendedor.usuarioId } })
+    const cfgF = lerConfigFollow(loja?.followConfig)
+    if (!dentroDoHorario(agora, cfgF)) continue
+    const cfg = lerConfig(a.configuracao)
+    const { motos } = await vitrineDaLoja(a.vendedor.usuarioId).catch(() => ({ motos: [] as MotoVitrine[] }))
+    let hoje = await prisma.assistenteMensagem.count({ where: { origem: 'FOLLOW', criadoEm: { gte: inicioDoDiaBrt(agora) }, conversa: { assistenteId: a.id } } })
+    const conversas = await prisma.assistenteConversa.findMany({
+      where: { assistenteId: a.id, tipo: 'LEAD', followParado: null, cadencia: { path: ['status'], equals: 'ATIVO' }, lead: { is: { estagio: { notIn: ['FECHADO', 'PERDIDO'] }, vendaId: null, ...SEM_CLIENTE_BLOQUEADO } } },
+      select: { ...SELECT_CONVERSA_FOLLOW, status: true, pausadoEm: true },
+      take: 300,
+    })
+    for (const c of conversas) {
+      if (hoje >= cfgF.tetoDiario || Date.now() - inicio > prazoMs) break
+      const cad = lerCadenciaDaConversa(c.cadencia)
+      if (!cad || !cad.proximoEm || new Date(cad.proximoEm) > agora) continue
+      // O robô ainda está no roteiro com o cliente: espera.
+      if (c.status === 'ATIVA' && !c.pausadoEm) continue
+      if (c.followUltimoEm && c.followUltimoEm >= inicioDoDiaBrt(agora)) continue
+      const passo = cad.passos[cad.passo]
+      const proximo = cad.passo + 1
+      const novo: CadenciaDaConversa = { ...cad, passo: proximo, enviados: [...cad.enviados, { passo: cad.passo, em: agora.toISOString() }], proximoEm: quandoDoPasso(cad, proximo), status: proximo >= cad.passos.length ? 'CONCLUIDO' : 'ATIVO', ...(proximo >= cad.passos.length && { motivoFim: 'Sem resposta' }) }
+      if (!passo) continue
+      // Trava: só uma rodada manda este passo.
+      const marcado = await prisma.assistenteConversa.updateMany({ where: { id: c.id, followUltimoEm: c.followUltimoEm }, data: { followUltimoEm: agora, cadencia: novo as unknown as Prisma.InputJsonValue } })
+      if (!marcado.count) continue
+      const { texto, foto } = textoDoFollow(passo, cfg, { nomeContato: c.nomeContato, vendedor: a.vendedor.nome }, motoDoFollow(cfg, c, motos))
+      const destino = c.jid ?? c.numeroContato
+      try {
+        if (foto) await enviarFotoNaConversa(a.instancia, c.id, destino, { url: foto, legenda: texto }, 'ASSISTENTE', 1500, 'FOLLOW', 'CADENCIA')
+        else {
+          const registro = await prisma.assistenteMensagem.create({ data: { conversaId: c.id, remetente: 'ASSISTENTE', texto, origem: 'FOLLOW', followFluxo: 'CADENCIA' } })
+          try {
+            const id = await enviarTexto(a.instancia!, destino, texto, 1500)
+            if (id) await prisma.assistenteMensagem.update({ where: { id: registro.id }, data: { providerId: id, criadoEm: new Date() } }).catch(() => undefined)
+          } catch (e) { await prisma.assistenteMensagem.delete({ where: { id: registro.id } }).catch(() => undefined); throw e }
+        }
+        await prisma.assistenteConversa.update({ where: { id: c.id }, data: { ultimaMensagemEm: new Date() } })
+        hoje += 1; enviadas += 1
+        if (c.lead) {
+          // Cada mensagem fica no histórico do lead; terminou sem resposta, vira tarefa do vendedor.
+          await prisma.leadFollow.create({ data: { usuarioId: c.lead.usuarioId, leadId: c.lead.id, vendedorId: c.lead.vendedorId, agendadoPara: agora, tipo: 'JORNADA', canal: 'WHATSAPP', status: 'FEITO', feitoEm: agora, resultado: 'Enviado pelo robô', nota: `Robô: passo ${cad.passo + 1} de ${cad.passos.length} da cadência "${cad.nome}"`, contexto: { atividade: 'CADENCIA_ROBO' } } })
+          if (novo.status === 'CONCLUIDO') {
+            concluidas += 1
+            await prisma.leadFollow.create({ data: { usuarioId: c.lead.usuarioId, leadId: c.lead.id, vendedorId: c.lead.vendedorId, agendadoPara: new Date(agora.getTime() + 2 * 24 * HORA_MS), tipo: 'JORNADA', canal: 'LIGACAO', nota: `Não respondeu à cadência do robô ("${cad.nome}"). Tente uma ligação ou um áudio.`, contexto: { atividade: 'FIM_CADENCIA' } } })
+          }
+        }
+      } catch (e) {
+        await prisma.assistenteConversa.updateMany({ where: { id: c.id, followUltimoEm: agora }, data: { followUltimoEm: c.followUltimoEm, cadencia: cad as unknown as Prisma.InputJsonValue } })
+        logger.warn({ err: e, conversaId: c.id }, 'pré-venda: passo da cadência não saiu')
+      }
+    }
+  }
+  return { cadenciasEnviadas: enviadas, cadenciasConcluidas: concluidas }
+}
+
+/**
+ * Cliente parou no meio do roteiro: o robô repete a pergunta que faltou
+ * (2 h e 20 h depois, no máximo 2 vezes, no horário da loja). Passadas 24 h
+ * da segunda sem resposta, entrega ao vendedor o que já coletou.
+ */
+export async function retomarRoteiros(agora = new Date(), prazoMs = 5000): Promise<{ retomadas: number; entreguesPorSilencio: number }> {
+  const inicio = Date.now()
+  let retomadas = 0, entregues = 0
+  const conversas = await prisma.assistenteConversa.findMany({
+    where: { tipo: 'LEAD', status: 'ATIVA', robo: true, pausadoEm: null, ultimaMensagemEm: { lte: new Date(agora.getTime() - 2 * HORA_MS), gte: new Date(agora.getTime() - 7 * 24 * HORA_MS) }, assistente: { status: 'CONECTADO', instancia: { not: null }, atendimentoAutomatico: true } },
+    include: { assistente: { include: { vendedor: true } }, mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, select: { remetente: true, criadoEm: true } } },
+    take: 100,
+  })
+  for (const c of conversas) {
+    if (Date.now() - inicio > prazoMs) break
+    if (c.mensagens[0]?.remetente === 'CONTATO') continue // o cliente falou por último: o roteiro responde na hora, não aqui
+    const a = c.assistente as unknown as AssistenteCompleto
+    const cfg = lerConfig(a.configuracao)
+    const ultimaNossa = c.mensagens[0]?.criadoEm ?? c.ultimaMensagemEm
+    const desde = agora.getTime() - ultimaNossa.getTime()
+    if (c.retomadas >= 2) {
+      if (desde < 24 * HORA_MS) continue
+      const passou = await prisma.assistenteConversa.updateMany({ where: { id: c.id, status: 'ATIVA' }, data: { status: 'AGUARDANDO_VENDEDOR', aguardandoVendedorEm: agora, resultado: 'SUMIU' } })
+      if (passou.count) { entregues += 1; await concluirAtendimento(a, cfg, c.id).catch(e => logger.warn({ err: e }, 'pré-venda: falha ao entregar o lead que sumiu')) }
+      continue
+    }
+    if (desde < (c.retomadas === 0 ? 2 : 20) * HORA_MS) continue
+    const loja = await prisma.assistenteLoja.findUnique({ where: { usuarioId: a.vendedor.usuarioId } })
+    if (!dentroDoHorario(agora, lerConfigFollow(loja?.followConfig))) continue
+    const pergunta = cfg.perguntas[c.etapaRoteiro]
+    if (!pergunta) continue
+    const marcado = await prisma.assistenteConversa.updateMany({ where: { id: c.id, retomadas: c.retomadas }, data: { retomadas: c.retomadas + 1, retomadaEm: agora } })
+    if (!marcado.count) continue
+    const ctx = contexto(a, cfg, c.nomeContato)
+    const abertura = c.retomadas === 0 ? `Oi, ${primeiroNome(c.nomeContato) || 'tudo bem'}! Só pra eu deixar tudo pronto pra ${ctx.vendedor}:` : `${primeiroNome(c.nomeContato) || 'Oi'}, falta só isso pra ${ctx.vendedor} te mandar a melhor condição:`
+    await enviarDoAssistente(a, cfg, c.id, c.jid ?? c.numeroContato, [`${abertura}\n\n${textoPergunta(pergunta, ctx)}`]).then(() => { retomadas += 1 }).catch(e => logger.warn({ err: e, conversaId: c.id }, 'pré-venda: retomada não saiu'))
+  }
+  return { retomadas, entreguesPorSilencio: entregues }
+}
+
+export { rotuloCadencia }
+
+/**
+ * Robô retomado pelo vendedor no CRM: responde o que o cliente mandou
+ * enquanto ele estava pausado (senão essa mensagem ficaria sem resposta).
+ */
+export async function responderAoRetomar(conversaId: string, pausadoDesde: Date) {
+  const c = await prisma.assistenteConversa.findUnique({
+    where: { id: conversaId },
+    include: { assistente: { include: { vendedor: true } }, mensagens: { where: { criadoEm: { gte: pausadoDesde } }, orderBy: { criadoEm: 'asc' }, select: { remetente: true, texto: true } } },
+  })
+  if (!c || c.status !== 'ATIVA' || c.pausadoEm) return
+  const pendente = c.mensagens.filter(m => m.remetente === 'CONTATO').map(m => m.texto).join(' ').trim()
+  if (!pendente || c.mensagens.at(-1)?.remetente !== 'CONTATO') return
+  const a = c.assistente as unknown as AssistenteCompleto
+  if (!a.atendimentoAutomatico) return
+  const cfg = lerConfig(a.configuracao)
+  const ctx = contexto(a, cfg, c.nomeContato)
+  const respostas = (c.respostas ?? {}) as Record<string, string>
+  const [ativos, vitrine] = await Promise.all([
+    respostasAtivas(a.vendedor.usuarioId).catch(() => [] as ItemAtivo[]),
+    vitrineDaLoja(a.vendedor.usuarioId).catch(() => undefined),
+  ])
+  const passo = avancarRoteiro(cfg, { etapa: c.etapaRoteiro, respostas }, pendente, ctx, baseParaRobo(ativos, { ...ctx, moto: respostaDoCampo(cfg, respostas, 'modeloInteresse') }, vitrine))
+  await prisma.assistenteConversa.update({ where: { id: c.id }, data: dadosDoPasso(passo) })
+  await enviarDoAssistente(a, cfg, c.id, c.jid ?? c.numeroContato, passo.mensagens, passo.midias)
+  if (passo.desfecho === 'DESISTIU') await anotarDesistencia(c.id).catch(() => undefined)
+  else if (passo.desfecho) await concluirAtendimento(a, cfg, c.id)
+  await sincronizarLevantamento(c.id).catch(() => undefined)
 }

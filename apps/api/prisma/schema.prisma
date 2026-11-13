@@ -1424,6 +1424,9 @@ model Lead {
   situacaoCnh               String? // TEM | EM_PROCESSO | NAO_TEM
   temEntrada                Boolean?
   levantamentoCompleto      Boolean   @default(false)
+  // Pré-venda do robô (Ajuste 3): o que o cliente contou para a simulação
+  // { motoId, entradaValor, parcelaDesejada, prazoMeses, troca, cidade, melhorHorario, prontoEm }.
+  levantamento              Json?
   vendaSemVisita            Boolean   @default(false)
   // Lead que já existia antes da migração para as 10 etapas.
   anteriorMigracao          Boolean   @default(false)
@@ -2137,6 +2140,16 @@ model AssistenteConversa {
   anuncioTitulo        String?
   origem               String?
   etapaRoteiro         Int       @default(0)
+  // Pré-venda (Ajuste 3): robô pausado pelo vendedor no CRM; quantas vezes
+  // o robô retomou a pergunta que faltou (máx. 2) e quando; quando a ficha
+  // ficou pronta para simular (o bastão passou ao vendedor).
+  pausadoEm            DateTime?
+  retomadas            Int       @default(0)
+  retomadaEm           DateTime?
+  prontoEm             DateTime?
+  // Follow pelo robô escolhido pelo vendedor: { id, nome, passos: [{ dias, texto, midia }],
+  // passo, proximoEm, status: ATIVO|PAUSADO|CONCLUIDO|PAROU_RESPOSTA|CANCELADO, inicioEm, autorId, enviados: [] }.
+  cadencia             Json?
   respostas            Json?
   ultimaMensagemEm     DateTime  @default(now())
   aguardandoVendedorEm DateTime?
@@ -2361,6 +2374,8 @@ model AssistenteLoja {
   // entradaMinimaPct, perguntarRenda, comprometimentoMax, aviso }.
   simulacaoAtiva   Boolean  @default(false)
   simulacaoConfig  Json?
+  // Biblioteca de cadências de follow que o vendedor escolhe no CRM (Ajuste 3).
+  cadencias        Json?
   atualizadoEm     DateTime @default(now()) @updatedAt
 
   @@map("pro_labore_assistente_loja")

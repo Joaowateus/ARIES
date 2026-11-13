@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type PremissasJornada, type Temperatura } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, FASES, NOME_ETAPA, NOME_MOTIVO, NOME_DESTINO } from '@/lib/etapasJornada'
+import { FollowRoboModal, SeloRobo } from './FollowRobo'
 
 const MS_HORA = 3_600_000
 function tempoNaEtapa(l: Lead) {
@@ -85,6 +86,11 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [soPendencia, setSoPendencia] = useState(false)
   const [tempAberta, setTempAberta] = useState<string | null>(null)
   const [guia, setGuia] = useState<Guia>(null)
+  // Ajuste 3: modo Selecionar (aplicar o follow pelo robô a vários clientes) e o modal do follow.
+  const [selecionando, setSelecionando] = useState(false)
+  const [marcados, setMarcados] = useState<string[]>([])
+  const [followPara, setFollowPara] = useState<Array<{ id: string; nome: string }> | null>(null)
+  const alternarMarcado = (id: string) => setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id]))
   // A orientação some sozinha depois de 15 s (o selo de pendência fica no card).
   useEffect(() => { if (!guia) return; const t = setTimeout(() => setGuia(null), 15_000); return () => clearTimeout(t) }, [guia])
   const [conversao, setConversao] = useState<Record<string, { chegaram: number; conversao: number | null }>>({})
@@ -163,6 +169,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
         ))}
         {(comPendencia > 0 || soPendencia) && <button type="button" className={`pl-chip ${soPendencia ? 'active' : ''}`} aria-pressed={soPendencia} onClick={() => setSoPendencia(v => !v)} data-filtro-pendencia title="Leads que avançaram de etapa faltando algum critério">Com pendência · {comPendencia}</button>}
         {(filtroTemp || soPendencia) && <button type="button" className="pl-link-action" onClick={() => { setFiltroTemp(''); setSoPendencia(false) }}>Ver todos</button>}
+        <button type="button" className={`pl-chip ${selecionando ? 'active' : ''}`} aria-pressed={selecionando} onClick={() => { setSelecionando(v => !v); setMarcados([]) }} data-modo-selecionar title="Marque vários clientes para ligar o follow pelo robô">{selecionando ? 'Sair da seleção' : 'Selecionar'}</button>
         <span className="pl-hint qj-filtros-dica">Em cada coluna, os quentes vêm primeiro.</span>
       </div>
       {erro && <div className="pl-alert" role="alert">{erro}</div>}
@@ -211,8 +218,13 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                             <div
                               key={l.id} className={`pl-kanban-card pl-kc qj-card qj-${temp.toLowerCase()}`} draggable data-card={l.id} data-calor={temp}
                               onDragStart={() => setArrastando(l.id)} onDragEnd={() => setArrastando(null)}
-                              onClick={() => onAbrir(l.id)} style={{ cursor: 'pointer' }}
+                              onClick={() => (selecionando ? alternarMarcado(l.id) : onAbrir(l.id))} style={{ cursor: 'pointer' }}
                             >
+                              {selecionando && (
+                                <label className="qj-marcar" onClick={ev => ev.stopPropagation()}>
+                                  <input type="checkbox" checked={marcados.includes(l.id)} onChange={() => alternarMarcado(l.id)} aria-label={`Selecionar ${l.nomeCliente}`} data-marcar={l.id} />
+                                </label>
+                              )}
                               <div className="qj-card-topo">
                                 <span className="qj-temp-wrap" onClick={ev => ev.stopPropagation()}>
                                   <button type="button" className={`qj-temp qj-${temp.toLowerCase()}`} onClick={() => setTempAberta(t => (t === l.id ? null : l.id))} title={`${NOME_TEMP[temp]}: ${l.calor?.motivo ?? ''}. Clique para ajustar.`} aria-label={`Temperatura ${NOME_TEMP[temp]}`} aria-expanded={tempAberta === l.id} data-temperatura={temp}><i aria-hidden />{NOME_TEMP[temp]}{l.calor?.manual ? '*' : ''}</button>
@@ -227,6 +239,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                                 <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máximo ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
                               </div>
                               {vejaEquipe && l.vendedor?.nome && <div className="pl-hint qj-dono">{l.vendedor.nome}</div>}
+                              <SeloRobo lead={l} />
                               {passo && (
                                 <button type="button" className="qj-passo" onClick={ev => { ev.stopPropagation(); seguir(l, passo) }} title={pend.length ? pend.join(' · ') : 'Sugestão do ARIES para este lead'} data-proximo-passo>
                                   <span>Próximo</span>{passo.texto}
@@ -274,6 +287,15 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
           </div>
         </div>
       )}
+      {selecionando && !followPara && (
+        <div className="qj-selecao" role="toolbar" aria-label="Clientes selecionados" data-barra-selecao>
+          <b>{marcados.length}</b> {marcados.length === 1 ? 'cliente selecionado' : 'clientes selecionados'}
+          <button type="button" className="pl-btn pl-btn-primary" disabled={!marcados.length} onClick={() => setFollowPara(leads.filter(l => marcados.includes(l.id)).map(l => ({ id: l.id, nome: l.nomeCliente })))} data-follow-selecionados>Follow pelo robô</button>
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setMarcados(naTela.filter(l => !l.somenteLeitura).map(l => l.id))}>Marcar os da tela</button>
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => { setSelecionando(false); setMarcados([]) }}>Cancelar</button>
+        </div>
+      )}
+      {followPara && <FollowRoboModal leads={followPara} fechar={() => setFollowPara(null)} aoAplicar={() => { setMarcados([]); setSelecionando(false); onAtualizar() }} />}
       {guia && (
         <div className="qj-guia" role="status" data-guia-etapa>
           <div className="qj-guia-txt">
