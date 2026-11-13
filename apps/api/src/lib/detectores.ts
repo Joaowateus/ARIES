@@ -359,7 +359,7 @@ async function anuncioEncarecendo(usuarioId: string, cfg: ConfigDetector, agora:
     titulo: piorou ? 'Anúncios mais caros e rendendo menos' : 'Anúncios mais baratos e rendendo mais',
     acaoSugerida: piorou ? 'Revisar criativos e a distribuição da verba com o gestor de tráfego (pausar o que encareceu, reforçar o que traz lead que compra)' : 'Manter os criativos e a verba que baratearam o lead',
     alvoTipo: 'ANUNCIOS', alvoId: null,
-    evidencia: { metricas: evs, casos, volumeMinimo: cfg.volumeMinimo, resumo: `custo por lead ${r2(cb.valor)} → ${r2(ca.valor)} · ROAS ${rb.valor} → ${ra.valor}` },
+    evidencia: { metricas: evs, casos, volumeMinimo: cfg.volumeMinimo, resumo: `custo por lead ${fmtValor(cb.valor, 'BRL')} → ${fmtValor(ca.valor, 'BRL')} · ROAS ${fmtValor(rb.valor, 'X')} → ${fmtValor(ra.valor, 'X')}` },
     forca: forcaDe(casos, cfg.volumeMinimo, cc.valor != null && (piorou ? cb.valor > cc.valor : cb.valor < cc.valor), false),
     impacto: { unidade: 'LEADS', valor: piorou ? Math.max(0, Math.round(gasto / cb.valor - casos)) : Math.max(0, Math.round(casos - gasto / cb.valor)), texto: piorou ? 'leads a menos com o mesmo gasto, se o custo voltasse ao anterior (estimativa)' : 'leads a mais com o mesmo gasto (estimativa)' },
   }]

@@ -20,7 +20,7 @@ import { prisma } from './prisma'
 import { FICHAS_PADRAO, hojeBrt, ler, mesCorrente, calcular, metaDoMes, type Escopo, type Papel, type Periodo } from './metricas'
 import { papeisDaConta } from './detectoresOnda4'
 import { fmtValor, nomesDistintos } from './formato'
-import { situacaoDaMeta, type SituacaoMeta } from './metaCoerente'
+import { metaCobertaAgora, situacaoDaMeta, type SituacaoMeta } from './metaCoerente'
 import { lerExpediente, prazoDoDiaEscolhido } from './expediente'
 import { avisarNoWhatsapp } from './ligacoesAviso'
 
@@ -211,6 +211,7 @@ async function recsDoBloco(bloco: BlocoChave, quem: Leitor, modo: ModoDaily) {
   if (modo === 'EQUIPE') where.alvoTipo = { in: ['EQUIPE', 'ETAPA'] }
   else if (quem.papel !== 'DONO') where.visivelPara = { has: quem.vendedorId ?? '__' }
   const rs = await prisma.recomendacao.findMany({ where, select: { id: true, codigo: true, titulo: true, forca: true, impacto: true, acaoSugerida: true, alvoTipo: true, detector: true, criadoEm: true }, take: 50 })
+  if (bloco === 'RESULTADO' && rs.length && await metaCobertaAgora(quem.usuarioId)) rs.splice(0, rs.length, ...rs.filter(r => r.detector !== 'meta_em_risco'))
   const imp = (r: { impacto: unknown }) => Number((r.impacto as { valor?: number } | null)?.valor ?? 0)
   return rs.sort((a, b) => imp(b) - imp(a) || b.criadoEm.getTime() - a.criadoEm.getTime()).slice(0, 3)
     .map(r => ({ id: r.id, codigo: r.codigo, titulo: r.titulo, forca: r.forca, impacto: (r.impacto as { texto?: string } | null)?.texto ?? null, acao: r.acaoSugerida, individual: r.alvoTipo === 'PESSOA' }))
