@@ -45,3 +45,11 @@ export function diasUteisRestantes(hoje: string, incluirHoje = true, diasDaSeman
   for (let x = new Date(d.getTime() + (incluirHoje ? 0 : 86_400_000)); x <= fim; x = new Date(x.getTime() + 86_400_000)) if (diasDaSemana.includes(x.getUTCDay())) n++
   return n
 }
+
+/** PDF 06 · correção 7: primeiro nome, a não ser que dois da lista tenham o mesmo primeiro nome (aí, o nome completo). */
+export function nomesDistintos(lista: Array<{ id: string; nome: string | null }>): Map<string, string> {
+  const primeiro = (s: string | null) => (s ?? '').trim().split(/\s+/)[0] || ''
+  const cont = new Map<string, number>()
+  for (const p of lista) { const k = primeiro(p.nome).toLowerCase(); cont.set(k, (cont.get(k) ?? 0) + 1) }
+  return new Map(lista.map(p => [p.id, (cont.get(primeiro(p.nome).toLowerCase()) ?? 0) > 1 ? (p.nome ?? '').trim() : primeiro(p.nome)]))
+}

@@ -21,7 +21,7 @@ export function fmtValor(v: number | null | undefined, unidade: string): string 
   if (v == null) return '—'
   const n = (x: number, c = 1) => x.toLocaleString('pt-BR', { maximumFractionDigits: c })
   if (unidade === 'BRL') return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
-  if (unidade === 'PCT') return `${n(v)}%`
+  if (unidade === 'PCT') return `${n(v, Math.abs(v) < 10 ? 2 : 1)}%`
   if (unidade === 'MIN') return v < 60 ? `${n(v, 0)} min` : `${n(v / 60)} h`
   if (unidade === 'DIAS') return `${n(v)} d`
   if (unidade === 'X') return `${n(v, 2)}x`
@@ -63,17 +63,21 @@ export function CartaoNumero({ chave, nome, valor, unidade, status, sub, aviso }
   )
 }
 
-const subDaLeitura = (l: LeituraMetrica) => l.anterior?.valor != null ? `antes: ${fmtValor(l.anterior.valor, l.unidade)}${l.projecao != null ? ` · projeção ${fmtValor(l.projecao, l.unidade)}` : ''}` : l.projecao != null ? `projeção ${fmtValor(l.projecao, l.unidade)}` : ''
+const subDaLeitura = (l: LeituraMetrica) => l.anterior?.valor != null ? `mesmo período anterior: ${fmtValor(l.anterior.valor, l.unidade)}${l.projecao != null ? ` · projeção ${fmtValor(l.projecao, l.unidade)}` : ''}` : l.projecao != null ? `projeção ${fmtValor(l.projecao, l.unidade)}` : ''
 
+const COMPARACAO: Record<string, string> = { MES: 'mesmo período do mês anterior', SEMANA: 'mesmo período da semana anterior', HOJE: 'mesmo horário de ontem' }
 export function subDoNumero(n: NumeroHoje): string {
   const partes: string[] = []
   if (n.alvo?.valor != null) partes.push(`${n.alvo.rotulo}: ${fmtValor(n.alvo.valor, n.unidade === 'QTD' ? 'QTD' : n.unidade)}`)
   else if (n.alvo) partes.push(`${n.alvo.rotulo}: não definida`)
-  const d = n.detalhe as { maiorEsperaMin?: number; alemDoNormal?: number; motivo?: string } | null
+  const d = n.detalhe as { maiorEsperaMin?: number; alemDoNormal?: number; motivo?: string; texto?: string } | null
+  // PDF 06 · correção 10: o número diz o que conta, na mesma unidade da fila ("9 vendas aguardando pagamento").
+  if (d?.texto) partes.push(d.texto)
   if (d?.maiorEsperaMin) partes.push(`maior espera ${fmtValor(d.maiorEsperaMin, 'MIN')}`)
   if (d?.alemDoNormal) partes.push(`${d.alemDoNormal} além do normal`)
   if (d?.motivo && n.valor == null) partes.push(d.motivo)
-  if (!partes.length && n.anterior?.valor != null) partes.push(`antes: ${fmtValor(n.anterior.valor, n.unidade)}`)
+  // PDF 06 · correção 11: a comparação por extenso.
+  if (!partes.length && n.anterior?.valor != null) partes.push(`${COMPARACAO[n.tipoPeriodo] ?? 'mesmo período anterior'}: ${fmtValor(n.anterior.valor, n.unidade)}`)
   if (n.tipoPeriodo === 'AGORA') partes.push('agora')
   return partes.join(' · ')
 }

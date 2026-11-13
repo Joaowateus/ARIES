@@ -178,6 +178,26 @@ async function atividadesDe(usuarioId: string, responsavelId: string, agora: Dat
   })
 }
 
+const qtdVendas = (n: number) => `${n} ${n === 1 ? 'venda' : 'vendas'}`
+/** Comissões confirmadas e não pagas: uma linha por vendedor e, à parte, as vendas sem vendedor definido. */
+async function pagamentosPendentes(u: string, financeiro = false) {
+  const pend = await prisma.venda.findMany({ where: { usuarioId: u, situacao: 'CONFIRMADA', valorComissao: { gt: 0 }, pagamentoComissaoId: null }, orderBy: { data: 'asc' }, select: { id: true, data: true, vendedorId: true, lead: { select: { nomeCliente: true } } } })
+  const ativos = new Map((await prisma.vendedor.findMany({ where: { usuarioId: u }, select: { id: true, nome: true } })).map(v => [v.id, v.nome]))
+  const porVendedor = new Map<string, typeof pend>()
+  const semVendedor: typeof pend = []
+  for (const v of pend) {
+    if (v.vendedorId && ativos.has(v.vendedorId)) porVendedor.set(v.vendedorId, [...(porVendedor.get(v.vendedorId) ?? []), v])
+    else semVendedor.push(v)
+  }
+  const itens: Array<Omit<ItemFila, 'grupo' | 'ordem'>> = []
+  if (semVendedor.length) {
+    const lista = semVendedor.slice(0, 5).map(v => `${primeiro(v.lead?.nomeCliente) || 'cliente sem nome'} (${v.data.toLocaleDateString('pt-BR', { timeZone: 'UTC' })})`).join(', ')
+    itens.push({ titulo: `Comissões sem vendedor definido: ${qtdVendas(semVendedor.length)}`, detalhe: `Defina o vendedor antes de pagar: ${lista}${semVendedor.length > 5 ? ` e mais ${semVendedor.length - 5}` : ''}`, quando: semVendedor[0].data.toISOString(), ref: null, href: '/pro-labore/vendas?filtro=sem-vendedor', acao: { rotulo: 'Definir o vendedor', tipo: 'LINK', href: '/pro-labore/vendas?filtro=sem-vendedor' } })
+  }
+  for (const [id, vs] of porVendedor) itens.push({ titulo: financeiro ? `Lançar a comissão de ${primeiro(ativos.get(id))}: ${qtdVendas(vs.length)}` : `Aprovar o pagamento de comissão de ${primeiro(ativos.get(id))}: ${qtdVendas(vs.length)}`, detalhe: `${qtdVendas(vs.length)} ${vs.length === 1 ? 'confirmada' : 'confirmadas'} aguardando pagamento`, quando: null, ref: { tipo: 'VENDEDOR', id }, href: '/pro-labore/vendas', acao: { rotulo: financeiro ? 'Lançar' : 'Aprovar o pagamento', tipo: 'LINK', href: '/pro-labore/vendas' } })
+  return itens
+}
+
 export async function filaDoHoje(pessoa: Pessoa, agora = new Date()): Promise<ItemFila[]> {
   const cfg = await configDoPapel(pessoa.usuarioId, pessoa.papel)
   const u = pessoa.usuarioId, eu = pessoa.vendedorId
@@ -246,9 +266,9 @@ export async function filaDoHoje(pessoa: Pessoa, agora = new Date()): Promise<It
   if (pessoa.papel === 'DONO') {
     const vendas = await prisma.venda.findMany({ where: { usuarioId: u, situacao: 'AGUARDANDO_CONFIRMACAO' }, orderBy: { data: 'asc' }, select: { id: true, data: true, vendedor: { select: { nome: true } }, lead: { select: { nomeCliente: true } } } })
     for (const v of vendas) add('VENDA_A_CONFIRMAR', { titulo: `Confirmar a venda de ${primeiro(v.lead?.nomeCliente)}`, detalhe: `por ${primeiro(v.vendedor?.nome)} em ${v.data.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`, quando: v.data.toISOString(), ref: { tipo: 'VENDA', id: v.id }, href: '/pro-labore/vendas', acao: { rotulo: 'Confirmar', tipo: 'LINK', href: '/pro-labore/vendas' } })
-    const pend = await prisma.venda.groupBy({ by: ['vendedorId'], where: { usuarioId: u, situacao: 'CONFIRMADA', valorComissao: { gt: 0 }, pagamentoComissaoId: null }, _count: true })
-    const nomes = new Map((await prisma.vendedor.findMany({ where: { usuarioId: u }, select: { id: true, nome: true } })).map(v => [v.id, primeiro(v.nome)]))
-    for (const p of pend) add('PAGAMENTO_A_APROVAR', { titulo: `Aprovar o pagamento de comissão de ${nomes.get(p.vendedorId ?? '') ?? 'sem vendedor'}`, detalhe: `${p._count} venda(s) confirmada(s) sem pagamento`, quando: null, ref: p.vendedorId ? { tipo: 'VENDEDOR', id: p.vendedorId } : null, href: '/pro-labore/vendas', acao: { rotulo: 'Aprovar o pagamento', tipo: 'LINK', href: '/pro-labore/vendas' } })
+    // PDF 06 · correções 3 e 10: uma linha por vendedor, contando vendas (a mesma unidade do número);
+    // vendas sem vendedor viram um item próprio, que lista as vendas e pede o vendedor antes de pagar.
+    for (const it of await pagamentosPendentes(u)) add('PAGAMENTO_A_APROVAR', it)
     const sug = await prisma.sugestaoAjuste.findMany({ where: { usuarioId: u, status: 'PENDENTE' }, orderBy: { criadoEm: 'asc' } })
     for (const s of sug) {
       const meta = s.parametro.startsWith('meta')
@@ -269,9 +289,7 @@ export async function filaDoHoje(pessoa: Pessoa, agora = new Date()): Promise<It
   }
 
   if (pessoa.papel === 'FINANCEIRO') {
-    const pend = await prisma.venda.groupBy({ by: ['vendedorId'], where: { usuarioId: u, situacao: 'CONFIRMADA', valorComissao: { gt: 0 }, pagamentoComissaoId: null }, _count: true })
-    const nomes = new Map((await prisma.vendedor.findMany({ where: { usuarioId: u }, select: { id: true, nome: true } })).map(v => [v.id, primeiro(v.nome)]))
-    for (const p of pend) add('PAGAMENTO_A_LANCAR', { titulo: `Lançar a comissão de ${nomes.get(p.vendedorId ?? '') ?? 'sem vendedor'}`, detalhe: `${p._count} venda(s) confirmada(s)`, quando: null, ref: p.vendedorId ? { tipo: 'VENDEDOR', id: p.vendedorId } : null, href: '/pro-labore/vendas', acao: { rotulo: 'Lançar', tipo: 'LINK', href: '/pro-labore/vendas' } })
+    for (const it of await pagamentosPendentes(u, true)) add('PAGAMENTO_A_LANCAR', it)
     add('COMPROVANTE_FALTANDO', { titulo: 'Comprovantes faltando', detalhe: 'O sistema ainda não registra se o comprovante foi anexado; fica como ponto de extensão.', quando: null, ref: null, href: null, acao: null, extensao: true })
     const div = ((await calcular('divergencias_vendas_financeiro', { usuarioId: u, papel: 'FINANCEIRO' }, { inicio: hojeBrt(agora), fim: hojeBrt(agora) }, agora)).detalhe as { ids: string[] }).ids
     const pags = await prisma.pagamentoComissao.findMany({ where: { id: { in: div } }, select: { id: true, numero: true, pagoEm: true } })

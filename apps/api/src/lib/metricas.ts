@@ -14,6 +14,7 @@
 //   semanais): bom = no padrão ou melhor; atenção = até 20% pior; crítico =
 //   mais de 20% pior;
 // - os dias são de Brasília (UTC−3).
+import { diasUteisRestantes, ritmoEmVendas } from './formato'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { ETAPAS, type Etapa } from './etapasJornada'
@@ -551,7 +552,9 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
     const [vendas, ticket] = await Promise.all([CALC.vendas(e, mes, agora), CALC.ticket_medio({ ...e, vendedorId: null }, { inicio: maisDias(mes.fim, -89), fim: mes.fim }, agora)])
     if (!meta || !ticket.valor) return { valor: null, detalhe: { meta, motivo: !meta ? 'Sem meta do mês' : 'Sem vendas nos últimos 90 dias para o ticket médio' } }
     const metaVendas = meta / ticket.valor, faltam = Math.max(0, metaVendas - (vendas.valor ?? 0))
-    return { valor: Math.round((faltam / restantes) * 10) / 10, detalhe: { meta: r2(meta), metaVendas: Math.round(metaVendas * 10) / 10, vendas: vendas.valor, diasRestantes: restantes, ticketMedio: ticket.valor } }
+    // PDF 06 · correção 5: além do número da ficha, o ritmo em vendas inteiras e dias úteis ("faltam 4 vendas em 12 dias úteis").
+    const texto = ritmoEmVendas(Math.ceil(faltam - 1e-9), diasUteisRestantes(hojeBrt(agora)), faltam <= 0)
+    return { valor: Math.round((faltam / restantes) * 10) / 10, detalhe: { meta: r2(meta), metaVendas: Math.round(metaVendas * 10) / 10, vendas: vendas.valor, diasRestantes: restantes, ticketMedio: ticket.valor, texto } }
   },
   async clientes_esperando(e, _p, agora) {
     const rs = await q<{ id: string; min: number }>(Prisma.sql`
@@ -604,7 +607,10 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
       prisma.sugestaoAjuste.count({ where: { usuarioId: e.usuarioId, status: 'PENDENTE' } }),
       prisma.venda.count({ where: { usuarioId: e.usuarioId, situacao: 'CONFIRMADA', valorComissao: { gt: 0 }, pagamentoComissaoId: null } }),
     ])
-    return { valor: vendas + sugestoes + divergentes, detalhe: { vendasAConfirmar: vendas, pagamentosAAprovar: divergentes, sugestoes } }
+    // PDF 06 · correção 10: o texto conta do mesmo jeito que a fila (por venda e por sugestão).
+    const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`
+    const texto = [vendas ? pl(vendas, 'venda a confirmar', 'vendas a confirmar') : '', divergentes ? pl(divergentes, 'venda aguardando pagamento', 'vendas aguardando pagamento') : '', sugestoes ? pl(sugestoes, 'sugestão de ajuste', 'sugestões de ajuste') : ''].filter(Boolean).join(' · ')
+    return { valor: vendas + sugestoes + divergentes, detalhe: { vendasAConfirmar: vendas, pagamentosAAprovar: divergentes, sugestoes, texto: texto || 'nada aguardando' } }
   },
   async gasto_anuncio(e, p) {
     // Ajuste 1: sem nenhuma fonte de gasto no período (Tráfego sem dados e nada digitado no mês), o número fica

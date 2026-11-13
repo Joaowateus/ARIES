@@ -21,6 +21,8 @@ export const REGRAS: Record<string, { nome: string; classificacao: 'INCOMPLETO' 
   A_VISTA_EM_CREDITO: { nome: 'À vista em etapa de crédito', classificacao: 'SUSPEITO' },
   ATIVIDADE_SEM_RESULTADO: { nome: 'Atividade feita sem resultado', classificacao: 'INCOMPLETO' },
   ETAPA_COM_PENDENCIA: { nome: 'Avançou de etapa com pendência', classificacao: 'INCOMPLETO' },
+  // PDF 06 · correção 7: o mesmo vendedor cadastrado duas vezes divide as vendas e aparece repetido no Daily.
+  VENDEDOR_DUPLICADO: { nome: 'Possível vendedor duplicado', classificacao: 'SUSPEITO' },
 }
 
 const DIA = 86_400_000
@@ -78,6 +80,14 @@ export async function detectar(usuarioId: string, agora = new Date()): Promise<P
   // CRM livre (Ajuste 2): quem avançou "mesmo assim" continua contando na etapa, com a pendência à vista.
   const pendentes = await prisma.lead.findMany({ where: { usuarioId, perdidoEm: null, vendaId: null, pendenciasEtapa: { isEmpty: false } }, select: { id: true, vendedorId: true, pendenciasEtapa: true } })
   for (const l of pendentes) out.push({ tabela: 'pro_labore_leads', id: l.id, leadId: l.id, regra: 'ETAPA_COM_PENDENCIA', classificacao: 'INCOMPLETO', oQueFalta: `Avançou de etapa faltando: ${l.pendenciasEtapa.join('; ')}`.slice(0, 480), responsavelId: l.vendedorId ?? usuarioId })
+  // Vendedores ativos com o mesmo nome, ou em que um nome é o começo do outro ("RAFAELA" e "RAFAELA RODRIGUES").
+  const vend = await prisma.vendedor.findMany({ where: { usuarioId, ativo: true }, select: { id: true, nome: true } })
+  const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+  for (const v of vend) {
+    const a = norm(v.nome)
+    const iguais = vend.filter(x => x.id !== v.id && (() => { const b = norm(x.nome); const curto = a.length <= b.length ? a : b, longo = a.length <= b.length ? b : a; return curto.length > 0 && curto.every((t, i) => longo[i] === t) })())
+    if (iguais.length) out.push({ tabela: 'pro_labore_vendedores', id: v.id, leadId: null, regra: 'VENDEDOR_DUPLICADO', classificacao: 'SUSPEITO', oQueFalta: `"${v.nome}" parece o mesmo cadastro que ${iguais.map(x => `"${x.nome}"`).join(', ')}: junte as vendas num cadastro só ou complete o nome para diferenciar`, responsavelId: usuarioId })
+  }
   return out
 }
 

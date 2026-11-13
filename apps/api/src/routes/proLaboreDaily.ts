@@ -4,7 +4,8 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import { papelDoUsuario } from '../lib/papelHoje'
-import { ErroDaily, NOME_BLOCO, configDaily, decidirDaily, encerrarDaily, iniciarDaily, pautaDaily, salvarConfigDaily, tempoDoBloco, tratarDaily, type BlocoChave, type Leitor } from '../lib/daily'
+import { ErroDaily, NOME_BLOCO, adiarDaily, configDaily, decidirDaily, encerrarDaily, iniciarDaily, palcoDoDaily, pautaDaily, salvarConfigDaily, tempoDoBloco, tratarDaily, type BlocoChave, type Leitor } from '../lib/daily'
+import { EXPEDIENTE_PADRAO, lerExpediente, salvarExpediente } from '../lib/expediente'
 import { ErroPainel, PARTES, metasDasEtapas, opcoesDoPainel, painel, salvarMetaEtapa } from '../lib/painel'
 import { hojeBrt, mesCorrente } from '../lib/metricas'
 import { ETAPAS, type Etapa } from '../lib/etapasJornada'
@@ -32,19 +33,36 @@ router.get('/daily/pauta', requireProLaboreAuth, async (req: Request, res: Respo
 })
 router.post('/daily/iniciar', requireProLaboreAuth, async (req: Request, res: Response) => {
   const q = leitor(req, res); if (!q) return
-  try { res.json(await iniciarDaily(q, modoDe(req.body?.modo))) } catch (e) { falha(res, e) }
+  const p = z.object({ participantes: z.array(z.string()).max(60).optional(), transmitir: z.boolean().optional() }).safeParse(req.body ?? {})
+  try { res.json(await iniciarDaily(q, modoDe(req.body?.modo), new Date(), p.success ? p.data : {})) } catch (e) { falha(res, e) }
 })
 router.post('/daily/:id/decidir', requireProLaboreAuth, async (req: Request, res: Response) => {
   const q = leitor(req, res); if (!q) return
-  const p = z.object({ bloco: z.enum(BLOCOS), texto: z.string().trim().min(3, 'Escreva o que foi decidido').max(500), responsavelId: z.string().nullable(), prazo: z.string().min(8) }).safeParse(req.body)
+  // PDF 06 · 4.3: uma ou mais pessoas (obrigatório), prazo (obrigatório) e prioridade; uma ATV por pessoa.
+  const p = z.object({
+    bloco: z.enum(BLOCOS), texto: z.string().trim().min(3, 'Escreva o que foi decidido').max(500),
+    responsaveis: z.array(z.string()).max(20).optional(), responsavelId: z.string().nullable().optional(),
+    prazo: z.string('Escolha o prazo').min(8, 'Escolha o prazo'), prioridade: z.enum(['ALTA', 'MEDIA', 'BAIXA']).optional(),
+    itemTipo: z.enum(['REC', 'ATV', 'NUMERO', 'ITEM', 'PENDENCIA']).optional(), itemRef: z.string().nullable().optional(),
+  }).safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
   try { res.json(await decidirDaily(q, String(req.params.id), p.data)) } catch (e) { falha(res, e) }
 })
 router.post('/daily/:id/tratar', requireProLaboreAuth, async (req: Request, res: Response) => {
   const q = leitor(req, res); if (!q) return
-  const p = z.object({ bloco: z.enum(BLOCOS), tipo: z.enum(['REC', 'ATV', 'NUMERO']), ref: z.string().nullable(), texto: z.string().trim().min(1).max(300), individual: z.boolean().optional() }).safeParse(req.body)
+  const p = z.object({ bloco: z.enum(BLOCOS), tipo: z.enum(['REC', 'ATV', 'NUMERO', 'ITEM', 'PENDENCIA']), ref: z.string().nullable(), texto: z.string().trim().min(1).max(300), individual: z.boolean().optional() }).safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
   try { res.json(await tratarDaily(q, String(req.params.id), p.data)) } catch (e) { falha(res, e) }
+})
+router.post('/daily/:id/adiar', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const q = leitor(req, res); if (!q) return
+  const p = z.object({ bloco: z.enum(BLOCOS), tipo: z.enum(['REC', 'ATV', 'NUMERO', 'ITEM', 'PENDENCIA']), ref: z.string().nullable(), texto: z.string().trim().min(1).max(300), motivo: z.string().trim().min(3, 'Escreva o motivo do adiamento').max(300) }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  try { res.json(await adiarDaily(q, String(req.params.id), p.data)) } catch (e) { falha(res, e) }
+})
+router.put('/daily/:id/palco', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const q = leitor(req, res); if (!q) return
+  try { res.json(await palcoDoDaily(q, String(req.params.id), req.body?.palco ?? null)) } catch (e) { falha(res, e) }
 })
 router.post('/daily/:id/bloco', requireProLaboreAuth, async (req: Request, res: Response) => {
   const q = leitor(req, res); if (!q) return
@@ -54,7 +72,7 @@ router.post('/daily/:id/bloco', requireProLaboreAuth, async (req: Request, res: 
 })
 router.post('/daily/:id/encerrar', requireProLaboreAuth, async (req: Request, res: Response) => {
   const q = leitor(req, res); if (!q) return
-  try { res.json(await encerrarDaily(q, String(req.params.id))) } catch (e) { falha(res, e) }
+  try { res.json(await encerrarDaily(q, String(req.params.id), new Date(), { enviarWhatsapp: req.body?.enviarWhatsapp !== false })) } catch (e) { falha(res, e) }
 })
 router.get('/daily/config', requireProLaboreAuth, async (req: Request, res: Response) => {
   const q = leitor(req, res); if (!q) return
@@ -64,6 +82,16 @@ router.put('/daily/config', requireProLaboreAuth, requireDono, async (req: Reque
   const p = z.object({ blocos: z.array(z.object({ chave: z.enum(BLOCOS), minutos: z.number().min(1).max(30), ligado: z.boolean() })).min(1), justificativa: z.string().trim().min(5, 'Escreva por que mudou') }).safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
   try { res.json({ blocos: await salvarConfigDaily(req.proLaboreUser!.sub, p.data.blocos, p.data.justificativa, req.proLaboreUser!.sub) }) } catch (e) { falha(res, e) }
+})
+
+// --- Expediente (PDF 06 · correção 9): prazos de detector e de decisão vencem no fim do expediente ---
+router.get('/expediente', requireProLaboreAuth, async (req: Request, res: Response) => {
+  res.json({ expediente: await lerExpediente(req.proLaboreUser!.sub), padrao: EXPEDIENTE_PADRAO })
+})
+router.put('/expediente', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const p = z.object({ inicio: z.string(), fim: z.string(), dias: z.array(z.number().int().min(0).max(6)).min(1, 'Escolha ao menos um dia'), justificativa: z.string().trim().min(5, 'Escreva por que mudou') }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  try { res.json({ expediente: await salvarExpediente(req.proLaboreUser!.sub, p.data, p.data.justificativa, req.proLaboreUser!.sub) }) } catch (e) { res.status(400).json({ error: e instanceof Error ? e.message : 'Não foi possível salvar' }) }
 })
 
 // --- Painel ---

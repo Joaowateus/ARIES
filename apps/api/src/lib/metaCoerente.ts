@@ -10,7 +10,6 @@ import { calcular, hojeBrt, mesCorrente, metaDoMes, faixaDe, type Escopo } from 
 import { diasUteisRestantes, fmtValor, ritmoEmVendas } from './formato'
 import { lerExpediente } from './expediente'
 
-const DIA = 86_400_000
 const r2 = (n: number) => Math.round(n * 100) / 100
 
 export interface SituacaoMeta {
@@ -25,10 +24,10 @@ export interface SituacaoMeta {
 export async function situacaoDaMeta(usuarioId: string, agora = new Date(), vendedorId: string | null = null): Promise<SituacaoMeta> {
   const e: Escopo = { usuarioId, papel: 'DONO', vendedorId }
   const mes = mesCorrente(agora)
-  const [prev, meta, ticket, exp] = await Promise.all([
+  const [prev, meta, vpd, exp] = await Promise.all([
     calcular('previsao_fechamento', e, mes, agora),
     metaDoMes({ usuarioId, vendedorId }),
-    calcular('ticket_medio', e, { inicio: new Date(agora.getTime() - 90 * DIA).toISOString().slice(0, 10), fim: hojeBrt(agora) }, agora).catch(() => null),
+    calcular('vendas_por_dia_necessarias', e, mes, agora).catch(() => null),
     lerExpediente(usuarioId),
   ])
   const d = (prev.detalhe ?? {}) as { realizado?: number; diasRestantes?: number; diasPassados?: number }
@@ -38,8 +37,10 @@ export async function situacaoDaMeta(usuarioId: string, agora = new Date(), vend
   const diasPassados = d.diasPassados ?? Number(h.slice(8, 10))
   const diasUteis = diasUteisRestantes(h, true, exp.dias)
   const cobre = meta != null && prev.valor != null && prev.valor >= meta
-  const t = ticket?.valor && ticket.valor > 0 ? ticket.valor : null
-  const faltamVendas = meta != null && t ? Math.max(0, Math.ceil((meta - realizado) / t - 1e-9)) : null
+  // Vendas que faltam: a mesma conta da ficha "Vendas por dia necessárias" (meta ÷ ticket médio − vendas do mês), em vendas inteiras.
+  const dv = (vpd?.detalhe ?? {}) as { metaVendas?: number; vendas?: number | null; ticketMedio?: number | null }
+  const t = dv.ticketMedio && dv.ticketMedio > 0 ? dv.ticketMedio : null
+  const faltamVendas = dv.metaVendas != null ? Math.max(0, Math.ceil(dv.metaVendas - (dv.vendas ?? 0) - 1e-9)) : null
   return {
     previsao: prev.valor, meta, pct: meta && prev.valor != null ? Math.round((prev.valor / meta) * 100) : null,
     faixa: meta && prev.valor != null ? faixaDe(prev.valor, meta, 'MAIOR') : null,
