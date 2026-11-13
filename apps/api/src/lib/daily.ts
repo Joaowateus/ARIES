@@ -190,7 +190,9 @@ async function numerosDoBloco(bloco: BlocoChave, quem: Leitor, modo: ModoDaily, 
       }))
       // PDF 06 · correção 6: no faturamento de ontem, só quem vendeu; os outros num total que abre a lista.
       if (n.chave === 'faturamento') {
-        const sem = porPessoa.filter(x => !x.valor)
+        // Quem não vende (o SDR) não entra em "sem venda".
+        const sdrs = new Set(equipe.filter(v => (v as { papel?: string }).papel === 'SDR').map(v => v.id))
+        const sem = porPessoa.filter(x => !x.valor && !sdrs.has(x.id))
         porPessoa = porPessoa.filter(x => (x.valor ?? 0) > 0)
         semVenda = { total: sem.length, nomes: sem.map(x => x.nome) }
       }

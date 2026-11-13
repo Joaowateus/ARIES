@@ -145,7 +145,7 @@ export function Daily({ papel }: { papel: string }) {
         </header>
         {apresentacao && (
           <div className="pl-hint" style={{ padding: '6px 20px', fontSize: 12, borderBottom: '1px solid var(--pl-border)' }} data-link-transmissao>
-            Ao vivo para a equipe (modo equipe): <a href={`/pro-labore/reunioes/${apresentacao}`} target="_blank" rel="noreferrer">{typeof window !== 'undefined' ? window.location.origin : ''}/pro-labore/reunioes/{apresentacao}</a>
+            Ao vivo para a equipe (modo equipe): <a href={`/pro-labore/daily-ao-vivo/${apresentacao}`} target="_blank" rel="noreferrer">{typeof window !== 'undefined' ? window.location.origin : ''}/pro-labore/daily-ao-vivo/{apresentacao}</a>
           </div>
         )}
         <main style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }} data-bloco={bloco.chave}>

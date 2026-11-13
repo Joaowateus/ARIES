@@ -248,8 +248,9 @@ async function cartao(area: AreaChave, nome: string, defs: Array<{ chave: string
     const unidade = l.unidade
     const comparacao = d.chave === 'previsao_fechamento' && c.meta?.meta ? `${c.meta.pct}% da meta` : comparacaoTxt(l, d.per)
     // Cifras de faturamento e previsão para quem não é o dono: só a porcentagem da meta.
-    const semCifra = !c.dono && unidade === 'BRL'
-    metricas.push({ chave: d.chave, nome: l.nome, valor: semCifra ? null : valor, unidade, texto: semCifra ? (comparacao ?? '—') : fmtValor(valor, unidade), faixa, comparacao: semCifra ? null : comparacao })
+    const fichaD = lista.find(x => x.chave === d.chave)
+    const semCifra = !c.dono && unidade === 'BRL' && (CIFRAS_DO_DONO.has(d.chave) || d.chave === 'previsao_fechamento' || !fichaD?.quemVe.includes(c.papel as never))
+    metricas.push({ chave: d.chave, nome: l.nome, valor: semCifra ? null : valor, unidade, texto: semCifra ? (d.chave === 'previsao_fechamento' && comparacao ? comparacao : '—') : fmtValor(valor, unidade), faixa, comparacao: semCifra ? null : comparacao })
     if (semCifra && d.chave !== 'previsao_fechamento') continue
     const media = mediaEquipe ? { valor: medias.get(d.chave) ?? null, rotulo: 'média da equipe' } : null
     let s = sentido(l)

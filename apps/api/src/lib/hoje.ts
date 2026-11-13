@@ -9,6 +9,7 @@ import { calcular, fichas, hojeBrt, ler, mesCorrente, metaDoMes, padraoDaLoja, f
 import { NOME_ETAPA, type Etapa } from './etapasJornada'
 import { premissas } from './jornadaPremissas'
 import { fmtValor } from './formato'
+import { situacaoDaMeta } from './metaCoerente'
 import { lerExpediente, prazoNoExpediente } from './expediente'
 import { podeVerRec } from './recomendacoes'
 import type { PapelHoje } from './papelHoje'
@@ -361,7 +362,13 @@ async function principalDe(pessoa: Pessoa, chave: string | null, agora: Date): P
   const ficha = (await fichas(pessoa.usuarioId)).find(f => f.chave === chave)
   if (!ficha || !ficha.quemVe.includes(pessoa.papel)) return null
   const pessoal = pessoa.papel === 'VENDEDOR' || pessoa.papel === 'SDR'
-  return ler(chave, { usuarioId: pessoa.usuarioId, papel: pessoa.papel, vendedorId: pessoal ? pessoa.vendedorId ?? '__nenhum__' : null }, ficha.retrato ? { inicio: hojeBrt(agora), fim: hojeBrt(agora) } : mesCorrente(agora), agora).catch(() => null)
+  const l = await ler(chave, { usuarioId: pessoa.usuarioId, papel: pessoa.papel, vendedorId: pessoal ? pessoa.vendedorId ?? '__nenhum__' : null }, ficha.retrato ? { inicio: hojeBrt(agora), fim: hojeBrt(agora) } : mesCorrente(agora), agora).catch(() => null)
+  // PDF 06 · correção 4: a previsão é sempre lida contra a meta (a mesma conta do Hoje, do Daily e da REC).
+  if (l && chave === 'previsao_fechamento') {
+    const m = await situacaoDaMeta(pessoa.usuarioId, agora, pessoal ? pessoa.vendedorId : null).catch(() => null)
+    if (m?.faixa) return { ...l, valor: m.previsao, faixa: m.faixa, padrao: m.meta }
+  }
+  return l
 }
 
 const NADA = 'Nada fora do normal nesta aba'

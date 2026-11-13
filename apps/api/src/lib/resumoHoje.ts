@@ -34,27 +34,34 @@ export function fatosDoResumo(b: Bussola, papel: PapelHoje, primeiraDaFila: stri
   const fatos: Fato[] = []
   const pessoal = papel === 'VENDEDOR' || papel === 'SDR'
   const m = b.meta
-  if (m?.pct != null) fatos.push({ id: 'f1', tipo: 'COMO_ESTAMOS', area: pessoal ? 'sua meta do mês' : 'meta do mês', valor: `${m.pct}% da meta${m.cobre ? ', no ritmo' : `, com ${m.ritmo}`}`, hipotese: false })
+  if (m?.pct != null) fatos.push({ id: 'f1', tipo: 'COMO_ESTAMOS', area: pessoal ? 'sua meta do mês' : 'meta do mês', valor: `${m.pct}% da meta${m.cobre ? ', no ritmo' : ` (${m.ritmo})`}`, hipotese: false })
   else {
     const c = b.cartoes[0]
     if (c) fatos.push({ id: 'f1', tipo: 'COMO_ESTAMOS', area: c.nome, valor: minusc(c.situacao), hipotese: false })
   }
   // O melhor ponto: o primeiro "bom" de uma área verde; senão, de qualquer área.
   const ordem = (c: Cartao) => (c.cor === 'VERDE' ? 0 : c.cor === 'AMARELO' ? 1 : 2)
-  const comBom = [...b.cartoes].filter(c => c.bons.length && c.area !== 'RESULTADO').sort((x, y) => ordem(x) - ordem(y))[0] ?? b.cartoes.find(c => c.bons.length)
+  // A meta já está na primeira frase: o ponto bom vem de outra área (sem repetir a previsão).
+  const comBom = [...b.cartoes].filter(c => c.bons.length && c.area !== 'RESULTADO').sort((x, y) => ordem(x) - ordem(y))[0] ?? (m?.pct != null ? undefined : b.cartoes.find(c => c.bons.length))
   if (comBom) fatos.push({ id: 'f2', tipo: 'BOM', area: comBom.nome, valor: minusc(semPonto(comBom.bons[0].texto)), hipotese: false })
   // O ponto que merece mais atenção: área vermelha antes da amarela.
-  const comAtencao = [...b.cartoes].filter(c => c.atencao.length).sort((x, y) => ordem(y) - ordem(x))[0]
+  // A meta já está na primeira frase: o ponto de atenção vem de outra área quando houver.
+  const comAtencao = [...b.cartoes].filter(c => c.atencao.length && !(m?.pct != null && c.area === 'RESULTADO' && c.atencao.every(p => p.chave === 'previsao_fechamento'))).sort((x, y) => ordem(y) - ordem(x))[0]
   if (comAtencao) fatos.push({ id: 'f3', tipo: 'ATENCAO', area: comAtencao.nome, valor: minusc(semPonto(comAtencao.atencao[0].texto)), hipotese: false })
   // Por onde começar: a primeira ação da fila; senão, a oportunidade da área que pede atenção.
   const op = (comAtencao ?? b.cartoes.find(c => c.oportunidade))?.oportunidade
-  if (primeiraDaFila) fatos.push({ id: 'f4', tipo: 'COMECAR', area: 'fila', valor: minusc(semPonto(primeiraDaFila)), hipotese: false })
+  // O título da fila pode trazer detalhes longos (moto, valores): fica só a ação.
+  const acaoFila = primeiraDaFila ? primeiraDaFila.split(/:\s| \(/)[0].slice(0, 90) : null
+  if (acaoFila) fatos.push({ id: 'f4', tipo: 'COMECAR', area: 'fila', valor: minusc(semPonto(acaoFila)), hipotese: false })
   else if (op) fatos.push({ id: 'f4', tipo: 'COMECAR', area: comAtencao?.nome ?? 'oportunidade', valor: minusc(semPonto(op.texto)), hipotese: !!op.hipotese })
   // Incentivo ligado a um resultado real: um ponto bom com comparação (de outra área, se der).
-  const incentivo = b.cartoes.flatMap(c => c.bons.map(p => ({ c, p }))).find(x => x.c !== comBom && /período|semana|dia anterior|média/.test(x.p.texto))
-    ?? b.cartoes.flatMap(c => c.bons.map(p => ({ c, p }))).find(x => x.p !== comBom?.bons[0])
+  const candidatos = b.cartoes.flatMap(c => c.bons.map(p => ({ c, p }))).filter(x => x.p.chave !== 'previsao_fechamento')
+  const incentivo = candidatos.find(x => x.c !== comBom && /período|semana|dia anterior|média/.test(x.p.texto)) ?? candidatos.find(x => x.p !== comBom?.bons[0])
   if (incentivo) fatos.push({ id: 'f5', tipo: 'INCENTIVO', area: incentivo.c.nome, valor: minusc(semPonto(incentivo.p.texto)), hipotese: false })
-  else if (m?.pct != null && m.realizado > 0) fatos.push({ id: 'f5', tipo: 'INCENTIVO', area: 'resultado do mês', valor: `${m.pct}% da meta já previstos para o mês`, hipotese: false })
+  else if (m && m.realizado > 0 && (b.cartoes.find(c => c.area === 'RESULTADO')?.metricas.find(x => x.chave === 'vendas')?.valor ?? 0) > 0) {
+    const v = b.cartoes.find(c => c.area === 'RESULTADO')!.metricas.find(x => x.chave === 'vendas')!.valor!
+    fatos.push({ id: 'f5', tipo: 'INCENTIVO', area: 'resultado do mês', valor: `${v} ${v === 1 ? 'venda confirmada' : 'vendas confirmadas'} no mês até agora`, hipotese: false })
+  }
   return fatos
 }
 
