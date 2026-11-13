@@ -51,7 +51,7 @@ export async function situacaoDaMeta(usuarioId: string, agora = new Date(), vend
 
 /** Texto da ação sugerida da REC de meta, a partir da situação atual (formato brasileiro, vendas inteiras). */
 export function textoMetaEmRisco(s: SituacaoMeta, piorEtapa: { nome: string; conversao: number } | null) {
-  const ritmo = s.ritmo === 'Meta no ritmo' ? '' : `${s.ritmo.charAt(0).toUpperCase()}${s.ritmo.slice(1)}. `
+  const ritmo = s.ritmo === 'Meta no ritmo' || s.faltamVendas == null ? '' : `${s.ritmo.charAt(0).toUpperCase()}${s.ritmo.slice(1)}. `
   return `${ritmo}${piorEtapa ? `Onde agir: a etapa ${piorEtapa.nome} tem a menor conversão do mês (${fmtValor(piorEtapa.conversao, 'PCT')}).` : 'Concentrar o time nas oportunidades de Negociação a Visita.'}`
 }
 

@@ -13,6 +13,10 @@ import { ErroRec, aceitar, concluirAtividade, descartar } from '../lib/recomenda
 import { hojeBrt } from '../lib/metricas'
 import { criarAcao, envioSeguro, perguntar } from '../lib/pergunte'
 import { aceitePdf04 } from '../lib/aceitePdf04'
+import { resumoDoHoje } from '../lib/resumoHoje'
+import { ErroDaily, itensEnviados, levarAoDaily } from '../lib/daily'
+import { ErroFrase, TEMAS, criarFrase, editarFrase, listarFrases } from '../lib/frases'
+import { sugerirFrasesComIa } from '../lib/frasesIa'
 
 const router = Router()
 
@@ -33,13 +37,53 @@ router.get('/hoje', requireProLaboreAuth, async (req: Request, res: Response) =>
   const [numeros, fila, lente] = await Promise.all([numerosDoHoje(pessoa, agora), pessoa.papel === 'SOCIAL_MEDIA' ? Promise.resolve([]) : filaDoHoje(pessoa, agora), lenteDaAba(pessoa, 'hoje', agora)])
   const [quadro, painel] = await Promise.all([
     pessoa.papel === 'SUPERVISOR' || pessoa.papel === 'DONO' ? quadroDaEquipe(pessoa.usuarioId, agora) : Promise.resolve(null),
-    pessoa.papel === 'DONO' ? painelDoDono(pessoa.usuarioId, agora) : Promise.resolve(null),
+    // PDF 06: a bússola por área (GET /hoje/bussola) substitui o antigo painel por área.
+    Promise.resolve(null as Awaited<ReturnType<typeof painelDoDono>> | null),
   ])
   res.json({
     papel: pessoa.papel, nomePapel: NOME_PAPEL[pessoa.papel], pergunta: cfg.pergunta, lenteDescricao: cfg.lente,
     numeros, fila: fila.map(i => ({ ...i, grupoNome: nomeDoGrupo(i.grupo) })), ordemFila: cfg.fila.map(g => ({ grupo: g, nome: nomeDoGrupo(g) })),
     lente, quadro: pessoa.papel === 'SUPERVISOR' ? quadro : null, painel, geradoEm: agora.toISOString(),
   })
+})
+
+// PDF 06 · seção 3: frase do dia, resumo do ARIES e a bússola por área (alcance do papel).
+// Vem numa chamada separada porque calcula as 9 áreas; fica guardada por 1 hora (?atualizar=1 recalcula).
+router.get('/hoje/bussola', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const pessoa = pessoaDe(req)
+  const agora = new Date()
+  const fila = pessoa.papel === 'SOCIAL_MEDIA' ? [] : await filaDoHoje(pessoa, agora).catch(() => [])
+  const primeira = fila.find(i => i.acao && !i.extensao)
+  const r = await resumoDoHoje(pessoa, primeira ? primeira.titulo : null, agora, req.query.atualizar === '1')
+  const enviados = await itensEnviados(pessoa.usuarioId, pessoa.id)
+  res.json({ ...r, enviados })
+})
+// "Levar ao Daily": o ponto escolhido no Hoje entra no topo do bloco da área, marcado com quem enviou e quando.
+router.post('/hoje/levar-ao-daily', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const p = z.object({ area: z.string().min(3).max(20), texto: z.string().trim().min(3).max(300), detalhe: z.string().max(500).nullable().optional(), refTipo: z.string().max(20).nullable().optional(), refId: z.string().max(80).nullable().optional() }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  const pessoa = pessoaDe(req)
+  try { res.json(await levarAoDaily(pessoa, p.data)) } catch (e) { if (e instanceof ErroDaily) { res.status(e.status).json({ error: e.message }); return } throw e }
+})
+
+// PDF 06 · 5.2: biblioteca de frases (Configurações, só o dono). Autor e fonte sempre; ligar exige aprovação.
+const falhaFrase = (res: Response, e: unknown) => { if (e instanceof ErroFrase) { res.status(e.status).json({ error: e.message }); return } throw e }
+router.get('/frases', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  res.json({ frases: await listarFrases(req.proLaboreUser!.sub), temas: TEMAS })
+})
+router.post('/frases', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const p = z.object({ texto: z.string(), autor: z.string(), fonte: z.string(), temas: z.array(z.string()).max(6).default([]), ativa: z.boolean().optional() }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'Preencha a frase, o autor e a fonte' }); return }
+  try { res.json(await criarFrase(req.proLaboreUser!.sub, req.proLaboreUser!.nome, p.data)) } catch (e) { falhaFrase(res, e) }
+})
+router.put('/frases/:id', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const p = z.object({ texto: z.string().optional(), autor: z.string().optional(), fonte: z.string().optional(), temas: z.array(z.string()).max(6).optional(), ativa: z.boolean().optional(), aprovar: z.boolean().optional() }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'Dados inválidos' }); return }
+  try { res.json(await editarFrase(req.proLaboreUser!.sub, String(req.params.id), req.proLaboreUser!.nome, p.data)) } catch (e) { falhaFrase(res, e) }
+})
+router.post('/frases/sugerir', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const tema = typeof req.body?.tema === 'string' && (TEMAS as readonly string[]).includes(req.body.tema) ? req.body.tema : 'vendas'
+  res.json(await sugerirFrasesComIa(req.proLaboreUser!.sub, tema))
 })
 
 // Social Media: mantém o Hoje do seu espaço próprio, com os três números e a Lente acrescentados.

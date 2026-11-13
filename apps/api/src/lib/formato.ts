@@ -27,7 +27,9 @@ export const vendasTxt = (n: number) => { const k = Math.max(0, Math.ceil(n - 1e
  * faltamVendas: vendas que faltam para a meta; diasUteis: dias úteis que restam.
  */
 export function ritmoEmVendas(faltamVendas: number | null, diasUteis: number, previsaoCobre: boolean): string {
-  if (previsaoCobre || faltamVendas == null || faltamVendas <= 0) return 'Meta no ritmo'
+  if (previsaoCobre) return 'Meta no ritmo'
+  if (faltamVendas == null) return 'sem vendas recentes para estimar quantas faltam'
+  if (faltamVendas <= 0) return 'Meta no ritmo'
   const faltam = Math.ceil(faltamVendas - 1e-9)
   if (diasUteis <= 0) return `faltam ${vendasTxt(faltam)} e o mês acabou`
   if (faltam < diasUteis) {
