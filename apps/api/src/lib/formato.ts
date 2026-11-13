@@ -55,3 +55,6 @@ export function nomesDistintos(lista: Array<{ id: string; nome: string | null }>
   for (const p of lista) { const k = primeiro(p.nome).toLowerCase(); cont.set(k, (cont.get(k) ?? 0) + 1) }
   return new Map(lista.map(p => [p.id, (cont.get(primeiro(p.nome).toLowerCase()) ?? 0) > 1 ? (p.nome ?? '').trim() : primeiro(p.nome)]))
 }
+
+/** Texto já pronto com número cru ("ROAS 42.86", "0.5 venda"): troca o ponto decimal por vírgula (milhar com 3 dígitos fica). */
+export const decimalBr = (t: string) => t.replace(/(\d)\.(\d{1,2})(?!\d)/g, '$1,$2')

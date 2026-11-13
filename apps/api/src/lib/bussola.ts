@@ -9,7 +9,7 @@
 // com a equipe só como média; tráfego, social media e financeiro, a própria área e
 // o resultado do mês.
 import { prisma } from './prisma'
-import { fichas, hojeBrt, ler, mesCorrente, type Escopo, type Leitura, type Periodo } from './metricas'
+import { calcular, fichas, hojeBrt, ler, mesCorrente, type Escopo, type Leitura, type Periodo } from './metricas'
 import { fmtValor, nomesDistintos, vendasTxt } from './formato'
 import { situacaoDaMeta, type SituacaoMeta } from './metaCoerente'
 import type { PapelHoje } from './papelHoje'
@@ -21,7 +21,7 @@ export type Cor = 'VERDE' | 'AMARELO' | 'VERMELHO' | 'CINZA'
 
 export interface Ponto { texto: string; chave: string | null; valor: number | null; unidade: string | null; hipotese?: boolean; levar?: Levar | null }
 export interface Levar { area: AreaChave; texto: string; refTipo: string | null; refId: string | null }
-export interface MetricaCartao { chave: string; nome: string; valor: number | null; unidade: string; texto: string; faixa: string | null; comparacao: string | null }
+export interface MetricaCartao { chave: string; nome: string; valor: number | null; unidade: string; texto: string; faixa: string | null; comparacao: string | null; variacao?: number | null; melhor?: string }
 export interface Cartao {
   area: AreaChave; nome: string; href: string
   cor: Cor; situacao: string
@@ -49,7 +49,7 @@ const METRICAS: Record<AreaChave, Array<{ chave: string; per: Per }>> = {
   RESULTADO: [{ chave: 'previsao_fechamento', per: 'MES' }, { chave: 'vendas', per: 'MES' }, { chave: 'faturamento', per: 'MES' }],
   PRE_VENDA: [{ chave: 'leads_novos', per: 'MES' }, { chave: 'tempo_primeira_resposta', per: 'MES' }, { chave: 'leads_passados', per: 'MES' }],
   CREDITO: [{ chave: 'fichas_aguardando_banco', per: 'AGORA' }, { chave: 'aprovacoes_vencendo', per: 'AGORA' }, { chave: 'aprovacao_credito', per: 'MES' }],
-  VENDEDORES: [{ chave: 'visitas_agendadas', per: 'MES' }, { chave: 'propostas_enviadas', per: 'MES' }, { chave: 'conversao_lead_venda', per: 'MES' }],
+  VENDEDORES: [{ chave: 'conversao_lead_venda', per: 'MES' }, { chave: 'propostas_enviadas', per: 'MES' }, { chave: 'visitas_agendadas', per: 'MES' }],
   TRAFEGO: [{ chave: 'gasto_anuncio', per: 'MES' }, { chave: 'custo_por_lead', per: 'MES' }, { chave: 'roas', per: 'MES' }],
   SOCIAL: [{ chave: 'posts_publicados', per: 'MES' }, { chave: 'leads_dos_posts', per: 'MES' }, { chave: 'vendas_por_post', per: 'MES' }],
   REATIVACAO: [{ chave: 'taxa_recuperacao', per: 'MES' }, { chave: 'prioridade_sem_atividade', per: 'AGORA' }, { chave: 'taxa_resposta_reativacao', per: 'MES' }],
@@ -124,15 +124,15 @@ function comparacaoTxt(l: Leitura, per: Per): string | null {
 }
 function textoPonto(l: Leitura, per: Per, bom: boolean, media?: { valor: number | null; rotulo: string } | null): string {
   const v = fmtValor(l.valor, l.unidade)
-  const nome = l.nome.charAt(0).toLowerCase() + l.nome.slice(1)
   const comp = comparacaoTxt(l, per)
   if (media && media.valor != null) return `${l.nome}: ${v} (${media.rotulo}: ${fmtValor(media.valor, l.unidade)})`
   if (comp) {
-    const mudou = l.variacao != null ? `${bom ? (l.melhor === 'MAIOR' ? 'subiu' : 'caiu') : (l.melhor === 'MAIOR' ? 'caiu' : 'subiu')} ${fmtValor(Math.abs(l.variacao), 'PCT')}` : null
-    return `${l.nome} em ${v}${mudou ? `, ${mudou}` : ''} (${comp})`
+    // Variação pequena é "estável"; senão, sobe ou cai, com o número.
+    const mudou = l.variacao == null ? null : Math.abs(l.variacao) < 1 ? 'estável' : `${l.variacao > 0 ? 'subiu' : 'caiu'} ${fmtValor(Math.abs(l.variacao), 'PCT')}`
+    return `${l.nome}: ${v}${mudou ? `, ${mudou}` : ''} (${comp.replace(/^no /, '')})`
   }
-  if (l.padrao != null) return `${l.nome} em ${v} (${bom ? 'dentro' : 'fora'} do padrão da loja, ${fmtValor(l.padrao, l.unidade)})`
-  return `${nome.charAt(0).toUpperCase() + nome.slice(1)}: ${v}`
+  if (l.padrao != null) return `${l.nome}: ${v} (${bom ? 'dentro' : 'fora'} do padrão da loja, ${fmtValor(l.padrao, l.unidade)})`
+  return `${l.nome}: ${v}`
 }
 const corDe = (faixas: Array<string | null>): Cor => faixas.includes('CRITICO') ? 'VERMELHO' : faixas.includes('ATENCAO') ? 'AMARELO' : faixas.some(f => f === 'BOM') ? 'VERDE' : 'CINZA'
 const SITUACAO: Record<Cor, string> = { VERDE: 'em dia', AMARELO: 'em atenção', VERMELHO: 'pede ação hoje', CINZA: 'sem dados suficientes para classificar' }
@@ -176,12 +176,13 @@ async function oportunidade(area: AreaChave, c: Contexto, e: Escopo, ls: Map<str
     return null
   }
   if (area === 'VENDEDORES') {
-    const [semFollow, props90, vendas90] = await Promise.all([leitura('propostas_sem_follow', e, 'AGORA', agora), leitura('propostas_enviadas', e, 'D90', agora), leitura('vendas', e, 'D90', agora)])
+    // A estimativa usa quanto das oportunidades que chegaram em Proposta virou venda (histórico de 180 dias, do dicionário).
+    const [semFollow, valores] = await Promise.all([leitura('propostas_sem_follow', e, 'AGORA', agora), calcular('valores_por_etapa', e, mesCorrente(agora), agora).catch(() => null)])
     const n = semFollow?.valor ?? 0
     if (n > 0) {
-      const taxa = props90?.valor && vendas90?.valor != null ? Math.min(1, vendas90.valor / props90.valor) : null
-      const est = taxa != null ? r1(n * taxa) : null
-      return { texto: `Fazer o follow das ${n} propostas sem retorno${est != null && est >= 0.5 ? `: pelo histórico de 90 dias, cerca de ${vendasTxt(est)}` : ''}.`, chave: 'propostas_sem_follow', valor: n, unidade: 'QTD', hipotese: true, levar: lev(`Follow das ${n} propostas sem retorno`) }
+      const conv = ((valores?.detalhe ?? []) as Array<{ etapa: string; conversaoAteVenda: number }>).find(x => x.etapa === 'PROPOSTA')?.conversaoAteVenda ?? null
+      const est = conv != null && conv > 0 && conv < 100 ? r1((n * conv) / 100) : null
+      return { texto: `Fazer o follow das ${n} propostas sem retorno${est != null && est >= 0.5 ? `: com a conversão de Proposta em venda de ${fmtValor(conv, 'PCT')}, são cerca de ${vendasTxt(est)}` : ''}.`, chave: 'propostas_sem_follow', valor: n, unidade: 'QTD', hipotese: true, levar: lev(`Follow das ${n} propostas sem retorno`) }
     }
     return null
   }
@@ -250,7 +251,7 @@ async function cartao(area: AreaChave, nome: string, defs: Array<{ chave: string
     // Cifras de faturamento e previsão para quem não é o dono: só a porcentagem da meta.
     const fichaD = lista.find(x => x.chave === d.chave)
     const semCifra = !c.dono && unidade === 'BRL' && (CIFRAS_DO_DONO.has(d.chave) || d.chave === 'previsao_fechamento' || !fichaD?.quemVe.includes(c.papel as never))
-    metricas.push({ chave: d.chave, nome: l.nome, valor: semCifra ? null : valor, unidade, texto: semCifra ? (d.chave === 'previsao_fechamento' && comparacao ? comparacao : '—') : fmtValor(valor, unidade), faixa, comparacao: semCifra ? null : comparacao })
+    metricas.push({ chave: d.chave, nome: l.nome, valor: semCifra ? null : valor, unidade, texto: semCifra ? (d.chave === 'previsao_fechamento' && comparacao ? comparacao : '—') : fmtValor(valor, unidade), faixa, comparacao: semCifra ? null : comparacao, variacao: semCifra ? null : l.variacao, melhor: l.melhor })
     if (semCifra && d.chave !== 'previsao_fechamento') continue
     const media = mediaEquipe ? { valor: medias.get(d.chave) ?? null, rotulo: 'média da equipe' } : null
     let s = sentido(l)
@@ -270,6 +271,7 @@ async function cartao(area: AreaChave, nome: string, defs: Array<{ chave: string
   const recs = c.dono || c.papel === 'SUPERVISOR' || c.papel === 'TRAFEGO' || c.papel === 'FINANCEIRO' || c.papel === 'SOCIAL_MEDIA'
     ? await prisma.recomendacao.findMany({ where: { usuarioId: c.usuarioId, status: 'NOVA', area: { in: AREAS_REC[area] }, ...(c.dono ? {} : { visivelPara: { has: c.vendedorId ?? '__' } }), ...(pessoal ? { alvoId: c.vendedorId ?? '__' } : {}) }, select: { id: true, codigo: true, titulo: true }, orderBy: { criadoEm: 'desc' }, take: 2 })
     : await prisma.recomendacao.findMany({ where: { usuarioId: c.usuarioId, status: 'NOVA', alvoTipo: 'PESSOA', alvoId: c.vendedorId ?? '__', area: { in: AREAS_REC[area] } }, select: { id: true, codigo: true, titulo: true }, take: 2 })
+  if (area === 'RESULTADO' && c.meta?.cobre) recs.splice(0, recs.length, ...recs.filter(r => r.titulo !== 'Meta do mês em risco'))
   // Dica: o que já funcionou na loja (boa prática registrada) ou o Playbook da área.
   const boa = await prisma.recomendacao.findFirst({ where: { usuarioId: c.usuarioId, tipo: 'FUNCIONANDO', area: { in: AREAS_REC[area] }, status: { in: ['NOVA', 'ACEITA', 'AVALIADA', 'ENCERRADA'] } }, orderBy: { criadoEm: 'desc' }, select: { titulo: true } }).catch(() => null)
   const dica = boa && cor !== 'VERDE' ? `O que já funcionou aqui: ${boa.titulo.charAt(0).toLowerCase()}${boa.titulo.slice(1)}. ${DICAS[area].atencao}` : cor === 'VERDE' ? DICAS[area].bem : DICAS[area].atencao

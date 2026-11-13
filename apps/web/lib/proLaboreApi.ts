@@ -3929,7 +3929,7 @@ export interface PontoBussola { texto: string; chave: string | null; valor: numb
 export interface CartaoBussola {
   area: AreaBussola; nome: string; href: string; cor: 'VERDE' | 'AMARELO' | 'VERMELHO' | 'CINZA'; situacao: string
   bons: PontoBussola[]; atencao: PontoBussola[]; oportunidade: PontoBussola | null; dica: string
-  metricas: Array<{ chave: string; nome: string; valor: number | null; unidade: string; texto: string; faixa: string | null; comparacao: string | null }>
+  metricas: Array<{ chave: string; nome: string; valor: number | null; unidade: string; texto: string; faixa: string | null; comparacao: string | null; variacao?: number | null; melhor?: string }>
   recs: Array<{ id: string; codigo: string | null; titulo: string; levar: LevarDaily }>
 }
 export interface BussolaHoje {
@@ -3937,10 +3937,20 @@ export interface BussolaHoje {
   frase: { id: string; texto: string; autor: string; fonte: string } | null
   bussola: { cartoes: CartaoBussola[]; vendedores: Array<{ id: string; nome: string; destaque: string | null; atencao: string | null }> | null; meta: { pct: number | null; ritmo: string; cobre: boolean } | null; geradaEm: string }
   enviados: Array<{ id: string; bloco: string; texto: string; refTipo: string | null; refId: string | null; enviadoEm: string }>
+  fatos?: Array<{ id: string; tipo: string; area: string; valor: string; hipotese: boolean }>
+}
+export interface PainelHoje {
+  geradoEm: string
+  series: Record<string, Array<{ dia: string; valor: number }>>
+  ritmo: { dias: Array<{ dia: string; acumulado: number }>; ultimoDia: string; totalDias: number; meta: number | null; previsao: number | null; pct: number | null; faixa: string | null; texto: string | null; emPct: boolean }
+  funil: { etapas: Array<{ etapa: string; nome: string; chegaram: number; seguiram: number; conversao: number | null }>; gargalo: string | null }
+  equipe: Array<{ id: string; nome: string; vendas: number; faturamento: number | null; feitas: number; atrasadas: number }> | null
+  origem: Array<{ chave: string; nome: string; valor: number }> | null
 }
 export interface FraseBiblioteca { id: string; texto: string; autor: string; fonte: string; temas: string[]; ativa: boolean; aprovadaPor: string | null; aprovadaEm: string | null; origem: 'DONO' | 'ARIES' | 'INICIAL'; ultimaVezUsada: string | null }
 export const bussolaApi = {
   carregar: (atualizar = false) => request<BussolaHoje>(`/pro-labore/hoje/bussola${atualizar ? '?atualizar=1' : ''}`),
+  painel: () => request<PainelHoje>('/pro-labore/hoje/painel'),
   levarAoDaily: (d: LevarDaily & { detalhe?: string | null }) => request<{ item: { id: string }; jaEstava: boolean }>('/pro-labore/hoje/levar-ao-daily', { method: 'POST', body: JSON.stringify(d) }),
   frases: () => request<{ frases: FraseBiblioteca[]; temas: string[] }>('/pro-labore/frases'),
   criarFrase: (f: { texto: string; autor: string; fonte: string; temas: string[]; ativa?: boolean }) => request<FraseBiblioteca>('/pro-labore/frases', { method: 'POST', body: JSON.stringify(f) }),

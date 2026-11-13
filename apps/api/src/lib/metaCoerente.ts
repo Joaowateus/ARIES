@@ -104,3 +104,10 @@ export async function reverMetaEmRiscoTodas(agora = new Date()) {
   for (const c of contas) encerradas += (await reverMetaEmRisco(c.id, agora).catch(e => { console.error('[meta coerente]', e); return { encerradas: 0 } })).encerradas
   return { encerradas }
 }
+
+/** A REC "Meta do mês em risco" ainda aberta contradiz a previsão de agora? (a tela não mostra até a rodada encerrar). */
+export async function metaCobertaAgora(usuarioId: string, agora = new Date()): Promise<boolean> {
+  const n = await prisma.recomendacao.count({ where: { usuarioId, detector: 'meta_em_risco', status: 'NOVA' } })
+  if (!n) return false
+  return (await situacaoDaMeta(usuarioId, agora).catch(() => null))?.cobre ?? false
+}

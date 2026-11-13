@@ -6,9 +6,10 @@
 // o painel por área. Nada aqui executa sozinho: cada item leva à ação.
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { bussolaApi, proLaboreApi, telasApi, type BussolaHoje, type HojeDados, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
-import { BussolaPorArea, FraseDoDia, ResumoAries } from './Bussola'
-import { AgoraHoje, Cabecalho, Detalhes, Lente, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
+import { bussolaApi, proLaboreApi, telasApi, type BussolaHoje, type HojeDados, type PainelHoje, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
+import { BussolaPorArea, FraseDoDia, ResumoCurto } from './Bussola'
+import { CartaoRitmo, GraficosOperacao, LinhaKpis, montarKpis } from './PainelHoje'
+import { Cabecalho, Detalhes, Lente, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
 import { FraseDoDono } from './FraseDoDono'
 import { Daily } from './Daily'
 import { PainelDoDono } from './PainelDoDono'
@@ -70,6 +71,9 @@ function HojeDoPapel({ aoCarregar }: { aoCarregar: (papel: string) => void }) {
   const [atualizando, setAtualizando] = useState(false)
   const carregarBussola = useCallback((atualizar = false) => { setAtualizando(atualizar); bussolaApi.carregar(atualizar).then(setB).catch(() => undefined).finally(() => setAtualizando(false)) }, [])
   useEffect(() => { bussolaApi.carregar().then(setB).catch(() => undefined) }, [])
+  // Painel de comando: dados dos gráficos (ritmo do mês, tendências, funil, equipe, origem).
+  const [pg, setPg] = useState<PainelHoje | null>(null)
+  useEffect(() => { bussolaApi.painel().then(setPg).catch(() => undefined) }, [])
   if (erro) return <TelaVazia titulo="Não deu para montar o seu Hoje agora">{erro}</TelaVazia>
   if (!d) return <p className="pl-hint">Montando o seu Hoje…</p>
   const ficha = { nome: 'Hoje', pergunta: d.pergunta, paraQuem: d.nomePapel, acaoPrincipal: 'Executar a próxima atividade' }
@@ -81,10 +85,14 @@ function HojeDoPapel({ aoCarregar }: { aoCarregar: (papel: string) => void }) {
       <Cabecalho aba={ficha} acao={proxima?.acao?.href ? <Link className="pl-btn pl-btn-primary ar-acao-principal" href={proxima.acao.href} data-acao-principal>Fazer a próxima: {proxima.acao.rotulo}</Link> : undefined} />
       <div className="ar-tela">
         <div className="ar-trabalho">
-          {b ? <ResumoAries d={b} atualizando={atualizando} aoAtualizar={() => carregarBussola(true)} /> : <p className="pl-hint" data-resumo-carregando>O ARIES está montando o resumo do dia…</p>}
-          <AgoraHoje numeros={d.numeros} />
-          {b && <BussolaPorArea d={b} aoMudar={() => undefined} />}
-          <div className="ar-fila-grupo" style={{ margin: '4px 0 6px' }} data-titulo-fila>O que depende de mim</div>
+          <LinhaKpis kpis={montarKpis(d.papel, d.numeros, b, pg)} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 12, marginBottom: 16 }} data-topo-painel>
+            {pg ? <CartaoRitmo p={pg} papel={d.papel} /> : <div className="pl-card pl-hint">Montando o ritmo do mês…</div>}
+            {b ? <ResumoCurto d={b} atualizando={atualizando} aoAtualizar={() => carregarBussola(true)} /> : <div className="pl-card pl-hint" data-resumo-carregando>O ARIES está montando o resumo do dia…</div>}
+          </div>
+          {b && <BussolaPorArea d={b} aoMudar={() => undefined} series={pg?.series} />}
+          {pg && <GraficosOperacao p={pg} papel={d.papel} />}
+          <div className="pl-card-title" style={{ margin: '4px 0 8px' }} data-titulo-fila>O que depende de mim{d.fila.length ? ` · ${d.fila.filter(i => !i.extensao).length}` : ''}</div>
           {d.papel === 'SOCIAL_MEDIA'
             ? <TelaVazia titulo="Seu Hoje fica no espaço do Social Media" passo={<Link className="pl-btn pl-btn-primary" href="/pro-labore/sm">Abrir o meu espaço</Link>}>Pautas do dia, aprovações pedidas e Directs sem resposta estão lá.</TelaVazia>
             : <Fila itens={d.fila} aoMudar={carregar} />}

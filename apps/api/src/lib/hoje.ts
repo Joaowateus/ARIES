@@ -8,8 +8,8 @@ import { prisma } from './prisma'
 import { calcular, fichas, hojeBrt, ler, mesCorrente, metaDoMes, padraoDaLoja, faixaDe, type Escopo, type Leitura, type Periodo } from './metricas'
 import { NOME_ETAPA, type Etapa } from './etapasJornada'
 import { premissas } from './jornadaPremissas'
-import { fmtValor } from './formato'
-import { situacaoDaMeta } from './metaCoerente'
+import { decimalBr, fmtValor } from './formato'
+import { metaCobertaAgora, situacaoDaMeta } from './metaCoerente'
 import { lerExpediente, prazoNoExpediente } from './expediente'
 import { podeVerRec } from './recomendacoes'
 import type { PapelHoje } from './papelHoje'
@@ -309,9 +309,12 @@ export async function recsVisiveis(pessoa: Pessoa, filtro: Record<string, unknow
   const quem = { id: pessoa.vendedorId ?? pessoa.usuarioId, papel: pessoa.papel === 'DONO' ? 'DONO' : pessoa.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR', usuarioId: pessoa.usuarioId }
   const recs = await prisma.recomendacao.findMany({
     where: { usuarioId: pessoa.usuarioId, status: 'NOVA', ...(pessoa.papel === 'DONO' ? {} : pessoa.papel === 'TRAFEGO' ? { OR: [{ area: 'ANUNCIOS' }, { visivelPara: { has: quem.id } }] } : { visivelPara: { has: quem.id } }), ...filtro },
-    select: { id: true, codigo: true, titulo: true, area: true, forca: true, tipo: true, impacto: true, acaoSugerida: true, evidencia: true, status: true, alvoTipo: true, alvoId: true, destinatarioId: true, visivelPara: true },
+    select: { id: true, codigo: true, titulo: true, area: true, forca: true, tipo: true, impacto: true, acaoSugerida: true, evidencia: true, status: true, alvoTipo: true, alvoId: true, destinatarioId: true, visivelPara: true, detector: true },
     take: 200,
   })
+  // Correção 4: a REC de meta que a previsão de agora já desmente não aparece (a rodada de hora em hora a encerra).
+  const coberta = recs.some(r => r.detector === 'meta_em_risco') && await metaCobertaAgora(pessoa.usuarioId)
+  if (coberta) recs.splice(0, recs.length, ...recs.filter(r => r.detector !== 'meta_em_risco'))
   // O vendedor nunca vê achado sobre colega (mesma regra da aba Recomendações).
   const vistas = pessoa.papel === 'TRAFEGO' ? recs.filter(r => r.visivelPara.includes(quem.id) || r.alvoTipo === 'ANUNCIOS' || r.alvoTipo === 'EQUIPE') : recs.filter(r => podeVerRec(r, quem as Parameters<typeof podeVerRec>[1]))
   return vistas.sort((a, b) => impactoDe(b) - impactoDe(a)).slice(0, limite)
@@ -326,10 +329,15 @@ export interface Lente { titulo: string; itens: ItemLente[]; vazio: boolean; pri
 
 const evidenciaTxt = (ev: unknown) => {
   const e = ev as { resumo?: string; metricas?: Array<{ nome: string }> } | null
-  return e?.resumo ?? e?.metricas?.map(m => m.nome).join(', ') ?? 'Evidência do dicionário'
+  const t = decimalBr(e?.resumo ?? e?.metricas?.map(m => m.nome).join(', ') ?? 'Evidência do dicionário')
+  // Sequência de etapas do mesmo valor ("INICIAR ← INICIAR ← INICIAR"): vira uma frase legível.
+  const partes = t.split(/\s*←\s*/)
+  if (partes.length > 1 && partes.every(x => x === partes[0])) return `na mesma etapa (${partes[0].toLowerCase()}) há ${partes.length} meses seguidos`
+  if (partes.length > 1) return `evolução recente: ${partes.map(x => x.toLowerCase()).join(' ← ')}`
+  return t
 }
 const recParaLente = (r: RecLente, pessoa: Pessoa): ItemLente => ({
-  tipo: 'REC', id: r.id, codigo: r.codigo, achado: r.titulo, evidencia: evidenciaTxt(r.evidencia), forca: r.forca,
+  tipo: 'REC', id: r.id, codigo: r.codigo, achado: decimalBr(r.titulo), evidencia: evidenciaTxt(r.evidencia), forca: r.forca,
   acao: { rotulo: r.acaoSugerida.length > 60 ? 'Ver a ação sugerida' : r.acaoSugerida, href: `/pro-labore/recomendacoes?rec=${r.id}` },
   podeAceitar: pessoa.papel === 'DONO' || r.destinatarioId === (pessoa.vendedorId ?? pessoa.usuarioId) || pessoa.papel === 'SUPERVISOR', podeDescartar: true,
 })

@@ -14,6 +14,7 @@ import { hojeBrt } from '../lib/metricas'
 import { criarAcao, envioSeguro, perguntar } from '../lib/pergunte'
 import { aceitePdf04 } from '../lib/aceitePdf04'
 import { resumoDoHoje } from '../lib/resumoHoje'
+import { painelDoHoje } from '../lib/hojePainel'
 import { ErroDaily, itensEnviados, levarAoDaily } from '../lib/daily'
 import { ErroFrase, TEMAS, criarFrase, editarFrase, listarFrases } from '../lib/frases'
 import { sugerirFrasesComIa } from '../lib/frasesIa'
@@ -57,6 +58,11 @@ router.get('/hoje/bussola', requireProLaboreAuth, async (req: Request, res: Resp
   const r = await resumoDoHoje(pessoa, primeira ? primeira.titulo : null, agora, req.query.atualizar === '1')
   const enviados = await itensEnviados(pessoa.usuarioId, pessoa.id)
   res.json({ ...r, enviados })
+})
+// Hoje como painel de comando: os dados dos gráficos (ritmo do mês, minilinhas, funil, equipe, origem).
+router.get('/hoje/painel', requireProLaboreAuth, async (req: Request, res: Response) => {
+  const pessoa = pessoaDe(req)
+  res.json(await painelDoHoje(pessoa))
 })
 // "Levar ao Daily": o ponto escolhido no Hoje entra no topo do bloco da área, marcado com quem enviou e quando.
 router.post('/hoje/levar-ao-daily', requireProLaboreAuth, async (req: Request, res: Response) => {

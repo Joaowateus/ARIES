@@ -3,6 +3,7 @@
 // junção com a camada de qualidade, ciclo (nova → aceita/descartada → em
 // execução → avaliada → encerrada), Atividades geradas e memória.
 // Nível 1: nada aqui executa ação sozinho; aceitar só cria as Atividades.
+import { decimalBr } from './formato'
 import { lerExpediente, prazoNoExpediente } from './expediente'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
@@ -149,9 +150,9 @@ export async function criarDoAchado(usuarioId: string, a: Achado, agora = new Da
   const def = DETECTORES.find(d => d.chave === a.detector)!
   const rec = await prisma.recomendacao.create({
     data: {
-      usuarioId, auditoriaAutor: 'AUTOMACAO|||detector', titulo: a.titulo, area: a.area, detector: a.detector, tipo: a.tipo,
-      evidencia: { ...a.evidencia, orientacao: a.orientacao ?? null, alvoNome: a.alvoNome ?? null, regra: def.dispara } as unknown as Prisma.InputJsonValue,
-      forca: a.forca, impacto: (a.impacto ?? Prisma.JsonNull) as Prisma.InputJsonValue, acaoSugerida: a.acaoSugerida, nivelAutonomia: 1,
+      usuarioId, auditoriaAutor: 'AUTOMACAO|||detector', titulo: decimalBr(a.titulo), area: a.area, detector: a.detector, tipo: a.tipo,
+      evidencia: { ...a.evidencia, ...(a.evidencia.resumo ? { resumo: decimalBr(a.evidencia.resumo) } : {}), orientacao: a.orientacao ?? null, alvoNome: a.alvoNome ?? null, regra: def.dispara } as unknown as Prisma.InputJsonValue,
+      forca: a.forca, impacto: (a.impacto ?? Prisma.JsonNull) as Prisma.InputJsonValue, acaoSugerida: decimalBr(a.acaoSugerida), nivelAutonomia: 1,
       alvoTipo: a.alvoTipo, alvoId: a.alvoId, destinatarioId: r.destinatarioId, acompanhaIds: r.acompanha, visivelPara, prazo, contexto,
     },
   })
