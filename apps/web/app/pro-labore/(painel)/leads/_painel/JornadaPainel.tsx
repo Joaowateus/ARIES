@@ -52,8 +52,8 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
             <b>{NOME_ETAPA[p.etapa]}</b>
             {p.faltando.length ? (
               <>
-                <span className="pl-hint">falta {p.faltando.join(' · ')}</span>
-                <button type="button" className="pl-btn" style={{ padding: '2px 10px' }} onClick={() => void executar(() => proLaboreApi.jornada.mover(lead.id, p.etapa, undefined, true))} title="Move o card e deixa a pendência marcada" data-painel-forcar={p.etapa}>Avançar mesmo assim</button>
+                <button type="button" className="pl-btn pl-btn-primary" style={{ padding: '2px 10px' }} onClick={() => void executar(() => proLaboreApi.jornada.mover(lead.id, p.etapa, undefined, true))} title="Avança e deixa o que falta como pendência" data-painel-forcar={p.etapa}>Avançar →</button>
+                <span className="pl-hint">o que fazer: {p.faltando.join(' · ')}</span>
               </>
             ) : (
               <button type="button" className="pl-btn pl-btn-primary" style={{ padding: '2px 10px' }} onClick={() => void executar(() => proLaboreApi.jornada.mover(lead.id, p.etapa))} data-painel-mover={p.etapa}>Avançar →</button>

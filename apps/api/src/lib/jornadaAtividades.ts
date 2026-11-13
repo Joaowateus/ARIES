@@ -5,7 +5,7 @@
 import { prisma } from './prisma'
 import { autorAtual, comAutor } from './autorAuditoria'
 import { ErroJornada, moverEtapa, registrarPerda } from './jornadaRegras'
-import type { Etapa } from './etapasJornada'
+import { ETAPAS, type Etapa } from './etapasJornada'
 
 type LeadBase = { id: string; usuarioId: string; etapa: string | null; estagio: string; vendaId: string | null; modeloInteresse: string | null; formaPagamento: string | null; situacaoCnh: string | null; temEntrada: boolean | null; responsavelQualificacaoId: string | null; responsavelFechamentoId: string | null; vendedorId: string | null }
 export type AtividadeJornada = 'PRIMEIRO_CONTATO' | 'FOLLOW_PROPOSTA' | 'CONFIRMAR_VISITA' | 'VISITA' | 'REMARCAR_VISITA' | 'RESULTADO_VISITA' | 'POS_ENTREGA' | 'POS_DOCUMENTACAO' | 'POS_REVISAO'
@@ -45,9 +45,10 @@ export function mensagemDaProposta(nome: string, modelo: string | null, p: { pre
 }
 
 export async function registrarProposta(l: LeadBase & { nomeCliente: string }, p: { preco: number; entrada?: number | null; parcela?: number | null; prazo?: number | null; validade?: Date | null; followEm?: Date | null }) {
-  if (!['NEGOCIACAO', 'PROPOSTA'].includes(l.etapa ?? '')) throw new ErroJornada(409, 'A proposta é registrada na Negociação (ou para atualizar na Proposta)')
+  // CRM livre: a proposta pode ser registrada em qualquer etapa antes da venda (o lead vai para a Proposta).
+  if (l.etapa === 'VENDA') throw new ErroJornada(409, 'A venda já foi registrada')
   const proposta = await prisma.leadProposta.create({ data: { usuarioId: l.usuarioId, leadId: l.id, preco: p.preco, entrada: p.entrada ?? null, parcela: p.parcela ?? null, prazo: p.prazo ?? null, validade: p.validade ?? null, autorId: autorAtual().id ?? null } })
-  if (l.etapa === 'NEGOCIACAO') await moverEtapa(l, 'PROPOSTA')
+  if (ETAPAS.indexOf((l.etapa ?? 'LEAD') as Etapa) < ETAPAS.indexOf('PROPOSTA')) await moverEtapa(l, 'PROPOSTA', { forcar: true })
   await criarAtividade(l, 'FOLLOW_PROPOSTA', p.followEm ?? new Date(Date.now() + DIA))
   return { proposta, mensagem: mensagemDaProposta(l.nomeCliente, l.modeloInteresse, p) }
 }
@@ -64,14 +65,15 @@ export async function respostaDaProposta(propostaId: string, usuarioId: string, 
 // --- Visita ---
 
 export async function marcarVisita(l: LeadBase, marcadaPara: Date) {
-  if (!['PROPOSTA', 'AGENDAMENTO'].includes(l.etapa ?? '')) throw new ErroJornada(409, 'A visita é marcada a partir da Proposta')
+  // CRM livre: a visita pode ser marcada em qualquer etapa antes da venda (o lead vai para o Agendamento).
+  if (l.etapa === 'VENDA') throw new ErroJornada(409, 'A venda já foi registrada')
   if (marcadaPara.getTime() < Date.now() - HORA) throw new ErroJornada(400, 'A data da visita já passou')
   const aberta = await prisma.leadVisita.findFirst({ where: { leadId: l.id, checkinEm: null, falta: false }, orderBy: { criadoEm: 'desc' } })
   const faltas = await prisma.leadVisita.count({ where: { leadId: l.id, falta: true } })
   const visita = aberta
     ? await prisma.leadVisita.update({ where: { id: aberta.id }, data: { marcadaPara, remarcacoes: { increment: 1 } } })
     : await prisma.leadVisita.create({ data: { usuarioId: l.usuarioId, leadId: l.id, vendedorId: l.vendedorId, marcadaPara, remarcacoes: faltas } })
-  if (l.etapa === 'PROPOSTA') await moverEtapa(l, 'AGENDAMENTO')
+  if (ETAPAS.indexOf((l.etapa ?? 'LEAD') as Etapa) < ETAPAS.indexOf('AGENDAMENTO')) await moverEtapa(l, 'AGENDAMENTO', { forcar: true })
   await concluirAtividade(l.id, 'REMARCAR_VISITA', 'Visita remarcada')
   await concluirAtividade(l.id, 'FOLLOW_PROPOSTA', 'Visita marcada')
   await criarAtividade(l, 'VISITA', marcadaPara)
@@ -81,13 +83,14 @@ export async function marcarVisita(l: LeadBase, marcadaPara: Date) {
 }
 
 export async function checkin(l: LeadBase) {
-  const v = await prisma.leadVisita.findFirst({ where: { leadId: l.id, checkinEm: null, falta: false }, orderBy: { marcadaPara: 'desc' } })
-  if (!v) throw new ErroJornada(409, 'Não há visita marcada para registrar o check-in')
   const agora = new Date()
+  // CRM livre: cliente chegou sem visita marcada? Registra a visita agora mesmo.
+  const v = (await prisma.leadVisita.findFirst({ where: { leadId: l.id, checkinEm: null, falta: false }, orderBy: { marcadaPara: 'desc' } }))
+    ?? await prisma.leadVisita.create({ data: { usuarioId: l.usuarioId, leadId: l.id, vendedorId: l.vendedorId, marcadaPara: agora } })
   await prisma.leadVisita.update({ where: { id: v.id }, data: { checkinEm: agora } })
   await concluirAtividade(l.id, 'VISITA', 'Cliente chegou')
   await concluirAtividade(l.id, 'CONFIRMAR_VISITA', 'Cliente chegou')
-  if (l.etapa === 'AGENDAMENTO') await moverEtapa(l, 'VISITA')
+  if (l.etapa !== 'VENDA' && l.etapa !== 'VISITA') await moverEtapa(l, 'VISITA', { forcar: true })
   // "Registrar resultado da visita" no mesmo dia.
   // Fim do dia em Brasília (23:59, UTC-3).
   const hojeBR = new Date(agora.getTime() - 3 * HORA).toISOString().slice(0, 10)
@@ -97,8 +100,9 @@ export async function checkin(l: LeadBase) {
 }
 
 export async function resultadoDaVisita(l: LeadBase, resultado: string) {
-  const v = await prisma.leadVisita.findFirst({ where: { leadId: l.id, checkinEm: { not: null } }, orderBy: { checkinEm: 'desc' } })
-  if (!v) throw new ErroJornada(409, 'Registre o check-in antes do resultado')
+  // CRM livre: sem check-in registrado, o resultado registra a visita (com o check-in) agora.
+  const v = (await prisma.leadVisita.findFirst({ where: { leadId: l.id, checkinEm: { not: null } }, orderBy: { checkinEm: 'desc' } }))
+    ?? await prisma.leadVisita.create({ data: { usuarioId: l.usuarioId, leadId: l.id, vendedorId: l.vendedorId, marcadaPara: new Date(), checkinEm: new Date() } })
   await prisma.leadVisita.update({ where: { id: v.id }, data: { resultado, resultadoEm: new Date() } })
   await concluirAtividade(l.id, 'RESULTADO_VISITA', resultado.slice(0, 200))
 }
@@ -160,8 +164,8 @@ export async function marcarDisponivel(usuarioId: string, vendedorId: string, di
 // --- Passagem do SDR para o vendedor ---
 
 export async function passarAoVendedor(l: LeadBase, resumo: string) {
-  const etapaOk = l.etapa === 'SQL' || (l.etapa === 'LEVANTAMENTO' && l.formaPagamento === 'A_VISTA')
-  if (!etapaOk) throw new ErroJornada(409, 'A passagem é feita no SQL (aprovado) ou, no cliente à vista, ao fim do Levantamento')
+  // CRM livre: a passagem ao vendedor pode ser feita em qualquer etapa (o ideal é no SQL ou, à vista, no fim do Levantamento).
+  if (l.etapa === 'VENDA') throw new ErroJornada(409, 'A venda já foi registrada')
   // Lead que voltou: o mesmo vendedor, se ainda estiver ativo; senão, o rodízio.
   let vendedorId: string | null = null
   if (l.responsavelFechamentoId) {

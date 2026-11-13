@@ -39,6 +39,8 @@ interface Props {
 }
 
 type Aviso = { lead: Lead; destino: EtapaJornada; faltando: string[]; podeForcar: boolean } | null
+/** Orientação depois de mover (não bloqueia): o que fazer na etapa nova. */
+type Guia = { lead: Lead; destino: EtapaJornada; itens: string[] } | null
 
 const NOME_TEMP: Record<Temperatura, string> = { QUENTE: 'Quente', MORNO: 'Morno', FRIO: 'Frio' }
 const ORDEM_TEMP: Record<Temperatura, number> = { QUENTE: 0, MORNO: 1, FRIO: 2 }
@@ -82,6 +84,9 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [filtroTemp, setFiltroTemp] = useState<Temperatura | ''>('')
   const [soPendencia, setSoPendencia] = useState(false)
   const [tempAberta, setTempAberta] = useState<string | null>(null)
+  const [guia, setGuia] = useState<Guia>(null)
+  // A orientação some sozinha depois de 15 s (o selo de pendência fica no card).
+  useEffect(() => { if (!guia) return; const t = setTimeout(() => setGuia(null), 15_000); return () => clearTimeout(t) }, [guia])
   const [conversao, setConversao] = useState<Record<string, { chegaram: number; conversao: number | null }>>({})
   // Ajuste 1: o Painel do dono abre o CRM filtrado numa etapa (?etapa=): mostra a fase dela e leva até a coluna.
   const [destaque] = useState<EtapaJornada | null>(() => {
@@ -120,8 +125,11 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
     if (destino === 'VENDA') { onRegistrarVenda(lead); return }
     setOcupado(true); setErro(null)
     try {
-      await proLaboreApi.jornada.mover(lead.id, destino, contatoFora, forcar)
+      // CRM livre: o card sempre anda; o que falta vira orientação (e o selo de pendência no card).
+      const c = await proLaboreApi.jornada.mover(lead.id, destino, contatoFora, forcar ?? true)
       setAviso(null); onAtualizar()
+      const itens = (c.pendencias ?? []).filter(p => !/^Pulou /.test(p))
+      setGuia(itens.length ? { lead, destino, itens } : null)
     } catch (e) {
       const d = (e as ErroApi).dados as { faltando?: string[]; podeForcar?: boolean } | undefined
       if ((e as ErroApi).status === 422 && d?.faltando?.length) setAviso({ lead, destino, faltando: d.faltando, podeForcar: !!d.podeForcar })
@@ -263,6 +271,20 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
               <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setAviso(null)}>{aviso.podeForcar ? 'Cancelar' : 'Fechar'}</button>
             </div>
             {aviso.podeForcar && <p className="pl-hint" style={{ marginBottom: 0 }}>Se avançar mesmo assim, o card fica com o selo de pendência até você resolver.</p>}
+          </div>
+        </div>
+      )}
+      {guia && (
+        <div className="qj-guia" role="status" data-guia-etapa>
+          <div className="qj-guia-txt">
+            <b>{guia.lead.nomeCliente} foi para {NOME_ETAPA[guia.destino]}.</b>
+            <span>Para esta etapa: {guia.itens.join(' · ')}</span>
+          </div>
+          <div className="qj-guia-botoes">
+            {guia.itens.some(f => /levantamento|coleta/i.test(f))
+              ? <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setLevantamento(guia.lead); setGuia(null) }}>Preencher o levantamento</button>
+              : <button type="button" className="pl-btn pl-btn-primary" onClick={() => { onAbrir(guia.lead.id); setGuia(null) }} data-guia-resolver>Fazer agora</button>}
+            <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setGuia(null)} data-guia-ok>Depois</button>
           </div>
         </div>
       )}

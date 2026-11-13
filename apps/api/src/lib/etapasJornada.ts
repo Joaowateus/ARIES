@@ -23,6 +23,7 @@ export const NOME_MOTIVO: Record<string, string> = {
   CANCELADA_DESISTENCIA: 'Venda cancelada por desistência', CREDITO_NAO_LIBERADO: 'Crédito não liberado na formalização', ERRO_REGISTRO: 'Venda cancelada por erro de registro',
   PEDIU_NAO_CONTATO: 'Pediu para não ser contatado',
   OUTRO_ANTERIOR_MIGRACAO: 'Outro (anterior à migração)',
+  OUTRO: 'Outro motivo',
 }
 export const MOTIVOS_DA_ETAPA: Record<Etapa, string[]> = {
   LEAD: ['CONTATO_INVALIDO', 'NAO_E_LEAD'],
@@ -52,7 +53,7 @@ const DESTINOS: Record<DestinoPerda, string[]> = {
   REATIVACAO_INTERESSE: ['NAO_AUTORIZOU', 'SO_PESQUISANDO', 'SEM_CNH', 'SEM_ENTRADA', 'ACHOU_CARO', 'NAO_GOSTOU_MOTO'],
   REATIVACAO_NEGOCIACAO: ['DESISTIU', 'DESISTIU_SIMULACAO', 'NAO_ACEITOU_CONDICAO', 'CONDICAO_NAO_FECHOU', 'DOCUMENTACAO_PENDENTE', 'APROVACAO_VENCEU', 'DESISTIU_APROVACAO', 'CANCELADA_DESISTENCIA'],
   REATIVACAO_RETOMADA: ['RECUSADO_TODOS_BANCOS', 'CREDITO_NAO_LIBERADO', 'MOTO_INDISPONIVEL', 'COMPROU_OUTRO_LUGAR'],
-  REATIVACAO_OUTRO: ['OUTRO_ANTERIOR_MIGRACAO'],
+  REATIVACAO_OUTRO: ['OUTRO_ANTERIOR_MIGRACAO', 'OUTRO'],
 }
 /**
  * Destino do motivo. Dois motivos do MQL não estão na tabela do PDF e
