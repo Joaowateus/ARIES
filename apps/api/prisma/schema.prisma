@@ -1185,6 +1185,8 @@ model ParametroLiquidez {
   // Ajuste 1: blocos do Daily (ordem, tempo, ligado) e metas por etapa da jornada (conversão mínima, perda máxima, custo máximo).
   dailyConfig                  Json?
   metasEtapas                  Json?
+  // PDF 06: expediente da loja { inicio: "08:00", fim: "18:00", dias: [1..6] } (prazos de detector e decisão).
+  expediente                   Json?
 
   @@map("pro_labore_parametros")
 }
@@ -4927,4 +4929,96 @@ model PilotoParticipante {
 
   @@unique([usuarioId, pessoaId], map: "pro_labore_piloto_key")
   @@map("pro_labore_piloto")
+}
+
+// PDF 06 · Biblioteca de frases do Hoje: autor e fonte sempre; só aparece aprovada e ativa.
+// origem: DONO (cadastrada pelo dono) | ARIES (sugerida, só entra com a aprovação do dono) | INICIAL (conjunto inicial).
+model FraseBiblioteca {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  texto          String
+  autor          String
+  fonte          String
+  temas          String[]  @default([])
+  ativa          Boolean   @default(false)
+  aprovadaPor    String?
+  aprovadaEm     DateTime?
+  origem         String    @default("DONO")
+  ultimaVezUsada DateTime?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @default(now()) @updatedAt
+
+  @@index([usuarioId])
+  @@map("pro_labore_frases")
+}
+
+model FraseUso {
+  id        String   @id @default(cuid())
+  usuarioId String
+  fraseId   String
+  dia       String
+  criadoEm  DateTime @default(now())
+
+  @@unique([usuarioId, dia])
+  @@map("pro_labore_frases_uso")
+}
+
+// PDF 06 · Resumo diário do Hoje por pessoa: texto, cartões por área e a frase do dia.
+model HojeResumo {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  pessoaId    String
+  papel       String
+  dia         String
+  texto       String
+  origemTexto String   @default("MODELO") // IA | MODELO
+  cartoes     Json?
+  fraseId     String?
+  criadoEm    DateTime @default(now())
+
+  @@unique([usuarioId, pessoaId, dia])
+  @@map("pro_labore_hoje_resumos")
+}
+
+// PDF 06 · Item da pauta do Daily. origem: HOJE (enviado por "Levar ao Daily") | ADIADO (de um Daily anterior).
+// situacao: ABERTO | DECIDIDO | TRATADO | ADIADO.
+model DailyItem {
+  id              String    @id @default(cuid())
+  usuarioId       String
+  bloco           String
+  origem          String
+  texto           String
+  detalhe         String?
+  refTipo         String? // METRICA | REC | ATV | AREA
+  refId           String?
+  enviadoPorId    String?
+  enviadoPorNome  String?
+  enviadoEm       DateTime  @default(now())
+  situacao        String    @default("ABERTO")
+  reuniaoId       String?
+  motivoAdiamento String?
+  adiadoDeId      String?
+  resolvidoEm     DateTime?
+
+  @@index([usuarioId, situacao])
+  @@map("pro_labore_daily_itens")
+}
+
+// PDF 06 · Decisão do Daily: uma atividade (ATV, origem reunião) por responsável.
+model DailyDecisao {
+  id           String   @id @default(cuid())
+  usuarioId    String
+  reuniaoId    String
+  bloco        String
+  itemId       String?
+  itemTipo     String?
+  texto        String
+  responsaveis String[] @default([])
+  prazo        DateTime
+  prioridade   String   @default("MEDIA") // ALTA | MEDIA | BAIXA
+  atividadeIds String[] @default([])
+  criadoEm     DateTime @default(now())
+
+  @@index([usuarioId, reuniaoId])
+  @@map("pro_labore_daily_decisoes")
 }

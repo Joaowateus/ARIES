@@ -6,8 +6,9 @@
 // o painel por área. Nada aqui executa sozinho: cada item leva à ação.
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { proLaboreApi, telasApi, type HojeDados, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
-import { AgoraHoje, Cabecalho, Detalhes, Lente, StatusChip, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
+import { bussolaApi, proLaboreApi, telasApi, type BussolaHoje, type HojeDados, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
+import { BussolaPorArea, FraseDoDia, ResumoAries } from './Bussola'
+import { AgoraHoje, Cabecalho, Detalhes, Lente, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
 import { FraseDoDono } from './FraseDoDono'
 import { Daily } from './Daily'
 import { PainelDoDono } from './PainelDoDono'
@@ -64,6 +65,11 @@ function HojeDoPapel({ aoCarregar }: { aoCarregar: (papel: string) => void }) {
   const [erro, setErro] = useState<string | null>(null)
   const carregar = useCallback(() => { telasApi.hoje().then(x => { setD(x); setErro(null); aoCarregar(x.papel) }).catch(e => setErro(e instanceof Error ? e.message : 'Não foi possível carregar')) }, [aoCarregar])
   useEffect(() => { carregar() }, [carregar])
+  // PDF 06: frase do dia, resumo do ARIES e bússola por área (chamada separada: calcula as áreas).
+  const [b, setB] = useState<BussolaHoje | null>(null)
+  const [atualizando, setAtualizando] = useState(false)
+  const carregarBussola = useCallback((atualizar = false) => { setAtualizando(atualizar); bussolaApi.carregar(atualizar).then(setB).catch(() => undefined).finally(() => setAtualizando(false)) }, [])
+  useEffect(() => { bussolaApi.carregar().then(setB).catch(() => undefined) }, [])
   if (erro) return <TelaVazia titulo="Não deu para montar o seu Hoje agora">{erro}</TelaVazia>
   if (!d) return <p className="pl-hint">Montando o seu Hoje…</p>
   const ficha = { nome: 'Hoje', pergunta: d.pergunta, paraQuem: d.nomePapel, acaoPrincipal: 'Executar a próxima atividade' }
@@ -71,15 +77,18 @@ function HojeDoPapel({ aoCarregar }: { aoCarregar: (papel: string) => void }) {
   return (
     <div data-hoje={d.papel}>
       {d.papel === 'DONO' && <FraseDoDono />}
+      {b && <FraseDoDia frase={b.frase} />}
       <Cabecalho aba={ficha} acao={proxima?.acao?.href ? <Link className="pl-btn pl-btn-primary ar-acao-principal" href={proxima.acao.href} data-acao-principal>Fazer a próxima: {proxima.acao.rotulo}</Link> : undefined} />
       <div className="ar-tela">
         <div className="ar-trabalho">
+          {b ? <ResumoAries d={b} atualizando={atualizando} aoAtualizar={() => carregarBussola(true)} /> : <p className="pl-hint" data-resumo-carregando>O ARIES está montando o resumo do dia…</p>}
           <AgoraHoje numeros={d.numeros} />
+          {b && <BussolaPorArea d={b} aoMudar={() => undefined} />}
+          <div className="ar-fila-grupo" style={{ margin: '4px 0 6px' }} data-titulo-fila>O que depende de mim</div>
           {d.papel === 'SOCIAL_MEDIA'
             ? <TelaVazia titulo="Seu Hoje fica no espaço do Social Media" passo={<Link className="pl-btn pl-btn-primary" href="/pro-labore/sm">Abrir o meu espaço</Link>}>Pautas do dia, aprovações pedidas e Directs sem resposta estão lá.</TelaVazia>
             : <Fila itens={d.fila} aoMudar={carregar} />}
           {d.quadro && <QuadroEquipe linhas={d.quadro} aoMudar={carregar} />}
-          {d.painel && <PainelDono linhas={d.painel} />}
           <Detalhes titulo="Como a fila é ordenada">
             <ol style={{ margin: 0, paddingLeft: 18 }}>{d.ordemFila.map(g => <li key={g.grupo}>{g.nome}</li>)}</ol>
             <p className="pl-hint" style={{ marginBottom: 0 }}>Os números vêm do dicionário de métricas (toque em um número para ver a ficha). Atualizado às {new Date(d.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.</p>
@@ -208,27 +217,6 @@ function QuadroEquipe({ linhas, aoMudar }: { linhas: LinhaQuadro[]; aoMudar: () 
         </div>
       )}
       {msg && <p className="pl-hint" role="status">{msg}</p>}
-    </section>
-  )
-}
-
-function PainelDono({ linhas }: { linhas: NonNullable<HojeDados['painel']> }) {
-  return (
-    <section style={{ marginTop: 20 }} aria-label="Painel por área" data-painel-dono>
-      <div className="ar-fila-grupo">Painel por área</div>
-      <ul className="ar-fila">{linhas.map(l => (
-        <li key={l.area} className="ar-fila-item" data-area={l.area}>
-          <div className="ar-fila-texto">
-            <div className="ar-fila-titulo">{l.area}</div>
-            <div className="ar-fila-det">
-              {l.texto}: <b>{fmtValor(l.valor, l.unidade)}</b>{l.alvo ? ` de ${fmtValor(l.alvo, l.unidade)}${l.ritmoPct != null ? ` (${l.ritmoPct}%)` : ''}` : ''}
-              {l.extra ? <> · ROAS <b>{fmtValor(l.extra.valor, l.extra.unidade)}</b></> : null}
-              {l.detalhe ? ` · novos ${fmtValor(l.detalhe.NOVO_CLIENTE ?? 0, 'BRL')}, recuperados ${fmtValor(l.detalhe.RECUPERADO_CENTRAL ?? 0, 'BRL')}, retorno espontâneo ${fmtValor(l.detalhe.RETORNO_ESPONTANEO ?? 0, 'BRL')}` : ''}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><StatusChip status={l.faixa} /><Link className="pl-btn" href={l.href}>Abrir</Link></div>
-        </li>
-      ))}</ul>
     </section>
   )
 }

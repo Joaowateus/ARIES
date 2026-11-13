@@ -6,6 +6,7 @@
 // A conta da empresa é a mesma linha de SocialMediaConta do dono (titular
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
+import { reverMetaEmRiscoTodas } from '../lib/metaCoerente'
 import { faltasVencidas } from '../lib/jornadaAtividades'
 import { Router, Request, Response } from 'express'
 import { aprenderTodas } from '../lib/assistenteAprendizado'
@@ -335,8 +336,10 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   // Assistente pessoal: o resumo da manhã no chat "Você" de cada vendedor.
   const manha = await enviarResumosDaManha(agoraDoCron(req)).catch(e => { console.error('[assistente] resumo da manhã', e); return { resumosManha: 0 } })
   // PDF 03: Meta em risco a cada hora (as RECs abertas do mês não se repetem).
+  // PDF 06 · correção 4: antes, revê as RECs de meta abertas com a previsão de agora (encerra as que perderam o sentido).
+  const metaRevista = await reverMetaEmRiscoTodas(agoraDoCron(req)).catch(e => { console.error('[meta coerente]', e); return { encerradas: 0 } })
   const metaRisco = await rodarDetectoresTodas(agoraDoCron(req), ['meta_em_risco']).catch(e => { console.error('[detectores] meta', e); return { recsCriadas: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas, metaEmRisco: metaRisco.recsCriadas })
+  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas, metaEmRisco: metaRisco.recsCriadas, metaEmRiscoEncerradas: metaRevista.encerradas })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return

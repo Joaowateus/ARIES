@@ -3842,13 +3842,14 @@ export interface AceiteArea {
 }
 
 // --- Ajuste 1 · Hoje do dono: Daily e Painel ---
-export type BlocoDaily = 'RESULTADO' | 'PRE_VENDA' | 'CREDITO' | 'VENDEDORES' | 'TRAFEGO' | 'SOCIAL' | 'REATIVACAO' | 'GESTAO'
+export type BlocoDaily = 'PENDENCIAS' | 'RESULTADO' | 'PRE_VENDA' | 'CREDITO' | 'VENDEDORES' | 'TRAFEGO' | 'SOCIAL' | 'REATIVACAO' | 'GESTAO'
 export type ModoDaily = 'GESTAO' | 'EQUIPE'
 export type StatusFaixa = 'BOM' | 'ATENCAO' | 'CRITICO' | null
 export interface NumeroDaily {
   chave: string; rotulo: string; unidade: string; melhor: string; periodo: { inicio: string; fim: string }; tipoPeriodo: string
   valor: number | null; anterior: number | null; variacao: number | null; alvo: { valor: number | null; rotulo: string } | null; status: StatusFaixa
   junto: { nome: string; valor: number | null } | null; porPessoa: Array<{ id: string; nome: string; valor: number | null }> | null
+  semVenda?: { total: number; nomes: string[] } | null; texto?: string | null
   naoDefinido: string | null; ficha: { definicao: string; formula: string }
 }
 export interface BlocoPauta {
@@ -3857,8 +3858,19 @@ export interface BlocoPauta {
   atividades: Array<{ id: string; codigo: string | null; oQue: string; prazo: string; atrasada: boolean; responsavel: string; cliente: string | null }>
   decididas: Array<{ id: string; codigo: string | null; oQue: string | null; prazo: string; responsavel: string }>
   responsavelSugerido: string | null; semPessoa: string | null
+  enviados: ItemPautaEnviado[]
+  resolvidos: Array<{ tipo: string; ref: string | null; situacao: 'TRATADO' | 'ADIADO' | 'DECIDIDO' }>
+  pendencias: PendenciasDaily | null
 }
-export interface PautaDaily { modo: ModoDaily; geradoEm: string; papel: string; reuniao: { id: string; ata: unknown } | null; totalMinutos: number; blocos: BlocoPauta[]; equipe: Array<{ id: string; nome: string }> }
+export type TipoItemDaily = 'REC' | 'ATV' | 'NUMERO' | 'ITEM' | 'PENDENCIA'
+export interface ItemPautaEnviado { id: string; origem: 'HOJE' | 'ADIADO'; texto: string; detalhe: string | null; refTipo: string | null; refId: string | null; enviadoPor: string | null; enviadoEm: string; motivoAdiamento: string | null; situacao: string }
+export interface PendenciasDaily {
+  reuniao: { id: string; titulo: string; data: string } | null; total: number; feitas: number; atrasadas: number; venceHoje: number; noPrazo: number
+  itens: Array<{ id: string; codigo: string | null; oQue: string; responsavel: string; prazo: string; situacao: 'FEITA' | 'ATRASADA' | 'VENCE_HOJE' | 'NO_PRAZO' | 'CANCELADA'; feitaEm: string | null; resultado: string | null }>
+}
+export interface PautaDaily { modo: ModoDaily; geradoEm: string; papel: string; reuniao: { id: string; ata: unknown } | null; totalMinutos: number; blocos: BlocoPauta[]; equipe: Array<{ id: string; nome: string }>; meta: { previsao: number | null; pct: number | null; faixa: StatusFaixa; ritmo: string } | null }
+export type PrioridadeDaily = 'ALTA' | 'MEDIA' | 'BAIXA'
+export interface ResumoFinalDaily { decisoes: number; atividades: number; porPessoa: Array<{ nome: string; tarefas: number; whatsapp: boolean }>; blocos: Array<{ chave: string; nome: string; segundos: number; pulado: boolean }>; tratados: number; adiados: number; segundos: number }
 export interface LeituraPainel { chave: string; nome: string; unidade: string; melhor: string; valor: number | null; anterior: { periodo: { inicio: string; fim: string }; valor: number | null } | null; variacao: number | null; projecao: number | null; status: StatusFaixa }
 export interface EtapaPainel {
   etapa: string; nome: string; fase: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'; volume: number; conversao: number | null; conversaoHistorico: number | null; excluidos: number
@@ -3896,14 +3908,46 @@ export interface AceiteAjuste1 {
 const qs = (f: Record<string, string | undefined>) => { const s = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join('&'); return s ? `?${s}` : '' }
 export const dailyApi = {
   pauta: (modo: ModoDaily, reuniao?: string | null) => request<PautaDaily>(`/pro-labore/daily/pauta${qs({ modo, reuniao: reuniao ?? undefined })}`),
-  iniciar: (modo: ModoDaily) => request<{ id: string; titulo: string; modo: ModoDaily }>('/pro-labore/daily/iniciar', { method: 'POST', body: JSON.stringify({ modo }) }),
-  decidir: (id: string, d: { bloco: BlocoDaily; texto: string; responsavelId: string | null; prazo: string }) => request<{ atividade: { id: string; codigo: string | null }; responsavel: string }>(`/pro-labore/daily/${id}/decidir`, { method: 'POST', body: JSON.stringify(d) }),
-  tratar: (id: string, d: { bloco: BlocoDaily; tipo: 'REC' | 'ATV' | 'NUMERO'; ref: string | null; texto: string; individual?: boolean }) => request<{ tratados: number }>(`/pro-labore/daily/${id}/tratar`, { method: 'POST', body: JSON.stringify(d) }),
+  iniciar: (modo: ModoDaily, opcoes: { participantes?: string[]; transmitir?: boolean } = {}) => request<{ id: string; titulo: string; modo: ModoDaily; apresentacaoId: string | null; participantes: Array<{ id: string; nome: string }> }>('/pro-labore/daily/iniciar', { method: 'POST', body: JSON.stringify({ modo, ...opcoes }) }),
+  decidir: (id: string, d: { bloco: BlocoDaily; texto: string; responsaveis: string[]; prazo: string; prioridade: PrioridadeDaily; itemTipo?: TipoItemDaily; itemRef?: string | null }) => request<{ atividades: Array<{ id: string; codigo: string | null; responsavel: string }>; responsavel: string; decisao: { id: string; prazo: string; prioridade: PrioridadeDaily } }>(`/pro-labore/daily/${id}/decidir`, { method: 'POST', body: JSON.stringify(d) }),
+  tratar: (id: string, d: { bloco: BlocoDaily; tipo: TipoItemDaily; ref: string | null; texto: string; individual?: boolean }) => request<{ tratados: number }>(`/pro-labore/daily/${id}/tratar`, { method: 'POST', body: JSON.stringify(d) }),
+  adiar: (id: string, d: { bloco: BlocoDaily; tipo: TipoItemDaily; ref: string | null; texto: string; motivo: string }) => request<{ adiados: number }>(`/pro-labore/daily/${id}/adiar`, { method: 'POST', body: JSON.stringify(d) }),
+  palco: (id: string, palco: unknown) => request<{ ok: boolean }>(`/pro-labore/daily/${id}/palco`, { method: 'PUT', body: JSON.stringify({ palco }) }),
   bloco: (id: string, d: { bloco: BlocoDaily; segundos: number; pulado: boolean }) => request<unknown>(`/pro-labore/daily/${id}/bloco`, { method: 'POST', body: JSON.stringify(d) }),
-  encerrar: (id: string) => request<{ id: string; titulo: string; texto: string; decisoes: number }>(`/pro-labore/daily/${id}/encerrar`, { method: 'POST' }),
+  encerrar: (id: string) => request<{ id: string; titulo: string; texto: string; decisoes: number; resumo: ResumoFinalDaily }>(`/pro-labore/daily/${id}/encerrar`, { method: 'POST', body: JSON.stringify({}) }),
+  expediente: () => request<{ expediente: Expediente; padrao: Expediente }>('/pro-labore/expediente'),
+  salvarExpediente: (e: Expediente & { justificativa: string }) => request<{ expediente: Expediente }>('/pro-labore/expediente', { method: 'PUT', body: JSON.stringify(e) }),
   config: () => request<{ blocos: Array<{ chave: BlocoDaily; nome: string; minutos: number; ligado: boolean }> }>('/pro-labore/daily/config'),
   salvarConfig: (blocos: Array<{ chave: BlocoDaily; minutos: number; ligado: boolean }>, justificativa: string) => request<unknown>('/pro-labore/daily/config', { method: 'PUT', body: JSON.stringify({ blocos, justificativa }) }),
 }
+export interface Expediente { inicio: string; fim: string; dias: number[] }
+
+// --- PDF 06 · Hoje: bússola, resumo, frase do dia, Levar ao Daily e biblioteca de frases ---
+export type AreaBussola = 'RESULTADO' | 'PRE_VENDA' | 'CREDITO' | 'VENDEDORES' | 'TRAFEGO' | 'SOCIAL' | 'REATIVACAO' | 'GESTAO' | 'EQUIPE'
+export interface LevarDaily { area: AreaBussola; texto: string; refTipo: string | null; refId: string | null }
+export interface PontoBussola { texto: string; chave: string | null; valor: number | null; unidade: string | null; hipotese?: boolean; levar?: LevarDaily | null }
+export interface CartaoBussola {
+  area: AreaBussola; nome: string; href: string; cor: 'VERDE' | 'AMARELO' | 'VERMELHO' | 'CINZA'; situacao: string
+  bons: PontoBussola[]; atencao: PontoBussola[]; oportunidade: PontoBussola | null; dica: string
+  metricas: Array<{ chave: string; nome: string; valor: number | null; unidade: string; texto: string; faixa: string | null; comparacao: string | null }>
+  recs: Array<{ id: string; codigo: string | null; titulo: string; levar: LevarDaily }>
+}
+export interface BussolaHoje {
+  dia: string; texto: string; origemTexto: 'IA' | 'MODELO'; geradoEm: string
+  frase: { id: string; texto: string; autor: string; fonte: string } | null
+  bussola: { cartoes: CartaoBussola[]; vendedores: Array<{ id: string; nome: string; destaque: string | null; atencao: string | null }> | null; meta: { pct: number | null; ritmo: string; cobre: boolean } | null; geradaEm: string }
+  enviados: Array<{ id: string; bloco: string; texto: string; refTipo: string | null; refId: string | null; enviadoEm: string }>
+}
+export interface FraseBiblioteca { id: string; texto: string; autor: string; fonte: string; temas: string[]; ativa: boolean; aprovadaPor: string | null; aprovadaEm: string | null; origem: 'DONO' | 'ARIES' | 'INICIAL'; ultimaVezUsada: string | null }
+export const bussolaApi = {
+  carregar: (atualizar = false) => request<BussolaHoje>(`/pro-labore/hoje/bussola${atualizar ? '?atualizar=1' : ''}`),
+  levarAoDaily: (d: LevarDaily & { detalhe?: string | null }) => request<{ item: { id: string }; jaEstava: boolean }>('/pro-labore/hoje/levar-ao-daily', { method: 'POST', body: JSON.stringify(d) }),
+  frases: () => request<{ frases: FraseBiblioteca[]; temas: string[] }>('/pro-labore/frases'),
+  criarFrase: (f: { texto: string; autor: string; fonte: string; temas: string[]; ativa?: boolean }) => request<FraseBiblioteca>('/pro-labore/frases', { method: 'POST', body: JSON.stringify(f) }),
+  editarFrase: (id: string, f: Partial<{ texto: string; autor: string; fonte: string; temas: string[]; ativa: boolean; aprovar: boolean }>) => request<FraseBiblioteca>(`/pro-labore/frases/${id}`, { method: 'PUT', body: JSON.stringify(f) }),
+  sugerirFrases: (tema: string) => request<{ sugeridas: FraseBiblioteca[]; aviso: string }>('/pro-labore/frases/sugerir', { method: 'POST', body: JSON.stringify({ tema }) }),
+}
+
 export const painelDonoApi = {
   // Duas chamadas em paralelo (cada uma cabe no tempo da função): o topo e as séries do ano.
   topo: (f: FiltrosPainelWeb) => request<PainelDono>(`/pro-labore/painel-dono${qs({ ...(f as Record<string, string | undefined>), parte: 'TOPO' })}`),

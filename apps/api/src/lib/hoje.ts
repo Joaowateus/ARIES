@@ -8,6 +8,9 @@ import { prisma } from './prisma'
 import { calcular, fichas, hojeBrt, ler, mesCorrente, metaDoMes, padraoDaLoja, faixaDe, type Escopo, type Leitura, type Periodo } from './metricas'
 import { NOME_ETAPA, type Etapa } from './etapasJornada'
 import { premissas } from './jornadaPremissas'
+import { fmtValor } from './formato'
+import { situacaoDaMeta } from './metaCoerente'
+import { lerExpediente, prazoNoExpediente } from './expediente'
 import { podeVerRec } from './recomendacoes'
 import type { PapelHoje } from './papelHoje'
 
@@ -176,6 +179,26 @@ async function atividadesDe(usuarioId: string, responsavelId: string, agora: Dat
   })
 }
 
+const qtdVendas = (n: number) => `${n} ${n === 1 ? 'venda' : 'vendas'}`
+/** Comissões confirmadas e não pagas: uma linha por vendedor e, à parte, as vendas sem vendedor definido. */
+async function pagamentosPendentes(u: string, financeiro = false) {
+  const pend = await prisma.venda.findMany({ where: { usuarioId: u, situacao: 'CONFIRMADA', valorComissao: { gt: 0 }, pagamentoComissaoId: null }, orderBy: { data: 'asc' }, select: { id: true, data: true, vendedorId: true, lead: { select: { nomeCliente: true } } } })
+  const ativos = new Map((await prisma.vendedor.findMany({ where: { usuarioId: u }, select: { id: true, nome: true } })).map(v => [v.id, v.nome]))
+  const porVendedor = new Map<string, typeof pend>()
+  const semVendedor: typeof pend = []
+  for (const v of pend) {
+    if (v.vendedorId && ativos.has(v.vendedorId)) porVendedor.set(v.vendedorId, [...(porVendedor.get(v.vendedorId) ?? []), v])
+    else semVendedor.push(v)
+  }
+  const itens: Array<Omit<ItemFila, 'grupo' | 'ordem'>> = []
+  if (semVendedor.length) {
+    const lista = semVendedor.slice(0, 5).map(v => `${primeiro(v.lead?.nomeCliente) || 'cliente sem nome'} (${v.data.toLocaleDateString('pt-BR', { timeZone: 'UTC' })})`).join(', ')
+    itens.push({ titulo: `Comissões sem vendedor definido: ${qtdVendas(semVendedor.length)}`, detalhe: `Defina o vendedor antes de pagar: ${lista}${semVendedor.length > 5 ? ` e mais ${semVendedor.length - 5}` : ''}`, quando: semVendedor[0].data.toISOString(), ref: null, href: '/pro-labore/vendas?filtro=sem-vendedor', acao: { rotulo: 'Definir o vendedor', tipo: 'LINK', href: '/pro-labore/vendas?filtro=sem-vendedor' } })
+  }
+  for (const [id, vs] of porVendedor) itens.push({ titulo: financeiro ? `Lançar a comissão de ${primeiro(ativos.get(id))}: ${qtdVendas(vs.length)}` : `Aprovar o pagamento de comissão de ${primeiro(ativos.get(id))}: ${qtdVendas(vs.length)}`, detalhe: `${qtdVendas(vs.length)} ${vs.length === 1 ? 'confirmada' : 'confirmadas'} aguardando pagamento`, quando: null, ref: { tipo: 'VENDEDOR', id }, href: '/pro-labore/vendas', acao: { rotulo: financeiro ? 'Lançar' : 'Aprovar o pagamento', tipo: 'LINK', href: '/pro-labore/vendas' } })
+  return itens
+}
+
 export async function filaDoHoje(pessoa: Pessoa, agora = new Date()): Promise<ItemFila[]> {
   const cfg = await configDoPapel(pessoa.usuarioId, pessoa.papel)
   const u = pessoa.usuarioId, eu = pessoa.vendedorId
@@ -244,9 +267,9 @@ export async function filaDoHoje(pessoa: Pessoa, agora = new Date()): Promise<It
   if (pessoa.papel === 'DONO') {
     const vendas = await prisma.venda.findMany({ where: { usuarioId: u, situacao: 'AGUARDANDO_CONFIRMACAO' }, orderBy: { data: 'asc' }, select: { id: true, data: true, vendedor: { select: { nome: true } }, lead: { select: { nomeCliente: true } } } })
     for (const v of vendas) add('VENDA_A_CONFIRMAR', { titulo: `Confirmar a venda de ${primeiro(v.lead?.nomeCliente)}`, detalhe: `por ${primeiro(v.vendedor?.nome)} em ${v.data.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`, quando: v.data.toISOString(), ref: { tipo: 'VENDA', id: v.id }, href: '/pro-labore/vendas', acao: { rotulo: 'Confirmar', tipo: 'LINK', href: '/pro-labore/vendas' } })
-    const pend = await prisma.venda.groupBy({ by: ['vendedorId'], where: { usuarioId: u, situacao: 'CONFIRMADA', valorComissao: { gt: 0 }, pagamentoComissaoId: null }, _count: true })
-    const nomes = new Map((await prisma.vendedor.findMany({ where: { usuarioId: u }, select: { id: true, nome: true } })).map(v => [v.id, primeiro(v.nome)]))
-    for (const p of pend) add('PAGAMENTO_A_APROVAR', { titulo: `Aprovar o pagamento de comissão de ${nomes.get(p.vendedorId ?? '') ?? 'sem vendedor'}`, detalhe: `${p._count} venda(s) confirmada(s) sem pagamento`, quando: null, ref: p.vendedorId ? { tipo: 'VENDEDOR', id: p.vendedorId } : null, href: '/pro-labore/vendas', acao: { rotulo: 'Aprovar o pagamento', tipo: 'LINK', href: '/pro-labore/vendas' } })
+    // PDF 06 · correções 3 e 10: uma linha por vendedor, contando vendas (a mesma unidade do número);
+    // vendas sem vendedor viram um item próprio, que lista as vendas e pede o vendedor antes de pagar.
+    for (const it of await pagamentosPendentes(u)) add('PAGAMENTO_A_APROVAR', it)
     const sug = await prisma.sugestaoAjuste.findMany({ where: { usuarioId: u, status: 'PENDENTE' }, orderBy: { criadoEm: 'asc' } })
     for (const s of sug) {
       const meta = s.parametro.startsWith('meta')
@@ -267,9 +290,7 @@ export async function filaDoHoje(pessoa: Pessoa, agora = new Date()): Promise<It
   }
 
   if (pessoa.papel === 'FINANCEIRO') {
-    const pend = await prisma.venda.groupBy({ by: ['vendedorId'], where: { usuarioId: u, situacao: 'CONFIRMADA', valorComissao: { gt: 0 }, pagamentoComissaoId: null }, _count: true })
-    const nomes = new Map((await prisma.vendedor.findMany({ where: { usuarioId: u }, select: { id: true, nome: true } })).map(v => [v.id, primeiro(v.nome)]))
-    for (const p of pend) add('PAGAMENTO_A_LANCAR', { titulo: `Lançar a comissão de ${nomes.get(p.vendedorId ?? '') ?? 'sem vendedor'}`, detalhe: `${p._count} venda(s) confirmada(s)`, quando: null, ref: p.vendedorId ? { tipo: 'VENDEDOR', id: p.vendedorId } : null, href: '/pro-labore/vendas', acao: { rotulo: 'Lançar', tipo: 'LINK', href: '/pro-labore/vendas' } })
+    for (const it of await pagamentosPendentes(u, true)) add('PAGAMENTO_A_LANCAR', it)
     add('COMPROVANTE_FALTANDO', { titulo: 'Comprovantes faltando', detalhe: 'O sistema ainda não registra se o comprovante foi anexado; fica como ponto de extensão.', quando: null, ref: null, href: null, acao: null, extensao: true })
     const div = ((await calcular('divergencias_vendas_financeiro', { usuarioId: u, papel: 'FINANCEIRO' }, { inicio: hojeBrt(agora), fim: hojeBrt(agora) }, agora)).detalhe as { ids: string[] }).ids
     const pags = await prisma.pagamentoComissao.findMany({ where: { id: { in: div } }, select: { id: true, numero: true, pagoEm: true } })
@@ -341,7 +362,13 @@ async function principalDe(pessoa: Pessoa, chave: string | null, agora: Date): P
   const ficha = (await fichas(pessoa.usuarioId)).find(f => f.chave === chave)
   if (!ficha || !ficha.quemVe.includes(pessoa.papel)) return null
   const pessoal = pessoa.papel === 'VENDEDOR' || pessoa.papel === 'SDR'
-  return ler(chave, { usuarioId: pessoa.usuarioId, papel: pessoa.papel, vendedorId: pessoal ? pessoa.vendedorId ?? '__nenhum__' : null }, ficha.retrato ? { inicio: hojeBrt(agora), fim: hojeBrt(agora) } : mesCorrente(agora), agora).catch(() => null)
+  const l = await ler(chave, { usuarioId: pessoa.usuarioId, papel: pessoa.papel, vendedorId: pessoal ? pessoa.vendedorId ?? '__nenhum__' : null }, ficha.retrato ? { inicio: hojeBrt(agora), fim: hojeBrt(agora) } : mesCorrente(agora), agora).catch(() => null)
+  // PDF 06 · correção 4: a previsão é sempre lida contra a meta (a mesma conta do Hoje, do Daily e da REC).
+  if (l && chave === 'previsao_fechamento') {
+    const m = await situacaoDaMeta(pessoa.usuarioId, agora, pessoal ? pessoa.vendedorId : null).catch(() => null)
+    if (m?.faixa) return { ...l, valor: m.previsao, faixa: m.faixa, padrao: m.meta }
+  }
+  return l
 }
 
 const NADA = 'Nada fora do normal nesta aba'
@@ -367,7 +394,7 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
     if (pessoa.papel === 'SDR') {
       const h = hojeBrt(agora), ini = new Date(new Date(`${h}T00:00:00Z`).getTime() - 6 * DIA).toISOString().slice(0, 10)
       const l = await ler('taxa_devolucao', { usuarioId: u, papel: 'SDR', vendedorId: pessoa.vendedorId ?? '__nenhum__' }, { inicio: ini, fim: h }, agora).catch(() => null)
-      if (l) itens.push({ tipo: 'NUMERO', id: null, codigo: null, achado: `Taxa de devolução da semana: ${l.valor == null ? 'sem passagens' : `${l.valor}%`}`, evidencia: l.anterior?.valor != null ? `semana anterior: ${l.anterior.valor}%` : 'Leads devolvidos pelo vendedor ÷ leads passados', forca: null, acao: { rotulo: 'Ver as devoluções', href: '/pro-labore/leads' }, podeAceitar: false, podeDescartar: false })
+      if (l) itens.push({ tipo: 'NUMERO', id: null, codigo: null, achado: `Taxa de devolução da semana: ${l.valor == null ? 'sem passagens' : fmtValor(l.valor, 'PCT')}`, evidencia: l.anterior?.valor != null ? `semana anterior: ${fmtValor(l.anterior.valor, 'PCT')}` : 'Leads devolvidos pelo vendedor ÷ leads passados', forca: null, acao: { rotulo: 'Ver as devoluções', href: '/pro-labore/leads' }, podeAceitar: false, podeDescartar: false })
     }
   } else if (pessoa.papel === 'SUPERVISOR') {
     // Equipe e etapa, mais o que a onda 4 manda para ele (Reativação, ocorrências, boas práticas).
@@ -378,7 +405,7 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
     const leituras = await Promise.all(chaves.map(c => principalDe(pessoa, c, agora)))
     const riscos = leituras.filter((l): l is Leitura => !!l && l.faixa === 'CRITICO').slice(0, 3)
     itens = [
-      ...riscos.map(l => ({ tipo: 'RISCO' as const, id: null, codigo: null, achado: `${l.nome} em faixa crítica`, evidencia: l.anterior?.valor != null ? `agora ${l.valor} contra ${l.anterior.valor} no mesmo intervalo anterior` : `padrão da loja: ${l.padrao ?? 'sem histórico'}`, forca: null, acao: { rotulo: 'Perguntar ao ARIES por quê', href: `/pro-labore/pergunte?q=${encodeURIComponent(`Por que ${l.nome.toLowerCase()} está crítico?`)}` }, podeAceitar: false, podeDescartar: false })),
+      ...riscos.map(l => ({ tipo: 'RISCO' as const, id: null, codigo: null, achado: `${l.nome} em faixa crítica`, evidencia: l.anterior?.valor != null ? `agora ${fmtValor(l.valor, l.unidade)}; mesmo período do mês anterior: ${fmtValor(l.anterior.valor, l.unidade)}` : `padrão da loja: ${l.padrao != null ? fmtValor(l.padrao, l.unidade) : 'sem histórico'}`, forca: null, acao: { rotulo: 'Perguntar ao ARIES por quê', href: `/pro-labore/pergunte?q=${encodeURIComponent(`Por que ${l.nome.toLowerCase()} está crítico?`)}` }, podeAceitar: false, podeDescartar: false })),
       ...(await recsVisiveis(pessoa, {})).map(r => recParaLente(r, pessoa)),
     ]
   } else if (pessoa.papel === 'TRAFEGO') {
@@ -479,7 +506,7 @@ export async function acaoDoSupervisor(pessoa: Pessoa, corpo: { acao: string; de
     const atv = await prisma.atividade.create({
       data: {
         usuarioId: u, auditoriaAutor: autor(pessoa), tipo: intervir ? 'INTERVENCAO_SUPERVISOR' : 'PLANO_DE_ACAO', origemTipo: 'ROTINA', origemId: `hoje-supervisor|${alvo.id}`,
-        responsavelId: intervir ? pessoa.vendedorId : alvo.id, prazo: new Date(agora.getTime() + (intervir ? 2 * H : 3 * DIA)),
+        responsavelId: intervir ? pessoa.vendedorId : alvo.id, prazo: intervir ? new Date(agora.getTime() + 2 * H) : prazoNoExpediente(agora, 3, await lerExpediente(u)),
         oQueFazer: intervir ? `Intervir com ${primeiro(alvo.nome)}: ${texto}` : `Plano de ação: ${texto}`,
         registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
       },

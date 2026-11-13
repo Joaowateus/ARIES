@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { proLaboreApi, type ApresentacaoDetalhe, type ErroApi } from '@/lib/proLaboreApi'
 import Apresentador from '../_componentes/Apresentador'
 import Espectador from '../_componentes/Espectador'
+import EspectadorDaily from '../_componentes/EspectadorDaily'
 import { SenhaDepartamento } from '../_componentes/Organizacao'
 
 // Mesma URL pra todo mundo: o dono abre como apresentador (edita e
@@ -48,6 +49,8 @@ export default function ProLaboreApresentacaoPage() {
     )
   }
   if (!dados || dados.id !== id) return <div className="pl-hint">Carregando apresentação…</div>
+  // PDF 06: o Daily transmitido abre sempre como espectador, no modo equipe (inclusive para quem conduz, em outra tela).
+  if ((dados.detalhe.configuracao as { tipo?: string } | null)?.tipo === 'DAILY') return <EspectadorDaily key={id} inicial={dados.detalhe} />
   return dados.detalhe.podeEditar
     ? <Apresentador key={id} inicial={dados.detalhe} />
     : <Espectador key={id} inicial={dados.detalhe} />

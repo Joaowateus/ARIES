@@ -80,7 +80,8 @@ export default function ProLaboreVendasPage() {
   // paga", filtro da tabela e a venda sendo desmarcada (pra travar o clique).
   const [pagando, setPagando] = useState<{ tipo: TipoPagamentoVenda; vendas: Venda[] } | null>(null)
   const [filtroPagamento, setFiltroPagamento] = useState<FiltroPagamento>('todas')
-  const [filtroVendedor, setFiltroVendedor] = useState('')
+  // PDF 06 · correção 3: o Hoje leva para cá as vendas sem vendedor definido (?filtro=sem-vendedor).
+  const [filtroVendedor, setFiltroVendedor] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('filtro') === 'sem-vendedor' ? '__sem__' : '')
   const [desmarcando, setDesmarcando] = useState<string | null>(null)
   const [erroComissao, setErroComissao] = useState('')
 
@@ -356,7 +357,8 @@ export default function ProLaboreVendasPage() {
   }, new Map<string, { id: string; nome: string; vendas: Venda[]; total: number }>()).values()].sort((a, b) => b.total - a.total)
 
   const visiveis = vendas.filter(v => {
-    if (filtroVendedor && v.vendedorId !== filtroVendedor) return false
+    if (filtroVendedor === '__sem__') { if (v.vendedorId) return false }
+    else if (filtroVendedor && v.vendedorId !== filtroVendedor) return false
     if (filtroPagamento === 'todas') return true
     const [tipo, sit] = filtroPagamento.split('-') as [TipoPagamentoVenda, 'apagar' | 'pago']
     return sit === 'pago' ? !!pagamentoDe(tipo, v) : aPagarDe(tipo, v)
@@ -575,6 +577,7 @@ export default function ProLaboreVendasPage() {
             </select>
             <select className="pl-select pl-cms-vendedor" value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} aria-label="Filtrar por vendedor">
               <option value="">Todos os vendedores</option>
+              <option value="__sem__">Sem vendedor definido</option>
               {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
             </select>
           </div>
