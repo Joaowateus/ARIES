@@ -265,6 +265,12 @@ export interface Lead {
   pendenciasEtapa?: string[]
   temperaturaManual?: Temperatura | null
   calor?: { valor: Temperatura; pontos: number; manual: boolean; motivo: string }
+  // Pré-venda do robô (Ajuste 3): o que o robô está fazendo e a cadência de follow escolhida pelo vendedor.
+  preVenda?: {
+    robo: { codigo: 'PAUSADO' | 'COLETANDO' | 'PRONTO' | 'COM_VENDEDOR'; texto: string } | null
+    cadencia: { status: 'ATIVO' | 'PAUSADO' | 'CONCLUIDO' | 'PAROU_RESPOSTA' | 'CANCELADO'; nome: string; texto: string; passo: number; total: number; proximoEm: string | null } | null
+  } | null
+  levantamento?: { motoId?: string | null; entradaValor?: number | null; parcelaDesejada?: number | null; prazoMeses?: number | null; troca?: string | null; cidade?: string | null; melhorHorario?: string | null; prontoEm?: string | null } | null
   revisarEtapa?: boolean
   vendaSemVisita?: boolean
   anteriorMigracao?: boolean
@@ -632,6 +638,11 @@ export const proLaboreApi = {
   jornada: {
     checklist: (id: string) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/checklist`),
     mover: (id: string, etapa: EtapaJornada, contatoFora?: boolean, forcar?: boolean) => request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/etapa`, { method: 'POST', body: JSON.stringify({ etapa, contatoFora, forcar }) }),
+    cadencias: () => request<CadenciaRobo[]>('/pro-labore/jornada/robo/cadencias'),
+    salvarCadencias: (lista: CadenciaRobo[]) => request<CadenciaRobo[]>('/pro-labore/jornada/robo/cadencias', { method: 'PUT', body: JSON.stringify(lista) }),
+    aplicarCadencia: (leadIds: string[], cadenciaId: string, inicio?: string, passos?: PassoCadenciaRobo[]) => request<{ aplicados: number; resultados: Array<{ leadId: string; ok: boolean; motivo?: string }> }>('/pro-labore/jornada/robo/cadencia', { method: 'POST', body: JSON.stringify({ leadIds, cadenciaId, inicio, passos }) }),
+    mudarCadencia: (leadId: string, acao: 'pausar' | 'retomar' | 'cancelar') => request<unknown>(`/pro-labore/jornada/robo/leads/${leadId}/cadencia/${acao}`, { method: 'POST', body: '{}' }),
+    robo: (leadId: string, acao: 'pausar' | 'retomar') => request<unknown>(`/pro-labore/jornada/robo/leads/${leadId}/${acao}`, { method: 'POST', body: '{}' }),
     temperatura: (id: string, temperatura: Temperatura | null) => request<{ ok: boolean }>(`/pro-labore/jornada/leads/${id}/temperatura`, { method: 'PATCH', body: JSON.stringify({ temperatura }) }),
     levantamento: (id: string, data: { modeloInteresse?: string | null; formaPagamento?: 'A_VISTA' | 'FINANCIADO' | null; situacaoCnh?: 'TEM' | 'EM_PROCESSO' | 'NAO_TEM' | null; temEntrada?: boolean | null }) =>
       request<ChecklistJornada>(`/pro-labore/jornada/leads/${id}/levantamento`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -3480,6 +3491,8 @@ export interface SaudeBanco { usadoMB: number; limiteMB: number; alertaMB: numbe
 export type CanalFollow = 'WHATSAPP' | 'LIGACAO' | 'VISITA' | 'EMAIL' | 'OUTRO'
 export type MotivoPerda = 'SEM_MOMENTO' | 'SEM_CREDITO' | 'PRECO' | 'SEM_RESPOSTA' | 'CONCORRENCIA' | 'SEM_ESTOQUE' | 'DESISTIU' | 'OUTRO'
 export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE'
+export interface PassoCadenciaRobo { dias: number; texto: string; midia: 'NENHUMA' | 'FOTO_MOTO' | 'VIDEO_MOTO' | 'IMAGEM'; imagem?: string | null }
+export interface CadenciaRobo { id: string; nome: string; descricao: string; passos: PassoCadenciaRobo[] }
 // CREDITO = nova análise de crédito do vendedor (depois da recusa); convive com o follow comum.
 export interface FollowLead { id: string; agendadoPara: string; canal: CanalFollow | null; nota: string | null; tipo?: 'CONTATO' | 'CREDITO'; contexto?: { conversaId: string; bancos: string[]; recusadoEm: string } | null; status?: 'PENDENTE' | 'FEITO' | 'CANCELADO'; feitoEm?: string | null; resultado?: string | null; criadoPor?: string | null; criadoEm?: string }
 // Por onde mandar a mensagem do follow: a conversa no WhatsApp do sistema (ou o motivo de não dar) e o texto sugerido.

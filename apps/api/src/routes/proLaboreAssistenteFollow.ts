@@ -55,6 +55,7 @@ async function desempenhoPorFluxo(usuarioId: string, vendedorId: string | null, 
   for (const r of respostas) porConversa.set(r.conversaId, [...(porConversa.get(r.conversaId) ?? []), r.criadoEm.getTime()])
   const linhas = new Map<SituacaoFollow, { enviados: number; responderam: number }>(SITUACOES_FOLLOW.map(s => [s, { enviados: 0, responderam: 0 }]))
   for (const m of enviadas) {
+    if (m.followFluxo === 'CADENCIA') continue // cadência escolhida pelo vendedor: fora do desempenho dos fluxos automáticos
     const l = linhas.get(SITUACOES_FOLLOW.includes(m.followFluxo as SituacaoFollow) ? m.followFluxo as SituacaoFollow : 'SEM_RESPOSTA')!
     l.enviados++
     const t = m.criadoEm.getTime()

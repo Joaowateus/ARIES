@@ -4,7 +4,9 @@
 // configurável, reconhece pedido de atendente/desistência por palavras-chave
 // e entrega um resumo pronto pro vendedor.
 
-export const CAMPOS_LEAD = ['modeloInteresse', 'formaPagamento', 'valorEntrada', 'veiculoTroca', 'cidade', 'melhorHorario', 'nomeCompleto', 'outro'] as const
+import { extrairDoTexto, lerPagamento } from './assistentePreVenda'
+
+export const CAMPOS_LEAD = ['modeloInteresse', 'formaPagamento', 'valorEntrada', 'situacaoCnh', 'parcelaDesejada', 'prazoDesejado', 'veiculoTroca', 'cidade', 'melhorHorario', 'nomeCompleto', 'outro'] as const
 export type CampoLead = (typeof CAMPOS_LEAD)[number]
 
 export interface PerguntaRoteiro {
@@ -44,6 +46,8 @@ export const CONFIG_PADRAO: ConfigAssistente = {
     { id: 'interesse', rotulo: 'Veículo de interesse', campo: 'modeloInteresse', texto: 'Qual veículo te interessou? Pode mandar o modelo, o ano ou o anúncio que você viu.' },
     { id: 'pagamento', rotulo: 'Forma de pagamento', campo: 'formaPagamento', texto: 'Como você pensa em pagar?', opcoes: ['À vista', 'Financiado', 'Tenho um veículo pra dar na troca'] },
     { id: 'entrada', rotulo: 'Entrada', campo: 'valorEntrada', texto: 'Tem algum valor de entrada em mente? Se ainda não tiver, pode responder "não".' },
+    { id: 'cnh', rotulo: 'CNH', campo: 'situacaoCnh', texto: 'E a habilitação (CNH categoria A)?', opcoes: ['Tenho CNH', 'Estou tirando', 'Não tenho'] },
+    { id: 'parcela', rotulo: 'Parcela que cabe', campo: 'parcelaDesejada', texto: 'Quanto de parcela cabe no seu bolso por mês? Assim {vendedor} já monta a melhor condição pra você.' },
     { id: 'horario', rotulo: 'Melhor horário', campo: 'melhorHorario', texto: 'Qual o melhor horário pra {vendedor} te chamar?' },
   ],
   mensagemEncerramento: 'Perfeito, anotei tudo! ✅ Já passei suas respostas pra {vendedor}, que vai te chamar por aqui em instantes.',
@@ -54,6 +58,20 @@ export const CONFIG_PADRAO: ConfigAssistente = {
   atrasoSegundos: 3,
   alertaEsperaMin: 10,
   resumoManha: true,
+}
+
+// Pré-venda (Ajuste 3): o levantamento que o CRM exige (modelo, pagamento,
+// entrada e CNH) sempre é perguntado, mesmo numa configuração salva antes.
+const OBRIGATORIAS: CampoLead[] = ['modeloInteresse', 'formaPagamento', 'valorEntrada', 'situacaoCnh']
+function comLevantamento(perguntas: PerguntaRoteiro[]): PerguntaRoteiro[] {
+  const lista = [...perguntas]
+  for (const campo of OBRIGATORIAS) {
+    if (lista.some(p => p.campo === campo)) continue
+    const padrao = CONFIG_PADRAO.perguntas.find(p => p.campo === campo)!
+    const antesDe = lista.findIndex(p => p.campo === 'melhorHorario')
+    lista.splice(antesDe >= 0 ? antesDe : lista.length, 0, { ...padrao, id: lista.some(p => p.id === padrao.id) ? `${padrao.id}_lv` : padrao.id })
+  }
+  return lista
 }
 
 // Mescla o que está salvo com o padrão — config antiga (ou incompleta)
@@ -75,7 +93,7 @@ export function lerConfig(salva: unknown): ConfigAssistente {
     responderContatosNovos: typeof c.responderContatosNovos === 'boolean' ? c.responderContatosNovos : CONFIG_PADRAO.responderContatosNovos,
     gatilhos: Array.isArray(c.gatilhos) ? c.gatilhos.map(String).map(g => g.trim()).filter(Boolean) : CONFIG_PADRAO.gatilhos,
     mensagemBoasVindas: texto(c.mensagemBoasVindas, CONFIG_PADRAO.mensagemBoasVindas),
-    perguntas,
+    perguntas: comLevantamento(perguntas),
     mensagemEncerramento: texto(c.mensagemEncerramento, CONFIG_PADRAO.mensagemEncerramento),
     mensagemAtendente: texto(c.mensagemAtendente, CONFIG_PADRAO.mensagemAtendente),
     mensagemDespedida: texto(c.mensagemDespedida, CONFIG_PADRAO.mensagemDespedida),
@@ -227,6 +245,32 @@ function comResposta(daBase: RespostaDaBase | null, mensagens: string[], antesDe
   return { mensagens: mensagens.map((m, j) => (j === i ? `${semPerguntaFinal(daBase.texto)}\n\n${m}` : m)), ...usado }
 }
 
+// Pré-venda: não pergunta o que o cliente já disse, e à vista não tem entrada, parcela nem prazo.
+function pagamentoDas(cfg: ConfigAssistente, respostas: Record<string, string>): 'A_VISTA' | 'FINANCIADO' | null {
+  const v = respostaDoCampo(cfg, respostas, 'formaPagamento')
+  return v ? lerPagamento(v) : null
+}
+function deveFazer(cfg: ConfigAssistente, p: PerguntaRoteiro, respostas: Record<string, string>): boolean {
+  if (respostas[p.id]) return false
+  if (['valorEntrada', 'parcelaDesejada', 'prazoDesejado'].includes(p.campo) && pagamentoDas(cfg, respostas) === 'A_VISTA') return false
+  return true
+}
+export function proximaPergunta(cfg: ConfigAssistente, respostas: Record<string, string>, de: number): number {
+  let i = de
+  while (i < cfg.perguntas.length && !deveFazer(cfg, cfg.perguntas[i], respostas)) i++
+  return i
+}
+/** O que dá para tirar da mensagem livre preenche as perguntas ainda sem resposta ("Titan financiada, tenho CNH"). */
+export function preencherPelaMensagem(cfg: ConfigAssistente, respostas: Record<string, string>, texto: string, exceto?: string): Record<string, string> {
+  const achado = extrairDoTexto(texto)
+  const r = { ...respostas }
+  for (const p of cfg.perguntas) {
+    const v = achado[p.campo]
+    if (v && !r[p.id] && p.id !== exceto) r[p.id] = v
+  }
+  return r
+}
+
 function tambemResponde(p: PerguntaRoteiro, texto: string, daBase: RespostaDaBase): boolean {
   if (p.opcoes?.length) return p.opcoes.includes(interpretarResposta(p, texto))
   return !!daBase.resto
@@ -242,12 +286,12 @@ export function iniciarRoteiro(cfg: ConfigAssistente, ctx: ContextoRoteiro, text
   // Primeira mensagem já com uma dúvida ("Aceita troca?", "Tem a XRE?"): responde junto.
   const daBase = base?.responder(textoInicial, []) ?? null
   if (daBase) estado.respostas._kb = daBase.id
-  // A moto pedida já responde a primeira pergunta ("Qual veículo te interessou?").
-  const p0 = cfg.perguntas[0]
-  if (p0 && daBase?.valeComo?.campo === p0.campo) {
-    estado.respostas[p0.id] = daBase.valeComo.valor
-    estado.etapa = 1
-  }
+  // A moto pedida já responde "Qual veículo te interessou?"; o resto da mensagem pode responder outras.
+  const pm = daBase?.valeComo ? cfg.perguntas.find(p => p.campo === daBase.valeComo!.campo) : null
+  if (pm && daBase?.valeComo) estado.respostas[pm.id] = daBase.valeComo.valor
+  if (daBase?.motoId) estado.respostas._motoId = daBase.motoId
+  estado.respostas = preencherPelaMensagem(cfg, estado.respostas, textoInicial)
+  estado.etapa = proximaPergunta(cfg, estado.respostas, 0)
   const proxima = cfg.perguntas[estado.etapa]
   const fim = proxima ? null : preencher(cfg.mensagemEncerramento, ctx)
   if (daBase?.foto) {
@@ -346,6 +390,7 @@ export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, text
   const usados = usadosDaBase(estado.respostas)
   const daBase = base?.responder(texto, usados) ?? null
   if (daBase) estado.respostas._kb = [...usados, daBase.id].join(',')
+  if (daBase?.motoId) estado.respostas._motoId = daBase.motoId
   const valeComo = pergunta && daBase?.valeComo?.campo === pergunta.campo ? daBase.valeComo.valor : null
   // O cliente só perguntou, sem responder: resposta da loja e a mesma
   // pergunta de novo (a etapa não anda).
@@ -354,10 +399,14 @@ export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, text
   }
   // "Pode me ligar às 18h" responde a pergunta E pede atendimento — guarda
   // a resposta antes de passar a conversa pro vendedor.
-  if (pergunta) estado.respostas[pergunta.id] = valeComo ?? interpretarResposta(pergunta, texto)
+  if (pergunta) {
+    estado.respostas[pergunta.id] = valeComo ?? interpretarResposta(pergunta, texto)
+    estado.respostas._anterior = pergunta.id
+    estado.respostas = preencherPelaMensagem(cfg, estado.respostas, texto, pergunta.id)
+  }
   if (pedeAtendente(texto)) return { ...comResposta(daBase, [preencher(cfg.mensagemAtendente, ctx)]), estado, desfecho: 'PEDIU_ATENDENTE' }
 
-  estado.etapa += 1
+  estado.etapa = proximaPergunta(cfg, estado.respostas, estado.etapa + 1)
   const proxima = cfg.perguntas[estado.etapa]
   if (proxima) return { ...comResposta(daBase, [textoPergunta(proxima, ctx)]), estado, desfecho: null }
   return encerrar(cfg, estado, ctx, daBase, sim)
@@ -367,7 +416,7 @@ export function avancarRoteiro(cfg: ConfigAssistente, atual: EstadoRoteiro, text
 // anterior ("Onix" + "2020 prata") — junta na resposta da pergunta que ele
 // estava respondendo, em vez de tratar como resposta da próxima.
 export function complementarResposta(cfg: ConfigAssistente, atual: EstadoRoteiro, texto: string): EstadoRoteiro {
-  const pergunta = cfg.perguntas[atual.etapa - 1]
+  const pergunta = cfg.perguntas.find(p => p.id === atual.respostas._anterior) ?? cfg.perguntas[atual.etapa - 1]
   // Nos passos da simulação (renda, CPF) nada vai para a resposta anterior.
   if (!pergunta || PASSOS_EXTRAS.includes(atual.respostas._simulacao)) return atual
   const anterior = atual.respostas[pergunta.id]

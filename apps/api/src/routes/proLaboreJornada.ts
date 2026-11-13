@@ -1,5 +1,8 @@
+import { Prisma } from '@prisma/client'
 // Rotas da jornada de 10 etapas (PDF 01): checklist do que falta, mudança de
 // etapa com critério, Levantamento e registro de perda pelo motivo da etapa.
+import { responderAoRetomar } from '../lib/assistenteMotor'
+import { aplicarCadencia, cadenciasDaLoja, mudarCadencia, mudarRobo } from '../lib/assistenteCadenciaCrm'
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
@@ -50,6 +53,55 @@ router.post('/jornada/leads/:id/etapa', ...editar, async (req: Request, res: Res
     const l = await leadDaJornada(usuarioId, String(req.params.id), resto)
     await moverEtapa(l, p.data.etapa, { contatoFora: p.data.contatoFora, forcar: p.data.forcar })
     res.json(await checklist(await leadDaJornada(usuarioId, l.id)))
+  } catch (e) { falha(res, e) }
+})
+
+// --- Pré-venda do robô (Ajuste 3): follow pelo robô escolhido pelo vendedor e o robô por lead ---
+router.get('/jornada/robo/cadencias', ...ver, async (req: Request, res: Response) => {
+  res.json(await cadenciasDaLoja(escopo(req).usuarioId))
+})
+const passoSchema = z.object({ dias: z.number().int().min(0).max(90), texto: z.string().trim().min(3).max(900), midia: z.enum(['NENHUMA', 'FOTO_MOTO', 'VIDEO_MOTO', 'IMAGEM']).default('NENHUMA'), imagem: z.string().nullable().optional() })
+router.put('/jornada/robo/cadencias', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const p = z.array(z.object({ id: z.string().trim().min(2).max(40), nome: z.string().trim().min(2).max(60), descricao: z.string().max(160).default(''), passos: z.array(passoSchema).min(1).max(8) })).max(20).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return }
+  const usuarioId = req.proLaboreUser!.sub
+  await prisma.assistenteLoja.upsert({ where: { usuarioId }, create: { usuarioId, cadencias: p.data as Prisma.InputJsonValue }, update: { cadencias: p.data as Prisma.InputJsonValue } })
+  res.json(await cadenciasDaLoja(usuarioId))
+})
+router.post('/jornada/robo/cadencia', ...editar, async (req: Request, res: Response) => {
+  const p = z.object({ leadIds: z.array(z.string()).min(1).max(200), cadenciaId: z.string().min(1), inicio: z.string().datetime().optional(), passos: z.array(passoSchema).max(8).optional() }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'Escolha os clientes e a cadência' }); return }
+  const { usuarioId, resto } = escopo(req)
+  const u = req.proLaboreUser!
+  try {
+    const r = await aplicarCadencia(usuarioId, p.data.leadIds, p.data.cadenciaId, { inicio: p.data.inicio ? new Date(p.data.inicio) : undefined, passos: p.data.passos as never, autor: { id: u.sub, nome: (u as { nome?: string }).nome ?? null }, escopo: resto })
+    res.json({ aplicados: r.filter(x => x.ok).length, resultados: r })
+  } catch (e) { res.status(400).json({ error: e instanceof Error ? e.message : 'Não foi possível' }) }
+})
+router.post('/jornada/robo/leads/:id/cadencia/:acao', ...editar, async (req: Request, res: Response) => {
+  const acao = String(req.params.acao)
+  if (!['pausar', 'retomar', 'cancelar'].includes(acao)) { res.status(400).json({ error: 'Ação inválida' }); return }
+  try {
+    const { usuarioId, resto } = escopo(req)
+    const l = await prisma.lead.findFirst({ where: { id: String(req.params.id), usuarioId, ...resto }, select: { id: true } })
+    if (!l) { res.status(404).json({ error: 'Lead não encontrado' }); return }
+    const c = await mudarCadencia(l.id, acao as 'pausar' | 'retomar' | 'cancelar')
+    if (!c) { res.status(404).json({ error: 'Este cliente não tem cadência do robô' }); return }
+    res.json(c)
+  } catch (e) { falha(res, e) }
+})
+router.post('/jornada/robo/leads/:id/:acao', ...editar, async (req: Request, res: Response) => {
+  const acao = String(req.params.acao)
+  if (acao !== 'pausar' && acao !== 'retomar') { res.status(400).json({ error: 'Ação inválida' }); return }
+  try {
+    const { usuarioId, resto } = escopo(req)
+    const l = await prisma.lead.findFirst({ where: { id: String(req.params.id), usuarioId, ...resto }, select: { id: true } })
+    if (!l) { res.status(404).json({ error: 'Lead não encontrado' }); return }
+    const r = await mudarRobo(l.id, acao)
+    if (!r) { res.status(404).json({ error: 'Este cliente ainda não conversou com o robô' }); return }
+    // Retomou: o robô responde o que o cliente mandou enquanto estava pausado.
+    if (acao === 'retomar' && r.pausadoAntes) await responderAoRetomar(r.id, r.pausadoAntes).catch(e => console.error('[pré-venda] retomar', e))
+    res.json({ id: r.id, pausadoEm: r.pausadoEm })
   } catch (e) { falha(res, e) }
 })
 

@@ -242,12 +242,20 @@ export async function checklist(l: LeadJornada) {
  */
 export async function avancarPorFatos(leadId: string, autor: Autor = { origem: 'AUTOMACAO' }) {
   return comAutor(autor, async () => {
-    const l = await prisma.lead.findUnique({ where: { id: leadId }, select: SELECT_JORNADA })
-    if (!l?.etapa || l.estagio === 'PERDIDO' || l.vendaId) return null
-    const proxima: Partial<Record<Etapa, Etapa>> = { LEAD: 'ABORDADO', LEVANTAMENTO: 'MQL', MQL: 'SQL' }
-    const destino = proxima[l.etapa as Etapa]
-    if (!destino || (await faltasPara(l, destino)).length) return null
-    await gravarEtapa(l, destino, {}, destino === 'ABORDADO' ? 'uma pessoa da loja respondeu' : destino === 'MQL' ? 'simulação enviada com o levantamento completo' : 'banco aprovou o crédito')
-    return destino
+    // Pré-venda (Ajuste 3, aprovado 13/11): também Abordado → Levantamento quando a coleta começou
+    // (o robô ou a pessoa já tem modelo, pagamento, CNH ou entrada). Encadeia: Lead → Abordado → Levantamento.
+    const proxima: Partial<Record<Etapa, Etapa>> = { LEAD: 'ABORDADO', ABORDADO: 'LEVANTAMENTO', LEVANTAMENTO: 'MQL', MQL: 'SQL' }
+    const MOTIVO: Partial<Record<Etapa, string>> = { ABORDADO: 'uma pessoa da loja respondeu', LEVANTAMENTO: 'a coleta do levantamento começou', MQL: 'simulação enviada com o levantamento completo', SQL: 'banco aprovou o crédito' }
+    let ultimo: Etapa | null = null
+    for (let i = 0; i < 3; i++) {
+      const l = await prisma.lead.findUnique({ where: { id: leadId }, select: SELECT_JORNADA })
+      if (!l?.etapa || l.estagio === 'PERDIDO' || l.vendaId) break
+      const destino = proxima[l.etapa as Etapa]
+      if (!destino || (await faltasPara(l, destino)).length) break
+      if (destino === 'LEVANTAMENTO' && !(l.modeloInteresse?.trim() || l.formaPagamento || l.situacaoCnh || l.temEntrada !== null)) break
+      await gravarEtapa(l, destino, {}, MOTIVO[destino])
+      ultimo = destino
+    }
+    return ultimo
   })
 }
