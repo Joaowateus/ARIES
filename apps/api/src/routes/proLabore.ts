@@ -1,3 +1,6 @@
+import { ErroJornada, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
+import { motivoNovo } from '../lib/migracaoJornada'
+import type { Etapa } from '../lib/etapasJornada'
 import { temperaturaDoLead } from '../lib/temperaturaLead'
 import { Router, Request, Response, NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
@@ -1134,9 +1137,27 @@ router.post('/leads/:id/estagio', requireProLaboreAuth, requireModulo('crm', 'ED
     res.json(atual)
     return
   }
-  // Lead da jornada de 10 etapas: muda pelo quadro novo, com critério (só reativar continua aqui).
+  // Lead da jornada de 10 etapas (CRM livre): as telas antigas (Marcar como perdido, menu "mover")
+  // continuam funcionando, passando pelas regras novas; nada é recusado, só o que falta fica como pendência.
   if (atual.etapa && !(atual.estagio === 'PERDIDO' && parse.data.estagio !== 'PERDIDO')) {
-    res.status(409).json({ error: 'Este lead está na nova jornada de 10 etapas: mude a etapa pelo quadro novo do CRM.', codigo: 'JORNADA_10' })
+    try {
+      const l = await leadDaJornada(atual.usuarioId, atual.id)
+      if (parse.data.estagio === 'PERDIDO') {
+        if (!parse.data.motivoPerda) { res.status(400).json({ error: 'Escolha o motivo da perda' }); return }
+        if (parse.data.motivoPerda === 'OUTRO' && !parse.data.notaPerda) { res.status(400).json({ error: 'Com o motivo "Outro", explique em uma frase o que aconteceu' }); return }
+        await registrarPerda(l, parse.data.motivoPerda === 'OUTRO' ? 'OUTRO' : motivoNovo(parse.data.motivoPerda, (atual.etapa ?? 'LEAD') as Etapa), parse.data.notaPerda || null)
+        await prisma.lead.update({ where: { id: atual.id }, data: { temperatura: parse.data.temperatura ?? null } })
+        await cancelarLigacoesDoLead(prisma, atual.id, 'Lead perdido')
+      } else if (parse.data.estagio === 'FECHADO') {
+        res.status(409).json({ error: 'Para fechar, use "Registrar venda" no card (o dono confirma depois).', codigo: 'JORNADA_10' }); return
+      } else {
+        await moverEtapa(l, ({ LEAD: 'LEAD', ABORDADO: 'ABORDADO', NEGOCIACAO: 'NEGOCIACAO', PROPOSTA: 'PROPOSTA' } as Record<string, Etapa>)[parse.data.estagio] ?? 'LEAD', { forcar: true })
+      }
+      res.json(await prisma.lead.findUnique({ where: { id: atual.id }, include: LEAD_INCLUDE }))
+    } catch (e) {
+      if (e instanceof ErroJornada) { res.status(e.status).json({ error: e.message, faltando: e.faltando }); return }
+      throw e
+    }
     return
   }
   // Sem o motivo, a perda não ensina nada: é ele que mostra onde e por que o funil perde.

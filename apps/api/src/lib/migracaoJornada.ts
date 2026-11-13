@@ -45,6 +45,8 @@ export function motivoNovo(antigo: string | null, etapa: Etapa): string {
     case 'CONCORRENCIA': return 'COMPROU_OUTRO_LUGAR'
     case 'SEM_ESTOQUE': return 'MOTO_INDISPONIVEL'
     case 'DESISTIU': return 'DESISTIU'
+    case 'SEM_CREDITO': return 'RECUSADO_TODOS_BANCOS'
+    case 'SEM_MOMENTO': return 'SO_PESQUISANDO'
     case 'SEM_RESPOSTA': return etapa === 'LEAD' || etapa === 'ABORDADO' ? 'NUNCA_RESPONDEU' : 'PAROU_DE_RESPONDER'
     default: return 'OUTRO_ANTERIOR_MIGRACAO'
   }

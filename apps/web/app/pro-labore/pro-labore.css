@@ -4660,3 +4660,8 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .crm-mais-painel .crm-resumo, .crm-mais-painel .crm-atencao, .crm-mais-painel .crm-etiquetas { margin-bottom: 8px; }
 @media (max-width: 1280px) { .crm-custos-grade { grid-template-columns: repeat(5, minmax(190px, 1fr)); overflow-x: auto; padding-bottom: 4px; } }
 @media (max-width: 720px) { .crm-mais { margin-left: 0; } }
+/* Orientação depois de mover o card (não bloqueia). */
+.qj-guia { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; width: min(760px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid var(--pl-border-strong); border-left: 3px solid var(--pl-warning, #d97706); border-radius: var(--pl-radius-lg); background: var(--pl-surface); box-shadow: 0 12px 32px rgba(0, 0, 0, .4); font-size: 13px; }
+.qj-guia-txt { display: grid; gap: 2px; flex: 1 1 320px; min-width: 0; }
+.qj-guia-txt span { color: var(--pl-ink-2); }
+.qj-guia-botoes { display: flex; gap: 8px; flex: none; }

@@ -307,8 +307,11 @@ export default function ProLaboreLeadsPage() {
   const dragRef = useRef<{ lead: Lead; startX: number; startY: number; dragging: boolean; colSobre: EstagioLead | null; abort: AbortController } | null>(null)
   const colRefs = useRef(new Map<EstagioLead, HTMLDivElement>())
 
+  // "Carregando…" só na primeira vez: depois, a lista atualiza por baixo sem desmontar o quadro
+  // (senão a orientação "Para esta etapa…" e a rolagem se perdem a cada movimento).
+  const carregouUmaVez = useRef(false)
   const carregar = useCallback(() => {
-    setLoading(true)
+    if (!carregouUmaVez.current) setLoading(true)
     Promise.all([
       proLaboreApi.leads.listar(),
       vejaEquipe ? proLaboreApi.vendedores.listar() : Promise.resolve<Vendedor[]>([]),
@@ -316,7 +319,7 @@ export default function ProLaboreLeadsPage() {
       proLaboreApi.funilMetas.listar(),
     ])
       .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v.filter(x => x.vende !== false)); setParametro(p); setMetasFunil(metas) })
-      .finally(() => setLoading(false))
+      .finally(() => { carregouUmaVez.current = true; setLoading(false) })
     if (isDono) {
       const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)
       metricasApi.ler(['custo_por_lead'], { inicio: `${hoje.slice(0, 8)}01`, fim: hoje })

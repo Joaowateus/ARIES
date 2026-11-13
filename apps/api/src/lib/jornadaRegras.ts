@@ -191,15 +191,16 @@ export async function moverEtapa(l: LeadJornada, destino: Etapa, opcoes: OpcoesM
   const faltas = await faltasPara(l, destino, opcoes)
   if (!faltas.length) { await gravarEtapa(l, destino, { pendenciasEtapa: [] }); return }
   const pendencias = await pendenciasAoForcar(l, destino, opcoes)
-  if (!opcoes.forcar || autorAtual().origem === 'AUTOMACAO') throw new ErroJornada(422, `Falta algo para ${NOME_ETAPA[destino]}`, pendencias.length ? pendencias : faltas, true)
+  // O avanço automático (avancarPorFatos) nunca chega aqui com critério faltando: ele confere antes.
+  if (!opcoes.forcar) throw new ErroJornada(422, `Falta algo para ${NOME_ETAPA[destino]}`, pendencias.length ? pendencias : faltas, true)
   await gravarEtapa(l, destino, { pendenciasEtapa: pendencias }, pendencias.length ? `Avançou com pendência: ${pendencias.join('; ')}`.slice(0, 480) : undefined)
 }
 
 /** Registra a perda: só o motivo é escolhido; o destino vem da tabela. */
 export async function registrarPerda(l: LeadJornada, motivo: string, nota?: string | null) {
   const etapa = (l.etapa ?? 'LEAD') as Etapa
-  const validos = [...MOTIVOS_DA_ETAPA[etapa], 'PEDIU_NAO_CONTATO']
-  if (!validos.includes(motivo)) throw new ErroJornada(400, `Motivo não vale para a etapa ${NOME_ETAPA[etapa]}`)
+  // CRM livre: os motivos da etapa são a sugestão; qualquer motivo conhecido vale (a pessoa sabe o que aconteceu).
+  if (!destinoDoMotivo(motivo)) throw new ErroJornada(400, 'Escolha o motivo da perda')
   if (l.estagio === 'PERDIDO') throw new ErroJornada(409, 'Lead já está perdido')
   const destino = destinoDoMotivo(motivo)
   const agora = new Date()
@@ -231,7 +232,7 @@ export async function checklist(l: LeadJornada) {
   const r = []
   for (const e of proximas) r.push({ etapa: e, faltando: await faltasPara(l, e) })
   const criterios = await criteriosLevantamento(l.usuarioId)
-  return { etapa: atual, proximas: r, levantamentoFalta: faltasDoLevantamento(l, criterios), motivos: [...MOTIVOS_DA_ETAPA[atual], 'PEDIU_NAO_CONTATO'], pendencias: l.pendenciasEtapa ?? [] }
+  return { etapa: atual, proximas: r, levantamentoFalta: faltasDoLevantamento(l, criterios), motivos: [...MOTIVOS_DA_ETAPA[atual], 'PEDIU_NAO_CONTATO', 'OUTRO'], pendencias: l.pendenciasEtapa ?? [] }
 }
 
 /**
