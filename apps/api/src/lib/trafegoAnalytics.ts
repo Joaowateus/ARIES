@@ -4,6 +4,7 @@
 // período anterior, evolução diária, campanhas/conjuntos/anúncios,
 // simulações ("se bater a meta, quanto ganha") e diagnóstico automático.
 import { prisma } from './prisma'
+import { num } from './formato'
 import { buscarAlcancePeriodo } from './metaAds'
 import { hojeNoFuso, somarDias } from './trafegoSync'
 
@@ -237,8 +238,8 @@ function diagnosticar(
   const itens: Item[] = []
   if (m.gasto === 0) return [{ nivel: 'info', titulo: 'Sem investimento no período', texto: 'Nenhum anúncio gastou nesse período. Escolha outro período ou confira se as campanhas estão ativas.' }]
 
-  if (d.frequencia != null && d.frequencia >= 4.5) itens.push({ secao: 'tf-criativos', nivel: 'critico', titulo: `Frequência alta (${d.frequencia.toFixed(1)})`, texto: 'Cada pessoa viu os anúncios muitas vezes: o público saturou. Troque os criativos e/ou amplie o público — o CPM tende a subir e o CTR a cair.' })
-  else if (d.frequencia != null && d.frequencia >= 3) itens.push({ secao: 'tf-criativos', nivel: 'atencao', titulo: `Frequência subindo (${d.frequencia.toFixed(1)})`, texto: 'O público já está vendo os anúncios repetidas vezes. Prepare criativos novos antes do resultado cair.' })
+  if (d.frequencia != null && d.frequencia >= 4.5) itens.push({ secao: 'tf-criativos', nivel: 'critico', titulo: `Frequência alta (${num(d.frequencia, 1)})`, texto: 'Cada pessoa viu os anúncios muitas vezes: o público saturou. Troque os criativos e/ou amplie o público — o CPM tende a subir e o CTR a cair.' })
+  else if (d.frequencia != null && d.frequencia >= 3) itens.push({ secao: 'tf-criativos', nivel: 'atencao', titulo: `Frequência subindo (${num(d.frequencia, 1)})`, texto: 'O público já está vendo os anúncios repetidas vezes. Prepare criativos novos antes do resultado cair.' })
 
   if (d.ctr != null && d.ctr < 0.008) itens.push({ secao: 'tf-criativos', nivel: 'critico', titulo: `CTR baixo (${pct(d.ctr)})`, texto: 'Pouca gente clica depois de ver o anúncio. O problema está no criativo (gancho dos primeiros segundos), na oferta ou na chamada pra ação.' })
   else if (d.ctr != null && d.ctr < 0.01) itens.push({ secao: 'tf-criativos', nivel: 'atencao', titulo: `CTR abaixo de 1% (${pct(d.ctr)})`, texto: 'Teste novos ganchos e chamadas no criativo — é a alavanca mais barata do funil.' })
