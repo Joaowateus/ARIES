@@ -44,6 +44,7 @@ import { preencherResposta } from './assistenteConhecimento'
 import { MotoVitrine, acharMotos, nomeDaMoto } from './assistenteVitrine'
 import { interpretarPergunta } from './assistentePessoal'
 import { leadsEsperando, primeiroNomeVendedor, responderPergunta, resumoDoDia, tempoDesde as tempoDesdePessoal } from './assistentePessoalDados'
+import { pl } from './formato'
 
 export const STATUS_ABERTOS = ['ATIVA', 'AGUARDANDO_VENDEDOR', 'ASSUMIDA']
 // Mais velha que isso o robô não responde (servidor fora do ar, reentrega);
@@ -1411,7 +1412,7 @@ function tempoDesde(d: Date): string {
   if (min < 60) return `há ${min} min`
   const h = Math.round(min / 60)
   if (h < 24) return `há ${h}h`
-  return `há ${Math.round(h / 24)} dia(s)`
+  return `há ${pl(Math.round(h / 24), 'dia', 'dias')}`
 }
 
 // ---------- Pré-venda (Ajuste 3): cadência escolhida pelo vendedor e retomada do roteiro ----------

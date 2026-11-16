@@ -8,6 +8,7 @@ import { prisma } from './prisma'
 import { calcular, hojeBrt, ler, metaDoMes, type Escopo, type FiltrosEscopo, type Periodo } from './metricas'
 import { ETAPAS, NOME_ETAPA, NOME_MOTIVO, faseDa, type Etapa } from './etapasJornada'
 import { premissas, type TempoMaximo } from './jornadaPremissas'
+import { pl } from './formato'
 
 export class ErroPainel extends Error { constructor(public status: number, msg: string) { super(msg) } }
 export interface MetaEtapa { conversaoMin: number | null; perdaMax: number | null; custoMax: number | null }
@@ -186,8 +187,8 @@ export async function painel(quem: Leitor, p: Periodo, f: FiltrosPainel, agora =
     equipe: equipeSec,
     anuncios: anunciosSec,
     avisos: [
-      ...(excluidos.aVista ? [`${excluidos.aVista} lead(s) à vista fora de MQL e SQL.`] : []),
-      ...(excluidos.semVisita ? [`${excluidos.semVisita} venda(s) sem visita fora de Agendamento e Visita.`] : []),
+      ...(excluidos.aVista ? [`${pl(excluidos.aVista, 'lead', 'leads')} à vista fora de MQL e SQL.`] : []),
+      ...(excluidos.semVisita ? [`${pl(excluidos.semVisita, 'venda', 'vendas')} sem visita fora de Agendamento e Visita.`] : []),
       ...(f.vendedorId || f.sdrId || f.origem || f.formaPagamento ? ['O gasto com anúncios não se divide por pessoa, origem ou forma de pagamento: ROAS e custos usam o gasto total.'] : []),
     ],
   }

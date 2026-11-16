@@ -67,7 +67,7 @@ export default function RestaurarCopiaPage() {
             {estado.origem && <p className="pl-hint">Cópia de {new Date(estado.origem.geradaEm).toLocaleString('pt-BR')} · versão do banco da cópia: {estado.origem.migracao ?? '—'} · daqui: {estado.origem.migracaoDestino ?? '—'}</p>}
             {estado.conferencia && (divergentes.length === 0
               ? <div className="pl-alert pl-alert-success" data-conferencia-ok>Conferência: as {num(estado.conferencia.length)} tabelas têm o mesmo número de registros da cópia.</div>
-              : <div className="pl-alert pl-alert-error" data-conferencia-divergente>Conferência: {divergentes.length} tabela(s) com número diferente: {divergentes.slice(0, 8).map(t => `${t.tabela} (${t.restauradas} de ${t.esperadas})`).join(', ')}</div>)}
+              : <div className="pl-alert pl-alert-error" data-conferencia-divergente>Conferência: {divergentes.length === 1 ? "1 tabela com número diferente" : `${divergentes.length} tabelas com número diferente`}: {divergentes.slice(0, 8).map(t => `${t.tabela} (${t.restauradas} de ${t.esperadas})`).join(', ')}</div>)}
             {estado.ultimasFalhas && estado.ultimasFalhas.length > 0 && <details><summary className="pl-hint">Ver o que não entrou</summary><ul className="pl-hint">{estado.ultimasFalhas.map((f, i) => <li key={i}>{f.tabela}: {f.erro}</li>)}</ul></details>}
             {estado.status === 'CONCLUIDA' && <p><Link href="/pro-labore/login">Entrar no sistema</Link> (com os mesmos e-mails e senhas da produção).</p>}
           </div>

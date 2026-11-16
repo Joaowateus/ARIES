@@ -15,6 +15,7 @@ import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { requireModulo, requireEscopoEquipe } from '../lib/acessos'
 import { recalcularPagamentoComissao, CAMPO_PAGAMENTO, TIPOS_PAGAMENTO, valorDoPagamento, type TipoPagamento } from '../lib/comissoes'
+import { pl } from '../lib/formato'
 
 const router = Router()
 
@@ -159,7 +160,7 @@ async function registrar(req: Request, res: Response) {
     const codigo = e instanceof Prisma.PrismaClientKnownRequestError ? e.code : e instanceof Error ? e.name : 'desconhecido'
     console.error('[pagamentos] falha ao registrar pagamento', { usuarioId, tipo, codigo, erro: e instanceof Error ? e.message : e })
     res.status(500).json({
-      error: `Não deu pra registrar o pagamento agora (código ${codigo}).${criados.length ? ` ${criados.length} comprovante(s) já foram gravados — atualize a página.` : ' Nada foi gravado — tente de novo.'}`,
+      error: `Não deu pra registrar o pagamento agora (código ${codigo}).${criados.length ? ` ${criados.length === 1 ? '1 comprovante já foi gravado' : `${criados.length} comprovantes já foram gravados`} — atualize a página.` : ' Nada foi gravado — tente de novo.'}`,
     })
     return
   }

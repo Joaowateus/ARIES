@@ -19,7 +19,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { FICHAS_PADRAO, hojeBrt, ler, mesCorrente, calcular, metaDoMes, type Escopo, type Papel, type Periodo } from './metricas'
 import { papeisDaConta } from './detectoresOnda4'
-import { fmtValor, nomesDistintos } from './formato'
+import { fmtValor, nomesDistintos, pl } from './formato'
 import { metaCobertaAgora, situacaoDaMeta, type SituacaoMeta } from './metaCoerente'
 import { lerExpediente, prazoDoDiaEscolhido } from './expediente'
 import { avisarNoWhatsapp } from './ligacoesAviso'
@@ -574,7 +574,7 @@ export async function textoPautaDaManha(usuarioId: string, papel: 'DONO' | 'SUPE
   if (!p || !p.blocos.length) return null
   const pontos: string[] = []
   for (const b of p.blocos) {
-    if (b.chave === 'PENDENCIAS') { if (b.pendencias?.atrasadas) pontos.push(`• ${b.nome}: ${b.pendencias.atrasadas} atrasada(s) de ${b.pendencias.total}`); continue }
+    if (b.chave === 'PENDENCIAS') { if (b.pendencias?.atrasadas) pontos.push(`• ${b.nome}: ${pl(b.pendencias.atrasadas, 'atrasada', 'atrasadas')} de ${b.pendencias.total}`); continue }
     const ruins = b.numeros.filter(n => n.status === 'CRITICO' || n.status === 'ATENCAO')
     if (ruins.length) pontos.push(`• ${b.nome}: ${ruins.map(n => `${n.rotulo.toLowerCase()} ${n.texto ?? fmt(n.valor, n.unidade)}`).join('; ')}`)
     else if (b.enviados.length) pontos.push(`• ${b.nome}: ${b.enviados[0].texto}`)

@@ -8,6 +8,7 @@ import { calcular, hojeBrt, mesCorrente, type Escopo, type Periodo } from './met
 import { NOME_ETAPA, type Etapa } from './etapasJornada'
 import { fluxoDa, lerConfigFollow } from './assistenteFollow'
 import type { Achado, ConfigDetector, DefDetector, Forca } from './detectores'
+import { pl } from './formato'
 
 export type GrupoArea = 'REATIVACAO' | 'MARKETING' | 'GESTAO' | 'PESSOAS'
 export const GRUPOS: GrupoArea[] = ['REATIVACAO', 'MARKETING', 'GESTAO', 'PESSOAS']
@@ -363,7 +364,7 @@ async function postQueVende(c: Ctx): Promise<Achado[]> {
       detector: 'post_que_vende', area: 'MARKETING', tipo: 'FUNCIONANDO', grupo: 'MARKETING',
       titulo: `Post que vende: ${pauta?.titulo ? `"${pauta.titulo.slice(0, 60)}"` : `post ${x.midia.slice(0, 20)}`}`, acaoSugerida: `Repetir o formato${pauta?.formato ? ` (${pauta.formato.toLowerCase()})` : ''} ou impulsionar com verba`, alvoTipo: 'POST', alvoId: x.midia,
       evidencia: { metricas: [ev('leads_dos_posts', 'Leads gerados pelo post', n, r1(media), p, null, n, 'QTD', { vendas: v, mediaPorPost: r1(media) })], casos: n, volumeMinimo: c.cfg.volumeMinimo, resumo: `${n} leads e ${v} venda(s) contra ${r1(media)} leads por post` },
-      forca: forca(n, c.cfg.volumeMinimo, false, n >= media * 2), impacto: { unidade: 'VENDAS', valor: v, texto: `${v} venda(s) no período (estimativa do potencial de repetir)` },
+      forca: forca(n, c.cfg.volumeMinimo, false, n >= media * 2), impacto: { unidade: 'VENDAS', valor: v, texto: `${pl(v, 'venda', 'vendas')} no período (estimativa do potencial de repetir)` },
       destino: destino(c.papeis.socialMedia ?? c.usuarioId, [c.papeis.trafego]),
     })
   }
@@ -384,9 +385,9 @@ async function vendaParadaConfirmacao(c: Ctx): Promise<Achado[]> {
   if (paradas.length < c.cfg.volumeMinimo) return []
   return [{
     detector: 'venda_parada_confirmacao', area: 'GESTAO', tipo: 'PROBLEMA', grupo: 'GESTAO',
-    titulo: `${paradas.length} venda(s) aguardando a sua confirmação há mais de ${Math.round(limiteDias)} dias`, acaoSugerida: 'Confirmar ou corrigir cada venda em Vendas e pagamentos', alvoTipo: 'VENDA', alvoId: null,
+    titulo: `${pl(paradas.length, 'venda', 'vendas')} aguardando a sua confirmação há mais de ${Math.round(limiteDias)} dias`, acaoSugerida: 'Confirmar ou corrigir cada venda em Vendas e pagamentos', alvoTipo: 'VENDA', alvoId: null,
     evidencia: { metricas: [ev('decisoes_aguardando', 'Vendas paradas na confirmação', paradas.length, null, periodoDias(c.agora, 1, 0), null, paradas.length, 'QTD', { normalDias: normal == null ? null : r1(normal), limiteDias: r1(limiteDias), maisAntigaDias: Math.round((c.agora.getTime() - Math.min(...paradas.map(v => v.criadoEm.getTime()))) / DIA) })], casos: paradas.length, volumeMinimo: c.cfg.volumeMinimo, resumo: `${paradas.length} além do normal`, registros: { tabela: 'pro_labore_vendas', ids: paradas.map(v => v.id) } },
-    forca: 'COMPROVADA', impacto: { unidade: 'VENDAS', valor: paradas.length, texto: `${paradas.length} venda(s) sem confirmação (fora dos números do mês)` },
+    forca: 'COMPROVADA', impacto: { unidade: 'VENDAS', valor: paradas.length, texto: `${pl(paradas.length, 'venda', 'vendas')} sem confirmação (fora dos números do mês)` },
     destino: destino(c.usuarioId, []),
   }]
 }
@@ -404,7 +405,7 @@ async function pagamentoAtrasado(c: Ctx): Promise<Achado[]> {
   if (ids.length < c.cfg.volumeMinimo) return []
   return [{
     detector: 'pagamento_atrasado', area: 'GESTAO', tipo: 'PROBLEMA', grupo: 'GESTAO',
-    titulo: `${ids.length} venda(s) confirmada(s) com pagamento além do prazo habitual (${Math.round(prazo)} dias)`, acaoSugerida: 'Aprovar e registrar os pagamentos de comissão e pró-labore', alvoTipo: 'PAGAMENTO', alvoId: null,
+    titulo: `${pl(ids.length, 'venda confirmada', 'vendas confirmadas')} com pagamento além do prazo habitual (${Math.round(prazo)} dias)`, acaoSugerida: 'Aprovar e registrar os pagamentos de comissão e pró-labore', alvoTipo: 'PAGAMENTO', alvoId: null,
     evidencia: { metricas: [ev('comissoes_a_pagar', 'Vendas com pagamento atrasado', ids.length, null, periodoDias(c.agora, 1, 0), null, ids.length, 'QTD', { comissao: com.length, proLabore: pro.length, prazoHabitualDias: Math.round(prazo) })], casos: ids.length, volumeMinimo: c.cfg.volumeMinimo, resumo: `${com.length} comissão(ões) e ${pro.length} pró-labore(s)`, registros: { tabela: 'pro_labore_vendas', ids } },
     forca: 'COMPROVADA', impacto: null,
     destino: destino(c.usuarioId, [c.papeis.financeiro]),
@@ -422,7 +423,7 @@ async function contaNaoFecha(c: Ctx): Promise<Achado[]> {
   if (casos < c.cfg.volumeMinimo) return []
   return [{
     detector: 'conta_nao_fecha', area: 'GESTAO', tipo: 'PROBLEMA', grupo: 'GESTAO',
-    titulo: `A conta do mês não fecha: ${[nDiv ? `${nDiv} pagamento(s) que não batem com as vendas` : '', foraTeto.length ? `${foraTeto.length} venda(s) com valor fora dos tetos` : ''].filter(Boolean).join(' e ')}`,
+    titulo: `A conta do mês não fecha: ${[nDiv ? `${nDiv === 1 ? '1 pagamento que não bate' : `${nDiv} pagamentos que não batem`} com as vendas` : '', foraTeto.length ? `${pl(foraTeto.length, 'venda', 'vendas')} com valor fora dos tetos` : ''].filter(Boolean).join(' e ')}`,
     acaoSugerida: 'Conferir e corrigir os lançamentos em Vendas e pagamentos', alvoTipo: 'LANCAMENTO', alvoId: null,
     evidencia: { metricas: [ev('divergencias_vendas_financeiro', 'Divergências entre Vendas e Financeiro', nDiv, null, mes, null, casos, 'QTD', { foraDosTetos: foraTeto.length, semComprovante: 'ponto de extensão: o comprovante é gerado pelo próprio sistema' })], casos, volumeMinimo: c.cfg.volumeMinimo, resumo: `${nDiv} divergência(s), ${foraTeto.length} fora do teto`, registros: { tabela: 'pro_labore_vendas', ids: foraTeto.map(v => v.id) } },
     forca: 'COMPROVADA', impacto: null,
