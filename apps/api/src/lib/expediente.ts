@@ -56,3 +56,22 @@ export function prazoDoDiaEscolhido(escolhido: string | Date, e: Expediente = EX
   const dia = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : diaBrt(new Date(s).getTime())
   return fimDoExpediente(dia, e)
 }
+
+/** O instante cai dentro do expediente (dia de trabalho, entre o início e o fim)? */
+export function dentroDoExpediente(t: Date, e: Expediente = EXPEDIENTE_PADRAO): boolean {
+  const dia = diaBrt(t.getTime())
+  if (!e.dias.includes(new Date(`${dia}T12:00:00.000Z`).getUTCDay())) return false
+  return t.getTime() >= emBrt(dia, e.inicio) && t.getTime() <= emBrt(dia, e.fim)
+}
+
+/** Prazo em horas (ex.: intervir em 2 h): se cair fora do expediente, vai para o fim do expediente de hoje ou do próximo dia de trabalho. */
+export function prazoEmHoras(agora: Date, horas: number, e: Expediente = EXPEDIENTE_PADRAO): Date {
+  const p = new Date(agora.getTime() + horas * 3_600_000)
+  return dentroDoExpediente(p, e) ? p : prazoNoExpediente(agora, 0, e)
+}
+
+/** Prazo que veio pronto de uma tela ou sugestão: se cair fora do expediente, passa para o fim do expediente daquele dia. */
+export function prazoAjustado(p: Date, e: Expediente = EXPEDIENTE_PADRAO, agora = new Date()): Date {
+  const r = dentroDoExpediente(p, e) ? p : prazoDoDiaEscolhido(p, e)
+  return r.getTime() > agora.getTime() ? r : prazoNoExpediente(agora, 0, e)
+}

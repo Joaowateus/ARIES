@@ -19,6 +19,7 @@ import { fichas, hojeBrt, ler, mesCorrente, metaDoMes, type Escopo, type Ficha, 
 import type { PapelHoje } from './papelHoje'
 import type { Pessoa } from './hoje'
 import { pl } from './formato'
+import { lerExpediente, prazoAjustado } from './expediente'
 
 const MODELO = modeloDa('COPILOTO')
 const DIA = 86_400_000
@@ -386,7 +387,7 @@ export async function criarAcao(pessoa: Pessoa, conversaId: string, texto: strin
   const atv = await prisma.atividade.create({
     data: {
       usuarioId: pessoa.usuarioId, auditoriaAutor: `USUARIO|${pessoa.id}|${pessoa.papel}|pergunte`, tipo: 'ACAO_PERGUNTE', origemTipo: 'ROTINA', origemId: conversaId,
-      responsavelId: pessoa.vendedorId, prazo, oQueFazer: texto.slice(0, 300), registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
+      responsavelId: pessoa.vendedorId ?? pessoa.usuarioId, prazo: prazoAjustado(prazo, await lerExpediente(pessoa.usuarioId)), oQueFazer: texto.slice(0, 300), registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
     },
     select: { id: true, codigo: true, prazo: true, oQueFazer: true },
   })

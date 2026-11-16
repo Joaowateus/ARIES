@@ -10,7 +10,7 @@ import { NOME_ETAPA, type Etapa } from './etapasJornada'
 import { premissas } from './jornadaPremissas'
 import { decimalBr, fmtValor, pl } from './formato'
 import { metaCobertaAgora, situacaoDaMeta } from './metaCoerente'
-import { lerExpediente, prazoNoExpediente } from './expediente'
+import { lerExpediente, prazoNoExpediente, prazoEmHoras } from './expediente'
 import { podeVerRec } from './recomendacoes'
 import type { PapelHoje } from './papelHoje'
 
@@ -514,7 +514,7 @@ export async function acaoDoSupervisor(pessoa: Pessoa, corpo: { acao: string; de
     const atv = await prisma.atividade.create({
       data: {
         usuarioId: u, auditoriaAutor: autor(pessoa), tipo: intervir ? 'INTERVENCAO_SUPERVISOR' : 'PLANO_DE_ACAO', origemTipo: 'ROTINA', origemId: `hoje-supervisor|${alvo.id}`,
-        responsavelId: intervir ? pessoa.vendedorId : alvo.id, prazo: intervir ? new Date(agora.getTime() + 2 * H) : prazoNoExpediente(agora, 3, await lerExpediente(u)),
+        responsavelId: intervir ? (pessoa.vendedorId ?? pessoa.usuarioId) : alvo.id, prazo: intervir ? prazoEmHoras(agora, 2, await lerExpediente(u)) : prazoNoExpediente(agora, 3, await lerExpediente(u)),
         oQueFazer: intervir ? `Intervir com ${primeiro(alvo.nome)}: ${texto}` : `Plano de ação: ${texto}`,
         registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
       },
