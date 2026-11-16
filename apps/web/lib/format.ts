@@ -23,3 +23,6 @@ export function formatMoedaCompacta(valor: number): string {
   if (abs >= 1_000) return `${sinal}R$${(abs / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}mil`
   return formatMoeda(valor)
 }
+
+/** "1 venda", "3 vendas": quantidade com singular/plural certos (sem "venda(s)"). */
+export const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`

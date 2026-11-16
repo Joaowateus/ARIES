@@ -10,6 +10,7 @@ import {
   type BlocoPdf, type CelulaPdf, type DestaquePdf, type KpiPdf, type LinhaComparativa, type RelatorioPdf, type Tom,
 } from '@/lib/relatorioPdf'
 import { fmtCompacto, fmtNum, fmtPct, fmtSeg } from './viz'
+import { pl } from '@/lib/format'
 
 type Analise = Extract<AnaliseSocialMedia, { conectado: true }>
 const FORMATO: Record<FormatoPostSocial, string> = { REELS: 'Reels', CARROSSEL: 'Carrossel', FOTO: 'Foto' }
@@ -96,7 +97,7 @@ function leituras(a: Analise): DestaquePdf[] {
   if (top) out.push({ tom: 'bom', titulo: 'Post de maior alcance', texto: `${FORMATO[top.formato]} de ${ddmmPdf(top.dia)}: ${fmtNum(top.alcance)} pessoas, ${fmtNum(top.interacoes)} interações (${fmtPct(top.taxaEngajamento)}). "${legenda(top, 90)}"` })
   const f = a.funil
   out.push({ tom: f.leads > 0 ? 'neutro' : 'atencao', titulo: 'Resultado comercial', texto: f.leads > 0 ? `${fmtNum(f.leads)} leads orgânicos no CRM no período, ${fmtNum(f.mql)} em negociação e ${fmtNum(f.vendas)} vendas.` : 'Nenhum lead orgânico cadastrado no CRM no período. Confira se o time marca o canal "Orgânico" ao cadastrar quem chega pelo Instagram.' })
-  if (a.qualidade.status !== 'completo') out.push({ tom: 'atencao', titulo: 'Sobre os dados', texto: `${a.qualidade.diasSemDados.length} dia(s) do período sem dados sincronizados: os totais podem estar abaixo do real.` })
+  if (a.qualidade.status !== 'completo') out.push({ tom: 'atencao', titulo: 'Sobre os dados', texto: `${pl(a.qualidade.diasSemDados.length, 'dia', 'dias')} do período sem dados sincronizados: os totais podem estar abaixo do real.` })
   return out
 }
 
@@ -332,7 +333,7 @@ export function relatorioSocial(a: Analise): RelatorioPdf {
     if (comInsights.length >= 8) { blocos.push({ tipo: 'subsecao', titulo: '5 com menos alcance' }); blocos.push(tabelaPosts(piores)) }
     blocos.push({ tipo: 'subsecao', titulo: `Todas (${pubs.length})` })
     blocos.push(tabelaPosts(pubs))
-    if (a.postsSemInsights) blocos.push({ tipo: 'texto', texto: `${a.postsSemInsights} publicação(ões) ainda sem métricas do Instagram (publicadas há pouco).`, nota: true })
+    if (a.postsSemInsights) blocos.push({ tipo: 'texto', texto: `${pl(a.postsSemInsights, 'publicação', 'publicações')} ainda sem métricas do Instagram (publicadas há pouco).`, nota: true })
   }
 
   // 13. Recomendações

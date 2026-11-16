@@ -5,12 +5,13 @@
 // O vendedor decide: vira lead ou não é lead (sai da lista).
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type ContatoForaDoCrm } from '@/lib/proLaboreApi'
+import { pl } from '@/lib/format'
 
 const quando = (iso: string) => {
   const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
   if (min < 60) return `há ${min} min`
   const h = Math.round(min / 60)
-  return h < 24 ? `há ${h}h` : `há ${Math.round(h / 24)} dia(s)`
+  return h < 24 ? `há ${h}h` : `há ${pl(Math.round(h / 24), 'dia', 'dias')}`
 }
 
 export function ForaDoCrm({ onFechar, onMudou }: { onFechar: () => void; onMudou: () => void }) {

@@ -4,6 +4,7 @@
 // e o teste do Ajuste 1 calculado na produção.
 import { useEffect, useState } from 'react'
 import { ITENS_AJUSTE1, dailyApi, painelDonoApi, type AceiteAjuste1, type BlocoDaily } from '@/lib/proLaboreApi'
+import { pl } from '@/lib/format'
 
 type Bloco = { chave: BlocoDaily; nome: string; minutos: number; ligado: boolean }
 
@@ -82,8 +83,8 @@ export function AceiteAjuste1Card() {
           <table className="pl-table" style={{ marginTop: 10 }}><thead><tr><th>Item</th><th>Medido</th><th /></tr></thead><tbody>
             <tr><td>Números do Painel e do Daily (dia {a.dia})</td><td>{a.numeros.contagens.filter(x => x.bate).length} de {a.numeros.contagens.length} contagens diretas batem · {a.numeros.daily.filter(x => x.bate).length} de {a.numeros.daily.length} números do Daily · {a.numeros.painel.filter(x => x.bate).length} de {a.numeros.painel.length} do Painel</td><td><Selo passa={a.numeros.passa} /></td></tr>
             <tr><td>Jornada de compra ({a.mesConferido.inicio.slice(5, 7)}/{a.mesConferido.inicio.slice(0, 4)})</td><td>{a.jornada.total} etapas · {a.jornada.etapas.filter(x => x.bate).length} de {a.jornada.etapas.length} conferem com a contagem manual (volume, conversão, perda e custo)</td><td><Selo passa={a.jornada.passa} /></td></tr>
-            <tr><td>Modo equipe</td><td>{a.modoEquipe.individuais} orientação(ões) individual(is) · {a.modoEquipe.porPessoa} número(s) por pessoa · {a.modoEquipe.atividadesPorPessoa} atividade(s) por pessoa</td><td><Selo passa={a.modoEquipe.passa} /></td></tr>
-            <tr><td>&quot;Decidido&quot; e ata</td><td>{a.decidido.reunioes} Daily(s) encerrado(s) · {a.decidido.decisoes} decisão(ões) · {a.decidido.comOrigemReuniao} ATV com origem reunião</td><td><Selo passa={a.decidido.passa} /></td></tr>
+            <tr><td>Modo equipe</td><td>{pl(a.modoEquipe.individuais, 'orientação individual', 'orientações individuais')} · {a.modoEquipe.porPessoa} números por pessoa · {a.modoEquipe.atividadesPorPessoa} atividades por pessoa</td><td><Selo passa={a.modoEquipe.passa} /></td></tr>
+            <tr><td>&quot;Decidido&quot; e ata</td><td>{pl(a.decidido.reunioes, 'Daily encerrado', 'Dailies encerrados')} · {pl(a.decidido.decisoes, 'decisão', 'decisões')} · {a.decidido.comOrigemReuniao} ATV com origem reunião</td><td><Selo passa={a.decidido.passa} /></td></tr>
             <tr><td>Comparação sem &quot;−100%&quot;</td><td>{a.comparacao.periodo.inicio.slice(8)}/{a.comparacao.periodo.inicio.slice(5, 7)} a {a.comparacao.periodo.fim.slice(8)}/{a.comparacao.periodo.fim.slice(5, 7)} contra {a.comparacao.anterior.inicio.slice(8)}/{a.comparacao.anterior.inicio.slice(5, 7)} a {a.comparacao.anterior.fim.slice(8)}/{a.comparacao.anterior.fim.slice(5, 7)}{a.comparacao.menos100.length ? ` · −100% em: ${a.comparacao.menos100.join(', ')}` : ''}</td><td><Selo passa={a.comparacao.passa} /></td></tr>
             <tr><td>Cifras do dono para o supervisor</td><td>{a.cifras.supervisorVe.length ? `aparecem: ${a.cifras.supervisorVe.join(', ')}` : 'nenhuma aparece'} (o vendedor não abre o Daily nem o Painel)</td><td><Selo passa={a.cifras.passa} /></td></tr>
           </tbody></table>

@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type IntelReuniaoPauta, type IntelReuniaoRegistro, type IntelTipoReuniao } from '@/lib/proLaboreApi'
 import { SEVERIDADE, STATUS_ACAO, brl, dataBR, num, pct, periodoDoMes } from './fmt'
+import { pl } from '@/lib/format'
 
 const TIPOS: Array<{ valor: IntelTipoReuniao; rotulo: string; descricao: string }> = [
   { valor: 'TRAFEGO', rotulo: 'Tráfego', descricao: 'Investimento, entrega, custo por lead e qualidade dos leads de anúncio.' },
@@ -137,7 +138,7 @@ export function Reuniao({ mes }: { mes: string }) {
       <section className="ic-card">
         <div className="ic-cab"><div><h2>Atas registradas</h2></div></div>
         {!registros ? <div className="pl-hint">Carregando…</div> : registros.length === 0 ? <p className="ic-legenda">Nenhuma reunião registrada ainda.</p> : registros.slice(0, 20).map(r => (
-          <div key={r.id} className="ic-linha"><span>{r.titulo}<small>{TIPOS.find(t => t.valor === r.tipo)?.rotulo} · {r.criadoPor} · {(r.acoesIds ?? []).length} ação(ões){r.notas ? ` · ${r.notas.slice(0, 90)}${r.notas.length > 90 ? '…' : ''}` : ''}</small></span><b>{dataBR(r.data)}</b></div>
+          <div key={r.id} className="ic-linha"><span>{r.titulo}<small>{TIPOS.find(t => t.valor === r.tipo)?.rotulo} · {r.criadoPor} · {pl((r.acoesIds ?? []).length, 'ação', 'ações')}{r.notas ? ` · ${r.notas.slice(0, 90)}${r.notas.length > 90 ? '…' : ''}` : ''}</small></span><b>{dataBR(r.data)}</b></div>
         ))}
       </section>
     </>

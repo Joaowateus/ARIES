@@ -16,6 +16,7 @@ const formatMoedaCompacta = (v: number) => {
   return `${s}R$ ${n(a, 0)}`
 }
 import { EditarMetas } from '../hoje/PainelDoDono'
+import { pl } from '@/lib/format'
 
 const COR = { BOM: 'var(--pl-good)', ATENCAO: 'var(--pl-warning, #d97706)', CRITICO: 'var(--pl-critical)' } as const
 const CURTO: Record<string, string> = { LEVANTAMENTO: 'Levantamento', MQL: 'MQL (Simulação)', SQL: 'SQL (Aprovado)', VISITA: 'Visita confirmada' }
@@ -66,13 +67,13 @@ export function JornadaDezEtapas({ periodo, ano, mes, vendedorId, isDono, rotulo
   const metaTxt = (e: EtapaPainel) => [e.metas.conversaoMin != null ? `conv. ${e.metas.conversaoMin}%` : '', e.metas.perdaMax != null ? `perda ${e.metas.perdaMax}%` : '', e.metas.custoMax != null ? `custo ${formatMoedaCompacta(e.metas.custoMax)}` : ''].filter(Boolean).join(' · ')
   return (
     <div data-jornada-10 className="jd">
-      {(d.excluidos.aVista > 0 || d.excluidos.semVisita > 0) && <p className="pl-hint jd-aviso">Exclusões aprovadas: {d.excluidos.aVista} à vista fora de MQL e SQL · {d.excluidos.semVisita} venda(s) sem visita fora de Agendamento e Visita.</p>}
+      {(d.excluidos.aVista > 0 || d.excluidos.semVisita > 0) && <p className="pl-hint jd-aviso">Exclusões aprovadas: {d.excluidos.aVista} à vista fora de MQL e SQL · {pl(d.excluidos.semVisita, 'venda', 'vendas')} sem visita fora de Agendamento e Visita.</p>}
       <div className="jd-rola">
         <div className="jd-grade">
           {/* Fases, com o subtotal */}
           {d.fases.map(f => (
             <div key={f.fase} className="jd-fase" style={{ gridColumn: `span ${d.etapas.filter(e => e.fase === f.fase).length}` }}>
-              <b>{f.nome}</b>{d.etapas.filter(e => e.fase === f.fase).length > 1 ? <> · {f.entraram} entraram{f.conversao != null ? ` · ${pct(f.conversao)} seguiram` : ''} · {f.perdidos} perdido(s)</> : null}
+              <b>{f.nome}</b>{d.etapas.filter(e => e.fase === f.fase).length > 1 ? <> · {f.entraram} entraram{f.conversao != null ? ` · ${pct(f.conversao)} seguiram` : ''} · {pl(f.perdidos, 'perdido', 'perdidos')}</> : null}
             </div>
           ))}
           {/* Nomes (abrem o CRM na etapa) e o selo do gargalo, numa altura fixa */}

@@ -9,6 +9,7 @@ import { recApi, type RecResumo } from '@/lib/proLaboreApi'
 import { abaPorChave } from '@/lib/abasAries'
 import { Cabecalho, Lente } from '../_padrao/Padrao'
 import { AREA, DetalheRec, ForcaChip, STATUS } from './DetalheRec'
+import { pl } from '@/lib/format'
 
 export default function RecomendacoesPage() {
   const { usuario } = useProLaboreAuth()
@@ -27,7 +28,7 @@ export default function RecomendacoesPage() {
   const destinatarios = [...new Map((d?.itens ?? []).filter(x => x.destinatarioId).map(x => [x.destinatarioId!, x.destinatario ?? x.destinatarioId!])).entries()]
   async function rodar() {
     setMsg(null)
-    try { const r = await recApi.rodar(); setMsg(`${r.filter(x => x.criada).length} nova(s) recomendação(ões).`); await carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível rodar') }
+    try { const r = await recApi.rodar(); setMsg(`${pl(r.filter(x => x.criada).length, 'nova recomendação', 'novas recomendações')}.`); await carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível rodar') }
   }
   return (
     <div>

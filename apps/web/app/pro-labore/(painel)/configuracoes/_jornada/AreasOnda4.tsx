@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { recApi, type AceiteArea, type AreaOnda4 } from '@/lib/proLaboreApi'
 import { DetalheRec, ForcaChip } from '../../recomendacoes/DetalheRec'
+import { pl } from '@/lib/format'
 
 function Selo({ passa }: { passa: boolean | null | undefined }) {
   if (passa == null) return <span className="pl-hint">sem casos ainda</span>
@@ -25,9 +26,9 @@ export function AreasOnda4() {
   async function mudar(g: string, d: { ligada?: boolean; modo?: 'SILENCIOSO' | 'NORMAL' }, texto: string) {
     if (just.trim().length < 5) { setMsg('Escreva o motivo (fica no histórico).'); return }
     if (!window.confirm(texto)) return
-    try { const r = await recApi.mudarArea(g, { ...d, justificativa: just.trim() }); setMsg(`Feito.${r.afetadas ? ` ${r.afetadas} recomendação(ões) abertas passaram a ir para quem deve agir.` : ''}${r.recsCriadas != null ? ` Os detectores rodaram: ${r.recsCriadas} recomendação(ões) nova(s).` : ''}`); setJust(''); carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
+    try { const r = await recApi.mudarArea(g, { ...d, justificativa: just.trim() }); setMsg(`Feito.${r.afetadas ? ` ${pl(r.afetadas, 'recomendação aberta passou', 'recomendações abertas passaram')} a ir para quem deve agir.` : ''}${r.recsCriadas != null ? ` Os detectores rodaram: ${pl(r.recsCriadas, "recomendação nova", "recomendações novas")}.` : ''}`); setJust(''); carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
   }
-  async function rodarAgora(g: string) { setMsg('Rodando os detectores…'); try { const r = await recApi.rodarArea(g); setMsg(`Os detectores rodaram: ${r.recsCriadas} recomendação(ões) nova(s). Elas aparecem em Recomendações para quem pode ver.`); setAceite(x => { const y = { ...x }; delete y[g]; return y }) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }
+  async function rodarAgora(g: string) { setMsg('Rodando os detectores…'); try { const r = await recApi.rodarArea(g); setMsg(`Os detectores rodaram: ${pl(r.recsCriadas, "recomendação nova", "recomendações novas")}. Elas aparecem em Recomendações para quem pode ver.`); setAceite(x => { const y = { ...x }; delete y[g]; return y }) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }
   async function rodarAceite(g: string) { try { const a = await recApi.aceiteArea(g); setAceite(x => ({ ...x, [g]: a })) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }
   return (
     <section className="pl-card" id="areas-onda4" style={{ marginBottom: 20 }} data-areas-onda4>
@@ -70,11 +71,11 @@ function AceiteDaArea({ a, abrir }: { a: AceiteArea; abrir: (id: string) => void
         {linha('Evidência correta', `${a.evidencia.itens.filter(x => x.bate).length} de ${a.evidencia.itens.filter(x => x.bate !== null).length} recalculadas batem com o dicionário (as demais contam registros direto da fonte)`, a.evidencia.passa)}
         {linha('Utilidade da área', a.utilidade.avaliacoes ? `${a.utilidade.pertinentes} de ${a.utilidade.avaliacoes} pertinentes (${a.utilidade.pct}%; precisa de 80%)` : 'avalie a amostra abaixo', a.utilidade.passa)}
         {linha('Roteamento', `${a.roteamento.itens.filter(x => x.ok).length} de ${a.roteamento.itens.length} chegam a quem a tabela da área define`, a.roteamento.passa)}
-        {a.pessoas && linha('Cuidados de Pessoas', `${a.pessoas.ocorrencias} ocorrência(s) repetida(s) só com supervisor e dono · ${a.pessoas.dicas} boa(s) prática(s) compartilhada(s)`, a.pessoas.passa)}
+        {a.pessoas && linha('Cuidados de Pessoas', `${pl(a.pessoas.ocorrencias, 'ocorrência repetida', 'ocorrências repetidas')} só com supervisor e dono · ${pl(a.pessoas.dicas, 'boa prática compartilhada', 'boas práticas compartilhadas')}`, a.pessoas.passa)}
         {a.gestaoSemIa && linha('Gestão sem valores na IA', `detectores só no código · ${a.gestaoSemIa.envios} envios à IA, ${a.gestaoSemIa.inseguros} com R$`, a.gestaoSemIa.passa)}
-        {a.reativacao && linha('Reativação', `${a.reativacao.comBloqueado} com cliente bloqueado · ${a.reativacao.roteiros} roteiro(s) para promover, só com aprovação`, a.reativacao.passa)}
-        {linha('Sem duplicidade', `${a.duplicidade.juntadas} achado(s) juntado(s) às correções da qualidade`, a.duplicidade.passa)}
-        {linha('Sistema atual', `${a.sistemaAtual.areasDesligadas.length} área(s) ainda desligada(s), ${a.sistemaAtual.recsDeAreasDesligadas} recomendação(ões) delas`, a.sistemaAtual.passa)}
+        {a.reativacao && linha('Reativação', `${a.reativacao.comBloqueado} com cliente bloqueado · ${pl(a.reativacao.roteiros, 'roteiro', 'roteiros')} para promover, só com aprovação`, a.reativacao.passa)}
+        {linha('Sem duplicidade', `${pl(a.duplicidade.juntadas, 'achado juntado', 'achados juntados')} às correções da qualidade`, a.duplicidade.passa)}
+        {linha('Sistema atual', `${pl(a.sistemaAtual.areasDesligadas.length, 'área ainda desligada', 'áreas ainda desligadas')}, ${pl(a.sistemaAtual.recsDeAreasDesligadas, 'recomendação', 'recomendações')} delas`, a.sistemaAtual.passa)}
       </tbody></table>
       <div className="pl-eyebrow" style={{ marginTop: 8 }}>Amostra de 10 para o teste de utilidade</div>
       {!a.utilidade.amostra.length && <p className="pl-hint" data-amostra-vazia>Ainda não há recomendações desta área. Os detectores rodam uma vez por dia (ou use o botão Rodar os detectores agora); só geram recomendação quando o volume mínimo é atingido.</p>}
