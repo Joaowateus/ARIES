@@ -333,7 +333,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             title={sidebarColapsada ? 'Expandir menu' : 'Recolher menu'}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d={sidebarColapsada ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'} />
+              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M9.5 4.5v15" />
             </svg>
           </button>
           <button type="button" className="pl-menu-toggle pl-sidebar-close" onClick={() => setMenuAberto(false)} aria-label="Fechar menu">
