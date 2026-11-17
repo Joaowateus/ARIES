@@ -8,6 +8,8 @@ import { proLaboreApi } from '@/lib/proLaboreApi'
 import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
+import { Ico, MODULOS, NavModulosContext, moduloDoGrupo } from './_padrao/Navegacao'
+import { PaisagemNoite } from './hoje/PaisagemNoite'
 import { AvisoBanco } from './_banco/AvisoBanco'
 import { PaletaComandos } from './_comando/PaletaComandos'
 import { AvisoLigacao } from './_ligacoes/AvisoLigacao'
@@ -175,6 +177,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     return () => { cancelado = true; clearInterval(t); document.removeEventListener('visibilitychange', buscar) }
   }, [usuario, versaoBarra])
   const [gruposColapsados, setGruposColapsados] = useState<string[]>([])
+  const [modulosAbertos, setModulosAbertos] = useState<string[]>([])
   // PDF 04 · piloto: versão das telas desta pessoa (nova ou atual) e o registro de uso de cada aba.
   const [telas, setTelas] = useState<VersaoTelas | null>(null)
   const [usoId, setUsoId] = useState<string | null>(null)
@@ -312,12 +315,18 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const grupoAtual = nova ? abaAtual?.grupo ?? null : grupos.find(g => g.items.includes(itemDoMenuAtual as NavItem))?.label ?? null
   const abasDoTopo = !nova && itemDoMenuAtual?.abas && itemDoMenuAtual.abas.length > 1 ? itemDoMenuAtual.abas : null
   const temPagina = (item: NavItem, href: string) => paginasDo(item).some(p => p.href === href)
+  // Menu pelos 9 módulos (17/11): selos somados no módulo fechado; o módulo da página aberta fica aberto.
+  const contagem = (item: NavItem) => (temPagina(item, '/pro-labore/leads') ? followsDia.atrasados + followsDia.hoje : 0) + (temPagina(item, '/pro-labore/ligacoes') ? ligacoesDia.atrasadas + ligacoesDia.hoje : 0) + (item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 ? pedidosReuniao : 0)
+  const atrasado = (itens: NavItem[]) => itens.some(i => (temPagina(i, '/pro-labore/leads') && followsDia.atrasados > 0) || (temPagina(i, '/pro-labore/ligacoes') && ligacoesDia.atrasadas > 0))
+  const modulosVisiveis = MODULOS.flatMap(m => { const g = gruposNovos.find(x => x.label === m.grupo); return g ? [{ chave: m.chave, nome: m.nome, rota: m.rota, href: m.chave === 'inicio' ? '/pro-labore/hoje' : g.items[0].href }] : [] })
+  const alternarModulo = (label: string, contemAtivo: boolean) => { if (contemAtivo) return; setModulosAbertos(m => (m.includes(label) ? m.filter(x => x !== label) : [...m, label])) }
   const podeCrm = paginasVisiveis.some(item => item.href === '/pro-labore/leads')
   const abrirPaleta = () => { setMenuAberto(false); window.dispatchEvent(new Event('pl-abrir-paleta')) }
   const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : usuario.papel === 'SOCIAL_MEDIA' ? 'social media' : null
 
   return (
     <div className="pl-app-shell">
+      {nova && <><PaisagemNoite className="pl-fundo-app" /><div className="pl-fundo-veu" aria-hidden="true" /></>}
       <aside className={`pl-sidebar ${menuAberto ? 'open' : ''} ${sidebarColapsada ? 'collapsed' : ''}`}>
         <div className="pl-sidebar-brand">
           <AriesBrandMark size={28} />
@@ -341,6 +350,44 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
           </button>
         </div>
 
+        {nova ? (
+          <nav className="pl-sidebar-nav pl-nav-modulos" aria-label="Módulos">
+            {grupos.map(grupo => {
+              const mod = moduloDoGrupo(grupo.label)
+              const unico = grupo.items.length === 1
+              const contemAtivo = grupo.items.some(ativo)
+              const aberto = !sidebarColapsada && !unico && (contemAtivo || modulosAbertos.includes(grupo.label ?? ''))
+              const somaSelos = grupo.items.reduce((t, it) => t + contagem(it), 0)
+              const cabeca = (
+                <>
+                  <Ico n={mod} />
+                  <span className="pl-sidebar-link-label">{grupo.label === 'Sistema' ? grupo.items[0].label : grupo.label}</span>
+                  {!aberto && somaSelos > 0 && <span className={`pl-nav-pedidos ${atrasado(grupo.items) ? 'pl-nav-follow-atrasado' : ''}`}>{somaSelos}</span>}
+                  {!unico && !sidebarColapsada && <svg className={`pl-mod-seta${aberto ? ' aberto' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>}
+                </>
+              )
+              return (
+                <div key={grupo.label ?? 'x'} className={`pl-modulo${contemAtivo ? ' tem-ativo' : ''}`} data-modulo-menu={mod}>
+                  {unico || sidebarColapsada
+                    ? <Link href={grupo.items[0].href} className={`pl-sidebar-link${contemAtivo ? ' active' : ''}`} title={sidebarColapsada ? (grupo.label === 'Sistema' ? grupo.items[0].label : grupo.label ?? undefined) : undefined} aria-current={contemAtivo ? 'page' : undefined}>{cabeca}</Link>
+                    : <button type="button" className={`pl-sidebar-link pl-modulo-botao${contemAtivo ? ' active' : ''}`} aria-expanded={aberto} onClick={() => alternarModulo(grupo.label ?? '', contemAtivo)}>{cabeca}</button>}
+                  {aberto && (
+                    <div className="pl-sublinks">
+                      {grupo.items.map(item => (
+                        <Link key={item.href} href={item.href} className={`pl-sublink${ativo(item) ? ' active' : ''}`} aria-current={ativo(item) ? 'page' : undefined}>
+                          <span>{item.label}</span>
+                          {contagem(item) > 0 && <span className={`pl-nav-pedidos ${atrasado([item]) ? 'pl-nav-follow-atrasado' : ''}`}>{contagem(item)}</span>}
+                          {item.href === '/pro-labore/reunioes' && reunioesAoVivo > 0 && <span className="pl-nav-aovivo" title="Apresentação ao vivo agora"><span className="pl-ap-pulso" aria-hidden="true" />AO VIVO</span>}
+                          {item.href === '/pro-labore/social-media' && avisosSocial.length > 0 && <span className="pl-nav-alerta" title={avisosSocial.join(' · ')}>!</span>}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </nav>
+        ) : (
         <nav className="pl-sidebar-nav">
           {grupos.map((grupo, i) => {
             const colapsado = !!grupo.label && gruposColapsados.includes(grupo.label)
@@ -389,6 +436,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             )
           })}
         </nav>
+        )}
 
         <div className="pl-sidebar-footer">
           {(followsDia.atrasados + followsDia.hoje + ligacoesDia.atrasadas + ligacoesDia.hoje > 0) && (
@@ -469,10 +517,12 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                   ))}
                 </nav>
               )}
+              <NavModulosContext.Provider value={modulosVisiveis}>
               <TelasContext.Provider value={{ versao: nova ? 'NOVA' : 'ATUAL', usoId, registrarAcao: (acao: string) => { if (usoId) void telasApi.usoAcao(usoId, acao).catch(() => undefined) } }}>
                 {nova && abaAtual && !abaAtual.proprio && !pathname.startsWith('/pro-labore/aba/') ? <TelaPadrao aba={abaAtual}>{children}</TelaPadrao> : children}
                 {nova && <AtalhoAries />}
               </TelasContext.Provider>
+              </NavModulosContext.Provider>
             </>
           )}
 
