@@ -5,6 +5,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { qualidadeApi, type CorrecaoPendente } from '@/lib/proLaboreApi'
+import { pl } from '@/lib/format'
 
 type Dados = Awaited<ReturnType<typeof qualidadeApi.correcoes>>
 const CLASSE: Record<string, string> = { INCOMPLETO: 'Incompleto', SUSPEITO: 'Suspeito' }
@@ -21,14 +22,14 @@ export function SaudeDados({ podeReavaliar }: { podeReavaliar: boolean }) {
   const total = Object.values(d.porRegra).reduce((a, b) => a + b, 0)
   async function reavaliar() {
     setMsg(null)
-    try { const r = await qualidadeApi.avaliar(); setMsg(`${r.qualidadeAbertas} nova(s), ${r.qualidadeResolvidas} resolvida(s).`); await carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível reavaliar') }
+    try { const r = await qualidadeApi.avaliar(); setMsg(`${pl(r.qualidadeAbertas, 'nova', 'novas')}, ${pl(r.qualidadeResolvidas, 'resolvida', 'resolvidas')}.`); await carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível reavaliar') }
   }
   const onde = (c: CorrecaoPendente) => c.leadId ? <Link className="pl-link" href={`/pro-labore/leads?lead=${c.leadId}`}>{c.lead ?? 'Abrir lead'}</Link> : c.registroTabela === 'pro_labore_vendas' ? <Link className="pl-link" href="/pro-labore/vendas">Venda</Link> : '—'
   return (
     <section className="pl-card" id="saude-dados" style={{ marginBottom: 20 }} data-saude-dados>
       <div className="pl-card-head"><div>
         <div className="pl-card-title">Saúde dos dados</div>
-        <div className="pl-card-sub">{total === 0 ? 'Nenhuma correção pendente.' : `${total} correção(ões) pendente(s). Dado suspeito não entra como evidência para recomendações.`}</div>
+        <div className="pl-card-sub">{total === 0 ? 'Nenhuma correção pendente.' : `${pl(total, 'correção pendente', 'correções pendentes')}. Dado suspeito não entra como evidência para recomendações.`}</div>
       </div>
         {podeReavaliar && <button type="button" className="pl-btn" onClick={() => void reavaliar()} data-reavaliar>Reavaliar agora</button>}
       </div>

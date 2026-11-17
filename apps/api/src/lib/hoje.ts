@@ -8,9 +8,9 @@ import { prisma } from './prisma'
 import { calcular, fichas, hojeBrt, ler, mesCorrente, metaDoMes, padraoDaLoja, faixaDe, type Escopo, type Leitura, type Periodo } from './metricas'
 import { NOME_ETAPA, type Etapa } from './etapasJornada'
 import { premissas } from './jornadaPremissas'
-import { decimalBr, fmtValor } from './formato'
+import { decimalBr, fmtValor, pl } from './formato'
 import { metaCobertaAgora, situacaoDaMeta } from './metaCoerente'
-import { lerExpediente, prazoNoExpediente } from './expediente'
+import { lerExpediente, prazoNoExpediente, prazoEmHoras } from './expediente'
 import { podeVerRec } from './recomendacoes'
 import type { PapelHoje } from './papelHoje'
 
@@ -430,7 +430,7 @@ export async function lenteDoHoje(pessoa: Pessoa, agora = new Date()): Promise<L
     const ticketCom = await prisma.venda.aggregate({ where: { usuarioId: u, situacao: 'CONFIRMADA', data: { gte: new Date(agora.getTime() - 90 * DIA) } }, _avg: { valorComissao: true } })
     const faltam = Math.max(0, (vendasMes.projecao ?? vendasMes.valor ?? 0) - (vendasMes.valor ?? 0))
     itens = [
-      { tipo: 'NUMERO', id: null, codigo: null, achado: 'Previsão de comissões até o fim do mês', evidencia: `[[comissoes_a_pagar]] a pagar agora + ${Math.round(faltam)} venda(s) previstas × comissão média`, forca: 'HIPOTESE', acao: { rotulo: 'Ver as comissões', href: '/pro-labore/vendas' }, podeAceitar: false, podeDescartar: false },
+      { tipo: 'NUMERO', id: null, codigo: null, achado: 'Previsão de comissões até o fim do mês', evidencia: `[[comissoes_a_pagar]] a pagar agora + ${pl(Math.round(faltam), 'venda prevista', 'vendas previstas')} × comissão média`, forca: 'HIPOTESE', acao: { rotulo: 'Ver as comissões', href: '/pro-labore/vendas' }, podeAceitar: false, podeDescartar: false },
       { tipo: 'NUMERO', id: null, codigo: null, achado: 'Previsão de saídas do mês', evidencia: 'Saídas do caixa no ritmo do mês ([[saidas_financeiro]] até hoje)', forca: 'HIPOTESE', acao: { rotulo: 'Abrir o Financeiro', href: '/pro-labore/financeiro' }, podeAceitar: false, podeDescartar: false },
     ]
     // Os valores (R$) entram pela tela, que formata a partir destes números do dicionário.
@@ -514,7 +514,7 @@ export async function acaoDoSupervisor(pessoa: Pessoa, corpo: { acao: string; de
     const atv = await prisma.atividade.create({
       data: {
         usuarioId: u, auditoriaAutor: autor(pessoa), tipo: intervir ? 'INTERVENCAO_SUPERVISOR' : 'PLANO_DE_ACAO', origemTipo: 'ROTINA', origemId: `hoje-supervisor|${alvo.id}`,
-        responsavelId: intervir ? pessoa.vendedorId : alvo.id, prazo: intervir ? new Date(agora.getTime() + 2 * H) : prazoNoExpediente(agora, 3, await lerExpediente(u)),
+        responsavelId: intervir ? (pessoa.vendedorId ?? pessoa.usuarioId) : alvo.id, prazo: intervir ? prazoEmHoras(agora, 2, await lerExpediente(u)) : prazoNoExpediente(agora, 3, await lerExpediente(u)),
         oQueFazer: intervir ? `Intervir com ${primeiro(alvo.nome)}: ${texto}` : `Plano de ação: ${texto}`,
         registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
       },

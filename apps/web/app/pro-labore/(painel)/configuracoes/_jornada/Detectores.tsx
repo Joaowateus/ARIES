@@ -5,6 +5,7 @@
 // (modo silencioso na primeira semana).
 import { useEffect, useState } from 'react'
 import { recApi, type DetectorCfg, type SugestaoAjuste } from '@/lib/proLaboreApi'
+import { pl } from '@/lib/format'
 
 export function Detectores({ podeEditar }: { podeEditar: boolean }) {
   const [d, setD] = useState<{ modo: 'SILENCIOSO' | 'NORMAL'; detectores: DetectorCfg[] } | null>(null)
@@ -24,7 +25,7 @@ export function Detectores({ podeEditar }: { podeEditar: boolean }) {
   async function trocarModo() {
     setMsg(null)
     if (motivo.trim().length < 5) { setMsg('Escreva por que está mudando antes de salvar.'); return }
-    try { const r = await recApi.roteamento(d!.modo === 'SILENCIOSO' ? 'NORMAL' : 'SILENCIOSO', motivo); setD({ ...d!, modo: r.modo }); setMsg(r.modo === 'NORMAL' ? `Roteamento ligado: ${r.afetadas} recomendação(ões) abertas foram para quem deve agir.` : 'Voltou ao modo silencioso.') } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
+    try { const r = await recApi.roteamento(d!.modo === 'SILENCIOSO' ? 'NORMAL' : 'SILENCIOSO', motivo); setD({ ...d!, modo: r.modo }); setMsg(r.modo === 'NORMAL' ? `Roteamento ligado: ${pl(r.afetadas, 'recomendação aberta foi', 'recomendações abertas foram')} para quem deve agir.` : 'Voltou ao modo silencioso.') } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
   }
   return (
     <section className="pl-card" id="detectores" style={{ marginBottom: 20 }} data-detectores>

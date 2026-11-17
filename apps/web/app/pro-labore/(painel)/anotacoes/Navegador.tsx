@@ -360,7 +360,7 @@ export function VisaoPasta({
       {linhas.length === 0 ? (
         <div className="pl-empty pl-card">
           <div className="pl-emoji">📝</div>
-          {pasta ? 'Pasta vazia. Crie algo aqui ou arraste itens pra dentro dela.' : 'Nada por aqui ainda.'}
+          {pasta ? 'Pasta vazia. Crie algo aqui ou arraste itens pra dentro dela.' : 'Nada por aqui ainda. Comece com "+ Nova página" ou "+ Novo mapa mental", logo acima, ou crie uma pasta no menu ao lado.'}
         </div>
       ) : (
         <div className="pl-fb-tabela" role="table" aria-label="Itens da pasta">

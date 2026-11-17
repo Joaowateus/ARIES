@@ -14,6 +14,7 @@ import { FraseDoDono } from './FraseDoDono'
 import { Daily } from './Daily'
 import { PainelDoDono } from './PainelDoDono'
 import { DashboardAntigo } from '../_dashboard/DashboardAntigo'
+import { pl } from '@/lib/format'
 
 // Ajuste 1: o Hoje do dono (e do supervisor) tem três sub-abas: Hoje · Daily · Painel.
 type Sub = 'hoje' | 'daily' | 'painel'
@@ -176,7 +177,7 @@ function QuadroEquipe({ linhas, aoMudar }: { linhas: LinhaQuadro[]; aoMudar: () 
         : acao.tipo === 'REPRIORIZAR' ? { acao: 'REPRIORIZAR', atividadeId: atvId, prazo: prazo ? new Date(prazo).toISOString() : '' }
           : { acao: acao.tipo, vendedorId: acao.pessoa.id, texto })
       registrarAcao(`equipe:${acao.tipo}`)
-      setMsg(r.redistribuidas != null ? `${r.redistribuidas} atividade(s) redistribuída(s).` : r.repriorizadas ? 'Prazo ajustado.' : `Atividade ${r.atividade?.codigo ?? ''} criada.`)
+      setMsg(r.redistribuidas != null ? `${pl(r.redistribuidas, 'atividade redistribuída', 'atividades redistribuídas')}.` : r.repriorizadas ? 'Prazo ajustado.' : `Atividade ${r.atividade?.codigo ?? ''} criada.`)
       setAcao(null); setTexto(''); setAtvId(''); setPara(''); aoMudar()
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
   }

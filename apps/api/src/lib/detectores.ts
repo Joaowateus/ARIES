@@ -6,7 +6,7 @@
 // - no nível 1: só criam a Recomendação, nunca executam nada.
 // A REC é criada por lib/recomendacoes (roteamento, contexto, memória).
 import { situacaoDaMeta, textoMetaEmRisco } from './metaCoerente'
-import { fmtValor } from './formato'
+import { fmtValor, pl } from './formato'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { ETAPAS, NOME_ETAPA, type Etapa } from './etapasJornada'
@@ -291,9 +291,9 @@ async function creditoEmperrado(usuarioId: string, cfg: ConfigDetector, agora: D
       const bancos = [...new Set(fichas.map(f => f.banco))]
       out.push({
         detector: 'credito_emperrado', area: 'CREDITO', tipo: 'PROBLEMA',
-        titulo: `${fichas.length} ficha(s) de crédito sem resposta além do normal${nome ? ` · ${primeiroNome(nome)}` : ''}`,
+        titulo: `${pl(fichas.length, 'ficha', 'fichas')} de crédito sem resposta além do normal${nome ? ` · ${primeiroNome(nome)}` : ''}`,
         acaoSugerida: `Cobrar ${bancos.join(', ')} pelas fichas paradas ou mudar a ordem de envio para um banco que responde mais rápido`,
-        orientacao: `Há ${fichas.length} ficha(s) suas esperando resposta do banco há mais que o dobro do tempo normal (${bancos.join(', ')}). Vale cobrar o banco hoje e avisar o cliente de que a análise está em andamento.`,
+        orientacao: `Há ${pl(fichas.length, 'ficha', 'fichas')} suas esperando resposta do banco há mais que o dobro do tempo normal (${bancos.join(', ')}). Vale cobrar o banco hoje e avisar o cliente de que a análise está em andamento.`,
         alvoTipo: 'CREDITO', alvoId: sdr, alvoNome: nome ? primeiroNome(nome) : null,
         evidencia: {
           metricas: [{ chave: 'tempo_resposta_banco', nome: 'Tempo de resposta por banco (normal, 90 dias)', valor: tempos.valor, anterior: null, periodo: p90, periodoAnterior: null, amostra: tempos.amostra ?? 0, unidade: 'MIN', detalhe: porBanco }],

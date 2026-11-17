@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { painelDonoApi, type EtapaPainel, type FiltrosPainelWeb, type LeituraPainel, type PainelDono, type SerieMensal, type StatusFaixa } from '@/lib/proLaboreApi'
 import { StatusChip, TelaVazia, fmtValor } from '../_padrao/Padrao'
+import { pl } from '@/lib/format'
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 const hoje = () => new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10)
@@ -76,7 +77,7 @@ export function PainelDoDono({ papel }: { papel: string }) {
           </Secao>
         )}
         <Secao n={6} titulo="Equipe">
-          <Ranking titulo="Vendedores por faturamento" linhas={d.equipe.vendedores.map(v => ({ nome: v.nome, valor: v.valor, extra: `${v.vendas} venda(s)` }))} unidade="BRL" />
+          <Ranking titulo="Vendedores por faturamento" linhas={d.equipe.vendedores.map(v => ({ nome: v.nome, valor: v.valor, extra: pl(v.vendas, 'venda', 'vendas') }))} unidade="BRL" />
           <Ranking titulo="SDRs por leads passados ao vendedor" linhas={d.equipe.sdrs.map(v => ({ nome: v.nome, valor: v.valor }))} unidade="QTD" vazio="Nenhum SDR cadastrado." />
         </Secao>
         <Secao n={7} titulo="Anúncios">
@@ -108,13 +109,13 @@ function Jornada({ d, dono, aoMudar }: { d: PainelDono; dono: boolean; aoMudar: 
   const fases = d.jornada.fases
   return (
     <Secao n={2} titulo="Jornada de compra">
-      {(d.jornada.excluidos.aVista > 0 || d.jornada.excluidos.semVisita > 0) && <p className="pl-hint" style={{ marginTop: 0 }}>Exclusões aprovadas aplicadas: {d.jornada.excluidos.aVista} à vista fora de MQL e SQL; {d.jornada.excluidos.semVisita} venda(s) sem visita fora de Agendamento e Visita.</p>}
+      {(d.jornada.excluidos.aVista > 0 || d.jornada.excluidos.semVisita > 0) && <p className="pl-hint" style={{ marginTop: 0 }}>Exclusões aprovadas aplicadas: {d.jornada.excluidos.aVista} à vista fora de MQL e SQL; {pl(d.jornada.excluidos.semVisita, 'venda', 'vendas')} sem visita fora de Agendamento e Visita.</p>}
       <div style={{ display: 'grid', gap: 14 }}>
         {fases.map(fa => (
           <div key={fa.fase} data-fase-painel={fa.fase}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 6 }}>
               <div className="pl-eyebrow">{fa.nome}</div>
-              <span className="pl-hint" style={{ fontSize: 12 }} data-subtotal-fase>Subtotal: {fa.entraram} entraram{fa.conversao != null ? ` · ${fa.conversao}% seguiram para a fase seguinte` : ''} · {fa.perdidos} perdido(s){fa.custo != null ? ` · custo de entrada ${fmtValor(fa.custo, 'BRL')}` : ''}</span>
+              <span className="pl-hint" style={{ fontSize: 12 }} data-subtotal-fase>Subtotal: {fa.entraram} entraram{fa.conversao != null ? ` · ${fa.conversao}% seguiram para a fase seguinte` : ''} · {pl(fa.perdidos, 'perdido', 'perdidos')}{fa.custo != null ? ` · custo de entrada ${fmtValor(fa.custo, 'BRL')}` : ''}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
               {d.jornada.etapas.filter(e => e.fase === fa.fase).map(e => <CartaoEtapa key={e.etapa} e={e} gargalo={d.jornada.gargalo === e.etapa} dono={dono} editar={() => setEditando(e)} />)}

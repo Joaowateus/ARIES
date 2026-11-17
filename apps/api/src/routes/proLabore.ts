@@ -454,7 +454,12 @@ router.get('/vendedores', requireProLaboreAuth, requireListaDaEquipe, async (req
     select: VENDEDOR_SELECT,
     orderBy: { nome: 'asc' },
   })
-  res.json(vendedores)
+  // Quem só precisa da lista para escolher um nome (agenda, passagem) vê dos
+  // colegas só nome e papel: e-mail, documento, teto de comissão e meta ficam
+  // com o dono, o supervisor e quem tem acesso à aba Equipe.
+  const { papel, vendedorId } = req.proLaboreUser!
+  const verTudo = papel === 'DONO' || papel === 'SUPERVISOR' || (req.acessos?.vendedores ?? 'NENHUM') !== 'NENHUM'
+  res.json(verTudo ? vendedores : vendedores.map(v => (v.id === vendedorId ? v : { id: v.id, nome: v.nome, ativo: v.ativo, papel: v.papel, vende: v.vende, email: null, documento: null, tetoComissaoPorVenda: null, metaMensal: null, criadoEm: v.criadoEm, atualizadoEm: v.atualizadoEm })))
 })
 
 const criarVendedorSchema = z.object({

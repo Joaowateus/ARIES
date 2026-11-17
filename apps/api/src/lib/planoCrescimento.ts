@@ -15,6 +15,7 @@
 // enxerga números, nunca o Prisma — é o ponto de extensão caso um motor
 // mais sofisticado (ex. gerado por IA a partir dos mesmos números) venha a
 // substituir ou complementar essas regras no futuro.
+import { fmtValor } from './formato'
 
 export const ESTAGIOS = ['INICIAR', 'MANTER', 'ESCALONAR', 'ESCALAR'] as const
 export type Estagio = (typeof ESTAGIOS)[number]
@@ -190,7 +191,7 @@ function pilarConversao(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
     chave: 'conversao',
     nome: 'Conversão',
     estagio,
-    resumo: `${m.conversaoLeadVenda.toFixed(1)}% dos leads viram venda; ticket médio de ${m.ticketMedioAtual > 0 ? 'R$ ' + m.ticketMedioAtual.toFixed(0) : 'sem vendas no mês'}.`,
+    resumo: `${fmtValor(m.conversaoLeadVenda, 'PCT')} dos leads viram venda; ticket médio de ${m.ticketMedioAtual > 0 ? fmtValor(m.ticketMedioAtual, 'BRL') : 'sem vendas no mês'}.`,
     metricas: [
       { label: 'Leads no mês', valor: m.leadsAtual, formato: 'numero' },
       { label: 'Conversão lead → venda', valor: m.conversaoLeadVenda / 100, formato: 'percentual' },
@@ -221,7 +222,7 @@ function pilarExecucao(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
       'Usar o ranking do Dashboard pra identificar quem precisa de mais apoio.',
     ],
     ESCALONAR: [
-      `Hoje o vendedor líder responde por ${m.concentracaoMaiorVendedorPct.toFixed(0)}% da receita — vale nivelar a equipe antes de crescer mais.`,
+      `Hoje o vendedor líder responde por ${fmtValor(Math.round(m.concentracaoMaiorVendedorPct), 'PCT')} da receita — vale nivelar a equipe antes de crescer mais.`,
       'Replicar o que o vendedor de melhor desempenho está fazendo de diferente com os demais.',
     ],
     ESCALAR: [
@@ -262,7 +263,7 @@ function pilarFinanceiro(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
     INICIAR: m.roas === 0
       ? ['Lançar o gasto com anúncios em Indicadores pra começar a medir ROAS e CAC.']
       : [
-          `ROAS atual de ${m.roas.toFixed(1)}x está abaixo do investido — revisar segmentação/criativo do anúncio antes de aumentar verba.`,
+          `ROAS atual de ${fmtValor(m.roas, 'X')} está abaixo do investido — revisar segmentação/criativo do anúncio antes de aumentar verba.`,
           'Focar em reduzir CAC ajustando o público antes de qualquer escala.',
         ],
     MANTER: [
@@ -270,7 +271,7 @@ function pilarFinanceiro(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
       'Acompanhar CAC junto com ROAS pra não mascarar custo alto com volume.',
     ],
     ESCALONAR: [
-      `ROAS de ${m.roas.toFixed(1)}x já é saudável — considerar aumentar verba de anúncio de forma gradual.`,
+      `ROAS de ${fmtValor(m.roas, 'X')} já é saudável — considerar aumentar verba de anúncio de forma gradual.`,
       'Garantir que o financeiro (fluxo de caixa) aguenta o aumento de investimento antes de acelerar.',
     ],
     ESCALAR: [
@@ -284,7 +285,7 @@ function pilarFinanceiro(m: MetricasNegocio, metas: MetasCrescimento): Pilar {
     nome: 'Financeiro',
     estagio,
     resumo: m.roas > 0
-      ? `ROAS de ${m.roas.toFixed(1)}x; receita ${receitaCrescendo ? 'estável ou em alta' : 'em queda'} vs. mês anterior.`
+      ? `ROAS de ${fmtValor(m.roas, 'X')}; receita ${receitaCrescendo ? 'estável ou em alta' : 'em queda'} vs. mês anterior.`
       : 'Sem gasto com anúncio lançado no mês — ROAS não calculado.',
     metricas: [
       { label: 'Receita do mês', valor: m.receitaAtual, formato: 'moeda' },

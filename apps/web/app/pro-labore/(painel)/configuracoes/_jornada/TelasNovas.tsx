@@ -5,6 +5,7 @@
 // foi enviado à IA e o aceite da seção 9 calculado na produção.
 import { useEffect, useState } from 'react'
 import { telasApi, type AceitePdf04, type PilotoPessoa } from '@/lib/proLaboreApi'
+import { pl } from '@/lib/format'
 
 function Selo({ passa }: { passa: boolean | null }) {
   if (passa == null) return <span className="pl-hint">sem casos ainda</span>
@@ -61,7 +62,7 @@ export function TelasNovas() {
 
       <details style={{ marginTop: 10 }} onToggle={e => { if ((e.target as HTMLDetailsElement).open && !ia) telasApi.registroIa().then(setIa).catch(() => setIa(null)) }}>
         <summary className="pl-hint">Registro do que foi enviado à IA (Pergunte ao ARIES)</summary>
-        {ia && <p className="pl-hint">{ia.total} envio(s). {ia.envios.filter(x => !x.seguro).length === 0 ? 'Nenhum com R$, CPF ou data de nascimento.' : `${ia.envios.filter(x => !x.seguro).length} com conteúdo protegido: conferir.`}</p>}
+        {ia && <p className="pl-hint">{pl(ia.total, 'envio', 'envios')}. {ia.envios.filter(x => !x.seguro).length === 0 ? 'Nenhum com R$, CPF ou data de nascimento.' : `${ia.envios.filter(x => !x.seguro).length} com conteúdo protegido: conferir.`}</p>}
         {ia?.envios.slice(0, 20).map(x => (
           <details key={x.id} style={{ marginBottom: 4 }} data-envio-ia={x.seguro ? 'seguro' : 'inseguro'}>
             <summary className="pl-hint">{new Date(x.criadoEm).toLocaleString('pt-BR')} · {x.finalidade === 'ENTENDER' ? 'entender a pergunta' : 'escrever a resposta'} · {x.seguro ? 'sem dados protegidos' : 'CONFERIR'}</summary>

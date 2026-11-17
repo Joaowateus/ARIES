@@ -345,7 +345,7 @@ function OcorrenciasConteudo() {
         eyebrow="Equipe"
         title="Ocorrências"
         subtitle="Registro disciplinar e de feedback da equipe comercial — protocolo, prazos e histórico de correção"
-        actions={<button type="button" className="pl-btn pl-btn-primary" onClick={() => abrirModal()}>Nova Ocorrência</button>}
+        actions={<button type="button" className="pl-btn pl-btn-primary" onClick={() => abrirModal()}>Nova ocorrência</button>}
       />
       {abasVisao}
 
@@ -408,7 +408,8 @@ function OcorrenciasConteudo() {
       ) : ocorrencias.length === 0 ? (
         <div className="pl-empty pl-card">
           <div className="pl-emoji">📋</div>
-          Nenhuma ocorrência registrada com esses filtros.
+          {filtroVendedor || filtroTipo || filtroGravidade || filtroStatus ? 'Nenhuma ocorrência com esses filtros. Limpe os filtros acima para ver todas.' : 'Nenhuma ocorrência registrada. Registre feedbacks, pontos de melhoria e questões disciplinares da equipe para acompanhar o histórico de cada pessoa.'}
+          <div style={{ marginTop: 12 }}><button type="button" className="pl-btn pl-btn-primary" onClick={() => abrirModal()}>Registrar ocorrência</button></div>
         </div>
       ) : (
         <div className="pl-table-wrap">

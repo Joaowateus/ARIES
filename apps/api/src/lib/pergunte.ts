@@ -18,6 +18,8 @@ import { iaLigada } from './smIA'
 import { fichas, hojeBrt, ler, mesCorrente, metaDoMes, type Escopo, type Ficha, type Leitura, type Periodo } from './metricas'
 import type { PapelHoje } from './papelHoje'
 import type { Pessoa } from './hoje'
+import { pl } from './formato'
+import { lerExpediente, prazoAjustado } from './expediente'
 
 const MODELO = modeloDa('COPILOTO')
 const DIA = 86_400_000
@@ -239,7 +241,7 @@ async function avisoDeQualidade(usuarioId: string, f: Ficha, p: Periodo): Promis
                   UNION ALL SELECT 1 FROM pro_labore_vendas v WHERE ${tabela} = 'pro_labore_vendas' AND v.id = c."registroId" AND v.data >= ${ini} AND v.data < ${fim})`
   const inc = Number(r?.inc ?? 0), sus = Number(r?.sus ?? 0)
   if (!inc && !sus) return null
-  return `Atenção: no período há ${[inc ? `${inc} registro(s) incompleto(s)` : '', sus ? `${sus} suspeito(s)` : ''].filter(Boolean).join(' e ')} na base desta métrica.`
+  return `Atenção: no período há ${[inc ? pl(inc, 'registro incompleto', 'registros incompletos') : '', sus ? pl(sus, 'suspeito', 'suspeitos') : ''].filter(Boolean).join(' e ')} na base desta métrica.`
 }
 
 async function calcularNumeros(pessoa: Pessoa, ent: Entendimento, catalogo: Ficha[], agora: Date) {
@@ -385,7 +387,7 @@ export async function criarAcao(pessoa: Pessoa, conversaId: string, texto: strin
   const atv = await prisma.atividade.create({
     data: {
       usuarioId: pessoa.usuarioId, auditoriaAutor: `USUARIO|${pessoa.id}|${pessoa.papel}|pergunte`, tipo: 'ACAO_PERGUNTE', origemTipo: 'ROTINA', origemId: conversaId,
-      responsavelId: pessoa.vendedorId, prazo, oQueFazer: texto.slice(0, 300), registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
+      responsavelId: pessoa.vendedorId ?? pessoa.usuarioId, prazo: prazoAjustado(prazo, await lerExpediente(pessoa.usuarioId)), oQueFazer: texto.slice(0, 300), registroTabela: 'pro_labore_hoje_acoes', registroId: randomUUID(),
     },
     select: { id: true, codigo: true, prazo: true, oQueFazer: true },
   })

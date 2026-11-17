@@ -10,6 +10,7 @@ import { acharMotos, fichaTexto } from './assistenteVitrine'
 import { ETIQUETAS, ROTULO_ETAPA } from './assistenteJornada'
 import { faixaNota } from './assistenteNota'
 import { inicioDoDiaBrt } from './assistenteFollow'
+import { pl } from './formato'
 
 const DIA = 86_400_000
 const ABERTOS = { notIn: ['FECHADO', 'PERDIDO'] }
@@ -24,7 +25,7 @@ export function tempoDesde(d: Date, agora = new Date()): string {
   if (min < 60) return `há ${min} min`
   const h = Math.round(min / 60)
   if (h < 24) return `há ${h}h`
-  return `há ${Math.round(h / 24)} dia(s)`
+  return `há ${pl(Math.round(h / 24), 'dia', 'dias')}`
 }
 
 export interface Esperando { conversaId: string; nome: string; numero: string; desde: Date; ultima: string }

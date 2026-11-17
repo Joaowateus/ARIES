@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, type DetalheJornada, type ErroApi, type EtapaJornada, type Lead } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, NOME_ETAPA } from '@/lib/etapasJornada'
 import { FollowRoboModal, SeloRobo } from '../_jornada/FollowRobo'
+import { pl } from '@/lib/format'
 
 const brl = (n: number | null) => (n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
 const quando = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—')
@@ -133,7 +134,7 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
       {(etapa === 'PROPOSTA' || etapa === 'AGENDAMENTO' || etapa === 'VISITA' || d.visitas.length > 0) && (
         <section className="pl-pn-bloco" data-visitas>
           <h3>Visita à loja</h3>
-          {d.visitas.map(v => <p key={v.id} className="pl-hint">{quando(v.marcadaPara)}{v.remarcacoes ? ` · ${v.remarcacoes} remarcação(ões)` : ''} · {v.checkinEm ? `chegou ${quando(v.checkinEm)}` : v.falta ? 'faltou' : 'marcada'}{v.resultado ? ` · ${v.resultado}` : ''}</p>)}
+          {d.visitas.map(v => <p key={v.id} className="pl-hint">{quando(v.marcadaPara)}{v.remarcacoes ? ` · ${pl(v.remarcacoes, 'remarcação', 'remarcações')}` : ''} · {v.checkinEm ? `chegou ${quando(v.checkinEm)}` : v.falta ? 'faltou' : 'marcada'}{v.resultado ? ` · ${v.resultado}` : ''}</p>)}
           {(etapa === 'PROPOSTA' || etapa === 'AGENDAMENTO') && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <input type="datetime-local" className="pl-input" value={visitaEm} onChange={e => setVisitaEm(e.target.value)} data-visita-em />

@@ -6,6 +6,7 @@
 // A conta da empresa é a mesma linha de SocialMediaConta do dono (titular
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
+import { orcamento } from '../lib/cronOrcamento'
 import { reverMetaEmRiscoTodas } from '../lib/metaCoerente'
 import { faltasVencidas } from '../lib/jornadaAtividades'
 import { Router, Request, Response } from 'express'
@@ -313,67 +314,74 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   // Madrugada: o banco descansa (ver lib/cronEconomia.ts).
   const pausa = pularHora(agoraDoCron(req))
   if (pausa) { res.json({ pausado: pausa }); return }
-  const sincronizacao = await rodarJobSocialMedia('HORA')
-  // Sexta: a retrospectiva da semana. Segunda às 8h: o relatório ao gestor (seção 11.4).
-  // App da Meta bloqueado: testa de novo e, liberado, o Tráfego e o Instagram voltam sozinhos.
-  const meta = await recuperarConexoesMeta(agoraDoCron(req)).catch(e => { console.error('[meta] recuperar', e); return { metaTestadas: 0, metaLiberadas: 0 } })
-  // Central de Conteúdo: no começo do mês, o calendário novo (em rascunho, para aprovação).
-  const central = await rodarCentral(agoraDoCron(req)).catch(e => { console.error('[central] cron', e); return { centralGerados: 0 } })
-  // Copiloto Comercial: o dia de cada pessoa (regras para todos; a IA no tempo que sobrar).
-  const copiloto = await rodarCopiloto(agoraDoCron(req), 10000).catch(e => { console.error('[copiloto] cron', e); return { copilotoDias: 0, copilotoIA: 0, copilotoWhatsapp: 0 } })
-  // Assistente Comercial: aprende com as conversas da última hora (dúvidas e objeções dos clientes).
-  const aprendizado = await aprenderTodas(5000).catch(e => { console.error('[assistente] aprendizado', e); return { aprendizadoContas: 0, aprendizadoReconhecidas: 0 } })
-  // Placar da base: a resposta usada fez o lead andar no funil?
-  const avancos = await verificarAvancos().catch(e => { console.error('[assistente] avanços', e); return { usosVerificados: 0, usosComAvanco: 0 } })
-  // Etiquetas que mudam com o tempo ("sumiu há 24h").
-  const etiquetas = await atualizarEtiquetasRecentes(300, agoraDoCron(req)).catch(e => { console.error('[assistente] etiquetas', e); return { etiquetasConversas: 0 } })
-  // Todos os leads abertos com conversa: etiquetas em dia (as mais antigas primeiro).
-  const abertas = await recalcularEtiquetasAbertas(200, agoraDoCron(req)).catch(e => { console.error('[assistente] etiquetas abertas', e); return { etiquetasAbertas: 0 } })
-  // CPF, nascimento e e-mail escritos na observação de leads antigos: para os campos, mascarados no texto.
-  const higiene = await higienizarObservacoes(300).catch(e => { console.error('[assistente] observações', e); return { observacoesLimpas: 0 } })
+  const agora = agoraDoCron(req)
+  // Pente fino: dentro dos 30 s da função, as tarefas centrais primeiro; as demais com o tempo que sobrar.
+  const o = orcamento(25_000)
+  // PDF 06 · correção 4: revê as RECs de meta abertas com a previsão de agora; depois, o detector de meta.
+  const metaRevista = await o.rodar('meta revista', () => reverMetaEmRiscoTodas(agora), { encerradas: 0 })
+  const metaRisco = await o.rodar('meta em risco', () => rodarDetectoresTodas(agora, ['meta_em_risco']), { recsCriadas: 0 })
   // Jornada: visita que passou da hora sem check-in conta como falta.
-  const faltas = await faltasVencidas(100, agoraDoCron(req)).catch(e => { console.error('[jornada] faltas', e); return { faltasAutomaticas: 0 } })
+  const faltas = await o.rodar('faltas', () => faltasVencidas(100, agora), { faltasAutomaticas: 0 })
   // Assistente pessoal: o resumo da manhã no chat "Você" de cada vendedor.
-  const manha = await enviarResumosDaManha(agoraDoCron(req)).catch(e => { console.error('[assistente] resumo da manhã', e); return { resumosManha: 0 } })
-  // PDF 03: Meta em risco a cada hora (as RECs abertas do mês não se repetem).
-  // PDF 06 · correção 4: antes, revê as RECs de meta abertas com a previsão de agora (encerra as que perderam o sentido).
-  const metaRevista = await reverMetaEmRiscoTodas(agoraDoCron(req)).catch(e => { console.error('[meta coerente]', e); return { encerradas: 0 } })
-  const metaRisco = await rodarDetectoresTodas(agoraDoCron(req), ['meta_em_risco']).catch(e => { console.error('[detectores] meta', e); return { recsCriadas: 0 } })
-  res.json({ ...sincronizacao, ...(await rodarRetrospectivas(agoraDoCron(req))), ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas, metaEmRisco: metaRisco.recsCriadas, metaEmRiscoEncerradas: metaRevista.encerradas })
+  const manha = await o.rodar('resumo da manhã', () => enviarResumosDaManha(agora), { resumosManha: 0 })
+  const sincronizacao = await o.rodar('social media', () => rodarJobSocialMedia('HORA'), {} as Awaited<ReturnType<typeof rodarJobSocialMedia>>)
+  const retros = await o.rodar('retrospectivas', () => rodarRetrospectivas(agora), {} as Awaited<ReturnType<typeof rodarRetrospectivas>>)
+  // App da Meta bloqueado: testa de novo e, liberado, o Tráfego e o Instagram voltam sozinhos.
+  const meta = await o.rodar('conexões Meta', () => recuperarConexoesMeta(agora), { metaTestadas: 0, metaLiberadas: 0 })
+  // Central de Conteúdo: no começo do mês, o calendário novo (em rascunho, para aprovação).
+  const central = await o.rodar('central', () => rodarCentral(agora), { centralGerados: 0 })
+  // Desenvolvimento (antes Copiloto): o dia de cada pessoa (regras para todos; a IA no tempo que sobrar).
+  const copiloto = await o.rodar('desenvolvimento', lim => rodarCopiloto(agora, Math.min(10_000, lim)), { copilotoDias: 0, copilotoIA: 0, copilotoWhatsapp: 0 })
+  // Aprende com as conversas da última hora (dúvidas e objeções dos clientes).
+  const aprendizado = await o.rodar('aprendizado', lim => aprenderTodas(Math.min(5000, lim)), { aprendizadoContas: 0, aprendizadoReconhecidas: 0 })
+  // Placar da base: a resposta usada fez o lead andar no funil?
+  const avancos = await o.rodar('avanços', () => verificarAvancos(), { usosVerificados: 0, usosComAvanco: 0 })
+  // Etiquetas que mudam com o tempo ("sumiu há 24h") e as dos leads abertos (as mais antigas primeiro).
+  const etiquetas = await o.rodar('etiquetas', () => atualizarEtiquetasRecentes(300, agora), { etiquetasConversas: 0 })
+  const abertas = await o.rodar('etiquetas abertas', () => recalcularEtiquetasAbertas(200, agora), { etiquetasAbertas: 0 })
+  // CPF, nascimento e e-mail escritos na observação de leads antigos: para os campos, mascarados no texto.
+  const higiene = await o.rodar('higiene', () => higienizarObservacoes(300), { observacoesLimpas: 0 })
+  res.json({ ...sincronizacao, ...retros, ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas, metaEmRisco: metaRisco.recsCriadas, metaEmRiscoEncerradas: metaRevista.encerradas, adiadas: o.adiadas, tempos: o.tempos })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
-  const sincronizacao = await rodarJobSocialMedia('DIA')
-  // Vendas fechadas no CRM viram pautas de entrega (seção 6), mesmo sem ninguém abrir a tela.
-  const operacoes = await prisma.smMembro.findMany({ select: { usuarioId: true } })
-  let pautasDeEntrega = 0
-  for (const o of operacoes) pautasDeEntrega += await gerarPautasDeVendas(o.usuarioId)
-  // Testes A/B com a amostra completa são concluídos sem ninguém abrir a tela.
-  const comTeste = await prisma.smTeste.findMany({ where: { status: 'ATIVO' }, distinct: ['usuarioId'], select: { usuarioId: true } })
-  let testesConcluidos = 0
-  for (const o of comTeste) {
-    const antes = await prisma.smTeste.count({ where: { usuarioId: o.usuarioId, status: 'CONCLUIDO' } })
-    await listarTestes(o.usuarioId)
-    testesConcluidos += (await prisma.smTeste.count({ where: { usuarioId: o.usuarioId, status: 'CONCLUIDO' } })) - antes
-  }
-  // Fase 6: o retrato do dia dos concorrentes e, do dia 25 em diante, o planejamento do mês seguinte.
   const agora = agoraDoCron(req)
-  const concorrentes = await rodarConcorrentes(agora).catch(e => { console.error('[sm] concorrentes', e); return { concorrentes: 0 } })
-  const planejamento = await rodarPlanejamento(agora).catch(e => { console.error('[sm] planejamento', e); return { planejamento: 0 } })
-  const lembretes = await lembretesAnuais(agora).catch(e => { console.error('[meta] lembretes', e); return { lembretesMeta: 0 } })
-  // Referências: vídeos dos perfis (todo dia) e das hashtags das motos (a cada 3 dias, no limite semanal).
-  const referencias = await rodarReferencias(agora).catch(e => { console.error('[sm] referências', e); return { referenciasPerfis: 0, referenciasMotos: 0 } })
-  // Os eventos brutos do Instagram já processados não ficam para sempre (espaço do banco).
-  const eventosLimpos = await limparEventosAntigos(agora).catch(e => { console.error('[sm] limpeza de eventos', e); return { eventosApagados: 0 } })
-  // PDF 02 · dicionário de métricas: retrato do dia das métricas de "agora" (base das faixas).
-  const retratos = await guardarRetratos(agoraDoCron(req)).catch(e => { console.error('[metricas] retratos', e); return { retratosMetricas: 0 } })
+  // Pente fino: qualidade e detectores primeiro (antes ficavam no fim e não cabiam nos 30 s depois das chamadas à Meta).
+  const o = orcamento(25_000)
   // PDF 02 · 4.8: camada de qualidade (abre e resolve as correções pendentes).
-  const qualidade = await avaliarTodas(agoraDoCron(req)).catch(e => { console.error('[qualidade] avaliar', e); return { qualidadeAbertas: 0, qualidadeResolvidas: 0 } })
+  const qualidade = await o.rodar('qualidade', () => avaliarTodas(agora), { qualidadeAbertas: 0, qualidadeResolvidas: 0 })
   // PDF 03 e PDF 05 (só as áreas ligadas): os detectores rodam depois da qualidade (para juntar o que ela já apontou), uma vez por dia.
-  const detectores = await rodarDetectoresTodas(agoraDoCron(req), ['resposta_lenta', 'funil_parado', 'etapa_travando', 'atividades_acumuladas', 'credito_emperrado', 'anuncio_encarecendo', ...DETECTORES_ONDA4.map(d => d.chave)]).catch(e => { console.error('[detectores] dia', e); return { recsCriadas: 0 } })
+  const detectores = await o.rodar('detectores', () => rodarDetectoresTodas(agora, ['resposta_lenta', 'funil_parado', 'etapa_travando', 'atividades_acumuladas', 'credito_emperrado', 'anuncio_encarecendo', ...DETECTORES_ONDA4.map(d => d.chave)]), { recsCriadas: 0 })
   // PDF 03 · 4.4: no dia 1º, as sugestões de ajuste do mês que fechou (só valem com a aprovação do dono).
-  const ajuste = await ajusteMensalTodas(agoraDoCron(req)).catch(e => { console.error('[ajuste mensal]', e); return { sugestoesAjuste: 0 } })
-  res.json({ ...qualidade, ...detectores, ...ajuste, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos })
+  const ajuste = await o.rodar('ajuste mensal', () => ajusteMensalTodas(agora), { sugestoesAjuste: 0 })
+  // PDF 02 · dicionário de métricas: retrato do dia das métricas de "agora" (base das faixas).
+  const retratos = await o.rodar('retratos', () => guardarRetratos(agora), { retratosMetricas: 0 })
+  const lembretes = await o.rodar('lembretes', () => lembretesAnuais(agora), { lembretesMeta: 0 })
+  const sincronizacao = await o.rodar('social media', () => rodarJobSocialMedia('DIA'), {} as Awaited<ReturnType<typeof rodarJobSocialMedia>>)
+  // Vendas fechadas no CRM viram pautas de entrega (seção 6), mesmo sem ninguém abrir a tela.
+  const pautasDeEntrega = await o.rodar('pautas de entrega', async () => {
+    let n = 0
+    for (const op of await prisma.smMembro.findMany({ select: { usuarioId: true } })) n += await gerarPautasDeVendas(op.usuarioId)
+    return n
+  }, 0)
+  // Testes A/B com a amostra completa são concluídos sem ninguém abrir a tela.
+  const testesConcluidos = await o.rodar('testes A/B', async () => {
+    let n = 0
+    for (const op of await prisma.smTeste.findMany({ where: { status: 'ATIVO' }, distinct: ['usuarioId'], select: { usuarioId: true } })) {
+      const antes = await prisma.smTeste.count({ where: { usuarioId: op.usuarioId, status: 'CONCLUIDO' } })
+      await listarTestes(op.usuarioId)
+      n += (await prisma.smTeste.count({ where: { usuarioId: op.usuarioId, status: 'CONCLUIDO' } })) - antes
+    }
+    return n
+  }, 0)
+  // Fase 6: o retrato do dia dos concorrentes e, do dia 25 em diante, o planejamento do mês seguinte.
+  const concorrentes = await o.rodar('concorrentes', () => rodarConcorrentes(agora), { concorrentes: 0 })
+  const planejamento = await o.rodar('planejamento', () => rodarPlanejamento(agora), { planejamento: 0 })
+  // Referências: vídeos dos perfis (todo dia) e das hashtags das motos (a cada 3 dias, no limite semanal).
+  const referencias = await o.rodar('referências', () => rodarReferencias(agora), { referenciasPerfis: 0, referenciasMotos: 0 })
+  // Os eventos brutos do Instagram já processados não ficam para sempre (espaço do banco).
+  const eventosLimpos = await o.rodar('limpeza de eventos', () => limparEventosAntigos(agora), { eventosApagados: 0 })
+  res.json({ ...qualidade, ...detectores, ...ajuste, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos, adiadas: o.adiadas, tempos: o.tempos })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em
@@ -384,34 +392,37 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
   const pausa = pularMinuto(agoraDoCron(req))
   if (pausa) { res.json({ pausado: pausa }); return }
+  const agora = agoraDoCron(req)
+  // Pente fino: a régua e as rotinas de atividade primeiro (antes ficavam no fim e não cabiam nos 30 s);
+  // as tarefas com limite de tempo próprio recebem só o que sobrar.
+  const o = orcamento(25_000)
+  // PDF 02 · ATV: as ocorrências de hoje das rotinas e a régua de cobrança.
+  const rotinas = await o.rodar('rotinas', () => gerarOcorrenciasDeRotina(agora), { ocorrenciasRotina: 0 })
+  const regua = await o.rodar('régua', () => rodarRegua(agora), { reguaRegistros: 0, reguaEnviados: 0 })
+  // Ligações: aviso na hora e lembrete 30 min depois para quem liga (Aries ou chat "Você").
+  const ligacoes = await o.rodar('ligações', () => avisarLigacoes(agora), { avisosLigacao: 0 })
+  // Avisa o vendedor de lead esperando resposta (pelo Aries, quando vinculado).
+  const espera = await o.rodar('espera', () => avisarLeadsEsperando(agora), { avisosEspera: 0 })
+  // Follow de crédito recusado: avisa o vendedor no dia da nova análise.
+  const credito = await o.rodar('follow de crédito', () => avisarFollowsCredito(agora), { avisosCredito: 0 })
   // As imagens da pauta são servidas pela própria API: a Meta precisa da URL completa.
   const baseApi = process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`
-  const [sincronizacao, publicacao, atendimento] = await Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi), processarEventosPendentes(100)])
+  const [sincronizacao, publicacao, atendimento] = await o.rodar('social media', () => Promise.all([rodarJobSocialMedia('RETENTATIVA'), publicarPautasVencidas(baseApi), processarEventosPendentes(100)]), [{}, null, null] as unknown as [Awaited<ReturnType<typeof rodarJobSocialMedia>>, Awaited<ReturnType<typeof publicarPautasVencidas>>, Awaited<ReturnType<typeof processarEventosPendentes>>])
   // Seção 11.5: gatilhos do Pulso e a entrega agrupada no celular.
-  const pulso = await rodarPulso(agoraDoCron(req)).catch(e => { console.error('[sm] pulso', e); return { pulsoNovos: 0, pulsoPush: 0 } })
-  // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
-  const trafego = await sincronizarTrafegoPendentes(10_000).catch(e => { console.error('[trafego] cron', e); return { trafegoSincronizadas: 0, trafegoFalhas: 0 } })
-  // Assistente Comercial: follow automático (só quando a loja ligou; horário e teto conferidos lá dentro).
+  const pulso = await o.rodar('pulso', () => rodarPulso(agora), { pulsoNovos: 0, pulsoPush: 0 })
   // Follow automático e a varredura dos leads cujo aviso do WhatsApp se perdeu, em paralelo.
-  const [follow, varredura] = await Promise.all([
-    rodarFollows(agoraDoCron(req), 8000).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0, followsParaVendedor: 0 } }),
-    varrerConversasRecentes(agoraDoCron(req), 6000).catch(e => { console.error('[assistente] varredura', e); return { varreduras: 0, mensagensVarridas: 0 } }),
-  ])
+  const [follow, varredura] = await o.rodar('follow e varredura', lim => Promise.all([
+    rodarFollows(agora, Math.min(8000, lim)).catch(e => { console.error('[assistente] follow', e); return { followsEnviados: 0, followsParaVendedor: 0 } }),
+    varrerConversasRecentes(agora, Math.min(6000, lim)).catch(e => { console.error('[assistente] varredura', e); return { varreduras: 0, mensagensVarridas: 0 } }),
+  ]), [{ followsEnviados: 0, followsParaVendedor: 0 }, { varreduras: 0, mensagensVarridas: 0 }] as const)
   // Pré-venda do robô (Ajuste 3): cadências escolhidas pelo vendedor e retomada do roteiro parado.
-  const cadencias = await rodarCadencias(agoraDoCron(req), 6000).catch(e => { console.error('[assistente] cadências', e); return { cadenciasEnviadas: 0, cadenciasConcluidas: 0 } })
-  const retomada = await retomarRoteiros(agoraDoCron(req), 5000).catch(e => { console.error('[assistente] retomada', e); return { retomadas: 0, entreguesPorSilencio: 0 } })
-  // Assistente pessoal: avisa o vendedor de lead esperando resposta (pelo Aries, quando vinculado).
-  const espera = await avisarLeadsEsperando(agoraDoCron(req)).catch(e => { console.error('[assistente] espera', e); return { avisosEspera: 0 } })
+  const cadencias = await o.rodar('cadências', lim => rodarCadencias(agora, Math.min(6000, lim)), { cadenciasEnviadas: 0, cadenciasConcluidas: 0 })
+  const retomada = await o.rodar('retomada', lim => retomarRoteiros(agora, Math.min(5000, lim)), { retomadas: 0, entreguesPorSilencio: 0 })
   // Aries no WhatsApp: o resumo da manhã no horário escolhido pelo gestor.
-  const agente = await rodarAgente(agoraDoCron(req), 5000).catch(e => { console.error('[agente] manhã', e); return { manhaAgente: 0 } })
-  // Ligações: aviso na hora e lembrete 30 min depois para quem liga (Aries ou chat "Você").
-  const ligacoes = await avisarLigacoes(agoraDoCron(req)).catch(e => { console.error('[ligacoes] aviso', e); return { avisosLigacao: 0 } })
-  // Follow de crédito recusado: avisa o vendedor no dia da nova análise.
-  const credito = await avisarFollowsCredito(agoraDoCron(req)).catch(e => { console.error('[follow] crédito', e); return { avisosCredito: 0 } })
-  // PDF 02 · ATV: as ocorrências de hoje das rotinas e a régua de cobrança (modo de registro: anota, não envia).
-  const rotinas = await gerarOcorrenciasDeRotina(agoraDoCron(req)).catch(e => { console.error('[atv] rotinas', e); return { ocorrenciasRotina: 0 } })
-  const regua = await rodarRegua(agoraDoCron(req)).catch(e => { console.error('[atv] régua', e); return { reguaRegistros: 0 } })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua })
+  const agente = await o.rodar('Aries manhã', lim => rodarAgente(agora, Math.min(5000, lim)), { manhaAgente: 0 })
+  // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
+  const trafego = await o.rodar('tráfego', lim => sincronizarTrafegoPendentes(Math.min(10_000, lim)), { trafegoSincronizadas: 0, trafegoFalhas: 0 })
+  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

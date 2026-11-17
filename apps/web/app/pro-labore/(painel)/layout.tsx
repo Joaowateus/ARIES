@@ -187,7 +187,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
     if (!usuario || usuario.papel === 'SOCIAL_MEDIA' || !telas) return
     const aba = abaDaRota(pathname)
     let vivo = true
-    telasApi.usoAbrir(aba?.chave ?? pathname.replace('/pro-labore', '') ?? 'inicio', telas.versao).then(r => { if (vivo) setUsoId(r.id) }).catch(() => undefined)
+    telasApi.usoAbrir(aba?.chave || pathname.replace('/pro-labore', '') || 'inicio', telas.versao).then(r => { if (vivo) setUsoId(r.id) }).catch(() => undefined)
     return () => { vivo = false }
   }, [pathname, telas, usuario])
   // Versão nova: a tela inicial é o Hoje do papel.
