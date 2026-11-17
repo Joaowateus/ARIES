@@ -107,6 +107,29 @@ export async function painelDoHoje(p: { usuarioId: string; papel: PapelHoje; ven
     { chave: 'RETORNO_ESPONTANEO', nome: 'Retorno espontâneo', valor: o.RETORNO_ESPONTANEO ?? 0 },
   ] : null
 
+  // Próximos 7 dias (redesenho do Hoje): o que vence em cada dia, pela ATV (mesmo alcance da fila).
+  const iniSemana = new Date(Date.parse(`${hoje}T03:00:00Z`))
+  const fimSemana = new Date(iniSemana.getTime() + 7 * DIA)
+  const resp = vend ? Prisma.sql` AND a."responsavelId" = ${vend}` : Prisma.empty
+  const [porDia, atrasadas] = await Promise.all([
+    prisma.$queryRaw<Array<{ dia: string; grupo: string; n: bigint }>>`
+      SELECT to_char(a.prazo - interval '3 hours', 'YYYY-MM-DD') dia,
+        CASE WHEN a.tipo IN ('VISITA', 'CONFIRMAR_VISITA', 'RESULTADO_VISITA') THEN 'visitas'
+             WHEN a.tipo = 'LIGACAO' THEN 'ligacoes'
+             WHEN a."registroTabela" = 'pro_labore_lead_follows' OR a.tipo LIKE 'FOLLOW%' THEN 'follows'
+             ELSE 'outras' END grupo, count(*) n
+      FROM pro_labore_atividades a
+      WHERE a."usuarioId" = ${u} AND a.status = 'PENDENTE' AND a.prazo >= ${iniSemana} AND a.prazo < ${fimSemana}${resp}
+      GROUP BY 1, 2`,
+    // Atrasadas: a mesma ficha do dicionário que a aba Atividades usa.
+    calcular('atividades_atrasadas', e, mes, agora).catch(() => null),
+  ])
+  const semana = Array.from({ length: 7 }, (_, i) => {
+    const dia = diaIso(Date.parse(`${hoje}T12:00:00Z`) + i * DIA)
+    const de = (g: string) => Number(porDia.find(x => x.dia === dia && x.grupo === g)?.n ?? 0)
+    return { dia, visitas: de('visitas'), follows: de('follows'), ligacoes: de('ligacoes'), outras: de('outras'), atrasadas: i === 0 ? Number(atrasadas?.valor ?? 0) : 0 }
+  })
+
   void BRT
-  return { geradoEm: agora.toISOString(), series, ritmo, funil, equipe, origem }
+  return { geradoEm: agora.toISOString(), series, ritmo, funil, equipe, origem, semana }
 }

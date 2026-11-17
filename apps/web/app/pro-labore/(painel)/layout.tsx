@@ -391,6 +391,12 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
         </nav>
 
         <div className="pl-sidebar-footer">
+          {(followsDia.atrasados + followsDia.hoje + ligacoesDia.atrasadas + ligacoesDia.hoje > 0) && (
+            <Link href="/pro-labore/atividades" className="pl-sidebar-destaque" data-destaque-menu title="Abrir as atividades">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3c1 3.5 5 5.2 5 10a5 5 0 0 1-10 0c0-2.2 1.1-3.6 2.2-4.6.2 1.6 1 2.6 2 3 0-3 .3-5.6.8-8.4Z" /></svg>
+              <span><b>Para hoje</b><br />{[followsDia.hoje + followsDia.atrasados > 0 && `${followsDia.hoje + followsDia.atrasados} ${followsDia.hoje + followsDia.atrasados === 1 ? 'follow' : 'follows'}`, ligacoesDia.hoje + ligacoesDia.atrasadas > 0 && `${ligacoesDia.hoje + ligacoesDia.atrasadas} ${ligacoesDia.hoje + ligacoesDia.atrasadas === 1 ? 'ligação' : 'ligações'}`].filter(Boolean).join(' e ')}{followsDia.atrasados + ligacoesDia.atrasadas > 0 ? `, ${followsDia.atrasados + ligacoesDia.atrasadas} ${followsDia.atrasados + ligacoesDia.atrasadas === 1 ? 'atrasado' : 'atrasados'}` : ''}</span>
+            </Link>
+          )}
           <div className="pl-sidebar-tema"><span>Tema</span><PLThemeToggle /></div>
           <div className="pl-sidebar-user" title={`${usuario.nome}${rotuloPapel ? ` (${rotuloPapel})` : ''}`}>
             <span className="pl-sb-avatar" aria-hidden="true">{iniciaisDe(usuario.nome)}</span>
