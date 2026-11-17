@@ -13,6 +13,9 @@ const ESTADO: Record<Tabela, Record<string, string>> = {
   pro_labore_agenda_conclusoes: { PENDENTE: 'PENDENTE', EXECUTADA: 'FEITA', CANCELADA: 'CANCELADA' },
 }
 
+/** Nome da tabela de origem (só as três conhecidas) para a conferência de que o registro ainda existe. */
+const origem = (t: Tabela) => { if (!(t in ESTADO)) throw new Error('Tabela de origem desconhecida'); return Prisma.raw(`"${t}"`) }
+
 export interface FiltroAtv {
   tabela: Tabela
   usuarioId: string
@@ -33,6 +36,7 @@ export async function daAtv(f: FiltroAtv): Promise<Array<{ registroId: string; p
   const linhas = await prisma.$queryRaw<Array<{ registroId: string; prazo: Date; status: string }>>`
     SELECT a."registroId", a.prazo, a.status FROM pro_labore_atividades a
     WHERE a."registroTabela" = ${f.tabela} AND a."usuarioId" = ${f.usuarioId}
+      AND EXISTS (SELECT 1 FROM ${origem(f.tabela)} o WHERE o.id = a."registroId")
       ${leads}
       ${f.leadId ? Prisma.sql`AND a."leadId" = ${f.leadId}` : Prisma.empty}
       ${f.status ? Prisma.sql`AND a.status = ${f.status}` : Prisma.empty}
@@ -43,7 +47,7 @@ export async function daAtv(f: FiltroAtv): Promise<Array<{ registroId: string; p
   return linhas.map(l => ({ ...l, status: ESTADO[f.tabela][l.status] ?? l.status }))
 }
 
-/** Contagem pela ATV (selo do menu). */
+/** Contagem pela ATV (selo do menu). Como a lista, ignora a ATV cujo registro de origem não existe mais (lead excluído). */
 export async function contarNaAtv(f: Omit<FiltroAtv, 'ordem' | 'limite'>): Promise<number> {
   const leads = f.leadIds == null ? Prisma.empty
     : Array.isArray(f.leadIds) ? (f.leadIds.length ? Prisma.sql`AND a."leadId" IN (${Prisma.join(f.leadIds)})` : Prisma.sql`AND false`)
@@ -51,6 +55,7 @@ export async function contarNaAtv(f: Omit<FiltroAtv, 'ordem' | 'limite'>): Promi
   const [r] = await prisma.$queryRaw<Array<{ n: bigint }>>`
     SELECT count(*) n FROM pro_labore_atividades a
     WHERE a."registroTabela" = ${f.tabela} AND a."usuarioId" = ${f.usuarioId}
+      AND EXISTS (SELECT 1 FROM ${origem(f.tabela)} o WHERE o.id = a."registroId")
       ${leads}
       ${f.status ? Prisma.sql`AND a.status = ${f.status}` : Prisma.empty}
       ${f.prazoAntes ? Prisma.sql`AND a.prazo < ${f.prazoAntes}` : Prisma.empty}
