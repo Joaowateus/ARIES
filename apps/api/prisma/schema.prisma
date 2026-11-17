@@ -1187,6 +1187,9 @@ model ParametroLiquidez {
   metasEtapas                  Json?
   // PDF 06: expediente da loja { inicio: "08:00", fim: "18:00", dias: [1..6] } (prazos de detector e decisão).
   expediente                   Json?
+  // Tela inicial (17/11): imagem de fundo e atalhos, iguais para toda a loja.
+  inicioFundo                  String?
+  inicioAtalhos                Json?
 
   @@map("pro_labore_parametros")
 }
@@ -1346,69 +1349,69 @@ model LancamentoFinanceiro {
 // os números computados daqui e só cai pro FunilMensal em meses sem Lead
 // nenhum (histórico anterior à funcionalidade).
 model Lead {
-  id               String    @id @default(cuid())
-  usuarioId        String
-  vendedorId       String?
-  nomeCliente      String
-  telefone         String?
-  email            String?
-  cpf              String?
-  endereco         String?
-  modeloInteresse  String? // moto que o cliente tem interesse — separado de observacao pra facilitar relatório
-  observacao       String?
-  tipoLead         String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
+  id                String    @id @default(cuid())
+  usuarioId         String
+  vendedorId        String?
+  nomeCliente       String
+  telefone          String?
+  email             String?
+  cpf               String?
+  endereco          String?
+  modeloInteresse   String? // moto que o cliente tem interesse — separado de observacao pra facilitar relatório
+  observacao        String?
+  tipoLead          String? // TRAFEGO | ORGANICO — canal de origem do lead, pra analisar performance por canal
   // Quanto o cliente teria capacidade de gerar de faturamento — base pro
   // indicador de "oportunidade de faturamento" que passou pelo funil.
   // Default 0 só pra não quebrar leads já cadastrados antes deste campo
   // existir; obrigatório em todo lead novo (exigido na validação da rota).
-  valorNegociacao  Float     @default(0)
+  valorNegociacao   Float     @default(0)
   // P | R — como a negociação vai ser paga, e não como o lead entrou
   // (isso é tipoLead/canal). Muda o teto de pró-labore/comissão usado na
   // conversão em venda (ver tetoProLaboreRenegociacao/tetoComissaoRenegociacao
   // em ParametroLiquidez) — null se ainda não classificada, o que a
   // conversão trata igual a P (pagamento integral, tetos normais da conta).
-  tipoNegociacao   String?
-  estagio          String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
-  vendaId          String?   @unique
+  tipoNegociacao    String?
+  estagio           String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
+  vendaId           String?   @unique
   // Origem vinda do Social Media (seção 3.4): o lead criado pelo Atendimento
   // guarda o post e o canal de entrada, e a venda herda isso pelo lead.
-  origem           String? // INSTAGRAM_ORGANICO
-  postCode         String? // #P-DDMM-MODELO, #S-..., #BIO
-  midiaId          String? // id da mídia no Instagram
-  canalEntrada     String? // DIRECT | COMENTARIO | COMENTE_QUERO | RESPOSTA_STORY | LINK_WHATSAPP
-  conversaId       String?
+  origem            String? // INSTAGRAM_ORGANICO
+  postCode          String? // #P-DDMM-MODELO, #S-..., #BIO
+  midiaId           String? // id da mídia no Instagram
+  canalEntrada      String? // DIRECT | COMENTARIO | COMENTE_QUERO | RESPOSTA_STORY | LINK_WHATSAPP
+  conversaId        String?
   // Como o lead entrou no CRM: null = cadastro manual; WHATSAPP = criado
   // sozinho quando o contato mandou a 1ª mensagem no WhatsApp do vendedor.
-  origemCadastro   String?
+  origemCadastro    String?
   // Nota do Assistente (0–100) pela conversa do WhatsApp: quanto mais alta,
   // mais pronto para comprar. Só leitura; quem calcula é o assistente.
-  pontuacao        Int?
+  pontuacao         Int?
   // Etiquetas da jornada, calculadas pelo Assistente a cada mensagem
   // (QUENTE, FINANCIAMENTO, A_VISTA, TEM_TROCA, SEM_ENTRADA, PEDIU_SIMULACAO,
   // OBJECAO_PRECO, PEDIU_VISITA, SUMIU_24H).
-  etiquetas        String[]  @default([])
+  etiquetas         String[]  @default([])
   // Etapas para as quais um avanço automático foi desfeito: o assistente
   // não tenta de novo.
-  avancosDesfeitos String[]  @default([])
-  criadoEm         DateTime  @default(now())
-  atualizadoEm     DateTime  @updatedAt
-  fechadoEm        DateTime?
+  avancosDesfeitos  String[]  @default([])
+  criadoEm          DateTime  @default(now())
+  atualizadoEm      DateTime  @updatedAt
+  fechadoEm         DateTime?
   // Perdido: o lead sai do funil e vai para a Reativação com o motivo e a
   // temperatura (FRIO | MORNO | QUENTE). Reativar devolve ao funil e conta
   // em `reativacoes`; o motivo fica guardado como histórico.
-  motivoPerda      String?
+  motivoPerda       String?
   // Etapa em que o lead estava quando foi perdido (onde o funil perde).
-  estagioPerda     String?
-  notaPerda        String?
-  perdidoEm        DateTime?
-  temperatura      String?
+  estagioPerda      String?
+  notaPerda         String?
+  perdidoEm         DateTime?
+  temperatura       String?
   // CRM livre (Ajuste 2): o que faltava quando a pessoa avançou "mesmo assim"
   // (vazio = critérios cumpridos) e a temperatura que o vendedor fixou à mão
   // (FRIO | MORNO | QUENTE; nulo = calculada).
   pendenciasEtapa   String[]  @default([])
   temperaturaManual String?
-  reativadoEm      DateTime?
-  reativacoes      Int       @default(0)
+  reativadoEm       DateTime?
+  reativacoes       Int       @default(0)
 
   // --- Jornada de compra de 10 etapas (ARIES 2.0, PDF 01) ---
   // Cliente (CLI) dono desta oportunidade: o mesmo telefone é sempre o mesmo cliente.
@@ -5021,4 +5024,35 @@ model DailyDecisao {
 
   @@index([usuarioId, reuniaoId])
   @@map("pro_labore_daily_decisoes")
+}
+
+// Tela inicial (17/11): tarefas e notas compartilhadas pela loja (excluir = marcar).
+model InicioTarefa {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  texto        String
+  feita        Boolean   @default(false)
+  feitaEm      DateTime?
+  autorId      String?
+  autorNome    String?
+  excluidaEm   DateTime?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @default(now()) @updatedAt
+
+  @@index([usuarioId, excluidaEm, criadoEm], map: "pro_labore_inicio_tarefas_usuario_idx")
+  @@map("pro_labore_inicio_tarefas")
+}
+
+model InicioNota {
+  id           String    @id @default(cuid())
+  usuarioId    String
+  texto        String    @default("")
+  autorId      String?
+  autorNome    String?
+  excluidaEm   DateTime?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @default(now()) @updatedAt
+
+  @@index([usuarioId, excluidaEm, atualizadoEm], map: "pro_labore_inicio_notas_usuario_idx")
+  @@map("pro_labore_inicio_notas")
 }

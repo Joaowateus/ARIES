@@ -16,6 +16,7 @@ import { Daily } from './Daily'
 import { PainelDoDono } from './PainelDoDono'
 import { DashboardAntigo } from '../_dashboard/DashboardAntigo'
 import { pl } from '@/lib/format'
+import { InicioAries } from './InicioAries'
 
 // Ajuste 1: o Hoje do dono (e do supervisor) tem três sub-abas: Hoje · Daily · Painel.
 type Sub = 'hoje' | 'daily' | 'painel'
@@ -33,15 +34,18 @@ export default function HojePage() {
     if (s === 'hoje') url.searchParams.delete('sub'); else url.searchParams.set('sub', s)
     window.history.replaceState(null, '', url.toString())
   }
+  // Tela inicial do ARIES (17/11): a sub-aba Hoje virou a tela inicial em tela cheia, para todos.
+  useEffect(() => { try { const u = JSON.parse(localStorage.getItem('pro_labore_usuario') ?? 'null') as { papel?: string } | null; if (u?.papel) setPapel(u.papel) } catch { /* sem papel */ } }, [])
+  if (sub === 'hoje') return <InicioAries />
   const comSubs = papel === 'DONO' || papel === 'SUPERVISOR'
   return (
     <div data-hoje-subabas={comSubs ? sub : undefined}>
       {comSubs && (
         <div className="pl-sv-tabs" role="tablist" aria-label="Partes do Hoje" style={{ marginBottom: 12 }} data-subabas-hoje>
-          {SUBS.map(x => <button key={x.valor} type="button" role="tab" aria-selected={sub === x.valor} className={sub === x.valor ? 'ativo' : ''} onClick={() => trocar(x.valor)} data-subaba={x.valor}>{x.rotulo}</button>)}
+          {SUBS.map(x => <button key={x.valor} type="button" role="tab" aria-selected={sub === x.valor} className={sub === x.valor ? 'ativo' : ''} onClick={() => trocar(x.valor)} data-subaba={x.valor}>{x.valor === 'hoje' ? 'Início' : x.rotulo}</button>)}
         </div>
       )}
-      {(!comSubs || sub === 'hoje') && <HojeDoPapel aoCarregar={setPapel} />}
+      {!comSubs && papel && <InicioAries />}
       {comSubs && sub === 'daily' && <Daily papel={papel!} />}
       {comSubs && sub === 'painel' && <PainelComGraficos papel={papel!} />}
     </div>
