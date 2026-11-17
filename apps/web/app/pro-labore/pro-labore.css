@@ -5160,3 +5160,93 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .pl-app .pl-sidebar, .pl-app[data-theme="dark"] .pl-sidebar { background: rgba(12, 14, 19, .97); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); z-index: 40; }
   .pl-app[data-theme="light"] .pl-sidebar { background: rgba(250, 251, 253, .98); }
 }
+
+/* ==========================================================================
+   Paleta "Noir" (referência enviada pelo dono): preto puro, cinzas neutros,
+   branco como único destaque, vidro escuro com borda fina e brilho no topo,
+   brilhos radiais suaves e pílulas com contorno. Nada de cor de marca: a cor
+   fica só para estado (bom / atenção / crítico).
+   ========================================================================== */
+.pl-app {
+  --hx-ambar: #18181b;
+  --hx-ambar-forte: #000000;
+  --hx-ambar-suave: rgba(0, 0, 0, .06);
+}
+.pl-app[data-theme="dark"] {
+  --pl-frame: #000000;
+  --pl-lane: #030303;
+  --pl-bg: #050505;
+  --pl-surface: #0b0b0c;
+  --pl-surface-2: #121213;
+  --pl-surface-3: #1a1a1b;
+  --pl-ink-1: #f4f4f5;
+  --pl-ink-2: #a3a3a3;
+  --pl-ink-muted: #737373;
+  --pl-border: rgba(255, 255, 255, .07);
+  --pl-border-strong: rgba(255, 255, 255, .13);
+  --pl-accent: #f5f5f5;
+  --pl-accent-ink: #000000;
+  --pl-accent-strong: #ffffff;
+  --pl-accent-soft: rgba(255, 255, 255, .06);
+  --pl-grid-line: #161617;
+  --pl-baseline: #2a2a2b;
+  --pl-glass: #050505;
+  --pl-shadow-pop: 0 0 0 1px rgba(255, 255, 255, .07), 0 24px 60px -16px rgba(0, 0, 0, .9);
+  --hx-ambar: #ededed;
+  --hx-ambar-forte: #ffffff;
+  --hx-ambar-suave: rgba(255, 255, 255, .07);
+  --hx-vidro: rgba(12, 12, 13, .78);
+  --hx-vidro-borda: rgba(255, 255, 255, .07);
+  --nx-cartao: linear-gradient(180deg, rgba(255, 255, 255, .035) 0%, rgba(255, 255, 255, .012) 100%), rgba(8, 8, 9, .82);
+  --nx-brilho: inset 0 1px 0 rgba(255, 255, 255, .06), 0 18px 40px -24px rgba(0, 0, 0, .9);
+}
+.pl-app[data-theme="dark"] .ia {
+  --ia-vidro: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012)), rgba(8, 8, 9, .62);
+  --ia-vidro-forte: rgba(14, 14, 15, .78);
+  --ia-borda: rgba(255, 255, 255, .08);
+  --ia-texto-2: rgba(245, 245, 245, .6);
+  --ia-texto-3: rgba(245, 245, 245, .38);
+  --ia-acento: #f5f5f5;
+}
+.pl-app[data-theme="light"] .ia { --ia-acento: #18181b; }
+
+/* Fundo: preto com o brilho suave no alto, como a referência. A paisagem fica
+   em preto e branco, bem apagada (só a silhueta). */
+.pl-app[data-theme="dark"] { background: #000; }
+.pl-app[data-theme="dark"] .pl-fundo-app { filter: blur(12px) grayscale(1) brightness(.5); }
+.pl-app[data-theme="dark"] .pl-fundo-veu {
+  background:
+    radial-gradient(60% 38% at 50% -6%, rgba(255, 255, 255, .09), transparent 70%),
+    radial-gradient(40% 30% at 100% 100%, rgba(255, 255, 255, .035), transparent 70%),
+    rgba(0, 0, 0, .55);
+}
+.pl-app[data-theme="dark"] .ia-fundo { filter: grayscale(1) brightness(.72) contrast(1.05); }
+.pl-app[data-theme="light"] .ia-fundo { filter: grayscale(1); }
+
+/* Moldura e cartões de vidro escuro */
+.pl-app[data-theme="dark"] .pl-main { background: rgba(5, 5, 6, .6); border-color: rgba(255, 255, 255, .06); }
+.pl-app[data-theme="dark"] .pl-card,
+.pl-app[data-theme="dark"] .ar-cabecalho + * .pl-card { background: var(--nx-cartao); border-color: rgba(255, 255, 255, .07); box-shadow: var(--nx-brilho); }
+.pl-app[data-theme="dark"] .ia-cartao, .pl-app[data-theme="dark"] .ia-trilho { box-shadow: var(--nx-brilho); }
+
+/* Títulos finos e claros, texto de apoio em cinza */
+.pl-app h1, .pl-app h2, .pl-app .pl-display { font-weight: 500; letter-spacing: -.025em; }
+
+/* Botão principal: pílula branca com texto preto; secundários com contorno */
+.pl-app .pl-btn-primary { border-radius: 999px; }
+.pl-app[data-theme="dark"] .pl-btn-primary { background: #f5f5f5; color: #000; box-shadow: 0 0 24px -8px rgba(255, 255, 255, .35); }
+.pl-app[data-theme="dark"] .pl-chip { border-color: rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .03); }
+
+/* Menu: item ativo em vidro claro com fio branco à direita */
+.pl-app[data-theme="dark"] .pl-sublink.active,
+.pl-app[data-theme="dark"] .pl-sidebar.collapsed .pl-sidebar-link.active {
+  background: linear-gradient(90deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .09)); border-color: rgba(255, 255, 255, .1);
+}
+.pl-sublink.active::after { box-shadow: 0 0 12px 1px color-mix(in srgb, var(--hx-ambar) 45%, transparent); }
+.pl-app[data-theme="dark"] .pl-sidebar-destaque { border-color: rgba(255, 255, 255, .14); background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015)); }
+.pl-app[data-theme="dark"] .pl-sidebar-destaque b, .pl-app[data-theme="dark"] .pl-sidebar-destaque svg { color: #fff; }
+.hx-dia-hoje { box-shadow: 0 0 0 1px var(--hx-ambar-suave), 0 12px 32px -18px rgba(255, 255, 255, .25); }
+.hx-graficos [data-ritmo-mes] polyline { filter: drop-shadow(0 4px 10px rgba(255, 255, 255, .18)); }
+@media (max-width: 980px) {
+  .pl-app[data-theme="dark"] .pl-sidebar { background: rgba(4, 4, 5, .97); }
+}
