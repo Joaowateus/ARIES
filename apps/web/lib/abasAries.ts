@@ -24,7 +24,9 @@ const COMERCIAL: PapelHoje[] = ['DONO', 'SUPERVISOR', 'SDR', 'VENDEDOR']
 
 export const ABAS: AbaAries[] = [
   // Início
-  { chave: 'hoje', nome: 'Hoje', grupo: 'Início', href: '/pro-labore/hoje', paraQuem: 'Todos', pergunta: 'O que eu preciso fazer agora para bater a meta?', acaoPrincipal: 'Executar a próxima atividade', numeros: [], lente: 'hoje', proprio: true },
+  { chave: 'hoje', nome: 'Início', grupo: 'Início', href: '/pro-labore/hoje', paraQuem: 'Todos', pergunta: 'O que eu preciso fazer agora para bater a meta?', acaoPrincipal: 'Executar a próxima atividade', numeros: [], lente: 'hoje', proprio: true },
+  { chave: 'daily', nome: 'Daily', grupo: 'Início', href: '/pro-labore/hoje?sub=daily', paraQuem: 'Dono e supervisor', pergunta: 'O que a equipe decide hoje?', acaoPrincipal: 'Conduzir o Daily', numeros: [], lente: 'hoje', papeis: ['DONO', 'SUPERVISOR'], proprio: true },
+  { chave: 'painel', nome: 'Painel', grupo: 'Início', href: '/pro-labore/hoje?sub=painel', paraQuem: 'Dono e supervisor', pergunta: 'Como está o mês em números?', acaoPrincipal: 'Ler o painel', numeros: [], lente: 'hoje', papeis: ['DONO', 'SUPERVISOR'], proprio: true },
   { chave: 'pergunte', nome: 'Pergunte ao ARIES', grupo: 'Início', href: '/pro-labore/pergunte', paraQuem: 'Todos', pergunta: 'O que está acontecendo na operação, e por quê?', acaoPrincipal: 'Fazer uma pergunta', numeros: [], lente: 'pergunte', proprio: true },
   { chave: 'recomendacoes', nome: 'Recomendações', grupo: 'Início', href: '/pro-labore/recomendacoes', paraQuem: 'Gestão', pergunta: 'Onde está o maior ganho que ainda não pegamos?', acaoPrincipal: 'Aceitar e atribuir uma recomendação', numeros: [], lente: 'recomendacoes', papeis: GESTAO, proprio: true },
   // Comercial

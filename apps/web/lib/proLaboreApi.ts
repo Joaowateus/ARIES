@@ -3973,3 +3973,28 @@ export const painelDonoApi = {
   salvarMeta: (etapa: string, m: { conversaoMin: number | null; perdaMax: number | null; custoMax: number | null; justificativa: string }) => request<unknown>(`/pro-labore/painel-dono/metas/${etapa}`, { method: 'PUT', body: JSON.stringify(m) }),
   aceiteItem: (item: ItemAjuste1, dia?: string) => request<Partial<AceiteAjuste1>>(`/pro-labore/ajuste1/aceite${qs({ dia, item })}`),
 }
+
+// Tela inicial do ARIES (17/11): tudo da tela numa chamada; tarefas e notas compartilhadas.
+export interface TarefaInicio { id: string; texto: string; feita: boolean; feitaEm: string | null; autorNome: string | null; criadoEm: string }
+export interface NotaInicio { id: string; texto: string; autorNome: string | null; atualizadoEm: string }
+export interface IndicadorInicio { chave: string; valor: number | null; variacao: number | null; unidade: string | null; semAcesso?: boolean }
+export interface InicioDados {
+  escopo: 'PROPRIO' | 'LOJA'; fundo: string | null; atalhos: string[] | null; podeConfigurar: boolean
+  tarefas: TarefaInicio[]; notas: NotaInicio[]; indicadores: IndicadorInicio[]
+  insights: Array<{ tipo: string; forca: string | null; titulo: string; texto: string | null; href: string | null }>
+  atividade: Array<{ id: string; texto: string; modulo: string; em: string; href: string }>
+}
+export interface ResultadoBusca { id: string; origem: string; titulo: string; detalhe: string | null; href: string }
+export const inicioApi = {
+  carregar: () => request<InicioDados>('/pro-labore/inicio'),
+  buscar: (q: string) => request<ResultadoBusca[]>(`/pro-labore/inicio/busca?q=${encodeURIComponent(q)}`),
+  criarTarefa: (texto: string) => request<TarefaInicio>('/pro-labore/inicio/tarefas', { method: 'POST', body: JSON.stringify({ texto }) }),
+  mudarTarefa: (id: string, d: { texto?: string; feita?: boolean }) => request<TarefaInicio>(`/pro-labore/inicio/tarefas/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  excluirTarefa: (id: string) => request<{ ok: boolean }>(`/pro-labore/inicio/tarefas/${id}`, { method: 'DELETE' }),
+  criarNota: (texto = '') => request<NotaInicio>('/pro-labore/inicio/notas', { method: 'POST', body: JSON.stringify({ texto }) }),
+  salvarNota: (id: string, texto: string) => request<NotaInicio>(`/pro-labore/inicio/notas/${id}`, { method: 'PATCH', body: JSON.stringify({ texto }) }),
+  excluirNota: (id: string) => request<{ ok: boolean }>(`/pro-labore/inicio/notas/${id}`, { method: 'DELETE' }),
+  salvarConfig: (d: { fundo?: string | null; atalhos?: string[] }) => request<{ fundo: string | null; atalhos: string[] | null }>('/pro-labore/inicio/config', { method: 'PUT', body: JSON.stringify(d) }),
+  enviarFundo: (arquivo: Blob) => request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: arquivo, headers: { 'Content-Type': 'application/octet-stream' } }).then(r => r.caminho),
+  urlImagem: (caminho: string) => `${BASE}${caminho}`,
+}

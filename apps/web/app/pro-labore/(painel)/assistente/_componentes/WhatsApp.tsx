@@ -46,7 +46,8 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
   // Link do painel do lead no CRM: ?conversa=...&vendedor=... abre direto na conversa.
   const [linkConversa] = useState(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('conversa')))
   const [vendedorEscolhido, setVendedorEscolhido] = useState(() => (typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('vendedor') ?? ''))
-  const [aba, setAba] = useState<Aba>(linkConversa ? 'conversas' : 'visao')
+  // ?aba=estoque (Produtos, na tela inicial) abre direto a Vitrine.
+  const [aba, setAba] = useState<Aba>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('aba') === 'estoque' ? 'estoque' : linkConversa ? 'conversas' : 'visao'))
   const [dias, setDias] = useState<(typeof PERIODOS)[number]>(30)
   const [versao, setVersao] = useState(0)
   const [config, setConfig] = useState<{ chave: string; dados: ConfigAssistenteResposta } | null>(null)
