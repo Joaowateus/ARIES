@@ -3946,6 +3946,7 @@ export interface PainelHoje {
   funil: { etapas: Array<{ etapa: string; nome: string; chegaram: number; seguiram: number; conversao: number | null }>; gargalo: string | null }
   equipe: Array<{ id: string; nome: string; vendas: number; faturamento: number | null; feitas: number; atrasadas: number }> | null
   origem: Array<{ chave: string; nome: string; valor: number }> | null
+  semana?: Array<{ dia: string; visitas: number; follows: number; ligacoes: number; outras: number; atrasadas: number }>
 }
 export interface FraseBiblioteca { id: string; texto: string; autor: string; fonte: string; temas: string[]; ativa: boolean; aprovadaPor: string | null; aprovadaEm: string | null; origem: 'DONO' | 'ARIES' | 'INICIAL'; ultimaVezUsada: string | null }
 export const bussolaApi = {

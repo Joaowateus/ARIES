@@ -7,9 +7,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { bussolaApi, proLaboreApi, telasApi, type BussolaHoje, type HojeDados, type PainelHoje, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
-import { BussolaPorArea, FraseDoDia, ResumoCurto } from './Bussola'
-import { CartaoRitmo, GraficosOperacao, LinhaKpis, montarKpis } from './PainelHoje'
-import { Cabecalho, Detalhes, Lente, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
+import { BussolaPorArea, ResumoCurto } from './Bussola'
+import { montarKpis } from './PainelHoje'
+import { CartaoFrase, CartaoGraficos, GavetaLente, HeroHoje, SemanaHoje } from './HojeNovo'
+import { Detalhes, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
 import { FraseDoDono } from './FraseDoDono'
 import { Daily } from './Daily'
 import { PainelDoDono } from './PainelDoDono'
@@ -75,36 +76,43 @@ function HojeDoPapel({ aoCarregar }: { aoCarregar: (papel: string) => void }) {
   // Painel de comando: dados dos gráficos (ritmo do mês, tendências, funil, equipe, origem).
   const [pg, setPg] = useState<PainelHoje | null>(null)
   useEffect(() => { bussolaApi.painel().then(setPg).catch(() => undefined) }, [])
+  const [lenteAberta, setLenteAberta] = useState(false)
   if (erro) return <TelaVazia titulo="Não deu para montar o seu Hoje agora">{erro}</TelaVazia>
   if (!d) return <p className="pl-hint">Montando o seu Hoje…</p>
-  const ficha = { nome: 'Hoje', pergunta: d.pergunta, paraQuem: d.nomePapel, acaoPrincipal: 'Executar a próxima atividade' }
   const proxima = d.fila.find(i => i.acao && !i.extensao)
+  const kpis = montarKpis(d.papel, d.numeros, b, pg)
+  const como = b?.fatos?.find(x => x.tipo === 'COMO_ESTAMOS')
+  const resumo = como ? `${como.area.includes('meta') ? 'O mês está com ' : ''}${como.valor}` : d.pergunta
+  const nFila = d.fila.filter(i => !i.extensao).length
   return (
-    <div data-hoje={d.papel}>
-      {d.papel === 'DONO' && <FraseDoDono />}
-      {b && <FraseDoDia frase={b.frase} />}
-      <Cabecalho aba={ficha} acao={proxima?.acao?.href ? <Link className="pl-btn pl-btn-primary ar-acao-principal" href={proxima.acao.href} data-acao-principal>Fazer a próxima: {proxima.acao.rotulo}</Link> : undefined} />
-      <div className="ar-tela">
-        <div className="ar-trabalho">
-          <LinhaKpis kpis={montarKpis(d.papel, d.numeros, b, pg)} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 12, marginBottom: 16 }} data-topo-painel>
-            {pg ? <CartaoRitmo p={pg} papel={d.papel} /> : <div className="pl-card pl-hint">Montando o ritmo do mês…</div>}
-            {b ? <ResumoCurto d={b} atualizando={atualizando} aoAtualizar={() => carregarBussola(true)} /> : <div className="pl-card pl-hint" data-resumo-carregando>O ARIES está montando o resumo do dia…</div>}
-          </div>
-          {b && <BussolaPorArea d={b} aoMudar={() => undefined} series={pg?.series} />}
-          {pg && <GraficosOperacao p={pg} papel={d.papel} />}
-          <div className="pl-card-title" style={{ margin: '4px 0 8px' }} data-titulo-fila>O que depende de mim{d.fila.length ? ` · ${d.fila.filter(i => !i.extensao).length}` : ''}</div>
-          {d.papel === 'SOCIAL_MEDIA'
-            ? <TelaVazia titulo="Seu Hoje fica no espaço do Social Media" passo={<Link className="pl-btn pl-btn-primary" href="/pro-labore/sm">Abrir o meu espaço</Link>}>Pautas do dia, aprovações pedidas e Directs sem resposta estão lá.</TelaVazia>
-            : <Fila itens={d.fila} aoMudar={carregar} />}
-          {d.quadro && <QuadroEquipe linhas={d.quadro} aoMudar={carregar} />}
-          <Detalhes titulo="Como a fila é ordenada">
-            <ol style={{ margin: 0, paddingLeft: 18 }}>{d.ordemFila.map(g => <li key={g.grupo}>{g.nome}</li>)}</ol>
-            <p className="pl-hint" style={{ marginBottom: 0 }}>Os números vêm do dicionário de métricas (toque em um número para ver a ficha). Atualizado às {new Date(d.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.</p>
-          </Detalhes>
-        </div>
-        <Lente aba="hoje" dados={d.lente} aoMudar={carregar} />
+    <div className="hx" data-hoje={d.papel}>
+      <HeroHoje kpis={kpis} resumo={resumo} nLente={d.lente.itens.length} aoAbrirLente={() => setLenteAberta(true)}
+        frase={d.papel === 'DONO' ? <FraseDoDono /> : undefined}
+        acao={proxima?.acao?.href ? <Link className="hx-btn-ambar ar-acao-principal" href={proxima.acao.href} data-acao-principal>Fazer a próxima: {proxima.acao.rotulo}</Link> : undefined} />
+      {pg?.semana && <SemanaHoje semana={pg.semana} />}
+      <div className="hx-grade" data-topo-painel>
+        {pg ? <CartaoGraficos p={pg} papel={d.papel} /> : <div className="hx-cartao pl-hint">Montando os gráficos do mês…</div>}
+        {b ? <ResumoCurto d={b} atualizando={atualizando} aoAtualizar={() => carregarBussola(true)} /> : <div className="hx-cartao pl-hint" data-resumo-carregando>O ARIES está montando o resumo do dia…</div>}
       </div>
+      <div className={`hx-grade hx-grade-b${b?.frase ? '' : ' hx-sem-frase'}`}>
+        {b && <BussolaPorArea d={b} aoMudar={() => undefined} series={pg?.series} compacto />}
+        {b?.frase && <CartaoFrase frase={b.frase} />}
+      </div>
+      <section className="hx-cartao hx-fila-cartao" aria-label="O que depende de mim">
+        <div className="hx-cartao-topo">
+          <h2 className="hx-cartao-titulo" data-titulo-fila>O que depende de mim{nFila ? <span className="hx-contador">{nFila}</span> : null}</h2>
+          <Link className="hx-link" href="/pro-labore/atividades">Ver todas as atividades</Link>
+        </div>
+        {d.papel === 'SOCIAL_MEDIA'
+          ? <TelaVazia titulo="Seu Hoje fica no espaço do Social Media" passo={<Link className="pl-btn pl-btn-primary" href="/pro-labore/sm">Abrir o meu espaço</Link>}>Pautas do dia, aprovações pedidas e Directs ficam lá.</TelaVazia>
+          : <Fila itens={d.fila} aoMudar={carregar} />}
+      </section>
+      {d.quadro && <section className="hx-cartao"><QuadroEquipe linhas={d.quadro} aoMudar={carregar} /></section>}
+      <Detalhes titulo="Como a fila é ordenada">
+        <ol style={{ margin: 0, paddingLeft: 18 }}>{d.ordemFila.map(g => <li key={g.grupo}>{g.nome}</li>)}</ol>
+        <p className="pl-hint" style={{ marginBottom: 0 }}>Os números vêm do dicionário de métricas. Atualizado às {new Date(d.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.</p>
+      </Detalhes>
+      <GavetaLente aberta={lenteAberta} aoFechar={() => setLenteAberta(false)} dados={d.lente} aoMudar={carregar} />
     </div>
   )
 }

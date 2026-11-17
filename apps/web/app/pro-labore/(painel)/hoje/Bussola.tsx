@@ -120,7 +120,7 @@ const SERIE_DA_AREA: Record<string, string> = { RESULTADO: 'faturamento', PRE_VE
 const ICONE_AREA: Record<string, string> = { RESULTADO: '◎', PRE_VENDA: '☎', CREDITO: '⌂', VENDEDORES: '◆', TRAFEGO: '↗', SOCIAL: '✦', REATIVACAO: '↻', GESTAO: '▤', EQUIPE: '◉' }
 
 /** Saúde das áreas: uma grade de blocos pequenos (farol, número principal, tendência, uma frase); o detalhe abre ao lado. */
-export function BussolaPorArea({ d, aoMudar, series }: { d: BussolaHoje; aoMudar: () => void; series?: Record<string, SerieDia> }) {
+export function BussolaPorArea({ d, aoMudar, series, compacto }: { d: BussolaHoje; aoMudar: () => void; series?: Record<string, SerieDia>; compacto?: boolean }) {
   const [enviadosAgora, setEnviados] = useState<Set<string>>(new Set())
   const [msg, setMsg] = useState<string | null>(null)
   const [aberta, setAberta] = useState<string | null>(null)
@@ -142,7 +142,7 @@ export function BussolaPorArea({ d, aoMudar, series }: { d: BussolaHoje; aoMudar
   for (const c of cartoes) contagem[c.cor]++
   const atual = cartoes.find(c => c.area + c.nome === aberta) ?? null
   return (
-    <section aria-label="Saúde das áreas" className="pl-card" style={{ marginBottom: 16 }} data-bussola>
+    <section aria-label="Saúde das áreas" className={compacto ? 'hx-cartao' : 'pl-card'} style={compacto ? undefined : { marginBottom: 16 }} data-bussola>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
         <div className="pl-card-title" style={{ margin: 0 }}>Saúde das áreas</div>
         <div style={{ display: 'flex', gap: 10, fontSize: 12 }} data-contagem-areas>
@@ -153,6 +153,23 @@ export function BussolaPorArea({ d, aoMudar, series }: { d: BussolaHoje; aoMudar
         </div>
       </div>
       {msg && <p className="pl-hint" role="status" data-msg-levar>{msg}</p>}
+      {compacto ? (
+        <ul className="hx-areas" data-areas-lista>
+          {[...cartoes].sort((a, b) => ordemCor[a.cor] - ordemCor[b.cor]).map(c => {
+            const m = c.metricas[0]
+            return (
+              <li key={c.area + c.nome}>
+                <button type="button" onClick={() => setAberta(c.area + c.nome)} data-cartao-area={c.area} data-cor={c.cor} aria-label={`${c.nome}: ${c.situacao}. Abrir o detalhe`}>
+                  <span className="hx-area-icone" aria-hidden>{ICONE_AREA[c.area] ?? '•'}</span>
+                  <span className="hx-area-nome">{c.nome}<small>{m?.nome ?? c.situacao}</small></span>
+                  <span className="hx-area-valor" data-numero-area>{m?.texto ?? '—'}</span>
+                  <span className="hx-area-ponto" aria-hidden title={COR[c.cor].rotulo} style={{ background: COR[c.cor].borda }} />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))', gap: 10 }}>
         {[...cartoes].sort((a, b) => ordemCor[a.cor] - ordemCor[b.cor]).map(c => {
           const m = c.metricas[0]
@@ -177,6 +194,7 @@ export function BussolaPorArea({ d, aoMudar, series }: { d: BussolaHoje; aoMudar
           )
         })}
       </div>
+      )}
       {vendedores && vendedores.length > 0 && (
         <details style={{ marginTop: 12 }} data-bussola-vendedores>
           <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Vendedores: destaque e ponto de atenção de cada um</summary>
