@@ -5097,3 +5097,66 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .ia-palco { grid-auto-rows: auto; }
   .ia-trilho { background: rgba(14, 16, 21, .92); }
 }
+
+/* =====================================================================
+   Navegação pelos 9 módulos (17/11) + visual único (fundo e vidro da
+   tela inicial em todas as telas).
+   ===================================================================== */
+.pl-app { --pl-font-sans: var(--font-manrope), system-ui, -apple-system, "Segoe UI", sans-serif; --pl-font-display: var(--pl-font-sans); --pl-font-num: var(--pl-font-sans); }
+.pl-nav-modulos { gap: 4px; }
+.pl-modulo { display: flex; flex-direction: column; gap: 2px; }
+.pl-modulo-botao { width: 100%; text-align: left; background: transparent; cursor: pointer; font: inherit; }
+.pl-mod-seta { width: 14px !important; height: 14px !important; margin-left: auto; opacity: .55 !important; transition: transform .18s ease; }
+.pl-mod-seta.aberto { transform: rotate(90deg); }
+.pl-modulo-botao.active { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: var(--pl-ink-1); font-weight: 600; }
+.pl-modulo-botao.active::after { display: none; }
+.pl-sublinks { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px 23px; padding-left: 12px; border-left: 1px solid var(--pl-border); }
+.pl-sublink {
+  position: relative; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 10px;
+  font-size: 13.5px; font-weight: 500; color: var(--pl-ink-2); text-decoration: none; border: 1px solid transparent;
+}
+.pl-sublink span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-sublink:hover { color: var(--pl-ink-1); background: color-mix(in srgb, var(--pl-surface-3) 55%, transparent); }
+.pl-sublink.active {
+  color: var(--pl-ink-1); font-weight: 600; border-color: var(--pl-border);
+  background: linear-gradient(90deg, var(--pl-surface-3) 0%, var(--pl-surface-3) 62%, color-mix(in srgb, var(--hx-ambar) 22%, var(--pl-surface-3)) 100%);
+}
+.pl-sublink.active::after { content: ''; position: absolute; right: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 3px 0 0 3px; background: var(--hx-ambar); box-shadow: 0 0 12px 1px color-mix(in srgb, var(--hx-ambar) 65%, transparent); }
+.pl-sidebar.collapsed .pl-sublinks { display: none; }
+
+/* Fundo e vidro em todas as telas */
+.pl-app-shell { position: relative; isolation: isolate; background: transparent; }
+.pl-fundo-app { position: fixed; inset: -20px; width: calc(100% + 40px); height: calc(100% + 40px); z-index: -2; filter: blur(14px) brightness(.62); pointer-events: none; }
+.pl-fundo-veu { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: rgba(6, 8, 11, .35); }
+.pl-app[data-theme="light"] .pl-fundo-app { filter: blur(18px) grayscale(1) brightness(2.6); opacity: .22; }
+.pl-app[data-theme="light"] .pl-fundo-veu { background: rgba(238, 240, 244, .82); }
+.pl-app[data-theme="dark"] .pl-main { background: rgba(14, 16, 21, .58); border-color: rgba(255, 255, 255, .07); backdrop-filter: blur(22px) saturate(120%); -webkit-backdrop-filter: blur(22px) saturate(120%); }
+.pl-app[data-theme="light"] .pl-main { background: rgba(255, 255, 255, .72); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
+.pl-app[data-theme="dark"] .pl-card, .pl-app[data-theme="dark"] .ar-cabecalho + * .pl-card { background: rgba(26, 29, 36, .55); border-color: rgba(255, 255, 255, .08); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.pl-app .pl-card { border-radius: 16px; }
+.pl-app[data-theme="dark"] .pl-topbar-v2 { background: transparent; }
+.pl-app[data-theme="dark"] .pl-sidebar { background: transparent; }
+
+/* Tela inicial em monitores grandes: largura máxima e linhas mais justas */
+.ia-palco { max-width: 1760px; margin: 0 auto; grid-template-rows: minmax(236px, 29vh) minmax(270px, 33vh) minmax(176px, 21vh) auto; }
+.ia-linhas { gap: 4px; scrollbar-width: none; }
+.ia-linhas::-webkit-scrollbar { display: none; }
+.ia-linha { padding: 5px 8px; }
+.ia-modulos .ia-linhas { overflow: hidden; }
+.ia-atividade .ia-linhas { overflow: hidden; }
+.ia-atalhos .ia-grade-atalhos { gap: 10px 8px; }
+@media (min-width: 1600px) { .ia-atalho-ico { max-width: 62px; } .ia { font-size: 13.5px; } }
+.pl-fundo-app { filter: blur(10px) brightness(.95); }
+.pl-fundo-veu { background: rgba(6, 8, 11, .18); }
+.pl-app[data-theme="dark"] .pl-main { background: rgba(14, 16, 21, .46); }
+.pl-nav-modulos .pl-sidebar-link { min-height: 38px; padding: 7px 12px; font-size: 14px; }
+.pl-nav-modulos { gap: 2px; }
+.pl-sublink { padding: 6px 12px; font-size: 13px; }
+.pl-sublinks { margin-bottom: 4px; }
+.ia-modulos.ia-todos .ia-linhas { overflow-y: auto; }
+
+/* Gaveta do menu no celular: vidro opaco para o conteúdo não aparecer por trás. */
+@media (max-width: 980px) {
+  .pl-app .pl-sidebar, .pl-app[data-theme="dark"] .pl-sidebar { background: rgba(12, 14, 19, .97); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); z-index: 40; }
+  .pl-app[data-theme="light"] .pl-sidebar { background: rgba(250, 251, 253, .98); }
+}
