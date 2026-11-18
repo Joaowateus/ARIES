@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { proLaboreApi } from '@/lib/proLaboreApi'
@@ -15,7 +15,7 @@ import { PaletaComandos } from './_comando/PaletaComandos'
 import { AvisoLigacao } from './_ligacoes/AvisoLigacao'
 import type { LigacaoAgora } from '@/lib/proLaboreApi'
 import { telasApi, type PapelHoje, type VersaoTelas } from '@/lib/proLaboreApi'
-import { ABAS, GRUPOS, abaDaRota, type AbaAries } from '@/lib/abasAries'
+import { ABAS, GRUPOS, abaDaRota, abaPorChave, type AbaAries } from '@/lib/abasAries'
 import { TelaPadrao, TelasContext } from './_padrao/Padrao'
 import { AtalhoAries } from './_padrao/PergunteChat'
 
@@ -126,7 +126,14 @@ const CHAVE_SIDEBAR_COLAPSADA = 'pl_sidebar_colapsada'
 const iniciaisDe = (nome: string) => nome.trim().split(/\s+/).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || '?'
 const CHAVE_GRUPOS_COLAPSADOS = 'pl_sidebar_grupos_colapsados'
 
+// A sub-aba do Início (?sub=daily | ?sub=painel) define qual item do menu fica aceso; useSearchParams
+// pede um Suspense em volta.
 export default function ProLaborePainelLayout({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={null}><PainelLayout>{children}</PainelLayout></Suspense>
+}
+
+function PainelLayout({ children }: { children: React.ReactNode }) {
+  const subInicio = useSearchParams().get('sub')
   const { usuario, loading, logout, recarregar } = useProLaboreAuth()
   const router = useRouter()
   const pathname = usePathname()
@@ -309,7 +316,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
   const itensVisiveis = grupos.flatMap(g => g.items)
   const paginasVisiveis = itensVisiveis.flatMap(paginasDo)
   const itemDoMenuAtual = itemAtual ? itensVisiveis.find(i => paginasDo(i).some(p => p.href === itemAtual.href)) : undefined
-  const abaAtual = nova ? abaDaRota(pathname) : null
+  const abaAtual = nova ? (pathname === '/pro-labore/hoje' && (subInicio === 'daily' || subInicio === 'painel') ? abaPorChave(subInicio) : abaDaRota(pathname)) : null
   const ativo = (item: NavItem) => (nova ? !!abaAtual && item.href === abaAtual.href : item === itemDoMenuAtual)
   const paginaAtual = itemAtual && bate(pathname, itemAtual.href) ? paginasVisiveis.find(p => p.href === itemAtual.href) : undefined
   const grupoAtual = nova ? abaAtual?.grupo ?? null : grupos.find(g => g.items.includes(itemDoMenuAtual as NavItem))?.label ?? null

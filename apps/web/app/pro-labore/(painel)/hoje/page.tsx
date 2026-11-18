@@ -4,7 +4,8 @@
 // pergunta do papel, três números do dicionário, a fila de ação na ordem
 // aprovada e a Lente do ARIES; o supervisor ganha o quadro da equipe e o dono,
 // o painel por área. Nada aqui executa sozinho: cada item leva à ação.
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { bussolaApi, proLaboreApi, telasApi, type BussolaHoje, type HojeDados, type PainelHoje, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
 import { BussolaPorArea, ResumoCurto } from './Bussola'
@@ -22,30 +23,31 @@ import { InicioAries } from './InicioAries'
 type Sub = 'hoje' | 'daily' | 'painel'
 const SUBS: Array<{ valor: Sub; rotulo: string }> = [{ valor: 'hoje', rotulo: 'Hoje' }, { valor: 'daily', rotulo: 'Daily' }, { valor: 'painel', rotulo: 'Painel' }]
 
+// A sub-aba vem do endereço (?sub=daily | ?sub=painel), então os itens Início, Daily e Painel do menu
+// trocam a tela mesmo quando a pessoa já está em /pro-labore/hoje.
 export default function HojePage() {
+  return <Suspense fallback={null}><HojeComSubabas /></Suspense>
+}
+
+function HojeComSubabas() {
+  const params = useSearchParams()
+  const router = useRouter()
+  const q = params.get('sub')
+  const sub: Sub = q === 'daily' || q === 'painel' ? q : 'hoje'
   const [papel, setPapel] = useState<string | null>(null)
-  const [sub, setSub] = useState<Sub>(() => {
-    const q = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('sub')
-    return q === 'daily' || q === 'painel' ? q : 'hoje'
-  })
-  function trocar(s: Sub) {
-    setSub(s)
-    const url = new URL(window.location.href)
-    if (s === 'hoje') url.searchParams.delete('sub'); else url.searchParams.set('sub', s)
-    window.history.replaceState(null, '', url.toString())
-  }
-  // Tela inicial do ARIES (17/11): a sub-aba Hoje virou a tela inicial em tela cheia, para todos.
   useEffect(() => { try { const u = JSON.parse(localStorage.getItem('pro_labore_usuario') ?? 'null') as { papel?: string } | null; if (u?.papel) setPapel(u.papel) } catch { /* sem papel */ } }, [])
-  if (sub === 'hoje') return <InicioAries />
   const comSubs = papel === 'DONO' || papel === 'SUPERVISOR'
+  function trocar(s: Sub) { router.replace(s === 'hoje' ? '/pro-labore/hoje' : `/pro-labore/hoje?sub=${s}`, { scroll: false }) }
+  // Tela inicial do ARIES: é a sub-aba Início, dentro da moldura do sistema (menu lateral à vista).
+  const mostrarInicio = sub === 'hoje' || !comSubs
   return (
     <div data-hoje-subabas={comSubs ? sub : undefined}>
       {comSubs && (
-        <div className="pl-sv-tabs" role="tablist" aria-label="Partes do Hoje" style={{ marginBottom: 12 }} data-subabas-hoje>
+        <div className="pl-sv-tabs" role="tablist" aria-label="Partes do Início" style={{ marginBottom: 12 }} data-subabas-hoje>
           {SUBS.map(x => <button key={x.valor} type="button" role="tab" aria-selected={sub === x.valor} className={sub === x.valor ? 'ativo' : ''} onClick={() => trocar(x.valor)} data-subaba={x.valor}>{x.valor === 'hoje' ? 'Início' : x.rotulo}</button>)}
         </div>
       )}
-      {!comSubs && papel && <InicioAries />}
+      {papel && mostrarInicio && <InicioAries embutida />}
       {comSubs && sub === 'daily' && <Daily papel={papel!} />}
       {comSubs && sub === 'painel' && <PainelComGraficos papel={papel!} />}
     </div>
