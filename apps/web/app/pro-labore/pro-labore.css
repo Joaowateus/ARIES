@@ -5162,91 +5162,151 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 }
 
 /* ==========================================================================
-   Paleta "Noir" (referência enviada pelo dono): preto puro, cinzas neutros,
-   branco como único destaque, vidro escuro com borda fina e brilho no topo,
-   brilhos radiais suaves e pílulas com contorno. Nada de cor de marca: a cor
-   fica só para estado (bom / atenção / crítico).
+   Paleta "Noir" → Design System. Os valores de cor vivem em ds/tokens.css
+   (#090909 / #666666 / #F5F5F5); aqui ficam só as regras, lendo as variáveis.
    ========================================================================== */
-.pl-app {
-  --hx-ambar: #18181b;
-  --hx-ambar-forte: #000000;
-  --hx-ambar-suave: rgba(0, 0, 0, .06);
-}
 .pl-app[data-theme="dark"] {
-  --pl-frame: #000000;
-  --pl-lane: #030303;
-  --pl-bg: #050505;
-  --pl-surface: #0b0b0c;
-  --pl-surface-2: #121213;
-  --pl-surface-3: #1a1a1b;
-  --pl-ink-1: #f4f4f5;
-  --pl-ink-2: #a3a3a3;
-  --pl-ink-muted: #737373;
-  --pl-border: rgba(255, 255, 255, .07);
-  --pl-border-strong: rgba(255, 255, 255, .13);
-  --pl-accent: #f5f5f5;
-  --pl-accent-ink: #000000;
-  --pl-accent-strong: #ffffff;
-  --pl-accent-soft: rgba(255, 255, 255, .06);
-  --pl-grid-line: #161617;
-  --pl-baseline: #2a2a2b;
-  --pl-glass: #050505;
-  --pl-shadow-pop: 0 0 0 1px rgba(255, 255, 255, .07), 0 24px 60px -16px rgba(0, 0, 0, .9);
-  --hx-ambar: #ededed;
-  --hx-ambar-forte: #ffffff;
-  --hx-ambar-suave: rgba(255, 255, 255, .07);
-  --hx-vidro: rgba(12, 12, 13, .78);
-  --hx-vidro-borda: rgba(255, 255, 255, .07);
-  --nx-cartao: linear-gradient(180deg, rgba(255, 255, 255, .035) 0%, rgba(255, 255, 255, .012) 100%), rgba(8, 8, 9, .82);
-  --nx-brilho: inset 0 1px 0 rgba(255, 255, 255, .06), 0 18px 40px -24px rgba(0, 0, 0, .9);
+  --nx-cartao: linear-gradient(180deg, rgba(102, 102, 102, .16) 0%, rgba(102, 102, 102, .03) 100%), color-mix(in srgb, var(--ar-preto) 85%, transparent);
+  --nx-brilho: var(--ar-brilho-topo), 0 18px 40px -24px rgba(0, 0, 0, .9);
 }
-.pl-app[data-theme="dark"] .ia {
-  --ia-vidro: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012)), rgba(8, 8, 9, .62);
-  --ia-vidro-forte: rgba(14, 14, 15, .78);
-  --ia-borda: rgba(255, 255, 255, .08);
-  --ia-texto-2: rgba(245, 245, 245, .6);
-  --ia-texto-3: rgba(245, 245, 245, .38);
-  --ia-acento: #f5f5f5;
-}
-.pl-app[data-theme="light"] .ia { --ia-acento: #18181b; }
 
-/* Fundo: preto com o brilho suave no alto, como a referência. A paisagem fica
-   em preto e branco, bem apagada (só a silhueta). */
-.pl-app[data-theme="dark"] { background: #000; }
+/* Fundo: paisagem em preto e branco, apagada; o brilho cinza vem dos tokens. */
+.pl-app[data-theme="dark"] { background: var(--pl-bg); }
 .pl-app[data-theme="dark"] .pl-fundo-app { filter: blur(12px) grayscale(1) brightness(.5); }
-.pl-app[data-theme="dark"] .pl-fundo-veu {
-  background:
-    radial-gradient(60% 38% at 50% -6%, rgba(255, 255, 255, .09), transparent 70%),
-    radial-gradient(40% 30% at 100% 100%, rgba(255, 255, 255, .035), transparent 70%),
-    rgba(0, 0, 0, .55);
-}
 .pl-app[data-theme="dark"] .ia-fundo { filter: grayscale(1) brightness(.72) contrast(1.05); }
 .pl-app[data-theme="light"] .ia-fundo { filter: grayscale(1); }
 
-/* Moldura e cartões de vidro escuro */
-.pl-app[data-theme="dark"] .pl-main { background: rgba(5, 5, 6, .6); border-color: rgba(255, 255, 255, .06); }
+/* Moldura e cartões */
+.pl-app[data-theme="dark"] .pl-main { background: color-mix(in srgb, var(--pl-bg) 62%, transparent); border-color: var(--pl-border); }
 .pl-app[data-theme="dark"] .pl-card,
-.pl-app[data-theme="dark"] .ar-cabecalho + * .pl-card { background: var(--nx-cartao); border-color: rgba(255, 255, 255, .07); box-shadow: var(--nx-brilho); }
+.pl-app[data-theme="dark"] .ar-cabecalho + * .pl-card { background: var(--nx-cartao); border-color: var(--pl-border); box-shadow: var(--nx-brilho); }
 .pl-app[data-theme="dark"] .ia-cartao, .pl-app[data-theme="dark"] .ia-trilho { box-shadow: var(--nx-brilho); }
 
-/* Títulos finos e claros, texto de apoio em cinza */
 .pl-app h1, .pl-app h2, .pl-app .pl-display { font-weight: 500; letter-spacing: -.025em; }
 
-/* Botão principal: pílula branca com texto preto; secundários com contorno */
-.pl-app .pl-btn-primary { border-radius: 999px; }
-.pl-app[data-theme="dark"] .pl-btn-primary { background: #f5f5f5; color: #000; box-shadow: 0 0 24px -8px rgba(255, 255, 255, .35); }
-.pl-app[data-theme="dark"] .pl-chip { border-color: rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .03); }
+/* Botão principal: pílula no destaque; secundários com contorno */
+.pl-app .pl-btn-primary { border-radius: 999px; background: var(--pl-accent); color: var(--pl-accent-ink); }
+.pl-app[data-theme="dark"] .pl-chip { border-color: var(--pl-border-strong); background: var(--pl-accent-soft); }
 
-/* Menu: item ativo em vidro claro com fio branco à direita */
-.pl-app[data-theme="dark"] .pl-sublink.active,
-.pl-app[data-theme="dark"] .pl-sidebar.collapsed .pl-sidebar-link.active {
-  background: linear-gradient(90deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .09)); border-color: rgba(255, 255, 255, .1);
+/* Menu: item ativo em vidro claro com borda, sem barra vertical solta */
+.pl-app .pl-sidebar .pl-sublink.active,
+.pl-app .pl-sidebar.collapsed .pl-sidebar-link.active,
+.pl-app .pl-nav-modulos > .pl-modulo > a.pl-sidebar-link.active {
+  background: var(--ar-ativo-fundo); border-color: var(--ar-ativo-borda); color: var(--pl-ink-1);
 }
-.pl-sublink.active::after { box-shadow: 0 0 12px 1px color-mix(in srgb, var(--hx-ambar) 45%, transparent); }
-.pl-app[data-theme="dark"] .pl-sidebar-destaque { border-color: rgba(255, 255, 255, .14); background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015)); }
-.pl-app[data-theme="dark"] .pl-sidebar-destaque b, .pl-app[data-theme="dark"] .pl-sidebar-destaque svg { color: #fff; }
-.hx-dia-hoje { box-shadow: 0 0 0 1px var(--hx-ambar-suave), 0 12px 32px -18px rgba(255, 255, 255, .25); }
-.hx-graficos [data-ritmo-mes] polyline { filter: drop-shadow(0 4px 10px rgba(255, 255, 255, .18)); }
+.pl-sublink.active::after, .pl-nav-modulos .pl-sidebar-link.active::after { display: none; }
+.pl-app .pl-sidebar-destaque { border-color: var(--pl-border-strong); background: linear-gradient(180deg, var(--pl-accent-soft), transparent); }
+.pl-app .pl-sidebar-destaque b, .pl-app .pl-sidebar-destaque svg { color: var(--pl-ink-1); }
+.hx-dia-hoje { box-shadow: 0 0 0 1px var(--hx-ambar-suave), 0 12px 32px -18px rgba(102, 102, 102, .45); }
+.hx-graficos [data-ritmo-mes] polyline { filter: drop-shadow(0 4px 10px rgba(102, 102, 102, .35)); }
 @media (max-width: 980px) {
-  .pl-app[data-theme="dark"] .pl-sidebar { background: rgba(4, 4, 5, .97); }
+  .pl-app .pl-sidebar, .pl-app[data-theme="dark"] .pl-sidebar { background: color-mix(in srgb, var(--pl-bg) 97%, transparent); }
+}
+
+/* O botão "Pergunte ao ARIES" flutua no canto: espaço para o fim das listas ficar acima dele. */
+.pl-app .pl-main .pl-shell { padding-bottom: 88px; }
+
+/* ==========================================================================
+   Design System etapa 2 — Tela inicial (aba Início). Estrutura e posições
+   intactas; só acabamento. Cores vêm de ds/tokens.css (.pl-app .ia).
+   ========================================================================== */
+.ia { color: var(--ia-texto-1); }
+.ia-veu { background: var(--ia-brilho-canto), var(--ia-escurece); }
+.ia-cartao { border-radius: 14px; padding: 18px; background: var(--ia-vidro); border-color: var(--ia-borda); box-shadow: var(--ar-brilho-topo), 0 18px 40px -22px rgba(0, 0, 0, .75); }
+.ia-cartao-topo h2, .ia-ind-topo h2 { font-size: 14px; font-weight: 500; color: var(--ia-texto-1); }
+.ia-saudacao { color: var(--ia-texto-1); font-weight: 500; }
+.ia-hora { font-weight: 300; color: var(--ia-texto-1); text-shadow: none; }
+.ia-data { color: var(--ia-texto-2); }
+.ia-busca { background: var(--ia-busca-fundo); border-color: var(--ia-borda-forte); border-radius: 14px; }
+.ia-ind-valor { color: var(--ia-texto-1); }
+.ia-indicadores li { border-top-color: var(--ia-borda); }
+.ia-controles > *:hover { color: var(--ia-texto-1); }
+
+/* Insights: aspas neutras; vermelho só no selo "Crítico", sempre escrito */
+.ia-aspas { color: var(--ia-texto-3); }
+.ia-selo { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid var(--ia-borda-forte); color: var(--ia-texto-2); }
+.ia-selo-critico { color: var(--ia-critico); border-color: color-mix(in srgb, var(--ia-critico) 55%, transparent); background: color-mix(in srgb, var(--ia-critico) 10%, transparent); }
+.ia-selo-critico::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* Cartão superior direito: Para hoje */
+.ia-para-hoje { flex-direction: column; align-items: stretch; justify-content: space-between; gap: 6px; }
+.ia-para-hoje-num { margin: 0; font-size: 17px; font-weight: 400; color: var(--ia-texto-1); font-variant-numeric: tabular-nums; }
+.ia-para-hoje-num span[aria-hidden] { color: var(--ia-texto-3); }
+.ia-para-hoje-atraso { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--ia-critico); font-variant-numeric: tabular-nums; }
+.ia-para-hoje-ok { margin: 0; font-size: 12.5px; color: var(--ia-texto-3); }
+.ia-reservado.ia-para-hoje span { display: inline; margin: 0; font-size: inherit; color: inherit; }
+
+/* Indicadores: 5 itens distribuídos, link no rodapé, termina junto da fileira de baixo */
+.ia-indicadores ul { justify-content: space-between; }
+.ia-indicadores .ia-ind-link { margin-top: auto; padding-top: 8px; }
+
+/* Fileira de baixo nas mesmas colunas de Módulos, Acesso rápido e Tarefas */
+@media (min-width: 1181px) {
+  .ia-baixo { grid-template-columns: subgrid; column-gap: inherit; padding-right: 0; }
+}
+
+/* ==========================================================================
+   Design System etapa 2 — CRM (aba Funil). Leads na primeira tela; custos por
+   etapa foram para "Mais do CRM". Só acabamento: dados e ações iguais.
+   ========================================================================== */
+/* Faixa de resumo acima do quadro */
+.crm-faixa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; margin: 4px 0 14px; padding: 10px 14px; border: 1px solid var(--pl-border); border-radius: 12px; background: var(--pl-surface); font-size: 13px; color: var(--pl-ink-2); }
+.crm-faixa b { color: var(--pl-ink-1); font-weight: 600; font-variant-numeric: tabular-nums; }
+.crm-faixa small { font-size: 12px; color: var(--pl-ink-muted); margin-right: 4px; }
+.crm-faixa .crm-faixa-atencao b { color: var(--ar-estado-atencao); }
+.crm-faixa .crm-faixa-critico b:last-of-type { color: var(--ar-estado-critico); }
+
+/* Colunas: superfície sólida, título inteiro (quebra em 2 linhas), quantidade e soma */
+.pl-app .pl-kanban-col { background: var(--pl-surface); border: 1px solid var(--pl-border); }
+.pl-app .pl-kanban-col-head { align-items: flex-start; }
+.pl-app .pl-kanban-col-title { white-space: normal; overflow: visible; text-overflow: clip; text-transform: none; font-size: 12.5px; font-weight: 600; line-height: 1.3; color: var(--pl-ink-1); overflow-wrap: anywhere; }
+.pl-kanban-col-lado { text-align: right; flex: none; }
+.pl-kanban-col-soma { font-variant-numeric: tabular-nums; color: var(--pl-ink-2); font-size: 11.5px; }
+.pl-kanban-col-soma.zero { color: var(--pl-ink-muted); }
+
+/* Cartão do lead em 3 níveis */
+.pl-app .pl-kanban-card { background: var(--pl-surface-2); border-color: var(--pl-border); }
+.pl-app .pl-kc-nome { font-size: 14px; font-weight: 500; color: var(--pl-ink-1); }
+.qj-card-topo { grid-template-columns: minmax(0, 1fr) auto; }
+.pl-kc-linha .pl-kc-moto { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pl-ink-2); }
+.pl-kc-linha .pl-kc-valor { color: var(--pl-ink-1); font-variant-numeric: tabular-nums; flex: none; }
+.qj-linha { margin-top: 4px; }
+.qj-nivel3, .pl-kc-passo { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; min-width: 0; }
+.qj-nivel3-passo, .pl-kc-passo-itens { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; flex: 1; }
+.qj-nivel3 .qj-passo { margin-top: 0; }
+.qj-passo em { font-style: normal; font-weight: 600; }
+.qj-passo-hoje { border-color: color-mix(in srgb, var(--ar-estado-atencao) 60%, transparent); }
+.qj-passo-hoje em { color: var(--ar-estado-atencao); }
+.qj-passo-atrasado { border-color: color-mix(in srgb, var(--ar-estado-critico) 60%, transparent); }
+.qj-passo-atrasado em { color: var(--ar-estado-critico); }
+.pl-kc-sem-passo { font-size: 11.5px; color: var(--pl-ink-muted); }
+.qj-avatar, .pl-kc-passo .pl-kc-vendedor { flex: none; width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 50%; font-size: 10px; font-weight: 600; background: var(--pl-surface-3); color: var(--pl-ink-1); border: 1px solid var(--pl-border-strong); }
+.qj-selos, .pl-kc-selos { margin-top: 6px; color: var(--pl-ink-muted); }
+.qj-selos .pl-kanban-card-time, .pl-kc-selos .pl-kanban-card-time { margin-left: auto; }
+.fw-selo.hoje { color: var(--ar-estado-atencao); }
+.fw-selo.atrasado { color: var(--ar-estado-critico); }
+
+/* Cor só com motivo: zero e neutros em cinza; vermelho só quando há perda */
+.pl-app .pl-crm-fin-oportunidade { color: var(--ar-neutro) !important; }
+.pl-app .pl-crm-fin-perdida[data-zero], .pl-app .pl-crm-fin-perdida[data-zero] dt, .pl-app .pl-crm-fin-perdida[data-zero] dd,
+.pl-app .crm-linhas .pl-crm-fin-perdida[data-zero] dt, .pl-app .crm-linhas .pl-crm-fin-perdida[data-zero] dd,
+.pl-app .pl-crm-resumo-perda[data-zero] { color: var(--ar-neutro) !important; }
+.pl-delta.atencao { color: var(--ar-estado-atencao); background: color-mix(in srgb, var(--ar-estado-atencao) 13%, transparent); }
+/* Pílula ativa (fase da jornada, densidade, filtros): destaque cheio e legível */
+.pl-app[data-theme] .pl-chip.active { background: var(--pl-accent); color: var(--pl-accent-ink); border-color: var(--pl-accent); }
+/* Próximo passo: quebra em até 2 linhas em vez de cortar */
+.qj-passo { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
+.qj-passo span { margin-right: 6px; }
+/* Ações do card: "Avançar" sempre na linha inteira, para o nome da etapa não ser cortado */
+.qj-acoes:has(> .qj-avancar + .pl-btn:last-child) { grid-template-columns: 1fr 1fr; }
+.qj-acoes:has(> .qj-avancar + .pl-btn:last-child) > .qj-avancar { grid-column: 1 / -1; }
+/* Janelas e formulários: superfície sólida (o quadro não aparece por trás) */
+.pl-app[data-theme] .pl-modal-backdrop .pl-card.pl-modal-panel, .pl-app[data-theme] .pl-modal-backdrop .pl-modal-panel, .pl-app[data-theme] .pl-modal-panel { background: var(--pl-surface); backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* Tempo na etapa estourado: texto crítico legível nos dois temas */
+.pl-app .pl-kanban-card-time.stale { color: var(--ar-critico-texto); }
+/* Celular: números do topo e a Lente empilhados (sem espremer em 4 colunas) */
+@media (max-width: 760px) {
+  .ar-topo-largo { grid-template-columns: minmax(0, 1fr); }
+  .ar-topo-largo .ar-agora { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ar-topo-largo .ar-lente { order: 2; }
 }

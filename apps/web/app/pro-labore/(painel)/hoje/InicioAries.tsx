@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation'
 import { inicioApi, type InicioDados, type NotaInicio, type ResultadoBusca, type TarefaInicio } from '@/lib/proLaboreApi'
 import { usePLTema } from '@/lib/proLaboreTheme'
 import { PaisagemNoite } from './PaisagemNoite'
-import { Ico, MODULOS as MODULOS_PADRAO, NavModulosContext } from '../_padrao/Navegacao'
+import { Ico, MODULOS as MODULOS_PADRAO, NavModulosContext, ParaHojeContext } from '../_padrao/Navegacao'
 
 // ---------- Módulos e atalhos (rotas existentes do ARIES) ----------
 const ATALHOS: Record<string, { nome: string; href: string; icone: string }> = {
@@ -85,7 +85,7 @@ export function InicioAries() {
       </nav>
 
       <div className="ia-palco">
-        <div className="ia-saudacao" data-saudacao>{saud}{nome ? `, ${capital(nome.toLowerCase())}` : ''} <span aria-hidden>👋</span></div>
+        <div className="ia-saudacao" data-saudacao>{saud}{nome ? `, ${capital(nome.toLowerCase())}` : ''}</div>
         <div className="ia-controles" role="group" aria-label="Aparência e configurações">
           {d?.podeConfigurar && <button type="button" onClick={() => setConfigurando(true)} title="Configurar a tela inicial" aria-label="Configurar a tela inicial" data-configurar-inicio><Ico n="lapis" /></button>}
           {tema && <button type="button" onClick={() => tema.setTema(tema.tema === 'dark' ? 'light' : 'dark')} title={tema.tema === 'dark' ? 'Usar o tema claro no sistema' : 'Usar o tema escuro no sistema'} aria-label="Trocar o tema"><Ico n={tema.tema === 'dark' ? 'sol' : 'lua'} /></button>}
@@ -98,10 +98,7 @@ export function InicioAries() {
           <Busca aoAbrir={href => router.push(href)} />
         </header>
 
-        <section className="ia-cartao ia-reservado" aria-label="Espaço reservado" data-cartao-reservado>
-          <Ico n="lua" className="ia-reservado-ico" />
-          <div><b>Em definição</b><span>Este espaço da tela inicial ainda vai receber a sua função.</span></div>
-        </section>
+        <ParaHoje />
 
         {erro && <div className="ia-cartao ia-erro" role="alert">Não deu para carregar a tela agora: {erro}</div>}
 
@@ -300,6 +297,31 @@ function Notas({ lista, aoMudar }: { lista: NotaInicio[] | null; aoMudar: () => 
   )
 }
 
+// ---------- Para hoje (cartão superior direito) ----------
+// Mesmos números do aviso "Para hoje" do menu lateral (vêm do layout, sem chamada nova).
+function ParaHoje() {
+  const p = useContext(ParaHojeContext)
+  if (!p) return (
+    <section className="ia-cartao ia-reservado" aria-label="Espaço reservado" data-cartao-reservado>
+      <Ico n="lua" className="ia-reservado-ico" />
+      <div><b>Em definição</b><span>Este espaço da tela inicial ainda vai receber a sua função.</span></div>
+    </section>
+  )
+  const follows = p.followsHoje + p.followsAtrasados
+  const ligacoes = p.ligacoesHoje + p.ligacoesAtrasadas
+  const atrasados = p.followsAtrasados + p.ligacoesAtrasadas
+  return (
+    <section className="ia-cartao ia-reservado ia-para-hoje" aria-label="Para hoje" data-cartao-reservado data-para-hoje>
+      <div className="ia-cartao-topo"><h2>Para hoje</h2></div>
+      <p className="ia-para-hoje-num">
+        <span>{follows} {follows === 1 ? 'follow' : 'follows'}</span><span aria-hidden> · </span><span>{ligacoes} {ligacoes === 1 ? 'ligação' : 'ligações'}</span>
+      </p>
+      {atrasados > 0 ? <p className="ia-para-hoje-atraso" data-para-hoje-atrasados>{atrasados} {atrasados === 1 ? 'atrasado' : 'atrasados'}</p> : <p className="ia-para-hoje-ok">Nada atrasado</p>}
+      <Link href="/pro-labore/atividades" className="ia-ind-link">Abrir atividades</Link>
+    </section>
+  )
+}
+
 // ---------- ARIES Insights ----------
 function Insights({ itens }: { itens: InicioDados['insights'] | null }) {
   const [i, setI] = useState(0)
@@ -308,6 +330,7 @@ function Insights({ itens }: { itens: InicioDados['insights'] | null }) {
     <section className="ia-cartao ia-insights" aria-label="ARIES Insights" data-cartao-insights>
       <Ico n="aspas" className="ia-aspas" />
       {atual ? <>
+        {atual.tipo === 'RISCO' && <span className="ia-selo ia-selo-critico" data-selo-critico>Crítico</span>}
         <p className="ia-insight-titulo">{atual.titulo}</p>
         {atual.texto && <p className="ia-insight-texto">{atual.texto}</p>}
         <div className="ia-insight-rodape">
