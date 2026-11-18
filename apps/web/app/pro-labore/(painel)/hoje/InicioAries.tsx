@@ -48,7 +48,7 @@ const haQuanto = (iso: string, agora: number) => {
 }
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-export function InicioAries() {
+export function InicioAries({ embutida = false }: { embutida?: boolean } = {}) {
   const MODULOS = useContext(NavModulosContext) ?? MODULOS_PADRAO
   const router = useRouter()
   const tema = usePLTema()
@@ -72,17 +72,17 @@ export function InicioAries() {
   const fundo = d?.fundo ? inicioApi.urlImagem(d.fundo) : null
 
   return (
-    <div className="ia" data-inicio-aries>
+    <div className={`ia${embutida ? ' ia-embutida' : ''}`} data-inicio-aries>
       {fundo ? <div className="ia-fundo" style={{ backgroundImage: `url(${fundo})` }} data-fundo-proprio /> : <PaisagemNoite className="ia-fundo" />}
       <div className="ia-veu" aria-hidden />
 
-      <nav className="ia-trilho" aria-label="Módulos do ARIES" data-trilho>
+      {!embutida && <nav className="ia-trilho" aria-label="Módulos do ARIES" data-trilho>
         {MODULOS.map(m => (
           <Link key={m.chave} href={m.href} className={`ia-trilho-item${m.chave === 'inicio' ? ' ativo' : ''}`} title={m.nome} aria-label={m.nome} aria-current={m.chave === 'inicio' ? 'page' : undefined} data-modulo-trilho={m.chave}>
             <Ico n={m.chave} />
           </Link>
         ))}
-      </nav>
+      </nav>}
 
       <div className="ia-palco">
         <div className="ia-saudacao" data-saudacao>{saud}{nome ? `, ${capital(nome.toLowerCase())}` : ''}</div>

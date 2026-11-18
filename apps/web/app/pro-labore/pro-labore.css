@@ -5310,3 +5310,20 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .ar-topo-largo .ar-agora { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ar-topo-largo .ar-lente { order: 2; }
 }
+
+/* Tela inicial dentro da aba Início (moldura do sistema, menu lateral à vista):
+   mesma composição, num painel com a paisagem ao fundo, sem a barra de ícones. */
+.pl-shell:has(.ia-embutida) { max-width: 1760px; }
+.ia.ia-embutida { position: relative; inset: auto; z-index: 0; isolation: isolate; overflow: hidden; border-radius: 18px; border: 1px solid var(--pl-border); min-height: calc(100vh - 190px); }
+.ia-embutida .ia-fundo, .ia-embutida .ia-veu { position: absolute; }
+.ia-embutida .ia-palco { padding: 22px 22px 18px; min-height: 0; max-width: none; grid-template-rows: minmax(210px, 25vh) minmax(270px, 33vh) minmax(176px, 21vh) auto; }
+@media (max-width: 1180px) { .ia-embutida .ia-palco { padding-left: 22px; grid-template-rows: none; } }
+@media (max-width: 760px) { .ia-embutida .ia-palco { padding: 14px; } }
+@media (min-width: 1181px) {
+  /* Dentro da moldura não há barra de ícones à direita: a coluna de folga sai e as linhas encolhem um pouco. */
+  .ia-embutida .ia-palco { grid-template-columns: 180fr 184fr 137fr 92fr; grid-template-rows: minmax(190px, 22vh) minmax(250px, 31vh) minmax(170px, 20vh) auto; row-gap: 2vh; }
+  .ia-embutida .ia-controles { grid-column: 4 / -1; }
+  .ia-embutida .ia-reservado { grid-column: 3 / -1; }
+  .ia-embutida .ia-rodape { grid-column: 1 / -1; }
+}
+@media (min-width: 1181px) { .ia-embutida .ia-reservado { height: auto; min-height: 0; margin-bottom: 0; } }
