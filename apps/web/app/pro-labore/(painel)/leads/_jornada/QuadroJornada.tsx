@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type PremissasJornada, type Temperatura } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, FASES, NOME_ETAPA, NOME_MOTIVO, NOME_DESTINO } from '@/lib/etapasJornada'
 import { FollowRoboModal, SeloRobo } from './FollowRobo'
+import { situacaoFollow } from '../../_follow/follow'
 
 const MS_HORA = 3_600_000
 function tempoNaEtapa(l: Lead) {
@@ -199,7 +200,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                         <div className="pl-kanban-col-lado">
                           <div className="pl-kanban-col-count pl-mono">{cards.length}</div>
                           {cards.some(l => pendencias(l).length > 0) && <div className="qj-col-pend" title="Avançaram faltando algum critério" data-col-pendencias>{cards.filter(l => pendencias(l).length > 0).length} com pendência</div>}
-                          {soma > 0 && <div className="pl-kanban-col-soma">{moeda(soma)}</div>}
+                          <div className={`pl-kanban-col-soma pl-mono${soma > 0 ? "" : " zero"}`}>{moeda(soma)}</div>
                         </div>
                       </div>
                       <div className="pl-kanban-cards">
@@ -214,6 +215,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                           const prox = proxima(l)
                           const limite = estourou(l, premissas)
                           const temp = calorDe(l), pend = pendencias(l), passo = proximoPasso(l)
+                          const sit = l.follows?.[0] ? situacaoFollow(l.follows[0]) : null
                           return (
                             <div
                               key={l.id} className={`pl-kanban-card pl-kc qj-card qj-${temp.toLowerCase()}`} draggable data-card={l.id} data-calor={temp}
@@ -225,7 +227,9 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                                   <input type="checkbox" checked={marcados.includes(l.id)} onChange={() => alternarMarcado(l.id)} aria-label={`Selecionar ${l.nomeCliente}`} data-marcar={l.id} />
                                 </label>
                               )}
+                              {/* Nível 1: nome e temperatura (selo com texto) */}
                               <div className="qj-card-topo">
+                                <span className="pl-kanban-card-name pl-kc-nome">{l.nomeCliente}</span>
                                 <span className="qj-temp-wrap" onClick={ev => ev.stopPropagation()}>
                                   <button type="button" className={`qj-temp qj-${temp.toLowerCase()}`} onClick={() => setTempAberta(t => (t === l.id ? null : l.id))} title={`${NOME_TEMP[temp]}: ${l.calor?.motivo ?? ''}. Clique para ajustar.`} aria-label={`Temperatura ${NOME_TEMP[temp]}`} aria-expanded={tempAberta === l.id} data-temperatura={temp}><i aria-hidden />{NOME_TEMP[temp]}{l.calor?.manual ? '*' : ''}</button>
                                   {tempAberta === l.id && (
@@ -235,22 +239,35 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                                     </span>
                                   )}
                                 </span>
-                                <span className="pl-kanban-card-name pl-kc-nome">{l.nomeCliente}</span>
-                                <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máximo ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
                               </div>
-                              {vejaEquipe && l.vendedor?.nome && <div className="pl-hint qj-dono">{l.vendedor.nome}</div>}
-                              <SeloRobo lead={l} />
+                              {/* Nível 2: moto de interesse e valor */}
+                              {(l.modeloInteresse || l.valorNegociacao > 0) && (
+                                <div className="pl-kc-linha qj-linha">
+                                  <span className="pl-kc-moto" title={l.modeloInteresse ?? ''}>{l.modeloInteresse ?? ''}</span>
+                                  {l.valorNegociacao > 0 && <span className="pl-kc-valor pl-mono">{moeda(l.valorNegociacao)}</span>}
+                                </div>
+                              )}
+                              {/* Nível 3: próximo passo (cor pelo estado do follow) e o vendedor */}
+                              <div className="qj-nivel3">
+                                <div className="qj-nivel3-passo">
+                                  {!passo && <span className="pl-kc-sem-passo">Sem próximo passo</span>}
                               {passo && (
-                                <button type="button" className="qj-passo" onClick={ev => { ev.stopPropagation(); seguir(l, passo) }} title={pend.length ? pend.join(' · ') : 'Sugestão do ARIES para este lead'} data-proximo-passo>
-                                  <span>Próximo</span>{passo.texto}
+                                <button type="button" className={`qj-passo ${sit ? `qj-passo-${sit.tipo.toLowerCase()}` : ''}`} onClick={ev => { ev.stopPropagation(); seguir(l, passo) }} title={pend.length ? pend.join(' · ') : 'Sugestão do ARIES para este lead'} data-proximo-passo>
+                                  <span>Próximo</span>{passo.texto}{sit && sit.tipo !== 'FUTURO' && <em> · {sit.texto}</em>}
                                 </button>
                               )}
+                                </div>
+                                {vejaEquipe && l.vendedor?.nome && <span className="pl-avatar qj-avatar" title={l.vendedor.nome} aria-label={`Vendedor: ${l.vendedor.nome}`} data-vendedor-card>{l.vendedor.nome.split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase()}</span>}
+                              </div>
+                              {/* Rodapé: robô, selos e tempo na etapa */}
                               <div className="qj-selos">
+                                <SeloRobo lead={l} />
                                 {pend.length > 0 && <span className="pl-chip qj-pendente" title={pend.join(' · ')} data-pendencia>{pend.length === 1 ? '1 pendência' : `${pend.length} pendências`}</span>}
                                 {l.revisarEtapa && <span className="pl-chip" title="Fechado sem venda confirmada na migração: posicione na etapa certa">revisar etapa</span>}
                                 {l.formaPagamento === 'A_VISTA' && <span className="pl-chip">à vista</span>}
                                 {l.formaPagamento === 'FINANCIADO' && <span className="pl-chip">financiado</span>}
                                 {(e === 'LEVANTAMENTO' || e === 'ABORDADO') && !l.levantamentoCompleto && <span className="pl-chip">levantamento incompleto</span>}
+                                <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máximo ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
                               </div>
                               <div className="qj-acoes" onClick={ev => ev.stopPropagation()}>
                                 {prox && <button type="button" className="pl-btn pl-btn-ghost qj-avancar" disabled={ocupado} onClick={() => void mover(l, prox)} data-avancar title={prox === 'VENDA' ? 'Registrar venda' : `Avançar para ${NOME_ETAPA[prox]}`}>{prox === 'VENDA' ? 'Registrar venda' : `Avançar → ${NOME_ETAPA[prox]}`}</button>}

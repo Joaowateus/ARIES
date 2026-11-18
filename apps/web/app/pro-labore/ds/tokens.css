@@ -75,6 +75,11 @@
   --pl-shadow-pop: 0 0 0 1px rgba(102, 102, 102, .35), 0 24px 60px -16px rgba(0, 0, 0, .9);
   --pl-ring: 0 0 0 3px rgba(245, 245, 245, .14);
 
+  /* Item ativo do menu e brilho no topo dos cartões */
+  --ar-ativo-fundo: rgba(245, 245, 245, .07);
+  --ar-ativo-borda: rgba(102, 102, 102, .55);
+  --ar-brilho-topo: inset 0 1px 0 rgba(255, 255, 255, .06);
+
   /* Vidro e cartões: o degradê #666666 → #090909 da referência, suave */
   --hx-ambar: #f5f5f5;
   --hx-ambar-forte: #ffffff;
@@ -153,8 +158,26 @@
   --hx-ambar: #090909;
   --hx-ambar-forte: #000000;
   --hx-ambar-suave: rgba(9, 9, 9, .06);
+  --ar-ativo-fundo: rgba(9, 9, 9, .06);
+  --ar-ativo-borda: rgba(9, 9, 9, .2);
+  --ar-brilho-topo: inset 0 1px 0 rgba(255, 255, 255, .8);
 }
-.pl-app[data-theme="light"] .ia { --ia-acento: #090909; }
+/* A tela inicial é sempre noturna (paisagem ao fundo), nos dois temas:
+   mesmos tokens escuros, destaque branco. */
+.pl-app .ia {
+  --ia-texto-1: #f5f5f5;
+  --ia-texto-2: #b3b3b3;
+  --ia-texto-3: #999999;
+  --ia-acento: #f5f5f5;
+  --ia-critico: #f87171;
+  --ia-busca-fundo: rgba(15, 15, 15, .82);
+  --ia-borda-forte: rgba(102, 102, 102, .55);
+  --ia-vidro: linear-gradient(180deg, rgba(102, 102, 102, .16), rgba(102, 102, 102, .03)), rgba(9, 9, 9, .85);
+  --ia-borda: rgba(102, 102, 102, .32);
+  --ia-brilho-canto: radial-gradient(60% 50% at 100% 100%, rgba(102, 102, 102, .22), transparent 72%);
+  --ia-escurece: linear-gradient(180deg, rgba(9, 9, 9, .1), rgba(9, 9, 9, .55));
+  background: #090909;
+}
 
 /* ---------- Números: algarismos do mesmo tamanho em tabelas e indicadores ---------- */
 .pl-app table,
@@ -162,3 +185,14 @@
 .pl-app .ar-num-valor,
 .pl-app .ia-ind-valor,
 .pl-app .ia-hora { font-variant-numeric: tabular-nums; }
+
+/* ---------- Estados como tokens próprios (texto e fundo suave) ---------- */
+.pl-app {
+  --ar-estado-bom: var(--pl-good);
+  --ar-estado-atencao: var(--pl-warning, #b45309);
+  --ar-estado-critico: var(--pl-critical);
+  --ar-neutro: var(--pl-ink-2);
+}
+/* Texto crítico pequeno sobre fundo rosado (tema claro): vermelho mais escuro para passar 4,5:1 */
+.pl-app { --ar-critico-texto: var(--pl-critical); }
+.pl-app[data-theme="light"] { --ar-critico-texto: #b91c1c; }

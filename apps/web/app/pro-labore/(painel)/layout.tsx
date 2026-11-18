@@ -8,7 +8,7 @@ import { proLaboreApi } from '@/lib/proLaboreApi'
 import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
-import { Ico, MODULOS, NavModulosContext, moduloDoGrupo } from './_padrao/Navegacao'
+import { Ico, MODULOS, NavModulosContext, ParaHojeContext, moduloDoGrupo } from './_padrao/Navegacao'
 import { PaisagemNoite } from './hoje/PaisagemNoite'
 import { AvisoBanco } from './_banco/AvisoBanco'
 import { PaletaComandos } from './_comando/PaletaComandos'
@@ -331,7 +331,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
         <div className="pl-sidebar-brand">
           <AriesBrandMark size={28} />
           <div className="pl-sidebar-brand-text">
-            <div className="pl-brand-name">Pró-Labore</div>
+            <div className="pl-brand-name">ARIES</div>
             <div className="pl-brand-sub">Gestão comercial</div>
           </div>
           <button
@@ -474,7 +474,7 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
           </button>
           <div className="pl-breadcrumb">
-            <span>{grupoAtual ?? 'Pró-Labore'}</span>
+            <span>{grupoAtual ?? 'ARIES'}</span>
             {nova ? abaAtual && <><span aria-hidden="true">/</span><b>{abaAtual.nome}</b></> : itemDoMenuAtual && <><span aria-hidden="true">/</span><b>{itemDoMenuAtual.label}</b></>}
             {abasDoTopo && paginaAtual && <><span aria-hidden="true">/</span><b>{paginaAtual.label}</b></>}
           </div>
@@ -518,16 +518,18 @@ export default function ProLaborePainelLayout({ children }: { children: React.Re
                 </nav>
               )}
               <NavModulosContext.Provider value={modulosVisiveis}>
+              <ParaHojeContext.Provider value={{ followsHoje: followsDia.hoje, followsAtrasados: followsDia.atrasados, ligacoesHoje: ligacoesDia.hoje, ligacoesAtrasadas: ligacoesDia.atrasadas }}>
               <TelasContext.Provider value={{ versao: nova ? 'NOVA' : 'ATUAL', usoId, registrarAcao: (acao: string) => { if (usoId) void telasApi.usoAcao(usoId, acao).catch(() => undefined) } }}>
                 {nova && abaAtual && !abaAtual.proprio && !pathname.startsWith('/pro-labore/aba/') ? <TelaPadrao aba={abaAtual}>{children}</TelaPadrao> : children}
                 {nova && <AtalhoAries />}
               </TelasContext.Provider>
+              </ParaHojeContext.Provider>
               </NavModulosContext.Provider>
             </>
           )}
 
           <div className="pl-footer">
-            <span>Pró-Labore — módulo pessoal do ARIES.</span>
+            <span>ARIES — gestão comercial.</span>
           </div>
         </div>
       </div>
