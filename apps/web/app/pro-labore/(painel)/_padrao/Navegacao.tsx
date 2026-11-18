@@ -56,3 +56,6 @@ export const moduloDoGrupo = (grupo: string | null | undefined) => MODULOS.find(
 
 /** Os módulos que a pessoa vê, já com o endereço da primeira aba liberada (o menu e a tela inicial usam o mesmo). */
 export const NavModulosContext = createContext<Array<{ chave: string; nome: string; href: string; rota: string }> | null>(null)
+
+/** Follows e ligações do dia que o menu lateral já busca; a tela inicial lê daqui (sem chamada nova). */
+export const ParaHojeContext = createContext<{ followsHoje: number; followsAtrasados: number; ligacoesHoje: number; ligacoesAtrasadas: number } | null>(null)

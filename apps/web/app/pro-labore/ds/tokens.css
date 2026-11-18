@@ -1,0 +1,198 @@
+/* =====================================================================
+   ARIES · Design System · Tokens (Etapa 1 da reformulação visual, 18/11)
+
+   Paleta de referência enviada pelo dono: #090909 (base) e #666666 (cinza),
+   usados puros e em degradê um para o outro. Branco como único destaque.
+   Cor fica só para estado (bom / atenção / crítico / informação).
+
+   Este arquivo é carregado DEPOIS de pro-labore.css e é a fonte única das
+   cores e das fontes. As variáveis antigas (--pl-*, --hx-*, --ia-*, --nx-*,
+   --sm-*) continuam existindo, mas passam a ler daqui — assim nenhuma tela
+   quebra e todas mudam juntas. Só aparência: nenhuma regra de negócio,
+   rota ou permissão depende deste arquivo.
+
+   Contraste (WCAG AA pede 4,5:1 para texto):
+   - #666666 sobre #090909 dá 3,47:1 → no escuro, #666666 é superfície,
+     borda e degradê, nunca texto pequeno. Texto de apoio usa #999999 (7:1).
+   - No claro, #090909 (19,9:1) e #666666 (5,7:1) são as cores de texto.
+   ===================================================================== */
+
+.pl-app {
+  /* Paleta de referência */
+  --ar-preto: #090909;
+  --ar-cinza: #666666;
+  --ar-branco: #f5f5f5;
+  /* Degradês da referência (cartão claro→escuro e escuro→claro) */
+  --ar-degrade-desce: linear-gradient(180deg, #666666 0%, #090909 100%);
+  --ar-degrade-sobe: linear-gradient(180deg, #090909 0%, #666666 100%);
+
+  /* Uma família só para a interface; Geist Mono só para códigos e IDs */
+  --pl-font-sans: var(--font-geist), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pl-font-display: var(--pl-font-sans);
+  --pl-font-num: var(--pl-font-sans);
+  --hx-sans: var(--pl-font-sans);
+  --hx-serif: var(--pl-font-sans);
+}
+
+/* ---------- Tema escuro (padrão) ---------- */
+.pl-app[data-theme="dark"] {
+  /* Fundo e superfícies: misturas de #090909 com #666666 */
+  --pl-frame: #090909;
+  --pl-lane: #090909;
+  --pl-bg: #090909;
+  --pl-surface: #0f0f0f;   /* 6% de #666666 */
+  --pl-surface-2: #141414; /* 12% */
+  --pl-surface-3: #1c1c1c; /* 20% */
+
+  /* Texto */
+  --pl-ink-1: #f5f5f5;
+  --pl-ink-2: #b3b3b3;
+  --pl-ink-muted: #999999;
+
+  /* Bordas: o cinza da paleta em transparência */
+  --pl-border: rgba(102, 102, 102, .28);
+  --pl-border-strong: rgba(102, 102, 102, .55);
+  --pl-grid-line: #1c1c1c;
+  --pl-baseline: #333333;
+
+  /* Destaque: branco (como a pílula da referência) */
+  --pl-accent: #f5f5f5;
+  --pl-accent-ink: #090909;
+  --pl-accent-strong: #ffffff;
+  --pl-accent-soft: rgba(245, 245, 245, .07);
+  --pl-grad-brand: linear-gradient(135deg, #f5f5f5 0%, #666666 100%);
+  --pl-grad-brand-soft: rgba(102, 102, 102, .12);
+  --pl-glass: #090909;
+  --pl-brand-borda: rgba(245, 245, 245, .9);
+
+  /* Estados (só com rótulo ou ícone ao lado) */
+  --pl-good: #4ade80;
+  --pl-warning: #fbbf24;
+  --pl-critical: #f87171;
+  --pl-info: #60a5fa;
+
+  /* Sombras e foco */
+  --pl-shadow-pop: 0 0 0 1px rgba(102, 102, 102, .35), 0 24px 60px -16px rgba(0, 0, 0, .9);
+  --pl-ring: 0 0 0 3px rgba(245, 245, 245, .14);
+
+  /* Item ativo do menu e brilho no topo dos cartões */
+  --ar-ativo-fundo: rgba(245, 245, 245, .07);
+  --ar-ativo-borda: rgba(102, 102, 102, .55);
+  --ar-brilho-topo: inset 0 1px 0 rgba(255, 255, 255, .06);
+
+  /* Vidro e cartões: o degradê #666666 → #090909 da referência, suave */
+  --hx-ambar: #f5f5f5;
+  --hx-ambar-forte: #ffffff;
+  --hx-ambar-suave: rgba(245, 245, 245, .07);
+  --hx-vidro: rgba(9, 9, 9, .78);
+  --hx-vidro-borda: rgba(102, 102, 102, .3);
+  --nx-cartao: linear-gradient(180deg, rgba(102, 102, 102, .16) 0%, rgba(102, 102, 102, .03) 100%), rgba(9, 9, 9, .85);
+  --nx-brilho: inset 0 1px 0 rgba(255, 255, 255, .06), 0 18px 40px -24px rgba(0, 0, 0, .9);
+
+  background: #090909;
+}
+
+/* Tela inicial (Home): mesmos tokens, estrutura intacta */
+.pl-app[data-theme="dark"] .ia {
+  --ia-vidro: linear-gradient(180deg, rgba(102, 102, 102, .18), rgba(102, 102, 102, .03)), rgba(9, 9, 9, .62);
+  --ia-vidro-forte: rgba(15, 15, 15, .82);
+  --ia-borda: rgba(102, 102, 102, .32);
+  --ia-texto-2: rgba(245, 245, 245, .66);
+  --ia-texto-3: rgba(245, 245, 245, .56);
+  --ia-acento: #f5f5f5;
+}
+
+/* Fundo: escuro em cima, o cinza da paleta surgindo no canto de baixo */
+.pl-app[data-theme="dark"] .pl-fundo-veu {
+  background:
+    radial-gradient(60% 40% at 50% -8%, rgba(102, 102, 102, .22), transparent 70%),
+    radial-gradient(55% 45% at 100% 100%, rgba(102, 102, 102, .22), transparent 72%),
+    rgba(9, 9, 9, .6);
+}
+.pl-app[data-theme="dark"] .pl-main { background: rgba(9, 9, 9, .62); border-color: rgba(102, 102, 102, .22); }
+.pl-app[data-theme="dark"] .pl-card,
+.pl-app[data-theme="dark"] .ar-cabecalho + * .pl-card { background: var(--nx-cartao); border-color: rgba(102, 102, 102, .28); }
+.pl-app[data-theme="dark"] .pl-btn-primary { background: #f5f5f5; color: #090909; }
+.pl-app[data-theme="dark"] .pl-chip { border-color: rgba(102, 102, 102, .45); background: rgba(102, 102, 102, .08); }
+@media (max-width: 980px) {
+  .pl-app[data-theme="dark"] .pl-sidebar { background: rgba(9, 9, 9, .97); }
+}
+
+/* Espaço Social Media: mesma paleta no escuro */
+.pl-app[data-theme="dark"] .sm-app {
+  --sm-bg: #090909;
+  --sm-bg-sidebar: #0f0f0f;
+  --sm-bg-focus: #090909;
+  --sm-surface: #141414;
+  --sm-border: #262626;
+  --sm-border-strong: #333333;
+  --sm-divider: #1c1c1c;
+  --sm-text: #ededed;
+  --sm-text-strong: #f5f5f5;
+  --sm-text-muted: #b3b3b3;
+  --sm-text-faint: #999999;
+  --sm-silver: #f5f5f5;
+  --sm-on-silver: #090909;
+}
+
+/* ---------- Tema claro: a mesma paleta invertida ---------- */
+.pl-app[data-theme="light"] {
+  --pl-frame: #f2f2f2;
+  --pl-lane: #f5f5f5;
+  --pl-bg: #ffffff;
+  --pl-surface: #ffffff;
+  --pl-ink-1: #090909;
+  --pl-ink-2: #3d3d3d;
+  --pl-ink-muted: #666666;
+  --pl-border: rgba(9, 9, 9, .1);
+  --pl-border-strong: rgba(9, 9, 9, .18);
+  --pl-accent: #090909;
+  --pl-accent-ink: #ffffff;
+  --pl-accent-strong: #000000;
+  --pl-accent-soft: rgba(9, 9, 9, .05);
+  --pl-grad-brand: linear-gradient(135deg, #666666 0%, #090909 100%);
+  --pl-good: #15803d;
+  --pl-warning: #b45309;
+  --pl-critical: #dc2626;
+  --pl-info: #2563eb;
+  --hx-ambar: #090909;
+  --hx-ambar-forte: #000000;
+  --hx-ambar-suave: rgba(9, 9, 9, .06);
+  --ar-ativo-fundo: rgba(9, 9, 9, .06);
+  --ar-ativo-borda: rgba(9, 9, 9, .2);
+  --ar-brilho-topo: inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+/* A tela inicial é sempre noturna (paisagem ao fundo), nos dois temas:
+   mesmos tokens escuros, destaque branco. */
+.pl-app .ia {
+  --ia-texto-1: #f5f5f5;
+  --ia-texto-2: #b3b3b3;
+  --ia-texto-3: #999999;
+  --ia-acento: #f5f5f5;
+  --ia-critico: #f87171;
+  --ia-busca-fundo: rgba(15, 15, 15, .82);
+  --ia-borda-forte: rgba(102, 102, 102, .55);
+  --ia-vidro: linear-gradient(180deg, rgba(102, 102, 102, .16), rgba(102, 102, 102, .03)), rgba(9, 9, 9, .85);
+  --ia-borda: rgba(102, 102, 102, .32);
+  --ia-brilho-canto: radial-gradient(60% 50% at 100% 100%, rgba(102, 102, 102, .22), transparent 72%);
+  --ia-escurece: linear-gradient(180deg, rgba(9, 9, 9, .1), rgba(9, 9, 9, .55));
+  background: #090909;
+}
+
+/* ---------- Números: algarismos do mesmo tamanho em tabelas e indicadores ---------- */
+.pl-app table,
+.pl-app .pl-mono,
+.pl-app .ar-num-valor,
+.pl-app .ia-ind-valor,
+.pl-app .ia-hora { font-variant-numeric: tabular-nums; }
+
+/* ---------- Estados como tokens próprios (texto e fundo suave) ---------- */
+.pl-app {
+  --ar-estado-bom: var(--pl-good);
+  --ar-estado-atencao: var(--pl-warning, #b45309);
+  --ar-estado-critico: var(--pl-critical);
+  --ar-neutro: var(--pl-ink-2);
+}
+/* Texto crítico pequeno sobre fundo rosado (tema claro): vermelho mais escuro para passar 4,5:1 */
+.pl-app { --ar-critico-texto: var(--pl-critical); }
+.pl-app[data-theme="light"] { --ar-critico-texto: #b91c1c; }

@@ -856,7 +856,7 @@ export default function ProLaboreLeadsPage() {
                   <div><dt>Oportunidade</dt><dd className="pl-crm-fin-oportunidade" title={formatMoeda(d.oportunidadeRS)}>{moedaCurta(d.oportunidadeRS)}</dd></div>
                   {isDono && <div><dt>Pró-labore</dt><dd title={formatMoeda(d.proLaborePotencialRS)}>{moedaCurta(d.proLaborePotencialRS)}</dd></div>}
                   <div><dt>Comissão prev.</dt><dd title={formatMoeda(d.comissaoPotencialRS)}>{moedaCurta(d.comissaoPotencialRS)}</dd></div>
-                  <div className="pl-crm-fin-perdida"><dt>Comissão perdida</dt><dd title={formatMoeda(d.comissaoPerdidaRS)}>{moedaCurta(d.comissaoPerdidaRS)}</dd></div>
+                  <div className="pl-crm-fin-perdida" data-zero={d.comissaoPerdidaRS ? undefined : ''}><dt>Comissão perdida</dt><dd title={formatMoeda(d.comissaoPerdidaRS)}>{moedaCurta(d.comissaoPerdidaRS)}</dd></div>
                 </dl>
                 <dl className="crm-linhas">
                   <div><dt>{d.i === 0 ? 'Topo do funil' : 'Conv. anterior'}</dt><dd>{d.i === 0 ? '—' : `${(d.convFromPrev * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}</dd></div>
@@ -894,7 +894,7 @@ export default function ProLaboreLeadsPage() {
                     ) : (
                       <span>{rotuloMetaCrm(d.meta)}</span>
                     )}
-                    {d.statusOk != null && <span className={`pl-delta ${d.statusOk ? 'up' : 'down'}`} style={{ marginLeft: 6 }}>{d.statusOk ? 'ok' : 'fora'}</span>}
+                    {d.statusOk != null && <span className={`pl-delta ${d.statusOk ? 'up' : 'down'}`} style={{ marginLeft: 6 }}>{d.statusOk ? 'Bom' : 'Fora'}</span>}
                   </div>
                 )}
                 </div>
@@ -957,10 +957,15 @@ export default function ProLaboreLeadsPage() {
         </div>
       )}
 
-      {/* Custos e desempenho por etapa: as 10 etapas, sempre à vista */}
-      {!loading && (jornada10 && vejaEquipe
-        ? <CustosPorEtapa isDono={isDono} vendedorId={filtroVendedorId ?? ''} semDados={funilCinco} />
-        : funilCinco)}
+      {/* Faixa de resumo (valores que a tela já calcula); os custos por etapa ficam em "Mais do CRM" */}
+      {!loading && (
+        <div className="crm-faixa" role="status" aria-label="Resumo do funil" data-faixa-resumo>
+          <span><b className="pl-mono">{totalFiltrado.toLocaleString('pt-BR')}</b> {totalFiltrado === 1 ? 'lead no funil' : 'leads no funil'}</span>
+          <span><small>Oportunidade</small> <b className="pl-mono">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
+          <span className={parados.length > 0 ? 'crm-faixa-atencao' : undefined}><b className="pl-mono">{parados.length}</b> {parados.length === 1 ? 'parado' : 'parados'}</span>
+          <span className={followsAtrasados > 0 ? 'crm-faixa-critico' : undefined}><b className="pl-mono">{followsHoje}</b> {followsHoje === 1 ? 'follow hoje' : 'follows hoje'}{followsAtrasados > 0 && <> · <b className="pl-mono">{followsAtrasados}</b> {followsAtrasados === 1 ? 'atrasado' : 'atrasados'}</>}</span>
+        </div>
+      )}
 
       {maisAberto && (
         <div className="pl-modal-backdrop" role="dialog" aria-modal="true" aria-label="Mais do CRM" onClick={() => setMaisAberto(false)} data-mais-crm>
@@ -978,13 +983,19 @@ export default function ProLaboreLeadsPage() {
           <span className="crm-resumo-sep" aria-hidden />
           <span><small>Oportunidade</small> <b className="pl-crm-fin-oportunidade">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
           <span><small>Comissão prevista</small> <b>{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPotencialRS, 0))}</b></span>
-          <span><small>Comissão perdida</small> <b className="pl-crm-resumo-perda">{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPerdidaRS, 0))}</b></span>
+          <span><small>Comissão perdida</small> <b className="pl-crm-resumo-perda" data-zero={stagesDados.reduce((t, d) => t + d.comissaoPerdidaRS, 0) ? undefined : ''}>{formatMoeda(stagesDados.reduce((t, d) => t + d.comissaoPerdidaRS, 0))}</b></span>
           <span className="crm-resumo-fim">
             {foraDaMeta > 0 && <span className="pl-delta down">{foraDaMeta} etapa{foraDaMeta > 1 ? 's' : ''} fora da meta</span>}
             {totalPerdidos > 0 && <Link className="pl-link-action pl-leads-textlink" href="/pro-labore/reativacao">Perdidos na Reativação ({totalPerdidos}) →</Link>}
           </span>
         </div>
       )}
+            <h4 className="crm-mais-titulo">Custos e desempenho por etapa</h4>
+            <div data-custos-no-mais>
+              {!loading && (jornada10 && vejaEquipe
+                ? <CustosPorEtapa isDono={isDono} vendedorId={filtroVendedorId ?? ''} semDados={funilCinco} />
+                : funilCinco)}
+            </div>
             <h4 className="crm-mais-titulo">O que pede atenção</h4>
             {!temAtencao && <p className="pl-hint">Nenhum lead parado nem follow atrasado.</p>}
           {/* 4. O que pede atenção agora (parados e follows), numa faixa só */}
@@ -1069,7 +1080,7 @@ export default function ProLaboreLeadsPage() {
                     </div>
                     <div className="pl-kanban-col-lado">
                       <div className="pl-kanban-col-count pl-mono">{leadsDaColuna.length}</div>
-                      {somaDaColuna(leadsDaColuna) > 0 && <div className="pl-kanban-col-soma" title="Soma do valor da negociação dos cards da coluna">{moedaCurta(somaDaColuna(leadsDaColuna))}</div>}
+                      <div className={`pl-kanban-col-soma pl-mono${somaDaColuna(leadsDaColuna) > 0 ? '' : ' zero'}`} title="Soma do valor da negociação dos cards da coluna">{moedaCurta(somaDaColuna(leadsDaColuna))}</div>
                     </div>
                   </div>
                   <div className="pl-kanban-cards">
@@ -1410,22 +1421,41 @@ function KanbanCard({
       aria-label={`Abrir ${lead.nomeCliente}`}
       data-lead={lead.id}
     >
+      {/* Nível 1: quem é e quão quente está (selo com texto) */}
       <div className="pl-kc-topo">
         <span className="pl-kanban-card-name pl-kc-nome">{lead.nomeCliente}</span>
-        <span className="pl-kc-topo-lado">
-          {!lead.vendaId && <span className={`pl-kanban-card-time ${parado ? 'stale' : ''}`} title={`Há ${tempoParado(dias)} sem mudar de etapa`}>{tempoParado(dias)}</span>}
-          {vejaEquipe && lead.vendedor && <span className="pl-avatar pl-kc-vendedor" title={lead.vendedor.nome} style={{ background: corAvatar(lead.vendedor.id) }}>{iniciais(lead.vendedor.nome)}</span>}
-        </span>
+        {typeof lead.pontuacao === 'number' && !lead.vendaId && <ChipNota nota={lead.pontuacao} titulo={`Nota do Assistente pela conversa do WhatsApp: ${lead.pontuacao} de 100`} />}
       </div>
+      {/* Nível 2: moto de interesse e valor */}
       {(linha2 || lead.valorNegociacao > 0) && (
         <div className="pl-kc-linha">
-          {linha2 && <span className="pl-kc-moto" title={linha2}>{lead.modeloInteresse ? '🏍 ' : ''}{linha2}</span>}
+          {linha2 && <span className="pl-kc-moto" title={linha2}>{linha2}</span>}
           {lead.valorNegociacao > 0 && <span className="pl-kc-valor pl-mono" title="Valor da negociação">{moedaCurta(lead.valorNegociacao)}</span>}
         </div>
       )}
       {detalhado && lead.modeloInteresse && lead.telefone && <div className="pl-kc-meta">{telefoneBonito(lead.telefone)}</div>}
+      {/* Nível 3: próximo passo (cor pelo estado) e o vendedor */}
+      <div className="pl-kc-passo">
+        <span className="pl-kc-passo-itens">
+          {sitFollow && (
+            <button type="button" className={`fw-selo ${sitFollow.tipo.toLowerCase()}`} onClick={onFollow} onPointerDown={e => e.stopPropagation()} title={proximoFollow?.nota ?? 'Ver o follow'} data-follow={sitFollow.tipo}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+              {sitFollow.texto}
+            </button>
+          )}
+          {quandoLig && (
+            <span className={`pl-kc-ligacao ${quandoLig.atrasada ? 'atrasada' : ''}`} title={`Próxima ligação: ${quandoLig.texto}`} data-ligacao-card>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z" /></svg>
+              {quandoLig.texto}
+            </span>
+          )}
+          {!sitFollow && !quandoLig && !lead.vendaId && <span className="pl-kc-sem-passo">Sem próximo passo</span>}
+          {lead.vendaId && <span className="pl-kanban-card-badge pl-kc-venda">✓ Convertido em venda</span>}
+        </span>
+        {vejaEquipe && lead.vendedor && <span className="pl-avatar pl-kc-vendedor" title={lead.vendedor.nome} style={{ background: corAvatar(lead.vendedor.id) }}>{iniciais(lead.vendedor.nome)}</span>}
+      </div>
+      {/* Rodapé: origem, etiquetas, notas e tempo na etapa, em ícones pequenos */}
       <div className="pl-kc-selos">
-        {typeof lead.pontuacao === 'number' && !lead.vendaId && <ChipNota nota={lead.pontuacao} titulo={`Nota do Assistente pela conversa do WhatsApp: ${lead.pontuacao} de 100`} />}
         {(viaWhatsapp || lead.tipoLead || lead.postCode) && (
           <span className="pl-kc-origem">
             {viaWhatsapp && <span className="wa" title="Entrou sozinho quando o contato chamou no WhatsApp" data-tag-whatsapp><IconeOrigem tipo="wa" /></span>}
@@ -1440,31 +1470,15 @@ function KanbanCard({
             <IconeNota />{notas}
           </span>
         )}
+        {lead.tipoNegociacao && <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]}>{lead.tipoNegociacao}</span>}
+        {avancoAuto && (
+          <span className="pl-kc-auto-mini" data-avanco-auto title={`Movido pelo assistente: ${avancoAuto.motivo} (${new Date(avancoAuto.criadoEm).toLocaleString('pt-BR')})`}>
+            ↗ Assistente moveu
+            <button type="button" className="pl-link-action" onClick={onDesfazer} onPointerDown={e => e.stopPropagation()} data-desfazer>Desfazer</button>
+          </span>
+        )}
+        {!lead.vendaId && <span className={`pl-kanban-card-time ${parado ? 'stale' : ''}`} title={`Há ${tempoParado(dias)} sem mudar de etapa`}>{tempoParado(dias)}</span>}
       </div>
-      {(sitFollow || lead.vendaId || lead.tipoNegociacao || avancoAuto || quandoLig) && (
-        <div className="pl-kc-rodape">
-          {quandoLig && (
-            <span className={`pl-kc-ligacao ${quandoLig.atrasada ? 'atrasada' : ''}`} title={`Próxima ligação: ${quandoLig.texto}`} data-ligacao-card>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z" /></svg>
-              {quandoLig.texto}
-            </span>
-          )}
-          {avancoAuto && (
-            <span className="pl-kc-auto-mini" data-avanco-auto title={`Movido pelo assistente: ${avancoAuto.motivo} (${new Date(avancoAuto.criadoEm).toLocaleString('pt-BR')})`}>
-              ↗ Assistente moveu
-              <button type="button" className="pl-link-action" onClick={onDesfazer} onPointerDown={e => e.stopPropagation()} data-desfazer>Desfazer</button>
-            </span>
-          )}
-          {sitFollow && (
-            <button type="button" className={`fw-selo ${sitFollow.tipo.toLowerCase()}`} onClick={onFollow} onPointerDown={e => e.stopPropagation()} title={proximoFollow?.nota ?? 'Ver o follow'} data-follow={sitFollow.tipo}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
-              {sitFollow.texto}
-            </button>
-          )}
-          {lead.vendaId && <span className="pl-kanban-card-badge pl-kc-venda">✓ Convertido em venda</span>}
-          {lead.tipoNegociacao && <span className="pl-tipo-negociacao-tag" title={TIPO_NEGOCIACAO_TITLE[lead.tipoNegociacao]}>{lead.tipoNegociacao}</span>}
-        </div>
-      )}
       {movivel && (
         <div className="pl-kc-acoes" onPointerDown={e => e.stopPropagation()}>
           {proxima && (

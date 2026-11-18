@@ -64,14 +64,14 @@ export function CustosPorEtapa({ isDono, vendedorId, semDados }: { isDono: boole
                 <div><dt>Oportunidade</dt><dd className="pl-crm-fin-oportunidade" title={formatMoeda(e.valores.oportunidade)}>{curta(e.valores.oportunidade)}</dd></div>
                 <div><dt>Pró-labore</dt><dd title={formatMoeda(e.valores.proLaborePrevisto)}>{curta(e.valores.proLaborePrevisto)}</dd></div>
                 <div><dt>Comissão prev.</dt><dd title={formatMoeda(e.valores.comissaoPrevista)}>{curta(e.valores.comissaoPrevista)}</dd></div>
-                <div className="pl-crm-fin-perdida"><dt>Comissão perdida</dt><dd title={formatMoeda(e.valores.comissaoPerdida)}>{curta(e.valores.comissaoPerdida)}</dd></div>
+                <div className="pl-crm-fin-perdida" data-zero={e.valores.comissaoPerdida ? undefined : ''}><dt>Comissão perdida</dt><dd title={formatMoeda(e.valores.comissaoPerdida)}>{curta(e.valores.comissaoPerdida)}</dd></div>
               </dl>
             )}
             <div className="crm-etapa-meta">
               {isDono
                 ? <button type="button" className="pl-link-action" onClick={() => setEditando(e)} data-editar-metas={e.etapa} title={metaTxt(e) || 'Definir meta'}>{metaTxt(e) ? `Meta: ${metaTxt(e)} ✎` : 'Definir meta ✎'}</button>
                 : <span className="pl-hint">{metaTxt(e) ? `Meta: ${metaTxt(e)}` : 'sem meta'}</span>}
-              {e.situacao && <span className={`pl-delta ${e.situacao === 'BOM' ? 'up' : 'down'}`}>{e.situacao === 'BOM' ? 'ok' : e.situacao === 'ATENCAO' ? 'atenção' : 'fora'}</span>}
+              {e.situacao && <span className={`pl-delta ${e.situacao === 'BOM' ? 'up' : e.situacao === 'ATENCAO' ? 'atencao' : 'down'}`}>{e.situacao === 'BOM' ? 'Bom' : e.situacao === 'ATENCAO' ? 'Atenção' : 'Fora'}</span>}
             </div>
           </div>
         ))}

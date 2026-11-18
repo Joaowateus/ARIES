@@ -70,7 +70,7 @@ function Resposta({ r, compacto }: { r: RespostaAries; compacto?: boolean }) {
             <span><b>{n.nome}</b> · {n.escopo} · {n.periodoTexto}</span><span><b>{n.valorTexto}</b> <StatusChip status={n.faixa} /></span>
             <span className="pl-hint">{n.comparacao ? `Mesmo intervalo anterior: ${n.comparacao.valorTexto}${n.comparacao.variacao != null ? ` (${n.comparacao.variacao > 0 ? '+' : ''}${n.comparacao.variacao.toLocaleString('pt-BR')}%)` : ''}` : 'Sem comparação (retrato de agora)'}{n.meta ? ` · meta ${n.meta.valorTexto}` : ''}</span>
             <Link href={n.link} className="pl-hint" data-link-origem onClick={() => registrarAcao('pergunte:abrir-origem')}>Abrir a tela →</Link>
-            {n.aviso && <span className="pl-hint" style={{ gridColumn: '1 / -1', color: 'var(--pl-warning, #b7791f)' }} data-aviso-qualidade>{n.aviso}</span>}
+            {n.aviso && <span className="pl-hint" style={{ gridColumn: '1 / -1', color: 'var(--ar-estado-atencao)' }} data-aviso-qualidade>{n.aviso}</span>}
           </div>
         ))}
         {acao && !criada && (

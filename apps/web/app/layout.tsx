@@ -1,14 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Geist, Geist_Mono, Manrope } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 // Números (tabelas, valores, contadores) — o painel Pró-Labore usa as duas.
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
-// Redesenho do Hoje: serifada no título e no número de destaque; Manrope no menu e no corpo do Hoje.
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
-const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap" });
+// Design System (18/11): Geist é a única fonte da interface; Fraunces e Manrope saíram.
 
 export const metadata: Metadata = {
   title: "ARIES — Sistema Comercial",
@@ -28,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" className={`${geist.className} ${geist.variable} ${geistMono.variable} ${fraunces.variable} ${manrope.variable} h-full`}>
+    <html lang="pt-BR" className={`${geist.className} ${geist.variable} ${geistMono.variable} h-full`}>
       <body className="min-h-full bg-gray-50 text-gray-900 antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
