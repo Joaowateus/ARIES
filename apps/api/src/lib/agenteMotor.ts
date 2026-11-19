@@ -17,7 +17,8 @@ import { enviarComoPessoa } from './agenteEnvio'
 import { responderIntencao, resumoDaManha, type ContextoAgente } from './agenteRespostas'
 import { classificarMensagemAgente, iaLigada } from './copilotoIA'
 import { conversarComCopiloto } from './copilotoChat'
-import { perguntar } from './pergunte'
+import { perguntarAgente } from './pergunteAgente'
+import { contextoDaPessoa } from './centralConhecimento/contexto'
 import { papelDoUsuario } from './papelHoje'
 import { EQUIPE, primeiroNome } from './copilotoFatos'
 
@@ -142,20 +143,17 @@ async function tratarMensagem(agente: AgenteWhatsapp, m: MensagemWhatsapp, agora
   await enviarComoPessoa(agente, contato, resposta, { vinculoId: vinculo.id, intencao: i?.tipo ?? 'LIVRE' })
 }
 
-/** Pergunta sobre a operação pelo WhatsApp: mesma resposta do Pergunte ao ARIES, com métrica, período, comparação e link. */
+/** Pergunta sobre a operação pelo WhatsApp: o mesmo Pergunte ao ARIES da tela (Central de Conhecimento, P1), com origem e link. */
 async function perguntarPeloWhatsapp(ctx: { usuarioId: string; pessoa: string; nome: string; dono: boolean }, texto: string, agora: Date) {
-  let papel: ReturnType<typeof papelDoUsuario> = 'DONO'
-  let vendedorId: string | null = null
-  if (!ctx.dono) {
-    const v = await prisma.vendedor.findUnique({ where: { id: ctx.pessoa }, select: { id: true, papel: true, funcao: true } })
-    if (!v) return null
-    vendedorId = v.id
-    papel = papelDoUsuario({ papel: v.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR', sdr: v.papel === 'SDR', funcao: v.funcao === 'GESTOR_TRAFEGO' || v.funcao === 'FINANCEIRO' ? v.funcao : null })
-  }
-  const r = await perguntar({ usuarioId: ctx.usuarioId, papel, id: vendedorId ?? ctx.usuarioId, vendedorId, nome: ctx.nome }, texto, 'WHATSAPP', agora)
+  const c = await contextoDaPessoa(ctx.usuarioId, ctx.dono ? null : ctx.pessoa, ctx.nome)
+  if (!c) return null
+  const r = await perguntarAgente(c, texto, [], 'WHATSAPP', agora)
   const base = (process.env.FRONTEND_URL ?? '').replace(/\/$/, '')
-  const linhas = r.numeros.map(n => `• *${n.nome}* (${n.escopo}, ${n.periodoTexto}): ${n.valorTexto}${n.comparacao ? ` · antes: ${n.comparacao.valorTexto}` : ''}${n.meta ? ` · meta ${n.meta.valorTexto}` : ''}${base ? `\n  ${base}${n.link}` : ''}${n.aviso ? `\n  ⚠️ ${n.aviso}` : ''}`)
-  return { naoSabe: r.naoSabe, texto: [r.resposta, ...(linhas.length ? ['', ...linhas] : [])].join('\n') }
+  const linhas = r.numeros.length && !r.usouIa
+    ? r.numeros.map(n => `• *${n.nome}* (${n.escopo}, ${n.periodoTexto}): ${n.valorTexto}${n.comparacao ? ` · antes: ${n.comparacao.valorTexto}` : ''}${n.meta ? ` · meta ${n.meta.valorTexto}` : ''}${base ? `\n  ${base}${n.link}` : ''}${n.aviso ? `\n  ⚠️ ${n.aviso}` : ''}`)
+    : []
+  const origem = r.origens.length ? [`_Fonte: ${r.origens.map(o => `${o.nome}${o.atrasada ? ' (pode estar desatualizado)' : ''}`).join(', ')}_`, ...r.origens.filter(o => o.tela && base).slice(0, 2).map(o => `${base}${o.tela}`)] : []
+  return { naoSabe: r.naoSabe, texto: [r.resposta, ...(linhas.length ? ['', ...linhas] : []), ...(origem.length ? ['', ...origem] : [])].join('\n') }
 }
 
 async function vincular(agente: AgenteWhatsapp, m: MensagemWhatsapp, codigo: string, agora: Date) {
