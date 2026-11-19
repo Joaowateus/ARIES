@@ -1121,6 +1121,7 @@ export default function ProLaboreLeadsPage() {
           vejaEquipe={vejaEquipe}
           focarNota={focoNota}
           podeEscrever={podeEditarCrm}
+          premissas={premissas}
           onContagemNotas={n => contarNotas(painelLead.id, n)}
           onLigacoesMudaram={carregar}
           onFechar={fecharPainel}

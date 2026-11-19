@@ -473,7 +473,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   )
 }
 
-function ModalLevantamento({ lead, onFechar, onSalvo }: { lead: Lead; onFechar: () => void; onSalvo: () => void }) {
+export function ModalLevantamento({ lead, onFechar, onSalvo }: { lead: Lead; onFechar: () => void; onSalvo: () => void }) {
   const [modelo, setModelo] = useState(lead.modeloInteresse ?? '')
   const [pagamento, setPagamento] = useState(lead.formaPagamento ?? '')
   const [cnh, setCnh] = useState(lead.situacaoCnh ?? '')

@@ -13,8 +13,13 @@ const brl = (n: number | null) => (n == null ? '—' : n.toLocaleString('pt-BR',
 const quando = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—')
 const num = (s: string) => { const n = Number(s.replace(/\./g, '').replace(',', '.')); return s.trim() && Number.isFinite(n) ? n : null }
 
-export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => void }) {
-  const [d, setD] = useState<DetalheJornada | null>(null)
+/**
+ * parte: sem ela, o painel inteiro (como antes). 'resumo' = passagem SDR → vendedor, propostas e visitas;
+ * 'conversa' = pré-venda do robô. O painel em abas (19/11) passa o detalhe já carregado (detalhe/recarregar).
+ */
+export function JornadaPainel({ lead, onMudou, parte, detalhe, recarregar }: { lead: Lead; onMudou: () => void; parte?: 'resumo' | 'conversa'; detalhe?: DetalheJornada | null; recarregar?: () => Promise<unknown> }) {
+  const [dProprio, setD] = useState<DetalheJornada | null>(null)
+  const d = detalhe !== undefined ? detalhe : dProprio
   const [erro, setErro] = useState<string | null>(null)
   const [msgProposta, setMsgProposta] = useState<{ id: string; texto: string } | null>(null)
   const [prop, setProp] = useState({ preco: '', entrada: '', parcela: '', prazo: '', validade: '' })
@@ -24,8 +29,9 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
   const [motivo, setMotivo] = useState('')
   const [destino, setDestino] = useState<EtapaJornada | ''>('')
 
-  const carregar = useCallback(() => proLaboreApi.jornada.detalhe(lead.id).then(setD).catch(e => setErro(e instanceof Error ? e.message : 'Erro')), [lead.id])
-  useEffect(() => { void carregar() }, [carregar])
+  const carregarProprio = useCallback(() => proLaboreApi.jornada.detalhe(lead.id).then(setD).catch(e => setErro(e instanceof Error ? e.message : 'Erro')), [lead.id])
+  const carregar = recarregar ?? carregarProprio
+  useEffect(() => { if (detalhe === undefined) void carregarProprio() }, [carregarProprio, detalhe])
   async function executar(fn: () => Promise<unknown>) {
     setErro(null)
     try { await fn(); await carregar(); onMudou() } catch (e) {
@@ -33,6 +39,7 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
       setErro(f?.length ? `${(e as Error).message}: ${f.join(' · ')}` : e instanceof Error ? e.message : 'Não foi possível')
     }
   }
+  if (parte === 'conversa') return <PreVendaRobo lead={lead} onMudou={onMudou} />
   if (!d) return erro ? <div className="pl-alert">{erro}</div> : null
   const etapa = d.checklist.etapa, i = ETAPAS_JORNADA.indexOf(etapa)
   const aberta = d.visitas.find(v => !v.checkinEm && !v.falta)
@@ -40,7 +47,8 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
 
   return (
     <div data-jornada-painel>
-      <section className="pl-pn-bloco">
+      {erro && parte && <div className="pl-alert" role="alert">{erro}</div>}
+      {!parte && <section className="pl-pn-bloco">
         <h3>Jornada · {i + 1}. {NOME_ETAPA[etapa]}</h3>
         {(d.checklist.pendencias ?? []).length > 0 && (
           <div className="pn-pendencias" data-pendencias-painel>
@@ -79,9 +87,9 @@ export function JornadaPainel({ lead, onMudou }: { lead: Lead; onMudou: () => vo
           </div>
         )}
         {erro && <div className="pl-alert" role="alert" style={{ marginTop: 8 }}>{erro}</div>}
-      </section>
+      </section>}
 
-      <PreVendaRobo lead={lead} onMudou={onMudou} />
+      {!parte && <PreVendaRobo lead={lead} onMudou={onMudou} />}
 
       {(d.podePassar || d.podeDevolver || d.passagens.length > 0) && (
         <section className="pl-pn-bloco" data-passagem>
