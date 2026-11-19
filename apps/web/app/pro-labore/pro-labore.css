@@ -5356,3 +5356,16 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .ia-embutida .ia-rodape { padding: 7px 16px; }
 }
 @media (min-width: 1181px) { .ia-embutida .ia-reservado { margin-top: 60px; } }
+
+/* Menu: nome do módulo e seta separados (o nome abre a tela, a seta só mostra/recolhe as abas) */
+.pl-modulo-cab { position: relative; display: flex; align-items: center; }
+.pl-modulo-cab > .pl-modulo-botao { flex: 1; min-width: 0; padding-right: 36px; }
+.pl-mod-alternar { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--pl-ink-2); cursor: pointer; }
+.pl-mod-alternar:hover { background: var(--ar-ativo-fundo); color: var(--pl-ink-1); }
+.pl-mod-alternar .pl-mod-seta { margin: 0; }
+/* Sinal de "abrindo" no item clicado, até a tela aparecer */
+.pl-abrindo { width: 12px; height: 12px; margin-left: auto; flex: none; border-radius: 50%; border: 2px solid transparent; opacity: 0; }
+.pl-abrindo.ativo { opacity: 1; border-color: var(--pl-border-strong); border-top-color: var(--pl-ink-1); animation: pl-gira .7s linear infinite; }
+.pl-sidebar-link .pl-abrindo:not(.ativo), .pl-sublink .pl-abrindo:not(.ativo) { width: 0; border-width: 0; }
+@keyframes pl-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pl-abrindo.ativo { animation-duration: 2s; } }
