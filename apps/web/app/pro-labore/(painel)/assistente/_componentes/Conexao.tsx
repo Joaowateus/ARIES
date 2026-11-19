@@ -84,6 +84,20 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
     }
   }
 
+  // "Respondendo leads novos" ligado, mas o roteiro só responde anúncio e frases: liga os contatos novos aqui mesmo.
+  async function responderTodosNovos() {
+    if (!assistente) return
+    setSalvandoToggle(true)
+    try {
+      await proLaboreApi.assistente.salvar({ vendedorId, configuracao: { ...assistente.configuracao, responderContatosNovos: true } })
+      atualizar.current()
+    } catch (e) {
+      setErro((e as Error).message)
+    } finally {
+      setSalvandoToggle(false)
+    }
+  }
+
   async function alternar(campo: 'atendimentoAutomatico' | 'cadastroAutomatico') {
     if (!assistente) return
     setSalvandoToggle(true)
@@ -169,6 +183,12 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
           </button>
           <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar} disabled={carregando}>Desconectar</button>
         </div>
+        {assistente.atendimentoAutomatico && assistente.configuracao && !assistente.configuracao.responderContatosNovos && (
+          <div className="pl-alert" role="status" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }} data-aviso-so-campanha>
+            <span style={{ flex: '1 1 260px' }}><b>O robô só responde quem vem de anúncio ou usa uma frase de campanha.</b> Contato novo que chama direto (ex.: achou o número no Instagram) entra no CRM, mas fica sem resposta automática.</span>
+            <button type="button" className="pl-btn pl-btn-primary" onClick={responderTodosNovos} disabled={salvandoToggle} data-responder-todos-novos>Responder todos os contatos novos</button>
+          </div>
+        )}
         {erro && <div className="pl-alert pl-alert-error" style={{ width: '100%' }}>{erro}</div>}
       </div>
     )

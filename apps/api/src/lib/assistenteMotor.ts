@@ -427,7 +427,11 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
     }
 
     if (!origem && !a.cadastroAutomatico) return null
-    const ignorado = await tx.assistenteContatoIgnorado.findUnique({ where: { assistenteId_numero: { assistenteId: a.id, numero: m.numero } } })
+    const marcado = await tx.assistenteContatoIgnorado.findUnique({ where: { assistenteId_numero: { assistenteId: a.id, numero: m.numero } } })
+    // "Conversa pessoal" de mais de 90 dias e sem troca recente (origem CONTATO_NOVO confirmou pelo histórico): entra como novo.
+    const esquecido = !!marcado && origem === 'CONTATO_NOVO' && pessoalAntigo(marcado, m.instanteMs ?? Date.now())
+    if (esquecido) await tx.assistenteContatoIgnorado.delete({ where: { id: marcado!.id } })
+    const ignorado = esquecido ? null : marcado
     // "Não é lead" marcado pelo vendedor nunca entra. Conversa pessoal (o
     // vendedor escreveu primeiro) só vira lead por sinal forte: anúncio,
     // frase de campanha ou falou em compra. Lead perdido que volta a chamar
@@ -919,22 +923,40 @@ function dadosDoPasso(passo: PassoRoteiro) {
 // histórico do servidor além da própria mensagem. Se o servidor não
 // responder, assume que NÃO é novo — melhor perder um lead do que o
 // assistente responder um amigo/cliente antigo do vendedor.
+// Sem conversa com a loja há este tempo, quem escreve volta a contar como contato novo (vira lead e o robô
+// responde). Antes, qualquer conversa antiga — de anos atrás — bloqueava para sempre.
+const CONTATO_ESQUECIDO_MS = 90 * 86_400_000
+
+/** Marca de "conversa pessoal" antiga: não bloqueia mais, quem decide é o histórico recente. */
+export function pessoalAntigo(ignorado: { motivo: string; criadoEm: Date } | null, agoraMs = Date.now()): boolean {
+  return !!ignorado && ignorado.motivo === 'CONVERSA_PESSOAL' && agoraMs - ignorado.criadoEm.getTime() > CONTATO_ESQUECIDO_MS
+}
+
 async function contatoSemHistorico(a: AssistenteCompleto, m: MensagemWhatsapp): Promise<boolean> {
+  const agoraMs = m.instanteMs ?? Date.now()
+  const limite = new Date(agoraMs - CONTATO_ESQUECIDO_MS)
   const [anteriores, ignorado] = await Promise.all([
-    prisma.assistenteConversa.count({ where: { assistenteId: a.id, numeroContato: m.numero } }),
-    prisma.assistenteContatoIgnorado.findUnique({ where: { assistenteId_numero: { assistenteId: a.id, numero: m.numero } }, select: { id: true } }),
+    // Só conta conversa registrada aqui nos últimos 90 dias.
+    prisma.assistenteConversa.count({ where: { assistenteId: a.id, numeroContato: m.numero, ultimaMensagemEm: { gte: limite } } }),
+    prisma.assistenteContatoIgnorado.findUnique({ where: { assistenteId_numero: { assistenteId: a.id, numero: m.numero } }, select: { motivo: true, criadoEm: true } }),
   ])
-  if (anteriores > 0 || ignorado || !a.instancia) return false
+  if (anteriores > 0 || (ignorado && !pessoalAntigo(ignorado, agoraMs))) return false
+  if (!a.instancia) return true
   try {
     // "Oi" + "vi o anúncio" + foto chegam juntas: só conta como histórico o
     // que veio antes desta leva (mais de 3 min antes da mensagem).
     const { total, instantes } = await historicoDoContato(a.instancia, m.jid)
     if (!instantes.length) return total <= 1
-    const corte = (m.instanteMs ?? Date.now()) - 3 * 60_000
-    return total <= instantes.length && instantes.every(t => t >= corte)
+    const corte = agoraMs - 3 * 60_000
+    const antes = instantes.filter(t => t < corte)
+    if (!antes.length) return total <= instantes.length
+    // Já conversou, mas a última troca foi há mais de 90 dias: conta como contato novo.
+    return Math.max(...antes) < limite.getTime()
   } catch (e) {
-    logger.warn({ err: e }, 'assistente: histórico do contato indisponível — tratando como contato conhecido')
-    return false
+    // Antes: na falha, o contato era tratado como conhecido e o lead se perdia (nem cadastro nem resposta).
+    // Agora entra: se não for lead, o vendedor marca "não é lead" e o número não volta.
+    logger.warn({ err: e, numero: m.numero.slice(-4) }, 'assistente: histórico do contato indisponível — tratando como contato novo')
+    return true
   }
 }
 
