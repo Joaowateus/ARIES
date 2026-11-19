@@ -140,8 +140,10 @@ function inline(t: string): ReactNode {
 /** Atalho acessível de qualquer tela: abre o Pergunte ao ARIES numa gaveta. */
 export function AtalhoAries() {
   const [aberto, setAberto] = useState(false)
+  // Pergunta pronta (ex.: "Preparar com o ARIES" no painel do lead): abre a gaveta já perguntando.
+  const [pronta, setPronta] = useState<{ texto: string; n: number } | null>(null)
   useEffect(() => {
-    const abrir = () => setAberto(true)
+    const abrir = (e: Event) => { const q = (e as CustomEvent<{ pergunta?: string } | undefined>).detail?.pergunta; if (q) setPronta(x => ({ texto: q, n: (x?.n ?? 0) + 1 })); setAberto(true) }
     const tecla = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); setAberto(a => !a) } if (e.key === 'Escape') setAberto(false) }
     window.addEventListener('ar-abrir-pergunte', abrir); window.addEventListener('keydown', tecla)
     return () => { window.removeEventListener('ar-abrir-pergunte', abrir); window.removeEventListener('keydown', tecla) }
@@ -159,7 +161,7 @@ export function AtalhoAries() {
             <b>Pergunte ao ARIES</b>
             <div style={{ display: 'flex', gap: 6 }}><Link className="pl-btn" href="/pro-labore/pergunte" onClick={() => setAberto(false)}>Abrir a aba</Link><button type="button" className="pl-btn" onClick={() => setAberto(false)} aria-label="Fechar">Fechar</button></div>
           </div>
-          <div className="ar-gaveta-corpo"><PergunteChat compacto /></div>
+          <div className="ar-gaveta-corpo"><PergunteChat key={pronta?.n ?? 0} compacto inicial={pronta?.texto} /></div>
         </div>
       )}
     </>

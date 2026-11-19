@@ -25,3 +25,15 @@ test('contarFollows soma hoje e atrasados sem contar o futuro', () => {
   assert.deepEqual(contarFollows(fs, agora), { hoje: 2, atrasados: 3 })
   assert.deepEqual(contarFollows([], agora), { hoje: 0, atrasados: 0 })
 })
+
+import { PERFIS_CLIENTE, perfilClienteSchema } from '../src/lib/perfilCliente'
+
+test('perfil do cliente aceita os 4 tipos, null para limpar e ausente para não mexer', () => {
+  for (const p of PERFIS_CLIENTE) assert.equal(perfilClienteSchema.parse(p), p)
+  assert.equal(perfilClienteSchema.parse(null), null)
+  assert.equal(perfilClienteSchema.parse(undefined), undefined)
+})
+
+test('perfil do cliente recusa valor fora da lista', () => {
+  for (const v of ['CALMO', 'indeciso', '', 3]) assert.equal(perfilClienteSchema.safeParse(v).success, false)
+})

@@ -5625,3 +5625,18 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
   .pn2-ficha { grid-template-columns: 1fr; }
 }
 .qj-card .qj-acoes { position: static; padding: 6px 0 0; margin-top: 4px; background: none; border-top: 1px solid var(--pl-border); }
+
+/* Bloco F · perfil do cliente, preparar com o ARIES e Modo guiado */
+.pn2-perfil { display: flex; flex-direction: column; gap: 6px; }
+.pn2-perfil-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pn2-perfil-rot { font-size: 12px; color: var(--pl-ink-muted); }
+.pn2-perfil-seg button { padding: 4px 9px; font-size: 12px; }
+.pn2-perfil-seg button:disabled { cursor: not-allowed; opacity: .7; }
+.pn2-perfil-dica { font-size: 12.5px; color: var(--pl-ink-2); padding-left: 2px; }
+.pn2-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pn2-prompts .pl-btn { justify-content: center; font-size: 12.5px; }
+.fn-mais-cab { width: 34px; padding: 0; justify-content: center; }
+.fn-pop-dir { left: auto; right: 0; }
+.fn-alternar { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px; color: var(--pl-ink-1); }
+.fn-alternar input { width: 16px; height: 16px; margin-top: 2px; flex: none; }
+.fn-alternar small { color: var(--pl-ink-muted); font-size: 12px; line-height: 1.4; }

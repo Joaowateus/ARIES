@@ -1,7 +1,7 @@
 // Preferências de quem está usando (dono ou alguém da equipe), guardadas no
 // servidor pra valerem em qualquer aparelho. Hoje: a formatação padrão das
 // ideias dos mapas mentais e se tudo que a pessoa escolhe no painel de texto
-// vira o padrão automaticamente.
+// vira o padrão automaticamente. E o Modo guiado do Funil.
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
@@ -27,6 +27,8 @@ const estiloSchema = z.object({
 const prefSchema = z.object({
   estiloMapa: estiloSchema.nullable().optional(),
   padraoAutomatico: z.boolean().nullable().optional(),
+  // Funil (19/11): Modo guiado (dicas, pergunta da coluna e "o que fazer" no card). Sem valor = padrão do papel.
+  modoGuiado: z.boolean().nullable().optional(),
 }).strict()
 
 router.get('/preferencias', requireProLaboreAuth, async (req: Request, res: Response) => {

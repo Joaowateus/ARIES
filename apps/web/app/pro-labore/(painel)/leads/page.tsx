@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { QuadroJornada, calorDe, faseDaUrl, pendencias, type FaseFunil } from './_jornada/QuadroJornada'
 import { BarraFerramentas, CabecalhoFunil, DicaFunil, FaixaNumeros, FILTROS_VAZIOS, periodoMes, useLenteCrm, type Filtros } from './_topo/TopoFunil'
 import { useMetricas } from '../_metricas/Metricas'
+import { useModoGuiado } from './_topo/modoGuiado'
+import { MenuFunil } from './_topo/TopoFunil'
 import { CustosPorEtapa } from './_metricas/CustosPorEtapa'
 import { createPortal } from 'react-dom'
 import { proLaboreApi, metricasApi, type ErroApi, type EtapaJornada, type PremissasJornada, type Temperatura, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
@@ -215,6 +217,8 @@ export default function ProLaboreLeadsPage() {
   const [soPendencia, setSoPendencia] = useState(false)
   const [selecionando, setSelecionando] = useState(false)
   const [lente, recarregarLente] = useLenteCrm()
+  // Modo guiado (por pessoa): dica do quadro, pergunta da coluna e "o que fazer" no card.
+  const [guiado, setGuiado] = useModoGuiado(usuario?.papel)
   const [periodoAgora] = useState(periodoMes)
   const leiturasTopo = useMetricas(['taxa_abordagem', 'leads_novos'], periodoAgora)
   // Follow (botão do card) e perda (o cliente vai para a Reativação).
@@ -924,7 +928,7 @@ export default function ProLaboreLeadsPage() {
   )
   return (
     <div className="crm" data-crm>
-      <CabecalhoFunil avisosMais={avisosMais} onMais={() => setMaisAberto(true)} onNovo={() => abrirNovoLead()} />
+      <CabecalhoFunil avisosMais={avisosMais} onMais={() => setMaisAberto(true)} onNovo={() => abrirNovoLead()} menu={<MenuFunil guiado={guiado} onGuiado={setGuiado} />} />
       {!loading && (
         <FaixaNumeros
           n={{ noFunil: totalFiltrado, oportunidade: stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0), parados: parados.length, followsHoje, followsAtrasados, taxaAbordagem: leiturasTopo.taxa_abordagem?.valor ?? null, leadsNovos: leiturasTopo.leads_novos?.valor ?? null }}
@@ -949,7 +953,7 @@ export default function ProLaboreLeadsPage() {
         onSelecionar={jornada10 ? () => setSelecionando(v => !v) : null}
         densidade={densidadeBotoes}
       />
-      <DicaFunil sempre={false} />
+      <DicaFunil sempre={guiado} />
 
       {maisAberto && (
         <div className="pl-modal-backdrop" role="dialog" aria-modal="true" aria-label="Mais do CRM" onClick={() => setMaisAberto(false)} data-mais-crm>
@@ -1052,7 +1056,7 @@ export default function ProLaboreLeadsPage() {
               densidade={densidade}
               onFollow={setFollowAberto}
               onNovoNaEtapa={etapa => abrirNovoLead(etapa)}
-              guiado={false}
+              guiado={guiado}
             />
           ) : (
           <div className="pl-kanban">

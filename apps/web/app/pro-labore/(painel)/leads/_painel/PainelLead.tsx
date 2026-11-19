@@ -16,6 +16,7 @@ import { EtiquetasLead } from '../../assistente/_componentes/jornada'
 import { QualidadeLead } from './QualidadeLead'
 import { JornadaPainel } from './JornadaPainel'
 import { AtividadesLead } from './AtividadesLead'
+import { PerfilCliente, PrepararComAries } from './PerfilEPrompts'
 import { ModalLevantamento, NOME_TEMP, O_QUE_FAZER, calorDe, motoValida, nomeLimpo } from '../_jornada/QuadroJornada'
 import { estourou, tempoNaEtapa } from '../_jornada/tempo'
 
@@ -179,6 +180,7 @@ export function PainelLead(p: PainelLeadProps) {
             <span className={`pn2-temp qj-${temp.toLowerCase()}`} title={lead.calor?.motivo ?? ''}><i aria-hidden />{NOME_TEMP[temp]}{typeof lead.pontuacao === 'number' ? ` · ${lead.pontuacao} pts` : ''}</span>
             {aberto && <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máx. ${limite.max}` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(lead)} na etapa</span>}
           </div>
+          {aberto && <PerfilCliente key={lead.id} lead={lead} podeEscrever={podeEscrever} onMudou={() => p.onJornadaMudou?.()} />}
           {p.extraCabecalho}
           {aberto && oQueFazer && <div className={`pn2-fazer ${pend.length ? 'pend' : ''}`} data-o-que-fazer><b>O que fazer:</b> {oQueFazer}</div>}
           {lead.vendaId && <div className="pl-pn-venda">✓ Convertido em venda</div>}
@@ -252,6 +254,7 @@ export function PainelLead(p: PainelLeadProps) {
                   )}
                 </dl>
               </section>
+              {aberto && <PrepararComAries lead={lead} />}
               {p.extraResumo}
               {etapa && <JornadaPainel lead={lead} onMudou={() => p.onJornadaMudou?.()} parte="resumo" detalhe={d} recarregar={recarregar} />}
             </>

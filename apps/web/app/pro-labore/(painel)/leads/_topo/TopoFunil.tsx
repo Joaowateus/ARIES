@@ -63,6 +63,25 @@ export function CabecalhoFunil({ avisosMais, onMais, onNovo, menu }: { avisosMai
   )
 }
 
+/** "⋯" do cabeçalho do Funil: o Modo guiado (também em Configurações). */
+export function MenuFunil({ guiado, onGuiado }: { guiado: boolean; onGuiado: (v: boolean) => void }) {
+  const [aberto, setAberto] = useState(false)
+  const ref = useFecharFora(aberto, () => setAberto(false))
+  return (
+    <div className="fn-pop-wrap" ref={ref}>
+      <button type="button" className="pl-btn fn-mais-cab" aria-label="Opções do Funil" aria-expanded={aberto} onClick={() => setAberto(v => !v)} data-menu-funil>⋯</button>
+      {aberto && (
+        <div className="fn-pop fn-pop-dir" role="menu">
+          <label className="fn-alternar" data-alternar-guiado>
+            <input type="checkbox" role="menuitemcheckbox" aria-checked={guiado} checked={guiado} onChange={e => onGuiado(e.target.checked)} />
+            <span><b>Modo guiado</b><br /><small>Mostra a dica do quadro, a pergunta de cada coluna e o que fazer em cada card. O guia depois de mover não some sozinho.</small></span>
+          </label>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- 2. Números ---------------------------------------------------------
 export interface NumerosFunil {
   noFunil: number

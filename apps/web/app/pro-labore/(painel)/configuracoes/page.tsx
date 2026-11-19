@@ -1,5 +1,6 @@
 'use client'
 
+import { useModoGuiado } from '../leads/_topo/modoGuiado'
 import { useEffect, useState } from 'react'
 import { temAcesso, proLaboreApi, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
@@ -195,11 +196,14 @@ export default function ProLaboreConfiguracoesPage() {
 
   if (!isDono) {
     return (
+      <>
+      <SeuJeito />
       <div className="pl-empty pl-card">
         <div className="pl-emoji">🔒</div>
         <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Seu acesso não inclui essa área</h3>
         <p style={{ marginTop: 6 }}>Teto de pró-labore e meta anual são definidos pelo responsável pela conta.</p>
       </div>
+      </>
     )
   }
 
@@ -207,6 +211,7 @@ export default function ProLaboreConfiguracoesPage() {
     <div>
       <PageHeader eyebrow="Sistema" title="Configurações" subtitle="O Aries no WhatsApp, teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
 
+      <SeuJeito />
       <CopiaSeguranca />
       <MigracaoJornada />
       <RodizioLeads />
@@ -406,6 +411,21 @@ export default function ProLaboreConfiguracoesPage() {
       </form>
 
       <div style={{ marginTop: 20 }}><ImportacaoNeon /></div>
+    </div>
+  )
+}
+
+/** Preferências de quem está usando (19/11): o Modo guiado do Funil. */
+function SeuJeito() {
+  const { usuario } = useProLaboreAuth()
+  const [guiado, setGuiado] = useModoGuiado(usuario?.papel)
+  return (
+    <div className="pl-card" style={{ marginBottom: 20 }} data-seu-jeito>
+      <div className="pl-card-head"><div><div className="pl-card-title">Seu jeito de usar</div><div className="pl-card-sub">Vale só para você, em qualquer aparelho.</div></div></div>
+      <label className="fn-alternar" data-config-guiado>
+        <input type="checkbox" checked={guiado} onChange={e => setGuiado(e.target.checked)} />
+        <span><b>Modo guiado no Funil</b><br /><small>Mostra a dica do quadro, a pergunta de cada coluna e o que fazer em cada card. Sem isso, essas orientações ficam só no painel do lead.</small></span>
+      </label>
     </div>
   )
 }
