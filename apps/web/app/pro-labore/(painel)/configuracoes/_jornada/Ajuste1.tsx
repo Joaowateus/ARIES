@@ -1,48 +1,10 @@
 'use client'
 
-// Ajuste 1 · Configurações: blocos do Daily (ordem, tempo e ligado; só o dono)
-// e o teste do Ajuste 1 calculado na produção.
-import { useEffect, useState } from 'react'
-import { ITENS_AJUSTE1, dailyApi, painelDonoApi, type AceiteAjuste1, type BlocoDaily } from '@/lib/proLaboreApi'
+// Ajuste 1 · Configurações: o teste do Ajuste 1 calculado na produção.
+// (Os blocos do Daily saíram com a aba Daily em 19/11.)
+import { useState } from 'react'
+import { ITENS_AJUSTE1, painelDonoApi, type AceiteAjuste1 } from '@/lib/proLaboreApi'
 import { pl } from '@/lib/format'
-
-type Bloco = { chave: BlocoDaily; nome: string; minutos: number; ligado: boolean }
-
-export function ConfigDaily() {
-  const [blocos, setBlocos] = useState<Bloco[] | null>(null)
-  const [just, setJust] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-  useEffect(() => { dailyApi.config().then(r => setBlocos(r.blocos)).catch(() => setBlocos(null)) }, [])
-  if (!blocos) return null
-  const mover = (i: number, d: -1 | 1) => setBlocos(bs => { if (!bs) return bs; const j = i + d; if (j < 0 || j >= bs.length) return bs; const c = [...bs]; [c[i], c[j]] = [c[j], c[i]]; return c })
-  const total = blocos.filter(b => b.ligado).reduce((t, b) => t + b.minutos, 0)
-  async function salvar() {
-    if (just.trim().length < 5) { setMsg('Escreva o motivo (fica no histórico).'); return }
-    try { await dailyApi.salvarConfig(blocos!.map(b => ({ chave: b.chave, minutos: b.minutos, ligado: b.ligado })), just.trim()); setMsg('Blocos do Daily salvos.'); setJust('') } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível salvar') }
-  }
-  return (
-    <section className="pl-card" id="config-daily" style={{ marginBottom: 20 }} data-config-daily>
-      <div className="pl-card-head"><div>
-        <div className="pl-card-title">Daily: blocos, ordem e tempo</div>
-        <div className="pl-card-sub">A reunião da manhã no Hoje. Só você muda; cada mudança fica no histórico. Total ligado: {total} min.</div>
-      </div></div>
-      <table className="pl-table"><thead><tr><th>Ordem</th><th>Bloco</th><th>Minutos</th><th>Ligado</th></tr></thead>
-        <tbody>{blocos.map((b, i) => (
-          <tr key={b.chave} data-bloco-config={b.chave}>
-            <td style={{ whiteSpace: 'nowrap' }}><button type="button" className="pl-btn pl-btn-ghost" onClick={() => mover(i, -1)} aria-label={`Subir ${b.nome}`}>↑</button><button type="button" className="pl-btn pl-btn-ghost" onClick={() => mover(i, 1)} aria-label={`Descer ${b.nome}`}>↓</button></td>
-            <td>{b.nome}</td>
-            <td><input className="pl-input" type="number" min={1} max={30} value={b.minutos} onChange={e => setBlocos(bs => bs!.map(x => (x.chave === b.chave ? { ...x, minutos: Number(e.target.value) || 1 } : x)))} style={{ width: 80 }} aria-label={`Minutos de ${b.nome}`} /></td>
-            <td><input type="checkbox" checked={b.ligado} onChange={e => setBlocos(bs => bs!.map(x => (x.chave === b.chave ? { ...x, ligado: e.target.checked } : x)))} aria-label={`Ligar ${b.nome}`} /></td>
-          </tr>
-        ))}</tbody></table>
-      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        <input className="pl-input" style={{ flex: 1, minWidth: 220 }} placeholder="Motivo da mudança (obrigatório)" value={just} onChange={e => setJust(e.target.value)} aria-label="Motivo" />
-        <button type="button" className="pl-btn pl-btn-primary" onClick={() => void salvar()} data-salvar-daily>Salvar</button>
-      </div>
-      {msg && <p className="pl-hint" role="status">{msg}</p>}
-    </section>
-  )
-}
 
 function Selo({ passa }: { passa: boolean | null }) {
   if (passa == null) return <span className="pl-hint">sem casos ainda</span>

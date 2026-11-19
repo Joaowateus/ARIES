@@ -19,7 +19,7 @@ import { Detectores } from './_jornada/Detectores'
 import { AceitePdf03 } from './_jornada/AceitePdf03'
 import { TelasNovas } from './_jornada/TelasNovas'
 import { AreasOnda4 } from './_jornada/AreasOnda4'
-import { AceiteAjuste1Card, ConfigDaily } from './_jornada/Ajuste1'
+import { AceiteAjuste1Card } from './_jornada/Ajuste1'
 import { BibliotecaFrases, ConfigExpediente } from './_jornada/HojeConfig'
 import { MatrizAcoes } from './_jornada/MatrizAcoes'
 import { AceitePdf02 } from './_jornada/AceitePdf02'
@@ -216,7 +216,6 @@ export default function ProLaboreConfiguracoesPage() {
       <Detectores podeEditar={usuario?.papel === 'DONO'} />
       <MatrizAcoes />
       {usuario?.papel === 'DONO' && <AreasOnda4 />}
-      {usuario?.papel === 'DONO' && <ConfigDaily />}
       {usuario?.papel === 'DONO' && <ConfigExpediente />}
       {usuario?.papel === 'DONO' && <BibliotecaFrases />}
       {usuario?.papel === 'DONO' && <AceiteAjuste1Card />}

@@ -5,7 +5,7 @@
 // aprovada e a Lente do ARIES; o supervisor ganha o quadro da equipe e o dono,
 // o painel por área. Nada aqui executa sozinho: cada item leva à ação.
 import { Suspense, useCallback, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { bussolaApi, proLaboreApi, telasApi, type BussolaHoje, type HojeDados, type PainelHoje, type ItemFilaHoje, type LinhaQuadro } from '@/lib/proLaboreApi'
 import { BussolaPorArea, ResumoCurto } from './Bussola'
@@ -13,17 +13,15 @@ import { montarKpis } from './PainelHoje'
 import { CartaoFrase, CartaoGraficos, GavetaLente, HeroHoje, SemanaHoje } from './HojeNovo'
 import { Detalhes, TelaVazia, fmtValor, useTelas } from '../_padrao/Padrao'
 import { FraseDoDono } from './FraseDoDono'
-import { Daily } from './Daily'
 import { PainelDoDono } from './PainelDoDono'
 import { DashboardAntigo } from '../_dashboard/DashboardAntigo'
 import { pl } from '@/lib/format'
 import { InicioAries } from './InicioAries'
 
-// Ajuste 1: o Hoje do dono (e do supervisor) tem três sub-abas: Hoje · Daily · Painel.
-type Sub = 'hoje' | 'daily' | 'painel'
-const SUBS: Array<{ valor: Sub; rotulo: string }> = [{ valor: 'hoje', rotulo: 'Hoje' }, { valor: 'daily', rotulo: 'Daily' }, { valor: 'painel', rotulo: 'Painel' }]
+// O Início do dono (e do supervisor) tem duas sub-abas no menu lateral: Início · Painel (o Daily saiu em 19/11).
+type Sub = 'hoje' | 'painel'
 
-// A sub-aba vem do endereço (?sub=daily | ?sub=painel), então os itens Início, Daily e Painel do menu
+// A sub-aba vem do endereço (?sub=painel), então os itens Início e Painel do menu
 // trocam a tela mesmo quando a pessoa já está em /pro-labore/hoje.
 export default function HojePage() {
   return <Suspense fallback={null}><HojeComSubabas /></Suspense>
@@ -31,24 +29,16 @@ export default function HojePage() {
 
 function HojeComSubabas() {
   const params = useSearchParams()
-  const router = useRouter()
   const q = params.get('sub')
-  const sub: Sub = q === 'daily' || q === 'painel' ? q : 'hoje'
+  const sub: Sub = q === 'painel' ? 'painel' : 'hoje'
   const [papel, setPapel] = useState<string | null>(null)
   useEffect(() => { try { const u = JSON.parse(localStorage.getItem('pro_labore_usuario') ?? 'null') as { papel?: string } | null; if (u?.papel) setPapel(u.papel) } catch { /* sem papel */ } }, [])
   const comSubs = papel === 'DONO' || papel === 'SUPERVISOR'
-  function trocar(s: Sub) { router.replace(s === 'hoje' ? '/pro-labore/hoje' : `/pro-labore/hoje?sub=${s}`, { scroll: false }) }
   // Tela inicial do ARIES: é a sub-aba Início, dentro da moldura do sistema (menu lateral à vista).
   const mostrarInicio = sub === 'hoje' || !comSubs
   return (
     <div data-hoje-subabas={comSubs ? sub : undefined}>
-      {comSubs && (
-        <div className="pl-sv-tabs" role="tablist" aria-label="Partes do Início" style={{ marginBottom: 12 }} data-subabas-hoje>
-          {SUBS.map(x => <button key={x.valor} type="button" role="tab" aria-selected={sub === x.valor} className={sub === x.valor ? 'ativo' : ''} onClick={() => trocar(x.valor)} data-subaba={x.valor}>{x.valor === 'hoje' ? 'Início' : x.rotulo}</button>)}
-        </div>
-      )}
       {papel && mostrarInicio && <InicioAries embutida />}
-      {comSubs && sub === 'daily' && <Daily papel={papel!} />}
       {comSubs && sub === 'painel' && <PainelComGraficos papel={papel!} />}
     </div>
   )

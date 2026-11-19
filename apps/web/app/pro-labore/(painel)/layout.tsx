@@ -126,7 +126,7 @@ const CHAVE_SIDEBAR_COLAPSADA = 'pl_sidebar_colapsada'
 const iniciaisDe = (nome: string) => nome.trim().split(/\s+/).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || '?'
 const CHAVE_GRUPOS_COLAPSADOS = 'pl_sidebar_grupos_colapsados'
 
-// A sub-aba do Início (?sub=daily | ?sub=painel) define qual item do menu fica aceso; useSearchParams
+// A sub-aba do Início (?sub=painel) define qual item do menu fica aceso; useSearchParams
 // pede um Suspense em volta.
 export default function ProLaborePainelLayout({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}><PainelLayout>{children}</PainelLayout></Suspense>
@@ -316,7 +316,7 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
   const itensVisiveis = grupos.flatMap(g => g.items)
   const paginasVisiveis = itensVisiveis.flatMap(paginasDo)
   const itemDoMenuAtual = itemAtual ? itensVisiveis.find(i => paginasDo(i).some(p => p.href === itemAtual.href)) : undefined
-  const abaAtual = nova ? (pathname === '/pro-labore/hoje' && (subInicio === 'daily' || subInicio === 'painel') ? abaPorChave(subInicio) : abaDaRota(pathname)) : null
+  const abaAtual = nova ? (pathname === '/pro-labore/hoje' && subInicio === 'painel' ? abaPorChave('painel') : abaDaRota(pathname)) : null
   const ativo = (item: NavItem) => (nova ? !!abaAtual && item.href === abaAtual.href : item === itemDoMenuAtual)
   const paginaAtual = itemAtual && bate(pathname, itemAtual.href) ? paginasVisiveis.find(p => p.href === itemAtual.href) : undefined
   const grupoAtual = nova ? abaAtual?.grupo ?? null : grupos.find(g => g.items.includes(itemDoMenuAtual as NavItem))?.label ?? null
