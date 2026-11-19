@@ -7,6 +7,7 @@
 //    completando o histórico de 90 dias em blocos que se ajustam ao tempo de
 //    resposta da Meta, pra caber no tempo da função serverless.
 // 3. Estrutura (status, orçamento, público, criativo) com o tempo que sobrar.
+import { registrarSincronizacao } from './centralConhecimento/rotinas'
 import { prisma } from './prisma'
 import { Prisma } from '@prisma/client'
 import { buscarEstrutura, buscarInsightsDiarios, buscarTotaisDiariosConta, erroDeDemora, erroDeToken, ErroMetaAds, type InsightAnuncioDia, type TotaisContaDia } from './metaAds'
@@ -172,10 +173,13 @@ export async function sincronizarTrafego(conta: ContaSync, opcoes: { forcarEstru
       data: { ultimaSincronizacaoEm: new Date(), ultimoErroSync: null, historicoDesde: comoData(desdeGuardado) },
     })
     await registrarLiberacao(conta.usuarioId, new Date(), 'TRAFEGO').catch(() => false)
+    // PDF 07: evento ao fim da sincronização — a Central remonta as campanhas na próxima rodada.
+    await registrarSincronizacao(conta.usuarioId, 'meta')
     return { diasAtualizados: dias, historicoCompleto: desdeGuardado <= limiteHistorico, linhas: totalLinhas, diasTotais: totais.dias }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Falha ao sincronizar com o Gerenciador de Anúncios'
     await prisma.trafegoConta.update({ where: { id: conta.id }, data: { ultimoErroSync: msg } })
+    await registrarSincronizacao(conta.usuarioId, 'meta', msg)
     if (e instanceof ErroMetaAds && causaDoErroMeta(e.codigo, e.original) === 'APP_BLOQUEADO') await registrarBloqueio(conta.usuarioId, 'TRAFEGO', e.original ?? msg).catch(() => {})
     if (erroDeToken(e)) throw new ErroMetaAds(msg, 190)
     throw e

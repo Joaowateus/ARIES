@@ -106,6 +106,9 @@ const editarSchema = z.object({
   modelo: z.string().trim().max(80).nullable().optional(),
   etapa: z.enum(ETAPAS_CONHECIMENTO).nullable().optional(),
   status: z.enum(STATUS_CONHECIMENTO).optional(),
+  // PDF 07: data para revisar o verbete e fontes ligadas (ficha do dicionário, moto, processo).
+  validadeAte: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).nullable().optional(),
+  fontesLigadas: z.array(z.string().trim().min(2).max(80)).max(10).optional(),
 })
 
 router.patch('/assistente/conhecimento/:id', ...editar, async (req: Request, res: Response) => {
@@ -117,7 +120,7 @@ router.patch('/assistente/conhecimento/:id', ...editar, async (req: Request, res
   const d = p.data
   const gestao = daGestao(req)
   // O que muda a fala do robô com os clientes é da gestão.
-  if (!gestao && (d.status !== undefined || d.resposta !== undefined || atual.status === 'ATIVO')) {
+  if (!gestao && (d.status !== undefined || d.resposta !== undefined || d.validadeAte !== undefined || d.fontesLigadas !== undefined || atual.status === 'ATIVO')) {
     erro(res, 403, 'Aprovar, arquivar ou mudar uma resposta em uso é com a gestão. Você pode sugerir um rascunho.')
     return
   }
@@ -140,6 +143,8 @@ router.patch('/assistente/conhecimento/:id', ...editar, async (req: Request, res
       ...(d.etapa !== undefined && { etapa: d.etapa }),
       ...(d.status && { status: d.status }),
       ...(d.status === 'ATIVO' && atual.status !== 'ATIVO' && { aprovadoPor: autor(req), aprovadoEm: new Date() }),
+      ...(d.validadeAte !== undefined && { validadeAte: d.validadeAte ? new Date(d.validadeAte.length === 10 ? `${d.validadeAte}T12:00:00-03:00` : d.validadeAte) : null }),
+      ...(d.fontesLigadas && { fontesLigadas: d.fontesLigadas }),
     },
   })
   res.json(item)
@@ -174,7 +179,8 @@ router.post('/assistente/conhecimento/:id/juntar', ...editar, async (req: Reques
   // A caixa "Outras dúvidas" e os modelos prontos ficam (zerados/arquivados); o resto sai.
   if (origem.chave === CHAVE_OUTRAS) await prisma.assistenteConhecimento.update({ where: { id: origem.id }, data: { ocorrencias: 0 } })
   else if (origem.origem === 'MODELO_PRONTO') await prisma.assistenteConhecimento.update({ where: { id: origem.id }, data: { status: 'ARQUIVADO', ocorrencias: 0 } })
-  else await prisma.assistenteConhecimento.delete({ where: { id: origem.id } })
+  // PDF 07 (P11): o assunto juntado fica arquivado, com o histórico de versões; nada é apagado.
+  else await prisma.assistenteConhecimento.update({ where: { id: origem.id }, data: { status: 'ARQUIVADO', ocorrencias: 0 } })
   res.json({ ok: true, destinoId: destino.id, ocorrencias })
 })
 
@@ -199,14 +205,10 @@ router.delete('/assistente/conhecimento/:id', ...editar, async (req: Request, re
   const usuarioId = req.proLaboreUser!.sub
   const atual = await prisma.assistenteConhecimento.findFirst({ where: { id: String(req.params.id), usuarioId } })
   if (!atual) { erro(res, 404, 'Item não encontrado'); return }
-  // Modelo pronto e a caixa de entrada não voltariam certos se apagados: ficam arquivados.
-  if (atual.origem === 'MODELO_PRONTO' || atual.chave === CHAVE_OUTRAS) {
-    await prisma.assistenteConhecimento.update({ where: { id: atual.id }, data: { status: 'ARQUIVADO' } })
-    res.json({ arquivado: true })
-    return
-  }
-  await prisma.assistenteConhecimento.delete({ where: { id: atual.id } })
-  res.json({ ok: true })
+  // PDF 07 (P11): excluir da base é arquivar. O verbete sai do robô e das respostas, mas o
+  // histórico de versões fica (Central de Conhecimento) e pode voltar a valer.
+  await prisma.assistenteConhecimento.update({ where: { id: atual.id }, data: { status: 'ARQUIVADO' } })
+  res.json({ ok: true, arquivado: true })
 })
 
 // "Analisar conversas agora": não espera o cron (nem a meia hora de folga).

@@ -17,11 +17,11 @@ function Conteudo() {
         <PergunteChat inicial={q} />
         <Detalhes titulo="Como o ARIES responde">
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li>Sobre a sua operação (leads, conversas, vendas, metas, estoque, atividades, recomendações), o ARIES consulta o sistema na hora e não inventa números: se não encontrar, diz que não encontrou.</li>
-            <li>Sobre qualquer outro assunto, responde como um chat e busca na internet quando precisa de algo atual, mostrando as fontes.</li>
+            <li>Sobre a sua operação (leads, vendas, metas, estoque, atividades, conhecimento comercial, recomendações), o ARIES consulta a Central de Conhecimento na hora e não inventa números: se não encontrar, diz que não sabe e onde procurar.</li>
+            <li>Cada resposta mostra de onde veio (fonte, tipo de dado, hora da última atualização e o link da tela) e avisa quando a fonte pode estar desatualizada.</li>
+            <li>A IA nunca vê nem calcula valores em R$, custos, margens, CPF ou data de nascimento: ela escreve com espaços reservados e o sistema preenche os valores reais. O texto das conversas, as notas da negociação e as anotações não vão para a IA.</li>
             <li>Você só recebe o que já pode ver nas suas telas. O vendedor e o SDR veem só os próprios clientes e vendas; a equipe aparece só como média, sem nomes.</li>
-            <li>Quando o ARIES abre um CPF, a leitura fica registrada no controle de acesso a dados sensíveis.</li>
-            <li>A conversa lembra as últimas perguntas, então dá para continuar o assunto.</li>
+            <li>Sobre qualquer outro assunto, responde como um chat e busca na internet quando precisa de algo atual, mostrando as fontes. Achou uma resposta errada? Marque: ela vai para o dono revisar.</li>
           </ul>
         </Detalhes>
       </div>

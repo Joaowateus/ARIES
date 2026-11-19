@@ -27,7 +27,7 @@ export type Melhor = 'MAIOR' | 'MENOR' | 'NEUTRO'
 export type Papel = 'DONO' | 'SUPERVISOR' | 'SDR' | 'VENDEDOR' | 'SOCIAL_MEDIA' | 'TRAFEGO' | 'FINANCEIRO'
 export interface Ficha {
   chave: string
-  lote: 1 | 2 | 3 | 4 | 5
+  lote: 1 | 2 | 3 | 4 | 5 | 6
   // PDF 04: ponto de extensão (a fonte ainda não existe no sistema); a tela mostra o aviso.
   naoDefinido?: string
   nome: string
@@ -46,6 +46,8 @@ export interface Ficha {
   quemVe: Papel[]
   // Faixas manuais aprovadas pelo dono (sem isso: pelo padrão da loja).
   faixas?: { bom: number; critico: number } | null
+  // PDF 07 · fonte única (P2): as palavras que levam a esta ficha vivem aqui, não no código do Pergunte.
+  sinonimos?: string[]
 }
 
 const TODOS: Papel[] = ['DONO', 'SUPERVISOR', 'SDR', 'VENDEDOR']
@@ -61,7 +63,7 @@ const JAN = 'Dia, semana, mês ou período escolhido'
 // O PDF não define o responsável de cada métrica: valores iniciais, ajustáveis pelo dono (nova versão da ficha).
 const RESP_COM = 'Supervisor comercial', RESP_DONO = 'Dono', RESP_SDR = 'SDR', RESP_VEND = 'Vendedor'
 
-const f = (chave: string, lote: 1 | 2 | 3 | 4 | 5, nome: string, definicao: string, formula: string, fonte: string, unidade: Unidade, melhor: Melhor, aditiva: boolean, responsavel: string, quemVe: Papel[], extra: Partial<Ficha> = {}): Ficha =>
+const f = (chave: string, lote: 1 | 2 | 3 | 4 | 5 | 6, nome: string, definicao: string, formula: string, fonte: string, unidade: Unidade, melhor: Melhor, aditiva: boolean, responsavel: string, quemVe: Papel[], extra: Partial<Ficha> = {}): Ficha =>
   ({ chave, lote, nome, definicao, formula, fonte, janela: JAN, comparacao: COMP, unidade, melhor, aditiva, responsavel, quemVe, ...extra })
 
 export const FICHAS_PADRAO: Ficha[] = [
@@ -137,13 +139,79 @@ export const FICHAS_PADRAO: Ficha[] = [
   f('perda_por_etapa', 5, 'Perda por etapa', 'Quantos leads se perdem em cada etapa e por quê', 'Leads perdidos no período em cada etapa ÷ leads que chegaram à etapa no período (os 3 motivos mais frequentes no detalhe)', 'CRM', 'PCT', 'MENOR', false, RESP_COM, GESTAO),
   f('valores_por_etapa', 5, 'Valores por etapa', 'Oportunidade, pró-labore e comissão em jogo em cada etapa', 'Oportunidade = soma do valor dos leads que chegaram à etapa no período; previstos = leads abertos na etapa × conversão da etapa até a venda (180 dias) × média por venda (pró-labore ou comissão); comissão perdida = perdidos na etapa no período × a mesma conversão × comissão média', 'CRM e Vendas', 'BRL', 'NEUTRO', false, RESP_DONO, SO_DONO),
   f('comissoes_pagas', 5, 'Comissões pagas', 'Quanto foi pago aos vendedores em comissão', 'Soma dos pagamentos de comissão feitos no período, sem os cancelados', 'Vendas', 'BRL', 'NEUTRO', true, RESP_DONO, SO_DONO),
+  // Sexto lote — PDF 07 (Central de Conhecimento), aprovado pelo dono em 19/11/2026 (decisão D3).
+  f('dias_em_estoque', 6, 'Dias em estoque', 'Há quanto tempo as motos à venda estão na loja', 'Mediana dos dias desde a entrada das motos disponíveis ou reservadas, agora (o detalhe traz as 10 mais antigas)', 'Estoque', 'DIAS', 'MENOR', false, RESP_DONO, TODOS, { retrato: true, janela: 'Agora' }),
+  f('giro_estoque', 6, 'Giro do estoque', 'Quantas vezes o estoque foi vendido no período', 'Motos do estoque vendidas no período ÷ média de motos em estoque no início e no fim do período', 'Estoque e Vendas', 'X', 'MAIOR', false, RESP_DONO, GESTAO),
+  f('motos_paradas', 6, 'Motos paradas', 'Motos à venda há mais de 60 dias', 'Motos disponíveis ou reservadas com entrada há mais de 60 dias, agora (o limite pode mudar numa nova versão da ficha)', 'Estoque', 'QTD', 'MENOR', false, RESP_DONO, TODOS, { retrato: true, janela: 'Agora' }),
+  f('leads_por_campanha', 6, 'Leads por campanha', 'Quantos leads cada campanha de anúncio trouxe', 'Leads criados no período com campanha de origem registrada (por campanha no detalhe; o custo por lead fica na ficha Custo por lead)', 'Meta e CRM', 'QTD', 'MAIOR', true, RESP_DONO, ['DONO', 'TRAFEGO', 'SUPERVISOR']),
+  f('engajamento_posts', 6, 'Engajamento dos posts', 'Quanto o público interage com os posts', '(Curtidas + comentários + salvamentos + compartilhamentos) ÷ alcance dos posts publicados no período (o detalhe traz o alcance somado)', 'Instagram', 'PCT', 'MAIOR', false, 'Social media', DONO_SM),
+  f('conversas_sem_resposta_dia', 6, 'Conversas sem resposta no dia', 'Clientes que escreveram e ficaram sem resposta de uma pessoa da loja até o fim do dia', 'Conversas de lead com mensagem do cliente no dia e nenhuma resposta de pessoa da loja depois dela no mesmo dia (dias do período; só metadados das conversas)', 'WhatsApp', 'QTD', 'MENOR', true, RESP_COM, TODOS),
+  f('ocorrencias_abertas', 6, 'Ocorrências abertas', 'Ocorrências da equipe ainda não resolvidas', 'Ocorrências fora de Resolvida e Encerrada, agora (o detalhe traz a mediana de dias até resolver nos últimos 90 dias)', 'Ocorrências', 'QTD', 'MENOR', false, RESP_COM, GESTAO, { retrato: true, janela: 'Agora' }),
+  f('decisoes_daily_pendentes', 6, 'Decisões do Daily vencidas', 'Decisões do Daily com prazo vencido e atividades ainda não feitas', 'Decisões com prazo já passado e alguma atividade ligada pendente (ou nenhuma atividade criada), agora', 'Daily', 'QTD', 'MENOR', false, RESP_COM, GESTAO, { retrato: true, janela: 'Agora' }),
+  f('perguntas_sem_resposta', 6, 'Perguntas sem resposta', 'Perguntas ao ARIES que a Central não soube responder', 'Perguntas do Pergunte ao ARIES (tela e WhatsApp) respondidas com "não sei" no período', 'Central de Conhecimento', 'QTD', 'MENOR', true, RESP_DONO, GESTAO),
 ]
+
+// Palavras que levam a cada ficha no Pergunte (além do nome). Vieram do código do Pergunte (PDF 04)
+// e agora fazem parte da ficha: mudar um sinônimo é uma nova versão aprovada, como o resto.
+const SINONIMOS_PADRAO: Record<string, string[]> = {
+  leads_novos: ['leads novos', 'quantos leads', 'leads chegaram', 'leads entraram', 'entrada de leads', 'novos leads'],
+  tempo_primeira_resposta: ['tempo de resposta', 'primeira resposta', 'demora para responder', 'demorando para responder', 'tempo para responder'],
+  taxa_abordagem: ['abordagem', 'abordados'],
+  conversao_por_etapa: ['conversao por etapa', 'em qual etapa', 'qual etapa', 'funil'],
+  conversao_lead_venda: ['conversao', 'converte', 'convertendo'],
+  vendas: ['quantas vendas', 'vendas', 'vendi', 'vendemos', 'vendeu'],
+  faturamento: ['faturamento', 'faturou', 'faturei', 'faturamos'],
+  ticket_medio: ['ticket'],
+  leads_parados: ['parados', 'parado'],
+  atividades_atrasadas: ['atrasadas', 'atrasada', 'atividades atrasadas', 'tarefas atrasadas'],
+  aprovacao_credito: ['aprovacao', 'aprovando', 'aprova', 'credito aprovado'],
+  custo_por_lead: ['custo por lead', 'cpl', 'custo do lead'],
+  roas: ['roas', 'retorno do anuncio', 'retorno dos anuncios'],
+  pro_labore: ['pro-labore', 'pro labore', 'prolabore'],
+  previsao_fechamento: ['previsao', 'vai fechar', 'fechar o mes', 'bater a meta', 'meta do mes'],
+  tempo_na_etapa: ['tempo na etapa', 'quanto tempo fica'],
+  taxa_resposta: ['taxa de resposta', 'respondem'],
+  levantamentos_completos: ['levantamento', 'levantamentos'],
+  simulacao_vira_ficha: ['simulacao vira ficha', 'simulacoes viram'],
+  tempo_resposta_banco: ['resposta do banco', 'banco demora', 'bancos demoram', 'tempo do banco'],
+  tempo_ate_vendedor: ['tempo ate o vendedor', 'ate o vendedor'],
+  taxa_devolucao: ['devolucao', 'devolvidos', 'devolvem'],
+  objecoes_frequentes: ['objecao', 'objecoes'],
+  propostas_enviadas: ['propostas', 'proposta'],
+  visitas_agendadas: ['visitas agendadas', 'visitas marcadas', 'agendamentos'],
+  taxa_comparecimento: ['comparecimento', 'compareceram', 'vieram a loja'],
+  faltas_remarcacoes: ['faltas', 'remarcacoes', 'faltaram'],
+  conversao_visita: ['visita vira venda', 'conversao de visita'],
+  tempo_total_jornada: ['jornada', 'tempo total'],
+  faturamento_por_origem: ['por origem', 'de onde vem', 'origem das vendas'],
+  vendas_por_dia_necessarias: ['vendas por dia', 'quantas vendas por dia'],
+  clientes_esperando: ['esperando resposta', 'clientes esperando', 'quem esta esperando'],
+  leads_sem_primeira_resposta: ['sem resposta', 'sem primeira resposta'],
+  leads_passados: ['passados ao vendedor', 'passei ao vendedor', 'passagens'],
+  fichas_aguardando_banco: ['fichas aguardando', 'fichas paradas', 'fichas sem resposta'],
+  gasto_anuncio: ['gasto com anuncio', 'gastei em anuncio', 'gasto em anuncios', 'verba'],
+  comissoes_a_pagar: ['comissoes a pagar', 'comissao a pagar'],
+  saidas_financeiro: ['saidas', 'saiu do caixa', 'gastos do financeiro'],
+  posts_publicados: ['posts publicados', 'posts', 'publicacoes'],
+  leads_dos_posts: ['leads dos posts', 'leads do instagram'],
+  vendas_por_post: ['vendas por post'],
+  dias_em_estoque: ['dias em estoque', 'tempo de estoque', 'tempo no estoque', 'idade do estoque'],
+  giro_estoque: ['giro', 'giro do estoque', 'girando'],
+  motos_paradas: ['motos paradas', 'moto parada', 'encalhada', 'encalhadas', 'estoque parado'],
+  leads_por_campanha: ['leads por campanha', 'qual campanha', 'campanha trouxe', 'campanhas'],
+  engajamento_posts: ['engajamento', 'interacao', 'alcance dos posts'],
+  conversas_sem_resposta_dia: ['ficaram sem resposta', 'sem resposta no dia', 'conversas sem resposta'],
+  ocorrencias_abertas: ['ocorrencias', 'ocorrencia aberta', 'ocorrencias abertas'],
+  decisoes_daily_pendentes: ['decisoes do daily', 'decisoes pendentes', 'decisoes vencidas', 'daily'],
+  perguntas_sem_resposta: ['perguntas sem resposta', 'nao soube responder'],
+}
+for (const x of FICHAS_PADRAO) if (!x.sinonimos) x.sinonimos = SINONIMOS_PADRAO[x.chave] ?? []
 export const CHAVES = FICHAS_PADRAO.map(x => x.chave)
 
 // --- Fichas com versão (a versão 1 é a do PDF 02; cada mudança é aprovada pelo dono) ---
 
 export async function fichas(usuarioId: string): Promise<Array<Ficha & { versao: number; aprovadoPor: string | null; aprovadoEm: Date | null }>> {
-  const versoes = await prisma.metricaVersao.findMany({ where: { usuarioId }, orderBy: { versao: 'desc' } })
+  const versoes = await prisma.metricaVersao.findMany({ where: { usuarioId, situacao: 'APROVADA' }, orderBy: { versao: 'desc' } })
   return FICHAS_PADRAO.map(p => {
     const v = versoes.find(x => x.chave === p.chave)
     return v ? { ...p, ...(v.ficha as Partial<Ficha>), chave: p.chave, versao: v.versao, aprovadoPor: v.aprovadoPor, aprovadoEm: v.aprovadoEm } : { ...p, versao: 1, aprovadoPor: 'PDF 02 (aprovado)', aprovadoEm: null }
@@ -787,6 +855,81 @@ const CALC: Record<string, (e: Escopo, p: Periodo, agora: Date) => Promise<Valor
       return { etapa: x.etapa, oportunidade: r2(x.ids.reduce((t, id) => t + (valorDe.get(id) ?? 0), 0)), abertos: ab, conversaoAteVenda: r2(conv * 100), proLaborePrevisto: r2(ab * conv * pl), comissaoPrevista: r2(ab * conv * com), perdidos: perd, comissaoPerdida: r2(perd * conv * com) }
     })
     return { valor: r2(det.reduce((t, x) => t + x.proLaborePrevisto, 0)), detalhe: { medias: { proLabore: r2(pl), comissao: r2(com) }, etapas: det } }
+  },
+  // --- Sexto lote (PDF 07) ---
+  async dias_em_estoque(e, _p, agora) {
+    const ms = await prisma.smMotoEstoque.findMany({ where: { usuarioId: e.usuarioId, situacao: { in: ['DISPONIVEL', 'RESERVADA'] } }, select: { id: true, modelo: true, ano: true, entradaEm: true } })
+    const dias = ms.map(m => ({ id: m.id, moto: `${m.modelo}${m.ano ? ` ${m.ano}` : ''}`, dias: Math.max(0, Math.floor((agora.getTime() - m.entradaEm.getTime()) / DIA_MS)) }))
+    const md = mediana(dias.map(d => d.dias))
+    return { valor: md == null ? null : r2(md), amostra: dias.length, detalhe: dias.sort((a, b) => b.dias - a.dias).slice(0, 10) }
+  },
+  async giro_estoque(e, p) {
+    const { ini, fim } = instantes(p)
+    const [r] = await q<{ vendidas: bigint; noInicio: bigint; noFim: bigint }>(Prisma.sql`
+      SELECT count(*) FILTER (WHERE m.situacao = 'VENDIDA' AND m."saidaEm" >= ${ini} AND m."saidaEm" < ${fim}) vendidas,
+             count(*) FILTER (WHERE m."entradaEm" < ${ini} AND (m."saidaEm" IS NULL OR m."saidaEm" >= ${ini})) "noInicio",
+             count(*) FILTER (WHERE m."entradaEm" < ${fim} AND (m."saidaEm" IS NULL OR m."saidaEm" >= ${fim})) "noFim"
+      FROM pro_labore_sm_motos_estoque m WHERE m."usuarioId" = ${e.usuarioId}`)
+    const medio = (num(r.noInicio) + num(r.noFim)) / 2
+    return { valor: medio > 0 ? r2(num(r.vendidas) / medio) : null, amostra: num(r.vendidas), detalhe: { vendidas: num(r.vendidas), estoqueMedio: medio } }
+  },
+  async motos_paradas(e, _p, agora) {
+    const limite = new Date(agora.getTime() - 60 * DIA_MS)
+    const ms = await prisma.smMotoEstoque.findMany({ where: { usuarioId: e.usuarioId, situacao: { in: ['DISPONIVEL', 'RESERVADA'] }, entradaEm: { lt: limite } }, orderBy: { entradaEm: 'asc' }, select: { id: true, modelo: true, ano: true, entradaEm: true } })
+    return { valor: ms.length, detalhe: ms.slice(0, 20).map(m => ({ id: m.id, moto: `${m.modelo}${m.ano ? ` ${m.ano}` : ''}`, dias: Math.floor((agora.getTime() - m.entradaEm.getTime()) / DIA_MS) })) }
+  },
+  async leads_por_campanha(e, p) {
+    const { ini, fim } = instantes(p)
+    const rs = await q<{ campanha: string; n: bigint }>(Prisma.sql`
+      SELECT l."origemCampanha" campanha, count(*) n FROM pro_labore_leads l
+      WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim} AND l."origemCampanha" IS NOT NULL${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')}
+      GROUP BY 1 ORDER BY 2 DESC`)
+    return { valor: rs.reduce((s, x) => s + num(x.n), 0), detalhe: rs.slice(0, 15).map(x => ({ campanha: x.campanha, leads: num(x.n) })) }
+  },
+  async engajamento_posts(e, p) {
+    const { ini, fim } = instantes(p)
+    const [r] = await q<{ inter: bigint; alcance: bigint; posts: bigint }>(Prisma.sql`
+      SELECT coalesce(sum(m.curtidas + m.comentarios + m.salvamentos + m.compartilhamentos), 0) inter, coalesce(sum(m.alcance), 0) alcance, count(*) posts
+      FROM pro_labore_social_media_midias m JOIN pro_labore_social_media_contas c ON c.id = m."contaId"
+      WHERE c."usuarioId" = ${e.usuarioId} AND m."publicadoEm" >= ${ini} AND m."publicadoEm" < ${fim}`)
+    return { valor: pct(num(r.inter), num(r.alcance)), amostra: num(r.posts), detalhe: { alcance: num(r.alcance), interacoes: num(r.inter), posts: num(r.posts) } }
+  },
+  async conversas_sem_resposta_dia(e, p) {
+    const { ini, fim } = instantes(p)
+    // Por dia de Brasília: a última mensagem do cliente no dia não teve resposta de pessoa da loja depois dela, no mesmo dia.
+    const [r] = await q<{ n: bigint }>(Prisma.sql`
+      WITH ultimas AS (
+        SELECT m."conversaId", date_trunc('day', m."criadoEm" - interval '3 hours') dia, max(m."criadoEm") ultima
+        FROM pro_labore_assistente_mensagens m
+        JOIN pro_labore_assistente_conversas cv ON cv.id = m."conversaId"
+        JOIN pro_labore_assistente_comercial a ON a.id = cv."assistenteId"
+        JOIN pro_labore_vendedores v ON v.id = a."vendedorId"
+        WHERE v."usuarioId" = ${e.usuarioId} AND cv.tipo = 'LEAD' AND m.remetente = 'CONTATO' AND m."criadoEm" >= ${ini} AND m."criadoEm" < ${fim}${vend(e, Prisma.sql`a."vendedorId"`)}
+        GROUP BY 1, 2)
+      SELECT count(*) n FROM ultimas u
+      WHERE NOT EXISTS (SELECT 1 FROM pro_labore_assistente_mensagens r WHERE r."conversaId" = u."conversaId" AND r.remetente = 'VENDEDOR'
+                          AND r."criadoEm" > u.ultima AND r."criadoEm" < u.dia + interval '1 day' + interval '3 hours')`)
+    return { valor: num(r.n) }
+  },
+  async ocorrencias_abertas(e, _p, agora) {
+    const [abertas, resolvidas] = await Promise.all([
+      prisma.ocorrencia.count({ where: { usuarioId: e.usuarioId, status: { notIn: ['RESOLVIDA', 'ENCERRADA'] }, ...(e.vendedorId ? { vendedorId: e.vendedorId } : {}) } }),
+      prisma.ocorrencia.findMany({ where: { usuarioId: e.usuarioId, status: { in: ['RESOLVIDA', 'ENCERRADA'] }, atualizadoEm: { gte: new Date(agora.getTime() - 90 * DIA_MS) } }, select: { dataRegistro: true, atualizadoEm: true } }),
+    ])
+    const md = mediana(resolvidas.map(o => (o.atualizadoEm.getTime() - o.dataRegistro.getTime()) / DIA_MS))
+    return { valor: abertas, detalhe: { medianaDiasAteResolver: md == null ? null : r2(md), resolvidas90d: resolvidas.length } }
+  },
+  async decisoes_daily_pendentes(e, _p, agora) {
+    const ds = await prisma.dailyDecisao.findMany({ where: { usuarioId: e.usuarioId, prazo: { lt: agora } }, select: { id: true, texto: true, prazo: true, atividadeIds: true } })
+    const ids = ds.flatMap(d => d.atividadeIds)
+    const feitas = new Set((ids.length ? await prisma.atividade.findMany({ where: { id: { in: ids }, status: { in: ['EXECUTADA', 'CANCELADA'] } }, select: { id: true } }) : []).map(a => a.id))
+    const pendentes = ds.filter(d => !d.atividadeIds.length || d.atividadeIds.some(id => !feitas.has(id)))
+    return { valor: pendentes.length, detalhe: pendentes.slice(0, 10).map(d => ({ id: d.id, texto: d.texto.slice(0, 120), prazo: d.prazo })) }
+  },
+  async perguntas_sem_resposta(e, p) {
+    const { ini, fim } = instantes(p)
+    const n = await prisma.pergunteConversa.count({ where: { usuarioId: e.usuarioId, naoSabe: true, criadoEm: { gte: ini, lt: fim } } })
+    return { valor: n }
   },
   async comissoes_pagas(e, p) {
     const { ini, fim } = instantes(p)

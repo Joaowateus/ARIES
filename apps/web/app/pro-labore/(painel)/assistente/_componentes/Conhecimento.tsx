@@ -6,7 +6,7 @@
 // o vendedor sugere e rascunha.
 import { useEffect, useMemo, useState } from 'react'
 import {
-  proLaboreApi, type BaseConhecimento, type EtapaConhecimento, type ItemConhecimento, type StatusConhecimento, type TipoConhecimento,
+  centralApi, proLaboreApi, type VersaoVerbete, type BaseConhecimento, type EtapaConhecimento, type ItemConhecimento, type StatusConhecimento, type TipoConhecimento,
 } from '@/lib/proLaboreApi'
 import { CartaoViz, Vazio, fmtNum } from '../../social-media/_componentes/viz'
 import { tempoRelativo } from './util'
@@ -36,15 +36,16 @@ const MARCADORES = 'Use {nome}, {vendedor} e {moto}: o assistente troca pelo pri
 
 const paraLista = (texto: string) => [...new Set(texto.split(',').map(p => p.trim().toLowerCase()).filter(Boolean))]
 
-export function Conhecimento() {
+/** `abrirId`: abre um verbete direto (link da Central de Conhecimento ou do Pergunte). */
+export function Conhecimento({ abrirId }: { abrirId?: string } = {}) {
   const [dias, setDias] = useState<(typeof PERIODOS)[number]>(7)
   const [versao, setVersao] = useState(0)
   const [base, setBase] = useState<{ chave: string; dados: BaseConhecimento } | null>(null)
   const [erro, setErro] = useState('')
-  const [filtro, setFiltro] = useState<Filtro>('PARA_REVISAR')
+  const [filtro, setFiltro] = useState<Filtro>(abrirId ? 'TODOS' : 'PARA_REVISAR')
   const [tipo, setTipo] = useState<TipoConhecimento | ''>('')
   const [busca, setBusca] = useState('')
-  const [aberto, setAberto] = useState<string | null>(null)
+  const [aberto, setAberto] = useState<string | null>(abrirId ?? null)
   const [novo, setNovo] = useState(false)
   const [analisando, setAnalisando] = useState(false)
   const [aviso, setAviso] = useState('')
@@ -250,6 +251,9 @@ function ItemCartao({ item, todos, podeAprovar, aberto, onAbrir, onMudou }: {
   const [etapa, setEtapa] = useState<EtapaConhecimento | ''>(item.etapa ?? '')
   const [palavras, setPalavras] = useState(item.palavrasChave.join(', '))
   const [destino, setDestino] = useState('')
+  const [validade, setValidade] = useState(item.validadeAte ? item.validadeAte.slice(0, 10) : '')
+  const [fontes, setFontes] = useState((item.fontesLigadas ?? []).join(', '))
+  const [versoes, setVersoes] = useState<VersaoVerbete[] | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -257,12 +261,16 @@ function ItemCartao({ item, todos, podeAprovar, aberto, onAbrir, onMudou }: {
     setSalvando(true); setErro('')
     try { await acao(); onMudou() } catch (e) { setErro((e as Error).message) } finally { setSalvando(false) }
   }
-  const campos = () => ({ titulo, tipo, etapa: etapa || null, palavrasChave: paraLista(palavras), ...(editaResposta ? { resposta: texto.trim() || null } : { rascunho: texto.trim() || null }) })
+  const campos = () => ({
+    titulo, tipo, etapa: etapa || null, palavrasChave: paraLista(palavras),
+    ...(editaResposta ? { resposta: texto.trim() || null, validadeAte: validade || null, fontesLigadas: fontes.split(',').map(f => f.trim()).filter(f => f.length >= 2) } : { rascunho: texto.trim() || null }),
+  })
+  const verVersoes = () => centralApi.versoesVerbete(item.id).then(setVersoes).catch(e => setErro((e as Error).message))
+  const vencido = !!item.validadeAte && new Date(item.validadeAte) < new Date()
   const salvar = () => executar(() => proLaboreApi.assistente.editarConhecimento(item.id, campos()))
   const aprovar = () => executar(() => proLaboreApi.assistente.editarConhecimento(item.id, { ...campos(), status: 'ATIVO' }))
   const mudarStatus = (status: StatusConhecimento) => executar(() => proLaboreApi.assistente.editarConhecimento(item.id, { status }))
   const juntar = () => destino && executar(() => proLaboreApi.assistente.juntarConhecimento(item.id, destino))
-  const excluir = () => confirm(`Excluir “${item.titulo}” da base?`) && executar(() => proLaboreApi.assistente.excluirConhecimento(item.id))
   const mover = (frase: string, paraId: string) => paraId && executar(() => proLaboreApi.assistente.moverOcorrencia({ texto: frase, deId: item.id, paraId }))
 
   const outrosAssuntos = todos.filter(o => o.id !== item.id && !o.outras && o.status !== 'ARQUIVADO')
@@ -276,6 +284,7 @@ function ItemCartao({ item, todos, podeAprovar, aberto, onAbrir, onMudou }: {
           <span className={`pl-status-badge ${STATUS[item.status].classe}`}>{STATUS[item.status].rotulo}</span>
           {item.origem === 'APRENDIDO' && <span className="pl-as-kb-origem">Aprendido das conversas</span>}
           {item.origem === 'MODELO_PRONTO' && <span className="pl-as-kb-origem">Modelo pronto</span>}
+          {vencido && <span className="pl-status-badge atencao" data-kb-vencido>Revisar: validade vencida</span>}
         </span>
         <b className="pl-as-kb-titulo">{item.titulo}</b>
         <span className="pl-as-kb-numeros">
@@ -352,6 +361,16 @@ function ItemCartao({ item, todos, podeAprovar, aberto, onAbrir, onMudou }: {
               <label className="pl-field"><span>Palavras-chave para reconhecer o assunto (separe por vírgula)</span>
                 <input className="pl-input" value={palavras} onChange={e => setPalavras(e.target.value)} disabled={somenteLeitura} />
               </label>
+              {editaResposta && (
+                <div className="pl-as-kb-grade" data-kb-central>
+                  <label className="pl-field"><span>Revisar até (validade)</span>
+                    <input className="pl-input" type="date" value={validade} onChange={e => setValidade(e.target.value)} />
+                  </label>
+                  <label className="pl-field pl-as-kb-largo"><span>Fontes ligadas (métrica, moto ou processo; separe por vírgula)</span>
+                    <input className="pl-input" value={fontes} onChange={e => setFontes(e.target.value)} placeholder="Aprovação de crédito, Honda CG 160" />
+                  </label>
+                </div>
+              )}
             </>
           )}
 
@@ -366,7 +385,6 @@ function ItemCartao({ item, todos, podeAprovar, aberto, onAbrir, onMudou }: {
                 {destino && <button type="button" className="pl-btn pl-btn-ghost" onClick={juntar} disabled={salvando}>Juntar</button>}
               </span>
             )}
-            {podeAprovar && !item.outras && item.origem === 'MANUAL' && <button type="button" className="pl-btn pl-btn-ghost pl-danger" onClick={excluir} disabled={salvando}>Excluir</button>}
             {podeAprovar && !item.outras && item.status !== 'ARQUIVADO' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => mudarStatus('ARQUIVADO')} disabled={salvando}>Arquivar</button>}
             {podeAprovar && item.status === 'ARQUIVADO' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => mudarStatus('PARA_REVISAR')} disabled={salvando}>Voltar para revisão</button>}
             {!somenteLeitura && !item.outras && <button type="button" className="pl-btn pl-btn-ghost" onClick={salvar} disabled={salvando}>Salvar</button>}
@@ -375,6 +393,25 @@ function ItemCartao({ item, todos, podeAprovar, aberto, onAbrir, onMudou }: {
             )}
           </div>
           {item.aprovadoPor && <div className="pl-hint">Aprovada por {item.aprovadoPor} {item.aprovadoEm ? tempoRelativo(item.aprovadoEm) : ''}</div>}
+          {!item.outras && (
+            <div className="pl-as-kb-bloco" data-kb-versoes>
+              {versoes === null
+                ? <button type="button" className="pl-link-action" onClick={() => void verVersoes()}>Ver histórico de versões{item.versaoAtual ? ` (versão ${item.versaoAtual})` : ''}</button>
+                : (
+                  <>
+                    <div className="pl-as-kb-rotulo">Histórico de versões</div>
+                    <ol className="pl-as-kb-frases" style={{ listStyle: 'none', paddingLeft: 0 }}>
+                      {versoes.map(v => (
+                        <li key={v.id} style={{ display: 'block' }}>
+                          <b>Versão {v.versao}</b> · {v.motivo ?? 'Editado'}{v.autor ? ` · ${v.autor}` : ''} · {tempoRelativo(v.criadoEm)}
+                          {v.resposta && <div className="pl-hint" style={{ marginTop: 2 }}>{v.resposta}</div>}
+                        </li>
+                      ))}
+                    </ol>
+                  </>
+                )}
+            </div>
+          )}
         </div>
       )}
     </div>

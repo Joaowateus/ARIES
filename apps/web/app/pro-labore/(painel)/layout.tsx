@@ -99,7 +99,7 @@ const ICONE_ABA: Record<string, NavIconName> = {
   hoje: 'home', pergunte: 'spark', recomendacoes: 'flag', crm: 'kanban', conversas: 'chat', credito: 'shield', atividades: 'calendar', reativacao: 'refresh',
   'estoque-demanda': 'cart', 'pos-venda': 'file', trafego: 'funnel', 'social-media': 'at', 'origem-vendas': 'chart', equipe: 'users', desenvolvimento: 'compass',
   'rotina-auditoria': 'shield', ocorrencias: 'flag', reunioes: 'mic', 'vendas-pagamentos': 'cart', financeiro: 'wallet', 'metas-premissas': 'chart',
-  'plano-crescimento': 'chart', relatorios: 'file', playbook: 'notebook', 'base-conhecimento': 'notebook', anotacoes: 'notebook', configuracoes: 'gear',
+  'plano-crescimento': 'chart', relatorios: 'file', playbook: 'notebook', 'central-conhecimento': 'notebook', anotacoes: 'notebook', configuracoes: 'gear',
 }
 const paginasDo = (item: NavItem): NavPagina[] => item.abas ?? [item]
 const bate = (pathname: string, href: string) => pathname === href || (href !== '/pro-labore' && pathname.startsWith(`${href}/`))

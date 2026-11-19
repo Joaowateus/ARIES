@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import { registrarSincronizacao } from './centralConhecimento/rotinas'
 import { prisma } from './prisma'
 import {
   ErroGraphApi,
@@ -111,6 +112,8 @@ export async function sincronizarContaSocialMedia(conta: ContaParaSync, modo: Mo
     ])
     // A saúde da conexão acompanha só o Instagram da loja (o do dono), o mesmo do aviso.
     if (conta.titular.startsWith('dono:')) await registrarLiberacao(conta.usuarioId, agora, 'SOCIAL_MEDIA').catch(() => false)
+    // PDF 07: evento ao fim da sincronização — a Central remonta os posts da loja na próxima rodada.
+    if (conta.titular.startsWith('dono:')) await registrarSincronizacao(conta.usuarioId, 'instagram')
     return resultado
   } catch (e) {
     const mensagem = mensagemAmigavel(e)
@@ -122,6 +125,7 @@ export async function sincronizarContaSocialMedia(conta: ContaParaSync, modo: Mo
       prisma.smSincronizacao.update({ where: { id: registro.id }, data: { status: 'ERRO', terminadoEm: new Date(), erro: mensagem } }),
     ]).catch(() => {})
     if (conta.tipoConexao === 'EMPRESA') await avisarFalha(conta, mensagem, proxima).catch(() => {})
+    if (conta.titular.startsWith('dono:')) await registrarSincronizacao(conta.usuarioId, 'instagram', mensagem)
     throw new Error(mensagem)
   }
 }

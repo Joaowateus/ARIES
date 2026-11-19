@@ -3,6 +3,8 @@
 // atividade recente e a busca respeitam o alcance de cada papel (vendedor vê o
 // que é dele; cifras de tráfego só para quem já tem acesso). Nada é inventado:
 // sem dado, o cartão mostra o estado vazio.
+import { buscar as buscarNaCentral } from '../lib/centralConhecimento/indice'
+import { contextoDoPedido } from '../lib/centralConhecimento/contexto'
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
@@ -141,6 +143,19 @@ router.get('/inicio/busca', requireProLaboreAuth, async (req: Request, res: Resp
   if (q.length < 2) { res.json([]); return }
   const u = req.proLaboreUser!.sub
   const papel = pessoaDe(req).papel
+  const RELATORIOS_INDICE = [{ nome: 'Relatórios', href: '/pro-labore/assistente' }, { nome: 'Painel do mês', href: '/pro-labore/hoje?sub=painel' }, { nome: 'Indicadores', href: '/pro-labore/indicadores' }, { nome: 'Origem das vendas', href: '/pro-labore/aba/origem-vendas' }]
+  // PDF 07 (C7): com o índice da Central carregado, a busca do Início usa ele (sem acento, tolerante
+  // a erro de digitação, com as mesmas permissões). Antes da carga inicial, segue a busca de sempre.
+  if (await prisma.centralDocumento.findFirst({ where: { usuarioId: u }, select: { id: true } })) {
+    const r = await buscarNaCentral(contextoDoPedido(req), q, { limitePorTipo: 6 })
+    const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const rel = papel === 'DONO' || ve(req, 'indicadores') ? RELATORIOS_INDICE.filter(x => semAcento(x.nome).includes(semAcento(q)) || 'relatorio'.includes(semAcento(q))) : []
+    res.json([
+      ...r.grupos.flatMap(g => g.itens.map(i => ({ id: `${g.tipo.toLowerCase()}-${i.id}`, origem: g.nome, titulo: i.titulo, detalhe: i.resumo, href: i.link }))),
+      ...rel.map(x => ({ id: `rel-${x.href}`, origem: 'Relatório', titulo: x.nome, detalhe: null, href: x.href })),
+    ].slice(0, 20))
+    return
+  }
   const like = { contains: q, mode: 'insensitive' as const }
   const digitos = q.replace(/\D/g, '')
   const podeCrm = ve(req, 'crm') || papel === 'VENDEDOR'
