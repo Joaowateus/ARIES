@@ -5648,3 +5648,18 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .qj-aviso { position: relative; }
 .qj-aviso-x { position: absolute; top: 12px; right: 12px; }
 .qj-aviso h3 { padding-right: 36px; }
+/* H · ajustes de medida: 5+ cartões por coluna em 1366×768 */
+.pl-app .pl-main .pl-shell:has([data-crm]) { padding-top: 16px; }
+.fn-cab { margin-bottom: 8px; }
+.fn-numeros { margin-bottom: 8px; padding: 4px 6px; }
+.fn-barra { margin-bottom: 8px; }
+.pl-app .qj-compacto { padding: 8px 11px 7px; gap: 2px; line-height: 1.3; }
+.qj-l1 .pl-kc-nome { line-height: 1.3; }
+.qj-l4 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.qj-col-cab { gap: 2px; }
+.qj-menu-card { z-index: 80; }
+.qj-colunas > .pl-kanban-col.qj-col { padding: 8px 8px 6px; }
+.qj-cards { gap: 5px; }
+.pl-shell:has([data-crm]) .pl-hub-abas { margin-bottom: 10px; }
+/* Janelas abertas a partir do painel do lead (levantamento, follow, perda, venda) ficam acima dele. */
+.pl-app:has(.pl-pn-fundo) .pl-modal-backdrop { z-index: 75; }

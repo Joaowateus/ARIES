@@ -239,11 +239,6 @@ export default function ProLaboreLeadsPage() {
   const [filtroEtiqueta, setFiltroEtiqueta] = useState('')
   // Custo por lead automático: a ficha do dicionário (gasto ÷ leads novos de tráfego pago no mês).
   const [cplDicionario, setCplDicionario] = useState<{ valor: number; leads: number } | null>(null)
-  const [mesCorrente] = useState(() => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7))
-
-  function limparFiltroPeriodo() {
-    setFiltroPeriodo(null)
-  }
 
   // Edição de meta por etapa e de custo/lead — mesma interação do painel
   // (FunilJourney), só que aqui refletindo direto na etapa do CRM.
@@ -761,7 +756,6 @@ export default function ProLaboreLeadsPage() {
   // meta/custo da Jornada de compra do Painel (FunilJourney), só que
   // calculada em cima da contagem por estágio do próprio Kanban (respeitando
   // os filtros de canal/vendedor/período/busca já aplicados acima).
-  const leadsDoMes = leads.filter(l => l.criadoEm.slice(0, 7) === mesCorrente).length
   const custoAutomatico = isDono && cplDicionario ? cplDicionario.valor : null
   const custoPorLeadTopo = custoAutomatico ?? parametro?.custoPorLeadTopo ?? 0
   const metaPorEtapa = new Map<EstagioLead, MetaFunilProLabore>(metasFunil.map(m => [m.etapa, m]))
@@ -845,7 +839,6 @@ export default function ProLaboreLeadsPage() {
     </div>
   )
   const avisosMais = parados.length + followsAtrasados
-  const filtrosDoMais = [filtroParado ? 'só os parados' : '', filtroDecisao ? 'em decisão sem follow' : '', filtroFollow === 'ATRASADO' ? 'follows atrasados' : filtroFollow === 'HOJE' ? 'follows de hoje' : '', filtroEtiqueta ? ROTULO_ETIQUETA[filtroEtiqueta as keyof typeof ROTULO_ETIQUETA] : ''].filter(Boolean)
   // O funil em 5 etapas (visão anterior): na tela para quem não abre o Painel; na janela "Mais do CRM" para a gestão.
   const funilCinco = !loading && (
         <section className="crm-metricas" data-metricas-etapas>

@@ -140,6 +140,8 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [limites, setLimites] = useState<Partial<Record<EtapaJornada, number>>>({})
   // Cartão: menu "⋯" e, no toque, o primeiro toque mostra as ações (o segundo abre o painel).
   const [menuCard, setMenuCard] = useState<string | null>(null)
+  // O menu do cartão fica na tela (position: fixed): não é cortado pela rolagem da coluna nem fica sob o cabeçalho dela.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
   const [tocado, setTocado] = useState<string | null>(null)
   const toque = useRef(false)
   useEffect(() => {
@@ -156,7 +158,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
     const el = rolaRef.current
     if (!el || window.innerWidth < 761) { setAlturaQuadro(null); return }
     const topo = el.getBoundingClientRect().top + window.scrollY
-    setAlturaQuadro(`max(480px, calc(100dvh - ${Math.round(topo + 16)}px))`)
+    setAlturaQuadro(`max(480px, calc(100dvh - ${Math.round(topo + 24)}px))`)
   }, [])
   useLayoutEffect(() => {
     medir()
@@ -263,9 +265,10 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
     const waExterno = !wa ? linkWhatsapp(l.telefone) : null
     return (
       <span className="qj-menu-wrap">
-        <button type="button" className="pl-btn pl-btn-ghost qj-card-mais" aria-label={`Mais ações de ${l.nomeCliente}`} aria-expanded={menuCard === l.id} onClick={() => setMenuCard(m => (m === l.id ? null : l.id))} data-menu-card>⋯</button>
+        <button type="button" className="pl-btn pl-btn-ghost qj-card-mais" aria-label={`Mais ações de ${l.nomeCliente}`} aria-expanded={menuCard === l.id}
+          onClick={ev => { const r = ev.currentTarget.getBoundingClientRect(); const alto = 190; setMenuPos({ top: r.bottom + alto + 8 > window.innerHeight ? Math.max(8, r.top - alto - 4) : r.bottom + 4, left: Math.max(8, Math.min(window.innerWidth - 228, r.right - 220)) }); setMenuCard(m => (m === l.id ? null : l.id)) }} data-menu-card>⋯</button>
         {menuCard === l.id && (
-          <span className="qj-menu qj-menu-card" role="menu">
+          <span className="qj-menu qj-menu-card" role="menu" style={menuPos ? { position: 'fixed', top: menuPos.top, left: menuPos.left, right: 'auto', bottom: 'auto', width: 220 } : undefined}>
             {['ABORDADO', 'LEVANTAMENTO'].includes(e) && <button type="button" role="menuitem" onClick={() => { setMenuCard(null); setLevantamento(l) }} data-levantamento>Levantamento</button>}
             {e !== 'VENDA' && <button type="button" role="menuitem" onClick={() => { setMenuCard(null); void abrirPerda(l) }} data-perda>Perdido</button>}
             {wa && <Link role="menuitem" href={wa} data-abrir-conversa>Abrir conversa no WhatsApp</Link>}
@@ -401,8 +404,8 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                             {menuCol === e && (
                               <span className="qj-menu" role="menu" onKeyDown={ev => { if (ev.key === 'Escape') setMenuCol(null) }}>
                                 <button type="button" role="menuitem" onClick={() => { setSelecionando(true); setMarcados(cards.filter(l => !l.somenteLeitura).map(l => l.id)); setMenuCol(null) }} data-selecionar-coluna>Selecionar os desta coluna</button>
-                                <button type="button" role="menuitem" aria-checked={ordem[e] === 'TEMPO'} onClick={() => { setOrdem(o => ({ ...o, [e]: o[e] === 'TEMPO' ? 'CALOR' : 'TEMPO' })); setMenuCol(null) }} data-ordenar="TEMPO">{ordem[e] === 'TEMPO' ? '✓ ' : ''}Ordenar por tempo</button>
-                                <button type="button" role="menuitem" aria-checked={ordem[e] === 'VALOR'} onClick={() => { setOrdem(o => ({ ...o, [e]: o[e] === 'VALOR' ? 'CALOR' : 'VALOR' })); setMenuCol(null) }} data-ordenar="VALOR">{ordem[e] === 'VALOR' ? '✓ ' : ''}Ordenar por valor</button>
+                                <button type="button" role="menuitemcheckbox" aria-checked={ordem[e] === 'TEMPO'} onClick={() => { setOrdem(o => ({ ...o, [e]: o[e] === 'TEMPO' ? 'CALOR' : 'TEMPO' })); setMenuCol(null) }} data-ordenar="TEMPO">{ordem[e] === 'TEMPO' ? '✓ ' : ''}Ordenar por tempo</button>
+                                <button type="button" role="menuitemcheckbox" aria-checked={ordem[e] === 'VALOR'} onClick={() => { setOrdem(o => ({ ...o, [e]: o[e] === 'VALOR' ? 'CALOR' : 'VALOR' })); setMenuCol(null) }} data-ordenar="VALOR">{ordem[e] === 'VALOR' ? '✓ ' : ''}Ordenar por valor</button>
                               </span>
                             )}
                           </span>

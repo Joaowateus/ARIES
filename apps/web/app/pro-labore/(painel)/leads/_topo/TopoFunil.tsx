@@ -4,7 +4,7 @@
 // 1. Cabeçalho numa linha (título, pergunta, "i", Mais do CRM e Novo lead).
 // 2. Números numa linha (cada número aplica o filtro dele) + selo da Lente.
 // 3. Barra de ferramentas (busca, fase, Filtros, chips ativos, Selecionar, densidade).
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { telasApi, recApi, type Lente as LenteDados, type Temperatura, type TipoLead, type Vendedor } from '@/lib/proLaboreApi'
 import { abaPorChave } from '@/lib/abasAries'
@@ -337,13 +337,15 @@ export function BarraFerramentas({ busca, onBusca, fase, onFase, mostrarFase, fi
 
 /** A dica "Clique no card…" aparece uma vez por pessoa (ou sempre no Modo guiado). */
 export function DicaFunil({ sempre }: { sempre: boolean }) {
-  const [vista, setVista] = useState(true)
-  useEffect(() => { try { setVista(localStorage.getItem('pl_crm_dica_vista') === '1') } catch { setVista(false) } }, [])
+  const [fechou, setFechou] = useState(false)
+  // Lido do navegador sem efeito (no servidor, conta como vista: a dica só aparece no navegador).
+  const jaVista = useSyncExternalStore(() => () => {}, () => { try { return localStorage.getItem('pl_crm_dica_vista') === '1' } catch { return false } }, () => true)
+  const vista = fechou || jaVista
   if (vista && !sempre) return null
   return (
     <div className="fn-dica" role="note" data-dica-funil>
       Clique no card para ver tudo do lead · arraste ou use “Avançar” para mudar de etapa · em cada coluna, os quentes vêm primeiro.
-      {!sempre && <button type="button" className="pl-link-action" onClick={() => { setVista(true); try { localStorage.setItem('pl_crm_dica_vista', '1') } catch { /* sem armazenamento */ } }} data-dica-ok>Entendi</button>}
+      {!sempre && <button type="button" className="pl-link-action" onClick={() => { setFechou(true); try { localStorage.setItem('pl_crm_dica_vista', '1') } catch { /* sem armazenamento */ } }} data-dica-ok>Entendi</button>}
     </div>
   )
 }

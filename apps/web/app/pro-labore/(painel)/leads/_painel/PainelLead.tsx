@@ -67,7 +67,9 @@ export function PainelLead(p: PainelLeadProps) {
   const { lead, colunas, isDono, vejaEquipe, focarNota, podeEscrever, premissas = null, onFechar } = p
   const [aba, setAbaEstado] = useState<Aba>(() => (focarNota ? 'atividades' : abaSalva()))
   const setAba = (a: Aba) => { setAbaEstado(a); try { sessionStorage.setItem('pl_lead_aba', a) } catch { /* sem armazenamento */ } }
-  useEffect(() => { if (focarNota) setAbaEstado('atividades') }, [focarNota])
+  // Aberto de novo pelo botão "Notas": vai para Atividades (ajuste durante a renderização, sem efeito).
+  const [focoAnterior, setFocoAnterior] = useState(focarNota)
+  if (focarNota !== focoAnterior) { setFocoAnterior(focarNota); if (focarNota) setAbaEstado('atividades') }
   const [menu, setMenu] = useState(false)
   const [moverLista, setMoverLista] = useState(false)
   const [levantamento, setLevantamento] = useState(false)
