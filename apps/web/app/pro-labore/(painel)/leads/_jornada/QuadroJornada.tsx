@@ -10,25 +10,8 @@ import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type Premissa
 import { ETAPAS_JORNADA, FASES, NOME_ETAPA, NOME_MOTIVO, NOME_DESTINO } from '@/lib/etapasJornada'
 import { FollowRoboModal, SeloRobo } from './FollowRobo'
 import { situacaoFollow } from '../../_follow/follow'
+import { estourou, tempoNaEtapa } from './tempo'
 
-const MS_HORA = 3_600_000
-function tempoNaEtapa(l: Lead) {
-  const desde = l.entrouNaEtapaEm ?? l.criadoEm
-  const h = Math.max(0, (Date.now() - new Date(desde).getTime()) / MS_HORA)
-  if (h < 1) { const m = Math.floor(h * 60); return m < 1 ? 'agora' : `${m} min` }
-  if (h < 24) return `${Math.floor(h)} h`
-  const d = Math.floor(h / 24)
-  return d === 1 ? '1 dia' : `${d} dias`
-}
-const MS: Record<string, number> = { MINUTOS: 60_000, HORAS: MS_HORA, DIAS: 24 * MS_HORA }
-const UN: Record<string, string> = { MINUTOS: 'min', HORAS: 'h', DIAS: 'd' }
-/** Passou do tempo máximo da etapa (Metas e premissas)? */
-function estourou(l: Lead, p: PremissasJornada | null) {
-  const t = p?.temposMaximos[(l.etapa ?? 'LEAD') as EtapaJornada]
-  if (!t || t.valor == null) return null
-  const desde = new Date(l.entrouNaEtapaEm ?? l.criadoEm).getTime()
-  return { parado: Date.now() - desde > t.valor * MS[t.unidade], max: `${t.valor} ${UN[t.unidade]}` }
-}
 const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 
 interface Props {
@@ -267,7 +250,7 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
                                 {l.formaPagamento === 'A_VISTA' && <span className="pl-chip">à vista</span>}
                                 {l.formaPagamento === 'FINANCIADO' && <span className="pl-chip">financiado</span>}
                                 {(e === 'LEVANTAMENTO' || e === 'ABORDADO') && !l.levantamentoCompleto && <span className="pl-chip">levantamento incompleto</span>}
-                                <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máximo ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
+                                <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máx. ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
                               </div>
                               <div className="qj-acoes" onClick={ev => ev.stopPropagation()}>
                                 {prox && <button type="button" className="pl-btn pl-btn-ghost qj-avancar" disabled={ocupado} onClick={() => void mover(l, prox)} data-avancar title={prox === 'VENDA' ? 'Registrar venda' : `Avançar para ${NOME_ETAPA[prox]}`}>{prox === 'VENDA' ? 'Registrar venda' : `Avançar → ${NOME_ETAPA[prox]}`}</button>}

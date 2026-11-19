@@ -874,7 +874,7 @@ const LEAD_INCLUDE = {
   historico: { select: { estagioNovo: true, criadoEm: true, origem: true, motivo: true }, orderBy: { criadoEm: 'asc' } },
   // Os follows pendentes, o mais próximo primeiro (botão Follow do card). A
   // nova análise de crédito convive com o follow comum.
-  follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 3, select: { id: true, agendadoPara: true, canal: true, nota: true, tipo: true, contexto: true } },
+  follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 10, select: { id: true, agendadoPara: true, canal: true, nota: true, tipo: true, contexto: true } },
   // Quantas notas da negociação o lead tem (selo no card; o texto abre no painel).
   _count: { select: { notas: true } },
   // A próxima ligação pendente (selo do card e painel do lead).

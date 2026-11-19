@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { QuadroJornada } from './_jornada/QuadroJornada'
 import { CustosPorEtapa } from './_metricas/CustosPorEtapa'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, metricasApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
+import { proLaboreApi, metricasApi, type ErroApi, type PremissasJornada, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
 import { metaDefinida } from '@/lib/metaFunil'
 import { AvisoRepetida, parecidasDoErro } from '../vendas/AvisoRepetida'
 import { SeletorMoto } from '../vendas/SeletorMoto'
@@ -16,6 +16,8 @@ import Link from 'next/link'
 import { FollowModal } from '../_follow/FollowModal'
 import { PerdaModal } from '../_follow/PerdaModal'
 import { situacaoFollow } from '../_follow/follow'
+import { contarFollows, temFollow } from '../_follow/contagem'
+import { paradoOficial } from './_jornada/tempo'
 import { FaixaWhatsapp } from './_whatsapp/FaixaWhatsapp'
 import { ChipNota } from '../assistente/_componentes/SugestoesConversa'
 import { EtiquetasLead, ORDEM_ETIQUETAS, ROTULO_ETIQUETA } from '../assistente/_componentes/jornada'
@@ -72,8 +74,8 @@ function diasParado(lead: Lead): number {
   return Math.floor((Date.now() - new Date(desde).getTime()) / MS_POR_DIA)
 }
 const ETAPAS_DECISAO: EstagioLead[] = ['NEGOCIACAO', 'PROPOSTA']
-/** Em Negociação/Proposta sem mudar de etapa há mais que o limite e sem follow agendado: está esfriando sem ninguém cuidar. */
-function leadParado(lead: Lead, limite: number) {
+/** Filtro "Em decisão sem follow": em Negociação/Proposta sem mudar de etapa há mais que o limite e sem follow agendado. (Não é o "parado" oficial, que vem do tempo máximo da etapa.) */
+function emDecisaoSemFollow(lead: Lead, limite: number) {
   return ETAPAS_DECISAO.includes(lead.estagio) && !lead.vendaId && !lead.follows?.length && diasParado(lead) > limite
 }
 
@@ -217,6 +219,9 @@ export default function ProLaboreLeadsPage() {
   const [perdaAberta, setPerdaAberta] = useState<Lead | null>(null)
   const [filtroFollow, setFiltroFollow] = useState<'' | 'ATRASADO' | 'HOJE'>('')
   const [filtroParado, setFiltroParado] = useState(false)
+  const [filtroDecisao, setFiltroDecisao] = useState(false)
+  // Tempo máximo de cada etapa (Metas e premissas): base da regra oficial de parado.
+  const [premissas, setPremissas] = useState<PremissasJornada | null>(null)
   // Etiqueta da jornada (posta pelo Assistente): filtra só os cards do Kanban.
   const [filtroEtiqueta, setFiltroEtiqueta] = useState('')
   // Custo por lead automático: a ficha do dicionário (gasto ÷ leads novos de tráfego pago no mês).
@@ -320,6 +325,7 @@ export default function ProLaboreLeadsPage() {
     ])
       .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v.filter(x => x.vende !== false)); setParametro(p); setMetasFunil(metas) })
       .finally(() => { carregouUmaVez.current = true; setLoading(false) })
+    proLaboreApi.jornada.premissas().then(setPremissas).catch(() => setPremissas(null))
     if (isDono) {
       const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)
       metricasApi.ler(['custo_por_lead'], { inicio: `${hoje.slice(0, 8)}01`, fim: hoje })
@@ -691,17 +697,20 @@ export default function ProLaboreLeadsPage() {
   // Conta migrada para a jornada de 10 etapas: o quadro novo substitui o de 5 colunas.
   const jornada10 = leads.some(l => !!l.etapa)
   const totalPerdidos = leads.filter(l => l.estagio === 'PERDIDO').length
-  // Follows pendentes dos leads em andamento: atrasados e de hoje viram atalhos de filtro.
-  const situacaoDe = (l: Lead) => (l.follows?.[0] ? situacaoFollow(l.follows[0]).tipo : null)
-  const followsAtrasados = leadsAtivos.filter(l => situacaoDe(l) === 'ATRASADO').length
-  const followsHoje = leadsAtivos.filter(l => situacaoDe(l) === 'HOJE').length
+  // Uma regra só para cada número (19/11): follows pela contagem única (a mesma do menu e do
+  // "Para hoje") e parados pela regra oficial do dicionário (tempo máximo da etapa), sobre
+  // todos os leads de quem vê (sem os filtros da tela), para bater com o menu.
+  const { hoje: followsHoje, atrasados: followsAtrasados } = contarFollows(leads)
   const limiteParado = parametro?.diasLeadParado ?? 5
-  const parados = leadsAtivos.filter(l => leadParado(l, limiteParado))
+  const parados = jornada10 ? leads.filter(l => paradoOficial(l, premissas)) : leadsAtivos.filter(l => emDecisaoSemFollow(l, limiteParado))
+  const ehParado = (l: Lead) => (jornada10 ? paradoOficial(l, premissas) : emDecisaoSemFollow(l, limiteParado))
+  const emDecisao = leadsAtivos.filter(l => emDecisaoSemFollow(l, limiteParado))
   const contagemEtiquetas = ORDEM_ETIQUETAS.map(e => ({ e, n: leadsAtivos.filter(l => l.etiquetas?.includes(e)).length })).filter(x => x.n > 0)
   const painelLead = painelId ? leads.find(l => l.id === painelId) ?? null : null
   const leadsAtivosOrdenados = [...leadsAtivos]
-    .filter(l => !filtroFollow || situacaoDe(l) === filtroFollow)
-    .filter(l => !filtroParado || leadParado(l, limiteParado))
+    .filter(l => !filtroFollow || temFollow(l, filtroFollow))
+    .filter(l => !filtroParado || ehParado(l))
+    .filter(l => !filtroDecisao || emDecisaoSemFollow(l, limiteParado))
     .filter(l => !filtroEtiqueta || l.etiquetas?.includes(filtroEtiqueta))
     .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
@@ -810,7 +819,7 @@ export default function ProLaboreLeadsPage() {
   const foraDaMeta = stagesDados.filter(d => d.statusOk === false).length
   const ETIQ_VISIVEIS = 8
   const etiquetasMostradas = todasEtiquetas ? contagemEtiquetas : contagemEtiquetas.slice(0, ETIQ_VISIVEIS)
-  const temAtencao = parados.length > 0 || filtroParado || followsAtrasados > 0 || followsHoje > 0 || !!filtroFollow
+  const temAtencao = parados.length > 0 || filtroParado || emDecisao.length > 0 || filtroDecisao || followsAtrasados > 0 || followsHoje > 0 || !!filtroFollow
   const densidadeBotoes = (
     <div className="pl-kanban-densidade" role="group" aria-label="Tamanho dos cards">
       {(['compacto', 'detalhado'] as const).map(d => (
@@ -819,7 +828,7 @@ export default function ProLaboreLeadsPage() {
     </div>
   )
   const avisosMais = parados.length + followsAtrasados
-  const filtrosDoMais = [filtroParado ? 'só os parados' : '', filtroFollow === 'ATRASADO' ? 'follows atrasados' : filtroFollow === 'HOJE' ? 'follows de hoje' : '', filtroEtiqueta ? ROTULO_ETIQUETA[filtroEtiqueta as keyof typeof ROTULO_ETIQUETA] : ''].filter(Boolean)
+  const filtrosDoMais = [filtroParado ? 'só os parados' : '', filtroDecisao ? 'em decisão sem follow' : '', filtroFollow === 'ATRASADO' ? 'follows atrasados' : filtroFollow === 'HOJE' ? 'follows de hoje' : '', filtroEtiqueta ? ROTULO_ETIQUETA[filtroEtiqueta as keyof typeof ROTULO_ETIQUETA] : ''].filter(Boolean)
   // O funil em 5 etapas (visão anterior): na tela para quem não abre o Painel; na janela "Mais do CRM" para a gestão.
   const funilCinco = !loading && (
         <section className="crm-metricas" data-metricas-etapas>
@@ -953,7 +962,7 @@ export default function ProLaboreLeadsPage() {
         <div className="crm-filtros-ativos" role="status" data-filtros-ativos>
           <span className="pl-hint">Mostrando</span>
           {filtrosDoMais.map(f => <span key={f} className="pl-chip active">{f}</span>)}
-          <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => { setFiltroParado(false); setFiltroFollow(''); setFiltroEtiqueta('') }} data-limpar-filtros-mais>Ver todos os cards</button>
+          <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => { setFiltroParado(false); setFiltroDecisao(false); setFiltroFollow(''); setFiltroEtiqueta('') }} data-limpar-filtros-mais>Ver todos os cards</button>
         </div>
       )}
 
@@ -962,8 +971,8 @@ export default function ProLaboreLeadsPage() {
         <div className="crm-faixa" role="status" aria-label="Resumo do funil" data-faixa-resumo>
           <span><b className="pl-mono">{totalFiltrado.toLocaleString('pt-BR')}</b> {totalFiltrado === 1 ? 'lead no funil' : 'leads no funil'}</span>
           <span><small>Oportunidade</small> <b className="pl-mono">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
-          <span className={parados.length > 0 ? 'crm-faixa-atencao' : undefined}><b className="pl-mono">{parados.length}</b> {parados.length === 1 ? 'parado' : 'parados'}</span>
-          <span className={followsAtrasados > 0 ? 'crm-faixa-critico' : undefined}><b className="pl-mono">{followsHoje}</b> {followsHoje === 1 ? 'follow hoje' : 'follows hoje'}{followsAtrasados > 0 && <> · <b className="pl-mono">{followsAtrasados}</b> {followsAtrasados === 1 ? 'atrasado' : 'atrasados'}</>}</span>
+          <span className={parados.length > 0 ? 'crm-faixa-atencao' : undefined} title="Abertos há mais tempo que o máximo da etapa (Metas e premissas)"><b className="pl-mono">{parados.length}</b> {parados.length === 1 ? 'parado' : 'parados'}</span>
+          <span className={followsAtrasados > 0 ? 'crm-faixa-critico' : undefined} title="Follows pendentes dos leads em andamento: de hoje ainda no horário, e atrasados (data e hora já passaram)"><b className="pl-mono">{followsHoje}</b> {followsHoje === 1 ? 'follow hoje' : 'follows hoje'}{followsAtrasados > 0 && <> · <b className="pl-mono">{followsAtrasados}</b> {followsAtrasados === 1 ? 'atrasado' : 'atrasados'}</>}</span>
         </div>
       )}
 
@@ -1002,9 +1011,15 @@ export default function ProLaboreLeadsPage() {
           {temAtencao && (
             <div className="crm-atencao" role="status" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
               {(parados.length > 0 || filtroParado) && (
-                <span className="crm-atencao-item" title={`Parados há mais de ${limiteParado} dias em Negociação ou Proposta, sem follow agendado. É aqui que o funil mais perde: agende o próximo contato, avance ou registre o motivo da perda.`}>
-                  <b>{parados.length}</b> {parados.length === 1 ? 'lead parado' : 'leads parados'} em Negociação ou Proposta há mais de {limiteParado} dias, sem follow agendado
+                <span className="crm-atencao-item" title="Abertos há mais tempo que o máximo da etapa (Metas e premissas): a mesma regra que pinta o tempo do card de vermelho.">
+                  <b>{parados.length}</b> {parados.length === 1 ? 'lead parado' : 'leads parados'} além do tempo máximo da etapa
                   <button type="button" className={`pl-chip ${filtroParado ? 'active' : ''}`} aria-pressed={filtroParado} onClick={() => setFiltroParado(f => !f)} data-filtro-parados>{filtroParado ? 'Ver todos os cards' : 'Ver só os parados'}</button>
+                </span>
+              )}
+              {(emDecisao.length > 0 || filtroDecisao) && (
+                <span className="crm-atencao-item" title={`Em Negociação ou Proposta há mais de ${limiteParado} dias, sem follow agendado.`}>
+                  <b>{emDecisao.length}</b> em decisão sem follow
+                  <button type="button" className={`pl-chip ${filtroDecisao ? 'active' : ''}`} aria-pressed={filtroDecisao} onClick={() => setFiltroDecisao(f => !f)} data-filtro-decisao>{filtroDecisao ? 'Ver todos os cards' : 'Ver só estes'}</button>
                 </span>
               )}
               {(followsAtrasados > 0 || followsHoje > 0 || filtroFollow) && (
@@ -1399,7 +1414,7 @@ function KanbanCard({
   }
   const dias = diasParado(lead)
   // "Esfriando": em Negociação/Proposta, passou do limite da conta sem follow; nas outras etapas, uma semana sem avançar.
-  const parado = ETAPAS_DECISAO.includes(estagio) ? leadParado(lead, limiteParado) : dias >= 7 && !lead.vendaId
+  const parado = ETAPAS_DECISAO.includes(estagio) ? emDecisaoSemFollow(lead, limiteParado) : dias >= 7 && !lead.vendaId
   const viaWhatsapp = lead.origemCadastro === 'WHATSAPP'
   const faixa = typeof lead.pontuacao === 'number' ? (lead.pontuacao >= 70 ? 'quente' : lead.pontuacao >= 40 ? 'morno' : 'frio') : ''
   const etiquetas = lead.etiquetas?.filter(e => e !== 'QUENTE') ?? []
