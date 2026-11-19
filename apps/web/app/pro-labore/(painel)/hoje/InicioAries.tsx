@@ -25,7 +25,6 @@ const ATALHOS: Record<string, { nome: string; href: string; icone: string }> = {
   atividades: { nome: 'Atividades', href: '/pro-labore/atividades', icone: 'calendario' },
   conversas: { nome: 'Conversas', href: '/pro-labore/whatsapp', icone: 'conversa' },
   financeiro: { nome: 'Financeiro', href: '/pro-labore/financeiro', icone: 'dinheiro' },
-  daily: { nome: 'Daily', href: '/pro-labore/hoje?sub=daily', icone: 'relogio' },
   painel: { nome: 'Painel', href: '/pro-labore/hoje?sub=painel', icone: 'relatorios' },
 }
 const ATALHOS_PADRAO = ['novo-lead', 'nova-moto', 'nova-campanha', 'crm', 'estoque', 'relatorios']
