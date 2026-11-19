@@ -7,6 +7,7 @@
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
 import { orcamento } from '../lib/cronOrcamento'
+import { cargaInicial as cargaInicialCentral, conferir as conferirCentral, processarEventos as processarEventosCentral } from '../lib/centralConhecimento/rotinas'
 import { reverMetaEmRiscoTodas } from '../lib/metaCoerente'
 import { faltasVencidas } from '../lib/jornadaAtividades'
 import { Router, Request, Response } from 'express'
@@ -381,7 +382,9 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   const referencias = await o.rodar('referências', () => rodarReferencias(agora), { referenciasPerfis: 0, referenciasMotos: 0 })
   // Os eventos brutos do Instagram já processados não ficam para sempre (espaço do banco).
   const eventosLimpos = await o.rodar('limpeza de eventos', () => limparEventosAntigos(agora), { eventosApagados: 0 })
-  res.json({ ...qualidade, ...detectores, ...ajuste, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos, adiadas: o.adiadas, tempos: o.tempos })
+  // PDF 07 · conferência diária da Central (fontes x índice); o que diverge vai à Saúde e é corrigido sozinho.
+  const centralConferencia = await o.rodar('central: conferência', lim => conferirCentral(Math.min(15_000, lim), agora), { centralConferidas: 0, centralDivergencias: 0 })
+  res.json({ ...centralConferencia, ...qualidade, ...detectores, ...ajuste, ...sincronizacao, pautasDeEntrega, testesConcluidos, ...concorrentes, ...planejamento, ...lembretes, ...referencias, ...eventosLimpos, ...retratos, adiadas: o.adiadas, tempos: o.tempos })
 })
 // Chamado a cada 5 min: novas tentativas vencidas, a publicação das pautas
 // agendadas que já chegaram no horário, a fila do webhook e o Pulso. Em
@@ -399,6 +402,8 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   // PDF 02 · ATV: as ocorrências de hoje das rotinas e a régua de cobrança.
   const rotinas = await o.rodar('rotinas', () => gerarOcorrenciasDeRotina(agora), { ocorrenciasRotina: 0 })
   const regua = await o.rodar('régua', () => rodarRegua(agora), { reguaRegistros: 0, reguaEnviados: 0 })
+  // PDF 07 · Central de Conhecimento: os eventos gravados pelo banco vão para o índice (frescor de 15 min).
+  const centralEventos = await o.rodar('central de conhecimento', lim => processarEventosCentral(Math.min(6000, lim), agora), { centralProcessados: 0, centralFalhas: 0 })
   // Ligações: aviso na hora e lembrete 30 min depois para quem liga (Aries ou chat "Você").
   const ligacoes = await o.rodar('ligações', () => avisarLigacoes(agora), { avisosLigacao: 0 })
   // Avisa o vendedor de lead esperando resposta (pelo Aries, quando vinculado).
@@ -422,7 +427,9 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const agente = await o.rodar('Aries manhã', lim => rodarAgente(agora, Math.min(5000, lim)), { manhaAgente: 0 })
   // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
   const trafego = await o.rodar('tráfego', lim => sincronizarTrafegoPendentes(Math.min(10_000, lim)), { trafegoSincronizadas: 0, trafegoFalhas: 0 })
-  res.json({ ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
+  // Carga inicial da Central em rodadas, com o tempo que sobrar (para no ponto e continua na próxima).
+  const centralCarga = await o.rodar('central: carga inicial', lim => cargaInicialCentral(Math.min(8000, lim)), { centralCarga: 0 }, 3000)
+  res.json({ ...centralEventos, ...centralCarga, ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
