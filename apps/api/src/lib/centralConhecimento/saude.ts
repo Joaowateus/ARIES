@@ -1,6 +1,7 @@
 // PDF 07 · Central de Conhecimento — números do topo e a Saúde da Central (só o dono).
 import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
+import { envioSeguro } from '../pergunte'
 import { FONTES, FONTES_INDEXADAS } from './fontes'
 import { frescorDasFontes } from './indice'
 import { TENTATIVAS_ALERTA } from './rotinas'
@@ -92,4 +93,32 @@ export async function saude(usuarioId: string, agora = new Date()) {
     pesquisasSemResultado: pesquisasVazias.map(p => ({ termo: p.termo, vezes: p._count._all })),
     conferencias,
   }
+}
+
+/**
+ * Aceite do PDF 07 calculado na produção (só o dono): cobertura, frescor, divergências,
+ * proteção do que foi à IA (P1) e o acerto do Pergunte (respostas marcadas como erradas).
+ * As 40 perguntas do roteiro (docs/central-conhecimento-aceite.md) são feitas na tela e conferidas aqui.
+ */
+export async function aceite(usuarioId: string, agora = new Date()) {
+  const desde = new Date(agora.getTime() - 30 * DIA)
+  const [cob, frescor, divergencias, envios, conversas, erradas, naoSabe] = await Promise.all([
+    cobertura(usuarioId), frescorDasFontes(usuarioId, agora),
+    prisma.centralDivergencia.count({ where: { usuarioId, resolvidaEm: null } }),
+    prisma.iaEnvio.findMany({ where: { usuarioId, criadoEm: { gte: desde }, finalidade: { startsWith: 'AGENTE' } }, select: { id: true, finalidade: true, conteudo: true, criadoEm: true } }),
+    prisma.pergunteConversa.count({ where: { usuarioId, criadoEm: { gte: desde } } }),
+    prisma.pergunteConversa.count({ where: { usuarioId, criadoEm: { gte: desde }, marcadaErradaEm: { not: null } } }),
+    prisma.pergunteConversa.count({ where: { usuarioId, criadoEm: { gte: desde }, naoSabe: true } }),
+  ])
+  const inseguros = envios.filter(e => !envioSeguro(e.conteudo) || /\bnascimento\b\s*[:=]/i.test(e.conteudo))
+  const atrasadas = FONTES.filter(f => frescor.get(f.chave)?.atrasada || frescor.get(f.chave)?.falha).map(f => f.nome)
+  const acerto = conversas ? Math.round(((conversas - erradas) / conversas) * 1000) / 10 : null
+  const itens = [
+    { item: 'Cobertura das fontes ≥ 99%', valor: `${cob.pct}%`, passa: cob.pct >= 99 },
+    { item: 'Nenhuma fonte atrasada ou com falha', valor: atrasadas.join(', ') || 'todas em dia', passa: !atrasadas.length },
+    { item: 'Nenhuma divergência aberta', valor: String(divergencias), passa: divergencias === 0 },
+    { item: 'Nada de R$, CPF ou data no que foi à IA (30 dias)', valor: `${envios.length} envio(s), ${inseguros.length} com problema`, passa: !inseguros.length },
+    { item: 'Acerto do Pergunte ≥ 95% (respostas não marcadas como erradas, 30 dias)', valor: acerto == null ? 'sem perguntas ainda' : `${acerto}% de ${conversas}`, passa: acerto != null && acerto >= 95 && conversas >= 40 },
+  ]
+  return { itens, passa: itens.every(i => i.passa), naoSabe, inseguros: inseguros.slice(0, 20).map(e => ({ id: e.id, finalidade: e.finalidade, criadoEm: e.criadoEm })) }
 }

@@ -8,7 +8,7 @@ import { requireProLaboreAuth, requireDono } from '../middleware/authProLabore'
 import { contextoDoPedido } from '../lib/centralConhecimento/contexto'
 import { buscar } from '../lib/centralConhecimento/indice'
 import { NOME_TIPO, type TipoDoc } from '../lib/centralConhecimento/fontes'
-import { saude, topo } from '../lib/centralConhecimento/saude'
+import { aceite, saude, topo } from '../lib/centralConhecimento/saude'
 import { conferir, processarEventos, tentarDeNovo } from '../lib/centralConhecimento/rotinas'
 import { fichas, historicoDaFicha, hojeBrt, ler, mesCorrente, type Ficha } from '../lib/metricas'
 import { formatar } from '../lib/pergunte'
@@ -171,6 +171,11 @@ router.post('/central/saude/divergencias/:id/resolver', requireProLaboreAuth, re
 router.post('/central/saude/perguntas/:id/tratada', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const r = await prisma.pergunteConversa.updateMany({ where: { id: String(req.params.id), usuarioId: req.proLaboreUser!.sub }, data: { tratadaEm: new Date() } })
   res.json({ ok: r.count > 0 })
+})
+
+// PDF 07 · aceite calculado na produção (só o dono).
+router.get('/central/aceite', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  res.json(await aceite(req.proLaboreUser!.sub))
 })
 
 export default router
