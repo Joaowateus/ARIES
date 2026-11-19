@@ -5327,3 +5327,13 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
   .ia-embutida .ia-rodape { grid-column: 1 / -1; }
 }
 @media (min-width: 1181px) { .ia-embutida .ia-reservado { height: auto; min-height: 0; margin-bottom: 0; } }
+
+/* Tela inicial encaixada na moldura: um bloco só, sem margem interna, sem a borda
+   própria e sem o rodapé; ocupa exatamente a área abaixo da barra do topo. */
+.pl-main:has(.ia-embutida) { overflow: hidden; }
+.pl-app .pl-main .pl-shell:has(.ia-embutida) { max-width: none; padding: 0; }
+.pl-shell:has(.ia-embutida) .pl-footer { display: none; }
+.ia.ia-embutida { border: 0; border-radius: 0 0 12px 12px; min-height: calc(100vh - 71px); min-height: calc(100dvh - 71px); }
+@media (max-width: 980px) {
+  .ia.ia-embutida { border-radius: 0; min-height: calc(100dvh - 53px); }
+}
