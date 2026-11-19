@@ -251,8 +251,11 @@ export interface AgendaInicio {
   iniciadoEm: string
 }
 
+/** Perfil do cliente (19/11): como atender. */
+export type PerfilCliente = 'INDECISO' | 'DETALHISTA' | 'APRESSADO' | 'NERVOSO'
 export interface Lead {
   id: string
+  perfilCliente?: PerfilCliente | null
   // Jornada de 10 etapas (PDF 01): nulo enquanto a conta não foi migrada.
   etapa?: EtapaJornada | null
   fase?: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO' | null

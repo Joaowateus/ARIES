@@ -6,7 +6,7 @@ import { BarraFerramentas, CabecalhoFunil, DicaFunil, FaixaNumeros, FILTROS_VAZI
 import { useMetricas } from '../_metricas/Metricas'
 import { CustosPorEtapa } from './_metricas/CustosPorEtapa'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, metricasApi, type ErroApi, type PremissasJornada, type Temperatura, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
+import { proLaboreApi, metricasApi, type ErroApi, type EtapaJornada, type PremissasJornada, type Temperatura, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
 import { metaDefinida } from '@/lib/metaFunil'
 import { AvisoRepetida, parecidasDoErro } from '../vendas/AvisoRepetida'
 import { SeletorMoto } from '../vendas/SeletorMoto'
@@ -22,6 +22,7 @@ import { paradoOficial } from './_jornada/tempo'
 import { FaixaWhatsapp } from './_whatsapp/FaixaWhatsapp'
 import { ChipNota } from '../assistente/_componentes/SugestoesConversa'
 import { EtiquetasLead, ORDEM_ETIQUETAS, ROTULO_ETIQUETA } from '../assistente/_componentes/jornada'
+import { NOME_ETAPA } from '@/lib/etapasJornada'
 import { PainelLead } from './_painel/PainelLead'
 import { quandoLigar } from '../_ligacoes/Ligacoes'
 
@@ -254,6 +255,8 @@ export default function ProLaboreLeadsPage() {
   // empurrando o quadro pra baixo toda vez) — abre só quando precisa.
   // ?novo=1 e ?lead=ID chegam da paleta de comandos (Ctrl K).
   const [novoLeadAberto, setNovoLeadAberto] = useState(() => paramDaUrl('novo') === '1')
+  // "+" no cabeçalho da coluna: o lead novo já vai para aquela etapa.
+  const [etapaNovo, setEtapaNovo] = useState<EtapaJornada | null>(null)
   const [form, setForm] = useState<FormLead>(FORM_VAZIO)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -344,7 +347,8 @@ export default function ProLaboreLeadsPage() {
   // então funciona não importa em qual render o drag começou.
   useEffect(() => () => { dragRef.current?.abort.abort() }, [])
 
-  function abrirNovoLead() {
+  function abrirNovoLead(etapa: EtapaJornada | null = null) {
+    setEtapaNovo(etapa)
     setForm(FORM_VAZIO)
     setErro('')
     setNovoLeadAberto(true)
@@ -379,14 +383,20 @@ export default function ProLaboreLeadsPage() {
       valorNegociacao,
       })
     try {
+      let criado: Lead
       try {
-        await enviar()
+        criado = await enviar()
       } catch (err) {
         // Lead que chamou no WhatsApp já entra sozinho: confirma antes de duplicar.
         if ((err as ErroApi).status !== 409) throw err
         if (!confirm(`${(err as Error).message}\n\nCadastrar outro mesmo assim?`)) return
-        await enviar(true)
+        criado = await enviar(true)
       }
+      // Criado pelo "+" de uma coluna: vai para aquela etapa (o que faltar fica como pendência, como no Avançar).
+      if (etapaNovo && etapaNovo !== 'LEAD' && criado?.id) {
+        await proLaboreApi.jornada.mover(criado.id, etapaNovo, undefined, true).catch(e => alert(`O lead foi criado em Lead. Não deu para levar para a etapa escolhida: ${e instanceof Error ? e.message : 'erro'}`))
+      }
+      setEtapaNovo(null)
       setForm(FORM_VAZIO)
       setNovoLeadAberto(false)
       carregar()
@@ -914,7 +924,7 @@ export default function ProLaboreLeadsPage() {
   )
   return (
     <div className="crm" data-crm>
-      <CabecalhoFunil avisosMais={avisosMais} onMais={() => setMaisAberto(true)} onNovo={abrirNovoLead} />
+      <CabecalhoFunil avisosMais={avisosMais} onMais={() => setMaisAberto(true)} onNovo={() => abrirNovoLead()} />
       {!loading && (
         <FaixaNumeros
           n={{ noFunil: totalFiltrado, oportunidade: stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0), parados: parados.length, followsHoje, followsAtrasados, taxaAbordagem: leiturasTopo.taxa_abordagem?.valor ?? null, leadsNovos: leiturasTopo.leads_novos?.valor ?? null }}
@@ -1039,6 +1049,10 @@ export default function ProLaboreLeadsPage() {
               selecionando={selecionando}
               onSelecionando={setSelecionando}
               premissas={premissas}
+              densidade={densidade}
+              onFollow={setFollowAberto}
+              onNovoNaEtapa={etapa => abrirNovoLead(etapa)}
+              guiado={false}
             />
           ) : (
           <div className="pl-kanban">
@@ -1135,7 +1149,7 @@ export default function ProLaboreLeadsPage() {
       {novoLeadAberto && (
         <div className="pl-modal-backdrop" onClick={fecharNovoLead}>
           <form onSubmit={handleSubmit} className="pl-card pl-modal-panel" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-            <div className="pl-card-title" style={{ marginBottom: 14 }}>Novo lead</div>
+            <div className="pl-card-title" style={{ marginBottom: 14 }}>Novo lead{etapaNovo && etapaNovo !== 'LEAD' ? <span className="pl-hint" style={{ fontWeight: 400 }}> · entra em {NOME_ETAPA[etapaNovo]}</span> : null}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
               <div className="pl-field">
                 <label>Nome do cliente</label>

@@ -5,14 +5,59 @@
 // Ajuste 2 (CRM livre): o vendedor move o card para onde quiser; o sistema
 // mostra o que falta e deixa "avançar mesmo assim", guardando a pendência.
 // Cada card traz a temperatura (frio, morno, quente) e o próximo passo.
-import { useEffect, useState } from 'react'
-import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type PremissasJornada, type Temperatura } from '@/lib/proLaboreApi'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { proLaboreApi, type Lead, type EtapaJornada, type ErroApi, type PerfilCliente, type PremissasJornada, type Temperatura } from '@/lib/proLaboreApi'
 import { ETAPAS_JORNADA, FASES, NOME_ETAPA, NOME_MOTIVO, NOME_DESTINO } from '@/lib/etapasJornada'
 import { FollowRoboModal, SeloRobo } from './FollowRobo'
-import { situacaoFollow } from '../../_follow/follow'
+import { situacaoFollow, linkWhatsapp } from '../../_follow/follow'
 import { estourou, tempoNaEtapa } from './tempo'
 
 const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+/** "R$ 3,9 mi", "R$ 345 mil" (cabeçalho da coluna). */
+const moedaAbrev = (v: number) => (v >= 1_000_000 ? `R$ ${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : v >= 1000 ? `R$ ${Math.round(v / 1000).toLocaleString('pt-BR')} mil` : `R$ ${Math.round(v)}`)
+const POR_PAGINA = 50
+/** A pergunta que libera a passagem para a próxima etapa (conferida com os critérios da API, lib/jornadaRegras.ts). */
+const PERGUNTA_ETAPA: Record<EtapaJornada, string> = {
+  LEAD: 'A loja já respondeu o cliente?',
+  ABORDADO: 'O cliente respondeu e a coleta começou?',
+  LEVANTAMENTO: 'Já sabemos moto, pagamento, CNH e entrada, e a simulação foi enviada?',
+  MQL: 'Algum banco aprovou o crédito?',
+  SQL: 'O lead já foi passado ao vendedor?',
+  NEGOCIACAO: 'A proposta foi registrada?',
+  PROPOSTA: 'A visita foi marcada?',
+  AGENDAMENTO: 'O cliente chegou à loja?',
+  VISITA: 'A venda foi registrada?',
+  VENDA: 'Venda concluída',
+}
+/** O que fazer para passar à próxima etapa (o critério da API em uma frase; Modo guiado e painel). */
+export const O_QUE_FAZER: Record<EtapaJornada, string> = {
+  LEAD: 'uma pessoa da loja precisa responder o cliente',
+  ABORDADO: 'o cliente precisa responder e a coleta começar',
+  LEVANTAMENTO: 'completar o levantamento e enviar a simulação',
+  MQL: 'um banco precisa aprovar o crédito',
+  SQL: 'passar o lead ao vendedor',
+  NEGOCIACAO: 'registrar a proposta (preço, entrada e parcela)',
+  PROPOSTA: 'marcar a visita à loja, com data e hora',
+  AGENDAMENTO: 'registrar o check-in quando o cliente chegar',
+  VISITA: 'registrar a venda',
+  VENDA: 'venda concluída',
+}
+export const NOME_PERFIL: Record<PerfilCliente, string> = { INDECISO: 'Indeciso', DETALHISTA: 'Detalhista', APRESSADO: 'Apressado', NERVOSO: 'Nervoso' }
+const soDigitos = (v: string | null | undefined) => (v ?? '').replace(/\D/g, '')
+/** Nome vazio, só pontos ou igual ao telefone vira "Sem nome". */
+export function nomeLimpo(l: Pick<Lead, 'nomeCliente' | 'telefone'>): string | null {
+  const n = (l.nomeCliente ?? '').trim()
+  if (!n || /^[.\s·…-]*$/.test(n)) return null
+  const d = soDigitos(n)
+  if (d.length >= 8 && d.length >= n.replace(/\s/g, '').length - 3 && soDigitos(l.telefone).endsWith(d.slice(-8))) return null
+  return n
+}
+/** Moto muito longa ou terminando em "?" (o robô gravou a pergunta do cliente) não é uma moto. */
+export const motoValida = (m: string | null | undefined) => !!m && m.trim().length > 0 && m.trim().length <= 40 && !m.trim().endsWith('?')
+function IcoPend() { return <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M12 8v5M12 16.5v.5" /><circle cx="12" cy="12" r="9" /></svg> }
+function IcoRobo() { return <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><rect x="5" y="8" width="14" height="11" rx="3" /><path d="M12 4v4M9.5 13h.01M14.5 13h.01" /></svg> }
+function IcoLev() { return <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><rect x="6" y="4" width="12" height="16" rx="2" /><path d="M9 9h6M9 13h4" /></svg> }
 
 export type FaseFunil = 'TUDO' | 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'
 interface Props {
@@ -28,6 +73,11 @@ interface Props {
   selecionando: boolean
   onSelecionando: (v: boolean) => void
   premissas: PremissasJornada | null
+  densidade: 'compacto' | 'detalhado'
+  onFollow: (lead: Lead) => void
+  onNovoNaEtapa: (etapa: EtapaJornada) => void
+  /** Modo guiado: pergunta da coluna, "o que fazer" no card e o guia que não some sozinho. */
+  guiado: boolean
 }
 
 type Aviso = { lead: Lead; destino: EtapaJornada; faltando: string[]; podeForcar: boolean } | null
@@ -66,7 +116,7 @@ export function faseDaUrl(): FaseFunil {
   return FASES.find(x => (x.etapas as string[]).includes(e ?? ''))?.id ?? 'TUDO'
 }
 
-export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda, fase, filtroTemp, soPendencia, selecionando, onSelecionando, premissas }: Props) {
+export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda, fase, filtroTemp, soPendencia, selecionando, onSelecionando, premissas, densidade, onFollow, onNovoNaEtapa, guiado }: Props) {
   const [arrastando, setArrastando] = useState<string | null>(null)
   const [sobre, setSobre] = useState<EtapaJornada | null>(null)
   const [aviso, setAviso] = useState<Aviso>(null)
@@ -81,8 +131,39 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [marcados, setMarcados] = useState<string[]>([])
   const [followPara, setFollowPara] = useState<Array<{ id: string; nome: string }> | null>(null)
   const alternarMarcado = (id: string) => setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id]))
-  // A orientação some sozinha depois de 15 s (o selo de pendência fica no card).
-  useEffect(() => { if (!guia) return; const t = setTimeout(() => setGuia(null), 15_000); return () => clearTimeout(t) }, [guia])
+  // A orientação some sozinha depois de 15 s (o selo de pendência fica no card); no Modo guiado, fica.
+  useEffect(() => { if (!guia || guiado) return; const t = setTimeout(() => setGuia(null), 15_000); return () => clearTimeout(t) }, [guia, guiado])
+  // Cabeçalho da coluna: menu "⋯", ordem e quantos cartões mostrar (50 por vez).
+  const [menuCol, setMenuCol] = useState<EtapaJornada | null>(null)
+  const [ordem, setOrdem] = useState<Partial<Record<EtapaJornada, 'CALOR' | 'TEMPO' | 'VALOR'>>>({})
+  const [limites, setLimites] = useState<Partial<Record<EtapaJornada, number>>>({})
+  // Cartão: menu "⋯" e, no toque, o primeiro toque mostra as ações (o segundo abre o painel).
+  const [menuCard, setMenuCard] = useState<string | null>(null)
+  const [tocado, setTocado] = useState<string | null>(null)
+  const toque = useRef(false)
+  useEffect(() => {
+    if (!menuCol && !menuCard) return
+    const fechar = (ev: PointerEvent) => { if (!(ev.target as HTMLElement).closest('.qj-menu-wrap')) { setMenuCol(null); setMenuCard(null) } }
+    const esc = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { setMenuCol(null); setMenuCard(null) } }
+    document.addEventListener('pointerdown', fechar); document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('pointerdown', fechar); document.removeEventListener('keydown', esc) }
+  }, [menuCol, menuCard])
+  // O quadro ocupa o resto da altura da tela: só as colunas rolam na vertical.
+  const rolaRef = useRef<HTMLDivElement>(null)
+  const [alturaQuadro, setAlturaQuadro] = useState<string | null>(null)
+  const medir = useCallback(() => {
+    const el = rolaRef.current
+    if (!el || window.innerWidth < 761) { setAlturaQuadro(null); return }
+    const topo = el.getBoundingClientRect().top + window.scrollY
+    setAlturaQuadro(`max(480px, calc(100dvh - ${Math.round(topo + 16)}px))`)
+  }, [])
+  useLayoutEffect(() => {
+    medir()
+    window.addEventListener('resize', medir)
+    const ro = typeof ResizeObserver !== 'undefined' && rolaRef.current?.parentElement?.parentElement ? new ResizeObserver(medir) : null
+    if (ro && rolaRef.current?.closest('[data-crm]')) ro.observe(rolaRef.current.closest('[data-crm]') as Element)
+    return () => { window.removeEventListener('resize', medir); ro?.disconnect() }
+  }, [medir])
   const [conversao, setConversao] = useState<Record<string, { chegaram: number; conversao: number | null }>>({})
   // Ajuste 1: o Painel do dono abre o CRM filtrado numa etapa (?etapa=): mostra a fase dela e leva até a coluna.
   const [destaque] = useState<EtapaJornada | null>(() => {
@@ -101,7 +182,11 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const visiveis = FASES.filter(f => fase === 'TUDO' || f.id === fase)
   const naTela = leads.filter(l => (!filtroTemp || calorDe(l) === filtroTemp) && (!soPendencia || pendencias(l).length > 0))
   // Dentro da coluna: quentes primeiro; no empate, quem tem mais pontos.
-  const porEtapa = (e: EtapaJornada) => naTela.filter(l => (l.etapa ?? 'LEAD') === e).sort((a, b) => ORDEM_TEMP[calorDe(a)] - ORDEM_TEMP[calorDe(b)] || (b.calor?.pontos ?? 0) - (a.calor?.pontos ?? 0))
+  const porEtapa = (e: EtapaJornada) => naTela.filter(l => (l.etapa ?? 'LEAD') === e).sort((a, b) => {
+    if (ordem[e] === 'TEMPO') return new Date(a.entrouNaEtapaEm ?? a.criadoEm).getTime() - new Date(b.entrouNaEtapaEm ?? b.criadoEm).getTime()
+    if (ordem[e] === 'VALOR') return (b.valorNegociacao || 0) - (a.valorNegociacao || 0)
+    return ORDEM_TEMP[calorDe(a)] - ORDEM_TEMP[calorDe(b)] || (b.calor?.pontos ?? 0) - (a.calor?.pontos ?? 0)
+  })
   async function definirTemp(lead: Lead, t: Temperatura | null) {
     setTempAberta(null); setErro(null)
     try { await proLaboreApi.jornada.temperatura(lead.id, t); onAtualizar() } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível mudar a temperatura') }
@@ -138,112 +223,200 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
     try { const c = await proLaboreApi.jornada.checklist(lead.id); setPerda({ lead, motivos: c.motivos }) } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível abrir') }
   }
 
+  // --- Cartões --------------------------------------------------------
+  const avatar = (l: Lead) => vejaEquipe && l.vendedor?.nome
+    ? <span className="pl-avatar qj-avatar" title={l.vendedor.nome} aria-label={`Vendedor: ${l.vendedor.nome}`} data-vendedor-card>{l.vendedor.nome.split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase()}</span>
+    : null
+  const temperatura = (l: Lead, temp: Temperatura, simples: boolean) => (
+    <span className="qj-temp-wrap" onClick={ev => ev.stopPropagation()}>
+      <button type="button" className={`qj-temp ${simples ? 'qj-temp-ponto' : ''} qj-${temp.toLowerCase()}`} onClick={() => setTempAberta(t => (t === l.id ? null : l.id))} title={`${NOME_TEMP[temp]}: ${l.calor?.motivo ?? ''}. Clique para ajustar.`} aria-label={`Temperatura ${NOME_TEMP[temp]}`} aria-expanded={tempAberta === l.id} data-temperatura={temp}><i aria-hidden />{NOME_TEMP[temp]}{l.calor?.manual ? '*' : ''}</button>
+      {tempAberta === l.id && (
+        <span className="qj-temp-menu" role="menu" data-menu-temperatura>
+          {(['QUENTE', 'MORNO', 'FRIO'] as const).map(t => <button key={t} type="button" role="menuitem" onClick={() => void definirTemp(l, t)} data-definir-temp={t}>{NOME_TEMP[t]}</button>)}
+          <button type="button" role="menuitem" onClick={() => void definirTemp(l, null)} data-definir-temp="AUTO">Automática</button>
+        </span>
+      )}
+    </span>
+  )
+  const nomeDoCartao = (l: Lead) => {
+    const n = nomeLimpo(l)
+    return n ? <span className="pl-kanban-card-name pl-kc-nome">{n}</span> : <span className="pl-kanban-card-name pl-kc-nome qj-sem-nome" title={l.nomeCliente}>Sem nome {l.telefone && <small>{l.telefone}</small>}</span>
+  }
+  const motoDoCartao = (l: Lead) => (motoValida(l.modeloInteresse)
+    ? <span className="pl-kc-moto" title={l.modeloInteresse ?? ''}>{l.modeloInteresse}</span>
+    : <span className="pl-kc-moto qj-sem-moto" title={l.modeloInteresse ?? 'Sem moto de interesse'}>Moto não informada</span>)
+  const tempoDoCartao = (l: Lead, curto: boolean) => {
+    const limite = estourou(l, premissas)
+    return <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máx. ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{!curto && limite ? ` / ${limite.max}` : ''}</span>
+  }
+  /** Faixa de exceção no topo do cartão: vermelha (follow atrasado ou tempo estourado), âmbar (follow de hoje). */
+  const excecao = (l: Lead, sit: ReturnType<typeof situacaoFollow> | null) => (sit?.tipo === 'ATRASADO' || estourou(l, premissas)?.parado ? 'critico' : sit?.tipo === 'HOJE' ? 'hoje' : null)
+  function abrirCartao(l: Lead) {
+    if (selecionando) { alternarMarcado(l.id); return }
+    // Toque: o primeiro mostra as ações; o segundo abre o painel.
+    if (toque.current && tocado !== l.id) { setTocado(l.id); return }
+    setTocado(null); onAbrir(l.id)
+  }
+  const menuDoCartao = (l: Lead, e: EtapaJornada) => {
+    const wa = l.conversa?.id ? `/pro-labore/whatsapp?conversa=${l.conversa.id}` : null
+    const waExterno = !wa ? linkWhatsapp(l.telefone) : null
+    return (
+      <span className="qj-menu-wrap">
+        <button type="button" className="pl-btn pl-btn-ghost qj-card-mais" aria-label={`Mais ações de ${l.nomeCliente}`} aria-expanded={menuCard === l.id} onClick={() => setMenuCard(m => (m === l.id ? null : l.id))} data-menu-card>⋯</button>
+        {menuCard === l.id && (
+          <span className="qj-menu qj-menu-card" role="menu">
+            {['ABORDADO', 'LEVANTAMENTO'].includes(e) && <button type="button" role="menuitem" onClick={() => { setMenuCard(null); setLevantamento(l) }} data-levantamento>Levantamento</button>}
+            {e !== 'VENDA' && <button type="button" role="menuitem" onClick={() => { setMenuCard(null); void abrirPerda(l) }} data-perda>Perdido</button>}
+            {wa && <Link role="menuitem" href={wa} data-abrir-conversa>Abrir conversa no WhatsApp</Link>}
+            {waExterno && <a role="menuitem" href={waExterno} target="_blank" rel="noopener noreferrer" data-abrir-conversa>Abrir conversa no WhatsApp</a>}
+            <button type="button" role="menuitem" onClick={() => { setMenuCard(null); onFollow(l) }} data-agendar-follow>Agendar follow</button>
+          </span>
+        )}
+      </span>
+    )
+  }
+  const acoesDoCartao = (l: Lead, e: EtapaJornada, prox: EtapaJornada | null) => (
+    <div className="qj-acoes" onClick={ev => ev.stopPropagation()}>
+      {prox && <button type="button" className="pl-btn pl-btn-primary qj-avancar" disabled={ocupado} onClick={() => void mover(l, prox)} data-avancar title={prox === 'VENDA' ? 'Registrar venda' : `Avançar para ${NOME_ETAPA[prox]}`}>{prox === 'VENDA' ? 'Registrar venda' : `Avançar → ${NOME_ETAPA[prox]}`}</button>}
+      {menuDoCartao(l, e)}
+    </div>
+  )
+  const somenteLeitura = (l: Lead) => (
+    <div key={l.id} className="pl-kanban-card pl-kc" data-card={l.id} data-somente-leitura title="Você passou este lead ao vendedor: aqui aparece só a etapa e o resultado">
+      <span className="pl-kanban-card-name pl-kc-nome">{nomeLimpo(l) ?? 'Sem nome'}</span>
+      <div className="pl-hint">Passado a {l.vendedor?.nome ?? 'vendedor'} · {l.resultado === 'VENDIDO' ? 'vendido' : l.resultado === 'PERDIDO' ? 'perdido' : 'em andamento'}</div>
+    </div>
+  )
+  const propsDoCartao = (l: Lead, extra: string, sit: ReturnType<typeof situacaoFollow> | null) => {
+    const temp = calorDe(l), exc = excecao(l, sit)
+    return {
+      className: `pl-kanban-card pl-kc qj-card qj-${temp.toLowerCase()} ${extra} ${tocado === l.id ? 'tocado' : ''}`, draggable: true, tabIndex: 0,
+      'data-card': l.id, 'data-calor': temp, 'data-excecao': exc ?? undefined, 'aria-label': `${nomeLimpo(l) ?? 'Sem nome'}, ${NOME_TEMP[temp]}`,
+      onDragStart: () => setArrastando(l.id), onDragEnd: () => setArrastando(null),
+      onPointerDown: (ev: React.PointerEvent) => { toque.current = ev.pointerType === 'touch' },
+      onClick: () => abrirCartao(l),
+      onKeyDown: (ev: React.KeyboardEvent) => { if (ev.key === 'Enter' && ev.target === ev.currentTarget) onAbrir(l.id) },
+    }
+  }
+  const marcar = (l: Lead) => selecionando && (
+    <label className="qj-marcar" onClick={ev => ev.stopPropagation()}>
+      <input type="checkbox" checked={marcados.includes(l.id)} onChange={() => alternarMarcado(l.id)} aria-label={`Selecionar ${l.nomeCliente}`} data-marcar={l.id} />
+    </label>
+  )
+
+  /** Cartão compacto (padrão): nome e temperatura · moto e valor · próximo passo, tempo, ícones e vendedor. */
+  function cartaoCompacto(l: Lead, e: EtapaJornada) {
+    if (l.somenteLeitura) return somenteLeitura(l)
+    const temp = calorDe(l), pend = pendencias(l), passo = proximoPasso(l), prox = proxima(l)
+    const sit = l.follows?.[0] ? situacaoFollow(l.follows[0]) : null
+    const robo = l.preVenda?.robo?.codigo === 'PRONTO'
+    const levIncompleto = (e === 'LEVANTAMENTO' || e === 'ABORDADO') && !l.levantamentoCompleto
+    return (
+      <div key={l.id} {...propsDoCartao(l, 'qj-compacto', sit)}>
+        {marcar(l)}
+        <div className="qj-l1">{nomeDoCartao(l)}{temperatura(l, temp, true)}</div>
+        <div className="qj-l2">{motoDoCartao(l)}<span className="pl-kc-valor pl-mono">{l.valorNegociacao > 0 ? moeda(l.valorNegociacao) : '—'}</span></div>
+        <div className="qj-l3">
+          {passo
+            ? <button type="button" className={`qj-passo-txt ${sit && sit.tipo !== 'FUTURO' ? `qj-passo-${sit.tipo.toLowerCase()}` : ''}`} onClick={ev => { ev.stopPropagation(); seguir(l, passo) }} title={[pend.length ? pend.join(' · ') : 'Sugestão do ARIES para este lead', sit && sit.tipo !== 'FUTURO' ? sit.texto : ''].filter(Boolean).join(' · ')} data-proximo-passo>{passo.texto}</button>
+            : <span className="qj-passo-txt pl-kc-sem-passo">Sem próximo passo</span>}
+          <span className="qj-l3-dir">
+            {tempoDoCartao(l, true)}
+            {pend.length > 0 && <span className="qj-ico qj-ico-pend" title={pend.join(' · ')} data-pendencia><IcoPend />{pend.length}</span>}
+            {robo && <span className="qj-ico qj-ico-robo" title={l.preVenda?.robo?.texto ?? 'Robô pronto para simular'} data-robo="PRONTO"><IcoRobo /></span>}
+            {levIncompleto && <span className="qj-ico" title="Levantamento incompleto"><IcoLev /></span>}
+            {avatar(l)}
+          </span>
+        </div>
+        {guiado && e !== 'VENDA' && <div className="qj-l4" data-o-que-fazer-card>O que fazer: {pend[0] ?? O_QUE_FAZER[e]}</div>}
+        {acoesDoCartao(l, e, prox)}
+      </div>
+    )
+  }
+
+  /** Cartão detalhado: o cartão completo de antes, com os selos de pagamento e de levantamento. */
+  function cartaoDetalhado(l: Lead, e: EtapaJornada) {
+    if (l.somenteLeitura) return somenteLeitura(l)
+    const temp = calorDe(l), pend = pendencias(l), passo = proximoPasso(l), prox = proxima(l)
+    const sit = l.follows?.[0] ? situacaoFollow(l.follows[0]) : null
+    return (
+      <div key={l.id} {...propsDoCartao(l, 'qj-detalhado', sit)}>
+        {marcar(l)}
+        <div className="qj-card-topo">{nomeDoCartao(l)}{temperatura(l, temp, false)}</div>
+        <div className="pl-kc-linha qj-linha">{motoDoCartao(l)}{l.valorNegociacao > 0 && <span className="pl-kc-valor pl-mono">{moeda(l.valorNegociacao)}</span>}</div>
+        <div className="qj-nivel3">
+          <div className="qj-nivel3-passo">
+            {!passo && <span className="pl-kc-sem-passo">Sem próximo passo</span>}
+            {passo && <button type="button" className={`qj-passo-txt ${sit && sit.tipo !== 'FUTURO' ? `qj-passo-${sit.tipo.toLowerCase()}` : ''}`} onClick={ev => { ev.stopPropagation(); seguir(l, passo) }} title={pend.length ? pend.join(' · ') : 'Sugestão do ARIES para este lead'} data-proximo-passo>{passo.texto}{sit && sit.tipo !== 'FUTURO' && <em> · {sit.texto}</em>}</button>}
+          </div>
+          {avatar(l)}
+        </div>
+        <div className="qj-selos">
+          <SeloRobo lead={l} />
+          {l.perfilCliente && <span className="pl-chip qj-perfil" data-perfil-card>{NOME_PERFIL[l.perfilCliente]}</span>}
+          {pend.length > 0 && <span className="pl-chip qj-pendente" title={pend.join(' · ')} data-pendencia>{pend.length === 1 ? '1 pendência' : `${pend.length} pendências`}</span>}
+          {l.revisarEtapa && <span className="pl-chip" title="Fechado sem venda confirmada na migração: posicione na etapa certa">revisar etapa</span>}
+          {l.formaPagamento === 'A_VISTA' && <span className="pl-chip">à vista</span>}
+          {l.formaPagamento === 'FINANCIADO' && <span className="pl-chip">financiado</span>}
+          {(e === 'LEVANTAMENTO' || e === 'ABORDADO') && !l.levantamentoCompleto && <span className="pl-chip">levantamento incompleto</span>}
+          {tempoDoCartao(l, false)}
+        </div>
+        {guiado && e !== 'VENDA' && <div className="qj-l4" data-o-que-fazer-card>O que fazer: {pend[0] ?? O_QUE_FAZER[e]}</div>}
+        {acoesDoCartao(l, e, prox)}
+      </div>
+    )
+  }
+
   return (
     <div data-quadro-jornada>
       {erro && <div className="pl-alert" role="alert">{erro}</div>}
-      <div className="qj-rola">
+      <div className="qj-rola" ref={rolaRef} style={alturaQuadro ? { height: alturaQuadro } : undefined} data-quadro-rola>
         <div className="qj-trilho">
           {visiveis.map(f => (
-            <section key={f.id} data-fase-bloco={f.id} className="qj-fase" style={{ flexGrow: f.etapas.length }}>
-              <div className="pl-eyebrow qj-fase-nome">{f.nome}</div>
+            <section key={f.id} data-fase-bloco={f.id} className="qj-fase">
+              {fase === 'TUDO' && <div className="qj-fase-faixa" data-fase-faixa>{f.nome}</div>}
               <div className="qj-colunas">
                 {f.etapas.map(e => {
                   const i = ETAPAS_JORNADA.indexOf(e), cards = porEtapa(e)
                   const soma = cards.reduce((t, l) => t + (l.valorNegociacao || 0), 0)
+                  const comPend = cards.filter(l => pendencias(l).length > 0).length
+                  const mostrar = limites[e] ?? POR_PAGINA
                   return (
                     <div
                       key={e} data-coluna={e}
-                      className={`pl-kanban-col ${sobre === e ? 'drop-active' : ''}`}
+                      className={`pl-kanban-col qj-col ${sobre === e ? 'drop-active' : ''}`}
                       style={destaque === e ? { boxShadow: '0 0 0 2px var(--pl-border-strong)' } : undefined}
                       onDragOver={ev => { ev.preventDefault(); setSobre(e) }}
                       onDragLeave={() => setSobre(s => (s === e ? null : s))}
                       onDrop={ev => { ev.preventDefault(); setSobre(null); const l = leads.find(x => x.id === arrastando); if (l) void mover(l, e) }}
                     >
-                      <div className="pl-kanban-col-head">
-                        <div>
-                          <div className="pl-kanban-col-title">{i + 1}. {NOME_ETAPA[e]}</div>
-                          {e !== 'VENDA' && conversao[e]?.conversao != null && <div className="pl-kanban-col-hint" title={`Dos ${conversao[e].chegaram} leads que chegaram a esta etapa nos últimos 30 dias, quantos passaram à seguinte${e === 'MQL' || e === 'SQL' ? ' (sem os à vista)' : e === 'AGENDAMENTO' || e === 'VISITA' ? ' (sem as vendas sem visita)' : ''}`} data-conversao={e}>{conversao[e].conversao}% passam adiante · 30 dias</div>}
+                      <div className="qj-col-cab">
+                        <div className="qj-col-l1">
+                          <span className="qj-col-nome">{i + 1}. {NOME_ETAPA[e]}</span>
+                          <span className="qj-col-n pl-mono" aria-label={`${cards.length} leads`}>{cards.length}</span>
+                          {e !== 'VENDA' && <button type="button" className="qj-col-btn" onClick={() => onNovoNaEtapa(e)} aria-label={`Novo lead em ${NOME_ETAPA[e]}`} title={`Novo lead já em ${NOME_ETAPA[e]}`} data-novo-na-etapa={e}>+</button>}
+                          <span className="qj-menu-wrap">
+                            <button type="button" className="qj-col-btn" aria-label={`Opções de ${NOME_ETAPA[e]}`} aria-expanded={menuCol === e} onClick={() => setMenuCol(m => (m === e ? null : e))} data-menu-coluna={e}>⋯</button>
+                            {menuCol === e && (
+                              <span className="qj-menu" role="menu" onKeyDown={ev => { if (ev.key === 'Escape') setMenuCol(null) }}>
+                                <button type="button" role="menuitem" onClick={() => { setSelecionando(true); setMarcados(cards.filter(l => !l.somenteLeitura).map(l => l.id)); setMenuCol(null) }} data-selecionar-coluna>Selecionar os desta coluna</button>
+                                <button type="button" role="menuitem" aria-checked={ordem[e] === 'TEMPO'} onClick={() => { setOrdem(o => ({ ...o, [e]: o[e] === 'TEMPO' ? 'CALOR' : 'TEMPO' })); setMenuCol(null) }} data-ordenar="TEMPO">{ordem[e] === 'TEMPO' ? '✓ ' : ''}Ordenar por tempo</button>
+                                <button type="button" role="menuitem" aria-checked={ordem[e] === 'VALOR'} onClick={() => { setOrdem(o => ({ ...o, [e]: o[e] === 'VALOR' ? 'CALOR' : 'VALOR' })); setMenuCol(null) }} data-ordenar="VALOR">{ordem[e] === 'VALOR' ? '✓ ' : ''}Ordenar por valor</button>
+                              </span>
+                            )}
+                          </span>
                         </div>
-                        <div className="pl-kanban-col-lado">
-                          <div className="pl-kanban-col-count pl-mono">{cards.length}</div>
-                          {cards.some(l => pendencias(l).length > 0) && <div className="qj-col-pend" title="Avançaram faltando algum critério" data-col-pendencias>{cards.filter(l => pendencias(l).length > 0).length} com pendência</div>}
-                          <div className={`pl-kanban-col-soma pl-mono${soma > 0 ? "" : " zero"}`}>{moeda(soma)}</div>
+                        <div className="qj-col-l2">
+                          <span className="pl-mono" title={`Soma do valor da negociação: ${moeda(soma)}`}>{soma > 0 ? moedaAbrev(soma) : 'R$ 0'}</span>
+                          {e !== 'VENDA' && conversao[e]?.conversao != null && <span title={`Dos ${conversao[e].chegaram} leads que chegaram a esta etapa nos últimos 30 dias, quantos passaram à seguinte${e === 'MQL' || e === 'SQL' ? ' (sem os à vista)' : e === 'AGENDAMENTO' || e === 'VISITA' ? ' (sem as vendas sem visita)' : ''}`} data-conversao={e}>{conversao[e].conversao}% avançam</span>}
+                          {comPend > 0 && <span className="qj-col-pend" title={`${comPend} ${comPend === 1 ? 'avançou' : 'avançaram'} faltando algum critério`} data-col-pendencias><IcoPend />{comPend}</span>}
                         </div>
+                        {guiado && <div className="qj-col-l3" data-pergunta-coluna>{PERGUNTA_ETAPA[e]}</div>}
                       </div>
-                      <div className="pl-kanban-cards">
+                      <div className="pl-kanban-cards qj-cards">
                         {cards.length === 0 && <div className="pl-kanban-empty">Nenhum lead nesta etapa</div>}
-                        {cards.map(l => {
-                          if (l.somenteLeitura) return (
-                            <div key={l.id} className="pl-kanban-card pl-kc" data-card={l.id} data-somente-leitura title="Você passou este lead ao vendedor: aqui aparece só a etapa e o resultado">
-                              <span className="pl-kanban-card-name pl-kc-nome">{l.nomeCliente}</span>
-                              <div className="pl-hint">Passado a {l.vendedor?.nome ?? 'vendedor'} · {l.resultado === 'VENDIDO' ? 'vendido' : l.resultado === 'PERDIDO' ? 'perdido' : 'em andamento'}</div>
-                            </div>
-                          )
-                          const prox = proxima(l)
-                          const limite = estourou(l, premissas)
-                          const temp = calorDe(l), pend = pendencias(l), passo = proximoPasso(l)
-                          const sit = l.follows?.[0] ? situacaoFollow(l.follows[0]) : null
-                          return (
-                            <div
-                              key={l.id} className={`pl-kanban-card pl-kc qj-card qj-${temp.toLowerCase()}`} draggable data-card={l.id} data-calor={temp}
-                              onDragStart={() => setArrastando(l.id)} onDragEnd={() => setArrastando(null)}
-                              onClick={() => (selecionando ? alternarMarcado(l.id) : onAbrir(l.id))} style={{ cursor: 'pointer' }}
-                            >
-                              {selecionando && (
-                                <label className="qj-marcar" onClick={ev => ev.stopPropagation()}>
-                                  <input type="checkbox" checked={marcados.includes(l.id)} onChange={() => alternarMarcado(l.id)} aria-label={`Selecionar ${l.nomeCliente}`} data-marcar={l.id} />
-                                </label>
-                              )}
-                              {/* Nível 1: nome e temperatura (selo com texto) */}
-                              <div className="qj-card-topo">
-                                <span className="pl-kanban-card-name pl-kc-nome">{l.nomeCliente}</span>
-                                <span className="qj-temp-wrap" onClick={ev => ev.stopPropagation()}>
-                                  <button type="button" className={`qj-temp qj-${temp.toLowerCase()}`} onClick={() => setTempAberta(t => (t === l.id ? null : l.id))} title={`${NOME_TEMP[temp]}: ${l.calor?.motivo ?? ''}. Clique para ajustar.`} aria-label={`Temperatura ${NOME_TEMP[temp]}`} aria-expanded={tempAberta === l.id} data-temperatura={temp}><i aria-hidden />{NOME_TEMP[temp]}{l.calor?.manual ? '*' : ''}</button>
-                                  {tempAberta === l.id && (
-                                    <span className="qj-temp-menu" role="menu" data-menu-temperatura>
-                                      {(['QUENTE', 'MORNO', 'FRIO'] as const).map(t => <button key={t} type="button" role="menuitem" onClick={() => void definirTemp(l, t)} data-definir-temp={t}>{NOME_TEMP[t]}</button>)}
-                                      <button type="button" role="menuitem" onClick={() => void definirTemp(l, null)} data-definir-temp="AUTO">Automática</button>
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                              {/* Nível 2: moto de interesse e valor */}
-                              {(l.modeloInteresse || l.valorNegociacao > 0) && (
-                                <div className="pl-kc-linha qj-linha">
-                                  <span className="pl-kc-moto" title={l.modeloInteresse ?? ''}>{l.modeloInteresse ?? ''}</span>
-                                  {l.valorNegociacao > 0 && <span className="pl-kc-valor pl-mono">{moeda(l.valorNegociacao)}</span>}
-                                </div>
-                              )}
-                              {/* Nível 3: próximo passo (cor pelo estado do follow) e o vendedor */}
-                              <div className="qj-nivel3">
-                                <div className="qj-nivel3-passo">
-                                  {!passo && <span className="pl-kc-sem-passo">Sem próximo passo</span>}
-                              {passo && (
-                                <button type="button" className={`qj-passo ${sit ? `qj-passo-${sit.tipo.toLowerCase()}` : ''}`} onClick={ev => { ev.stopPropagation(); seguir(l, passo) }} title={pend.length ? pend.join(' · ') : 'Sugestão do ARIES para este lead'} data-proximo-passo>
-                                  <span>Próximo</span>{passo.texto}{sit && sit.tipo !== 'FUTURO' && <em> · {sit.texto}</em>}
-                                </button>
-                              )}
-                                </div>
-                                {vejaEquipe && l.vendedor?.nome && <span className="pl-avatar qj-avatar" title={l.vendedor.nome} aria-label={`Vendedor: ${l.vendedor.nome}`} data-vendedor-card>{l.vendedor.nome.split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase()}</span>}
-                              </div>
-                              {/* Rodapé: robô, selos e tempo na etapa */}
-                              <div className="qj-selos">
-                                <SeloRobo lead={l} />
-                                {pend.length > 0 && <span className="pl-chip qj-pendente" title={pend.join(' · ')} data-pendencia>{pend.length === 1 ? '1 pendência' : `${pend.length} pendências`}</span>}
-                                {l.revisarEtapa && <span className="pl-chip" title="Fechado sem venda confirmada na migração: posicione na etapa certa">revisar etapa</span>}
-                                {l.formaPagamento === 'A_VISTA' && <span className="pl-chip">à vista</span>}
-                                {l.formaPagamento === 'FINANCIADO' && <span className="pl-chip">financiado</span>}
-                                {(e === 'LEVANTAMENTO' || e === 'ABORDADO') && !l.levantamentoCompleto && <span className="pl-chip">levantamento incompleto</span>}
-                                <span className={`pl-kanban-card-time ${limite?.parado ? 'stale' : ''}`} title={limite ? `Tempo nesta etapa · máx. ${limite.max} (Metas e premissas)` : 'Tempo nesta etapa'} data-tempo-etapa={limite?.parado ? 'parado' : 'ok'}>{tempoNaEtapa(l)}{limite ? ` / ${limite.max}` : ''}</span>
-                              </div>
-                              <div className="qj-acoes" onClick={ev => ev.stopPropagation()}>
-                                {prox && <button type="button" className="pl-btn pl-btn-ghost qj-avancar" disabled={ocupado} onClick={() => void mover(l, prox)} data-avancar title={prox === 'VENDA' ? 'Registrar venda' : `Avançar para ${NOME_ETAPA[prox]}`}>{prox === 'VENDA' ? 'Registrar venda' : `Avançar → ${NOME_ETAPA[prox]}`}</button>}
-                                {['ABORDADO', 'LEVANTAMENTO'].includes(e) && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setLevantamento(l)} data-levantamento>Levantamento</button>}
-                                {e !== 'VENDA' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => void abrirPerda(l)} data-perda>Perdido</button>}
-                              </div>
-                            </div>
-                          )
-                        })}
+                        {cards.slice(0, mostrar).map(l => (densidade === 'detalhado' ? cartaoDetalhado(l, e) : cartaoCompacto(l, e)))}
+                        {cards.length > mostrar && <button type="button" className="pl-btn pl-btn-ghost qj-mais" onClick={() => setLimites(m => ({ ...m, [e]: mostrar + POR_PAGINA }))} data-mostrar-mais={e}>Mostrar mais {Math.min(POR_PAGINA, cards.length - mostrar)}</button>}
                       </div>
                     </div>
                   )
