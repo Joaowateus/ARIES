@@ -202,6 +202,14 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
   }, [pathname, telas, usuario])
   // Versão nova: a tela inicial é o Hoje do papel.
   useEffect(() => { if (nova && pathname === '/pro-labore') router.replace('/pro-labore/hoje') }, [nova, pathname, router])
+  // Página aberta direto com ?parâmetros (atualizar, link colado): o roteador guarda o endereço sem o "?…" e
+  // um clique para o mesmo caminho sem parâmetros (ex.: Início › Painel → Início) era ignorado. Sincroniza uma vez.
+  const enderecoSincronizado = useRef(false)
+  useEffect(() => {
+    if (enderecoSincronizado.current) return
+    enderecoSincronizado.current = true
+    if (window.location.search) router.replace(window.location.pathname + window.location.search + window.location.hash, { scroll: false })
+  }, [router])
 
   useEffect(() => {
     if (localStorage.getItem(CHAVE_SIDEBAR_COLAPSADA) === '1') setSidebarColapsada(true)
