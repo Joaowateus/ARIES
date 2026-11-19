@@ -1,4 +1,5 @@
 import { createContext } from "react"
+import { useLinkStatus } from "next/link"
 // Ícones e módulos da navegação do ARIES (tela inicial e menu lateral usam
 // a mesma lista, na mesma ordem e com os mesmos ícones).
 // ---------- Ícones (traço fino, 24×24) ----------
@@ -59,3 +60,9 @@ export const NavModulosContext = createContext<Array<{ chave: string; nome: stri
 
 /** Follows e ligações do dia que o menu lateral já busca; a tela inicial lê daqui (sem chamada nova). */
 export const ParaHojeContext = createContext<{ followsHoje: number; followsAtrasados: number; ligacoesHoje: number; ligacoesAtrasadas: number } | null>(null)
+
+/** Sinal de "abrindo" dentro de um <Link> do menu: aparece no clique e some quando a tela abre. */
+export function SinalAbrindo() {
+  const { pending } = useLinkStatus()
+  return <span className={`pl-abrindo${pending ? ' ativo' : ''}`} aria-hidden="true" />
+}

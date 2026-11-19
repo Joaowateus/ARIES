@@ -8,7 +8,7 @@ import { proLaboreApi } from '@/lib/proLaboreApi'
 import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
-import { Ico, MODULOS, NavModulosContext, ParaHojeContext, moduloDoGrupo } from './_padrao/Navegacao'
+import { Ico, MODULOS, NavModulosContext, ParaHojeContext, SinalAbrindo, moduloDoGrupo } from './_padrao/Navegacao'
 import { PaisagemNoite } from './hoje/PaisagemNoite'
 import { AvisoBanco } from './_banco/AvisoBanco'
 import { PaletaComandos } from './_comando/PaletaComandos'
@@ -185,6 +185,11 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
   }, [usuario, versaoBarra])
   const [gruposColapsados, setGruposColapsados] = useState<string[]>([])
   const [modulosAbertos, setModulosAbertos] = useState<string[]>([])
+  // Módulo da página aberta: a pessoa pode recolher a lista dele pela seta.
+  const [modulosFechados, setModulosFechados] = useState<string[]>([])
+  // Ao trocar de página, só o módulo da página aberta fica com a lista à vista (o menu não vai crescendo).
+  const [rotaDosModulos, setRotaDosModulos] = useState(pathname)
+  if (rotaDosModulos !== pathname) { setRotaDosModulos(pathname); setModulosAbertos([]); setModulosFechados([]) }
   // PDF 04 · piloto: versão das telas desta pessoa (nova ou atual) e o registro de uso de cada aba.
   const [telas, setTelas] = useState<VersaoTelas | null>(null)
   const [usoId, setUsoId] = useState<string | null>(null)
@@ -334,7 +339,11 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
   const contagem = (item: NavItem) => (temPagina(item, '/pro-labore/leads') ? followsDia.atrasados + followsDia.hoje : 0) + (temPagina(item, '/pro-labore/ligacoes') ? ligacoesDia.atrasadas + ligacoesDia.hoje : 0) + (item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 ? pedidosReuniao : 0)
   const atrasado = (itens: NavItem[]) => itens.some(i => (temPagina(i, '/pro-labore/leads') && followsDia.atrasados > 0) || (temPagina(i, '/pro-labore/ligacoes') && ligacoesDia.atrasadas > 0))
   const modulosVisiveis = MODULOS.flatMap(m => { const g = gruposNovos.find(x => x.label === m.grupo); return g ? [{ chave: m.chave, nome: m.nome, rota: m.rota, href: m.chave === 'inicio' ? '/pro-labore/hoje' : g.items[0].href }] : [] })
-  const alternarModulo = (label: string, contemAtivo: boolean) => { if (contemAtivo) return; setModulosAbertos(m => (m.includes(label) ? m.filter(x => x !== label) : [...m, label])) }
+  // Seta do módulo: abre/recolhe a lista sem sair da tela (também no módulo da página aberta).
+  const alternarModulo = (label: string, contemAtivo: boolean) => {
+    const troca = (m: string[]) => (m.includes(label) ? m.filter(x => x !== label) : [...m, label])
+    if (contemAtivo) setModulosFechados(troca); else setModulosAbertos(troca)
+  }
   const podeCrm = paginasVisiveis.some(item => item.href === '/pro-labore/leads')
   const abrirPaleta = () => { setMenuAberto(false); window.dispatchEvent(new Event('pl-abrir-paleta')) }
   const rotuloPapel = usuario.papel === 'SUPERVISOR' ? 'supervisor' : usuario.papel === 'VENDEDOR' ? 'vendedor' : usuario.papel === 'SOCIAL_MEDIA' ? 'social media' : null
@@ -371,26 +380,38 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
               const mod = moduloDoGrupo(grupo.label)
               const unico = grupo.items.length === 1
               const contemAtivo = grupo.items.some(ativo)
-              const aberto = !sidebarColapsada && !unico && (contemAtivo || modulosAbertos.includes(grupo.label ?? ''))
+              const aberto = !sidebarColapsada && !unico && (contemAtivo ? !modulosFechados.includes(grupo.label ?? '') : modulosAbertos.includes(grupo.label ?? ''))
               const somaSelos = grupo.items.reduce((t, it) => t + contagem(it), 0)
               const cabeca = (
                 <>
                   <Ico n={mod} />
                   <span className="pl-sidebar-link-label">{grupo.label === 'Sistema' ? grupo.items[0].label : grupo.label}</span>
                   {!aberto && somaSelos > 0 && <span className={`pl-nav-pedidos ${atrasado(grupo.items) ? 'pl-nav-follow-atrasado' : ''}`}>{somaSelos}</span>}
-                  {!unico && !sidebarColapsada && <svg className={`pl-mod-seta${aberto ? ' aberto' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>}
+                  <SinalAbrindo />
                 </>
               )
               return (
                 <div key={grupo.label ?? 'x'} className={`pl-modulo${contemAtivo ? ' tem-ativo' : ''}`} data-modulo-menu={mod}>
                   {unico || sidebarColapsada
                     ? <Link href={grupo.items[0].href} className={`pl-sidebar-link${contemAtivo ? ' active' : ''}`} title={sidebarColapsada ? (grupo.label === 'Sistema' ? grupo.items[0].label : grupo.label ?? undefined) : undefined} aria-current={contemAtivo ? 'page' : undefined}>{cabeca}</Link>
-                    : <button type="button" className={`pl-sidebar-link pl-modulo-botao${contemAtivo ? ' active' : ''}`} aria-expanded={aberto} onClick={() => alternarModulo(grupo.label ?? '', contemAtivo)}>{cabeca}</button>}
+                    : (
+                      <div className="pl-modulo-cab">
+                        {contemAtivo
+                          // Módulo da página aberta: o nome recolhe/abre a lista (antes o clique era ignorado).
+                          ? <button type="button" className="pl-sidebar-link pl-modulo-botao active" aria-expanded={aberto} onClick={() => alternarModulo(grupo.label ?? '', true)}>{cabeca}</button>
+                          // Outro módulo: o nome abre a primeira aba dele na hora (antes só abria a lista).
+                          : <Link href={grupo.items[0].href} className="pl-sidebar-link pl-modulo-botao" data-abrir-modulo>{cabeca}</Link>}
+                        <button type="button" className="pl-mod-alternar" aria-label={`${aberto ? 'Recolher' : 'Mostrar'} as abas de ${grupo.label}`} aria-expanded={aberto} onClick={() => alternarModulo(grupo.label ?? '', contemAtivo)}>
+                          <svg className={`pl-mod-seta${aberto ? ' aberto' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+                        </button>
+                      </div>
+                    )}
                   {aberto && (
                     <div className="pl-sublinks">
                       {grupo.items.map(item => (
                         <Link key={item.href} href={item.href} className={`pl-sublink${ativo(item) ? ' active' : ''}`} aria-current={ativo(item) ? 'page' : undefined}>
                           <span>{item.label}</span>
+                          <SinalAbrindo />
                           {contagem(item) > 0 && <span className={`pl-nav-pedidos ${atrasado([item]) ? 'pl-nav-follow-atrasado' : ''}`}>{contagem(item)}</span>}
                           {item.href === '/pro-labore/reunioes' && reunioesAoVivo > 0 && <span className="pl-nav-aovivo" title="Apresentação ao vivo agora"><span className="pl-ap-pulso" aria-hidden="true" />AO VIVO</span>}
                           {item.href === '/pro-labore/social-media' && avisosSocial.length > 0 && <span className="pl-nav-alerta" title={avisosSocial.join(' · ')}>!</span>}
