@@ -55,7 +55,8 @@ export const ABAS: AbaAries[] = [
   { chave: 'relatorios', nome: 'Relatórios', grupo: 'Relatórios', href: '/pro-labore/assistente', paraQuem: 'Gestão', pergunta: 'Como foi o dia, a semana e o mês?', acaoPrincipal: 'Ler e enviar', numeros: ['faturamento', 'vendas', 'leads_novos'], lente: 'relatorios', papeis: GESTAO },
   // Conhecimento
   { chave: 'playbook', nome: 'Playbook', grupo: 'Inteligência', href: '/pro-labore/aba/playbook', paraQuem: 'Todos', pergunta: 'Como a loja atende?', acaoPrincipal: 'Usar a resposta pronta', numeros: [], lente: 'playbook' },
-  { chave: 'base-conhecimento', nome: 'Base de conhecimento', grupo: 'Inteligência', href: '/pro-labore/aba/base-conhecimento', paraQuem: 'Todos', pergunta: 'Como responder esta dúvida ou objeção?', acaoPrincipal: 'Aprovar ou usar um verbete', numeros: ['objecoes_frequentes'], lente: 'base-conhecimento' },
+  // PDF 07: a Central de Conhecimento substitui a Base de conhecimento (mesma posição; o endereço antigo redireciona).
+  { chave: 'central-conhecimento', nome: 'Central de Conhecimento', grupo: 'Inteligência', href: '/pro-labore/aba/central-conhecimento', paraQuem: 'Todos', pergunta: 'O que o ARIES sabe sobre isto, e de onde vem?', acaoPrincipal: 'Pesquisar ou perguntar', numeros: [], lente: 'base-conhecimento', proprio: true, tambem: ['/pro-labore/aba/base-conhecimento'] },
   { chave: 'anotacoes', nome: 'Anotações', grupo: 'Inteligência', href: '/pro-labore/anotacoes', paraQuem: 'Todos', pergunta: 'Onde guardo minhas ideias e planos?', acaoPrincipal: 'Escrever ou transformar em ação', numeros: [], lente: 'anotacoes', modulo: 'anotacoes' },
   // Sistema
   { chave: 'configuracoes', nome: 'Configurações', grupo: 'Sistema', href: '/pro-labore/configuracoes', paraQuem: 'Dono', pergunta: 'Como o sistema está configurado?', acaoPrincipal: 'Ajustar e conectar', numeros: [], lente: 'configuracoes', papeis: ['DONO'], tambem: ['/pro-labore/equipe/acessos'] },

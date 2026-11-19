@@ -5,7 +5,7 @@
 // dicionário; o restante fica como ponto de extensão, sinalizado na tela.
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { telasApi } from '@/lib/proLaboreApi'
 import { abaPorChave } from '@/lib/abasAries'
@@ -32,15 +32,15 @@ const CONTEUDO: Record<string, { hoje: Array<{ texto: string; href: string }>; e
     hoje: [{ texto: 'Roteiro do robô e respostas prontas (Conversas)', href: '/pro-labore/whatsapp' }],
     extensao: 'O playbook completo da loja ainda não foi definido: fica como ponto de extensão.',
   },
-  'base-conhecimento': {
-    hoje: [{ texto: 'Base de conhecimento das conversas (Conversas)', href: '/pro-labore/whatsapp' }],
-    extensao: 'A aprovação de verbetes por aqui ainda não foi definida: fica como ponto de extensão.',
-  },
 }
 
 export default function AbaExtensaoPage() {
   const { chave } = useParams<{ chave: string }>()
+  const router = useRouter()
   const { usuario } = useProLaboreAuth()
+  // PDF 07: a Base de conhecimento virou a Central de Conhecimento (o link antigo continua valendo).
+  useEffect(() => { if (chave === 'base-conhecimento') router.replace('/pro-labore/aba/central-conhecimento?sub=comercial') }, [chave, router])
+  if (chave === 'base-conhecimento') return <p className="pl-hint">Abrindo a Central de Conhecimento…</p>
   const aba = abaPorChave(chave)
   const c = CONTEUDO[chave]
   if (!aba || !c) return <TelaVazia titulo="Aba não encontrada" passo={<Link className="pl-btn" href="/pro-labore/hoje">Voltar ao Hoje</Link>} />

@@ -959,7 +959,7 @@ export const proLaboreApi = {
     conhecimento: (dias = 7) => request<BaseConhecimento>(`/pro-labore/assistente/conhecimento?dias=${dias}`),
     criarConhecimento: (data: { tipo: TipoConhecimento; titulo: string; resposta?: string; palavrasChave?: string[]; modelo?: string; etapa?: EtapaConhecimento }) =>
       request<ItemConhecimento>('/pro-labore/assistente/conhecimento', { method: 'POST', body: JSON.stringify(data) }),
-    editarConhecimento: (id: string, data: Partial<{ tipo: TipoConhecimento; titulo: string; resposta: string | null; rascunho: string | null; palavrasChave: string[]; modelo: string | null; etapa: EtapaConhecimento | null; status: StatusConhecimento }>) =>
+    editarConhecimento: (id: string, data: Partial<{ tipo: TipoConhecimento; titulo: string; resposta: string | null; rascunho: string | null; palavrasChave: string[]; modelo: string | null; etapa: EtapaConhecimento | null; status: StatusConhecimento; validadeAte: string | null; fontesLigadas: string[] }>) =>
       request<ItemConhecimento>(`/pro-labore/assistente/conhecimento/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     juntarConhecimento: (id: string, destinoId: string) =>
       request<{ ok: boolean; destinoId: string; ocorrencias: number }>(`/pro-labore/assistente/conhecimento/${id}/juntar`, { method: 'POST', body: JSON.stringify({ destinoId }) }),
@@ -2114,6 +2114,10 @@ export interface ItemConhecimento {
   criadoPor: string | null
   aprovadoPor: string | null
   aprovadoEm: string | null
+  /** PDF 07: data para revisar, fontes ligadas e a versão atual (histórico na Central). */
+  validadeAte?: string | null
+  fontesLigadas?: string[]
+  versaoAtual?: number
   criadoEm: string
   // Calculados na listagem:
   outras?: boolean
@@ -3787,7 +3791,10 @@ export interface RespostaAries {
   acaoProposta: { texto: string; prazo: string } | null; acoes: unknown[]; usouIa: boolean; criadoEm: string
   /** Agente (19/11): sites da internet usados e o que foi consultado no sistema. */
   fontes?: Array<{ titulo: string; url: string }>; consultas?: string[]
+  /** PDF 07: de onde veio a resposta (fonte da Central, tipo de dado, última atualização e tela). */
+  origens?: OrigemResposta[]
 }
+export interface OrigemResposta { fonte: string; nome: string; tipo: string; atualizadoEm: string | null; atrasada: boolean; tela: string | null }
 export interface VersaoTelas { versao: 'NOVA' | 'ATUAL'; piloto: boolean; podeAlternar: boolean; liberadaEm: string | null; papel: PapelHoje; nomePapel: string }
 export interface PilotoPessoa { id: string; nome: string; papel: string; noPiloto: boolean; inicio: string | null; fim: string | null; versao: string | null }
 
@@ -3802,6 +3809,7 @@ export const telasApi = {
   perguntar: (pergunta: string, anteriores: Array<{ pergunta: string; resposta: string }> = []) => request<RespostaAries>('/pro-labore/pergunte', { method: 'POST', body: JSON.stringify({ pergunta, anteriores }) }),
   historicoPerguntas: () => request<Array<{ id: string; pergunta: string; resposta: string; naoSabe: boolean; valores: NumeroResposta[]; criadoEm: string }>>('/pro-labore/pergunte/historico'),
   criarAcaoPergunta: (id: string, texto: string, prazo: string) => request<{ id: string; codigo: string | null }>(`/pro-labore/pergunte/${id}/acao`, { method: 'POST', body: JSON.stringify({ texto, prazo }) }),
+  marcarErrada: (id: string) => request<{ ok: boolean }>(`/pro-labore/pergunte/${id}/errada`, { method: 'POST' }),
   registroIa: () => request<{ total: number; envios: Array<{ id: string; conversaId: string | null; finalidade: string; conteudo: string; criadoEm: string; seguro: boolean }> }>('/pro-labore/pergunte/registro-ia'),
   versao: () => request<VersaoTelas>('/pro-labore/telas/versao'),
   alternarVersao: (versao: 'NOVA' | 'ATUAL') => request<VersaoTelas>('/pro-labore/telas/versao', { method: 'POST', body: JSON.stringify({ versao }) }),
@@ -4004,4 +4012,62 @@ export const inicioApi = {
   salvarConfig: (d: { fundo?: string | null; atalhos?: string[] }) => request<{ fundo: string | null; atalhos: string[] | null }>('/pro-labore/inicio/config', { method: 'PUT', body: JSON.stringify(d) }),
   enviarFundo: (arquivo: Blob) => request<{ caminho: string }>('/pro-labore/imagens', { method: 'POST', body: arquivo, headers: { 'Content-Type': 'application/octet-stream' } }).then(r => r.caminho),
   urlImagem: (caminho: string) => `${BASE}${caminho}`,
+}
+
+// --- PDF 07 · Central de Conhecimento ---
+
+export type TipoDocCentral = 'LEAD' | 'CLIENTE' | 'VENDA' | 'MOTO' | 'ATIVIDADE' | 'VERBETE' | 'INDICADOR' | 'RECOMENDACAO' | 'OCORRENCIA' | 'REUNIAO' | 'ANOTACAO' | 'PAUTA' | 'POST' | 'CAMPANHA' | 'LANCAMENTO' | 'DECISAO'
+export interface NumeroCentral { chave: string; nome: string; valor: number; unidade: 'PCT' | 'QTD'; detalhe: string }
+export interface TopoCentral { papel: string; ultimaAtualizacao: string | null; aviso: string | null; numeros: NumeroCentral[] }
+export interface ResultadoCentral {
+  id: string; tipo: TipoDocCentral; tipoNome: string; fonte: string; fonteNome: string; titulo: string; resumo: string | null; link: string
+  data: string | null; atualizadoEm: string; fonteAtualizadaEm: string | null; fonteAtrasada: boolean
+}
+export interface BuscaCentral { grupos: Array<{ tipo: TipoDocCentral; nome: string; itens: ResultadoCentral[] }>; total: number }
+export interface FichaCentral { chave: string; nome: string; definicao: string; fonte: string; unidade: string; sinonimos: string[]; versao: number; naoDefinido: string | null; retrato: boolean; area: string }
+export interface RascunhoFicha { id: string; chave: string; versao: number; ficha: Record<string, unknown>; justificativa: string; autorId: string; criadoEm: string }
+export interface FichaDetalhe {
+  ficha: FichaCentral & { formula: string; janela: string; comparacao: string; responsavel: string; quemVe: string[]; melhor: string; aprovadoPor: string | null; aprovadoEm: string | null; faixas?: { bom: number; critico: number } | null }
+  valor: { valor: number | null; texto: string; anterior: string | null; variacao: number | null; faixa: string | null; periodo: { inicio: string; fim: string }; erro?: string } | null
+  escopo: string; qualidade: string | null
+  versoes: Array<{ versao: number; situacao: string; justificativa: string; aprovadoPor: string | null; aprovadoEm: string | null; criadoEm: string }>
+}
+export interface VersaoVerbete { id: string; versao: number; titulo: string; resposta: string | null; palavrasChave: string[]; status: string; autor: string | null; motivo: string | null; criadoEm: string }
+export interface FonteSaude {
+  chave: string; nome: string; tipo: string; descricao: string; situacao: 'EM_DIA' | 'ATRASADA' | 'FALHA' | 'NAO_INTEGRADA'
+  ultimaAtualizacaoEm: string | null; limiteMin: number; pendentes: number; itensFonte: number | null; itensIndice: number | null
+  ultimaConferenciaEm: string | null; cargaInicialEm: string | null; ultimoErro: string | null
+}
+export interface SaudeCentral {
+  cobertura: number; fontes: FonteSaude[]; pendentes: number
+  eventosComErro: Array<{ id: string; fonte: string; registroId: string; tentativas: number; ultimoErro: string | null; desde: string; proximaTentativaEm: string | null; alerta: boolean }>
+  divergencias: Array<{ id: string; fonte: string; registroId: string | null; descricao: string; desde: string }>
+  perguntasSemResposta: Array<{ id: string; pergunta: string; papel: string; canal: string; criadoEm: string }>
+  respostasErradas: Array<{ id: string; pergunta: string; resposta: string; papel: string; marcadaErradaEm: string }>
+  pesquisasSemResultado: Array<{ termo: string; vezes: number }>
+  conferencias: Array<{ id: string; fonte: string; tipo: string; inicio: string; fim: string | null; contagemFonte: number | null; contagemIndice: number | null; divergencias: number; situacao: string; erro: string | null }>
+}
+
+export const centralApi = {
+  topo: () => request<TopoCentral>('/pro-labore/central/topo'),
+  buscar: (q: string, f: { tipos?: TipoDocCentral[]; desde?: string; ate?: string; vendedorId?: string } = {}) => {
+    const p = new URLSearchParams({ q })
+    if (f.tipos?.length) p.set('tipos', f.tipos.join(','))
+    if (f.desde) p.set('desde', f.desde)
+    if (f.ate) p.set('ate', f.ate)
+    if (f.vendedorId) p.set('vendedorId', f.vendedorId)
+    return request<BuscaCentral>(`/pro-labore/central/busca?${p}`)
+  },
+  semResposta: (termo: string) => request<{ id: string }>('/pro-labore/central/sem-resposta', { method: 'POST', body: JSON.stringify({ termo }) }),
+  responsaveis: () => request<Array<{ id: string; nome: string }>>('/pro-labore/central/responsaveis'),
+  indicadores: () => request<{ fichas: FichaCentral[]; rascunhos: RascunhoFicha[]; podeAprovar: boolean }>('/pro-labore/central/indicadores'),
+  indicador: (chave: string) => request<FichaDetalhe>(`/pro-labore/central/indicadores/${encodeURIComponent(chave)}`),
+  sugerirFicha: (chave: string, d: { nome?: string; definicao?: string; sinonimos?: string[]; justificativa: string }) => request<{ id: string; versao: number }>(`/pro-labore/central/indicadores/${encodeURIComponent(chave)}/sugestao`, { method: 'POST', body: JSON.stringify(d) }),
+  decidirRascunho: (id: string, decisao: 'aprovar' | 'recusar') => request<{ ok: boolean; situacao: string }>(`/pro-labore/central/indicadores/rascunhos/${id}/${decisao}`, { method: 'POST' }),
+  versoesVerbete: (id: string) => request<VersaoVerbete[]>(`/pro-labore/central/conhecimento/${id}/versoes`),
+  saude: () => request<SaudeCentral>('/pro-labore/central/saude'),
+  tentarDeNovo: (d: { eventoId?: string; fonte?: string }) => request<{ reenviados: number; centralProcessados: number; centralFalhas: number }>('/pro-labore/central/saude/tentar', { method: 'POST', body: JSON.stringify(d) }),
+  conferirAgora: () => request<{ centralConferidas: number; centralDivergencias: number }>('/pro-labore/central/saude/conferir', { method: 'POST' }),
+  resolverDivergencia: (id: string) => request<{ ok: boolean }>(`/pro-labore/central/saude/divergencias/${id}/resolver`, { method: 'POST' }),
+  perguntaTratada: (id: string) => request<{ ok: boolean }>(`/pro-labore/central/saude/perguntas/${id}/tratada`, { method: 'POST' }),
 }

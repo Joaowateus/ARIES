@@ -5663,3 +5663,32 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .pl-shell:has([data-crm]) .pl-hub-abas { margin-bottom: 10px; }
 /* Janelas abertas a partir do painel do lead (levantamento, follow, perda, venda) ficam acima dele. */
 .pl-app:has(.pl-pn-fundo) .pl-modal-backdrop { z-index: 75; }
+
+/* ===== PDF 07 · Central de Conhecimento (só tokens) ===== */
+.cc-frescor { margin: -6px 0 10px; }
+.cc-aviso { margin: 0 0 12px; border-left: 3px solid var(--ar-estado-atencao); }
+.cc-subabas { margin: 4px 0 14px; }
+.cc-caixa { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.cc-caixa .pl-input { flex: 1 1 280px; min-width: 0; }
+.cc-filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.cc-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.cc-grupo { margin-bottom: 16px; }
+.cc-item { align-items: flex-start; }
+.cc-resumo { margin-top: 2px; overflow-wrap: anywhere; }
+.cc-meta { margin-top: 4px; font-size: .74rem; }
+.cc-pergunta { margin-bottom: 14px; }
+.cc-ficha { list-style: none; }
+.cc-ficha-cabeca { width: 100%; border: 0; background: transparent; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.cc-ficha-corpo { padding: 4px 12px 14px; border-left: 2px solid var(--pl-border); margin: 0 0 8px 8px; }
+.cc-valor { margin: 6px 0 10px; }
+.cc-valor-num { font-family: var(--pl-font-num); font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cc-dl { display: grid; grid-template-columns: minmax(110px, max-content) 1fr; gap: 4px 12px; margin: 0 0 10px; font-size: .86rem; }
+.cc-dl dt { color: var(--pl-ink-muted); }
+.cc-dl dd { margin: 0; overflow-wrap: anywhere; }
+.cc-rascunhos { margin-bottom: 14px; }
+.cc-tabela-rolagem { overflow-x: auto; }
+.cc-tabela td { vertical-align: top; }
+@media (max-width: 640px) {
+  .cc-dl { grid-template-columns: 1fr; }
+  .cc-dl dt { margin-top: 6px; }
+}

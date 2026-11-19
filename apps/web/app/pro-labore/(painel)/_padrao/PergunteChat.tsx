@@ -1,7 +1,8 @@
 'use client'
 
 // Pergunte ao ARIES: responde qualquer pergunta, como um chat. Sobre a loja, o
-// ARIES consulta o sistema (com as permissões de quem pergunta); sobre outros
+// ARIES consulta a Central de Conhecimento (com as permissões de quem pergunta;
+// valores em R$ preenchidos pelo sistema, nunca pela IA — PDF 07); sobre outros
 // assuntos, usa o próprio conhecimento e a internet, citando as fontes. A conversa
 // tem memória das últimas trocas. Sem a IA ligada, cai no Pergunte por regras
 // (números do dicionário com período, comparação e link para a tela).
@@ -56,6 +57,10 @@ function Resposta({ r, compacto }: { r: RespostaAries; compacto?: boolean }) {
   const [acao, setAcao] = useState(r.acaoProposta)
   const [criada, setCriada] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [errada, setErrada] = useState(false)
+  async function marcarErrada() {
+    try { await telasApi.marcarErrada(r.id); setErrada(true); registrarAcao('pergunte:resposta-errada') } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
+  }
   async function criar() {
     if (!acao) return
     try { const a = await telasApi.criarAcaoPergunta(r.id, acao.texto, acao.prazo); setCriada(a.codigo ?? 'criada'); registrarAcao('pergunte:criar-atividade') } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
@@ -66,7 +71,18 @@ function Resposta({ r, compacto }: { r: RespostaAries; compacto?: boolean }) {
       <div className="ar-pergunte-bolha" data-resposta={r.naoSabe ? 'nao-sabe' : 'numeros'}>
         <div style={{ fontSize: '.72rem', color: 'var(--pl-ink-muted)', marginBottom: 4 }}>ARIES</div>
         <TextoAries texto={r.resposta} />
-        {!!r.consultas?.length && <div className="pl-hint" style={{ marginTop: 6 }} data-consultas>Consultou: {r.consultas.join(' · ')}</div>}
+        {!!r.origens?.length && (
+          <div className="ar-pergunte-origens" data-origens>
+            {r.origens.map(o => (
+              <div key={o.fonte} className="pl-hint" data-origem={o.fonte}>
+                <b>{o.nome}</b> · {o.tipo}{o.atualizadoEm ? ` · atualizado ${new Date(o.atualizadoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+                {o.atrasada && <span className="pl-status-badge atencao" style={{ marginLeft: 6 }}>pode estar desatualizado</span>}
+                {o.tela && <> · <Link href={o.tela} onClick={() => registrarAcao('pergunte:abrir-origem')}>Abrir a tela →</Link></>}
+              </div>
+            ))}
+          </div>
+        )}
+        {!r.origens?.length && !!r.consultas?.length && <div className="pl-hint" style={{ marginTop: 6 }} data-consultas>Consultou: {r.consultas.join(' · ')}</div>}
         {!!r.fontes?.length && (
           <div className="ar-pergunte-fontes" data-fontes>
             <span className="pl-hint">Fontes:</span>
@@ -92,6 +108,11 @@ function Resposta({ r, compacto }: { r: RespostaAries; compacto?: boolean }) {
         )}
         {criada && <p className="pl-hint" role="status" style={{ margin: '8px 0 0' }}>Atividade {criada} criada para você.</p>}
         {msg && <p className="pl-hint" role="alert">{msg}</p>}
+        <div style={{ marginTop: 6 }}>
+          {errada
+            ? <span className="pl-hint" role="status">Obrigado: a resposta foi para a Saúde da Central, para o dono revisar.</span>
+            : <button type="button" className="pl-link-action" onClick={() => void marcarErrada()} data-resposta-errada>Resposta errada?</button>}
+        </div>
       </div>
     </>
   )
