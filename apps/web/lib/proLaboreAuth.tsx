@@ -51,7 +51,8 @@ export function ProLaboreAuthProvider({ children }: { children: ReactNode }) {
     setToken(token)
     setUsuario(u)
     setUsuarioState(u)
-    router.push(u.papel === 'SOCIAL_MEDIA' ? '/pro-labore/sm' : '/pro-labore')
+    // Depois do login, todo mundo abre na tela inicial do ARIES (Início › Início); social media no espaço dela.
+    router.push(u.papel === 'SOCIAL_MEDIA' ? '/pro-labore/sm' : '/pro-labore/hoje')
   }
 
   const recarregar = useCallback(async () => {
