@@ -20,15 +20,20 @@ export async function leadsPassadosDoSdr(req: Request) {
 // Quais leads a pessoa enxerga: o vendedor só os dele; dono e supervisor a
 // equipe inteira (ou um vendedor, quando filtram).
 export function leadWhereBase(req: Request, vendedorIdFiltro?: string): { usuarioId: string; vendedorId?: string; OR?: Prisma.LeadWhereInput[] } {
-  const usuarioId = req.proLaboreUser!.sub
+  const u = req.proLaboreUser!
+  return leadWhereDe({ usuarioId: u.sub, papel: u.papel, sdr: !!u.sdr, vendedorId: u.vendedorId ?? null }, vendedorIdFiltro)
+}
+/** A mesma regra de leadWhereBase, sem o pedido (Central de Conhecimento e WhatsApp do Pergunte). */
+export function leadWhereDe(u: { usuarioId: string; papel: string; sdr: boolean; vendedorId: string | null }, vendedorIdFiltro?: string): { usuarioId: string; vendedorId?: string; OR?: Prisma.LeadWhereInput[] } {
+  const usuarioId = u.usuarioId
   // SDR: os próprios leads e os que qualificou (mesmo depois de passados ao vendedor).
-  if (req.proLaboreUser!.papel === 'VENDEDOR' && req.proLaboreUser!.sdr) {
-    const eu = req.proLaboreUser!.vendedorId!
+  if (u.papel === 'VENDEDOR' && u.sdr) {
+    const eu = u.vendedorId!
     // Passado ao vendedor e já na fase de Venda: só a etapa e o resultado (leadsPassadosDoSdr).
     return { usuarioId, OR: [{ vendedorId: eu }, { responsavelQualificacaoId: eu, OR: [{ etapa: null }, { etapa: { in: ETAPAS_DO_SDR } }] }] }
   }
-  if (req.proLaboreUser!.papel === 'VENDEDOR') {
-    return { usuarioId, vendedorId: req.proLaboreUser!.vendedorId! }
+  if (u.papel === 'VENDEDOR') {
+    return { usuarioId, vendedorId: u.vendedorId! }
   }
   if (vendedorIdFiltro) return { usuarioId, vendedorId: vendedorIdFiltro }
   return { usuarioId }
