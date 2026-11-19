@@ -2327,6 +2327,10 @@ model AssistenteConhecimento {
   criadoPor          String?
   aprovadoPor        String?
   aprovadoEm         DateTime?
+  // PDF 07 · Central de Conhecimento: validade para revisar, fontes ligadas e versão atual (histórico em AssistenteConhecimentoVersao).
+  validadeAte        DateTime?
+  fontesLigadas      String[]  @default([])
+  versaoAtual        Int       @default(1)
   criadoEm           DateTime  @default(now())
   atualizadoEm       DateTime  @updatedAt
 
@@ -4682,6 +4686,7 @@ model MetricaVersao {
   autorId       String
   aprovadoPor   String?
   aprovadoEm    DateTime?
+  situacao      String    @default("APROVADA") // RASCUNHO (aguarda o dono) | APROVADA
   criadoEm      DateTime  @default(now())
 
   @@unique([usuarioId, chave, versao], map: "pro_labore_metricas_versoes_key")
@@ -4890,6 +4895,12 @@ model PergunteConversa {
   resposta  String
   naoSabe   Boolean  @default(false)
   acoes     Json     @default("[]")
+  // PDF 07: consultas do catálogo e fontes usadas (com a hora da última atualização) e a marcação de resposta errada.
+  consultas        Json?
+  fontes           Json?
+  marcadaErradaEm  DateTime?
+  marcadaErradaPor String?
+  tratadaEm        DateTime?
   criadoEm  DateTime @default(now())
 
   @@index([usuarioId, pessoaId, criadoEm], map: "pro_labore_pergunte_conversas_idx")
@@ -5057,4 +5068,128 @@ model InicioNota {
 
   @@index([usuarioId, excluidaEm, atualizadoEm], map: "pro_labore_inicio_notas_usuario_idx")
   @@map("pro_labore_inicio_notas")
+}
+
+// ---------------------------------------------------------------------
+// PDF 07 · Central de Conhecimento
+// ---------------------------------------------------------------------
+
+model CentralFonte {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  usuarioId           String
+  chave               String
+  situacao            String    @default("EM_DIA") // EM_DIA | ATRASADA | FALHA | NAO_INTEGRADA
+  ultimaAtualizacaoEm DateTime?
+  ultimoErro          String?
+  ultimoErroEm        DateTime?
+  itensIndexados      Int       @default(0)
+  ultimaConferenciaEm DateTime?
+  cargaInicialEm      DateTime?
+  cargaCursor         String?
+  atualizadoEm        DateTime  @default(now())
+
+  @@unique([usuarioId, chave], map: "pro_labore_cc_fontes_key")
+  @@map("pro_labore_cc_fontes")
+}
+
+model CentralEvento {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  usuarioId          String?
+  fonte              String
+  registroId         String
+  tipo               String // CRIADO | ALTERADO | EXCLUIDO | SINCRONIZADO
+  origem             String    @default("GATILHO") // GATILHO | SINCRONIZACAO | CARGA | CONFERENCIA
+  criadoEm           DateTime  @default(now())
+  processadoEm       DateTime?
+  tentativas         Int       @default(0)
+  ultimoErro         String?
+  proximaTentativaEm DateTime?
+
+  @@unique([fonte, registroId], map: "pro_labore_cc_eventos_key")
+  @@map("pro_labore_cc_eventos")
+}
+
+model CentralDocumento {
+  id            String                   @id @default(dbgenerated("gen_random_uuid()::text"))
+  usuarioId     String
+  fonte         String
+  registroId    String
+  tipo          String
+  titulo        String
+  resumo        String?
+  palavrasChave String[]                 @default([])
+  textoBusca    String
+  tsv           Unsupported("tsvector")? @default(dbgenerated("to_tsvector('portuguese'::regconfig, \"textoBusca\")"))
+  papeis        String[]                 @default([])
+  vendedorId    String?
+  autorId       String?
+  link          String
+  dataRegistro  DateTime?
+  versaoFonte   DateTime?
+  atualizadoEm  DateTime                 @default(now())
+
+  @@unique([fonte, registroId], map: "pro_labore_cc_documentos_key")
+  @@index([usuarioId, tipo], map: "pro_labore_cc_documentos_usuario_idx")
+  @@map("pro_labore_cc_documentos")
+}
+
+model CentralConferencia {
+  id             String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  usuarioId      String
+  fonte          String
+  tipo           String // CARGA_INICIAL | DIARIA
+  inicio         DateTime  @default(now())
+  fim            DateTime?
+  contagemFonte  Int?
+  contagemIndice Int?
+  divergencias   Int       @default(0)
+  situacao       String    @default("RODANDO") // RODANDO | OK | DIVERGENTE | FALHA
+  erro           String?
+
+  @@index([usuarioId, inicio], map: "pro_labore_cc_conferencias_idx")
+  @@map("pro_labore_cc_conferencias")
+}
+
+model CentralDivergencia {
+  id           String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  usuarioId    String
+  fonte        String
+  registroId   String?
+  descricao    String
+  desde        DateTime  @default(now())
+  resolvidaEm  DateTime?
+  resolvidaPor String?
+
+  @@index([usuarioId, resolvidaEm], map: "pro_labore_cc_divergencias_idx")
+  @@map("pro_labore_cc_divergencias")
+}
+
+model CentralPesquisa {
+  id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  usuarioId  String
+  pessoaId   String
+  papel      String
+  termo      String
+  resultados Int      @default(0)
+  criadoEm   DateTime @default(now())
+
+  @@index([usuarioId, criadoEm], map: "pro_labore_cc_pesquisas_idx")
+  @@map("pro_labore_cc_pesquisas")
+}
+
+model AssistenteConhecimentoVersao {
+  id             String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  conhecimentoId String
+  usuarioId      String
+  versao         Int
+  titulo         String
+  resposta       String?
+  palavrasChave  String[] @default([])
+  status         String
+  autor          String?
+  motivo         String?
+  criadoEm       DateTime @default(now())
+
+  @@unique([conhecimentoId, versao], map: "pro_labore_assistente_conhecimento_versoes_key")
+  @@map("pro_labore_assistente_conhecimento_versoes")
 }
