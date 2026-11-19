@@ -5393,3 +5393,19 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .ar-pergunte-texto ul { list-style: disc; }
 .ar-pergunte-texto ol { list-style: decimal; }
 .ar-pergunte-texto li { margin: 2px 0; }
+
+/* ====================================================================
+   Funil do CRM — otimização (19/11)
+   Bloco A · cores: vermelho só para atraso/estouro e Quente; âmbar para
+   hoje/pendência/Morno; azul para Frio; verde só para robô pronto e meta
+   batida; o resto em cinza. Selos numéricos são neutros.
+   ==================================================================== */
+.pl-app .pl-nav-pedidos,
+.pl-app .pl-nav-pedidos.pl-nav-follow-atrasado,
+.pl-app .crm-mais-n,
+.pl-app .pl-hub-abas-n { background: var(--pl-surface-3); color: var(--pl-ink-2); border: 1px solid var(--pl-border); font-weight: 600; }
+.pl-app .pl-kanban-card-time { color: var(--pl-ink-muted); background: transparent; border-color: transparent; }
+.pl-app .pl-kanban-card-time.stale { color: var(--ar-critico-texto, var(--pl-critical)); }
+.pl-app .pl-btn.pl-pn-converter { background: var(--pl-surface-2); border-color: var(--pl-border); color: var(--pl-ink-1); }
+.pl-app .pl-btn.pl-pn-converter:hover { background: var(--pl-surface-3); }
+.pl-app .crm-faixa .crm-faixa-atencao b { color: inherit; }
