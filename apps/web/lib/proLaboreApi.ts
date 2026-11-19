@@ -3780,6 +3780,8 @@ export interface NumeroResposta {
 export interface RespostaAries {
   id: string; pergunta: string; resposta: string; naoSabe: boolean; onde: string | null; numeros: NumeroResposta[]
   acaoProposta: { texto: string; prazo: string } | null; acoes: unknown[]; usouIa: boolean; criadoEm: string
+  /** Agente (19/11): sites da internet usados e o que foi consultado no sistema. */
+  fontes?: Array<{ titulo: string; url: string }>; consultas?: string[]
 }
 export interface VersaoTelas { versao: 'NOVA' | 'ATUAL'; piloto: boolean; podeAlternar: boolean; liberadaEm: string | null; papel: PapelHoje; nomePapel: string }
 export interface PilotoPessoa { id: string; nome: string; papel: string; noPiloto: boolean; inicio: string | null; fim: string | null; versao: string | null }
@@ -3792,7 +3794,7 @@ export const telasApi = {
     request<{ redistribuidas?: number; repriorizadas?: number; atividade?: { id: string; codigo: string | null } }>('/pro-labore/hoje/equipe/acao', { method: 'POST', body: JSON.stringify(corpo) }),
   atividades: (pessoa?: string) => request<{ atrasadas: AtividadeLista[]; hoje: AtividadeLista[]; proximas: AtividadeLista[] }>(`/pro-labore/atividades/minhas${pessoa ? `?pessoa=${encodeURIComponent(pessoa)}` : ''}`),
   concluirAtividade: (id: string, resultado: string) => request<unknown>(`/pro-labore/atividades/${id}/concluir`, { method: 'POST', body: JSON.stringify({ resultado }) }),
-  perguntar: (pergunta: string) => request<RespostaAries>('/pro-labore/pergunte', { method: 'POST', body: JSON.stringify({ pergunta }) }),
+  perguntar: (pergunta: string, anteriores: Array<{ pergunta: string; resposta: string }> = []) => request<RespostaAries>('/pro-labore/pergunte', { method: 'POST', body: JSON.stringify({ pergunta, anteriores }) }),
   historicoPerguntas: () => request<Array<{ id: string; pergunta: string; resposta: string; naoSabe: boolean; valores: NumeroResposta[]; criadoEm: string }>>('/pro-labore/pergunte/historico'),
   criarAcaoPergunta: (id: string, texto: string, prazo: string) => request<{ id: string; codigo: string | null }>(`/pro-labore/pergunte/${id}/acao`, { method: 'POST', body: JSON.stringify({ texto, prazo }) }),
   registroIa: () => request<{ total: number; envios: Array<{ id: string; conversaId: string | null; finalidade: string; conteudo: string; criadoEm: string; seguro: boolean }> }>('/pro-labore/pergunte/registro-ia'),

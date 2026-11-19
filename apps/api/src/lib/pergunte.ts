@@ -44,9 +44,9 @@ async function registrarEnvio(usuarioId: string, conversaId: string, finalidade:
 
 // --- Entendimento ---
 
-type PeriodoPedido = 'HOJE' | 'ONTEM' | 'SEMANA' | 'SEMANA_PASSADA' | 'MES' | 'MES_PASSADO' | 'ULTIMOS_7' | 'ULTIMOS_30' | 'ULTIMOS_90'
-const PERIODOS: PeriodoPedido[] = ['HOJE', 'ONTEM', 'SEMANA', 'SEMANA_PASSADA', 'MES', 'MES_PASSADO', 'ULTIMOS_7', 'ULTIMOS_30', 'ULTIMOS_90']
-interface Entendimento {
+export type PeriodoPedido = 'HOJE' | 'ONTEM' | 'SEMANA' | 'SEMANA_PASSADA' | 'MES' | 'MES_PASSADO' | 'ULTIMOS_7' | 'ULTIMOS_30' | 'ULTIMOS_90'
+export const PERIODOS: PeriodoPedido[] = ['HOJE', 'ONTEM', 'SEMANA', 'SEMANA_PASSADA', 'MES', 'MES_PASSADO', 'ULTIMOS_7', 'ULTIMOS_30', 'ULTIMOS_90']
+export interface Entendimento {
   metricas: string[]
   periodo: PeriodoPedido
   sobre: 'EU' | 'LOJA' | 'PESSOA'
@@ -244,7 +244,7 @@ async function avisoDeQualidade(usuarioId: string, f: Ficha, p: Periodo): Promis
   return `Atenção: no período há ${[inc ? pl(inc, 'registro incompleto', 'registros incompletos') : '', sus ? pl(sus, 'suspeito', 'suspeitos') : ''].filter(Boolean).join(' e ')} na base desta métrica.`
 }
 
-async function calcularNumeros(pessoa: Pessoa, ent: Entendimento, catalogo: Ficha[], agora: Date) {
+export async function calcularNumeros(pessoa: Pessoa, ent: Entendimento, catalogo: Ficha[], agora: Date) {
   const pessoal = pessoa.papel === 'VENDEDOR' || pessoa.papel === 'SDR'
   const equipe = await prisma.vendedor.findMany({ where: { usuarioId: pessoa.usuarioId, ativo: true, vende: true, funcao: null }, select: { id: true, nome: true } })
   let vendedorId: string | null = null, escopo = 'a loja', media = false, recusa: string | null = null

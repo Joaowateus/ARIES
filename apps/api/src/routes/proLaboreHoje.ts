@@ -11,7 +11,10 @@ import { CONFIG_PADRAO, ErroHoje, acaoDoSupervisor, configDoPapel, filaDoHoje, l
 import { alternarVersao, definirParticipante, liberarParaTodos, participantes, versaoDasTelas } from '../lib/piloto'
 import { ErroRec, aceitar, concluirAtividade, descartar } from '../lib/recomendacoes'
 import { hojeBrt } from '../lib/metricas'
-import { criarAcao, envioSeguro, perguntar } from '../lib/pergunte'
+import { criarAcao, envioSeguro } from '../lib/pergunte'
+import { perguntarAgente, type TrocaAnterior } from '../lib/pergunteAgente'
+import { leadWhereBase } from '../lib/escopoLead'
+import { nivelAtende } from '../lib/acessos'
 import { aceitePdf04 } from '../lib/aceitePdf04'
 import { resumoDoHoje } from '../lib/resumoHoje'
 import { painelDoHoje } from '../lib/hojePainel'
@@ -254,7 +257,16 @@ router.get('/orcamento-anuncio', requireProLaboreAuth, requireDono, async (req: 
 router.post('/pergunte', requireProLaboreAuth, async (req: Request, res: Response) => {
   const pergunta = String(req.body?.pergunta ?? '').trim()
   if (pergunta.length < 3) { res.status(400).json({ error: 'Escreva a pergunta' }); return }
-  res.json(await perguntar(pessoaDe(req), pergunta.slice(0, 600)))
+  const pessoa = pessoaDe(req)
+  const ve = (m: string) => pessoa.papel === 'DONO' || nivelAtende(req.acessos?.[m], 'VER')
+  const anteriores: TrocaAnterior[] = (Array.isArray(req.body?.anteriores) ? req.body.anteriores : [])
+    .filter((t: unknown): t is TrocaAnterior => !!t && typeof (t as TrocaAnterior).pergunta === 'string' && typeof (t as TrocaAnterior).resposta === 'string')
+    .slice(-6)
+  res.json(await perguntarAgente({
+    pessoa,
+    leads: ve('crm') || pessoa.papel === 'VENDEDOR' || pessoa.papel === 'SDR' ? leadWhereBase(req) : null,
+    veVendas: ve('vendas'), veEquipe: ve('vendedores'), veTrafego: ve('trafego'),
+  }, pergunta.slice(0, 2000), anteriores))
 })
 router.get('/pergunte/historico', requireProLaboreAuth, async (req: Request, res: Response) => {
   const pessoa = pessoaDe(req)

@@ -17,10 +17,11 @@ function Conteudo() {
         <PergunteChat inicial={q} />
         <Detalhes titulo="Como o ARIES responde">
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li>A inteligência só entende a pergunta e escolhe as métricas do dicionário; quem calcula os números é o sistema.</li>
-            <li>A inteligência nunca recebe valores em R$, CPF ou data de nascimento: ela escreve com espaços reservados e o sistema coloca os números.</li>
-            <li>Você só recebe o que pode ver. O vendedor recebe dados da equipe só como média, sem nomes.</li>
-            <li>Quando a pergunta sai do dicionário, o ARIES diz que não sabe e indica onde procurar.</li>
+            <li>Sobre a sua operação (leads, conversas, vendas, metas, estoque, atividades, recomendações), o ARIES consulta o sistema na hora e não inventa números: se não encontrar, diz que não encontrou.</li>
+            <li>Sobre qualquer outro assunto, responde como um chat e busca na internet quando precisa de algo atual, mostrando as fontes.</li>
+            <li>Você só recebe o que já pode ver nas suas telas. O vendedor e o SDR veem só os próprios clientes e vendas; a equipe aparece só como média, sem nomes.</li>
+            <li>Quando o ARIES abre um CPF, a leitura fica registrada no controle de acesso a dados sensíveis.</li>
+            <li>A conversa lembra as últimas perguntas, então dá para continuar o assunto.</li>
           </ul>
         </Detalhes>
       </div>
