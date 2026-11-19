@@ -5369,3 +5369,17 @@ button.pl-ap-banner { width: 100%; border-style: solid; font-family: inherit; te
 .pl-sidebar-link .pl-abrindo:not(.ativo), .pl-sublink .pl-abrindo:not(.ativo) { width: 0; border-width: 0; }
 @keyframes pl-gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pl-abrindo.ativo { animation-duration: 2s; } }
+
+/* Tela inicial: a barra do topo fica transparente, sem a linha de baixo, flutuando sobre a
+   paisagem (que passa a ir até o alto da moldura). Nas outras telas a barra não muda. */
+.pl-main:has(.ia-embutida) { position: relative; }
+.pl-app .pl-main:has(.ia-embutida) .pl-topbar-v2 { position: absolute; top: 0; left: 0; right: 0; background: transparent; border-bottom-color: transparent; box-shadow: none; }
+.pl-app .pl-main:has(.ia-embutida) .pl-topo-busca { background: rgba(15, 15, 15, .45); border-color: rgba(102, 102, 102, .35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.ia.ia-embutida { border-radius: 12px; min-height: calc(100vh - 18px); min-height: calc(100dvh - 18px); }
+@media (min-width: 1181px) {
+  .ia-embutida .ia-palco { min-height: calc(100vh - 18px); min-height: calc(100dvh - 18px); padding-top: 62px; }
+}
+@media (max-width: 1180px) { .ia-embutida .ia-palco { padding-top: 62px; } }
+@media (max-width: 980px) {
+  .ia.ia-embutida { border-radius: 0; min-height: 100dvh; }
+}
