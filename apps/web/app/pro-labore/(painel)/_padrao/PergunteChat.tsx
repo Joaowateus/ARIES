@@ -148,7 +148,11 @@ export function AtalhoAries() {
   }, [])
   return (
     <>
-      {!aberto && <button type="button" className="pl-btn pl-btn-primary ar-atalho-aries" onClick={() => setAberto(true)} data-atalho-pergunte title="Pergunte ao ARIES (Ctrl+J)">Pergunte ao ARIES</button>}
+      {!aberto && (
+        <button type="button" className="ar-atalho-aries" onClick={() => setAberto(true)} data-atalho-pergunte title="Pergunte ao ARIES (Ctrl+J)" aria-label="Pergunte ao ARIES">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.6L12 15l-1.8-4.4L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" /></svg>
+        </button>
+      )}
       {aberto && (
         <div className="ar-gaveta" role="dialog" aria-label="Pergunte ao ARIES" data-gaveta-pergunte>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--pl-border)' }}>

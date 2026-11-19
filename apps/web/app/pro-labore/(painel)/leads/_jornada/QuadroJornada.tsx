@@ -14,23 +14,30 @@ import { estourou, tempoNaEtapa } from './tempo'
 
 const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 
+export type FaseFunil = 'TUDO' | 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'
 interface Props {
   leads: Lead[]
   vejaEquipe: boolean
   onAbrir: (id: string) => void
   onAtualizar: () => void
   onRegistrarVenda: (lead: Lead) => void
-  extraBarra?: React.ReactNode
+  // Barra de ferramentas da tela (19/11): fase, temperatura, pendência e o modo Selecionar moram na página.
+  fase: FaseFunil
+  filtroTemp: Temperatura | ''
+  soPendencia: boolean
+  selecionando: boolean
+  onSelecionando: (v: boolean) => void
+  premissas: PremissasJornada | null
 }
 
 type Aviso = { lead: Lead; destino: EtapaJornada; faltando: string[]; podeForcar: boolean } | null
 /** Orientação depois de mover (não bloqueia): o que fazer na etapa nova. */
 type Guia = { lead: Lead; destino: EtapaJornada; itens: string[] } | null
 
-const NOME_TEMP: Record<Temperatura, string> = { QUENTE: 'Quente', MORNO: 'Morno', FRIO: 'Frio' }
+export const NOME_TEMP: Record<Temperatura, string> = { QUENTE: 'Quente', MORNO: 'Morno', FRIO: 'Frio' }
 const ORDEM_TEMP: Record<Temperatura, number> = { QUENTE: 0, MORNO: 1, FRIO: 2 }
-const calorDe = (l: Lead): Temperatura => l.calor?.valor ?? 'MORNO'
-const pendencias = (l: Lead) => l.pendenciasEtapa ?? []
+export const calorDe = (l: Lead): Temperatura => l.calor?.valor ?? 'MORNO'
+export const pendencias = (l: Lead) => l.pendenciasEtapa ?? []
 const followAtrasado = (l: Lead) => (l.follows ?? []).some(f => new Date(f.agendadoPara).getTime() < Date.now())
 
 type Passo = { texto: string; acao: 'abrir' | 'levantamento' | 'mover' | 'venda' }
@@ -53,11 +60,13 @@ function proximoPasso(l: Lead): Passo | null {
   }
 }
 
-export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda, extraBarra }: Props) {
-  const [fase, setFase] = useState<'TUDO' | 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO'>(() => {
-    const e = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('etapa')
-    return FASES.find(x => (x.etapas as string[]).includes(e ?? ''))?.id ?? 'TUDO'
-  })
+/** Fase inicial pela etapa do endereço (?etapa=, vindo do Painel). */
+export function faseDaUrl(): FaseFunil {
+  const e = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('etapa')
+  return FASES.find(x => (x.etapas as string[]).includes(e ?? ''))?.id ?? 'TUDO'
+}
+
+export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegistrarVenda, fase, filtroTemp, soPendencia, selecionando, onSelecionando, premissas }: Props) {
   const [arrastando, setArrastando] = useState<string | null>(null)
   const [sobre, setSobre] = useState<EtapaJornada | null>(null)
   const [aviso, setAviso] = useState<Aviso>(null)
@@ -65,13 +74,10 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const [perda, setPerda] = useState<{ lead: Lead; motivos: string[] } | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [premissas, setPremissas] = useState<PremissasJornada | null>(null)
-  const [filtroTemp, setFiltroTemp] = useState<Temperatura | ''>('')
-  const [soPendencia, setSoPendencia] = useState(false)
   const [tempAberta, setTempAberta] = useState<string | null>(null)
   const [guia, setGuia] = useState<Guia>(null)
   // Ajuste 3: modo Selecionar (aplicar o follow pelo robô a vários clientes) e o modal do follow.
-  const [selecionando, setSelecionando] = useState(false)
+  const setSelecionando = (v: boolean | ((x: boolean) => boolean)) => onSelecionando(typeof v === 'function' ? v(selecionando) : v)
   const [marcados, setMarcados] = useState<string[]>([])
   const [followPara, setFollowPara] = useState<Array<{ id: string; nome: string }> | null>(null)
   const alternarMarcado = (id: string) => setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id]))
@@ -89,7 +95,6 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
     return () => clearTimeout(t)
   }, [destaque])
   useEffect(() => {
-    proLaboreApi.jornada.premissas().then(setPremissas).catch(() => setPremissas(null))
     proLaboreApi.jornada.conversao().then(c => setConversao(Object.fromEntries(c.etapas.map(x => [x.etapa, x])))).catch(() => setConversao({}))
   }, [leads.length])
 
@@ -97,8 +102,6 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
   const naTela = leads.filter(l => (!filtroTemp || calorDe(l) === filtroTemp) && (!soPendencia || pendencias(l).length > 0))
   // Dentro da coluna: quentes primeiro; no empate, quem tem mais pontos.
   const porEtapa = (e: EtapaJornada) => naTela.filter(l => (l.etapa ?? 'LEAD') === e).sort((a, b) => ORDEM_TEMP[calorDe(a)] - ORDEM_TEMP[calorDe(b)] || (b.calor?.pontos ?? 0) - (a.calor?.pontos ?? 0))
-  const contTemp = (t: Temperatura) => leads.filter(l => !l.somenteLeitura && calorDe(l) === t).length
-  const comPendencia = leads.filter(l => pendencias(l).length > 0).length
   async function definirTemp(lead: Lead, t: Temperatura | null) {
     setTempAberta(null); setErro(null)
     try { await proLaboreApi.jornada.temperatura(lead.id, t); onAtualizar() } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível mudar a temperatura') }
@@ -137,25 +140,6 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
 
   return (
     <div data-quadro-jornada>
-      <div className="pl-kanban-barra qj-barra">
-        <div role="group" aria-label="Fases da jornada" className="qj-fases">
-          {([['TUDO', 'Jornada inteira'], ...FASES.map(f => [f.id, f.nome])] as Array<[typeof fase, string]>).map(([id, nome]) => (
-            <button key={id} type="button" className={`pl-chip ${fase === id ? 'active' : ''}`} aria-pressed={fase === id} onClick={() => setFase(id)} data-fase={id}>{nome}</button>
-          ))}
-        </div>
-        <span className="pl-hint qj-dica" title="Só passa quando o critério da etapa está cumprido.">Clique no card para ver tudo do lead · arraste ou use “Avançar”</span>
-        {extraBarra}
-      </div>
-      <div className="qj-filtros" role="group" aria-label="Quem merece atenção" data-filtro-temperatura>
-        <span className="pl-hint">Atenção</span>
-        {(['QUENTE', 'MORNO', 'FRIO'] as const).map(t => (
-          <button key={t} type="button" className={`pl-chip qj-temp-chip qj-${t.toLowerCase()} ${filtroTemp === t ? 'active' : ''}`} aria-pressed={filtroTemp === t} onClick={() => setFiltroTemp(f => (f === t ? '' : t))} data-temp={t}><i aria-hidden />{NOME_TEMP[t]}s · {contTemp(t)}</button>
-        ))}
-        {(comPendencia > 0 || soPendencia) && <button type="button" className={`pl-chip ${soPendencia ? 'active' : ''}`} aria-pressed={soPendencia} onClick={() => setSoPendencia(v => !v)} data-filtro-pendencia title="Leads que avançaram de etapa faltando algum critério">Com pendência · {comPendencia}</button>}
-        {(filtroTemp || soPendencia) && <button type="button" className="pl-link-action" onClick={() => { setFiltroTemp(''); setSoPendencia(false) }}>Ver todos</button>}
-        <button type="button" className={`pl-chip ${selecionando ? 'active' : ''}`} aria-pressed={selecionando} onClick={() => { setSelecionando(v => !v); setMarcados([]) }} data-modo-selecionar title="Marque vários clientes para ligar o follow pelo robô">{selecionando ? 'Sair da seleção' : 'Selecionar'}</button>
-        <span className="pl-hint qj-filtros-dica">Em cada coluna, os quentes vêm primeiro.</span>
-      </div>
       {erro && <div className="pl-alert" role="alert">{erro}</div>}
       <div className="qj-rola">
         <div className="qj-trilho">
