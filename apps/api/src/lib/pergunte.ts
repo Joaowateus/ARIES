@@ -57,50 +57,7 @@ export interface Entendimento {
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-// Palavras que levam a cada métrica (além do nome da ficha).
-const SINONIMOS: Record<string, string[]> = {
-  leads_novos: ['leads novos', 'quantos leads', 'leads chegaram', 'leads entraram', 'entrada de leads', 'novos leads'],
-  tempo_primeira_resposta: ['tempo de resposta', 'primeira resposta', 'demora para responder', 'demorando para responder', 'tempo para responder'],
-  taxa_abordagem: ['abordagem', 'abordados'],
-  conversao_por_etapa: ['conversao por etapa', 'em qual etapa', 'qual etapa', 'funil'],
-  conversao_lead_venda: ['conversao', 'converte', 'convertendo'],
-  vendas: ['quantas vendas', 'vendas', 'vendi', 'vendemos', 'vendeu'],
-  faturamento: ['faturamento', 'faturou', 'faturei', 'faturamos'],
-  ticket_medio: ['ticket'],
-  leads_parados: ['parados', 'parado'],
-  atividades_atrasadas: ['atrasadas', 'atrasada', 'atividades atrasadas', 'tarefas atrasadas'],
-  aprovacao_credito: ['aprovacao', 'aprovando', 'aprova', 'credito aprovado'],
-  custo_por_lead: ['custo por lead', 'cpl', 'custo do lead'],
-  roas: ['roas', 'retorno do anuncio', 'retorno dos anuncios'],
-  pro_labore: ['pro-labore', 'pro labore', 'prolabore'],
-  previsao_fechamento: ['previsao', 'vai fechar', 'fechar o mes', 'bater a meta', 'meta do mes'],
-  tempo_na_etapa: ['tempo na etapa', 'quanto tempo fica'],
-  taxa_resposta: ['taxa de resposta', 'respondem'],
-  levantamentos_completos: ['levantamento', 'levantamentos'],
-  simulacao_vira_ficha: ['simulacao vira ficha', 'simulacoes viram'],
-  tempo_resposta_banco: ['resposta do banco', 'banco demora', 'bancos demoram', 'tempo do banco'],
-  tempo_ate_vendedor: ['tempo ate o vendedor', 'ate o vendedor'],
-  taxa_devolucao: ['devolucao', 'devolvidos', 'devolvem'],
-  objecoes_frequentes: ['objecao', 'objecoes'],
-  propostas_enviadas: ['propostas', 'proposta'],
-  visitas_agendadas: ['visitas agendadas', 'visitas marcadas', 'agendamentos'],
-  taxa_comparecimento: ['comparecimento', 'compareceram', 'vieram a loja'],
-  faltas_remarcacoes: ['faltas', 'remarcacoes', 'faltaram'],
-  conversao_visita: ['visita vira venda', 'conversao de visita'],
-  tempo_total_jornada: ['jornada', 'tempo total'],
-  faturamento_por_origem: ['por origem', 'de onde vem', 'origem das vendas'],
-  vendas_por_dia_necessarias: ['vendas por dia', 'quantas vendas por dia'],
-  clientes_esperando: ['esperando resposta', 'clientes esperando', 'quem esta esperando'],
-  leads_sem_primeira_resposta: ['sem resposta', 'sem primeira resposta'],
-  leads_passados: ['passados ao vendedor', 'passei ao vendedor', 'passagens'],
-  fichas_aguardando_banco: ['fichas aguardando', 'fichas paradas', 'fichas sem resposta'],
-  gasto_anuncio: ['gasto com anuncio', 'gastei em anuncio', 'gasto em anuncios', 'verba'],
-  comissoes_a_pagar: ['comissoes a pagar', 'comissao a pagar'],
-  saidas_financeiro: ['saidas', 'saiu do caixa', 'gastos do financeiro'],
-  posts_publicados: ['posts publicados', 'posts', 'publicacoes'],
-  leads_dos_posts: ['leads dos posts', 'leads do instagram'],
-  vendas_por_post: ['vendas por post'],
-}
+// Palavras que levam a cada métrica: vivem na ficha do dicionário (P2, fonte única — PDF 07).
 // Para onde mandar quando a pergunta não está no dicionário.
 const ONDE: Array<[RegExp, string]> = [
   [/estoque|moto|modelo|placa/, 'Estoque e demanda'], [/anuncio|campanha|criativo/, 'Tráfego'], [/instagram|post|pauta|story|reels/, 'Social Media'],
@@ -124,7 +81,7 @@ function entenderPorRegra(pergunta: string, catalogo: Ficha[], nomesEquipe: stri
   const q = norm(pergunta)
   const achadas: Array<{ chave: string; pos: number; tam: number }> = []
   for (const f of catalogo) {
-    for (const termo of [norm(f.nome), ...(SINONIMOS[f.chave] ?? [])]) {
+    for (const termo of [norm(f.nome), ...(f.sinonimos ?? []).map(norm)]) {
       const pos = q.indexOf(termo)
       if (pos >= 0) achadas.push({ chave: f.chave, pos, tam: termo.length })
     }
