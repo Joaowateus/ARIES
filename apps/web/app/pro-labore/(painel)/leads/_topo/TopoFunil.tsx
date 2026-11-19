@@ -347,3 +347,42 @@ export function DicaFunil({ sempre }: { sempre: boolean }) {
     </div>
   )
 }
+
+/**
+ * Aviso com narrativa (19/11): tensão (o que está errado, com número), o que
+ * está em jogo (R$ ou clientes) e uma decisão (um botão principal com verbo e,
+ * no máximo, um secundário). Depois da ação, uma linha de confirmação por 5 s.
+ */
+export function AvisoNarrativo({ tensao, emJogo, principal, secundario, dados, aoTerminar }: {
+  aoTerminar?: () => void
+  tensao: React.ReactNode
+  emJogo?: React.ReactNode
+  principal: { rotulo: string; onClick: () => void; feito?: string; dados?: string }
+  secundario?: { rotulo: string; onClick: () => void; feito?: string; dados?: string }
+  dados?: string
+}) {
+  const [feito, setFeito] = useState<string | null>(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!feito) return; const t = setTimeout(() => { setFeito(null); aoTerminar?.() }, 5000); return () => clearTimeout(t) }, [feito])
+  if (feito) return <div className="fn-aviso fn-aviso-feito" role="status" data-aviso-feito>{feito}</div>
+  const agir = (b: { onClick: () => void; feito?: string }) => () => { b.onClick(); if (b.feito) setFeito(b.feito) }
+  return (
+    <div className="fn-aviso" role="status" data-aviso={dados}>
+      <div className="fn-aviso-txt">
+        <b>{tensao}</b>
+        {emJogo && <span>{emJogo}</span>}
+      </div>
+      <div className="fn-aviso-botoes">
+        <button type="button" className="pl-btn pl-btn-primary" onClick={agir(principal)} data-aviso-principal={principal.dados}>{principal.rotulo}</button>
+        {secundario && <button type="button" className="pl-btn pl-btn-ghost" onClick={agir(secundario)} data-aviso-secundario={secundario.dados}>{secundario.rotulo}</button>}
+      </div>
+    </div>
+  )
+}
+
+/** Confirmação curta na tela (5 s), para ações que fecham a janela de onde vieram. */
+export function useConfirmacao(): [string | null, (t: string) => void] {
+  const [texto, setTexto] = useState<string | null>(null)
+  useEffect(() => { if (!texto) return; const t = setTimeout(() => setTexto(null), 5000); return () => clearTimeout(t) }, [texto])
+  return [texto, setTexto]
+}

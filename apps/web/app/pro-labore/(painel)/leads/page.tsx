@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { QuadroJornada, calorDe, faseDaUrl, pendencias, type FaseFunil } from './_jornada/QuadroJornada'
-import { BarraFerramentas, CabecalhoFunil, DicaFunil, FaixaNumeros, FILTROS_VAZIOS, periodoMes, useLenteCrm, type Filtros } from './_topo/TopoFunil'
+import { AvisoNarrativo, useConfirmacao, BarraFerramentas, CabecalhoFunil, DicaFunil, FaixaNumeros, FILTROS_VAZIOS, periodoMes, useLenteCrm, type Filtros } from './_topo/TopoFunil'
 import { useMetricas } from '../_metricas/Metricas'
 import { useModoGuiado } from './_topo/modoGuiado'
 import { MenuFunil } from './_topo/TopoFunil'
@@ -219,6 +219,7 @@ export default function ProLaboreLeadsPage() {
   const [lente, recarregarLente] = useLenteCrm()
   // Modo guiado (por pessoa): dica do quadro, pergunta da coluna e "o que fazer" no card.
   const [guiado, setGuiado] = useModoGuiado(usuario?.papel)
+  const [confirmacao, confirmar] = useConfirmacao()
   const [periodoAgora] = useState(periodoMes)
   const leiturasTopo = useMetricas(['taxa_abordagem', 'leads_novos'], periodoAgora)
   // Follow (botão do card) e perda (o cliente vai para a Reativação).
@@ -832,6 +833,8 @@ export default function ProLaboreLeadsPage() {
   const foraDaMeta = stagesDados.filter(d => d.statusOk === false).length
   const ETIQ_VISIVEIS = 8
   const etiquetasMostradas = todasEtiquetas ? contagemEtiquetas : contagemEtiquetas.slice(0, ETIQ_VISIVEIS)
+  const somaValor = (ls: Lead[]) => ls.reduce((t, l) => t + (l.valorNegociacao || 0), 0)
+  const clientesComFollow = leads.filter(l => temFollow(l, 'ATRASADO') || temFollow(l, 'HOJE'))
   const contTemp = (t: Temperatura) => leadsAtivos.filter(l => !l.somenteLeitura && calorDe(l) === t).length
   const temAtencao = parados.length > 0 || filtroParado || emDecisao.length > 0 || filtroDecisao || followsAtrasados > 0 || followsHoje > 0 || !!filtroFollow
   const densidadeBotoes = (
@@ -954,6 +957,7 @@ export default function ProLaboreLeadsPage() {
         densidade={densidadeBotoes}
       />
       <DicaFunil sempre={guiado} />
+      {confirmacao && <div className="fn-aviso fn-aviso-feito" role="status" data-aviso-feito>{confirmacao}</div>}
 
       {maisAberto && (
         <div className="pl-modal-backdrop" role="dialog" aria-modal="true" aria-label="Mais do CRM" onClick={() => setMaisAberto(false)} data-mais-crm>
@@ -988,26 +992,36 @@ export default function ProLaboreLeadsPage() {
             {!temAtencao && <p className="pl-hint">Nenhum lead parado nem follow atrasado.</p>}
           {/* 4. O que pede atenção agora (parados e follows), numa faixa só */}
           {temAtencao && (
-            <div className="crm-atencao" role="status" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
+            <div className="crm-atencao-avisos" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
               {(parados.length > 0 || filtroParado) && (
-                <span className="crm-atencao-item" title="Abertos há mais tempo que o máximo da etapa (Metas e premissas): a mesma regra que pinta o tempo do card de vermelho.">
-                  <b>{parados.length}</b> {parados.length === 1 ? 'lead parado' : 'leads parados'} além do tempo máximo da etapa
-                  <button type="button" className={`pl-chip ${filtroParado ? 'active' : ''}`} aria-pressed={filtroParado} onClick={() => setFiltroParado(f => !f)} data-filtro-parados>{filtroParado ? 'Ver todos os cards' : 'Ver só os parados'}</button>
-                </span>
-              )}
-              {(emDecisao.length > 0 || filtroDecisao) && (
-                <span className="crm-atencao-item" title={`Em Negociação ou Proposta há mais de ${limiteParado} dias, sem follow agendado.`}>
-                  <b>{emDecisao.length}</b> em decisão sem follow
-                  <button type="button" className={`pl-chip ${filtroDecisao ? 'active' : ''}`} aria-pressed={filtroDecisao} onClick={() => setFiltroDecisao(f => !f)} data-filtro-decisao>{filtroDecisao ? 'Ver todos os cards' : 'Ver só estes'}</button>
-                </span>
+                <AvisoNarrativo dados="parados"
+                  tensao={<>{parados.length} {parados.length === 1 ? 'lead parado' : 'leads parados'} além do tempo máximo da etapa</>}
+                  emJogo={<>{moedaCurta(somaValor(parados))} em negociação · {parados.length === 1 ? '1 cliente' : `${parados.length} clientes`} esperando o próximo passo</>}
+                  principal={filtroParado
+                    ? { rotulo: 'Ver todos os cards', onClick: () => setFiltroParado(false), dados: 'parados' }
+                    : { rotulo: 'Ver os parados', onClick: () => { setFiltroParado(true); setMaisAberto(false); confirmar(`Feito: ${parados.length} ${parados.length === 1 ? 'lead parado filtrado' : 'leads parados filtrados'}`) }, dados: 'parados' }}
+                />
               )}
               {(followsAtrasados > 0 || followsHoje > 0 || filtroFollow) && (
-                <span className="crm-atencao-item" role="group" aria-label="Follows do dia">
-                  Follows
-                  {followsAtrasados > 0 && <button type="button" className={`pl-chip atrasado ${filtroFollow === 'ATRASADO' ? 'active' : ''}`} aria-pressed={filtroFollow === 'ATRASADO'} onClick={() => setFiltroFollow(f => (f === 'ATRASADO' ? '' : 'ATRASADO'))}>{followsAtrasados} atrasado{followsAtrasados > 1 ? 's' : ''}</button>}
-                  {followsHoje > 0 && <button type="button" className={`pl-chip hoje ${filtroFollow === 'HOJE' ? 'active' : ''}`} aria-pressed={filtroFollow === 'HOJE'} onClick={() => setFiltroFollow(f => (f === 'HOJE' ? '' : 'HOJE'))}>{followsHoje} para hoje</button>}
-                  {filtroFollow && <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => setFiltroFollow('')}>Ver todos os cards</button>}
-                </span>
+                <AvisoNarrativo dados="follows"
+                  tensao={<>{followsAtrasados > 0 ? `${followsAtrasados} ${followsAtrasados === 1 ? 'follow atrasado' : 'follows atrasados'}` : 'Nenhum follow atrasado'}{followsHoje > 0 ? ` e ${followsHoje} para hoje` : ''}</>}
+                  emJogo={<>{clientesComFollow.length === 1 ? '1 cliente' : `${clientesComFollow.length} clientes`} esperando contato · {moedaCurta(somaValor(clientesComFollow))} em negociação</>}
+                  principal={filtroFollow
+                    ? { rotulo: 'Ver todos os cards', onClick: () => setFiltroFollow(''), dados: 'follows' }
+                    : followsAtrasados > 0
+                      ? { rotulo: 'Ver os atrasados', onClick: () => { setFiltroFollow('ATRASADO'); setMaisAberto(false); confirmar(`Feito: leads com follow atrasado filtrados`) }, dados: 'ATRASADO' }
+                      : { rotulo: 'Ver os de hoje', onClick: () => { setFiltroFollow('HOJE'); setMaisAberto(false); confirmar(`Feito: leads com follow de hoje filtrados`) }, dados: 'HOJE' }}
+                  secundario={!filtroFollow && followsAtrasados > 0 && followsHoje > 0 ? { rotulo: 'Ver os de hoje', onClick: () => { setFiltroFollow('HOJE'); setMaisAberto(false); confirmar('Feito: leads com follow de hoje filtrados') }, dados: 'HOJE' } : undefined}
+                />
+              )}
+              {(emDecisao.length > 0 || filtroDecisao) && (
+                <AvisoNarrativo dados="decisao"
+                  tensao={<>{emDecisao.length} em Negociação ou Proposta há mais de {limiteParado} dias, sem follow agendado</>}
+                  emJogo={<>{moedaCurta(somaValor(emDecisao))} em negociação esfriando</>}
+                  principal={filtroDecisao
+                    ? { rotulo: 'Ver todos os cards', onClick: () => setFiltroDecisao(false), dados: 'decisao' }
+                    : { rotulo: 'Ver estes leads', onClick: () => { setFiltroDecisao(true); setMaisAberto(false); confirmar(`Feito: ${emDecisao.length} ${emDecisao.length === 1 ? 'lead filtrado' : 'leads filtrados'}`) }, dados: 'decisao' }}
+                />
               )}
             </div>
           )}

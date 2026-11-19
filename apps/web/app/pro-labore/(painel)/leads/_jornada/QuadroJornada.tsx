@@ -12,6 +12,7 @@ import { ETAPAS_JORNADA, FASES, NOME_ETAPA, NOME_MOTIVO, NOME_DESTINO } from '@/
 import { FollowRoboModal, SeloRobo } from './FollowRobo'
 import { situacaoFollow, linkWhatsapp } from '../../_follow/follow'
 import { estourou, tempoNaEtapa } from './tempo'
+import { AvisoNarrativo } from '../_topo/TopoFunil'
 
 const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 /** "R$ 3,9 mi", "R$ 345 mil" (cabeçalho da coluna). */
@@ -427,23 +428,34 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
         </div>
       </div>
 
-      {aviso && (
-        <div className="pl-modal-backdrop" role="dialog" aria-modal="true" data-aviso-criterio onClick={() => setAviso(null)}>
-          <div className="pl-modal-panel pl-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
-            <h3 style={{ marginTop: 0 }}>{aviso.podeForcar ? `Antes de ir para ${NOME_ETAPA[aviso.destino]}` : `Não dá para mover para ${NOME_ETAPA[aviso.destino]}`}</h3>
-            <p className="pl-hint">{aviso.lead.nomeCliente} · {aviso.podeForcar ? 'o ideal é resolver isto primeiro. Você decide:' : 'motivo:'}</p>
-            <ul className="qj-faltas">{aviso.faltando.map(f => <li key={f}>{f}</li>)}</ul>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {aviso.faltando.some(f => /Confirme que você respondeu/.test(f)) && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void mover(aviso.lead, aviso.destino, true)} data-confirmar-contato>Confirmo que respondi o cliente</button>}
-              {aviso.faltando.some(f => /levantamento|coleta/i.test(f)) && <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setLevantamento(aviso.lead); setAviso(null) }}>Preencher o levantamento</button>}
-              {aviso.podeForcar && !aviso.faltando.every(f => /levantamento|coleta|Confirme que você respondeu/i.test(f)) && <button type="button" className="pl-btn pl-btn-primary" onClick={() => { onAbrir(aviso.lead.id); setAviso(null) }} data-resolver-agora>Resolver agora</button>}
-              {aviso.podeForcar && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void mover(aviso.lead, aviso.destino, undefined, true)} data-avancar-mesmo-assim title="Move o card e deixa a pendência marcada no lead e no histórico">Avançar mesmo assim</button>}
-              <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setAviso(null)}>{aviso.podeForcar ? 'Cancelar' : 'Fechar'}</button>
+      {aviso && (() => {
+        const contato = aviso.faltando.some(f => /Confirme que você respondeu/.test(f))
+        const lev = aviso.faltando.some(f => /levantamento|coleta/i.test(f))
+        const n = aviso.faltando.length
+        // Uma decisão principal (o que resolve) e, no máximo, uma secundária (avançar mesmo assim).
+        const principal = contato
+          ? <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void mover(aviso.lead, aviso.destino, true)} data-confirmar-contato>Confirmo que respondi o cliente</button>
+          : lev
+            ? <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setLevantamento(aviso.lead); setAviso(null) }}>Preencher o levantamento</button>
+            : aviso.podeForcar ? <button type="button" className="pl-btn pl-btn-primary" onClick={() => { onAbrir(aviso.lead.id); setAviso(null) }} data-resolver-agora>Resolver agora</button> : null
+        return (
+          <div className="pl-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="qj-aviso-titulo" data-aviso-criterio onClick={() => setAviso(null)} onKeyDown={e => { if (e.key === 'Escape') setAviso(null) }}>
+            <div className="pl-modal-panel pl-card qj-aviso" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+              <button type="button" className="pl-pn-fechar qj-aviso-x" onClick={() => setAviso(null)} aria-label="Fechar" autoFocus>✕</button>
+              <h3 id="qj-aviso-titulo" style={{ marginTop: 0 }}>{aviso.podeForcar ? `Antes de ir para ${NOME_ETAPA[aviso.destino]}: ${n === 1 ? 'falta 1 critério' : `faltam ${n} critérios`}` : `Não dá para mover para ${NOME_ETAPA[aviso.destino]}`}</h3>
+              <p className="pl-hint" style={{ margin: '0 0 6px' }}>{nomeLimpo(aviso.lead) ?? 'O lead'}{aviso.lead.valorNegociacao > 0 ? ` · ${moeda(aviso.lead.valorNegociacao)} em negociação` : ''} · {aviso.podeForcar ? 'o ideal é resolver isto primeiro:' : 'motivo:'}</p>
+              <ul className="qj-faltas">{aviso.faltando.map(f => <li key={f}>{f}</li>)}</ul>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {principal}
+                {aviso.podeForcar
+                  ? <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void mover(aviso.lead, aviso.destino, undefined, true)} data-avancar-mesmo-assim title="Move o card e deixa a pendência marcada no lead e no histórico">Avançar mesmo assim</button>
+                  : !principal && <button type="button" className="pl-btn" onClick={() => setAviso(null)}>Entendi</button>}
+              </div>
+              {aviso.podeForcar && <p className="pl-hint" style={{ marginBottom: 0 }}>Se avançar mesmo assim, o card fica com o selo de pendência até você resolver.</p>}
             </div>
-            {aviso.podeForcar && <p className="pl-hint" style={{ marginBottom: 0 }}>Se avançar mesmo assim, o card fica com o selo de pendência até você resolver.</p>}
           </div>
-        </div>
-      )}
+        )
+      })()}
       {selecionando && !followPara && (
         <div className="qj-selecao" role="toolbar" aria-label="Clientes selecionados" data-barra-selecao>
           <b>{marcados.length}</b> {marcados.length === 1 ? 'cliente selecionado' : 'clientes selecionados'}
@@ -454,17 +466,16 @@ export function QuadroJornada({ leads, vejaEquipe, onAbrir, onAtualizar, onRegis
       )}
       {followPara && <FollowRoboModal leads={followPara} fechar={() => setFollowPara(null)} aoAplicar={() => { setMarcados([]); setSelecionando(false); onAtualizar() }} />}
       {guia && (
-        <div className="qj-guia" role="status" data-guia-etapa>
-          <div className="qj-guia-txt">
-            <b>{guia.lead.nomeCliente} foi para {NOME_ETAPA[guia.destino]}.</b>
-            <span>Para esta etapa: {guia.itens.join(' · ')}</span>
-          </div>
-          <div className="qj-guia-botoes">
-            {guia.itens.some(f => /levantamento|coleta/i.test(f))
-              ? <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setLevantamento(guia.lead); setGuia(null) }}>Preencher o levantamento</button>
-              : <button type="button" className="pl-btn pl-btn-primary" onClick={() => { onAbrir(guia.lead.id); setGuia(null) }} data-guia-resolver>Fazer agora</button>}
-            <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setGuia(null)} data-guia-ok>Depois</button>
-          </div>
+        <div className="qj-guia" data-guia-etapa>
+          <AvisoNarrativo key={`${guia.lead.id}-${guia.destino}`} dados="guia"
+            tensao={<>{nomeLimpo(guia.lead) ?? 'O lead'} foi para {NOME_ETAPA[guia.destino]}: {guia.itens.length === 1 ? '1 coisa a fazer' : `${guia.itens.length} coisas a fazer`} nesta etapa</>}
+            emJogo={<>{guia.itens.join(' · ')}{guia.lead.valorNegociacao > 0 ? ` · ${moeda(guia.lead.valorNegociacao)} em negociação` : ''}</>}
+            principal={guia.itens.some(f => /levantamento|coleta/i.test(f))
+              ? { rotulo: 'Preencher o levantamento', onClick: () => setLevantamento(guia.lead), feito: 'Feito: levantamento aberto', dados: 'levantamento' }
+              : { rotulo: 'Fazer agora', onClick: () => onAbrir(guia.lead.id), feito: 'Feito: lead aberto no painel', dados: 'resolver' }}
+            secundario={{ rotulo: 'Depois', onClick: () => setGuia(null), dados: 'ok' }}
+            aoTerminar={() => setGuia(null)}
+          />
         </div>
       )}
       {levantamento && <ModalLevantamento lead={levantamento} onFechar={() => setLevantamento(null)} onSalvo={() => { setLevantamento(null); onAtualizar() }} />}

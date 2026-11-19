@@ -5640,3 +5640,11 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .fn-alternar { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px; color: var(--pl-ink-1); }
 .fn-alternar input { width: 16px; height: 16px; margin-top: 2px; flex: none; }
 .fn-alternar small { color: var(--pl-ink-muted); font-size: 12px; line-height: 1.4; }
+
+/* Bloco G · avisos com narrativa */
+.qj-guia .fn-aviso { flex: 1; margin: 0; padding: 0; border: 0; background: none; }
+.crm-atencao-avisos { display: flex; flex-direction: column; gap: 8px; }
+.crm-atencao-avisos .fn-aviso { margin: 0; }
+.qj-aviso { position: relative; }
+.qj-aviso-x { position: absolute; top: 12px; right: 12px; }
+.qj-aviso h3 { padding-right: 36px; }
