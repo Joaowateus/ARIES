@@ -19,13 +19,13 @@ export function evolutionConfigurada(): boolean {
 
 const TIMEOUT_MS = 15_000
 
-async function chamar<T>(metodo: 'GET' | 'POST' | 'PUT' | 'DELETE', caminho: string, corpo?: unknown): Promise<T> {
+async function chamar<T>(metodo: 'GET' | 'POST' | 'PUT' | 'DELETE', caminho: string, corpo?: unknown, prazoMs = TIMEOUT_MS): Promise<T> {
   const base = (process.env.EVOLUTION_API_URL ?? '').replace(/\/+$/, '')
   const chave = process.env.EVOLUTION_API_KEY ?? ''
   if (!base || !chave) throw new ErroWhatsapp('Servidor do WhatsApp não configurado (EVOLUTION_API_URL / EVOLUTION_API_KEY).')
 
   const controle = new AbortController()
-  const timer = setTimeout(() => controle.abort(), TIMEOUT_MS)
+  const timer = setTimeout(() => controle.abort(), prazoMs)
   let resposta: globalThis.Response
   try {
     resposta = await fetch(`${base}${caminho}`, {
@@ -216,10 +216,10 @@ export async function contarMensagensComContato(instancia: string, jid: string):
 }
 
 /** Últimas mensagens trocadas com o contato (mais recentes primeiro), como vêm do servidor. */
-export async function mensagensDoContato(instancia: string, jid: string, limite = 20): Promise<{ total: number; registros: unknown[] }> {
+export async function mensagensDoContato(instancia: string, jid: string, limite = 20, prazoMs = TIMEOUT_MS): Promise<{ total: number; registros: unknown[] }> {
   const r = await chamar<unknown>('POST', `/chat/findMessages/${encodeURIComponent(instancia)}`, {
     where: { key: { remoteJid: jid } }, limit: limite, offset: limite, page: 1,
-  })
+  }, prazoMs)
   const d = r as { messages?: { records?: unknown[]; total?: number } } | unknown[]
   if (Array.isArray(d)) return { total: d.length, registros: d }
   const registros = d.messages?.records ?? []
@@ -227,8 +227,9 @@ export async function mensagensDoContato(instancia: string, jid: string, limite 
 }
 
 /** Quantas mensagens há com o contato e em que instantes (ms) as mais recentes foram trocadas. */
-export async function historicoDoContato(instancia: string, jid: string): Promise<{ total: number; instantes: number[] }> {
-  const { total, registros } = await mensagensDoContato(instancia, jid, 20)
+export async function historicoDoContato(instancia: string, jid: string, prazoMs = 6000): Promise<{ total: number; instantes: number[] }> {
+  // Prazo curto: roda dentro do aviso da mensagem (30 s na Vercel), antes de responder o cliente.
+  const { total, registros } = await mensagensDoContato(instancia, jid, 20, prazoMs)
   const instantes = registros.map(r => Number((r as { messageTimestamp?: unknown }).messageTimestamp)).filter(t => Number.isFinite(t) && t > 0).map(t => (t > 1e12 ? t : t * 1000))
   return { total, instantes }
 }
