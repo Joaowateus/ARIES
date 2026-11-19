@@ -1370,6 +1370,8 @@ model Lead {
   // conversão em venda (ver tetoProLaboreRenegociacao/tetoComissaoRenegociacao
   // em ParametroLiquidez) — null se ainda não classificada, o que a
   // conversão trata igual a P (pagamento integral, tetos normais da conta).
+  // Perfil do cliente (19/11): como atender — INDECISO, DETALHISTA, APRESSADO ou NERVOSO.
+  perfilCliente     String?
   tipoNegociacao    String?
   estagio           String    @default("LEAD") // LEAD | ABORDADO | NEGOCIACAO | PROPOSTA | FECHADO | PERDIDO
   vendaId           String?   @unique

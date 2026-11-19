@@ -1,3 +1,4 @@
+import { perfilClienteSchema } from '../lib/perfilCliente'
 import { situacaoDoRobo } from '../lib/assistenteCadenciaCrm'
 import { faltaParaSimular } from '../lib/assistentePreVenda'
 import { ErroJornada, leadDaJornada, moverEtapa, registrarPerda } from '../lib/jornadaRegras'
@@ -874,7 +875,7 @@ const LEAD_INCLUDE = {
   historico: { select: { estagioNovo: true, criadoEm: true, origem: true, motivo: true }, orderBy: { criadoEm: 'asc' } },
   // Os follows pendentes, o mais próximo primeiro (botão Follow do card). A
   // nova análise de crédito convive com o follow comum.
-  follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 3, select: { id: true, agendadoPara: true, canal: true, nota: true, tipo: true, contexto: true } },
+  follows: { where: { status: 'PENDENTE' }, orderBy: { agendadoPara: 'asc' }, take: 10, select: { id: true, agendadoPara: true, canal: true, nota: true, tipo: true, contexto: true } },
   // Quantas notas da negociação o lead tem (selo no card; o texto abre no painel).
   _count: { select: { notas: true } },
   // A próxima ligação pendente (selo do card e painel do lead).
@@ -1058,6 +1059,7 @@ const editarLeadSchema = z.object({
   tipoLead: z.enum(TIPOS_LEAD).nullable().optional(),
   tipoNegociacao: z.enum(TIPOS_NEGOCIACAO).nullable().optional(),
   valorNegociacao: z.number().positive('Valor da negociação deve ser maior que zero').optional(),
+  perfilCliente: perfilClienteSchema,
 })
 
 router.patch('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR'), async (req: Request, res: Response) => {
@@ -1078,7 +1080,7 @@ router.patch('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR'),
   const data: {
     nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string
     modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: string | null
-    tipoNegociacao?: string | null; valorNegociacao?: number
+    tipoNegociacao?: string | null; valorNegociacao?: number; perfilCliente?: string | null
     origem?: string; postCode?: string; midiaId?: string | null; canalEntrada?: string
   } = {
     nomeCliente: parse.data.nomeCliente,
@@ -1092,6 +1094,7 @@ router.patch('/leads/:id', requireProLaboreAuth, requireModulo('crm', 'EDITAR'),
     tipoLead: parse.data.tipoLead,
     tipoNegociacao: parse.data.tipoNegociacao,
     valorNegociacao: parse.data.valorNegociacao,
+    perfilCliente: parse.data.perfilCliente,
   }
   // Dono e supervisor podem reatribuir um lead a outro vendedor.
   if ((papel === 'DONO' || papel === 'SUPERVISOR') && parse.data.vendedorId !== undefined) {

@@ -7,6 +7,7 @@ import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { nivelAtende } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
 import { SINAL_APRESENTADOR_MS } from '../lib/apresentacaoTransmissao'
+import { LEAD_EM_ANDAMENTO, contarFollows, fimDoDiaBR } from '../lib/contagemFollows'
 
 const router = Router()
 const DIA = 864e5
@@ -21,11 +22,11 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
   const lead = veCrm ? leadWhereBase(req) : null
   // Ligações da própria pessoa (o dono: as dos leads sem vendedor) que já chegaram na hora: aviso na tela.
   const minhas = lead ? { status: 'PENDENTE', vendedorId: dono ? null : u.vendedorId ?? '-', agendadaPara: { lte: new Date(agora + 60e3), gte: new Date(agora - 12 * 3600e3) }, lead } : null
-  const [aoVivo, pedidosReuniao, atrasados, deHoje, avisos, ligAtrasadas, ligHoje, ligAgora] = await Promise.all([
+  const [aoVivo, pedidosReuniao, followsAteHoje, avisos, ligAtrasadas, ligHoje, ligAgora] = await Promise.all([
     prisma.apresentacao.count({ where: { usuarioId: u.sub, aoVivo: true, aprovacao: 'APROVADA', apresentadorSinalEm: { gte: new Date(agora - SINAL_APRESENTADOR_MS) } } }),
     dono ? prisma.apresentacao.count({ where: { usuarioId: u.sub, aprovacao: 'PENDENTE' } }) : 0,
-    lead ? prisma.leadFollow.count({ where: { status: 'PENDENTE', agendadoPara: { lt: hoje }, lead } }) : 0,
-    lead ? prisma.leadFollow.count({ where: { status: 'PENDENTE', agendadoPara: { gte: hoje, lt: amanha }, lead } }) : 0,
+    // Follows: a mesma regra da faixa do Funil (lib/contagemFollows), só dos leads em andamento.
+    lead ? prisma.leadFollow.findMany({ where: { status: 'PENDENTE', agendadoPara: { lt: fimDoDiaBR(new Date(agora)) }, lead: { AND: [lead, LEAD_EM_ANDAMENTO] } }, select: { agendadoPara: true } }) : [],
     dono ? prisma.smNotificacao.findMany({ where: { usuarioId: u.sub, destinatario: 'GESTOR', lidaEm: null }, orderBy: { atualizadoEm: 'desc' }, take: 20, select: { titulo: true } }) : [],
     // Ligações: já passou da hora / ainda hoje.
     lead ? prisma.ligacaoTarefa.count({ where: { status: 'PENDENTE', agendadaPara: { lt: new Date(agora) }, lead } }) : 0,
@@ -35,7 +36,8 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
       select: { id: true, agendadaPara: true, passo: true, totalPassos: true, instrucao: true, discadaEm: true, discagens: true, status: true, lead: { select: { id: true, nomeCliente: true, telefone: true } } },
     }) : [],
   ])
-  res.json({ aoVivo, pedidosReuniao, follows: lead ? { atrasados, hoje: deHoje } : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje, agora: ligAgora } : null, avisosSocial: avisos.map(a => a.titulo) })
+  const follows = contarFollows(followsAteHoje, new Date(agora))
+  res.json({ aoVivo, pedidosReuniao, follows: lead ? follows : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje, agora: ligAgora } : null, avisosSocial: avisos.map(a => a.titulo) })
 })
 
 export default router

@@ -1,24 +1,30 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { QuadroJornada } from './_jornada/QuadroJornada'
+import { QuadroJornada, calorDe, faseDaUrl, pendencias, type FaseFunil } from './_jornada/QuadroJornada'
+import { AvisoNarrativo, useConfirmacao, BarraFerramentas, CabecalhoFunil, DicaFunil, FaixaNumeros, FILTROS_VAZIOS, periodoMes, useLenteCrm, type Filtros } from './_topo/TopoFunil'
+import { useMetricas } from '../_metricas/Metricas'
+import { useModoGuiado } from './_topo/modoGuiado'
+import { MenuFunil } from './_topo/TopoFunil'
 import { CustosPorEtapa } from './_metricas/CustosPorEtapa'
 import { createPortal } from 'react-dom'
-import { proLaboreApi, metricasApi, type ErroApi, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
+import { proLaboreApi, metricasApi, type ErroApi, type EtapaJornada, type PremissasJornada, type Temperatura, Lead, EstagioLead, TipoLead, TIPOS_LEAD, TipoNegociacao, TIPOS_NEGOCIACAO, Vendedor, ParametroLiquidez, MetaFunilProLabore, TipoMetaFunilPL, EstagioFunilPL, type VendaParecida } from '@/lib/proLaboreApi'
 import { metaDefinida } from '@/lib/metaFunil'
 import { AvisoRepetida, parecidasDoErro } from '../vendas/AvisoRepetida'
 import { SeletorMoto } from '../vendas/SeletorMoto'
 import { formatMoeda, formatPct, centavosParaReais } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
-import { FunilFiltro, periodoHoje, periodoSemanaAtual, popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
-import { PageHeader } from '../../PageHeader'
+import { popularFunilNoPeriodo } from '@/lib/proLaboreFunilFiltro'
 import Link from 'next/link'
 import { FollowModal } from '../_follow/FollowModal'
 import { PerdaModal } from '../_follow/PerdaModal'
 import { situacaoFollow } from '../_follow/follow'
+import { contarFollows, temFollow } from '../_follow/contagem'
+import { paradoOficial } from './_jornada/tempo'
 import { FaixaWhatsapp } from './_whatsapp/FaixaWhatsapp'
 import { ChipNota } from '../assistente/_componentes/SugestoesConversa'
 import { EtiquetasLead, ORDEM_ETIQUETAS, ROTULO_ETIQUETA } from '../assistente/_componentes/jornada'
+import { NOME_ETAPA } from '@/lib/etapasJornada'
 import { PainelLead } from './_painel/PainelLead'
 import { quandoLigar } from '../_ligacoes/Ligacoes'
 
@@ -72,8 +78,8 @@ function diasParado(lead: Lead): number {
   return Math.floor((Date.now() - new Date(desde).getTime()) / MS_POR_DIA)
 }
 const ETAPAS_DECISAO: EstagioLead[] = ['NEGOCIACAO', 'PROPOSTA']
-/** Em Negociação/Proposta sem mudar de etapa há mais que o limite e sem follow agendado: está esfriando sem ninguém cuidar. */
-function leadParado(lead: Lead, limite: number) {
+/** Filtro "Em decisão sem follow": em Negociação/Proposta sem mudar de etapa há mais que o limite e sem follow agendado. (Não é o "parado" oficial, que vem do tempo máximo da etapa.) */
+function emDecisaoSemFollow(lead: Lead, limite: number) {
   return ETAPAS_DECISAO.includes(lead.estagio) && !lead.vendaId && !lead.follows?.length && diasParado(lead) > limite
 }
 
@@ -205,8 +211,17 @@ export default function ProLaboreLeadsPage() {
   const [filtroCanal, setFiltroCanal] = useState<TipoLead | ''>('')
   const [filtroVendedorId, setFiltroVendedorId] = useState<string | null>(null)
   const [filtroPeriodo, setFiltroPeriodo] = useState<{ inicio: string; fim: string } | null>(null)
-  const [filtroCustomInicio, setFiltroCustomInicio] = useState('')
-  const [filtroCustomFim, setFiltroCustomFim] = useState('')
+  // Topo do Funil (19/11): fase, temperatura, pendência e Selecionar saíram do quadro para a barra.
+  const [fase, setFase] = useState<FaseFunil>(faseDaUrl)
+  const [filtroTemp, setFiltroTemp] = useState<Temperatura | ''>('')
+  const [soPendencia, setSoPendencia] = useState(false)
+  const [selecionando, setSelecionando] = useState(false)
+  const [lente, recarregarLente] = useLenteCrm()
+  // Modo guiado (por pessoa): dica do quadro, pergunta da coluna e "o que fazer" no card.
+  const [guiado, setGuiado] = useModoGuiado(usuario?.papel)
+  const [confirmacao, confirmar] = useConfirmacao()
+  const [periodoAgora] = useState(periodoMes)
+  const leiturasTopo = useMetricas(['taxa_abordagem', 'leads_novos'], periodoAgora)
   // Follow (botão do card) e perda (o cliente vai para a Reativação).
   const [followAberto, setFollowAberto] = useState<Lead | null>(null)
   // ?lead=...&follow=... (link do aviso da nova análise no WhatsApp e do Meu dia): abre o follow certo do lead.
@@ -217,29 +232,13 @@ export default function ProLaboreLeadsPage() {
   const [perdaAberta, setPerdaAberta] = useState<Lead | null>(null)
   const [filtroFollow, setFiltroFollow] = useState<'' | 'ATRASADO' | 'HOJE'>('')
   const [filtroParado, setFiltroParado] = useState(false)
+  const [filtroDecisao, setFiltroDecisao] = useState(false)
+  // Tempo máximo de cada etapa (Metas e premissas): base da regra oficial de parado.
+  const [premissas, setPremissas] = useState<PremissasJornada | null>(null)
   // Etiqueta da jornada (posta pelo Assistente): filtra só os cards do Kanban.
   const [filtroEtiqueta, setFiltroEtiqueta] = useState('')
   // Custo por lead automático: a ficha do dicionário (gasto ÷ leads novos de tráfego pago no mês).
   const [cplDicionario, setCplDicionario] = useState<{ valor: number; leads: number } | null>(null)
-  const [mesCorrente] = useState(() => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 7))
-
-  function aplicarFiltroPeriodo() {
-    if (!filtroCustomInicio || !filtroCustomFim) return
-    setFiltroPeriodo({ inicio: filtroCustomInicio, fim: filtroCustomFim })
-  }
-
-  function selecionarFiltroPreset(tipo: 'hoje' | 'semana') {
-    const p = tipo === 'hoje' ? periodoHoje() : periodoSemanaAtual()
-    setFiltroCustomInicio(p.inicio)
-    setFiltroCustomFim(p.fim)
-    setFiltroPeriodo(p)
-  }
-
-  function limparFiltroPeriodo() {
-    setFiltroPeriodo(null)
-    setFiltroCustomInicio('')
-    setFiltroCustomFim('')
-  }
 
   // Edição de meta por etapa e de custo/lead — mesma interação do painel
   // (FunilJourney), só que aqui refletindo direto na etapa do CRM.
@@ -256,6 +255,8 @@ export default function ProLaboreLeadsPage() {
   // empurrando o quadro pra baixo toda vez) — abre só quando precisa.
   // ?novo=1 e ?lead=ID chegam da paleta de comandos (Ctrl K).
   const [novoLeadAberto, setNovoLeadAberto] = useState(() => paramDaUrl('novo') === '1')
+  // "+" no cabeçalho da coluna: o lead novo já vai para aquela etapa.
+  const [etapaNovo, setEtapaNovo] = useState<EtapaJornada | null>(null)
   const [form, setForm] = useState<FormLead>(FORM_VAZIO)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -320,6 +321,7 @@ export default function ProLaboreLeadsPage() {
     ])
       .then(([l, v, p, metas]) => { setLeads(l); setVendedores(v.filter(x => x.vende !== false)); setParametro(p); setMetasFunil(metas) })
       .finally(() => { carregouUmaVez.current = true; setLoading(false) })
+    proLaboreApi.jornada.premissas().then(setPremissas).catch(() => setPremissas(null))
     if (isDono) {
       const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)
       metricasApi.ler(['custo_por_lead'], { inicio: `${hoje.slice(0, 8)}01`, fim: hoje })
@@ -345,7 +347,8 @@ export default function ProLaboreLeadsPage() {
   // então funciona não importa em qual render o drag começou.
   useEffect(() => () => { dragRef.current?.abort.abort() }, [])
 
-  function abrirNovoLead() {
+  function abrirNovoLead(etapa: EtapaJornada | null = null) {
+    setEtapaNovo(etapa)
     setForm(FORM_VAZIO)
     setErro('')
     setNovoLeadAberto(true)
@@ -380,14 +383,20 @@ export default function ProLaboreLeadsPage() {
       valorNegociacao,
       })
     try {
+      let criado: Lead
       try {
-        await enviar()
+        criado = await enviar()
       } catch (err) {
         // Lead que chamou no WhatsApp já entra sozinho: confirma antes de duplicar.
         if ((err as ErroApi).status !== 409) throw err
         if (!confirm(`${(err as Error).message}\n\nCadastrar outro mesmo assim?`)) return
-        await enviar(true)
+        criado = await enviar(true)
       }
+      // Criado pelo "+" de uma coluna: vai para aquela etapa (o que faltar fica como pendência, como no Avançar).
+      if (etapaNovo && etapaNovo !== 'LEAD' && criado?.id) {
+        await proLaboreApi.jornada.mover(criado.id, etapaNovo, undefined, true).catch(e => alert(`O lead foi criado em Lead. Não deu para levar para a etapa escolhida: ${e instanceof Error ? e.message : 'erro'}`))
+      }
+      setEtapaNovo(null)
       setForm(FORM_VAZIO)
       setNovoLeadAberto(false)
       carregar()
@@ -691,17 +700,20 @@ export default function ProLaboreLeadsPage() {
   // Conta migrada para a jornada de 10 etapas: o quadro novo substitui o de 5 colunas.
   const jornada10 = leads.some(l => !!l.etapa)
   const totalPerdidos = leads.filter(l => l.estagio === 'PERDIDO').length
-  // Follows pendentes dos leads em andamento: atrasados e de hoje viram atalhos de filtro.
-  const situacaoDe = (l: Lead) => (l.follows?.[0] ? situacaoFollow(l.follows[0]).tipo : null)
-  const followsAtrasados = leadsAtivos.filter(l => situacaoDe(l) === 'ATRASADO').length
-  const followsHoje = leadsAtivos.filter(l => situacaoDe(l) === 'HOJE').length
+  // Uma regra só para cada número (19/11): follows pela contagem única (a mesma do menu e do
+  // "Para hoje") e parados pela regra oficial do dicionário (tempo máximo da etapa), sobre
+  // todos os leads de quem vê (sem os filtros da tela), para bater com o menu.
+  const { hoje: followsHoje, atrasados: followsAtrasados } = contarFollows(leads)
   const limiteParado = parametro?.diasLeadParado ?? 5
-  const parados = leadsAtivos.filter(l => leadParado(l, limiteParado))
+  const parados = jornada10 ? leads.filter(l => paradoOficial(l, premissas)) : leadsAtivos.filter(l => emDecisaoSemFollow(l, limiteParado))
+  const ehParado = (l: Lead) => (jornada10 ? paradoOficial(l, premissas) : emDecisaoSemFollow(l, limiteParado))
+  const emDecisao = leadsAtivos.filter(l => emDecisaoSemFollow(l, limiteParado))
   const contagemEtiquetas = ORDEM_ETIQUETAS.map(e => ({ e, n: leadsAtivos.filter(l => l.etiquetas?.includes(e)).length })).filter(x => x.n > 0)
   const painelLead = painelId ? leads.find(l => l.id === painelId) ?? null : null
   const leadsAtivosOrdenados = [...leadsAtivos]
-    .filter(l => !filtroFollow || situacaoDe(l) === filtroFollow)
-    .filter(l => !filtroParado || leadParado(l, limiteParado))
+    .filter(l => !filtroFollow || temFollow(l, filtroFollow))
+    .filter(l => !filtroParado || ehParado(l))
+    .filter(l => !filtroDecisao || emDecisaoSemFollow(l, limiteParado))
     .filter(l => !filtroEtiqueta || l.etiquetas?.includes(filtroEtiqueta))
     .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
@@ -727,18 +739,23 @@ export default function ProLaboreLeadsPage() {
   const conversaoFiltrado = totalFiltrado > 0 ? (fechadosFiltrado / totalFiltrado) * 100 : 0
   const filtroTextualAtivo = busca !== '' || filtroCanal !== '' || filtroVendedorId !== null || filtroPeriodo !== null
 
+  // Todos os filtros num objeto só (painel "Filtros", chips e números da faixa).
+  const filtros: Filtros = { temp: filtroTemp, pendencia: soPendencia, decisao: filtroDecisao, parados: filtroParado, follow: filtroFollow, vendedorId: filtroVendedorId, canal: filtroCanal, etiqueta: filtroEtiqueta, periodo: filtroPeriodo }
+  function mudarFiltro<K extends keyof Filtros>(k: K, v: Filtros[K]) {
+    const x = v as never
+    if (k === 'temp') setFiltroTemp(x); else if (k === 'pendencia') setSoPendencia(x); else if (k === 'decisao') setFiltroDecisao(x)
+    else if (k === 'parados') setFiltroParado(x); else if (k === 'follow') setFiltroFollow(x); else if (k === 'vendedorId') setFiltroVendedorId(x)
+    else if (k === 'canal') setFiltroCanal(x); else if (k === 'etiqueta') setFiltroEtiqueta(x); else if (k === 'periodo') setFiltroPeriodo(x)
+  }
   function limparFiltros() {
     setBusca('')
-    setFiltroCanal('')
-    setFiltroVendedorId(null)
-    limparFiltroPeriodo()
+    for (const k of Object.keys(FILTROS_VAZIOS) as Array<keyof Filtros>) mudarFiltro(k, FILTROS_VAZIOS[k])
   }
 
   // Indicadores de performance por etapa — mesma lógica de conversão/perda/
   // meta/custo da Jornada de compra do Painel (FunilJourney), só que
   // calculada em cima da contagem por estágio do próprio Kanban (respeitando
   // os filtros de canal/vendedor/período/busca já aplicados acima).
-  const leadsDoMes = leads.filter(l => l.criadoEm.slice(0, 7) === mesCorrente).length
   const custoAutomatico = isDono && cplDicionario ? cplDicionario.valor : null
   const custoPorLeadTopo = custoAutomatico ?? parametro?.custoPorLeadTopo ?? 0
   const metaPorEtapa = new Map<EstagioLead, MetaFunilProLabore>(metasFunil.map(m => [m.etapa, m]))
@@ -810,7 +827,10 @@ export default function ProLaboreLeadsPage() {
   const foraDaMeta = stagesDados.filter(d => d.statusOk === false).length
   const ETIQ_VISIVEIS = 8
   const etiquetasMostradas = todasEtiquetas ? contagemEtiquetas : contagemEtiquetas.slice(0, ETIQ_VISIVEIS)
-  const temAtencao = parados.length > 0 || filtroParado || followsAtrasados > 0 || followsHoje > 0 || !!filtroFollow
+  const somaValor = (ls: Lead[]) => ls.reduce((t, l) => t + (l.valorNegociacao || 0), 0)
+  const clientesComFollow = leads.filter(l => temFollow(l, 'ATRASADO') || temFollow(l, 'HOJE'))
+  const contTemp = (t: Temperatura) => leadsAtivos.filter(l => !l.somenteLeitura && calorDe(l) === t).length
+  const temAtencao = parados.length > 0 || filtroParado || emDecisao.length > 0 || filtroDecisao || followsAtrasados > 0 || followsHoje > 0 || !!filtroFollow
   const densidadeBotoes = (
     <div className="pl-kanban-densidade" role="group" aria-label="Tamanho dos cards">
       {(['compacto', 'detalhado'] as const).map(d => (
@@ -819,7 +839,6 @@ export default function ProLaboreLeadsPage() {
     </div>
   )
   const avisosMais = parados.length + followsAtrasados
-  const filtrosDoMais = [filtroParado ? 'só os parados' : '', filtroFollow === 'ATRASADO' ? 'follows atrasados' : filtroFollow === 'HOJE' ? 'follows de hoje' : '', filtroEtiqueta ? ROTULO_ETIQUETA[filtroEtiqueta as keyof typeof ROTULO_ETIQUETA] : ''].filter(Boolean)
   // O funil em 5 etapas (visão anterior): na tela para quem não abre o Painel; na janela "Mais do CRM" para a gestão.
   const funilCinco = !loading && (
         <section className="crm-metricas" data-metricas-etapas>
@@ -905,67 +924,33 @@ export default function ProLaboreLeadsPage() {
   )
   return (
     <div className="crm" data-crm>
-      <PageHeader
-        eyebrow="Vendas"
-        title="Funil de vendas"
-        subtitle={vejaEquipe ? 'Arraste os cards entre as etapas, use "Avançar" ou o menu de mover em cada card' : 'Seus leads, do primeiro contato ao fechamento'}
-      />
-
-      {/* Ferramentas: busca, filtro, "Mais do CRM" (o que saiu da tela) e "Novo lead" */}
-      <div className="pl-leads-toolbar crm-ferramentas">
-        <div className="pl-search-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input
-            className="pl-input pl-search-input"
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por nome, telefone, e-mail, modelo..."
-          />
-        </div>
-        <FunilFiltro
-          vendedores={vejaEquipe ? vendedores : []}
-          vendedorId={filtroVendedorId}
-          vendedorGeralId=""
-          canal={filtroCanal}
-          onChangeVendedor={setFiltroVendedorId}
-          onChangeCanal={setFiltroCanal}
-          periodo={filtroPeriodo}
-          customInicio={filtroCustomInicio}
-          customFim={filtroCustomFim}
-          onChangeCustomInicio={setFiltroCustomInicio}
-          onChangeCustomFim={setFiltroCustomFim}
-          onAplicarPeriodo={aplicarFiltroPeriodo}
-          onLimparPeriodo={limparFiltroPeriodo}
-          onSelecionarPreset={selecionarFiltroPreset}
-        />
-        {filtroTextualAtivo && <button type="button" className="pl-link-action pl-leads-textlink" onClick={limparFiltros}>Limpar filtros</button>}
-        <button type="button" className="pl-btn crm-mais" onClick={() => setMaisAberto(true)} aria-haspopup="dialog" data-abrir-mais-crm title="Resumo em R$, avisos, etiquetas, WhatsApp e o funil em 5 etapas">
-          Mais do CRM{avisosMais > 0 && <span className="crm-mais-n">{avisosMais}</span>}
-        </button>
-        <button type="button" className="pl-btn pl-btn-primary crm-novo" onClick={abrirNovoLead} data-novo-lead>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-          Novo lead
-        </button>
-      </div>
-
-
-      {filtrosDoMais.length > 0 && (
-        <div className="crm-filtros-ativos" role="status" data-filtros-ativos>
-          <span className="pl-hint">Mostrando</span>
-          {filtrosDoMais.map(f => <span key={f} className="pl-chip active">{f}</span>)}
-          <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => { setFiltroParado(false); setFiltroFollow(''); setFiltroEtiqueta('') }} data-limpar-filtros-mais>Ver todos os cards</button>
-        </div>
-      )}
-
-      {/* Faixa de resumo (valores que a tela já calcula); os custos por etapa ficam em "Mais do CRM" */}
+      <CabecalhoFunil avisosMais={avisosMais} onMais={() => setMaisAberto(true)} onNovo={() => abrirNovoLead()} menu={<MenuFunil guiado={guiado} onGuiado={setGuiado} />} />
       {!loading && (
-        <div className="crm-faixa" role="status" aria-label="Resumo do funil" data-faixa-resumo>
-          <span><b className="pl-mono">{totalFiltrado.toLocaleString('pt-BR')}</b> {totalFiltrado === 1 ? 'lead no funil' : 'leads no funil'}</span>
-          <span><small>Oportunidade</small> <b className="pl-mono">{formatMoeda(stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0))}</b></span>
-          <span className={parados.length > 0 ? 'crm-faixa-atencao' : undefined}><b className="pl-mono">{parados.length}</b> {parados.length === 1 ? 'parado' : 'parados'}</span>
-          <span className={followsAtrasados > 0 ? 'crm-faixa-critico' : undefined}><b className="pl-mono">{followsHoje}</b> {followsHoje === 1 ? 'follow hoje' : 'follows hoje'}{followsAtrasados > 0 && <> · <b className="pl-mono">{followsAtrasados}</b> {followsAtrasados === 1 ? 'atrasado' : 'atrasados'}</>}</span>
-        </div>
+        <FaixaNumeros
+          n={{ noFunil: totalFiltrado, oportunidade: stagesDados.reduce((t, d) => t + d.oportunidadeRS, 0), parados: parados.length, followsHoje, followsAtrasados, taxaAbordagem: leiturasTopo.taxa_abordagem?.valor ?? null, leadsNovos: leiturasTopo.leads_novos?.valor ?? null }}
+          ativos={{ parados: filtroParado, follow: filtroFollow, leadsNovos: !!filtroPeriodo && filtroPeriodo.inicio === periodoAgora.inicio && filtroPeriodo.fim === periodoAgora.fim }}
+          onNoFunil={limparFiltros}
+          onOportunidade={() => setMaisAberto(true)}
+          onParados={() => setFiltroParado(f => !f)}
+          onFollow={f => setFiltroFollow(x => (x === f ? '' : f))}
+          onLeadsNovos={() => setFiltroPeriodo(p => (p && p.inicio === periodoAgora.inicio && p.fim === periodoAgora.fim ? null : periodoAgora))}
+          lente={lente}
+          onLenteMudou={recarregarLente}
+        />
       )}
+      <BarraFerramentas
+        busca={busca} onBusca={setBusca}
+        fase={fase} onFase={setFase} mostrarFase={jornada10}
+        filtros={filtros} mudar={mudarFiltro} limpar={limparFiltros}
+        contagens={{ temp: { QUENTE: contTemp('QUENTE'), MORNO: contTemp('MORNO'), FRIO: contTemp('FRIO') }, pendencia: leadsAtivos.filter(l => pendencias(l).length > 0).length, decisao: emDecisao.length, parados: parados.length, followsHoje, followsAtrasados }}
+        vendedores={vejaEquipe ? vendedores : []}
+        etiquetas={contagemEtiquetas}
+        selecionando={selecionando}
+        onSelecionar={jornada10 ? () => setSelecionando(v => !v) : null}
+        densidade={densidadeBotoes}
+      />
+      <DicaFunil sempre={guiado} />
+      {confirmacao && <div className="fn-aviso fn-aviso-feito" role="status" data-aviso-feito>{confirmacao}</div>}
 
       {maisAberto && (
         <div className="pl-modal-backdrop" role="dialog" aria-modal="true" aria-label="Mais do CRM" onClick={() => setMaisAberto(false)} data-mais-crm>
@@ -1000,20 +985,36 @@ export default function ProLaboreLeadsPage() {
             {!temAtencao && <p className="pl-hint">Nenhum lead parado nem follow atrasado.</p>}
           {/* 4. O que pede atenção agora (parados e follows), numa faixa só */}
           {temAtencao && (
-            <div className="crm-atencao" role="status" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
+            <div className="crm-atencao-avisos" data-aviso-parados={parados.length > 0 || filtroParado ? '' : undefined}>
               {(parados.length > 0 || filtroParado) && (
-                <span className="crm-atencao-item" title={`Parados há mais de ${limiteParado} dias em Negociação ou Proposta, sem follow agendado. É aqui que o funil mais perde: agende o próximo contato, avance ou registre o motivo da perda.`}>
-                  <b>{parados.length}</b> {parados.length === 1 ? 'lead parado' : 'leads parados'} em Negociação ou Proposta há mais de {limiteParado} dias, sem follow agendado
-                  <button type="button" className={`pl-chip ${filtroParado ? 'active' : ''}`} aria-pressed={filtroParado} onClick={() => setFiltroParado(f => !f)} data-filtro-parados>{filtroParado ? 'Ver todos os cards' : 'Ver só os parados'}</button>
-                </span>
+                <AvisoNarrativo dados="parados"
+                  tensao={<>{parados.length} {parados.length === 1 ? 'lead parado' : 'leads parados'} além do tempo máximo da etapa</>}
+                  emJogo={<>{moedaCurta(somaValor(parados))} em negociação · {parados.length === 1 ? '1 cliente' : `${parados.length} clientes`} esperando o próximo passo</>}
+                  principal={filtroParado
+                    ? { rotulo: 'Ver todos os cards', onClick: () => setFiltroParado(false), dados: 'parados' }
+                    : { rotulo: 'Ver os parados', onClick: () => { setFiltroParado(true); setMaisAberto(false); confirmar(`Feito: ${parados.length} ${parados.length === 1 ? 'lead parado filtrado' : 'leads parados filtrados'}`) }, dados: 'parados' }}
+                />
               )}
               {(followsAtrasados > 0 || followsHoje > 0 || filtroFollow) && (
-                <span className="crm-atencao-item" role="group" aria-label="Follows do dia">
-                  Follows
-                  {followsAtrasados > 0 && <button type="button" className={`pl-chip atrasado ${filtroFollow === 'ATRASADO' ? 'active' : ''}`} aria-pressed={filtroFollow === 'ATRASADO'} onClick={() => setFiltroFollow(f => (f === 'ATRASADO' ? '' : 'ATRASADO'))}>{followsAtrasados} atrasado{followsAtrasados > 1 ? 's' : ''}</button>}
-                  {followsHoje > 0 && <button type="button" className={`pl-chip hoje ${filtroFollow === 'HOJE' ? 'active' : ''}`} aria-pressed={filtroFollow === 'HOJE'} onClick={() => setFiltroFollow(f => (f === 'HOJE' ? '' : 'HOJE'))}>{followsHoje} para hoje</button>}
-                  {filtroFollow && <button type="button" className="pl-link-action pl-leads-textlink" onClick={() => setFiltroFollow('')}>Ver todos os cards</button>}
-                </span>
+                <AvisoNarrativo dados="follows"
+                  tensao={<>{followsAtrasados > 0 ? `${followsAtrasados} ${followsAtrasados === 1 ? 'follow atrasado' : 'follows atrasados'}` : 'Nenhum follow atrasado'}{followsHoje > 0 ? ` e ${followsHoje} para hoje` : ''}</>}
+                  emJogo={<>{clientesComFollow.length === 1 ? '1 cliente' : `${clientesComFollow.length} clientes`} esperando contato · {moedaCurta(somaValor(clientesComFollow))} em negociação</>}
+                  principal={filtroFollow
+                    ? { rotulo: 'Ver todos os cards', onClick: () => setFiltroFollow(''), dados: 'follows' }
+                    : followsAtrasados > 0
+                      ? { rotulo: 'Ver os atrasados', onClick: () => { setFiltroFollow('ATRASADO'); setMaisAberto(false); confirmar(`Feito: leads com follow atrasado filtrados`) }, dados: 'ATRASADO' }
+                      : { rotulo: 'Ver os de hoje', onClick: () => { setFiltroFollow('HOJE'); setMaisAberto(false); confirmar(`Feito: leads com follow de hoje filtrados`) }, dados: 'HOJE' }}
+                  secundario={!filtroFollow && followsAtrasados > 0 && followsHoje > 0 ? { rotulo: 'Ver os de hoje', onClick: () => { setFiltroFollow('HOJE'); setMaisAberto(false); confirmar('Feito: leads com follow de hoje filtrados') }, dados: 'HOJE' } : undefined}
+                />
+              )}
+              {(emDecisao.length > 0 || filtroDecisao) && (
+                <AvisoNarrativo dados="decisao"
+                  tensao={<>{emDecisao.length} em Negociação ou Proposta há mais de {limiteParado} dias, sem follow agendado</>}
+                  emJogo={<>{moedaCurta(somaValor(emDecisao))} em negociação esfriando</>}
+                  principal={filtroDecisao
+                    ? { rotulo: 'Ver todos os cards', onClick: () => setFiltroDecisao(false), dados: 'decisao' }
+                    : { rotulo: 'Ver estes leads', onClick: () => { setFiltroDecisao(true); setMaisAberto(false); confirmar(`Feito: ${emDecisao.length} ${emDecisao.length === 1 ? 'lead filtrado' : 'leads filtrados'}`) }, dados: 'decisao' }}
+                />
               )}
             </div>
           )}
@@ -1046,12 +1047,6 @@ export default function ProLaboreLeadsPage() {
         </div>
       ) : (
         <>
-          {!jornada10 && (
-            <div className="pl-kanban-barra">
-              <span className="pl-hint">Clique no card para ver tudo do lead.</span>
-              {densidadeBotoes}
-            </div>
-          )}
           {jornada10 ? (
             <QuadroJornada
               leads={leadsAtivosOrdenados}
@@ -1059,7 +1054,16 @@ export default function ProLaboreLeadsPage() {
               onAbrir={id => { if (!leads.find(l => l.id === id)?.somenteLeitura) setPainelId(id) }}
               onAtualizar={carregar}
               onRegistrarVenda={lead => abrirConversao(lead)}
-              extraBarra={densidadeBotoes}
+              fase={fase}
+              filtroTemp={filtroTemp}
+              soPendencia={soPendencia}
+              selecionando={selecionando}
+              onSelecionando={setSelecionando}
+              premissas={premissas}
+              densidade={densidade}
+              onFollow={setFollowAberto}
+              onNovoNaEtapa={etapa => abrirNovoLead(etapa)}
+              guiado={guiado}
             />
           ) : (
           <div className="pl-kanban">
@@ -1128,6 +1132,7 @@ export default function ProLaboreLeadsPage() {
           vejaEquipe={vejaEquipe}
           focarNota={focoNota}
           podeEscrever={podeEditarCrm}
+          premissas={premissas}
           onContagemNotas={n => contarNotas(painelLead.id, n)}
           onLigacoesMudaram={carregar}
           onFechar={fecharPainel}
@@ -1156,7 +1161,7 @@ export default function ProLaboreLeadsPage() {
       {novoLeadAberto && (
         <div className="pl-modal-backdrop" onClick={fecharNovoLead}>
           <form onSubmit={handleSubmit} className="pl-card pl-modal-panel" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-            <div className="pl-card-title" style={{ marginBottom: 14 }}>Novo lead</div>
+            <div className="pl-card-title" style={{ marginBottom: 14 }}>Novo lead{etapaNovo && etapaNovo !== 'LEAD' ? <span className="pl-hint" style={{ fontWeight: 400 }}> · entra em {NOME_ETAPA[etapaNovo]}</span> : null}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
               <div className="pl-field">
                 <label>Nome do cliente</label>
@@ -1399,7 +1404,7 @@ function KanbanCard({
   }
   const dias = diasParado(lead)
   // "Esfriando": em Negociação/Proposta, passou do limite da conta sem follow; nas outras etapas, uma semana sem avançar.
-  const parado = ETAPAS_DECISAO.includes(estagio) ? leadParado(lead, limiteParado) : dias >= 7 && !lead.vendaId
+  const parado = ETAPAS_DECISAO.includes(estagio) ? emDecisaoSemFollow(lead, limiteParado) : dias >= 7 && !lead.vendaId
   const viaWhatsapp = lead.origemCadastro === 'WHATSAPP'
   const faixa = typeof lead.pontuacao === 'number' ? (lead.pontuacao >= 70 ? 'quente' : lead.pontuacao >= 40 ? 'morno' : 'frio') : ''
   const etiquetas = lead.etiquetas?.filter(e => e !== 'QUENTE') ?? []

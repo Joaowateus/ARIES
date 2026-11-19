@@ -251,8 +251,11 @@ export interface AgendaInicio {
   iniciadoEm: string
 }
 
+/** Perfil do cliente (19/11): como atender. */
+export type PerfilCliente = 'INDECISO' | 'DETALHISTA' | 'APRESSADO' | 'NERVOSO'
 export interface Lead {
   id: string
+  perfilCliente?: PerfilCliente | null
   // Jornada de 10 etapas (PDF 01): nulo enquanto a conta não foi migrada.
   etapa?: EtapaJornada | null
   fase?: 'PRE_VENDA' | 'VENDA' | 'FECHAMENTO' | null
@@ -680,7 +683,7 @@ export const proLaboreApi = {
     foraDoCrm: () => request<{ dias: number; itens: ContatoForaDoCrm[] }>('/pro-labore/assistente/fora-do-crm'),
     foraDoCrmVirarLead: (id: string) => request<{ leadId: string }>(`/pro-labore/assistente/fora-do-crm/${id}/lead`, { method: 'POST' }),
     foraDoCrmIgnorar: (id: string) => request<{ ok: boolean }>(`/pro-labore/assistente/fora-do-crm/${id}/ignorar`, { method: 'POST' }),
-    editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; tipoNegociacao?: TipoNegociacao | null; valorNegociacao?: number }) =>
+    editar: (id: string, data: { nomeCliente?: string; telefone?: string; email?: string; cpf?: string; endereco?: string; modeloInteresse?: string; observacao?: string; vendedorId?: string | null; tipoLead?: TipoLead | null; tipoNegociacao?: TipoNegociacao | null; valorNegociacao?: number; perfilCliente?: PerfilCliente | null }) =>
       request<Lead>(`/pro-labore/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     desfazerAvanco: (id: string) => request<Lead>(`/pro-labore/leads/${id}/desfazer-avanco`, { method: 'POST' }),
     mudarEstagio: (id: string, estagio: EstagioLead, perda?: { motivoPerda: MotivoPerda; notaPerda?: string; temperatura?: Temperatura }) =>
@@ -2448,6 +2451,8 @@ export interface PreferenciasProLabore {
   estiloMapa?: { fonte?: 'sans' | 'serif' | 'mao' | 'mono'; negrito?: boolean; italico?: boolean; tamanho?: 'p' | 'm' | 'g'; cor?: string; largura?: number }
   // Tudo que a pessoa escolhe no painel de texto vira o padrão (padrão: sim).
   padraoAutomatico?: boolean
+  // Funil: Modo guiado (sem valor = padrão do papel: ligado para SDR e vendedor).
+  modoGuiado?: boolean
 }
 
 // ---------- Tráfego ----------
