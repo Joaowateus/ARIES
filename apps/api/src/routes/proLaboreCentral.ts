@@ -9,7 +9,7 @@ import { contextoDoPedido } from '../lib/centralConhecimento/contexto'
 import { buscar } from '../lib/centralConhecimento/indice'
 import { NOME_TIPO, type TipoDoc } from '../lib/centralConhecimento/fontes'
 import { aceite, saude, topo } from '../lib/centralConhecimento/saude'
-import { conferir, processarEventos, tentarDeNovo } from '../lib/centralConhecimento/rotinas'
+import { cargaInicial, conferir, processarEventos, tentarDeNovo } from '../lib/centralConhecimento/rotinas'
 import { fichas, historicoDaFicha, hojeBrt, ler, mesCorrente, type Ficha } from '../lib/metricas'
 import { formatar } from '../lib/pergunte'
 
@@ -160,6 +160,15 @@ router.post('/central/saude/tentar', requireProLaboreAuth, requireDono, async (r
   // Já processa um lote agora, sem esperar o próximo job.
   const feito = await processarEventos(6000)
   res.json({ ...r, ...feito })
+})
+// "Carregar agora": roda rodadas da carga inicial da loja (o botão chama de novo até terminar).
+router.post('/central/saude/carregar', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const u = req.proLaboreUser!.sub
+  const feito = await processarEventos(5000)
+  const carga = await cargaInicial(18_000, u)
+  const faltam = await prisma.centralFonte.count({ where: { usuarioId: u, cargaInicialEm: null } })
+  const fontes = await prisma.centralFonte.count({ where: { usuarioId: u } })
+  res.json({ ...feito, ...carga, terminou: fontes > 0 && faltam === 0 && carga.centralCarga === 0 })
 })
 router.post('/central/saude/conferir', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   res.json(await conferir(20_000, new Date(), req.proLaboreUser!.sub))

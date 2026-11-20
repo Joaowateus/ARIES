@@ -1,4 +1,5 @@
 // PDF 07 · Central de Conhecimento — catálogo das fontes.
+// Limite de atraso dos registros: 30 min (o job roda a cada 15 min na produção; dois ciclos de folga).
 // Cada fonte diz: de onde vêm os dados, o limite de atraso aceito, o que entra no
 // índice de pesquisa (só os campos listados em `montar`: a lista de campos permitidos)
 // e quem pode ver cada item (`visiveis`, com as mesmas regras das telas).
@@ -81,7 +82,7 @@ const SITUACAO_MOTO: Record<string, string> = { DISPONIVEL: 'Disponível', RESER
 export const FONTES: FonteDef[] = [
   {
     chave: 'leads', nome: 'Leads e negociações (CRM)', tipo: 'REGISTRO', descricao: 'Nome do cliente, moto de interesse, etapa e vendedor. Sem CPF, valores ou conversas.',
-    tabela: 'pro_labore_leads', doc: 'LEAD', limiteMin: 15, papeis: COMERCIAL,
+    tabela: 'pro_labore_leads', doc: 'LEAD', limiteMin: 30, papeis: COMERCIAL,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_leads WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const ls = await prisma.lead.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, nomeCliente: true, telefone: true, modeloInteresse: true, etapa: true, estagio: true, vendedorId: true, criadoEm: true, atualizadoEm: true, temperatura: true, vendedor: { select: { nome: true } } } })
@@ -100,7 +101,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'clientes', nome: 'Clientes', tipo: 'REGISTRO', descricao: 'Nome do cliente e se está bloqueado. Sem CPF, nascimento ou endereço.',
-    tabela: 'pro_labore_clientes', doc: 'CLIENTE', limiteMin: 15, papeis: GESTAO,
+    tabela: 'pro_labore_clientes', doc: 'CLIENTE', limiteMin: 30, papeis: GESTAO,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_clientes WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const cs = await prisma.cliente.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, nome: true, telefone: true, bloqueado: true, criadoEm: true, atualizadoEm: true, _count: { select: { leads: true } } } })
@@ -116,7 +117,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'vendas', nome: 'Vendas', tipo: 'REGISTRO', descricao: 'Moto, cliente e data da venda. Sem valores (os valores ficam em Vendas e pagamentos).',
-    tabela: 'pro_labore_vendas', doc: 'VENDA', limiteMin: 15, papeis: ['DONO', 'FINANCEIRO', 'SUPERVISOR', 'VENDEDOR', 'SDR'],
+    tabela: 'pro_labore_vendas', doc: 'VENDA', limiteMin: 30, papeis: ['DONO', 'FINANCEIRO', 'SUPERVISOR', 'VENDEDOR', 'SDR'],
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_vendas WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const vs = await prisma.venda.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, data: true, situacao: true, vendedorId: true, placa: true, atualizadoEm: true, moto: { select: { modelo: true, ano: true } }, lead: { select: { nomeCliente: true } }, vendedor: { select: { nome: true } } } })
@@ -135,7 +136,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'estoque', nome: 'Estoque de motos', tipo: 'REGISTRO', descricao: 'Modelo, ano, cor, km, placa e situação. Sem preço nem custo.',
-    tabela: 'pro_labore_sm_motos_estoque', doc: 'MOTO', limiteMin: 15, papeis: TODOS,
+    tabela: 'pro_labore_sm_motos_estoque', doc: 'MOTO', limiteMin: 30, papeis: TODOS,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_sm_motos_estoque WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const ms = await prisma.smMotoEstoque.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, marca: true, modelo: true, versao: true, ano: true, cor: true, km: true, placa: true, situacao: true, entradaEm: true, atualizadoEm: true } })
@@ -151,7 +152,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'atividades', nome: 'Atividades', tipo: 'REGISTRO', descricao: 'O que fazer, tipo, situação e responsável.',
-    tabela: 'pro_labore_atividades', doc: 'ATIVIDADE', limiteMin: 15, papeis: TODOS,
+    tabela: 'pro_labore_atividades', doc: 'ATIVIDADE', limiteMin: 30, papeis: TODOS,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_atividades WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const as = await prisma.atividade.findMany({ where: { id: { in: ids } }, select: { id: true, codigo: true, usuarioId: true, tipo: true, oQueFazer: true, status: true, responsavelId: true, prazo: true, atualizadoEm: true } })
@@ -171,7 +172,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'conhecimento', nome: 'Conhecimento comercial', tipo: 'CONHECIMENTO', descricao: 'Dúvidas, objeções, argumentos e gatilhos com a resposta aprovada.',
-    tabela: 'pro_labore_assistente_conhecimento', doc: 'VERBETE', limiteMin: 15, papeis: TODOS,
+    tabela: 'pro_labore_assistente_conhecimento', doc: 'VERBETE', limiteMin: 30, papeis: TODOS,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_assistente_conhecimento WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const vs = await prisma.assistenteConhecimento.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, tipo: true, titulo: true, resposta: true, palavrasChave: true, status: true, modelo: true, criadoEm: true, atualizadoEm: true } })
@@ -192,7 +193,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'indicadores', nome: 'Dicionário de métricas', tipo: 'INDICADOR', descricao: 'Nome, definição e sinônimos de cada ficha. O valor é calculado na hora, nunca copiado.',
-    tabela: 'pro_labore_metricas_versoes', doc: 'INDICADOR', limiteMin: 15, papeis: TODOS, inteira: true,
+    tabela: 'pro_labore_metricas_versoes', doc: 'INDICADOR', limiteMin: 30, papeis: TODOS, inteira: true,
     idsSql: u => Prisma.sql`SELECT ${u} || ':' || x AS id FROM unnest(${FICHAS_PADRAO.map(f => f.chave)}::text[]) AS x`,
     async montar(ids) {
       const porLoja = new Map<string, string[]>()
@@ -218,7 +219,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'recomendacoes', nome: 'Recomendações', tipo: 'REGISTRO', descricao: 'Título, área e ação sugerida.',
-    tabela: 'pro_labore_recomendacoes', doc: 'RECOMENDACAO', limiteMin: 15, papeis: TODOS,
+    tabela: 'pro_labore_recomendacoes', doc: 'RECOMENDACAO', limiteMin: 30, papeis: TODOS,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_recomendacoes WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const rs = await prisma.recomendacao.findMany({ where: { id: { in: ids } }, select: { id: true, codigo: true, usuarioId: true, titulo: true, area: true, acaoSugerida: true, status: true, visivelPara: true, destinatarioId: true, criadoEm: true, atualizadoEm: true } })
@@ -237,7 +238,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'ocorrencias', nome: 'Ocorrências da equipe', tipo: 'REGISTRO', descricao: 'Tipo, motivo, pessoa e situação.',
-    tabela: 'pro_labore_ocorrencias', doc: 'OCORRENCIA', limiteMin: 15, papeis: GESTAO,
+    tabela: 'pro_labore_ocorrencias', doc: 'OCORRENCIA', limiteMin: 30, papeis: GESTAO,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_ocorrencias WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const os = await prisma.ocorrencia.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, protocolo: true, tipo: true, motivo: true, status: true, gravidade: true, vendedorId: true, dataOcorrencia: true, atualizadoEm: true, vendedor: { select: { nome: true } } } })
@@ -252,7 +253,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'reunioes', nome: 'Reuniões', tipo: 'REGISTRO', descricao: 'Título, tipo e data. Sem a transcrição.',
-    tabela: 'pro_labore_reunioes', doc: 'REUNIAO', limiteMin: 15, papeis: TODOS,
+    tabela: 'pro_labore_reunioes', doc: 'REUNIAO', limiteMin: 30, papeis: TODOS,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_reunioes WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const rs = await prisma.reuniao.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, titulo: true, tipo: true, data: true, vendedorId: true, atualizadoEm: true } })
@@ -271,7 +272,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'anotacoes', nome: 'Anotações', tipo: 'REGISTRO', descricao: 'Título e trecho das anotações. Cada uma só aparece para quem escreveu e nunca vai à IA.',
-    tabela: 'pro_labore_notas', doc: 'ANOTACAO', limiteMin: 15, papeis: TODOS,
+    tabela: 'pro_labore_notas', doc: 'ANOTACAO', limiteMin: 30, papeis: TODOS,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_notas WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const ns = await prisma.nota.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, vendedorId: true, titulo: true, conteudo: true, criadoEm: true, atualizadoEm: true } })
@@ -290,7 +291,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'pautas', nome: 'Pautas do Social Media', tipo: 'REGISTRO', descricao: 'Título, formato e situação da pauta.',
-    tabela: 'pro_labore_sm_pautas', doc: 'PAUTA', limiteMin: 15, papeis: ['DONO', 'SOCIAL_MEDIA'],
+    tabela: 'pro_labore_sm_pautas', doc: 'PAUTA', limiteMin: 30, papeis: ['DONO', 'SOCIAL_MEDIA'],
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_sm_pautas WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const ps = await prisma.smPauta.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, titulo: true, formato: true, status: true, codigo: true, criadoEm: true, atualizadoEm: true } })
@@ -304,7 +305,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'financeiro', nome: 'Lançamentos do Financeiro', tipo: 'REGISTRO', descricao: 'Categoria, favorecido e descrição. Sem valores nem documento.',
-    tabela: 'pro_labore_lancamentos_financeiros', doc: 'LANCAMENTO', limiteMin: 15, papeis: ['DONO', 'FINANCEIRO'],
+    tabela: 'pro_labore_lancamentos_financeiros', doc: 'LANCAMENTO', limiteMin: 30, papeis: ['DONO', 'FINANCEIRO'],
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_lancamentos_financeiros WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const ls = await prisma.lancamentoFinanceiro.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, categoria: true, numero: true, favorecido: true, descricao: true, vendedorId: true, pagoEm: true, canceladoEm: true, criadoEm: true } })
@@ -324,7 +325,7 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'daily', nome: 'Decisões do Daily', tipo: 'REGISTRO', descricao: 'O que foi decidido, prioridade e responsáveis.',
-    tabela: 'pro_labore_daily_decisoes', doc: 'DECISAO', limiteMin: 15, papeis: TODOS,
+    tabela: 'pro_labore_daily_decisoes', doc: 'DECISAO', limiteMin: 30, papeis: TODOS,
     idsSql: u => Prisma.sql`SELECT id FROM pro_labore_daily_decisoes WHERE "usuarioId" = ${u}`,
     async montar(ids) {
       const ds = await prisma.dailyDecisao.findMany({ where: { id: { in: ids } }, select: { id: true, usuarioId: true, texto: true, prioridade: true, prazo: true, criadoEm: true } })
@@ -375,7 +376,15 @@ export const FONTES: FonteDef[] = [
   },
   {
     chave: 'historico', nome: 'Histórico (auditoria e etapas)', tipo: 'HISTORICO', descricao: 'Consultado direto da trilha de auditoria e do histórico de etapas, que já são imutáveis.',
-    tabela: null, doc: null, limiteMin: 15, papeis: GESTAO,
+    tabela: null, doc: null, limiteMin: 30, papeis: GESTAO,
+  },
+  {
+    chave: 'dados', nome: 'Dados do Pró-Labore (consulta direta)', tipo: 'REGISTRO', descricao: 'Todas as tabelas do sistema, consultadas na hora pelo catálogo de dados, com as permissões de cada papel. Dinheiro só reservado; CPF, nascimento, senhas, e-mail e endereço nunca saem.',
+    tabela: null, doc: null, limiteMin: 0, papeis: TODOS,
+  },
+  {
+    chave: 'ia', nome: 'IA do Pergunte', tipo: 'INTEGRACAO', descricao: 'A chamada à IA que entende a pergunta e escreve a resposta. Se falhar, o Pergunte responde pelas regras e o motivo aparece aqui.',
+    tabela: null, doc: null, limiteMin: 0, papeis: ['DONO'],
   },
   {
     chave: 'playbook', nome: 'Playbook', tipo: 'NAO_INTEGRADA', descricao: 'O playbook da loja ainda não tem conteúdo no sistema. Entra na Central quando existir (decisão D4).',

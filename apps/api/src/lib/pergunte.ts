@@ -78,7 +78,8 @@ function periodoPorRegra(q: string): PeriodoPedido {
 }
 
 function entenderPorRegra(pergunta: string, catalogo: Ficha[], nomesEquipe: string[], euNome: string): Entendimento {
-  const q = norm(pergunta)
+  // "Pro - Labore", "pró–labore": o hífen com espaços volta a ser um hífen só.
+  const q = norm(pergunta).replace(/\s*[-–—]\s*/g, '-')
   const achadas: Array<{ chave: string; pos: number; tam: number }> = []
   for (const f of catalogo) {
     for (const termo of [norm(f.nome), ...(f.sinonimos ?? []).map(norm)]) {

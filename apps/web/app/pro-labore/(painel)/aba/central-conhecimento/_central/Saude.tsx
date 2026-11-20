@@ -28,12 +28,29 @@ export function SaudeCentral() {
     try { await acao(); setMsg(ok); await carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } finally { setOcupado(false) }
   }
 
+  // Carga inicial em rodadas de ~20 s, repetidas até terminar (ou até 15 rodadas).
+  async function carregarTudo() {
+    setOcupado(true); setMsg('Carregando as fontes no índice…')
+    try {
+      let total = 0
+      for (let i = 0; i < 15; i++) {
+        const r = await centralApi.carregarAgora()
+        total += r.centralCarga
+        setMsg(`Carregando… ${total.toLocaleString('pt-BR')} itens até agora.`)
+        if (r.terminou) break
+      }
+      setMsg(`Carga feita: ${total.toLocaleString('pt-BR')} itens no índice.`)
+      await carregar()
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível carregar') } finally { setOcupado(false) }
+  }
+
   if (erro) return <div className="pl-alert pl-alert-error" role="alert">{erro}</div>
   if (!d) return <p className="pl-hint" aria-busy="true">Lendo a saúde das fontes…</p>
   return (
     <div data-central-saude>
       <div className="cc-chips" style={{ marginBottom: 10 }}>
         <span className="pl-hint">Cobertura das fontes: <b>{d.cobertura.toLocaleString('pt-BR')}%</b> · {d.pendentes} evento(s) na fila</span>
+        {d.fontes.some(f => f.itensFonte != null && !f.cargaInicialEm) && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void carregarTudo()} data-carregar-agora>Carregar agora</button>}
         <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => centralApi.conferirAgora(), 'Conferência feita.')} data-conferir-agora>Conferir agora</button>
       </div>
       {msg && <p className="pl-hint" role="status">{msg}</p>}

@@ -135,12 +135,12 @@ export async function frescorDasFontes(usuarioId: string, agora = new Date()): P
     const antigo = pe?.antigo ?? null
     let em = s?.ultimaAtualizacaoEm ?? null
     if (def.chave === 'whatsapp') em = zap[0]?.ultima ?? null
-    if (def.chave === 'historico') em = agora
+    if (def.chave === 'historico' || def.chave === 'dados') em = agora
     let atrasada = false
     if (def.tipo === 'NAO_INTEGRADA') atrasada = false
     else if (antigo && agora.getTime() - antigo.getTime() > def.limiteMin * 60_000) atrasada = true
     // Integrações: atrasada se a última sincronização passou do limite (o WhatsApp só conta se já houve mensagens).
-    else if (def.tipo === 'INTEGRACAO' && def.chave !== 'whatsapp' && s?.ultimaAtualizacaoEm && agora.getTime() - s.ultimaAtualizacaoEm.getTime() > def.limiteMin * 60_000) atrasada = true
+    else if (def.tipo === 'INTEGRACAO' && def.chave !== 'whatsapp' && def.chave !== 'ia' && s?.ultimaAtualizacaoEm && agora.getTime() - s.ultimaAtualizacaoEm.getTime() > def.limiteMin * 60_000) atrasada = true
     const falha = Number(pe?.falhas ?? 0) > 0 || (!!s?.ultimoErroEm && (!s.ultimaAtualizacaoEm || s.ultimoErroEm > s.ultimaAtualizacaoEm))
     mapa.set(def.chave, { em, atrasada, falha, pendentes, maisAntigoPendente: antigo })
   }

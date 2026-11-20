@@ -3793,6 +3793,8 @@ export interface RespostaAries {
   fontes?: Array<{ titulo: string; url: string }>; consultas?: string[]
   /** PDF 07: de onde veio a resposta (fonte da Central, tipo de dado, última atualização e tela). */
   origens?: OrigemResposta[]
+  /** Respondido pelas regras porque a IA falhou (o motivo detalhado fica na Saúde da Central). */
+  semIa?: string | null
 }
 export interface OrigemResposta { fonte: string; nome: string; tipo: string; atualizadoEm: string | null; atrasada: boolean; tela: string | null }
 export interface VersaoTelas { versao: 'NOVA' | 'ATUAL'; piloto: boolean; podeAlternar: boolean; liberadaEm: string | null; papel: PapelHoje; nomePapel: string }
@@ -4067,6 +4069,7 @@ export const centralApi = {
   versoesVerbete: (id: string) => request<VersaoVerbete[]>(`/pro-labore/central/conhecimento/${id}/versoes`),
   saude: () => request<SaudeCentral>('/pro-labore/central/saude'),
   tentarDeNovo: (d: { eventoId?: string; fonte?: string }) => request<{ reenviados: number; centralProcessados: number; centralFalhas: number }>('/pro-labore/central/saude/tentar', { method: 'POST', body: JSON.stringify(d) }),
+  carregarAgora: () => request<{ centralProcessados: number; centralCarga: number; terminou: boolean }>('/pro-labore/central/saude/carregar', { method: 'POST' }),
   conferirAgora: () => request<{ centralConferidas: number; centralDivergencias: number }>('/pro-labore/central/saude/conferir', { method: 'POST' }),
   resolverDivergencia: (id: string) => request<{ ok: boolean }>(`/pro-labore/central/saude/divergencias/${id}/resolver`, { method: 'POST' }),
   perguntaTratada: (id: string) => request<{ ok: boolean }>(`/pro-labore/central/saude/perguntas/${id}/tratada`, { method: 'POST' }),

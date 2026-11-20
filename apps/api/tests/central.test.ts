@@ -218,3 +218,58 @@ test('verbete: cada mudança vira versão; excluir nunca apaga', async t => {
   assert.equal(v?.versaoAtual, vs[vs.length - 1].versao)
   await assert.rejects(prisma.assistenteConhecimentoVersao.deleteMany({ where: { conhecimentoId: loja.verbeteAtivo } }), 'versões são imutáveis')
 })
+
+// --- Catálogo de todos os dados (consulta direta) ---
+import { listarEntidades, consultarDados, agregarDados } from '../src/lib/centralConhecimento/catalogoDados'
+
+test('catálogo: o dono vê todas as entidades da loja, menos as que nunca vão à IA', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const dono = await ctxDe(null)
+  const nomes = listarEntidades(dono).map(e => e.nome)
+  for (const n of ['Lead', 'Venda', 'PagamentoComissao', 'LancamentoFinanceiro', 'SocialMediaConta', 'TrafegoInsightDiario', 'AssistenteMensagem', 'Ocorrencia', 'AgendaItem', 'EventoAuditoria', 'ParametroLiquidez']) assert.ok(nomes.includes(n), `inclui ${n}`)
+  for (const n of ['LeadNota', 'Nota', 'ProcessoAtendimento', 'IaEnvio', 'ProLaboreUsuario', 'AgenteMensagem']) assert.ok(!nomes.includes(n), `não inclui ${n}`)
+  assert.ok(nomes.length >= 100, `${nomes.length} entidades`)
+  const lead = listarEntidades(dono, 'Lead').find(e => e.nome === 'Lead')!
+  for (const c of ['cpf', 'email', 'endereco', 'observacao']) assert.ok(!lead.campos.some(x => x.nome === c), `Lead sem ${c}`)
+  assert.equal(lead.campos.find(c => c.nome === 'valorNegociacao')?.tipo, 'dinheiro')
+})
+
+test('catálogo: varre TODAS as entidades como dono sem erro e sem dado sensível', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const dono = await ctxDe(null)
+  for (const e of listarEntidades(dono)) {
+    const r = new Reservas()
+    const out = await consultarDados(dono, { entidade: e.nome, limite: 5 }, r)
+    const json = JSON.stringify(out)
+    assert.ok(!(out as { erro?: string }).erro, `${e.nome}: ${json.slice(0, 200)}`)
+    assert.ok(envioSeguro(json), `${e.nome}: envio seguro`)
+    for (const proibido of [CPF, 'carlos@x.com', '91988887777', '48.750', '51.230', '61.111', 'nasceu', 'senhaHash']) assert.ok(!json.includes(proibido), `${e.nome} não pode conter ${proibido}`)
+  }
+})
+
+test('catálogo: último lead de uma vendedora, soma do pró-labore e contagem por vendedor', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const dono = await ctxDe(null)
+  const r = new Reservas()
+  const ult = await consultarDados(dono, { entidade: 'Lead', filtros: [{ campo: 'vendedor.nome', op: 'contem', valor: 'Ana' }], ordenar: { campo: 'criadoEm', direcao: 'desc' }, campos: ['nomeCliente', 'vendedor.nome', 'valorNegociacao', 'telefone'], limite: 1 }, r) as { linhas: Array<Record<string, string>> }
+  assert.match(ult.linhas[0].nomeCliente, /Carlos/)
+  assert.match(ult.linhas[0].valorNegociacao, /^\{\{v\d+\}\}$/)
+  assert.equal(ult.linhas[0].telefone, 'final 7777')
+  const soma = await agregarDados(dono, { entidade: 'Venda', medida: 'somar', campoMedida: 'valorProLabore' }, r) as { valor: string }
+  assert.match(r.preencher(soma.valor), /R\$\s*2\.222/)
+  const porVend = await agregarDados(dono, { entidade: 'Lead', medida: 'contar', agruparPor: 'vendedorId' }, r) as { grupos: Array<{ grupo: string; valor: number }> }
+  assert.ok(porVend.grupos.some(g => /Ana/.test(g.grupo)), 'grupo pelo nome do vendedor')
+})
+
+test('catálogo: permissões e escopo pessoal no servidor', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const bruno = await ctxDe(loja.vendB)
+  const r = new Reservas()
+  const leads = await consultarDados(bruno, { entidade: 'Lead', campos: ['nomeCliente'] }, r) as { linhas: Array<{ nomeCliente: string }> }
+  assert.ok(leads.linhas.every(l => !/Carlos/.test(l.nomeCliente)), 'Bruno não vê o lead da Ana')
+  assert.match(JSON.stringify(await consultarDados(bruno, { entidade: 'Venda', campos: ['valorProLabore'] }, r)), /fora da Central/)
+  assert.match(JSON.stringify(await consultarDados(bruno, { entidade: 'LancamentoFinanceiro' }, r)), /erro/)
+  assert.match(JSON.stringify(await consultarDados(bruno, { entidade: 'ParametroLiquidez' }, r)), /não fica visível/)
+  assert.match(JSON.stringify(await consultarDados(await ctxDe(null), { entidade: 'LeadNota' }, r)), /notas da negociação/)
+  assert.match(JSON.stringify(await consultarDados(await ctxDe(null), { entidade: 'Lead', filtros: [{ campo: 'cpf', op: 'igual', valor: '1' }] }, r)), /fora da Central/)
+})
