@@ -339,7 +339,9 @@ export default function ProLaboreVendasPage() {
   const tetoComissaoAtual = form.vendedorId ? tetoComissao(form.vendedorId) : null
   const vendaEditada = editandoId ? vendas.find(v => v.id === editandoId) : undefined
   const comissaoTravada = !!vendaEditada?.pagamentoComissao
-  const proLaboreTravado = !!vendaEditada?.pagamentoProLabore
+  // Pró-labore já pago: o dono corrige o valor e o recibo é atualizado com o novo total; os demais perfis não mudam.
+  const proLaborePago = !!vendaEditada?.pagamentoProLabore
+  const proLaboreTravado = proLaborePago && usuario?.papel !== 'DONO'
 
   // Resumo dos pagamentos (sempre sobre todas as vendas, sem os filtros).
   const somar = (tipo: TipoPagamentoVenda, l: Venda[]) => l.reduce((s, v) => s + valorPago(tipo, v), 0)
@@ -410,7 +412,7 @@ export default function ProLaboreVendasPage() {
           <div className="pl-field">
             <label>Pró-labore sacado (R$)</label>
             <input type="number" step="0.01" min="0" max={tetoProLabore} className="pl-input" value={form.valorProLabore} onChange={e => setForm(f => ({ ...f, valorProLabore: e.target.value }))} placeholder="0,00" required disabled={proLaboreTravado} />
-            <span className="pl-hint">{proLaboreTravado ? `Já pago (recibo nº ${vendaEditada!.pagamentoProLabore!.numero}). Desmarque na tabela pra mudar.` : `Máximo ${formatMoeda(tetoProLabore)}`}</span>
+            <span className="pl-hint">{proLaboreTravado ? `Já pago (recibo nº ${vendaEditada!.pagamentoProLabore!.numero}). Só o dono corrige.` : proLaborePago ? `Já pago (recibo nº ${vendaEditada!.pagamentoProLabore!.numero}): ao salvar, o recibo fica com o novo total. Máximo ${formatMoeda(tetoProLabore)}` : `Máximo ${formatMoeda(tetoProLabore)}`}</span>
           </div>
           <div className="pl-field">
             <label>Vendedor (opcional)</label>
