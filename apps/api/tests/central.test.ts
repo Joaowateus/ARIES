@@ -318,3 +318,26 @@ test('mensagens: última mensagem de uma consultora, texto com R$ reservado e es
   const proprias = (await executarConsulta(bruno, 'mensagens', {}, rb)).dados as { mensagens: Array<{ cliente: string }> }
   assert.ok(proprias.mensagens.length >= 1 && proprias.mensagens.every(m => /Débora/.test(m.cliente)), 'Bruno vê só as conversas dele')
 })
+
+// --- Sem a chave da IA: perguntas de registro respondem direto, e o motivo aparece ---
+test('sem IA: último lead e última mensagem de uma consultora respondem direto', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const { perguntarAgente } = await import('../src/lib/pergunteAgente')
+  const chave = process.env.ANTHROPIC_API_KEY
+  delete process.env.ANTHROPIC_API_KEY
+  try {
+    const dono = await ctxDe(null)
+    const lead = await perguntarAgente(dono, 'Qual foi a ultimo Lead de Ana?')
+    assert.match(lead.resposta, /último lead de Ana é Carlos/i)
+    assert.match(String(lead.semIa), /ANTHROPIC_API_KEY/)
+    assert.equal(lead.naoSabe, false)
+    const msg = await perguntarAgente(dono, 'qual a última mensagem que a Ana recebeu?')
+    assert.match(msg.resposta, /Última mensagem recebida por Ana/)
+    assert.match(msg.resposta, /R\$ 5\.000/, 'o valor aparece para o dono')
+    assert.ok(!msg.resposta.includes('123.456.789-09'), 'CPF fora')
+    const bruno = await ctxDe(loja.vendB)
+    assert.match((await perguntarAgente(bruno, 'último lead da Ana')).resposta, /só os próprios leads/)
+    const fonte = await prisma.centralFonte.findUnique({ where: { usuarioId_chave: { usuarioId: loja.id, chave: 'ia' } } })
+    assert.match(String(fonte?.ultimoErro), /ANTHROPIC_API_KEY/)
+  } finally { if (chave !== undefined) process.env.ANTHROPIC_API_KEY = chave }
+})

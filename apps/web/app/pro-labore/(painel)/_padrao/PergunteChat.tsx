@@ -71,7 +71,7 @@ function Resposta({ r, compacto }: { r: RespostaAries; compacto?: boolean }) {
       <div className="ar-pergunte-bolha" data-resposta={r.naoSabe ? 'nao-sabe' : 'numeros'}>
         <div style={{ fontSize: '.72rem', color: 'var(--pl-ink-muted)', marginBottom: 4 }}>ARIES</div>
         <TextoAries texto={r.resposta} />
-        {r.semIa && <div className="pl-hint" style={{ marginTop: 6 }} data-sem-ia>Respondido pelas regras: a IA não respondeu agora. O motivo fica na Saúde da Central.</div>}
+        {r.semIa && <div className="pl-hint" style={{ marginTop: 6 }} data-sem-ia>Respondido sem a IA: {r.semIa}. Os detalhes ficam na Saúde da Central.</div>}
         {!!r.origens?.length && (
           <div className="ar-pergunte-origens" data-origens>
             {r.origens.map(o => (
