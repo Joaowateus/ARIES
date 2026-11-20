@@ -12,7 +12,7 @@ import { FONTES, fontePorChave } from '../src/lib/centralConhecimento/fontes'
 import { contextoDaPessoa, type CtxCentral } from '../src/lib/centralConhecimento/contexto'
 import { Reservas, executarConsulta, CONSULTAS } from '../src/lib/centralConhecimento/consultas'
 import { saude, topo } from '../src/lib/centralConhecimento/saude'
-import { envioSeguro } from '../src/lib/pergunte'
+import { envioSeguro, protegerParaIa } from '../src/lib/pergunte'
 import { textoDaIaSeguro } from '../src/lib/pergunteAgente'
 import { FICHAS_PADRAO, ler, mesCorrente } from '../src/lib/metricas'
 
@@ -227,10 +227,12 @@ test('catálogo: o dono vê todas as entidades da loja, menos as que nunca vão 
   const dono = await ctxDe(null)
   const nomes = listarEntidades(dono).map(e => e.nome)
   for (const n of ['Lead', 'Venda', 'PagamentoComissao', 'LancamentoFinanceiro', 'SocialMediaConta', 'TrafegoInsightDiario', 'AssistenteMensagem', 'Ocorrencia', 'AgendaItem', 'EventoAuditoria', 'ParametroLiquidez']) assert.ok(nomes.includes(n), `inclui ${n}`)
-  for (const n of ['LeadNota', 'Nota', 'ProcessoAtendimento', 'IaEnvio', 'ProLaboreUsuario', 'AgenteMensagem']) assert.ok(!nomes.includes(n), `não inclui ${n}`)
+  for (const n of ['LeadNota', 'ProcessoAtendimento', 'AgenteMensagem', 'SmMensagem']) assert.ok(nomes.includes(n), `inclui ${n} (liberado pelo dono)`)
+  for (const n of ['Nota', 'IaEnvio', 'ProLaboreUsuario']) assert.ok(!nomes.includes(n), `não inclui ${n}`)
   assert.ok(nomes.length >= 100, `${nomes.length} entidades`)
   const lead = listarEntidades(dono, 'Lead').find(e => e.nome === 'Lead')!
-  for (const c of ['cpf', 'email', 'endereco', 'observacao']) assert.ok(!lead.campos.some(x => x.nome === c), `Lead sem ${c}`)
+  for (const c of ['cpf', 'email', 'endereco']) assert.ok(!lead.campos.some(x => x.nome === c), `Lead sem ${c}`)
+  assert.ok(lead.campos.some(x => x.nome === 'observacao'), 'observação do lead liberada')
   assert.equal(lead.campos.find(c => c.nome === 'valorNegociacao')?.tipo, 'dinheiro')
 })
 
@@ -240,10 +242,12 @@ test('catálogo: varre TODAS as entidades como dono sem erro e sem dado sensíve
   for (const e of listarEntidades(dono)) {
     const r = new Reservas()
     const out = await consultarDados(dono, { entidade: e.nome, limite: 5 }, r)
-    const json = JSON.stringify(out)
-    assert.ok(!(out as { erro?: string }).erro, `${e.nome}: ${json.slice(0, 200)}`)
+    const bruto = JSON.stringify(out)
+    assert.ok(!(out as { erro?: string }).erro, `${e.nome}: ${bruto.slice(0, 200)}`)
+    // Como o agente faz: o que não passa na conferência é protegido antes de ir à IA.
+    const json = envioSeguro(bruto) ? bruto : protegerParaIa(bruto)
     assert.ok(envioSeguro(json), `${e.nome}: envio seguro`)
-    for (const proibido of [CPF, 'carlos@x.com', '91988887777', '48.750', '51.230', '61.111', 'nasceu', 'senhaHash']) assert.ok(!json.includes(proibido), `${e.nome} não pode conter ${proibido}`)
+    for (const proibido of [CPF, 'carlos@x.com', '91988887777', '48.750', '51.230', '61.111', '15/03/1990', 'senhaHash', 'R$']) assert.ok(!json.includes(proibido), `${e.nome} não pode conter ${proibido}`)
   }
 })
 
@@ -270,6 +274,47 @@ test('catálogo: permissões e escopo pessoal no servidor', async t => {
   assert.match(JSON.stringify(await consultarDados(bruno, { entidade: 'Venda', campos: ['valorProLabore'] }, r)), /fora da Central/)
   assert.match(JSON.stringify(await consultarDados(bruno, { entidade: 'LancamentoFinanceiro' }, r)), /erro/)
   assert.match(JSON.stringify(await consultarDados(bruno, { entidade: 'ParametroLiquidez' }, r)), /não fica visível/)
-  assert.match(JSON.stringify(await consultarDados(await ctxDe(null), { entidade: 'LeadNota' }, r)), /notas da negociação/)
+  assert.ok(!(await consultarDados(await ctxDe(null), { entidade: 'LeadNota' }, r) as { erro?: string }).erro, 'dono lê as notas da negociação')
+  const notasBruno = await consultarDados(bruno, { entidade: 'LeadNota', campos: ['texto'] }, r) as { linhas: Array<{ texto: string }> }
+  assert.ok(notasBruno.linhas.every(l => !/Zéfiro/.test(l.texto)), 'Bruno não lê a nota do lead da Ana')
+  assert.match(JSON.stringify(await consultarDados(await ctxDe(null), { entidade: 'Nota' }, r)), /privadas/)
   assert.match(JSON.stringify(await consultarDados(await ctxDe(null), { entidade: 'Lead', filtros: [{ campo: 'cpf', op: 'igual', valor: '1' }] }, r)), /fora da Central/)
+})
+
+// --- Conversas (liberadas pelo dono em 20/11/2026) ---
+test('mensagens: última mensagem de uma consultora, texto com R$ reservado e escopo pessoal', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const [asA, asB] = await Promise.all([
+    prisma.assistenteComercial.create({ data: { vendedorId: loja.vendA } }),
+    prisma.assistenteComercial.create({ data: { vendedorId: loja.vendB } }),
+  ])
+  const cA = await prisma.assistenteConversa.create({ data: { assistenteId: asA.id, tipo: 'LEAD', nomeContato: 'Carlos Zéfiro', numeroContato: '5591988887777', leadId: loja.leadA } })
+  const cB = await prisma.assistenteConversa.create({ data: { assistenteId: asB.id, tipo: 'LEAD', nomeContato: 'Débora Quintana', numeroContato: '5591977776666', leadId: loja.leadB } })
+  const agora = Date.now()
+  await prisma.assistenteMensagem.create({ data: { conversaId: cA.id, remetente: 'CONTATO', texto: 'Oi, tenho R$ 5.000 de entrada e meu CPF é 123.456.789-09', criadoEm: new Date(agora - 60_000) } })
+  await prisma.assistenteMensagem.create({ data: { conversaId: cA.id, remetente: 'VENDEDOR', texto: 'Perfeito, Carlos! Te mando a simulação da CG agora.', criadoEm: new Date(agora - 30_000) } })
+  await prisma.assistenteMensagem.create({ data: { conversaId: cB.id, remetente: 'CONTATO', texto: 'Ainda tem a Fazer azul?', criadoEm: new Date(agora - 10_000) } })
+  await prisma.leadNota.create({ data: { usuarioId: loja.id, leadId: loja.leadA, texto: 'Zéfiro quer fechar até sexta', autorId: loja.vendA, autorNome: 'Ana' } })
+
+  const dono = await ctxDe(null)
+  const r = new Reservas()
+  const ult = (await executarConsulta(dono, 'mensagens', { vendedor: 'Ana', limite: 1 }, r)).dados as { mensagens: Array<{ texto: string; quem: string; consultor: string; cliente: string; telefone: string }> }
+  assert.equal(ult.mensagens.length, 1)
+  assert.match(ult.mensagens[0].texto, /simulação da CG/)
+  assert.match(ult.mensagens[0].quem, /Consultor/)
+  assert.match(ult.mensagens[0].consultor, /Ana/)
+  assert.equal(ult.mensagens[0].telefone, 'final 7777')
+  const recebida = (await executarConsulta(dono, 'mensagens', { vendedor: 'Ana', quem: 'CLIENTE', limite: 1 }, r)).dados as { mensagens: Array<{ texto: string }> }
+  const txt = recebida.mensagens[0].texto
+  assert.ok(!txt.includes('R$') && !txt.includes('123.456.789-09'), `sem R$ nem CPF para a IA: ${txt}`)
+  assert.match(r.preencher(txt), /R\$ 5\.000/, 'o valor volta na resposta final')
+  assert.ok(envioSeguro(JSON.stringify(recebida)), 'envio seguro')
+
+  const bruno = await ctxDe(loja.vendB)
+  const rb = new Reservas()
+  const outraVend = (await executarConsulta(bruno, 'mensagens', { vendedor: 'Ana' }, rb)).dados as { mensagens: unknown[]; avisos?: string[] }
+  assert.equal(outraVend.mensagens.length, 0)
+  assert.match(String(outraVend.avisos), /próprias conversas/)
+  const proprias = (await executarConsulta(bruno, 'mensagens', {}, rb)).dados as { mensagens: Array<{ cliente: string }> }
+  assert.ok(proprias.mensagens.length >= 1 && proprias.mensagens.every(m => /Débora/.test(m.cliente)), 'Bruno vê só as conversas dele')
 })

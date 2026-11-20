@@ -5,8 +5,9 @@
 //
 // P1: o que volta para a IA nunca traz R$, custo, margem, CPF nem data de nascimento.
 // Todo valor em dinheiro vira um espaço reservado ({{v1}}, {{v2}}…) que só o sistema
-// conhece e preenche na resposta final. Telefone: só os 4 últimos dígitos. Texto das
-// conversas, notas da negociação, Processo e anotações não entram (D5).
+// conhece e preenche na resposta final. Telefone: só os 4 últimos dígitos. Desde 20/11/2026
+// o texto das conversas, as notas da negociação e o Processo entram (no escopo de quem pergunta);
+// dentro das mensagens, valores em R$ também viram espaço reservado. Anotações pessoais não entram.
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
@@ -16,7 +17,7 @@ import { calcularNumeros, formatar, PERIODOS, type NumeroResposta, type PeriodoP
 import type { CtxCentral } from './contexto'
 import { buscar } from './indice'
 import { NOME_TIPO, type TipoDoc } from './fontes'
-import { agregarDados, consultarDados, listarEntidades } from './catalogoDados'
+import { agregarDados, consultarDados, listarEntidades, textoLivreParaIa } from './catalogoDados'
 
 const DIA = 86_400_000
 
@@ -82,6 +83,14 @@ const pListar = z.object({ busca: z.string().max(80).optional() })
 const pConsultar = z.object({ entidade: z.string().min(1).max(60), filtros: z.array(pFiltro).max(12).optional(), desde: z.string().max(25).optional(), ate: z.string().max(25).optional(), campoData: z.string().max(60).optional(), ordenar: z.object({ campo: z.string().max(80), direcao: z.enum(['asc', 'desc']).optional() }).optional(), campos: z.array(z.string().max(80)).max(40).optional(), limite: z.number().int().min(1).max(100).optional() })
 const pAgregar = z.object({ entidade: z.string().min(1).max(60), medida: z.enum(['contar', 'somar', 'media', 'minimo', 'maximo']), campoMedida: z.string().max(80).optional(), agruparPor: z.string().max(80).optional(), filtros: z.array(pFiltro).max(12).optional(), desde: z.string().max(25).optional(), ate: z.string().max(25).optional(), campoData: z.string().max(60).optional(), limite: z.number().int().min(1).max(100).optional() })
 const ESQ_FILTROS = { type: 'array', description: 'Filtros: [{campo, op, valor}]. campo pode ser da relação ("vendedor.nome"). op: igual, diferente, contem, maior, menor, maior_igual, menor_igual, vazio, preenchido, em.', items: { type: 'object', properties: { campo: { type: 'string' }, op: { type: 'string', enum: OPS }, valor: {} }, required: ['campo', 'op'] } }
+const pMensagens = z.object({
+  vendedor: z.string().max(60).optional(), cliente: z.string().max(80).optional(), texto: z.string().max(80).optional(),
+  canal: z.enum(['WHATSAPP', 'INSTAGRAM', 'TODOS']).default('TODOS'), quem: z.enum(['CLIENTE', 'LOJA', 'TODAS']).default('TODAS'),
+  desde: z.string().max(25).optional(), ate: z.string().max(25).optional(), limite: z.number().int().min(1).max(60).default(15),
+})
+/** Texto de mensagem para a IA: valores em R$ reservados (o dono vê o valor na resposta), CPF fora. */
+const textoDaMensagem = (t: string, r: Reservas) => textoLivreParaIa(t, r, 1500)
+const QUEM_WPP: Record<string, string> = { CONTATO: 'Cliente', ASSISTENTE: 'Robô do WhatsApp', VENDEDOR: 'Consultor(a) da loja' }
 const pPesquisa = z.object({ texto: z.string().min(2).max(120), tipos: z.array(z.enum(TIPOS_PESQUISA)).max(6).optional() })
 
 /** Declara uma consulta com os parâmetros tipados pelo próprio esquema. */
@@ -161,6 +170,84 @@ export const CONSULTAS: Consulta[] = [
           propostas: l._count.propostas, visitas: l._count.visitas,
           conversa: conversa ? { situacao: conversa.status, ultimaMensagemDe: ultima ? (ultima.remetente === 'CONTATO' ? 'cliente' : ultima.remetente === 'VENDEDOR' ? 'loja' : 'robô') : null, horasDesdeUltimaMensagem: ultima ? Math.round((agora.getTime() - ultima.criadoEm.getTime()) / 3_600_000) : null } : null,
           tela: `/pro-labore/leads?lead=${l.id}`,
+        },
+      }
+    },
+  }),
+  def({
+    nome: 'mensagens', fonte: 'whatsapp', parametros: pMensagens,
+    descricao: 'Lê as mensagens das conversas (WhatsApp de cada consultor e Instagram da loja), com o texto, quem escreveu (cliente, robô ou consultor), a hora exata, o cliente e o consultor. Mais recentes primeiro. Use para "última mensagem que a Naiza mandou/recebeu", "o que o cliente X disse", "conversas de hoje", "quem falou em troca". Filtros: vendedor (nome do consultor), cliente (nome ou parte do telefone), texto (palavra dentro da mensagem), canal, quem (CLIENTE = recebidas, LOJA = enviadas pela loja), desde/ate (AAAA-MM-DD ou data e hora).',
+    esquema: { type: 'object', properties: { vendedor: { type: 'string' }, cliente: { type: 'string' }, texto: { type: 'string' }, canal: { type: 'string', enum: ['WHATSAPP', 'INSTAGRAM', 'TODOS'] }, quem: { type: 'string', enum: ['CLIENTE', 'LOJA', 'TODAS'] }, desde: { type: 'string' }, ate: { type: 'string' }, limite: { type: 'integer', minimum: 1, maximum: 60 } } },
+    async executar(ctx, p, r) {
+      const u = ctx.pessoa.usuarioId
+      const gestor = ctx.pessoa.papel === 'DONO' || ctx.pessoa.papel === 'SUPERVISOR'
+      const avisos: string[] = []
+      const desde = dataOuNull(p.desde), ate = dataOuNull(p.ate)
+      if (ate && p.ate && p.ate.length <= 10) ate.setUTCHours(23, 59, 59, 999)
+      const periodo = desde || ate ? { ...(desde ? { gte: desde } : {}), ...(ate ? { lte: ate } : {}) } : undefined
+      type Linha = { canal: string; quando: Date; cliente: string | null; telefone: string | null; consultor: string | null; quem: string; texto: string; tela: string | null; lead: string | null; origem: string | null }
+      const linhas: Linha[] = []
+
+      // WhatsApp de cada consultor: o gestor vê todos; os demais, só o próprio (como na aba Conversas).
+      const veWpp = gestor || (ctx.ve('assistente') && !!ctx.pessoa.vendedorId)
+      if (p.canal !== 'INSTAGRAM' && veWpp) {
+        let vendedorId: string | null | undefined = gestor ? undefined : ctx.pessoa.vendedorId
+        if (p.vendedor) {
+          const v = await vendedorPorNome(u, p.vendedor)
+          if (!v) avisos.push(`Nenhum consultor com o nome "${p.vendedor}".`)
+          else if (!gestor && v.id !== ctx.pessoa.vendedorId) avisos.push('Este perfil vê só as próprias conversas.')
+          vendedorId = v ? (gestor || v.id === ctx.pessoa.vendedorId ? v.id : '__nenhum__') : '__nenhum__'
+        }
+        const digitos = (p.cliente ?? '').replace(/\D/g, '')
+        const where: Prisma.AssistenteMensagemWhereInput = {
+          conversa: {
+            assistente: { vendedor: { usuarioId: u }, ...(vendedorId ? { vendedorId } : {}) },
+            ...(p.cliente ? { OR: [{ nomeContato: { contains: p.cliente.trim(), mode: 'insensitive' } }, { lead: { nomeCliente: { contains: p.cliente.trim(), mode: 'insensitive' } } }, ...(digitos.length >= 4 ? [{ numeroContato: { contains: digitos } }] : [])] } : {}),
+          },
+          ...(p.quem === 'CLIENTE' ? { remetente: 'CONTATO' } : p.quem === 'LOJA' ? { remetente: { in: ['ASSISTENTE', 'VENDEDOR'] } } : {}),
+          ...(p.texto ? { texto: { contains: p.texto, mode: 'insensitive' } } : {}),
+          ...(periodo ? { criadoEm: periodo } : {}),
+        }
+        const ms = await prisma.assistenteMensagem.findMany({
+          where, orderBy: { criadoEm: 'desc' }, take: p.limite,
+          select: { texto: true, remetente: true, origem: true, criadoEm: true, enviadaEm: true, midia: { select: { tipo: true } }, conversa: { select: { id: true, nomeContato: true, numeroContato: true, leadId: true, assistente: { select: { vendedorId: true, vendedor: { select: { nome: true } } } } } } },
+        })
+        for (const m of ms) linhas.push({
+          canal: 'WhatsApp', quando: m.enviadaEm ?? m.criadoEm, cliente: m.conversa.nomeContato, telefone: final4(m.conversa.numeroContato), consultor: m.conversa.assistente.vendedor.nome,
+          quem: QUEM_WPP[m.remetente] ?? m.remetente, texto: m.texto?.trim() ? textoDaMensagem(m.texto, r) : m.midia ? `[${m.midia.tipo === 'AUDIO' ? 'áudio' : 'imagem'}]` : '',
+          origem: m.origem === 'FOLLOW' ? 'follow automático' : null, lead: m.conversa.leadId,
+          tela: `/pro-labore/whatsapp?conversa=${m.conversa.id}&vendedor=${m.conversa.assistente.vendedorId}`,
+        })
+      } else if (p.canal === 'WHATSAPP') avisos.push('Seu acesso não inclui as conversas do WhatsApp.')
+
+      // Instagram da loja (direct e comentários): dono, supervisor e social media com o módulo.
+      const veIg = gestor || (ctx.pessoa.papel === 'SOCIAL_MEDIA' && ctx.ve('socialMedia'))
+      if (p.canal !== 'WHATSAPP' && !p.vendedor && veIg) {
+        const ms = await prisma.smMensagem.findMany({
+          where: {
+            conversa: { usuarioId: u, ...(p.cliente ? { OR: [{ clienteNome: { contains: p.cliente.trim(), mode: 'insensitive' } }, { clienteUsuario: { contains: p.cliente.trim().replace(/^@/, ''), mode: 'insensitive' } }] } : {}) },
+            ...(p.quem === 'CLIENTE' ? { direcao: 'IN' } : p.quem === 'LOJA' ? { direcao: 'OUT' } : {}),
+            ...(p.texto ? { texto: { contains: p.texto, mode: 'insensitive' } } : {}),
+            ...(periodo ? { enviadaEm: periodo } : {}),
+          },
+          orderBy: { enviadaEm: 'desc' }, take: p.limite,
+          select: { texto: true, direcao: true, autor: true, automacao: true, enviadaEm: true, conversa: { select: { canal: true, clienteNome: true, clienteUsuario: true, leadId: true } } },
+        })
+        for (const m of ms) linhas.push({
+          canal: `Instagram (${m.conversa.canal === 'DIRECT' ? 'direct' : m.conversa.canal === 'RESPOSTA_STORY' ? 'resposta ao story' : 'comentário'})`, quando: m.enviadaEm,
+          cliente: m.conversa.clienteNome ?? (m.conversa.clienteUsuario ? `@${m.conversa.clienteUsuario}` : null), telefone: null, consultor: null,
+          quem: m.direcao === 'IN' ? 'Cliente' : m.autor === 'AUTOMACAO' ? 'Resposta automática' : 'Loja', texto: textoDaMensagem(m.texto ?? '', r),
+          origem: m.automacao ? `automação ${m.automacao.toLowerCase()}` : null, lead: m.conversa.leadId, tela: '/pro-labore/social-media',
+        })
+      }
+
+      linhas.sort((a, b) => b.quando.getTime() - a.quando.getTime())
+      const lista = linhas.slice(0, p.limite)
+      return {
+        fonte: 'whatsapp', tela: lista[0]?.tela ?? '/pro-labore/whatsapp',
+        dados: {
+          avisos: avisos.length ? avisos : undefined, mostrando: lista.length,
+          mensagens: lista.map(l => ({ ...l, quando: l.quando.toISOString(), lead: l.lead ? `/pro-labore/leads?lead=${l.lead}` : null })),
         },
       }
     },

@@ -26,15 +26,11 @@ const DINHEIRO = new Set(['custoPorLeadTopo', 'entrada', 'gasto', 'margemContrib
 
 // Entidades que nunca vão à IA (P1, D5): o motivo aparece se alguém pedir.
 const BLOQUEADAS: Record<string, string> = {
-  LeadNota: 'notas da negociação não vão à IA',
-  ProcessoAtendimento: 'a aba Processo não vai à IA',
   Nota: 'anotações são privadas de quem escreveu',
   Pasta: 'anotações são privadas de quem escreveu',
   MapaMental: 'anotações são privadas de quem escreveu',
   MapaMentalVersao: 'anotações são privadas de quem escreveu',
   ApresentacaoNotaPessoal: 'notas pessoais são privadas',
-  InicioNota: 'notas do Início são da equipe, fora da IA',
-  AgenteMensagem: 'o texto das conversas com o Aries no WhatsApp não vai à IA',
   IaEnvio: 'registro do que foi enviado à IA',
   AcessoDadoSensivel: 'registro de acesso a dado sensível',
   CopiaSeguranca: 'cópias de segurança',
@@ -45,18 +41,17 @@ const BLOQUEADAS: Record<string, string> = {
   ProLaboreUsuario: 'conta de acesso',
   CentralEvento: 'fila técnica da Central',
   CentralDocumento: 'índice técnico da Central (use a pesquisa)',
-  SmIATexto: 'texto gerado pela IA',
   CopilotoMensagem: 'conversas pessoais com o Copiloto',
   SmAssistenteEstado: 'estado técnico',
   AssistenteAprendizadoEstado: 'estado técnico',
 }
-// Campos de texto livre de conversa: saem só os metadados (D5).
+// Liberação de 20/11/2026 (o dono aprovou): o texto das conversas, as notas da negociação,
+// a aba Processo, observações e transcrições entram, sempre no escopo de quem pergunta
+// (quem não vê a conversa na tela também não vê aqui). Continuam fora: endereços de arquivo,
+// os valores guardados do Pergunte e da auditoria (P1) e as anotações pessoais de cada um.
 const CAMPOS_FORA: Record<string, string[]> = {
-  AssistenteMensagem: ['texto', 'transcricao', 'midiaUrl', 'legenda'],
-  SmMensagem: ['texto', 'midiaUrl'],
-  AssistenteConversa: ['resumo', 'ultimaMensagem'],
-  Lead: ['observacao', 'notaPerda'],
-  Reuniao: ['transcricao'],
+  AssistenteMensagem: ['midiaUrl'],
+  SmMensagem: [],
   PergunteConversa: ['valores'],
   EventoAuditoria: ['valorAnterior', 'valorNovo'],
 }
@@ -68,7 +63,7 @@ const ROTULO: Record<string, string> = {
   Lead: 'Leads e negociações (CRM)', LeadEstagioHistorico: 'Histórico de etapas dos leads', LeadFollow: 'Follows dos leads', LeadProposta: 'Propostas', LeadVisita: 'Visitas',
   LeadPassagem: 'Passagens ao vendedor', Cliente: 'Clientes', Venda: 'Vendas', PagamentoComissao: 'Pagamentos de comissão e recibos de pró-labore', LancamentoFinanceiro: 'Lançamentos do Financeiro',
   Vendedor: 'Equipe (vendedores, SDRs, supervisores)', Atividade: 'Atividades (ATV)', AgendaItem: 'Agenda (tarefas e rotinas)', AgendaConclusao: 'Conclusões da agenda', Ocorrencia: 'Ocorrências da equipe',
-  SmMotoEstoque: 'Estoque de motos', AssistenteConversa: 'Conversas do WhatsApp (metadados)', AssistenteMensagem: 'Mensagens do WhatsApp (só quem mandou e quando)', AssistenteFichaCredito: 'Fichas de crédito',
+  SmMotoEstoque: 'Estoque de motos', AssistenteConversa: 'Conversas do WhatsApp', AssistenteMensagem: 'Mensagens do WhatsApp (texto, quem mandou e quando)', SmConversa: 'Conversas do Instagram', SmMensagem: 'Mensagens do Instagram (direct e comentários)', LeadNota: 'Notas da negociação', ProcessoAtendimento: 'Processo do atendimento', AgenteMensagem: 'Conversas da equipe com o ARIES no WhatsApp', InicioNota: 'Notas do Início', AssistenteFichaCredito: 'Fichas de crédito',
   AssistenteAnaliseCredito: 'Análises de crédito por banco', AssistenteConhecimento: 'Conhecimento comercial (verbetes)', Recomendacao: 'Recomendações', Reuniao: 'Reuniões', DailyDecisao: 'Decisões do Daily', DailyItem: 'Pauta do Daily',
   TrafegoConta: 'Conta de anúncios (Meta)', TrafegoInsightDiario: 'Resultados diários dos anúncios', TrafegoContaDiario: 'Totais diários da conta de anúncios', TrafegoEstrutura: 'Campanhas, conjuntos e anúncios',
   SocialMediaConta: 'Conta do Instagram (seguidores e dados do perfil)', SocialMediaMidia: 'Posts do Instagram', SocialMediaSnapshotDiario: 'Retrato diário do Instagram (seguidores, alcance)', SmPauta: 'Pautas do Social Media',
@@ -95,6 +90,8 @@ const ACESSO: Record<string, Acesso> = {
   LeadVisita: { papeis: ['SUPERVISOR', 'SDR', 'VENDEDOR'], escopo: doLead },
   LeadPassagem: { papeis: ['SUPERVISOR', 'SDR', 'VENDEDOR'], escopo: doLead },
   AssistenteFichaCredito: { papeis: ['SUPERVISOR', 'SDR', 'VENDEDOR'], escopo: doLead },
+  LeadNota: { papeis: ['SUPERVISOR', 'SDR', 'VENDEDOR'], escopo: doLead },
+  ProcessoAtendimento: { papeis: TODOS },
   LigacaoTarefa: { papeis: ['SUPERVISOR', 'SDR', 'VENDEDOR'], escopo: ctx => meuVendedor(ctx) },
   Cliente: { papeis: ['SUPERVISOR'], modulo: 'crm' },
   Venda: { papeis: ['SUPERVISOR', 'SDR', 'VENDEDOR', 'FINANCEIRO'], escopo: ctx => (ctx.pessoal ? meuVendedor(ctx) : ctx.ve('vendas') ? {} : null) },
@@ -125,6 +122,8 @@ const ACESSO: Record<string, Acesso> = {
   SocialMediaSnapshotDiario: { papeis: ['SOCIAL_MEDIA', 'SUPERVISOR'] },
   SocialMediaAlcancePeriodo: { papeis: ['SOCIAL_MEDIA', 'SUPERVISOR'] },
   SmPauta: { papeis: ['SOCIAL_MEDIA'] },
+  SmConversa: { papeis: ['SOCIAL_MEDIA', 'SUPERVISOR'], modulo: 'socialMedia' },
+  SmMensagem: { papeis: ['SOCIAL_MEDIA', 'SUPERVISOR'], modulo: 'socialMedia' },
   PergunteConversa: { papeis: TODOS, escopo: ctx => (ctx.pessoa.papel === 'DONO' ? {} : { pessoaId: ctx.pessoa.id }) },
 }
 
@@ -292,13 +291,20 @@ async function idsDaLojaParaAuditoria(u: string): Promise<string[]> {
   return [...l, ...v].map(x => x.id)
 }
 
+const DINHEIRO_TEXTO = /R\$\s*-?[\d.,]+(?:\s*(?:mil|milhões|milhão|k))?|\b[\d.,]+\s*(?:reais|real)\b/gi
+const CPF_TEXTO = /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g
+/** Texto livre (mensagem, nota, observação) para a IA: R$ vira espaço reservado (o valor volta na resposta), CPF sai. */
+export function textoLivreParaIa(t: string, r: Reservas, max = 2000): string {
+  return (t.length > max ? `${t.slice(0, max - 1)}…` : t).replace(CPF_TEXTO, '[documento]').replace(DINHEIRO_TEXTO, v => r.texto(v))
+}
+
 /** Converte um valor para o que pode ir à IA (dinheiro reservado, telefone mascarado, datas ISO). */
 function paraIa(tipo: TipoCampo, v: unknown, r: Reservas): unknown {
   if (v == null) return null
   if (tipo === 'dinheiro') return r.brl(Number(v))
   if (tipo === 'telefone (4 últimos dígitos)') { const d = String(v).replace(/\D/g, ''); return d.length >= 4 ? `final ${d.slice(-4)}` : null }
   if (v instanceof Date) return v.toISOString()
-  if (typeof v === 'string') return v.length > 300 ? `${v.slice(0, 299)}…` : v
+  if (typeof v === 'string') return textoLivreParaIa(v, r)
   if (typeof v === 'bigint') return Number(v)
   return v
 }
