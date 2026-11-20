@@ -123,11 +123,11 @@ async function lojas(): Promise<string[]> {
 }
 
 /** Carga inicial em rodadas: cada fonte de cada loja, 200 itens por vez, guardando onde parou. */
-export async function cargaInicial(limiteMs = 8000): Promise<{ centralCarga: number }> {
+export async function cargaInicial(limiteMs = 8000, soLoja?: string): Promise<{ centralCarga: number }> {
   const inicio = Date.now()
   let n = 0
   const salvas = await prisma.centralFonte.findMany({ select: { usuarioId: true, chave: true, cargaInicialEm: true, cargaCursor: true } })
-  for (const u of await lojas()) {
+  for (const u of soLoja ? [soLoja] : await lojas()) {
     for (const def of FONTES_INDEXADAS) {
       if (Date.now() - inicio > limiteMs - 1500) return { centralCarga: n }
       const s = salvas.find(x => x.usuarioId === u && x.chave === def.chave)

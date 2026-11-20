@@ -342,7 +342,9 @@ router.post('/sm/cron/hora', async (req: Request, res: Response) => {
   const abertas = await o.rodar('etiquetas abertas', () => recalcularEtiquetasAbertas(200, agora), { etiquetasAbertas: 0 })
   // CPF, nascimento e e-mail escritos na observação de leads antigos: para os campos, mascarados no texto.
   const higiene = await o.rodar('higiene', () => higienizarObservacoes(300), { observacoesLimpas: 0 })
-  res.json({ ...sincronizacao, ...retros, ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas, metaEmRisco: metaRisco.recsCriadas, metaEmRiscoEncerradas: metaRevista.encerradas, adiadas: o.adiadas, tempos: o.tempos })
+  // PDF 07: a Central também processa a fila e continua a carga inicial no job da hora (com o tempo que sobrar).
+  const centralHora = await o.rodar('central: fila e carga', async lim => ({ ...(await processarEventosCentral(Math.min(6000, lim))), ...(await cargaInicialCentral(Math.max(2000, Math.min(10_000, lim - 6500)))) }), { centralProcessados: 0, centralFalhas: 0, centralCarga: 0 }, 4000)
+  res.json({ ...centralHora, ...sincronizacao, ...retros, ...meta, ...central, ...copiloto, ...aprendizado, ...avancos, ...etiquetas, ...abertas, ...higiene, ...manha, ...faltas, metaEmRisco: metaRisco.recsCriadas, metaEmRiscoEncerradas: metaRevista.encerradas, adiadas: o.adiadas, tempos: o.tempos })
 })
 router.post('/sm/cron/dia', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return

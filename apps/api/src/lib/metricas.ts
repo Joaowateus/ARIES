@@ -81,7 +81,7 @@ export const FICHAS_PADRAO: Ficha[] = [
   f('aprovacao_credito', 1, 'Aprovação de crédito', 'Quantas fichas os bancos aprovam', 'Fichas aprovadas ÷ fichas com resposta dos bancos no período (ficha aprovada = ao menos um banco aprovou)', 'Crédito', 'PCT', 'MAIOR', false, RESP_COM, TODOS),
   f('custo_por_lead', 1, 'Custo por lead', 'Quanto custa cada lead de tráfego pago', 'Gasto com anúncios ÷ leads novos de tráfego pago (gasto real do Tráfego quando conectado; senão o digitado, proporcional aos dias)', 'Meta e CRM', 'BRL', 'MENOR', false, RESP_DONO, DONO_TRAFEGO),
   f('roas', 1, 'ROAS', 'Retorno do gasto com anúncios', 'Faturamento ÷ gasto com anúncios', 'Vendas e Meta', 'X', 'MAIOR', false, RESP_DONO, DONO_TRAFEGO),
-  f('pro_labore', 1, 'Pró-labore', 'O que o dono sacou das vendas', 'Soma do sacado em cada venda, dentro dos tetos', 'Vendas', 'BRL', 'MAIOR', true, RESP_DONO, SO_DONO),
+  f('pro_labore', 1, 'Pró-labore', 'O que o dono sacou das vendas', 'Soma do pró-labore sacado em cada venda confirmada no período', 'Vendas', 'BRL', 'MAIOR', true, RESP_DONO, SO_DONO),
   f('previsao_fechamento', 1, 'Previsão de fechamento do mês', 'Quanto o mês deve faturar', 'Realizado até hoje + projeção: média entre o ritmo do mês (realizado ÷ dias passados × dias restantes) e o funil aberto (oportunidades de Negociação a Visita × conversão delas em venda nos últimos 90 dias × ticket médio)', 'Calculada', 'BRL', 'MAIOR', false, RESP_DONO, GESTAO, { janela: 'Mês corrente' }),
   // Segundo lote — métricas da jornada
   f('tempo_na_etapa', 2, 'Tempo na etapa', 'Quanto tempo o lead fica em cada etapa', 'Mediana do tempo entre a entrada e a saída de cada etapa (saídas no período)', 'CRM', 'DIAS', 'MENOR', false, RESP_COM, TODOS),
@@ -167,7 +167,7 @@ const SINONIMOS_PADRAO: Record<string, string[]> = {
   aprovacao_credito: ['aprovacao', 'aprovando', 'aprova', 'credito aprovado'],
   custo_por_lead: ['custo por lead', 'cpl', 'custo do lead'],
   roas: ['roas', 'retorno do anuncio', 'retorno dos anuncios'],
-  pro_labore: ['pro-labore', 'pro labore', 'prolabore'],
+  pro_labore: ['pro-labore', 'pro labore', 'prolabore', 'saquei', 'sacado', 'sacou', 'retirada do dono'],
   previsao_fechamento: ['previsao', 'vai fechar', 'fechar o mes', 'bater a meta', 'meta do mes'],
   tempo_na_etapa: ['tempo na etapa', 'quanto tempo fica'],
   taxa_resposta: ['taxa de resposta', 'respondem'],

@@ -16,6 +16,7 @@ import { calcularNumeros, formatar, PERIODOS, type NumeroResposta, type PeriodoP
 import type { CtxCentral } from './contexto'
 import { buscar } from './indice'
 import { NOME_TIPO, type TipoDoc } from './fontes'
+import { agregarDados, consultarDados, listarEntidades } from './catalogoDados'
 
 const DIA = 86_400_000
 
@@ -75,6 +76,12 @@ const pAtividades = z.object({ quando: z.enum(['ATRASADAS', 'HOJE', 'PROXIMOS_7_
 const pVazio = z.object({})
 const pRecs = z.object({ situacao: z.enum(['ABERTAS', 'TODAS']).default('ABERTAS') })
 const TIPOS_PESQUISA = ['LEAD', 'CLIENTE', 'VENDA', 'MOTO', 'ATIVIDADE', 'VERBETE', 'INDICADOR', 'RECOMENDACAO', 'OCORRENCIA', 'REUNIAO', 'PAUTA', 'POST', 'CAMPANHA', 'LANCAMENTO', 'DECISAO'] as const
+const OPS = ['igual', 'diferente', 'contem', 'maior', 'menor', 'maior_igual', 'menor_igual', 'vazio', 'preenchido', 'em'] as const
+const pFiltro = z.object({ campo: z.string().min(1).max(80), op: z.enum(OPS), valor: z.unknown().optional() })
+const pListar = z.object({ busca: z.string().max(80).optional() })
+const pConsultar = z.object({ entidade: z.string().min(1).max(60), filtros: z.array(pFiltro).max(12).optional(), desde: z.string().max(25).optional(), ate: z.string().max(25).optional(), campoData: z.string().max(60).optional(), ordenar: z.object({ campo: z.string().max(80), direcao: z.enum(['asc', 'desc']).optional() }).optional(), campos: z.array(z.string().max(80)).max(40).optional(), limite: z.number().int().min(1).max(100).optional() })
+const pAgregar = z.object({ entidade: z.string().min(1).max(60), medida: z.enum(['contar', 'somar', 'media', 'minimo', 'maximo']), campoMedida: z.string().max(80).optional(), agruparPor: z.string().max(80).optional(), filtros: z.array(pFiltro).max(12).optional(), desde: z.string().max(25).optional(), ate: z.string().max(25).optional(), campoData: z.string().max(60).optional(), limite: z.number().int().min(1).max(100).optional() })
+const ESQ_FILTROS = { type: 'array', description: 'Filtros: [{campo, op, valor}]. campo pode ser da relação ("vendedor.nome"). op: igual, diferente, contem, maior, menor, maior_igual, menor_igual, vazio, preenchido, em.', items: { type: 'object', properties: { campo: { type: 'string' }, op: { type: 'string', enum: OPS }, valor: {} }, required: ['campo', 'op'] } }
 const pPesquisa = z.object({ texto: z.string().min(2).max(120), tipos: z.array(z.enum(TIPOS_PESQUISA)).max(6).optional() })
 
 /** Declara uma consulta com os parâmetros tipados pelo próprio esquema. */
@@ -265,6 +272,27 @@ export const CONSULTAS: Consulta[] = [
         dados: { total: r.total, grupos: r.grupos.map(g => ({ tipo: NOME_TIPO[g.tipo], itens: g.itens.map(i => ({ titulo: i.titulo, resumo: i.resumo, tela: i.link, fonteAtrasada: i.fonteAtrasada })) })) },
       }
     },
+  }),
+  def({
+    nome: 'listar_dados', fonte: 'dados', parametros: pListar,
+    descricao: 'Lista TODAS as entidades de dados do sistema Pró-Labore que esta pessoa pode consultar (leads, vendas, recibos, financeiro, equipe, agenda, ocorrências, estoque, conversas, crédito, tráfego, Instagram, pautas, parâmetros, auditoria…), com os campos e o tipo de cada um. Use antes de consultar_dados/agregar_dados quando não souber o nome da entidade ou do campo. "busca" filtra por palavra.',
+    esquema: { type: 'object', properties: { busca: { type: 'string', description: 'Palavra para filtrar (ex.: "instagram", "recibo", "seguidores").' } } },
+    async executar(ctx, p) {
+      const es = listarEntidades(ctx, p.busca)
+      return { fonte: 'dados', tela: null, dados: { total: es.length, entidades: es.slice(0, p.busca ? 40 : 200).map(e => ({ entidade: e.nome, rotulo: e.rotulo, campoData: e.campoData, campos: p.busca ? e.campos : e.campos.map(c => c.nome).slice(0, 30), relacoes: e.relacoes.map(r => `${r.nome}→${r.entidade}`) })) } }
+    },
+  }),
+  def({
+    nome: 'consultar_dados', fonte: 'dados', parametros: pConsultar,
+    descricao: 'Busca registros de qualquer entidade do sistema (use listar_dados para os nomes), com filtros, período (desde/ate em AAAA-MM-DD sobre o campo de data), ordenação e os campos que quiser (inclusive da relação, ex.: "vendedor.nome"). Dinheiro volta reservado ({{vN}}). Ex.: último lead da Naiza = entidade Lead, filtros [{campo:"vendedor.nome", op:"contem", valor:"Naiza"}], ordenar {campo:"criadoEm", direcao:"desc"}, limite 1.',
+    esquema: { type: 'object', properties: { entidade: { type: 'string' }, filtros: ESQ_FILTROS, desde: { type: 'string' }, ate: { type: 'string' }, campoData: { type: 'string' }, ordenar: { type: 'object', properties: { campo: { type: 'string' }, direcao: { type: 'string', enum: ['asc', 'desc'] } }, required: ['campo'] }, campos: { type: 'array', items: { type: 'string' } }, limite: { type: 'integer' } }, required: ['entidade'] },
+    async executar(ctx, p, r) { return { fonte: 'dados', tela: null, dados: await consultarDados(ctx, p, r) } },
+  }),
+  def({
+    nome: 'agregar_dados', fonte: 'dados', parametros: pAgregar,
+    descricao: 'Conta, soma, faz média, mínimo ou máximo de qualquer entidade do sistema, com filtros e período, e opcionalmente agrupa por um campo (ex.: vendedorId vira o nome). O sistema faz a conta: somas e médias de dinheiro voltam reservadas ({{vN}}). Ex.: pró-labore sacado no mês = entidade Venda, medida somar, campoMedida valorProLabore, desde o dia 1. Use quando não existir métrica no dicionário.',
+    esquema: { type: 'object', properties: { entidade: { type: 'string' }, medida: { type: 'string', enum: ['contar', 'somar', 'media', 'minimo', 'maximo'] }, campoMedida: { type: 'string' }, agruparPor: { type: 'string' }, filtros: ESQ_FILTROS, desde: { type: 'string' }, ate: { type: 'string' }, campoData: { type: 'string' }, limite: { type: 'integer' } }, required: ['entidade', 'medida'] },
+    async executar(ctx, p, r) { return { fonte: 'dados', tela: null, dados: await agregarDados(ctx, p, r) } },
   }),
 ]
 

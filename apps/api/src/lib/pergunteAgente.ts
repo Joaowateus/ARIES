@@ -17,19 +17,23 @@ import { logger } from './logger'
 import { fichas } from './metricas'
 import { envioSeguro, perguntar, protegerParaIa, type Resposta } from './pergunte'
 import { iaLigada } from './smIA'
+import { modeloDa } from './iaModelo'
 import type { CtxCentral } from './centralConhecimento/contexto'
 import { CONSULTAS, Reservas, executarConsulta } from './centralConhecimento/consultas'
 import { frescorDasFontes } from './centralConhecimento/indice'
 import { fontePorChave } from './centralConhecimento/fontes'
 
 const MODELO = process.env.PERGUNTE_IA_MODELO?.trim() || 'claude-sonnet-5-5'
+// Se o modelo escolhido falhar (indisponível na conta, recusado), tenta de novo com o modelo do Copiloto,
+// que já responde na produção. Cada falha fica registrada na Saúde da Central (fonte "IA do Pergunte").
+const MODELO_RESERVA = modeloDa('COPILOTO')
 const ORCAMENTO_MS = 24_000
 const MAX_RODADAS = 6
 
 export interface TrocaAnterior { pergunta: string; resposta: string }
 /** De onde veio a resposta: fonte da Central, tipo de dado, hora da última atualização e a tela. */
 export interface OrigemResposta { fonte: string; nome: string; tipo: string; atualizadoEm: string | null; atrasada: boolean; tela: string | null }
-export interface RespostaAgente extends Resposta { fontes: Array<{ titulo: string; url: string }>; consultas: string[]; origens: OrigemResposta[] }
+export interface RespostaAgente extends Resposta { fontes: Array<{ titulo: string; url: string }>; consultas: string[]; origens: OrigemResposta[]; semIa?: string | null }
 
 let cliente: Anthropic | null = null
 const anthropic = () => (cliente ??= new Anthropic({ timeout: 20_000, maxRetries: 0 }))
@@ -54,6 +58,8 @@ Como responder:
 - Valores em dinheiro chegam como espaços reservados {{v1}}, {{v2}}… Use-os no texto exatamente como vieram. Você nunca vê nem escreve valores em R$ e nunca faz conta com eles (soma, média, diferença, projeção): para isso existe a métrica do dicionário; se não houver, diga que a conta não está no dicionário.
 - Números do dicionário também chegam reservados, com o sentido (movimento SUBIU/CAIU/ESTAVEL e situação BOM/ATENCAO/CRITICO/ACIMA_DA_META/ABAIXO_DA_META). Diga o sentido em palavras e use os espaços reservados para o valor, o anterior, a meta e o período.
 - Contagens (quantos leads, quantas vendas, dias na etapa) você pode citar como vieram.
+- A Central tem TODOS os dados do sistema Pró-Labore. Ordem: 1) métrica do dicionário quando a pergunta é um indicador ("metricas"); 2) as consultas prontas (leads, vendas, estoque, atividades…); 3) para qualquer outra coisa, "listar_dados" para achar a entidade e os campos e depois "consultar_dados" (registros) ou "agregar_dados" (contar, somar, média, agrupar). Ex.: seguidores do Instagram, recibos de pró-labore, lançamentos do financeiro, ocorrências, agenda, tráfego por dia, crédito por banco, histórico de etapas, auditoria.
+- Antes de dizer "Não sei", tente o catálogo de dados. Diga "Não sei" só se nenhuma consulta trouxer a informação ou se ela estiver fora da Central (o motivo vem na consulta).
 - Se uma consulta disser que a métrica não existe no dicionário, responda que essa métrica não existe no ARIES. Não substitua por outra parecida.
 - As consultas já aplicam o acesso de quem pergunta. Se disserem que o perfil não vê algo, explique isso e não tente contornar.
 - Se um resultado vier com fonteAtrasada verdadeiro ou avisoDeQualidade, avise na resposta que o dado pode estar desatualizado ou incompleto.
@@ -65,11 +71,20 @@ Catálogo de métricas (chave: nome — definição), para a consulta "metricas"
 ${linhas}`
 }
 
+function motivoDaFalha(e: unknown, modelo: string): string {
+  const x = e as { status?: number; error?: { error?: { type?: string; message?: string } }; message?: string; name?: string }
+  const det = x?.error?.error?.message ?? x?.message ?? String(e)
+  return `${x?.name === 'APIConnectionTimeoutError' || /timed? ?out/i.test(det) ? 'tempo esgotado' : `erro${x?.status ? ` ${x.status}` : ''}${x?.error?.error?.type ? ` (${x.error.error.type})` : ''}`} no modelo ${modelo}: ${det}`.slice(0, 480)
+}
+async function registrarFalhaIa(usuarioId: string, motivo: string) {
+  await prisma.centralFonte.upsert({ where: { usuarioId_chave: { usuarioId, chave: 'ia' } }, create: { usuarioId, chave: 'ia', ultimoErro: motivo, ultimoErroEm: new Date() }, update: { ultimoErro: motivo, ultimoErroEm: new Date(), atualizadoEm: new Date() } }).catch(() => undefined)
+}
+
 async function registrar(usuarioId: string, conversaId: string, finalidade: string, conteudo: string) {
   await prisma.iaEnvio.create({ data: { usuarioId, conversaId, finalidade, conteudo: conteudo.slice(0, 60_000) } }).catch(e => logger.warn({ err: e }, 'pergunte: não registrou o envio à IA'))
 }
 
-export async function perguntarAgente(ctx: CtxCentral, pergunta: string, anteriores: TrocaAnterior[] = [], canal: 'TELA' | 'WHATSAPP' = 'TELA', agora = new Date()): Promise<RespostaAgente> {
+export async function perguntarAgente(ctx: CtxCentral, pergunta: string, anteriores: TrocaAnterior[] = [], canal: 'TELA' | 'WHATSAPP' = 'TELA', agora = new Date(), modeloInicial = MODELO): Promise<RespostaAgente> {
   const usuarioId = ctx.pessoa.usuarioId
   const semAgente = async (): Promise<RespostaAgente> => {
     const r = await perguntar(ctx.pessoa, pergunta, canal, agora)
@@ -99,12 +114,14 @@ export async function perguntarAgente(ctx: CtxCentral, pergunta: string, anterio
   const web = new Map<string, string>()
   let final: string | null = null
 
+  let modelo = modeloInicial
+  let falha: string | null = null
   try {
     for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
       const restante = ORCAMENTO_MS - (Date.now() - inicio)
       const fechar = restante < 9000 || rodada === MAX_RODADAS - 1
       const r = await anthropic().beta.messages.create({
-        model: MODELO, max_tokens: 4000,
+        model: modelo, max_tokens: 4000,
         betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
         system: [{ type: 'text', text: sistema, cache_control: { type: 'ephemeral' } }],
         tools, ...(fechar ? { tool_choice: { type: 'none' } } : {}),
@@ -142,11 +159,18 @@ export async function perguntarAgente(ctx: CtxCentral, pergunta: string, anterio
       messages.push({ role: 'user', content: resultados })
     }
   } catch (e) {
-    logger.warn({ err: e }, 'pergunte: agente falhou — usando o Pergunte por regras')
-    if (!final) return semAgente()
+    falha = motivoDaFalha(e, modelo)
+    logger.warn({ err: e, modelo }, 'pergunte: agente falhou')
+    // Modelo recusado/indisponível logo na primeira chamada: tenta uma vez com o modelo de reserva.
+    if (!final && modelo !== MODELO_RESERVA && Date.now() - inicio < 8000 && /model|404|not_found|permission|invalid_request/i.test(falha)) {
+      await registrarFalhaIa(usuarioId, `${falha} — nova tentativa com ${MODELO_RESERVA}`)
+      return perguntarAgente(ctx, pergunta, anteriores, canal, agora, MODELO_RESERVA)
+    }
   }
-  // Sem texto, ou com valor em R$/CPF escrito pela IA fora dos espaços reservados: regras.
-  if (!final || !textoDaIaSeguro(final)) return semAgente()
+  if (!final) { await registrarFalhaIa(usuarioId, falha ?? 'a IA não devolveu texto'); return { ...(await semAgente()), semIa: falha ?? 'a IA não devolveu texto' } }
+  // Valor em R$/CPF escrito pela IA fora dos espaços reservados: não vai para a tela; responde pelas regras.
+  if (!textoDaIaSeguro(final)) { await registrarFalhaIa(usuarioId, 'a IA escreveu um valor fora dos espaços reservados (resposta descartada)'); return { ...(await semAgente()), semIa: 'resposta da IA descartada por segurança (P1)' } }
+  await prisma.centralFonte.upsert({ where: { usuarioId_chave: { usuarioId, chave: 'ia' } }, create: { usuarioId, chave: 'ia', ultimaAtualizacaoEm: new Date() }, update: { ultimaAtualizacaoEm: new Date(), atualizadoEm: new Date() } }).catch(() => undefined)
 
   const resposta = reservas.preencher(final).slice(0, 20_000)
   const naoSabe = /^\s*não sei\b/i.test(final)
