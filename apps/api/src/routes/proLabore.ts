@@ -795,10 +795,13 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITA
     res.status(409).json({ error: `A comissão dessa venda já foi paga (comprovante nº ${pg?.numero ?? '?'}). Desmarque o pagamento na coluna "Comissão paga" antes de mudar o vendedor ou o valor da comissão.` })
     return
   }
-  // Pró-labore já pago também trava o valor do pró-labore.
-  if (atual.pagamentoProLaboreId && valorProLabore !== atual.valorProLabore) {
-    const pg = await prisma.pagamentoComissao.findUnique({ where: { id: atual.pagamentoProLaboreId }, select: { numero: true } })
-    res.status(409).json({ error: `O pró-labore dessa venda já foi pago (recibo nº ${pg?.numero ?? '?'}). Desmarque o pagamento na coluna "Pró-labore pago" antes de mudar o valor.` })
+  // Pró-labore já pago: o dono pode corrigir o valor (20/11, fim do teto de R$ 900); o recibo
+  // é recalculado com o novo total logo abaixo e a mudança fica na auditoria. Os demais perfis
+  // continuam travados.
+  const proLaborePagoMudou = !!atual.pagamentoProLaboreId && valorProLabore !== atual.valorProLabore
+  if (proLaborePagoMudou && req.proLaboreUser!.papel !== 'DONO') {
+    const pg = await prisma.pagamentoComissao.findUnique({ where: { id: atual.pagamentoProLaboreId! }, select: { numero: true } })
+    res.status(409).json({ error: `O pró-labore dessa venda já foi pago (recibo nº ${pg?.numero ?? '?'}). Só o dono corrige o valor de um pró-labore já pago.` })
     return
   }
 
@@ -838,7 +841,9 @@ router.patch('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITA
     include: VENDA_INCLUDE,
   })
   if (motoNova) await darBaixaNaMoto(motoNova, atual.data)
-  res.json(venda)
+  // Recibo do pró-labore já emitido: passa a ter o total novo (as vendas dele somadas de novo).
+  if (proLaborePagoMudou) await recalcularPagamentoComissao(prisma, atual.pagamentoProLaboreId!)
+  res.json(proLaborePagoMudou ? await prisma.venda.findUnique({ where: { id: atual.id }, include: VENDA_INCLUDE }) : venda)
 })
 
 router.delete('/vendas/:id', requireProLaboreAuth, requireModulo('vendas', 'EDITAR'), async (req: Request, res: Response) => {
