@@ -23,6 +23,7 @@ import type { CtxCentral } from './centralConhecimento/contexto'
 import { CONSULTAS, Reservas, executarConsulta } from './centralConhecimento/consultas'
 import { frescorDasFontes } from './centralConhecimento/indice'
 import { fontePorChave } from './centralConhecimento/fontes'
+import { respostaDireta } from './centralConhecimento/respostaDireta'
 
 const MODELO = process.env.PERGUNTE_IA_MODELO?.trim() || 'claude-sonnet-5-5'
 // Se o modelo escolhido falhar (indisponível na conta, recusado), tenta de novo com o modelo do Copiloto,
@@ -91,11 +92,30 @@ async function registrar(usuarioId: string, conversaId: string, finalidade: stri
 export async function perguntarAgente(ctx: CtxCentral, pergunta: string, anteriores: TrocaAnterior[] = [], canal: 'TELA' | 'WHATSAPP' = 'TELA', agora = new Date(), modeloInicial = MODELO): Promise<RespostaAgente> {
   const usuarioId = ctx.pessoa.usuarioId
   const semAgente = async (): Promise<RespostaAgente> => {
+    // Perguntas de registro ("último lead da Naiza", "última mensagem que ela recebeu") respondem direto, sem IA.
+    const direta = await respostaDireta(ctx, pergunta).catch(e => { logger.warn({ err: e }, 'pergunte: resposta direta falhou'); return null })
+    if (direta) {
+      const fr = (await frescorDasFontes(usuarioId, agora)).get(direta.fonte)
+      const def = fontePorChave(direta.fonte)
+      const origens: OrigemResposta[] = [{ fonte: direta.fonte, nome: def?.nome ?? direta.fonte, tipo: TIPO_DADO[def?.tipo ?? 'REGISTRO'] ?? 'Registro do sistema', atualizadoEm: fr?.em?.toISOString() ?? agora.toISOString(), atrasada: fr?.atrasada ?? false, tela: direta.tela }]
+      const salva = await prisma.pergunteConversa.create({
+        data: {
+          usuarioId, pessoaId: ctx.pessoa.id, papel: ctx.pessoa.papel, canal, pergunta: pergunta.slice(0, 1000), metricas: [] as unknown as Prisma.InputJsonValue,
+          valores: [] as unknown as Prisma.InputJsonValue, resposta: direta.resposta, naoSabe: false, acoes: [] as unknown as Prisma.InputJsonValue,
+          consultas: direta.consultas as unknown as Prisma.InputJsonValue, fontes: origens as unknown as Prisma.InputJsonValue,
+        },
+      })
+      return { id: salva.id, pergunta, resposta: direta.resposta, naoSabe: false, onde: null, numeros: [], acaoProposta: null, acoes: [], usouIa: false, criadoEm: salva.criadoEm.toISOString(), fontes: [], consultas: direta.consultas, origens }
+    }
     const r = await perguntar(ctx.pessoa, pergunta, canal, agora)
     const fr = r.numeros.length ? (await frescorDasFontes(usuarioId, agora)).get('indicadores') : undefined
     return { ...r, fontes: [], consultas: r.numeros.length ? ['Métricas'] : [], origens: r.numeros.length ? [{ fonte: 'indicadores', nome: 'Dicionário de métricas', tipo: TIPO_DADO.INDICADOR, atualizadoEm: agora.toISOString(), atrasada: fr?.atrasada ?? false, tela: r.numeros[0]?.link ?? null }] : [] }
   }
-  if (!iaLigada()) return semAgente()
+  if (!iaLigada()) {
+    const motivo = 'a chave da IA (ANTHROPIC_API_KEY) não está configurada no servidor da API'
+    await registrarFalhaIa(usuarioId, motivo)
+    return { ...(await semAgente()), semIa: motivo }
+  }
   const inicio = Date.now()
   const conversaId = `pg_${randomUUID()}`
   const sistema = await instrucoes(usuarioId)
