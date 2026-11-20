@@ -371,7 +371,7 @@ export const FONTES: FonteDef[] = [
   },
   // Fontes sem itens no índice: aparecem na Saúde com a hora da última atualização.
   {
-    chave: 'whatsapp', nome: 'WhatsApp (só metadados)', tipo: 'INTEGRACAO', descricao: 'Tempos e contagens das conversas, pelas métricas. O texto das mensagens não entra na Central nem vai à IA (decisão D5).',
+    chave: 'whatsapp', nome: 'Conversas (WhatsApp e Instagram)', tipo: 'INTEGRACAO', descricao: 'Mensagens com texto, quem escreveu e a hora exata, lidas na hora pela consulta "mensagens" no escopo de quem pergunta (liberado pelo dono em 20/11/2026). Valores em R$ dentro do texto vão reservados; CPF nunca sai.',
     tabela: null, doc: null, limiteMin: 3 * 60, papeis: COMERCIAL,
   },
   {

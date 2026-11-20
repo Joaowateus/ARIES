@@ -3,7 +3,8 @@
 // o sistema executa com as permissões de quem perguntou; a IA recebe só o sentido dos números,
 // contagens e nomes, nunca R$, custo, margem, CPF nem data de nascimento (P1): todo valor em
 // dinheiro volta como espaço reservado {{vN}}, e o sistema preenche antes de mostrar.
-// Texto das conversas, notas da negociação, Processo e anotações não vão à IA (D5).
+// Desde 20/11/2026 (liberação do dono) o texto das conversas, as notas da negociação e o Processo
+// entram, sempre no escopo de quem pergunta; anotações pessoais continuam fora.
 // Tudo o que vai à IA fica registrado (IaEnvio) para a conferência.
 // A busca na internet continua só para perguntas que não são da operação.
 //
@@ -39,7 +40,7 @@ let cliente: Anthropic | null = null
 const anthropic = () => (cliente ??= new Anthropic({ timeout: 20_000, maxRetries: 0 }))
 
 const TIPO_DADO: Record<string, string> = { INDICADOR: 'Indicador do dicionário', REGISTRO: 'Registro do sistema', CONHECIMENTO: 'Conhecimento comercial aprovado', INTEGRACAO: 'Dado de integração', HISTORICO: 'Histórico' }
-const ROTULO: Record<string, string> = { metricas: 'Métricas', buscar_leads: 'Leads', ver_lead: 'Lead', buscar_vendas: 'Vendas', estoque: 'Estoque', atividades: 'Atividades', equipe: 'Equipe', recomendacoes: 'Recomendações', pesquisar: 'Central de Conhecimento', web_search: 'Internet' }
+const ROTULO: Record<string, string> = { metricas: 'Métricas', buscar_leads: 'Leads', ver_lead: 'Lead', buscar_vendas: 'Vendas', estoque: 'Estoque', atividades: 'Atividades', equipe: 'Equipe', recomendacoes: 'Recomendações', mensagens: 'Conversas', pesquisar: 'Central de Conhecimento', web_search: 'Internet' }
 
 /** Texto da IA que escapou da regra (R$ com número, CPF): não pode ir para a tela como está. */
 export function textoDaIaSeguro(t: string): boolean {
@@ -59,6 +60,9 @@ Como responder:
 - Números do dicionário também chegam reservados, com o sentido (movimento SUBIU/CAIU/ESTAVEL e situação BOM/ATENCAO/CRITICO/ACIMA_DA_META/ABAIXO_DA_META). Diga o sentido em palavras e use os espaços reservados para o valor, o anterior, a meta e o período.
 - Contagens (quantos leads, quantas vendas, dias na etapa) você pode citar como vieram.
 - A Central tem TODOS os dados do sistema Pró-Labore. Ordem: 1) métrica do dicionário quando a pergunta é um indicador ("metricas"); 2) as consultas prontas (leads, vendas, estoque, atividades…); 3) para qualquer outra coisa, "listar_dados" para achar a entidade e os campos e depois "consultar_dados" (registros) ou "agregar_dados" (contar, somar, média, agrupar). Ex.: seguidores do Instagram, recibos de pró-labore, lançamentos do financeiro, ocorrências, agenda, tráfego por dia, crédito por banco, histórico de etapas, auditoria.
+- Conversas: use "mensagens" para qualquer pergunta sobre o que foi dito no WhatsApp ou no Instagram (última mensagem que alguém mandou ou recebeu, o que o cliente disse, quem falou de troca). Cite a mensagem, quem escreveu, o cliente e a hora. Notas da negociação (LeadNota), observações do lead, transcrições de reuniões e o Processo do atendimento estão no catálogo de dados.
+- Pessoas da equipe: quando a pergunta cita um nome ("da Naiza"), passe esse nome no filtro de vendedor/consultor da consulta.
+- Datas: diga sempre o período e qual data usou (criação, data da venda, competência, pagamento).
 - Antes de dizer "Não sei", tente o catálogo de dados. Diga "Não sei" só se nenhuma consulta trouxer a informação ou se ela estiver fora da Central (o motivo vem na consulta).
 - Se uma consulta disser que a métrica não existe no dicionário, responda que essa métrica não existe no ARIES. Não substitua por outra parecida.
 - As consultas já aplicam o acesso de quem pergunta. Se disserem que o perfil não vê algo, explique isso e não tente contornar.
