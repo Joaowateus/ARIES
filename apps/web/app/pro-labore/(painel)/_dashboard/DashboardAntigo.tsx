@@ -392,7 +392,7 @@ export function DashboardAntigo({ comoPainel = false }: { comoPainel?: boolean }
 
   return (
     <div>
-      <PageHeader eyebrow="Visão geral" title={comoPainel ? 'Painel' : 'Dashboard'} subtitle="Receita, pró-labore, funil e produção da equipe em um só lugar" />
+      <PageHeader eyebrow="Visão geral" title={comoPainel ? 'Painel' : 'Dashboard'} subtitle={vejaEquipe ? 'Receita, pró-labore, funil e produção da equipe em um só lugar' : 'A sua produção: vendas, comissão, funil e jornada dos seus clientes'} />
       {isDono && <AvisoConferencia />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>

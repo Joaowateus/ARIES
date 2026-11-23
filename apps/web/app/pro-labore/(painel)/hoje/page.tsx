@@ -18,7 +18,7 @@ import { DashboardAntigo } from '../_dashboard/DashboardAntigo'
 import { pl } from '@/lib/format'
 import { InicioAries } from './InicioAries'
 
-// O Início do dono (e do supervisor) tem duas sub-abas no menu lateral: Início · Painel (o Daily saiu em 19/11).
+// O Início tem duas sub-abas no menu lateral: Início · Painel (o Daily saiu em 19/11). Desde 23/11 o Painel é de todos.
 type Sub = 'hoje' | 'painel'
 
 // A sub-aba vem do endereço (?sub=painel), então os itens Início e Painel do menu
@@ -33,7 +33,8 @@ function HojeComSubabas() {
   const sub: Sub = q === 'painel' ? 'painel' : 'hoje'
   const [papel, setPapel] = useState<string | null>(null)
   useEffect(() => { try { const u = JSON.parse(localStorage.getItem('pro_labore_usuario') ?? 'null') as { papel?: string } | null; if (u?.papel) setPapel(u.papel) } catch { /* sem papel */ } }, [])
-  const comSubs = papel === 'DONO' || papel === 'SUPERVISOR'
+  // Painel: todos voltam a ter (o vendedor vê a própria produção; o servidor já recorta). Social media tem o espaço dele.
+  const comSubs = !!papel && papel !== 'SOCIAL_MEDIA'
   // Tela inicial do ARIES: é a sub-aba Início, dentro da moldura do sistema (menu lateral à vista).
   const mostrarInicio = sub === 'hoje' || !comSubs
   return (
@@ -51,10 +52,12 @@ function PainelComGraficos({ papel }: { papel: string }) {
   return (
     <div data-painel-graficos>
       <DashboardAntigo comoPainel />
-      <div style={{ marginTop: 20 }}>
-        <button type="button" className="pl-btn" onClick={() => setDetalhado(d => !d)} aria-expanded={detalhado} data-abrir-detalhado>{detalhado ? 'Fechar o Painel detalhado' : 'Painel detalhado: filtros por SDR, origem e forma de pagamento'}</button>
-        {detalhado && <div style={{ marginTop: 12 }}><PainelDoDono papel={papel} /></div>}
-      </div>
+      {(papel === 'DONO' || papel === 'SUPERVISOR') && (
+        <div style={{ marginTop: 20 }}>
+          <button type="button" className="pl-btn" onClick={() => setDetalhado(d => !d)} aria-expanded={detalhado} data-abrir-detalhado>{detalhado ? 'Fechar o Painel detalhado' : 'Painel detalhado: filtros por SDR, origem e forma de pagamento'}</button>
+          {detalhado && <div style={{ marginTop: 12 }}><PainelDoDono papel={papel} /></div>}
+        </div>
+      )}
     </div>
   )
 }
