@@ -97,8 +97,24 @@ router.put('/expediente', requireProLaboreAuth, requireDono, async (req: Request
 // --- Painel ---
 const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 router.get('/painel-dono', requireProLaboreAuth, async (req: Request, res: Response) => {
-  const q = leitor(req, res); if (!q) return
   const s = (k: string) => (typeof req.query[k] === 'string' && req.query[k] ? String(req.query[k]) : null)
+  // Desde 23/11 todos têm o Painel: quem não é da gestão lê só o topo (Agora, Jornada, Indicadores) da própria
+  // produção — o filtro é sempre o próprio vendedor (ou o próprio SDR), sem valores de pró-labore, custo ou comissão.
+  const u = req.proLaboreUser!
+  const papelU = papelDoUsuario(u)
+  if (papelU !== 'DONO' && papelU !== 'SUPERVISOR') {
+    if (!u.vendedorId) { res.status(403).json({ error: 'O Painel pessoal é de quem tem cadastro na equipe' }); return }
+    const mes = mesCorrente()
+    const inicio = dia.safeParse(s('inicio')).success ? s('inicio')! : mes.inicio
+    const fim = dia.safeParse(s('fim')).success ? s('fim')! : hojeBrt()
+    if (inicio > fim) { res.status(400).json({ error: 'O início vem antes do fim' }); return }
+    const proprio = papelU === 'SDR' ? { vendedorId: null, sdrId: u.vendedorId } : { vendedorId: u.vendedorId, sdrId: null }
+    try {
+      res.json(await painel({ usuarioId: u.sub, papel: 'SUPERVISOR' }, { inicio, fim }, { ...proprio, origem: s('origem'), formaPagamento: null }, new Date(), PARTES.TOPO))
+    } catch (e) { falha(res, e) }
+    return
+  }
+  const q = leitor(req, res); if (!q) return
   const mes = mesCorrente()
   const inicio = dia.safeParse(s('inicio')).success ? s('inicio')! : mes.inicio
   const fim = dia.safeParse(s('fim')).success ? s('fim')! : hojeBrt()

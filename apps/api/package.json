@@ -18,7 +18,8 @@
     "test:copiloto": "node --require ts-node/register --test tests/copiloto.test.ts",
     "test:agente": "node --require ts-node/register --test tests/agente.test.ts",
     "test:funil": "node --require ts-node/register --test tests/funil.test.ts",
-    "test:central": "node --require ts-node/register --test tests/central.test.ts"
+    "test:central": "node --require ts-node/register --test tests/central.test.ts",
+    "test:painel": "node --require ts-node/register --test tests/painelPessoal.test.ts"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
