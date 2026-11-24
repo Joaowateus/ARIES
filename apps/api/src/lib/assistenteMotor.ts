@@ -16,6 +16,7 @@
 //   ignorados, pro assistente nunca se meter ali.
 // - Grupo, status e canal são ignorados.
 
+import { atualizarStatusDoProvedor, destinatarioRecente, ehEcoDoDisparo, registrarResposta } from './disparo/motor'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { avancarPorFatos } from './jornadaRegras'
@@ -192,6 +193,22 @@ export function lerMensagens(dadosBrutos: unknown): MensagemWhatsapp[] {
   return saida
 }
 
+// Atualização de status (MESSAGES_UPDATE): o id da mensagem e o novo status (entregue, lida).
+function lerAtualizacoes(dadosBrutos: unknown): Array<{ providerId: string; status: string; instanteMs: number | null }> {
+  const lista = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos]
+  const NUMERICO: Record<string, string> = { '3': 'DELIVERY_ACK', '4': 'READ', '5': 'PLAYED' }
+  return lista.flatMap(b => {
+    const d = obj(b)
+    const key = obj(d.key)
+    const upd = obj(d.update)
+    const id = str(d.keyId) ?? str(key.id) ?? str(d.messageId) ?? null
+    const bruto = d.status ?? upd.status
+    const status = bruto == null ? null : NUMERICO[String(bruto)] ?? String(bruto)
+    const ts = Number(d.dateTime ?? d.messageTimestamp ?? 0)
+    return id && status ? [{ providerId: id, status, instanteMs: Number.isFinite(ts) && ts > 0 ? (ts > 1e12 ? ts : ts * 1000) : null }] : []
+  })
+}
+
 // ---------- Entrada do webhook ----------
 
 export async function processarWebhookAssistente(segredo: string, corpo: unknown): Promise<number> {
@@ -205,6 +222,11 @@ export async function processarWebhookAssistente(segredo: string, corpo: unknown
 
   if (evento === 'connection.update') {
     await tratarConexao(assistente, obj(c.data))
+    return 200
+  }
+  // Disparo: entregue e lida das mensagens das campanhas.
+  if (evento === 'messages.update') {
+    await atualizarStatusDoProvedor(lerAtualizacoes(c.data)).catch(e => logger.warn({ err: e }, 'disparo: falha ao ler entregue/lida'))
     return 200
   }
   if (evento !== 'messages.upsert') return 200
@@ -287,6 +309,8 @@ async function comTrava<T>(chave: string, fn: (tx: Prisma.TransactionClient) => 
 
 async function tratarMensagemDoVendedor(a: AssistenteCompleto, m: MensagemWhatsapp) {
   if (await jaRegistrada(m.id)) return // eco de algo que o próprio assistente/painel mandou
+  // Eco de uma mensagem de campanha (Disparo): não é o vendedor escrevendo — não marca conversa pessoal.
+  if (await ehEcoDoDisparo(a.id, m.numero, m.texto, m.id)) return
   const conversa = await prisma.assistenteConversa.findFirst({
     where: { assistenteId: a.id, tipo: 'LEAD', numeroContato: m.numero, status: { in: STATUS_ABERTOS } },
     orderBy: { criadoEm: 'desc' },
@@ -367,6 +391,9 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
   let origem: string | null = null
   if (!aberta && (a.atendimentoAutomatico || a.cadastroAutomatico)) {
     if (m.veioDeAnuncio) origem = 'ANUNCIO'
+    // Respondeu a uma campanha (Disparo): entra no CRM pelo caminho normal, sem o robô se apresentar.
+    // Vem antes do "contato novo": o histórico do WhatsApp pode ainda não mostrar a mensagem da campanha.
+    else if (await destinatarioRecente(a.id, m.numero)) origem = 'DISPARO'
     else if (casaGatilho(m.texto, cfg.gatilhos)) origem = 'GATILHO'
     else if ((a.cadastroAutomatico || cfg.responderContatosNovos) && await contatoSemHistorico(a, m)) origem = 'CONTATO_NOVO'
     // Contato que já conversava com o vendedor e falou em compra: vira lead,
@@ -375,7 +402,7 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
   }
   // O roteiro só roda com as respostas ligadas; o cadastro no CRM acontece
   // mesmo com elas pausadas (aí o vendedor atende sozinho, sem conversa aqui).
-  const roboAtende = !!origem && origem !== 'INTENCAO' && !opcoes.semRobo && a.atendimentoAutomatico && (origem !== 'CONTATO_NOVO' || cfg.responderContatosNovos)
+  const roboAtende = !!origem && origem !== 'INTENCAO' && origem !== 'DISPARO' && !opcoes.semRobo && a.atendimentoAutomatico && (origem !== 'CONTATO_NOVO' || cfg.responderContatosNovos)
   const baseDoRobo = (nomeContato: string, respostas: Record<string, string>) =>
     baseParaRobo(ativos, { ...contexto(a, cfg, nomeContato), moto: respostaDoCampo(cfg, respostas, 'modeloInteresse') }, vitrine)
   let conversaTocada: string | null = null
@@ -494,6 +521,8 @@ async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsap
         .catch(e => logger.warn({ err: e }, 'assistente: falha ao registrar uso da base'))
     }
   }
+  // Disparo: a resposta de quem recebeu campanha é ligada à campanha (para a sequência, avisa o vendedor).
+  if (!m.semTelefone) await registrarResposta(a.id, m.numero, m.texto, conversaTocada).catch(e => logger.warn({ err: e }, 'disparo: falha ao registrar a resposta'))
   if (conversaTocada) {
     await sincronizarLevantamento(conversaTocada).catch(e => logger.warn({ err: e }, 'pré-venda: falha ao gravar o levantamento no lead'))
     await pararCadenciaPorResposta(a, cfg, conversaTocada).catch(e => logger.warn({ err: e }, 'pré-venda: falha ao parar a cadência'))
@@ -1014,7 +1043,7 @@ export async function enviarFotoNaConversa(instancia: string | null, conversaId:
 
 // ---------- Fim do roteiro: CRM + aviso ----------
 
-const ROTULO_ORIGEM: Record<string, string> = { ANUNCIO: 'anúncio', GATILHO: 'mensagem de campanha', CONTATO_NOVO: 'contato novo', INTENCAO: 'contato que já conversava e falou em compra' }
+const ROTULO_ORIGEM: Record<string, string> = { ANUNCIO: 'anúncio', GATILHO: 'mensagem de campanha', CONTATO_NOVO: 'contato novo', INTENCAO: 'contato que já conversava e falou em compra', DISPARO: 'resposta a uma campanha do Disparo' }
 
 async function concluirAtendimento(a: AssistenteCompleto, cfg: ConfigAssistente, conversaId: string) {
   const conversa = await prisma.assistenteConversa.findUnique({ where: { id: conversaId } })

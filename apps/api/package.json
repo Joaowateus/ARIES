@@ -20,7 +20,8 @@
     "test:funil": "node --require ts-node/register --test tests/funil.test.ts",
     "test:central": "node --require ts-node/register --test tests/central.test.ts",
     "test:painel": "node --require ts-node/register --test tests/painelPessoal.test.ts",
-    "test:diagnostico": "node --require ts-node/register --test tests/assistenteDiagnostico.test.ts"
+    "test:diagnostico": "node --require ts-node/register --test tests/assistenteDiagnostico.test.ts",
+    "test:disparo": "node --require ts-node/register --test tests/disparo.test.ts"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"

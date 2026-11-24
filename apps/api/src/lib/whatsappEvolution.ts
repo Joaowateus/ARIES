@@ -8,6 +8,8 @@
 // e EVOLUTION_API_KEY (a AUTHENTICATION_API_KEY global do servidor).
 
 export class ErroWhatsapp extends Error {
+  /** O pedido pode ter chegado ao servidor (tempo esgotado ou conexão cortada no meio). */
+  talvezEnviado = false
   constructor(message: string, readonly status?: number) {
     super(message)
   }
@@ -35,7 +37,11 @@ async function chamar<T>(metodo: 'GET' | 'POST' | 'PUT' | 'DELETE', caminho: str
       signal: controle.signal,
     })
   } catch (e) {
-    throw new ErroWhatsapp(controle.signal.aborted ? 'O servidor do WhatsApp demorou demais pra responder.' : `Não foi possível falar com o servidor do WhatsApp: ${(e as Error).message}`)
+    // Tempo esgotado: o pedido pode ter chegado e a mensagem ter saído (resultado desconhecido).
+    // Conexão recusada: o pedido não chegou (pode repetir).
+    const err = new ErroWhatsapp(controle.signal.aborted ? 'O servidor do WhatsApp demorou demais pra responder.' : `Não foi possível falar com o servidor do WhatsApp: ${(e as Error).message}`)
+    err.talvezEnviado = controle.signal.aborted || /socket hang up|ECONNRESET|other side closed/i.test((e as Error).message ?? '')
+    throw err
   } finally {
     clearTimeout(timer)
   }
@@ -59,7 +65,8 @@ export interface CodigoConexao {
   pairingCode: string | null // código de 8 caracteres pra "conectar com número de telefone"
 }
 
-const EVENTOS_WEBHOOK = ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED']
+// MESSAGES_UPDATE: entregue e lida (Disparo). Números já conectados recebem o evento novo ao reapontar o aviso.
+const EVENTOS_WEBHOOK = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'QRCODE_UPDATED']
 
 function normalizarQr(dados: { base64?: string | null; pairingCode?: string | null; qrcode?: { base64?: string | null; pairingCode?: string | null } } | null): CodigoConexao {
   const qr = dados?.qrcode ?? dados
@@ -201,6 +208,44 @@ export async function enviarImagem(instancia: string, destino: string, imagem: {
     fileName: imagem.mime === 'image/png' ? 'moto.png' : 'moto.jpg', delay: Math.max(0, Math.round(digitandoMs)),
   })
   return r?.key?.id ?? null
+}
+
+// Envia mídia de qualquer tipo (imagem, vídeo, documento) em base64, com legenda; áudio vai como
+// mensagem de voz. Usado pelo Disparo (a vitrine continua com enviarImagem).
+export async function enviarMidia(instancia: string, destino: string, midia: { tipo: 'image' | 'video' | 'audio' | 'document'; mime: string; dados: Buffer; nomeArquivo: string }, legenda: string, digitandoMs = 0): Promise<string | null> {
+  const numero = destino.includes('@') ? destino : destino.replace(/\D/g, '')
+  if (midia.tipo === 'audio') {
+    const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendWhatsAppAudio/${encodeURIComponent(instancia)}`, {
+      number: numero, audio: midia.dados.toString('base64'), delay: Math.max(0, Math.round(digitandoMs)),
+    })
+    return r?.key?.id ?? null
+  }
+  const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendMedia/${encodeURIComponent(instancia)}`, {
+    number: numero, mediatype: midia.tipo, mimetype: midia.mime, caption: legenda, media: midia.dados.toString('base64'),
+    fileName: midia.nomeArquivo, delay: Math.max(0, Math.round(digitandoMs)),
+  })
+  return r?.key?.id ?? null
+}
+
+// Quais números têm WhatsApp (o servidor consulta o WhatsApp). Devolve só os confirmados como existentes.
+export async function numerosComWhatsapp(instancia: string, numeros: string[]): Promise<Set<string>> {
+  const r = await chamar<Array<{ exists?: boolean; number?: string; jid?: string }>>('POST', `/chat/whatsappNumbers/${encodeURIComponent(instancia)}`, { numbers: numeros })
+  return new Set((Array.isArray(r) ? r : []).filter(x => x.exists).map(x => (x.number ?? x.jid ?? '').replace(/\D/g, '')).filter(Boolean))
+}
+
+// Mensagens que a instância enviou para um contato a partir de um instante (para reconciliar um envio
+// cujo resultado ficou desconhecido: o pedido saiu, mas a resposta não voltou).
+export async function enviadasParaContato(instancia: string, numero: string, desde: Date): Promise<Array<{ id: string; texto: string; instanteMs: number }>> {
+  const r = await chamar<{ messages?: { records?: unknown[] } } | unknown[]>('POST', `/chat/findMessages/${encodeURIComponent(instancia)}`, {
+    where: { key: { remoteJid: `${numero}@s.whatsapp.net`, fromMe: true } }, limit: 20,
+  })
+  const lista = Array.isArray(r) ? r : (r as { messages?: { records?: unknown[] } })?.messages?.records ?? []
+  return lista.map(x => {
+    const o = x as { key?: { id?: string }; messageTimestamp?: number | string; message?: { conversation?: string; extendedTextMessage?: { text?: string }; imageMessage?: { caption?: string }; videoMessage?: { caption?: string }; documentMessage?: { caption?: string } } }
+    const ts = Number(o.messageTimestamp ?? 0)
+    const m = o.message ?? {}
+    return { id: o.key?.id ?? '', texto: m.conversation ?? m.extendedTextMessage?.text ?? m.imageMessage?.caption ?? m.videoMessage?.caption ?? m.documentMessage?.caption ?? '', instanteMs: ts > 1e12 ? ts : ts * 1000 }
+  }).filter(x => x.id && x.instanteMs >= desde.getTime() - 60_000)
 }
 
 // Arquivo de um áudio/foto que passou pela instância (recebido ou enviado

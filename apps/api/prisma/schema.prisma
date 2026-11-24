@@ -1474,6 +1474,8 @@ model Lead {
   ligacoes                LigacaoTarefa[]
   assistenteConversas     AssistenteConversa[]
 
+  disparoDestinatarios DisparoDestinatario[]
+
   @@index([usuarioId])
   @@index([usuarioId, estagio])
   @@index([usuarioId, etapa])
@@ -2070,6 +2072,8 @@ model AssistenteComercial {
   conversas AssistenteConversa[]
   ignorados AssistenteContatoIgnorado[]
   foraDoCrm AssistenteContatoForaCrm[]
+
+  disparoCampanhas DisparoCampanha[]
 
   @@map("pro_labore_assistente_comercial")
 }
@@ -4461,6 +4465,8 @@ model Cliente {
 
   leads Lead[]
 
+  disparoDestinatarios DisparoDestinatario[]
+
   @@unique([usuarioId, telefone])
   @@index([usuarioId])
   @@map("pro_labore_clientes")
@@ -4884,24 +4890,24 @@ model HojeConfig {
 }
 
 model PergunteConversa {
-  id        String   @id @default(cuid())
-  usuarioId String
-  pessoaId  String
-  papel     String
-  canal     String   @default("TELA")
-  pergunta  String
-  metricas  Json     @default("[]")
-  valores   Json     @default("[]")
-  resposta  String
-  naoSabe   Boolean  @default(false)
-  acoes     Json     @default("[]")
+  id               String    @id @default(cuid())
+  usuarioId        String
+  pessoaId         String
+  papel            String
+  canal            String    @default("TELA")
+  pergunta         String
+  metricas         Json      @default("[]")
+  valores          Json      @default("[]")
+  resposta         String
+  naoSabe          Boolean   @default(false)
+  acoes            Json      @default("[]")
   // PDF 07: consultas do catálogo e fontes usadas (com a hora da última atualização) e a marcação de resposta errada.
   consultas        Json?
   fontes           Json?
   marcadaErradaEm  DateTime?
   marcadaErradaPor String?
   tratadaEm        DateTime?
-  criadoEm  DateTime @default(now())
+  criadoEm         DateTime  @default(now())
 
   @@index([usuarioId, pessoaId, criadoEm], map: "pro_labore_pergunte_conversas_idx")
   @@map("pro_labore_pergunte_conversas")
@@ -5192,4 +5198,278 @@ model AssistenteConhecimentoVersao {
 
   @@unique([conhecimentoId, versao], map: "pro_labore_assistente_conhecimento_versoes_key")
   @@map("pro_labore_assistente_conhecimento_versoes")
+}
+
+// =====================================================================
+// ARIES DISPARO — Central de campanhas e distribuição de mensagens.
+// Usa os contatos do CRM (Lead, Cliente, conversas) por referência, a conexão
+// de WhatsApp que já existe (AssistenteComercial) e o armazenamento de
+// arquivos do sistema. A fila é o próprio banco (DisparoMensagem), lida pela
+// rotina de cada minuto com trava por linha (FOR UPDATE SKIP LOCKED).
+// =====================================================================
+
+// Campanha: público, conteúdo (sequência de passos), ritmo e agendamento.
+// status: DRAFT | VALIDATING | NEEDS_REVIEW | READY | SCHEDULED | QUEUED | RUNNING | PAUSED
+//         | COMPLETED | COMPLETED_WITH_ERRORS | CANCELLED | ARCHIVED (transições em lib/disparo/estados.ts)
+model DisparoCampanha {
+  id              String    @id @default(cuid())
+  usuarioId       String
+  nome            String
+  descricao       String?
+  objetivo        String?
+  // MARKETING (promocional: exige autorização) | OPERACIONAL (aviso de algo em andamento) | RELACIONAMENTO
+  finalidade      String    @default("MARKETING")
+  canal           String    @default("WHATSAPP")
+  assistenteId    String?
+  publicoId       String?
+  publico         Json
+  conteudo        Json
+  config          Json
+  agendadaPara    DateTime?
+  recorrencia     Json?
+  status          String    @default("DRAFT")
+  versao          Int       @default(1)
+  responsavelId   String?
+  responsavelNome String?
+  criadoPorId     String?
+  criadoPorNome   String?
+  aprovadoPorNome String?
+  aprovadoEm      DateTime?
+  preparadaEm     DateTime?
+  iniciadaEm      DateTime?
+  pausadaEm       DateTime?
+  concluidaEm     DateTime?
+  canceladaEm     DateTime?
+  origemId        String?
+  // Resultado da preparação: selecionados, elegíveis e excluídos por motivo (cada contato contado uma vez).
+  totais          Json?
+  // Cursor da preparação em rodadas (fila "preparação").
+  preparo         Json?
+  erro            String?
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+
+  assistente    AssistenteComercial?    @relation(fields: [assistenteId], references: [id], onDelete: SetNull)
+  versoes       DisparoCampanhaVersao[]
+  destinatarios DisparoDestinatario[]
+  mensagens     DisparoMensagem[]
+
+  @@index([usuarioId, status])
+  @@index([status, agendadaPara])
+  @@map("pro_labore_disparo_campanhas")
+}
+
+// Cada edição de uma campanha vira uma versão (o que foi enviado fica rastreável).
+model DisparoCampanhaVersao {
+  id         String   @id @default(cuid())
+  campanhaId String
+  versao     Int
+  nome       String
+  publico    Json
+  conteudo   Json
+  config     Json
+  autorNome  String?
+  motivo     String?
+  criadoEm   DateTime @default(now())
+
+  campanha DisparoCampanha @relation(fields: [campanhaId], references: [id], onDelete: Restrict)
+
+  @@unique([campanhaId, versao])
+  @@map("pro_labore_disparo_campanha_versoes")
+}
+
+// Público reutilizável: a definição (base + filtros E/OU + seleção manual), nunca uma cópia dos contatos.
+model DisparoPublico {
+  id            String    @id @default(cuid())
+  usuarioId     String
+  nome          String
+  descricao     String?
+  definicao     Json
+  criadoPorNome String?
+  arquivadoEm   DateTime?
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
+
+  @@index([usuarioId])
+  @@map("pro_labore_disparo_publicos")
+}
+
+// Destinatário de uma versão da campanha: referência ao contato do CRM + o mínimo do snapshot
+// (telefone normalizado, nome e os valores das variáveis no momento da preparação).
+// status: ELEGIVEL | EXCLUIDO | DESCARTADO (versão anterior) | EM_ANDAMENTO | CONCLUIDO | RESPONDEU | INTERROMPIDO | FALHOU
+model DisparoDestinatario {
+  id                 String    @id @default(cuid())
+  campanhaId         String
+  versao             Int
+  usuarioId          String
+  telefone           String
+  nome               String?
+  leadId             String?
+  clienteId          String?
+  conversaId         String?
+  vendedorId         String?
+  dados              Json?
+  status             String    @default("ELEGIVEL")
+  motivoExclusao     String?
+  passoAtual         Int       @default(0)
+  interrompidoPor    String?
+  respondeuEm        DateTime?
+  respostaConversaId String?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  campanha  DisparoCampanha   @relation(fields: [campanhaId], references: [id], onDelete: Restrict)
+  lead      Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  cliente   Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  mensagens DisparoMensagem[]
+
+  @@unique([campanhaId, versao, telefone])
+  @@index([campanhaId, status])
+  @@index([usuarioId, telefone])
+  @@index([leadId])
+  @@map("pro_labore_disparo_destinatarios")
+}
+
+// Uma mensagem (um passo da sequência) para um destinatário: é a fila de envio.
+// chave = campanha:destinatário:passo — a mesma tarefa nunca gera dois envios.
+// status: AGENDADA | ENVIANDO | ACEITA | ENTREGUE | LIDA | FALHOU | DESCONHECIDO | CANCELADA | PULADA
+model DisparoMensagem {
+  id                 String    @id @default(cuid())
+  campanhaId         String
+  destinatarioId     String
+  passo              Int
+  chave              String    @unique
+  assistenteId       String
+  tipo               String    @default("TEXTO")
+  texto              String?
+  midiaId            String?
+  status             String    @default("AGENDADA")
+  enviarApos         DateTime
+  tentativas         Int       @default(0)
+  proximaTentativaEm DateTime?
+  travadaEm          DateTime?
+  providerId         String?   @unique
+  ultimoErro         String?
+  erroClasse         String?
+  aceitaEm           DateTime?
+  entregueEm         DateTime?
+  lidaEm             DateTime?
+  falhouEm           DateTime?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  campanha           DisparoCampanha     @relation(fields: [campanhaId], references: [id], onDelete: Restrict)
+  destinatario       DisparoDestinatario @relation(fields: [destinatarioId], references: [id], onDelete: Restrict)
+  tentativasRegistro DisparoTentativa[]
+
+  @@index([status, enviarApos])
+  @@index([campanhaId, status])
+  @@index([assistenteId, status])
+  @@index([destinatarioId])
+  @@map("pro_labore_disparo_mensagens")
+}
+
+// Cada tentativa de envio, com o resultado (imutável).
+// resultado: ACEITA | FALHA_TEMPORARIA | FALHA_DEFINITIVA | DESCONHECIDO | RECONCILIADA
+model DisparoTentativa {
+  id         String    @id @default(cuid())
+  mensagemId String
+  numero     Int
+  inicio     DateTime
+  fim        DateTime?
+  resultado  String
+  erro       String?
+  codigo     String?
+  criadoEm   DateTime  @default(now())
+
+  mensagem DisparoMensagem @relation(fields: [mensagemId], references: [id], onDelete: Restrict)
+
+  @@index([mensagemId])
+  @@map("pro_labore_disparo_tentativas")
+}
+
+// Linha do tempo e auditoria do Disparo (imutável): criação, edição, aprovação, início, pausa,
+// cancelamento, resposta, revogação, falha, reconciliação.
+model DisparoEvento {
+  id             String   @id @default(cuid())
+  usuarioId      String
+  campanhaId     String?
+  destinatarioId String?
+  mensagemId     String?
+  tipo           String
+  descricao      String?
+  dados          Json?
+  autorNome      String?
+  criadoEm       DateTime @default(now())
+
+  @@index([campanhaId, criadoEm])
+  @@index([usuarioId, criadoEm])
+  @@index([destinatarioId])
+  @@map("pro_labore_disparo_eventos")
+}
+
+// Biblioteca: modelos de mensagem (um ou mais passos) para reutilizar.
+model DisparoModelo {
+  id            String    @id @default(cuid())
+  usuarioId     String
+  nome          String
+  conteudo      Json
+  criadoPorNome String?
+  arquivadoEm   DateTime?
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
+
+  @@index([usuarioId])
+  @@map("pro_labore_disparo_modelos")
+}
+
+// Biblioteca: arquivos (imagem, áudio, vídeo, documento). Ficam no armazenamento do sistema
+// (Supabase/Blob); no banco só quando não há armazenamento configurado.
+model DisparoMidia {
+  id            String    @id @default(cuid())
+  usuarioId     String
+  nome          String
+  tipo          String
+  mime          String
+  tamanho       Int
+  blobUrl       String?
+  blobAcesso    String?
+  dados         Bytes?
+  criadoPorNome String?
+  arquivadoEm   DateTime?
+  criadoEm      DateTime  @default(now())
+
+  @@index([usuarioId])
+  @@map("pro_labore_disparo_midias")
+}
+
+// Autorização de comunicação por contato (telefone), canal e finalidade. Só se acrescenta: a linha
+// mais recente vale. situacao: AUTORIZADO | REVOGADO | BLOQUEADO. Revogação vale para todas as
+// campanhas futuras e para as mensagens promocionais ainda não enviadas.
+model ContatoAutorizacao {
+  id                String   @id @default(cuid())
+  usuarioId         String
+  telefone          String
+  canal             String   @default("WHATSAPP")
+  finalidade        String   @default("MARKETING")
+  situacao          String
+  baseLegal         String?
+  evidencia         String?
+  origem            String
+  leadId            String?
+  registradoPorNome String?
+  criadoEm          DateTime @default(now())
+
+  @@index([usuarioId, telefone, criadoEm])
+  @@map("pro_labore_contato_autorizacoes")
+}
+
+// Configurações do Disparo por loja (ritmo, janela, limites, regra de autorização).
+model DisparoConfig {
+  id           String   @id @default(cuid())
+  usuarioId    String   @unique
+  config       Json
+  atualizadoEm DateTime @updatedAt
+
+  @@map("pro_labore_disparo_config")
 }
