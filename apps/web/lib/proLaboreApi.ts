@@ -1032,7 +1032,7 @@ export const proLaboreApi = {
   },
   // Copiloto Comercial: `pessoa` só vale para o dono (EQUIPE ou um vendedor).
   // Selos do menu lateral numa chamada só (ao vivo, pedidos, follows do dia, avisos do Instagram).
-  barraLateral: () => request<{ aoVivo: number; pedidosReuniao: number; follows: { atrasados: number; hoje: number } | null; ligacoes: { atrasadas: number; hoje: number; agora: LigacaoAgora[] } | null; avisosSocial: string[] }>('/pro-labore/barra-lateral'),
+  barraLateral: () => request<{ aoVivo: number; pedidosReuniao: number; follows: { atrasados: number; hoje: number } | null; ligacoes: { atrasadas: number; hoje: number; agora: LigacaoAgora[] } | null; avisosSocial: string[]; disparo?: { ativo: boolean; aprovar: number } | null }>('/pro-labore/barra-lateral'),
   // Aries no WhatsApp: o número do agente (gestor) e o vínculo de cada pessoa.
   agente: {
     painel: () => request<AgentePainel>('/pro-labore/agente'),

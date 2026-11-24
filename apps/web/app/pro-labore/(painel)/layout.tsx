@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
-import { proLaboreApi } from '@/lib/proLaboreApi'
+import { disparoApi, proLaboreApi } from '@/lib/proLaboreApi'
 import { PLThemeToggle } from '@/lib/proLaboreTheme'
 import { AriesBrandMark } from '../AriesBrandMark'
 import { NavIcon, NavIconName } from '../icons'
@@ -161,6 +161,11 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
   const [ligacoesDia, setLigacoesDia] = useState({ atrasadas: 0, hoje: 0 })
   // Ligações da própria pessoa que chegaram na hora: aviso na tela (e no computador).
   const [ligacoesAgora, setLigacoesAgora] = useState<LigacaoAgora[]>([])
+  // ARIES Disparo: campanhas esperando aprovação (selo) e envio pendente. Com envio pendente, qualquer
+  // tela aberta do ARIES pede uma rodada do envio: a campanha não depende só da rotina automática nem
+  // de alguém estar com a tela da campanha aberta (o servidor deixa uma rodada por vez).
+  const [disparoAprovar, setDisparoAprovar] = useState(0)
+  const disparoEmRodada = useRef(false)
   // Ligou, registrou ou adiou pelo aviso: busca os selos de novo na hora.
   const [versaoBarra, setVersaoBarra] = useState(0)
   // Uma chamada só para os selos, e nenhuma enquanto a aba do navegador está
@@ -177,6 +182,11 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
         if (b.follows) setFollowsDia(b.follows)
         if (b.ligacoes) { setLigacoesDia({ atrasadas: b.ligacoes.atrasadas, hoje: b.ligacoes.hoje }); setLigacoesAgora(b.ligacoes.agora ?? []) }
         setAvisosSocial(b.avisosSocial)
+        setDisparoAprovar(b.disparo?.aprovar ?? 0)
+        if (b.disparo?.ativo && !disparoEmRodada.current) {
+          disparoEmRodada.current = true
+          disparoApi.processar().catch(() => undefined).finally(() => { disparoEmRodada.current = false })
+        }
       }).catch(() => undefined)
     }
     buscar()
@@ -337,7 +347,7 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
   const abasDoTopo = !nova && itemDoMenuAtual?.abas && itemDoMenuAtual.abas.length > 1 ? itemDoMenuAtual.abas : null
   const temPagina = (item: NavItem, href: string) => paginasDo(item).some(p => p.href === href)
   // Menu pelos 9 módulos (17/11): selos somados no módulo fechado; o módulo da página aberta fica aberto.
-  const contagem = (item: NavItem) => (temPagina(item, '/pro-labore/leads') ? followsDia.atrasados + followsDia.hoje : 0) + (temPagina(item, '/pro-labore/ligacoes') ? ligacoesDia.atrasadas + ligacoesDia.hoje : 0) + (item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 ? pedidosReuniao : 0)
+  const contagem = (item: NavItem) => (temPagina(item, '/pro-labore/leads') ? followsDia.atrasados + followsDia.hoje : 0) + (temPagina(item, '/pro-labore/ligacoes') ? ligacoesDia.atrasadas + ligacoesDia.hoje : 0) + (item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 ? pedidosReuniao : 0) + (item.href === '/pro-labore/disparo' ? disparoAprovar : 0)
   const atrasado = (itens: NavItem[]) => itens.some(i => (temPagina(i, '/pro-labore/leads') && followsDia.atrasados > 0) || (temPagina(i, '/pro-labore/ligacoes') && ligacoesDia.atrasadas > 0))
   const modulosVisiveis = MODULOS.flatMap(m => { const g = gruposNovos.find(x => x.label === m.grupo); return g ? [{ chave: m.chave, nome: m.nome, rota: m.rota, href: m.chave === 'inicio' ? '/pro-labore/hoje' : g.items[0].href }] : [] })
   // Seta do módulo: abre/recolhe a lista sem sair da tela (também no módulo da página aberta).
@@ -463,6 +473,9 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
                     )}
                     {temPagina(item, '/pro-labore/ligacoes') && ligacoesDia.atrasadas + ligacoesDia.hoje > 0 && (
                       <span className={`pl-nav-pedidos ${ligacoesDia.atrasadas > 0 ? 'pl-nav-follow-atrasado' : ''}`} title={[ligacoesDia.atrasadas && `${ligacoesDia.atrasadas} atrasada${ligacoesDia.atrasadas > 1 ? 's' : ''}`, ligacoesDia.hoje && `${ligacoesDia.hoje} para hoje`].filter(Boolean).join(' · ')} data-ligacoes-menu>{ligacoesDia.atrasadas + ligacoesDia.hoje}</span>
+                    )}
+                    {item.href === '/pro-labore/disparo' && disparoAprovar > 0 && (
+                      <span className="pl-nav-pedidos" title={`${disparoAprovar} ${disparoAprovar === 1 ? 'campanha esperando' : 'campanhas esperando'} aprovação`} data-disparo-aprovar>{disparoAprovar}</span>
                     )}
                     {item.href === '/pro-labore/reunioes' && reunioesAoVivo === 0 && pedidosReuniao > 0 && (
                       <span className="pl-nav-pedidos" title={`${pedidosReuniao} ${pedidosReuniao === 1 ? 'pedido' : 'pedidos'} da equipe pra apresentar`}>{pedidosReuniao}</span>

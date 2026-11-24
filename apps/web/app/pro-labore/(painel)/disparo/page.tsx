@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { abaPorChave } from '@/lib/abasAries'
 import { disparoApi, type MetaDisparo } from '@/lib/proLaboreApi'
 import { Cabecalho } from '../_padrao/Padrao'
-import { MetaCtx, erroDe } from './_disparo/util'
+import { MetaCtx, RecarregarMetaCtx, erroDe } from './_disparo/util'
 import { VisaoGeral } from './_disparo/VisaoGeral'
 import { Campanhas } from './_disparo/Campanhas'
 import { Publicos } from './_disparo/Publicos'
@@ -39,7 +39,7 @@ function Conteudo() {
   if (erro) return <div><Cabecalho aba={aba} /><div className="pl-alert pl-alert-error" role="alert">{erro}</div></div>
   if (!meta) return <div><Cabecalho aba={aba} /><p className="pl-hint" aria-busy="true">Carregando o Disparo…</p></div>
   return (
-    <MetaCtx.Provider value={meta}>
+    <MetaCtx.Provider value={meta}><RecarregarMetaCtx.Provider value={recarregarMeta}>
       <div data-disparo={sub}>
         <Cabecalho aba={aba} />
         <div className="pl-sv-tabs cc-subabas" role="tablist" aria-label="Áreas do Disparo">
@@ -53,7 +53,7 @@ function Conteudo() {
           {sub === 'configuracoes' && <Configuracoes aoSalvar={recarregarMeta} />}
         </div>
       </div>
-    </MetaCtx.Provider>
+    </RecarregarMetaCtx.Provider></MetaCtx.Provider>
   )
 }
 

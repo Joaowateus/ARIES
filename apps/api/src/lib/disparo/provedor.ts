@@ -3,7 +3,7 @@
 // já tem (Evolution API, uma instância por vendedor — AssistenteComercial), sem conexão paralela e
 // sem credencial nova. Trocar para a API oficial (WhatsApp Cloud API) é escrever outra implementação.
 import { randomUUID } from 'crypto'
-import { ErroWhatsapp, enviadasParaContato, enviarMidia, enviarTexto, estadoInstancia, evolutionConfigurada, numerosComWhatsapp, reiniciarInstancia } from '../whatsappEvolution'
+import { ErroWhatsapp, enviadasParaContato, enviarMidia, enviarTexto, estadoInstancia, evolutionConfigurada, garantirEventosDoWebhook, numerosComWhatsapp, reiniciarInstancia } from '../whatsappEvolution'
 import { ambienteDeTeste } from '../ambiente'
 import { classificarErro, type ClasseErro, type TipoPasso } from './regras'
 
@@ -17,7 +17,7 @@ export interface Capacidades {
   maxMidiaBytes: number
   observacoes: string[]
 }
-export interface Envio { tipo: TipoPasso; texto: string; midia?: { mime: string; dados: Buffer; nomeArquivo: string } | null; digitandoMs?: number }
+export interface Envio { tipo: TipoPasso; texto: string; midia?: { mime: string; dados: Buffer; nomeArquivo: string } | null; digitandoMs?: number; /** Tempo máximo de espera pela resposta do servidor (cabe no limite da função). */ prazoMs?: number }
 export type EstadoRemetente = 'CONECTADO' | 'DESCONECTADO' | 'SEM_SERVIDOR' | 'ERRO'
 
 export class ErroEnvio extends Error {
@@ -34,6 +34,8 @@ export interface ProvedorWhatsapp {
   reconciliar(r: Remetente, destino: string, texto: string, desde: Date): Promise<string | null>
   /** Quais números têm WhatsApp (quando o provedor sabe responder). */
   numerosExistentes(r: Remetente, numeros: string[]): Promise<Set<string> | null>
+  /** Deixa o número pronto para campanha (ex.: aviso de entregue/lida ligado). Nunca lança. */
+  prepararRemetente(r: Remetente): Promise<void>
   /** Tenta religar a sessão caída ("Connection Closed") sem pedir QR; true se voltou a ficar conectada. */
   reconectar(r: Remetente, prazoMs?: number): Promise<boolean>
 }
@@ -69,8 +71,8 @@ export const provedorEvolution: ProvedorWhatsapp = {
   async enviar(r, destino, e) {
     if (!r.instancia) throw new ErroEnvio('Número remetente sem conexão', 'CONEXAO')
     try {
-      if (e.tipo === 'TEXTO' || !e.midia) return { providerId: await enviarTexto(r.instancia, destino, e.texto, e.digitandoMs ?? 0) }
-      return { providerId: await enviarMidia(r.instancia, destino, { tipo: TIPO_EVOLUTION[e.tipo as Exclude<TipoPasso, 'TEXTO'>], ...e.midia }, e.texto, e.digitandoMs ?? 0) }
+      if (e.tipo === 'TEXTO' || !e.midia) return { providerId: await enviarTexto(r.instancia, destino, e.texto, e.digitandoMs ?? 0, e.prazoMs) }
+      return { providerId: await enviarMidia(r.instancia, destino, { tipo: TIPO_EVOLUTION[e.tipo as Exclude<TipoPasso, 'TEXTO'>], ...e.midia }, e.texto, e.digitandoMs ?? 0, e.prazoMs) }
     } catch (err) { throw paraErroEnvio(err) }
   },
   async reconciliar(r, destino, texto, desde) {
@@ -82,6 +84,10 @@ export const provedorEvolution: ProvedorWhatsapp = {
   async numerosExistentes(r, numeros) {
     if (!r.instancia || !numeros.length) return null
     try { return await numerosComWhatsapp(r.instancia, numeros) } catch { return null }
+  },
+  async prepararRemetente(r) {
+    if (!r.instancia || ambienteDeTeste() || !evolutionConfigurada()) return
+    await garantirEventosDoWebhook(r.instancia).catch(() => undefined)
   },
   async reconectar(r, prazoMs = 12_000) {
     if (!r.instancia || ambienteDeTeste() || !evolutionConfigurada()) return false
@@ -107,6 +113,7 @@ export interface ProvedorFalso extends ProvedorWhatsapp {
   /** Quantas vezes o motor pediu para religar a sessão; e se religar resolve (simula o "Connection Closed"). */
   reconexoes: number
   religaAoReconectar: boolean
+  preparados: number
 }
 export function criarProvedorFalso(): ProvedorFalso {
   let n = 0
@@ -126,8 +133,9 @@ export function criarProvedorFalso(): ProvedorFalso {
     },
     async reconciliar(_r, destino, texto) { return p.enviados.find(x => x.destino === destino && x.texto === texto)?.providerId ?? null },
     async numerosExistentes() { return null },
+    async prepararRemetente() { p.preparados += 1 },
     async reconectar() { p.reconexoes += 1; if (p.religaAoReconectar) p.conectado = true; return p.conectado },
-    reconexoes: 0, religaAoReconectar: false,
+    reconexoes: 0, religaAoReconectar: false, preparados: 0,
   }
   return p
 }

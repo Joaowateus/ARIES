@@ -5726,16 +5726,25 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .dp-agora.atencao { border-left-color: var(--ar-estado-atencao, #d49b1f); }
 .dp-agora.critico { border-left-color: var(--ar-estado-critico, #d0453a); }
 .dp-agora-titulo { font-size: 16px; }
+.dp-aviso { margin: 8px 0; }
+.dp-aviso p, .dp-aviso li { font-size: 13px; }
+.dp-progresso { margin: 10px 0 4px; }
+.dp-progresso-barra { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--pl-surface-2, rgba(127,127,127,.15)); border: 1px solid var(--pl-border); }
+.dp-progresso-barra span { display: block; height: 100%; transition: width .6s ease; }
+.dp-progresso-barra .ok { background: var(--ar-estado-bom, #2e9d5b); }
+.dp-progresso-barra .falha { background: var(--ar-estado-critico, #d0453a); }
+.dp-progresso-barra .outra { background: var(--ar-estado-atencao, #d49b1f); }
+.dp-progresso-legenda { font-size: 12.5px; margin-top: 4px; color: var(--pl-ink-2, inherit); }
 .dp-cronometros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
 .dp-cronometros > div { border: 1px solid var(--pl-border); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dp-cronometros span { font-size: 12px; opacity: .75; }
 .dp-cronometros b { font-size: 20px; font-variant-numeric: tabular-nums; }
 @media (max-width: 720px) { .dp-cronometros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.dp-etapas { display: flex; flex-wrap: wrap; gap: 4px 6px; list-style: none; margin: 0 0 8px; padding: 0; font-size: 12px; }
-.dp-etapas li { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pl-border); opacity: .6; }
-.dp-etapas li.feita { opacity: .9; }
-.dp-etapas li.feita::before { content: '✓ '; }
-.dp-etapas li.atual { opacity: 1; font-weight: 600; border-color: currentColor; }
+.dp-caminho { display: flex; flex-wrap: wrap; gap: 4px 6px; list-style: none; margin: 0 0 8px; padding: 0; font-size: 12px; }
+.dp-caminho li { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pl-border); opacity: .6; }
+.dp-caminho li.feita { opacity: .9; }
+.dp-caminho li.feita::before { content: '✓ '; }
+.dp-caminho li.atual { opacity: 1; font-weight: 600; border-color: currentColor; }
 .dp-midia { max-width: 280px; max-height: 200px; border-radius: 8px; display: block; margin-top: 6px; }
 @media (max-width: 640px) { .dp-totais { grid-template-columns: 1fr; } .dp-resumo { grid-template-columns: 1fr; } }
 /* Disparo no celular: nada passa da largura da tela; tabelas rolam por dentro. */

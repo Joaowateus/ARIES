@@ -4,7 +4,7 @@
 // (contagem, motivos de exclusão e a lista paginada no servidor — nunca milhares de contatos no navegador).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { disparoApi, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoPublicoDisparo, type FinalidadeDisparo, type GrupoDisparo, type PreviaPublicoDisparo } from '@/lib/proLaboreApi'
-import { Paginacao, erroDe, n, useMeta } from './util'
+import { Paginacao, erroDe, n, useMeta, AvisoAutorizacao } from './util'
 
 const BASES: Array<{ valor: DefinicaoPublicoDisparo['base']; rotulo: string }> = [
   { valor: 'TODOS', rotulo: 'Todos os contatos' }, { valor: 'LEADS', rotulo: 'Leads' }, { valor: 'CLIENTES', rotulo: 'Clientes' }, { valor: 'CONTATARAM', rotulo: 'Quem já escreveu no WhatsApp' }, { valor: 'EQUIPE', rotulo: 'Equipe (WhatsApp conectado)' },
@@ -160,7 +160,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
                 {Object.entries(previa.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b></li>)}
               </ul>
             )}
-            {finalidade === 'MARKETING' && previa.porMotivo.SEM_AUTORIZACAO > 0 && <p className="pl-hint">Mensagem promocional só vai para quem autorizou (registre em Públicos › Autorizações){meta.config.baseMarketing === 'RELACAO' ? ' ou já tem relação comercial com a loja' : ''}.</p>}
+            {finalidade === 'MARKETING' && <AvisoAutorizacao quantos={previa.porMotivo.SEM_AUTORIZACAO ?? 0} aoMudar={() => void atualizar(0)} />}
             {previa.exemplo && <div className="dp-exemplo"><span className="pl-hint">Como o primeiro contato vai receber:</span>{previa.exemplo.map((t, i) => <p key={i}>{t || <i>(arquivo)</i>}</p>)}</div>}
             <div className="dp-linha">
               <button type="button" className={`pl-chip ${!verExcluidos ? 'active' : ''}`} onClick={() => { setVerExcluidos(false); void atualizar(0, false) }}>Quem vai receber</button>
