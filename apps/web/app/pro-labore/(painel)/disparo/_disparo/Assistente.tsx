@@ -209,7 +209,7 @@ export function Assistente({ campanha, fechar, abrirMonitor }: { campanha: Campa
           {salva.totais && <div className="dp-totais"><div><span>Selecionados</span><b>{n(salva.totais.selecionados)}</b></div><div><span>Vão receber</span><b>{n(salva.totais.elegiveis)}</b></div><div><span>Excluídos</span><b>{n(salva.totais.excluidos)}</b></div></div>}
           {salva.totais && Object.keys(salva.totais.porMotivo ?? {}).length > 0 && (
             <ul className="pl-hint" style={{ margin: '6px 0', paddingLeft: 18 }} data-motivos-exclusao>
-              {Object.entries(salva.totais.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b>{m === 'NUMERO_DA_EQUIPE' ? ' — números conectados ao ARIES não recebem campanha (o robô desse número responderia)' : m === 'SEM_AUTORIZACAO' ? ' — troque para Operacional ou registre a autorização em Públicos › Autorizações' : ''}</li>)}
+              {Object.entries(salva.totais.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b>{m === 'SEM_AUTORIZACAO' ? ' — troque para Operacional ou registre a autorização em Públicos › Autorizações' : ''}</li>)}
             </ul>
           )}
           {salva.status === 'NEEDS_REVIEW' && (meta.gestao

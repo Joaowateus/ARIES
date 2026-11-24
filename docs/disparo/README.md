@@ -72,7 +72,7 @@ Não foram criadas `provider_connections` (é a `AssistenteComercial`, sem crede
 ## 4. Serviços (`apps/api/src/lib/disparo/`)
 
 - **`regras.ts`**: estados e transições, configuração, telefone, variáveis, janela, classificação de erros, espera com variação e detecção de pedido de descadastro.
-- **`publico.ts`**: bases, 12 públicos prontos, filtros E/OU com um nível de subgrupo, seleção manual, junção por telefone e exclusões com motivo único.
+- **`publico.ts`**: bases (incluindo a Equipe, que são os WhatsApps conectados), 13 públicos prontos, filtros E/OU com um nível de subgrupo, seleção manual, junção por telefone e exclusões com motivo único.
 - **`autorizacao.ts`**: situação atual por telefone, registro, e revogação ou bloqueio que cancela as promocionais pendentes.
 - **`provedor.ts`**: o contrato do provedor (conexão, capacidades, envio, reconciliação, números existentes) e a implementação Evolution, mais um provedor de teste.
 - **`motor.ts`**: preparação, distribuição, envio, retentativa, reconciliação, conclusão, recorrência, decisão manual, entregue/lida, eco e respostas.
@@ -135,6 +135,8 @@ Permissões: `VER` = módulo `disparo` em VER; `EDITAR` = módulo em EDITAR; Don
 5. O vendedor recebe um follow e um aviso pelo Aries ou pelo chat "Você".
 6. "SAIR", "PARAR", "CANCELAR" e afins registram a revogação, e as promocionais pendentes são canceladas.
 7. Vendas não são atribuídas à campanha. O relatório comercial mostra o que os destinatários fizeram até 30 dias depois, como correlação.
+
+Números da equipe: podem receber campanhas (comunicado à empresa toda pelo público "Equipe"); só o próprio número que envia fica de fora. Mensagem vinda de um WhatsApp conectado da equipe nunca vira lead nem aciona o robô; se for resposta a uma campanha, fica registrada nela.
 
 ## 8. Manual de uso
 

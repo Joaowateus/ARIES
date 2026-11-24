@@ -289,6 +289,11 @@ async function tratarMensagem(a: AssistenteCompleto, m: MensagemWhatsapp) {
   await tratarMensagemDoContato(a, m, { semRobo: atrasada })
 }
 
+async function numeroDaEquipe(usuarioId: string, numero: string): Promise<boolean> {
+  if (numero.length < 8) return false
+  return (await prisma.assistenteComercial.count({ where: { vendedor: { usuarioId }, numeroWhatsapp: { endsWith: numero.slice(-8) } } })) > 0
+}
+
 async function jaRegistrada(providerId: string | null): Promise<boolean> {
   if (!providerId) return false
   return !!(await prisma.assistenteMensagem.findUnique({ where: { providerId }, select: { id: true } }))
@@ -373,6 +378,12 @@ interface AcaoPendente { conversaId: string; jid: string; passo: PassoRoteiro | 
 
 async function tratarMensagemDoContato(a: AssistenteCompleto, m: MensagemWhatsapp, opcoes: { semRobo?: boolean } = {}) {
   if (await jaRegistrada(m.id)) return
+  // Mensagem vinda do WhatsApp conectado de alguém da equipe (comunicado do Disparo, conversa interna):
+  // nunca vira lead nem aciona o robô. Se for resposta a uma campanha, fica registrada nela.
+  if (!m.semTelefone && await numeroDaEquipe(a.vendedor.usuarioId, m.numero)) {
+    await registrarResposta(a.id, m.numero, m.texto, null).catch(e => logger.warn({ err: e }, 'disparo: falha ao registrar a resposta da equipe'))
+    return
+  }
   const cfg = lerConfig(a.configuracao)
   // Ficha que o cliente mandou por conta própria ("CPF: ... NASCIMENTO: ...").
   const dados = m.ehTexto ? lerDadosDoCliente(m.texto) : null

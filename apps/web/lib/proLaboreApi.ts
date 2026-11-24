@@ -4099,7 +4099,7 @@ export interface ConteudoDisparo { passos: PassoDisparo[]; fallbacks?: Record<st
 export interface CondicaoDisparo { campo: string; op: string; valor?: unknown }
 export interface GrupoDisparo { op: 'E' | 'OU'; itens: Array<CondicaoDisparo | GrupoDisparo> }
 export interface DefinicaoPublicoDisparo {
-  base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM'; predefinido?: string | null; filtros?: GrupoDisparo | null
+  base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM' | 'EQUIPE'; predefinido?: string | null; filtros?: GrupoDisparo | null
   manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string }>; excluir?: string[]; apenasManual?: boolean } | null
 }
 export interface ConfigEnvioDisparo { janela: { inicio: string; fim: string; dias: number[] }; intervaloSeg: number; maxPorHora: number; maxPorDia: number; pararAoResponder: boolean; pararAoComprar: boolean; pararSeVendedorAssumir: boolean; maxTentativas: number }
