@@ -4140,6 +4140,8 @@ export interface SituacaoEnvioDisparo {
   motivo: 'PREPARANDO' | 'AGENDADA' | 'NA_HORA' | 'NA_FILA' | 'ENVIANDO' | 'INTERVALO' | 'LIMITE_HORA' | 'LIMITE_DIA' | 'FORA_DA_JANELA' | 'SEM_CONEXAO' | 'ATENDIMENTO' | 'PAUSADA' | 'TERMINADA' | 'PARADA'
   titulo: string; texto: string; proximoEnvioEm: string | null
   motor: { ultimaRodadaEm: string | null; origem: 'ROTINA' | 'TELA' | null; ultimaRotinaEm: string | null; rotinaParada: boolean }
+  tempos: { iniciadaEm: string | null; primeiraEnviadaEm: string | null; ultimaEnviadaEm: string | null; enviadas: number; intervaloSeg: number | null }
+  remetente: { motivo: string; em: string; erro?: string } | null
 }
 export interface ItemCampanhaDisparo { id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; totais: CampanhaDisparo['totais']; responsavelNome: string | null; criadoPorNome: string | null; erro: string | null; atualizadoEm: string; assistente: { vendedor: { nome: string } } | null }
 export interface DestinatarioDisparo { id: string; nome: string | null; telefone: string; status: string; motivoExclusao: string | null; passoAtual: number; respondeuEm: string | null; interrompidoPor: string | null; leadId: string | null; mensagens: Array<{ status: string; aceitaEm: string | null; entregueEm: string | null; lidaEm: string | null; ultimoErro: string | null }> }
