@@ -104,3 +104,14 @@ test('autorização: precisa de base legal e evidência; revogar é de qualquer 
   assert.equal((h.corpo.atual as { situacao: string }).situacao, 'REVOGADO')
   assert.equal(h.corpo.total, 2, 'o histórico guarda as duas linhas')
 })
+
+test('rotina própria do Disparo: exige o segredo e roda só quando há campanha ativa', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  process.env.SOCIAL_MEDIA_CRON_SECRET = 'segredo-teste'
+  const sem = await fetch(`${base}/pro-labore/sm/cron/disparo`, { method: 'POST' })
+  assert.equal(sem.status, 401)
+  const r = await fetch(`${base}/pro-labore/sm/cron/disparo`, { method: 'POST', headers: { 'x-cron-secret': 'segredo-teste' } })
+  assert.equal(r.status, 200)
+  const j = await r.json() as Record<string, unknown>
+  assert.ok('disparo' in j || 'disparoEnviadas' in j)
+})

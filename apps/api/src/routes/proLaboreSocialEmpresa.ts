@@ -6,7 +6,7 @@
 // A conta da empresa é a mesma linha de SocialMediaConta do dono (titular
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
-import { rodarDisparo } from '../lib/disparo/motor'
+import { disparoAtivo, rodarDisparo } from '../lib/disparo/motor'
 import { orcamento } from '../lib/cronOrcamento'
 import { cargaInicial as cargaInicialCentral, conferir as conferirCentral, processarEventos as processarEventosCentral } from '../lib/centralConhecimento/rotinas'
 import { reverMetaEmRiscoTodas } from '../lib/metaCoerente'
@@ -394,10 +394,23 @@ router.post('/sm/cron/dia', async (req: Request, res: Response) => {
 // produção trabalha a cada 15 min e descansa de madrugada, para o banco
 // poder desligar entre as rodadas (lib/cronEconomia.ts). O Copiloto roda só
 // no job da hora.
+// ARIES Disparo: rotina própria, para o cron-job.org chamar a cada 1 minuto (só o Disparo, até ~25 s).
+// Sem campanha ativa, sai sem trabalho. De madrugada não envia (fora de qualquer janela comercial).
+router.post('/sm/cron/disparo', async (req: Request, res: Response) => {
+  if (!cronAutorizado(req, res)) return
+  const agora = agoraDoCron(req)
+  if (!(await disparoAtivo(agora))) { res.json({ disparo: 'sem campanha ativa' }); return }
+  res.json(await rodarDisparo(24_000, agora))
+})
+
 router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   if (!cronAutorizado(req, res)) return
   const pausa = pularMinuto(agoraDoCron(req))
-  if (pausa) { res.json({ pausado: pausa }); return }
+  if (pausa) {
+    // A economia pula esta chamada, mas campanha do Disparo em andamento não pode esperar 15 min.
+    if (pausa === 'intervalo' && await disparoAtivo()) { res.json({ pausado: pausa, ...(await rodarDisparo(24_000, agoraDoCron(req))) }); return }
+    res.json({ pausado: pausa }); return
+  }
   const agora = agoraDoCron(req)
   // Pente fino: a régua e as rotinas de atividade primeiro (antes ficavam no fim e não cabiam nos 30 s);
   // as tarefas com limite de tempo próprio recebem só o que sobrar.
