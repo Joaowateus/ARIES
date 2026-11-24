@@ -67,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
     // Sem donoOnly: cada pessoa conecta o próprio Instagram e só vê o dela.
     { href: '/pro-labore/social-media', label: 'Social Media', icon: 'at', modulo: 'socialMedia' },
     { href: '/pro-labore/trafego', label: 'Tráfego', icon: 'funnel', modulo: 'trafego', donoOnly: true },
+    { href: '/pro-labore/disparo', label: 'Disparo', icon: 'chat', modulo: 'disparo' },
   ] },
   { label: 'Rotina', items: [
     // Bloco pessoal de reuniões/anotações, cada um só vê o próprio (escopo no backend).
@@ -96,7 +97,7 @@ const APELIDOS: Record<string, string[]> = {
 }
 // PDF 04 · ícone de cada aba do menu novo (7 grupos).
 const ICONE_ABA: Record<string, NavIconName> = {
-  hoje: 'home', pergunte: 'spark', recomendacoes: 'flag', crm: 'kanban', conversas: 'chat', credito: 'shield', atividades: 'calendar', reativacao: 'refresh',
+  hoje: 'home', disparo: 'chat', pergunte: 'spark', recomendacoes: 'flag', crm: 'kanban', conversas: 'chat', credito: 'shield', atividades: 'calendar', reativacao: 'refresh',
   'estoque-demanda': 'cart', 'pos-venda': 'file', trafego: 'funnel', 'social-media': 'at', 'origem-vendas': 'chart', equipe: 'users', desenvolvimento: 'compass',
   'rotina-auditoria': 'shield', ocorrencias: 'flag', reunioes: 'mic', 'vendas-pagamentos': 'cart', financeiro: 'wallet', 'metas-premissas': 'chart',
   'plano-crescimento': 'chart', relatorios: 'file', playbook: 'notebook', 'central-conhecimento': 'notebook', anotacoes: 'notebook', configuracoes: 'gear',

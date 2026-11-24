@@ -114,7 +114,8 @@ export function criarProvedorFalso(): ProvedorFalso {
   return p
 }
 
-let atual: ProvedorWhatsapp = provedorEvolution
+// Só fora da Vercel (demonstração local e testes de ponta a ponta): DISPARO_PROVEDOR_TESTE=1 usa o provedor de teste.
+let atual: ProvedorWhatsapp = process.env.DISPARO_PROVEDOR_TESTE === '1' && process.env.VERCEL !== '1' ? criarProvedorFalso() : provedorEvolution
 export const provedor = () => atual
 /** Só para testes: troca o provedor. */
 export function definirProvedor(p: ProvedorWhatsapp | null) { atual = p ?? provedorEvolution }

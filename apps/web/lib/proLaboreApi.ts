@@ -4089,3 +4089,123 @@ export interface DiagnosticoWhatsapp {
     problemas: ProblemaWhatsapp[]
   }>
 }
+
+// ===================== ARIES DISPARO =====================
+export type StatusCampanhaDisparo = 'DRAFT' | 'VALIDATING' | 'NEEDS_REVIEW' | 'READY' | 'SCHEDULED' | 'QUEUED' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'COMPLETED_WITH_ERRORS' | 'CANCELLED' | 'ARCHIVED'
+export type FinalidadeDisparo = 'MARKETING' | 'OPERACIONAL' | 'RELACIONAMENTO'
+export type TipoPassoDisparo = 'TEXTO' | 'IMAGEM' | 'AUDIO' | 'VIDEO' | 'DOCUMENTO'
+export interface PassoDisparo { tipo: TipoPassoDisparo; texto?: string | null; midiaId?: string | null; esperarMin?: number }
+export interface ConteudoDisparo { passos: PassoDisparo[]; fallbacks?: Record<string, string>; rodapeSair?: boolean }
+export interface CondicaoDisparo { campo: string; op: string; valor?: unknown }
+export interface GrupoDisparo { op: 'E' | 'OU'; itens: Array<CondicaoDisparo | GrupoDisparo> }
+export interface DefinicaoPublicoDisparo {
+  base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM'; predefinido?: string | null; filtros?: GrupoDisparo | null
+  manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string }>; excluir?: string[]; apenasManual?: boolean } | null
+}
+export interface ConfigEnvioDisparo { janela: { inicio: string; fim: string; dias: number[] }; intervaloSeg: number; maxPorHora: number; maxPorDia: number; pararAoResponder: boolean; pararAoComprar: boolean; pararSeVendedorAssumir: boolean; maxTentativas: number }
+export interface ConfigLojaDisparo { envio: ConfigEnvioDisparo; baseMarketing: 'EXPLICITA' | 'RELACAO'; exigirAprovacao: boolean; rodapeSair: string; palavrasSair: string[] }
+export interface MetaDisparo {
+  papel: string; gestao: boolean; dono: boolean; nivel: 'NENHUM' | 'VER' | 'EDITAR'
+  capacidades: { provedor: string; texto: boolean; imagem: boolean; audio: boolean; video: boolean; documento: boolean; templates: boolean; interativos: boolean; eventos: Record<string, boolean>; maxMidiaBytes: number; observacoes: string[] }
+  variaveis: Array<{ chave: string; rotulo: string; exemplo: string }>
+  campos: Array<{ campo: string; rotulo: string; ops: string[] }>
+  predefinidos: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublicoDisparo }>
+  motivos: Record<string, string>; status: Record<StatusCampanhaDisparo, string>; finalidades: Record<FinalidadeDisparo, string>
+  basesLegais: Array<{ chave: string; rotulo: string }>
+  remetentes: Array<{ id: string; vendedor: string; numero: string | null; conectado: boolean; ativo: boolean }>
+  vendedores: Array<{ id: string; nome: string; ativo: boolean }>
+  config: ConfigLojaDisparo
+}
+export interface PreviaPublicoDisparo {
+  selecionados: number; elegiveis: number; excluidos: number; porMotivo: Record<string, number>; total: number; porPagina: number; exemplo: string[] | null
+  pagina: Array<{ telefone: string | null; telefoneCompleto: string | null; nome: string; vendedor: string | null; situacao: string; etapa: string | null; origem: string | null; cidade: string | null; autorizacao: string | null; leadId: string | null; clienteId: string | null; motivo: string | null }>
+}
+export interface ResumoCampanhaDisparo {
+  status: StatusCampanhaDisparo; erro: string | null; selecionados: number; elegiveis: number; excluidos: number; porMotivo: Record<string, number>; destinatarios: Record<string, number>
+  pendentes: number; naFila: number; processadas: number; aceitas: number; entregues: number; lidas: number; falhas: number; desconhecidas: number; puladas: number
+  respostas: number; descadastros: number; aDecidir: number; taxaEntrega: number | null; taxaLeitura: number | null; taxaResposta: number | null; tempoMs: number | null; origem: string
+}
+export interface CampanhaDisparo {
+  id: string; nome: string; descricao: string | null; objetivo: string | null; finalidade: FinalidadeDisparo; assistenteId: string | null; publicoId: string | null
+  publico: DefinicaoPublicoDisparo; conteudo: ConteudoDisparo; config: Partial<ConfigEnvioDisparo>; agendadaPara: string | null; recorrencia: { tipo: 'DIARIA' | 'SEMANAL' | 'MENSAL'; ate?: string } | null
+  status: StatusCampanhaDisparo; versao: number; responsavelNome: string | null; criadoPorNome: string | null; aprovadoPorNome: string | null; aprovadoEm: string | null
+  iniciadaEm: string | null; concluidaEm: string | null; erro: string | null; totais: { selecionados: number; elegiveis: number; excluidos: number; porMotivo: Record<string, number> } | null
+  criadoEm: string; atualizadoEm: string
+  resumo?: ResumoCampanhaDisparo | null; versoes?: Array<{ versao: number; nome: string; autorNome: string | null; motivo: string | null; criadoEm: string }>
+  remetente?: { id: string; vendedor: string; numero: string | null; conectado: boolean } | null
+}
+export interface ItemCampanhaDisparo { id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; totais: CampanhaDisparo['totais']; responsavelNome: string | null; criadoPorNome: string | null; erro: string | null; atualizadoEm: string; assistente: { vendedor: { nome: string } } | null }
+export interface DestinatarioDisparo { id: string; nome: string | null; telefone: string; status: string; motivoExclusao: string | null; passoAtual: number; respondeuEm: string | null; interrompidoPor: string | null; leadId: string | null; mensagens: Array<{ status: string; aceitaEm: string | null; entregueEm: string | null; lidaEm: string | null; ultimoErro: string | null }> }
+export interface DetalheDestinatarioDisparo extends Omit<DestinatarioDisparo, 'mensagens'> {
+  campanhaId: string; dados: Record<string, string | null> | null
+  mensagens: Array<{ id: string; passo: number; status: string; texto: string | null; tipo: string; tentativas: number; ultimoErro: string | null; erroClasse: string | null; aceitaEm: string | null; entregueEm: string | null; lidaEm: string | null; falhouEm: string | null; enviarApos: string; tentativasRegistro: Array<{ numero: number; inicio: string; fim: string | null; resultado: string; erro: string | null }> }>
+  eventos: Array<{ id: string; tipo: string; descricao: string | null; criadoEm: string; autorNome: string | null }>
+}
+export interface EventoDisparo { id: string; tipo: string; descricao: string | null; criadoEm: string; autorNome: string | null; campanhaId?: string | null; campanha?: string | null }
+export interface VisaoGeralDisparo {
+  campanhas: { criadas: number; emAndamento: number; agendadas: number; concluidas: number; rascunhos: number }
+  destinatarios: number; processadas: number; aceitas: number; entregues: number; lidas: number; falhas: number; respostas: number
+  taxaEntrega: number | null; taxaLeitura: number | null; taxaResposta: number | null
+  recentes: Array<{ id: string; nome: string; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; finalidade: FinalidadeDisparo; totais: CampanhaDisparo['totais'] }>
+  atividade: EventoDisparo[]
+}
+export interface ComercialDisparo { janelaDias: number; ate: string; destinatariosComLead: number; leadsReativados: number; oportunidades: number; fichasDeCredito: number; aprovacoes: number; visitas: number; vendas: number; receita: number | null; custo: null; roi: null; origem: string }
+export interface ModeloDisparo { id: string; nome: string; conteudo: ConteudoDisparo; criadoPorNome: string | null; atualizadoEm: string }
+export interface MidiaDisparo { id: string; nome: string; tipo: Exclude<TipoPassoDisparo, 'TEXTO'>; mime: string; tamanho: number; criadoPorNome: string | null; criadoEm: string }
+export interface PublicoSalvoDisparo { id: string; nome: string; descricao: string | null; definicao: DefinicaoPublicoDisparo; criadoPorNome: string | null; atualizadoEm: string }
+export interface AutorizacaoDisparo { id: string; telefone: string; situacao: 'AUTORIZADO' | 'REVOGADO' | 'BLOQUEADO'; finalidade: string; baseLegal: string | null; evidencia: string | null; origem: string; registradoPorNome: string | null; criadoEm: string }
+export type CampanhaDisparoEntrada = Pick<CampanhaDisparo, 'nome' | 'descricao' | 'objetivo' | 'finalidade' | 'assistenteId' | 'publicoId' | 'publico' | 'conteudo' | 'config' | 'agendadaPara' | 'recorrencia'>
+
+const qsD = (o: Record<string, string | number | null | undefined>) => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(o)) if (v != null && v !== '') p.set(k, String(v)); const s = p.toString(); return s ? `?${s}` : '' }
+const postD = <T,>(caminho: string, corpo?: unknown) => request<T>(`/pro-labore/disparo${caminho}`, { method: 'POST', body: corpo === undefined ? undefined : JSON.stringify(corpo) })
+export const disparoApi = {
+  meta: () => request<MetaDisparo>('/pro-labore/disparo/meta'),
+  config: { salvar: (c: Partial<ConfigLojaDisparo>) => request<ConfigLojaDisparo>('/pro-labore/disparo/config', { method: 'PUT', body: JSON.stringify(c) }) },
+  visaoGeral: (dias = 30) => request<VisaoGeralDisparo>(`/pro-labore/disparo/visao-geral${qsD({ dias })}`),
+  comparativo: (dias = 90) => request<Array<{ id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; responsavel: string | null; publico: string | null; status: StatusCampanhaDisparo; iniciadaEm: string | null; aceitas: number; entregues: number; lidas: number; respostas: number; falhas: number; descadastros: number; taxaResposta: number | null }>>(`/pro-labore/disparo/relatorios/comparativo${qsD({ dias })}`),
+  campanhas: {
+    listar: (f: { status?: string; pagina?: number } = {}) => request<{ total: number; pagina: number; porPagina: number; itens: ItemCampanhaDisparo[] }>(`/pro-labore/disparo/campanhas${qsD(f)}`),
+    ver: (id: string) => request<CampanhaDisparo>(`/pro-labore/disparo/campanhas/${id}`),
+    criar: (c: CampanhaDisparoEntrada) => postD<CampanhaDisparo>('/campanhas', c),
+    salvar: (id: string, c: CampanhaDisparoEntrada) => request<{ ok: true; versao: number }>(`/pro-labore/disparo/campanhas/${id}`, { method: 'PUT', body: JSON.stringify(c) }),
+    duplicar: (id: string) => postD<CampanhaDisparo>(`/campanhas/${id}/duplicar`),
+    validar: (id: string) => postD<{ ok: true; preparada: boolean; elegiveis?: number; excluidos?: number }>(`/campanhas/${id}/validar`),
+    aprovar: (id: string) => postD<{ ok: true }>(`/campanhas/${id}/aprovar`),
+    reprovar: (id: string, motivo: string) => postD<{ ok: true }>(`/campanhas/${id}/reprovar`, { motivo }),
+    iniciar: (id: string, quando?: string | null) => postD<{ ok: true; status: StatusCampanhaDisparo }>(`/campanhas/${id}/iniciar`, { quando: quando ?? null }),
+    pausar: (id: string) => postD<{ ok: true }>(`/campanhas/${id}/pausar`),
+    retomar: (id: string) => postD<{ ok: true }>(`/campanhas/${id}/retomar`),
+    cancelar: (id: string) => postD<{ ok: true }>(`/campanhas/${id}/cancelar`),
+    arquivar: (id: string) => postD<{ ok: true }>(`/campanhas/${id}/arquivar`),
+    resumo: (id: string) => request<ResumoCampanhaDisparo>(`/pro-labore/disparo/campanhas/${id}/resumo`),
+    destinatarios: (id: string, f: { status?: string; busca?: string; pagina?: number } = {}) => request<{ total: number; pagina: number; porPagina: number; itens: DestinatarioDisparo[] }>(`/pro-labore/disparo/campanhas/${id}/destinatarios${qsD(f)}`),
+    eventos: (id: string) => request<EventoDisparo[]>(`/pro-labore/disparo/campanhas/${id}/eventos`),
+    comercial: (id: string, dias = 30) => request<ComercialDisparo | null>(`/pro-labore/disparo/campanhas/${id}/comercial${qsD({ dias })}`),
+  },
+  destinatario: (id: string) => request<DetalheDestinatarioDisparo>(`/pro-labore/disparo/destinatarios/${id}`),
+  decidir: (mensagemId: string, decisao: 'REENVIAR' | 'CONSIDERAR_ENVIADA') => postD<{ ok: true }>(`/mensagens/${mensagemId}/decidir`, { decisao }),
+  publicos: {
+    previa: (b: { definicao: DefinicaoPublicoDisparo; finalidade: FinalidadeDisparo; conteudo?: ConteudoDisparo | null; assistenteId?: string | null; pagina?: number; excluidos?: boolean }) => postD<PreviaPublicoDisparo>('/publicos/previa', b),
+    listar: () => request<PublicoSalvoDisparo[]>('/pro-labore/disparo/publicos'),
+    criar: (b: { nome: string; descricao?: string | null; definicao: DefinicaoPublicoDisparo }) => postD<PublicoSalvoDisparo>('/publicos', b),
+    salvar: (id: string, b: { nome: string; descricao?: string | null; definicao: DefinicaoPublicoDisparo }) => request<{ ok: true }>(`/pro-labore/disparo/publicos/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+    arquivar: (id: string) => postD<{ ok: true }>(`/publicos/${id}/arquivar`),
+    contatos: (busca: string) => request<{ itens: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome: string; telefone: string | null; vendedor: string | null; situacao: string }> }>(`/pro-labore/disparo/contatos${qsD({ busca })}`),
+  },
+  modelos: {
+    listar: () => request<ModeloDisparo[]>('/pro-labore/disparo/modelos'),
+    criar: (b: { nome: string; conteudo: ConteudoDisparo }) => postD<ModeloDisparo>('/modelos', b),
+    salvar: (id: string, b: { nome: string; conteudo: ConteudoDisparo }) => request<{ ok: true }>(`/pro-labore/disparo/modelos/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+    arquivar: (id: string) => postD<{ ok: true }>(`/modelos/${id}/arquivar`),
+  },
+  midias: {
+    listar: () => request<MidiaDisparo[]>('/pro-labore/disparo/midias'),
+    enviar: (arquivo: File) => request<MidiaDisparo>(`/pro-labore/disparo/midias${qsD({ nome: arquivo.name })}`, { method: 'POST', body: arquivo, headers: { 'Content-Type': arquivo.type || 'application/octet-stream' } }),
+    arquivo: (id: string) => requestArquivo(`/pro-labore/disparo/midias/${id}/arquivo`),
+    arquivar: (id: string) => postD<{ ok: true }>(`/midias/${id}/arquivar`),
+  },
+  autorizacoes: {
+    listar: (f: { telefone?: string; situacao?: string; pagina?: number } = {}) => request<{ total: number; pagina: number; porPagina: number; atual: { situacao: string; criadoEm: string; baseLegal: string | null } | null; itens: AutorizacaoDisparo[] }>(`/pro-labore/disparo/autorizacoes${qsD(f)}`),
+    registrar: (b: { telefones: string[]; situacao: 'AUTORIZADO' | 'REVOGADO' | 'BLOQUEADO'; baseLegal?: string | null; evidencia?: string | null }) => postD<{ registrados: number; invalidos: string[] }>('/autorizacoes', b),
+  },
+}

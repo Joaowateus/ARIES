@@ -5692,3 +5692,39 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
   .cc-dl { grid-template-columns: 1fr; }
   .cc-dl dt { margin-top: 6px; }
 }
+
+/* ---------- ARIES Disparo ---------- */
+.dp-painel { margin-top: 14px; display: grid; gap: 4px; }
+.dp-linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.dp-rodape { justify-content: flex-end; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--pl-border); }
+.dp-curto { width: auto; min-width: 90px; max-width: 160px; }
+.dp-paginacao { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 4px; }
+.dp-etapas { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 12px 0 16px; }
+.dp-etapas button { border: 1px solid var(--pl-border); background: var(--pl-surface-2); color: var(--pl-ink-2); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
+.dp-etapas .atual button { border-color: var(--pl-accent); color: var(--pl-ink-1); font-weight: 600; }
+.dp-etapas .feito button { color: var(--pl-ink-1); }
+.dp-etapas button:disabled { opacity: .5; cursor: default; }
+.dp-grupo { border: 1px solid var(--pl-border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.dp-subgrupo { background: var(--pl-surface-2); }
+.dp-condicao { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dp-condicao .pl-select { width: auto; }
+.dp-previa { margin-top: 16px; border-top: 1px solid var(--pl-border); padding-top: 12px; }
+.dp-totais { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 8px 0; }
+.dp-totais div { border: 1px solid var(--pl-border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
+.dp-totais span { font-size: 12px; color: var(--pl-ink-muted); }
+.dp-totais b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.dp-exemplo { border-left: 3px solid var(--pl-accent); background: var(--pl-surface-2); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+.dp-exemplo p { margin: 4px 0; white-space: pre-wrap; }
+.dp-passos { display: grid; gap: 12px; }
+.dp-passo { border: 1px solid var(--pl-border); border-radius: 10px; padding: 10px 12px; margin-top: 8px; }
+.dp-resumo { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 10px; }
+.dp-resumo dt { color: var(--pl-ink-muted); font-size: 12.5px; }
+.dp-resumo dd { margin: 0; }
+.dp-detalhe { max-width: 640px !important; }
+.dp-midia { max-width: 280px; max-height: 200px; border-radius: 8px; display: block; margin-top: 6px; }
+@media (max-width: 640px) { .dp-totais { grid-template-columns: 1fr; } .dp-resumo { grid-template-columns: 1fr; } }
+/* Disparo no celular: nada passa da largura da tela; tabelas rolam por dentro. */
+.dp-painel, .dp-painel > * { min-width: 0; max-width: 100%; }
+.dp-painel .pl-table-wrap { overflow-x: auto; max-width: 100%; }
+.dp-painel .cc-chips { flex-wrap: wrap; min-width: 0; }
+.dp-painel .pl-table { min-width: 560px; }
