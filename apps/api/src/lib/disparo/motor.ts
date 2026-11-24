@@ -436,6 +436,12 @@ async function agendarRecorrencia(campanhaId: string, agora: Date) {
 
 export interface ResultadoRodada { disparoPreparadas: number; disparoIniciadas: number; disparoEnviadas: number; disparoFalhas: number; disparoReconciliadas: number; disparoConcluidas: number }
 
+/** Há trabalho do Disparo agora? (preparar, agendada que chegou na hora, na fila, enviando ou sem confirmação) */
+export async function disparoAtivo(agora = new Date()): Promise<boolean> {
+  const n = await prisma.disparoCampanha.count({ where: { OR: [{ status: { in: ['VALIDATING', 'QUEUED', 'RUNNING'] } }, { status: 'SCHEDULED', agendadaPara: { lte: agora } }] } })
+  return n > 0
+}
+
 export async function rodarDisparo(prazoMs = 15_000, agora = new Date()): Promise<ResultadoRodada> {
   const fim = Date.now() + prazoMs
   const out: ResultadoRodada = { disparoPreparadas: 0, disparoIniciadas: 0, disparoEnviadas: 0, disparoFalhas: 0, disparoReconciliadas: 0, disparoConcluidas: 0 }

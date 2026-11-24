@@ -182,6 +182,14 @@ Na produção, a vazão real é o ritmo de proteção: no padrão, cerca de 3 me
 - "Lida" só aparece para quem mantém a confirmação de leitura ligada.
 - Arquivos de até 4 MB, por causa do limite de pedido da Vercel.
 
+## 10b. Rotina de envio na produção
+
+A rotina `/sm/cron/minuto` é chamada pelo cron-job.org a cada 5 min e, pela economia de banco, só trabalha a cada 15 min. Por isso o Disparo tem rotina própria:
+
+- `POST /pro-labore/sm/cron/disparo` com o cabeçalho `x-cron-secret` (o mesmo segredo das outras rotinas), **a cada 1 minuto** no cron-job.org. Sem campanha ativa, sai sem trabalho.
+- Sem essa rotina, o Disparo ainda roda nas chamadas de 5 min que a economia pularia, quando há campanha ativa.
+- Ritmo efetivo com o padrão (20 s + variação): cerca de 1 mensagem por minuto por número com a rotina de 1 minuto; cerca de 1 a cada 5 min sem ela.
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).
