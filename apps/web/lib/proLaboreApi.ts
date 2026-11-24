@@ -4105,6 +4105,7 @@ export interface DefinicaoPublicoDisparo {
 export interface ConfigEnvioDisparo { janela: { inicio: string; fim: string; dias: number[] }; intervaloSeg: number; maxPorHora: number; maxPorDia: number; pararAoResponder: boolean; pararAoComprar: boolean; pararSeVendedorAssumir: boolean; maxTentativas: number }
 export interface ConfigLojaDisparo { envio: ConfigEnvioDisparo; baseMarketing: 'EXPLICITA' | 'RELACAO'; exigirAprovacao: boolean; rodapeSair: string; palavrasSair: string[] }
 export interface MetaDisparo {
+  motor: { ultimaRotinaEm: string | null; rotinaLigada: boolean }
   papel: string; gestao: boolean; dono: boolean; nivel: 'NENHUM' | 'VER' | 'EDITAR'
   capacidades: { provedor: string; texto: boolean; imagem: boolean; audio: boolean; video: boolean; documento: boolean; templates: boolean; interativos: boolean; eventos: Record<string, boolean>; maxMidiaBytes: number; observacoes: string[] }
   variaveis: Array<{ chave: string; rotulo: string; exemplo: string }>
@@ -4133,6 +4134,12 @@ export interface CampanhaDisparo {
   criadoEm: string; atualizadoEm: string
   resumo?: ResumoCampanhaDisparo | null; versoes?: Array<{ versao: number; nome: string; autorNome: string | null; motivo: string | null; criadoEm: string }>
   remetente?: { id: string; vendedor: string; numero: string | null; conectado: boolean } | null
+  situacao?: SituacaoEnvioDisparo | null
+}
+export interface SituacaoEnvioDisparo {
+  motivo: 'PREPARANDO' | 'AGENDADA' | 'NA_HORA' | 'NA_FILA' | 'ENVIANDO' | 'INTERVALO' | 'LIMITE_HORA' | 'LIMITE_DIA' | 'FORA_DA_JANELA' | 'SEM_CONEXAO' | 'ATENDIMENTO' | 'PAUSADA' | 'TERMINADA' | 'PARADA'
+  titulo: string; texto: string; proximoEnvioEm: string | null
+  motor: { ultimaRodadaEm: string | null; origem: 'ROTINA' | 'TELA' | null; ultimaRotinaEm: string | null; rotinaParada: boolean }
 }
 export interface ItemCampanhaDisparo { id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; totais: CampanhaDisparo['totais']; responsavelNome: string | null; criadoPorNome: string | null; erro: string | null; atualizadoEm: string; assistente: { vendedor: { nome: string } } | null }
 export interface DestinatarioDisparo { id: string; nome: string | null; telefone: string; status: string; motivoExclusao: string | null; passoAtual: number; respondeuEm: string | null; interrompidoPor: string | null; leadId: string | null; mensagens: Array<{ status: string; aceitaEm: string | null; entregueEm: string | null; lidaEm: string | null; ultimoErro: string | null }> }
@@ -4160,6 +4167,8 @@ const qsD = (o: Record<string, string | number | null | undefined>) => { const p
 const postD = <T,>(caminho: string, corpo?: unknown) => request<T>(`/pro-labore/disparo${caminho}`, { method: 'POST', body: corpo === undefined ? undefined : JSON.stringify(corpo) })
 export const disparoApi = {
   meta: () => request<MetaDisparo>('/pro-labore/disparo/meta'),
+  /** Pede uma rodada do envio (a tela da campanha aberta envia mesmo sem a rotina automática). */
+  processar: () => postD<{ rodou: boolean; motivo?: string; disparoEnviadas?: number; disparoFalhas?: number }>('/processar'),
   config: { salvar: (c: Partial<ConfigLojaDisparo>) => request<ConfigLojaDisparo>('/pro-labore/disparo/config', { method: 'PUT', body: JSON.stringify(c) }) },
   visaoGeral: (dias = 30) => request<VisaoGeralDisparo>(`/pro-labore/disparo/visao-geral${qsD({ dias })}`),
   comparativo: (dias = 90) => request<Array<{ id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; responsavel: string | null; publico: string | null; status: StatusCampanhaDisparo; iniciadaEm: string | null; aceitas: number; entregues: number; lidas: number; respostas: number; falhas: number; descadastros: number; taxaResposta: number | null }>>(`/pro-labore/disparo/relatorios/comparativo${qsD({ dias })}`),

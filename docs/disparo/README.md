@@ -190,6 +190,13 @@ A rotina `/sm/cron/minuto` é chamada pelo cron-job.org a cada 5 min e, pela eco
 - Sem essa rotina, o Disparo ainda roda nas chamadas de 5 min que a economia pularia, quando há campanha ativa.
 - Ritmo efetivo com o padrão (20 s + variação): cerca de 1 mensagem por minuto por número com a rotina de 1 minuto; cerca de 1 a cada 5 min sem ela.
 
+## 10c. Envio pela tela e travas seguras no pooler
+
+- **A tela da campanha aberta também envia.** Enquanto a campanha está na fila ou enviando, a tela pede uma rodada do motor a cada 20 s (`POST /pro-labore/disparo/processar`, módulo Disparo). É o mesmo trabalho da rotina: respeita intervalo, limites, janela, conexão e a prioridade do atendimento. Assim a campanha nunca fica parada esperando a rotina automática; com a rotina de 1 minuto ligada, pode fechar a tela.
+- **Painel "Situação do envio"** no acompanhamento: o caminho da campanha (Montar → Revisar → Agendada/na fila → Enviando → Concluída) e, em linguagem simples, o que acontece agora (na fila, enviando, próxima mensagem em X s, fora do horário e quando volta, limite da hora/dia, número desconectado, pausada) e se o envio automático está ligado.
+- **Configurações › Envio automático** mostra se a rotina automática está rodando (última rodada nos últimos 10 min) e como ligá-la.
+- **Travas:** `pg_advisory_lock` foi trocado por travas com prazo na tabela `pro_labore_disparo_travas`. No pooler de transação do Supabase (porta 6543) a trava de sessão podia ficar presa numa conexão e a campanha parar na fila. Agora: distribuição e preparação por campanha, e um laço por número remetente de cada vez (tela e rotina juntas não furam o intervalo). A mesma tabela guarda a última rodada do motor (da rotina e da tela).
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

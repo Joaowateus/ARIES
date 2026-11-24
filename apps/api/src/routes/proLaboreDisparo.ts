@@ -2,7 +2,8 @@
 // Permissão: módulo "disparo" (VER acompanha; EDITAR cria, inicia, pausa). Configurações e
 // autorizações em lote ficam com o dono. Quem não é da gestão vê e mexe só nas próprias campanhas,
 // usa só o próprio número e sua campanha passa por aprovação (se a loja exigir).
-// Nenhuma rota envia mensagem: elas mudam o estado; o envio é da rotina de cada minuto (lib/disparo/motor.ts).
+// As rotas mudam o estado; o envio é do motor (lib/disparo/motor.ts), que roda pela rotina automática
+// (/sm/cron/disparo e /sm/cron/minuto) e também pela tela da campanha aberta (POST /disparo/processar).
 import express, { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
@@ -13,7 +14,8 @@ import { papelDoUsuario } from '../lib/papelHoje'
 import { gravarNoBlob, lerDoBlob } from '../lib/armazenamento'
 import { lerConfigLoja, lerConfigEnvio, normalizarTelefone, renderizar, ROTULO_STATUS, ROTULO_FINALIDADE, VARIAVEIS, EDITAVEL, FINALIDADES, TIPOS_PASSO, type Conteudo, type StatusCampanha } from '../lib/disparo/regras'
 import { CAMPOS, MOTIVOS, PREDEFINIDOS, BASES, resolverPublico, valoresDoContato, type DefinicaoPublico } from '../lib/disparo/publico'
-import { ErroDisparo, cancelarCampanha, configDaLoja, decidirMensagem, evento, prepararCampanha, transicionar } from '../lib/disparo/motor'
+import { ErroDisparo, cancelarCampanha, configDaLoja, decidirMensagem, disparoAtivo, evento, prepararCampanha, rodarDisparo, situacaoDoEnvio, transicionar } from '../lib/disparo/motor'
+import { comTrava, ultimasRodadas } from '../lib/disparo/travas'
 import { estadosDeAutorizacao, registrarAutorizacao, ROTULO_BASE, BASES_LEGAIS } from '../lib/disparo/autorizacao'
 import { provedor } from '../lib/disparo/provedor'
 import { comparativo, resultadoComercial, resumoCampanha, visaoGeral } from '../lib/disparo/relatorios'
@@ -88,12 +90,15 @@ function validarConteudo(conteudo: Conteudo) {
 
 router.get('/disparo/meta', ...ver, async (req, res) => {
   const q = quem(req)
-  const [remetentes, vendedores, config] = await Promise.all([
+  const [remetentes, vendedores, config, rodadas] = await Promise.all([
     remetentesDe(q),
     q.gestao ? prisma.vendedor.findMany({ where: { usuarioId: q.usuarioId }, orderBy: [{ ativo: 'desc' }, { nome: 'asc' }], select: { id: true, nome: true, ativo: true } }) : Promise.resolve([]),
     configDaLoja(q.usuarioId),
+    ultimasRodadas(),
   ])
+  const ultimaRotinaEm = rodadas.rotina?.em ?? null
   res.json({
+    motor: { ultimaRotinaEm, rotinaLigada: !!ultimaRotinaEm && Date.now() - new Date(ultimaRotinaEm).getTime() <= 10 * 60_000 },
     papel: q.papel, gestao: q.gestao, dono: q.dono, nivel: q.dono ? 'EDITAR' : req.acessos?.disparo ?? 'NENHUM',
     capacidades: provedor().capacidades(), variaveis: VARIAVEIS, campos: CAMPOS, predefinidos: PREDEFINIDOS.map(p => ({ chave: p.chave, nome: p.nome, descricao: p.descricao, definicao: p.definicao })),
     motivos: MOTIVOS, status: ROTULO_STATUS, finalidades: ROTULO_FINALIDADE, basesLegais: BASES_LEGAIS.map(b => ({ chave: b, rotulo: ROTULO_BASE[b] })),
@@ -204,12 +209,13 @@ router.post('/disparo/campanhas', ...editar, async (req, res) => {
 router.get('/disparo/campanhas/:id', ...ver, async (req, res) => {
   try {
     const c = await campanhaDe(req, String(req.params.id))
-    const [resumo, versoes, remetente] = await Promise.all([
+    const [resumo, versoes, remetente, situacao] = await Promise.all([
       resumoCampanha(c.id),
       prisma.disparoCampanhaVersao.findMany({ where: { campanhaId: c.id }, orderBy: { versao: 'desc' }, select: { versao: true, nome: true, autorNome: true, motivo: true, criadoEm: true } }),
       c.assistenteId ? prisma.assistenteComercial.findUnique({ where: { id: c.assistenteId }, select: { id: true, status: true, numeroWhatsapp: true, vendedor: { select: { nome: true } } } }) : null,
+      situacaoDoEnvio(c.id),
     ])
-    res.json({ ...c, resumo, versoes, remetente: remetente ? { id: remetente.id, vendedor: remetente.vendedor.nome, numero: remetente.numeroWhatsapp ? `final ${remetente.numeroWhatsapp.slice(-4)}` : null, conectado: remetente.status === 'CONECTADO' } : null })
+    res.json({ ...c, resumo, versoes, situacao, remetente: remetente ? { id: remetente.id, vendedor: remetente.vendedor.nome, numero: remetente.numeroWhatsapp ? `final ${remetente.numeroWhatsapp.slice(-4)}` : null, conectado: remetente.status === 'CONECTADO' } : null })
   } catch (e) { falha(res, e) }
 })
 
@@ -299,6 +305,16 @@ router.post('/disparo/campanhas/:id/iniciar', ...editar, async (req, res) => {
     const ok = await transicionar(c.id, agendar ? 'SCHEDULED' : 'QUEUED', { de: ['READY'], autorNome: q.nome, motivo: agendar ? `Agendada para ${quando!.toISOString()}` : 'Início imediato', dados: { agendadaPara: agendar ? quando : null } })
     if (!ok) throw new ErroDisparo('A campanha precisa estar pronta (revisada e, se for o caso, aprovada)', 409)
     res.json({ ok: true, status: agendar ? 'SCHEDULED' : 'QUEUED' })
+  } catch (e) { falha(res, e) }
+})
+// Rodada do motor pedida pela tela da campanha aberta: o envio não depende só da rotina automática.
+// Mesmo trabalho da rotina (respeita intervalo, limites, janela, conexão e o atendimento); uma rodada
+// da tela por vez, e o número remetente tem trava própria (rotina e tela juntas não furam o intervalo).
+router.post('/disparo/processar', ...ver, async (_req, res) => {
+  try {
+    if (!(await disparoAtivo())) { res.json({ rodou: false, motivo: 'Nenhuma campanha com envio pendente' }); return }
+    const r = await comTrava('rodada:tela', 24_000, () => rodarDisparo(20_000, new Date(), 'TELA'))
+    res.json(r.ok ? { rodou: true, ...r.valor } : { rodou: false, motivo: 'Já há uma rodada de envio em andamento' })
   } catch (e) { falha(res, e) }
 })
 router.post('/disparo/campanhas/:id/pausar', ...editar, async (req, res) => {

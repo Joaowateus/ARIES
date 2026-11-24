@@ -5721,6 +5721,16 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .dp-resumo dt { color: var(--pl-ink-muted); font-size: 12.5px; }
 .dp-resumo dd { margin: 0; }
 .dp-detalhe { max-width: 640px !important; }
+.dp-agora { margin: 12px 0; border-left: 4px solid var(--pl-border); }
+.dp-agora.bom { border-left-color: var(--ar-estado-bom, #2e9d5b); }
+.dp-agora.atencao { border-left-color: var(--ar-estado-atencao, #d49b1f); }
+.dp-agora.critico { border-left-color: var(--ar-estado-critico, #d0453a); }
+.dp-agora-titulo { font-size: 16px; }
+.dp-etapas { display: flex; flex-wrap: wrap; gap: 4px 6px; list-style: none; margin: 0 0 8px; padding: 0; font-size: 12px; }
+.dp-etapas li { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pl-border); opacity: .6; }
+.dp-etapas li.feita { opacity: .9; }
+.dp-etapas li.feita::before { content: '✓ '; }
+.dp-etapas li.atual { opacity: 1; font-weight: 600; border-color: currentColor; }
 .dp-midia { max-width: 280px; max-height: 200px; border-radius: 8px; display: block; margin-top: 6px; }
 @media (max-width: 640px) { .dp-totais { grid-template-columns: 1fr; } .dp-resumo { grid-template-columns: 1fr; } }
 /* Disparo no celular: nada passa da largura da tela; tabelas rolam por dentro. */

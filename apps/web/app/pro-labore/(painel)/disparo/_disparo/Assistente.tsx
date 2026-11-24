@@ -217,7 +217,7 @@ export function Assistente({ campanha, fechar, abrirMonitor }: { campanha: Campa
             : <p className="pl-hint">Aguardando aprovação do dono ou do supervisor.</p>)}
           {salva.status === 'READY' && (
             <div className="dp-linha">
-              {salva.totais?.elegiveis ? <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado || !meta.remetentes.find(r => r.id === salva.assistenteId)} onClick={() => void agir(() => disparoApi.campanhas.iniciar(salva.id, salva.agendadaPara), salva.agendadaPara ? 'Agendada.' : 'Na fila: o envio começa na próxima rodada (até 1 minuto).')}>{salva.agendadaPara && new Date(salva.agendadaPara) > new Date() ? `Confirmar agendamento (${dataHora(salva.agendadaPara)})` : `Confirmar e enviar para ${n(salva.totais.elegiveis)}`}</button> : <p className="pl-hint">Ninguém para receber: ajuste o público.</p>}
+              {salva.totais?.elegiveis ? <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado || !meta.remetentes.find(r => r.id === salva.assistenteId)} onClick={() => void agir(async () => { await disparoApi.campanhas.iniciar(salva.id, salva.agendadaPara); abrirMonitor(salva.id) }, 'Começou.')}>{salva.agendadaPara && new Date(salva.agendadaPara) > new Date() ? `Confirmar agendamento (${dataHora(salva.agendadaPara)})` : `Confirmar e enviar para ${n(salva.totais.elegiveis)}`}</button> : <p className="pl-hint">Ninguém para receber: ajuste o público.</p>}
               <button type="button" className="pl-btn" onClick={() => setPasso(1)}>Ajustar</button>
             </div>
           )}

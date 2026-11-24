@@ -5,7 +5,7 @@
 // provedor de WhatsApp consegue (e não consegue) fazer.
 import { useState } from 'react'
 import { disparoApi, type ConfigLojaDisparo } from '@/lib/proLaboreApi'
-import { DIAS, erroDe, useMeta } from './util'
+import { DIAS, dataHora, erroDe, useMeta } from './util'
 
 export function Configuracoes({ aoSalvar }: { aoSalvar: () => void }) {
   const meta = useMeta()
@@ -20,6 +20,20 @@ export function Configuracoes({ aoSalvar }: { aoSalvar: () => void }) {
   const cap = meta.capacidades
   return (
     <div data-disparo-config>
+      <section className="pl-card" data-envio-automatico={meta.motor.rotinaLigada ? 'ligado' : 'desligado'} style={{ marginBottom: 12 }}>
+        <div className="pl-card-title">Envio automático</div>
+        {meta.motor.rotinaLigada
+          ? <p style={{ margin: 0 }}>✅ Ligado: o ARIES envia as campanhas sozinho, mesmo com o sistema fechado (última rodada {dataHora(meta.motor.ultimaRotinaEm)}).</p>
+          : <>
+              <p style={{ margin: 0 }}>⚠️ {meta.motor.ultimaRotinaEm ? `Parado desde ${dataHora(meta.motor.ultimaRotinaEm)}` : 'Ainda não ligado'}. Enquanto isso, as campanhas enviam só com a tela da campanha aberta.</p>
+              <p className="pl-hint" style={{ marginBottom: 0 }}>Para ligar (uma vez só), no cron-job.org crie uma tarefa igual às do ARIES que já existem, com:</p>
+              <ul className="pl-hint" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                <li>Endereço: <span className="pl-mono">https://ariessistemacomercial.vercel.app/pro-labore/sm/cron/disparo</span></li>
+                <li>Método POST, a cada 1 minuto</li>
+                <li>Cabeçalho <span className="pl-mono">x-cron-secret</span> com o mesmo valor das outras tarefas</li>
+              </ul>
+            </>}
+      </section>
       <section className="pl-card">
         <div className="pl-card-title">Regras da loja</div>
         {!dono && <p className="pl-hint">Só o dono altera. Você está vendo os valores atuais.</p>}
