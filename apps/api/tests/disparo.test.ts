@@ -299,10 +299,13 @@ test('prioridade do atendimento e número desconectado', async t => {
   const conv = await prisma.assistenteConversa.create({ data: { assistenteId: loja.asAna, tipo: 'LEAD', nomeContato: 'Cliente atendido', numeroContato: '5591911112222', mensagens: { create: { remetente: 'CONTATO', texto: 'Oi' } } } })
   await rodarDisparo(8000)
   assert.equal(falso.enviados.length, 0, 'atendimento individual tem prioridade')
-  await prisma.assistenteMensagem.updateMany({ where: { conversa: { assistenteId: loja.asAna } }, data: { criadoEm: new Date(Date.now() - 60_000) } })
+  const est = await prisma.disparoTrava.findUnique({ where: { chave: `estado:remetente:${loja.asAna}` } })
+  assert.equal((est?.dados as { motivo: string }).motivo, 'ATENDIMENTO', 'a tela fica sabendo por que não saiu')
+  // Número movimentado: a rodada espera o silêncio (8 s) e envia na mesma rodada, sem desistir.
+  await prisma.assistenteMensagem.updateMany({ where: { conversa: { assistenteId: loja.asAna } }, data: { criadoEm: new Date(Date.now() - 4000) } })
+  await rodarDisparo(15_000)
+  assert.ok(falso.enviados.length > 0, 'depois do silêncio do atendimento, a campanha segue na mesma rodada')
   void conv
-  await rodarDisparo(6000)
-  assert.ok(falso.enviados.length > 0, 'depois do atendimento, a campanha segue')
 })
 
 test('auditoria: eventos e tentativas não podem ser apagados', async t => {

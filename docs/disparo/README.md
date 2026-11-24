@@ -197,6 +197,12 @@ A rotina `/sm/cron/minuto` é chamada pelo cron-job.org a cada 5 min e, pela eco
 - **Configurações › Envio automático** mostra se a rotina automática está rodando (última rodada nos últimos 10 min) e como ligá-la.
 - **Travas:** `pg_advisory_lock` foi trocado por travas com prazo na tabela `pro_labore_disparo_travas`. No pooler de transação do Supabase (porta 6543) a trava de sessão podia ficar presa numa conexão e a campanha parar na fila. Agora: distribuição e preparação por campanha, e um laço por número remetente de cada vez (tela e rotina juntas não furam o intervalo). A mesma tabela guarda a última rodada do motor (da rotina e da tela).
 
+## 10d. Cronômetros e prioridade do atendimento
+
+- **Cronômetros** no painel "Situação do envio" (atualizam a cada segundo): próxima mensagem (contagem regressiva), desde a última enviada, tempo de envio da campanha e ritmo médio por mensagem (com o intervalo mínimo configurado e quantas já saíram).
+- **Prioridade do atendimento:** antes, se o número tivesse qualquer mensagem de atendimento nos últimos 20 s, a rodada desistia; com o WhatsApp do vendedor movimentado a campanha podia nunca sair. Agora a rodada espera 8 s de silêncio do atendimento e envia na mesma rodada.
+- **Motivo de cada parada:** ao fim de cada rodada, o número remetente grava por que parou (intervalo, limite, fora do horário, atendimento, sem conexão, erro) em `pro_labore_disparo_travas` (`estado:remetente:<id>`); o painel mostra quando é atendimento ou erro, e a tela mostra o resultado da última rodada que ela pediu.
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

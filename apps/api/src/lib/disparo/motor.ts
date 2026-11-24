@@ -290,9 +290,23 @@ async function folgaDoRemetente(assistenteId: string, cfg: ConfigEnvio, agora: D
   return { podeAgora: espera <= 0, esperarMs: Math.max(0, espera) }
 }
 
-/** Prioridade do atendimento: houve mensagem do robô ou do vendedor neste número nos últimos 20 s? */
-async function atendimentoEmCurso(assistenteId: string, agora: Date): Promise<boolean> {
-  return (await prisma.assistenteMensagem.count({ where: { criadoEm: { gte: new Date(agora.getTime() - 20_000) }, remetente: { in: ['ASSISTENTE', 'VENDEDOR', 'CONTATO'] }, OR: [{ origem: null }, { origem: { not: 'DISPARO' } }], conversa: { assistenteId, tipo: 'LEAD' } } })) > 0
+/**
+ * Prioridade do atendimento: houve mensagem de atendimento neste número há pouco? Devolve até quando
+ * esperar (8 s depois da última), ou null. O laço espera e tenta de novo na mesma rodada, em vez de
+ * desistir: com o WhatsApp do vendedor movimentado, desistir fazia a campanha nunca sair.
+ */
+export const SILENCIO_ATENDIMENTO_MS = 8_000
+async function atendimentoOcupadoAte(assistenteId: string, agora: Date): Promise<number | null> {
+  const ultima = await prisma.assistenteMensagem.findFirst({ where: { criadoEm: { gte: new Date(agora.getTime() - SILENCIO_ATENDIMENTO_MS) }, remetente: { in: ['ASSISTENTE', 'VENDEDOR', 'CONTATO'] }, OR: [{ origem: null }, { origem: { not: 'DISPARO' } }], conversa: { assistenteId, tipo: 'LEAD' } }, orderBy: { criadoEm: 'desc' }, select: { criadoEm: true } })
+  return ultima ? ultima.criadoEm.getTime() + SILENCIO_ATENDIMENTO_MS : null
+}
+
+/** Por que o laço de um número parou na última rodada (a tela mostra). */
+export type ParadaRemetente = 'SEM_CONEXAO' | 'SEM_CAMPANHA' | 'FORA_DA_JANELA' | 'LIMITE' | 'INTERVALO' | 'ATENDIMENTO' | 'SEM_MENSAGEM' | 'PRAZO' | 'ERRO' | 'OCUPADO'
+async function gravarEstadoRemetente(assistenteId: string, motivo: ParadaRemetente, extra: Record<string, unknown> = {}) {
+  const agora = new Date()
+  const dados = { motivo, em: agora.toISOString(), ...extra } as Prisma.InputJsonValue
+  await prisma.disparoTrava.upsert({ where: { chave: `estado:remetente:${assistenteId}` }, create: { chave: `estado:remetente:${assistenteId}`, ate: agora, dados }, update: { ate: agora, dados } }).catch(() => undefined)
 }
 
 const espera = (ms: number) => new Promise(ok => setTimeout(ok, ms))
@@ -305,40 +319,61 @@ async function rodarRemetente(assistenteId: string, prazo: number): Promise<{ en
   // Um laço por número de cada vez (rotina e tela juntas não podem furar o intervalo entre mensagens).
   const chave = `remetente:${assistenteId}`
   if (!(await pegarTrava(chave, prazo - Date.now() + 5000))) return out
-  try { return await rodarRemetenteComTrava(a, prazo, out) } finally { await soltarTrava(chave) }
+  let parada: ParadaRemetente = 'PRAZO'
+  let erro: string | null = null
+  try {
+    const r = await rodarRemetenteComTrava(a, prazo, out)
+    parada = r.parada
+    return r.out
+  } catch (e) {
+    parada = 'ERRO'; erro = String((e as Error)?.message ?? e).slice(0, 300)
+    throw e
+  } finally {
+    await soltarTrava(chave)
+    await gravarEstadoRemetente(assistenteId, parada, { enviadas: out.enviadas, falhas: out.falhas, ...(erro ? { erro } : {}) })
+  }
 }
-async function rodarRemetenteComTrava(a: { id: string; instancia: string | null; vendedor: { usuarioId: string } }, prazo: number, out: { enviadas: number; falhas: number; puladas: number; semConexao: boolean }) {
+async function rodarRemetenteComTrava(a: { id: string; instancia: string | null; vendedor: { usuarioId: string } }, prazo: number, out: { enviadas: number; falhas: number; puladas: number; semConexao: boolean }): Promise<{ out: typeof out; parada: ParadaRemetente }> {
   const assistenteId = a.id
   const remetente: Remetente = { assistenteId: a.id, instancia: a.instancia }
   const estado = await provedor().verificarConexao(remetente)
   if (estado !== 'CONECTADO') {
     out.semConexao = true
-    await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING', erro: null }, data: { erro: estado === 'SEM_SERVIDOR' ? 'O servidor do WhatsApp não está configurado' : 'O número remetente está desconectado: a campanha espera a conexão voltar' } })
-    return out
+    await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING', erro: null }, data: { erro: estado === 'SEM_SERVIDOR' ? 'O servidor do WhatsApp não está configurado' : estado === 'ERRO' ? 'O servidor do WhatsApp não respondeu: a campanha tenta de novo na próxima rodada' : 'O número remetente está desconectado: a campanha espera a conexão voltar' } })
+    return { out, parada: 'SEM_CONEXAO' }
   }
   await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING', erro: { not: null } }, data: { erro: null } })
   const cfgLoja = await configDaLoja(a.vendedor.usuarioId)
+  let parada: ParadaRemetente = 'PRAZO'
   while (Date.now() < prazo - 2000) {
     const agora = new Date()
     // A janela e o ritmo vêm da campanha da próxima mensagem; o número usa o ritmo mais lento entre as campanhas ativas dele.
     const ativas = await prisma.disparoCampanha.findMany({ where: { assistenteId, status: 'RUNNING' }, select: { id: true, config: true } })
-    if (!ativas.length) break
+    if (!ativas.length) { parada = 'SEM_CAMPANHA'; break }
     const cfgs = ativas.map(c => ({ id: c.id, cfg: lerConfigEnvio(c.config, cfgLoja.envio) }))
     const naJanela = cfgs.filter(x => dentroDaJanela(x.cfg.janela, agora))
-    if (!naJanela.length) break
+    if (!naJanela.length) { parada = 'FORA_DA_JANELA'; break }
     const lento: ConfigEnvio = { ...naJanela[0].cfg, intervaloSeg: Math.max(...naJanela.map(x => x.cfg.intervaloSeg)), maxPorHora: Math.min(...naJanela.map(x => x.cfg.maxPorHora)), maxPorDia: Math.min(...naJanela.map(x => x.cfg.maxPorDia)) }
     const folga = await folgaDoRemetente(assistenteId, lento, agora)
     if (!folga.podeAgora) {
       // Variação de até 30% no intervalo: ritmo menos mecânico.
       const pausa = folga.esperarMs + Math.round(lento.intervaloSeg * 1000 * Math.random() * 0.3)
-      if (!Number.isFinite(pausa) || Date.now() + pausa > prazo - 3000) break
+      if (!Number.isFinite(pausa)) { parada = 'LIMITE'; break }
+      if (Date.now() + pausa > prazo - 3000) { parada = 'INTERVALO'; break }
       await espera(pausa)
       continue
     }
-    if (await atendimentoEmCurso(assistenteId, agora)) break
+    const ocupadoAte = await atendimentoOcupadoAte(assistenteId, agora)
+    if (ocupadoAte) {
+      // Atendimento acontecendo agora: espera o silêncio e tenta de novo nesta mesma rodada.
+      const w = ocupadoAte - Date.now() + 250
+      if (Date.now() + w > prazo - 3000) { parada = 'ATENDIMENTO'; break }
+      await espera(Math.max(250, w))
+      continue
+    }
     const m = await travarProxima(assistenteId, agora)
-    if (!m) break
-    if (!naJanela.some(x => x.id === m.campanhaId)) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'AGENDADA', travadaEm: null } }); break }
+    if (!m) { parada = 'SEM_MENSAGEM'; break }
+    if (!naJanela.some(x => x.id === m.campanhaId)) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'AGENDADA', travadaEm: null } }); parada = 'FORA_DA_JANELA'; break }
     const r = await enviarTravada(m, remetente, agora).catch(async e => {
       // Erro do próprio sistema (banco): a mensagem fica DESCONHECIDO se já tinha começado a tentativa.
       logger.error({ err: e, mensagemId: m.id }, 'disparo: falha inesperada no envio')
@@ -347,10 +382,10 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
     })
     if (r === 'ENVIADA') out.enviadas += 1
     else if (r === 'PULADA') out.puladas += 1
-    else if (r === 'SEM_CONEXAO') { out.semConexao = true; break }
+    else if (r === 'SEM_CONEXAO') { out.semConexao = true; parada = 'SEM_CONEXAO'; break }
     else out.falhas += 1
   }
-  return out
+  return { out, parada }
 }
 
 // ---------- Reconciliação ----------
@@ -589,6 +624,10 @@ export interface SituacaoEnvio {
   /** Quando a próxima mensagem deve sair (estimativa), se der para saber. */
   proximoEnvioEm: string | null
   motor: { ultimaRodadaEm: string | null; origem: OrigemRodada | null; ultimaRotinaEm: string | null; rotinaParada: boolean }
+  /** Para os cronômetros da tela. */
+  tempos: { iniciadaEm: string | null; primeiraEnviadaEm: string | null; ultimaEnviadaEm: string | null; enviadas: number; intervaloSeg: number | null }
+  /** Como terminou a última rodada do número remetente. */
+  remetente: { motivo: ParadaRemetente; em: string; erro?: string } | null
 }
 
 /** Primeiro minuto dentro da janela de envio a partir de agora (até 8 dias). */
@@ -600,14 +639,23 @@ export function proximaAbertura(j: ConfigEnvio['janela'], agora: Date): Date | n
 const quando = (d: Date) => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', hour: '2-digit', minute: '2-digit' })
 
 export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): Promise<SituacaoEnvio | null> {
-  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { usuarioId: true, status: true, agendadaPara: true, assistenteId: true, config: true, erro: true } })
+  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { usuarioId: true, status: true, agendadaPara: true, assistenteId: true, config: true, erro: true, iniciadaEm: true } })
   if (!c) return null
-  const rod = await ultimasRodadas()
+  const [rod, prim, ult, enviadas, est, cfgLoja0] = await Promise.all([
+    ultimasRodadas(),
+    prisma.disparoMensagem.findFirst({ where: { campanhaId, aceitaEm: { not: null } }, orderBy: { aceitaEm: 'asc' }, select: { aceitaEm: true } }),
+    prisma.disparoMensagem.findFirst({ where: { campanhaId, aceitaEm: { not: null } }, orderBy: { aceitaEm: 'desc' }, select: { aceitaEm: true } }),
+    prisma.disparoMensagem.count({ where: { campanhaId, aceitaEm: { not: null } } }),
+    c.assistenteId ? prisma.disparoTrava.findUnique({ where: { chave: `estado:remetente:${c.assistenteId}` }, select: { dados: true } }) : null,
+    configDaLoja(c.usuarioId),
+  ])
+  const tempos = { iniciadaEm: c.iniciadaEm?.toISOString() ?? null, primeiraEnviadaEm: prim?.aceitaEm?.toISOString() ?? null, ultimaEnviadaEm: ult?.aceitaEm?.toISOString() ?? null, enviadas, intervaloSeg: lerConfigEnvio(c.config, cfgLoja0.envio).intervaloSeg }
+  const remetente = (est?.dados ?? null) as SituacaoEnvio['remetente']
   const ultimaRotinaEm = rod.rotina?.em ?? null
   // Rotina automática parada: nenhuma rodada da rotina nos últimos 10 min.
   const rotinaParada = !ultimaRotinaEm || agora.getTime() - new Date(ultimaRotinaEm).getTime() > 10 * MIN
   const motor = { ultimaRodadaEm: rod.qualquer?.em ?? null, origem: rod.qualquer?.origem ?? null, ultimaRotinaEm, rotinaParada }
-  const s = (motivo: MotivoSituacao, titulo: string, texto: string, proximo: Date | null = null): SituacaoEnvio => ({ motivo, titulo, texto, proximoEnvioEm: proximo?.toISOString() ?? null, motor })
+  const s = (motivo: MotivoSituacao, titulo: string, texto: string, proximo: Date | null = null): SituacaoEnvio => ({ motivo, titulo, texto, proximoEnvioEm: proximo?.toISOString() ?? null, motor, tempos, remetente })
   const st = c.status as StatusCampanha
   if (st === 'PAUSED') return s('PAUSADA', 'Pausada', 'Nenhuma mensagem nova sai até você clicar em “Retomar”.')
   if (['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st)) return s('TERMINADA', 'Terminada', 'Esta campanha não envia mais nada.')
@@ -627,6 +675,10 @@ export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): P
     return s('FORA_DA_JANELA', 'Fora do horário de envio', `A campanha só envia ${cfg.janela.inicio}–${cfg.janela.fim} (horário de Brasília) nos dias escolhidos.${abre ? ` Volta ${quando(abre)}.` : ''}`, abre)
   }
   if (!c.assistenteId) return s('SEM_CONEXAO', 'Sem número remetente', 'Escolha o número que vai enviar a campanha.')
+  // O que aconteceu na última rodada deste número (últimos 2 min).
+  const recente = remetente && agora.getTime() - new Date(remetente.em).getTime() < 2 * MIN
+  if (recente && remetente!.motivo === 'ERRO') return s('SEM_CONEXAO', 'Erro na última tentativa', `O envio deu erro: ${remetente!.erro ?? 'sem detalhe'}. O ARIES tenta de novo na próxima rodada.`)
+  if (recente && remetente!.motivo === 'ATENDIMENTO') return s('ATENDIMENTO', 'Esperando o atendimento', `O WhatsApp deste número está em conversa com cliente agora. O disparo espera ${SILENCIO_ATENDIMENTO_MS / 1000} s sem mensagens de atendimento e envia em seguida (o atendimento tem prioridade).`, new Date(agora.getTime() + SILENCIO_ATENDIMENTO_MS))
   const pendentes = await prisma.disparoMensagem.findFirst({ where: { campanhaId, status: 'AGENDADA' }, orderBy: { enviarApos: 'asc' }, select: { enviarApos: true, proximaTentativaEm: true } })
   if (!pendentes) return s('ENVIANDO', 'Finalizando', 'Não há mais mensagens na fila: a campanha conclui na próxima rodada.')
   const [ultima, hora, dia] = await Promise.all([

@@ -88,10 +88,14 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
   // parado esperando a rotina automática. Uma rodada por vez; o servidor respeita intervalo e limites.
   const enviando = !!c && (['VALIDATING', 'QUEUED', 'RUNNING'].includes(c.status) || (c.status === 'SCHEDULED' && !!c.agendadaPara && new Date(c.agendadaPara) <= new Date()))
   const emRodada = useRef(false)
+  const [rodada, setRodada] = useState<{ em: number; texto: string; erro: boolean } | null>(null)
   const rodar = useCallback(() => {
     if (emRodada.current) return
     emRodada.current = true
-    disparoApi.processar().catch(() => undefined).finally(() => { emRodada.current = false; void carregar() })
+    disparoApi.processar()
+      .then(r => setRodada({ em: Date.now(), erro: false, texto: r.rodou ? `enviou ${r.disparoEnviadas ?? 0}${r.disparoFalhas ? `, ${r.disparoFalhas} falha(s)` : ''}` : (r.motivo ?? 'nada a fazer') }))
+      .catch(e => setRodada({ em: Date.now(), erro: true, texto: erroDe(e) }))
+      .finally(() => { emRodada.current = false; void carregar() })
   }, [carregar])
   useEffect(() => { if (!enviando) return; rodar(); const t = setInterval(rodar, 20_000); return () => clearInterval(t) }, [enviando, rodar])
 
@@ -125,7 +129,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
       </div>
       <p className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''} · {c.remetente ? `envia pelo WhatsApp de ${c.remetente.vendedor} ${c.remetente.numero ?? ''}${c.remetente.conectado ? '' : ' (desconectado)'}` : 'sem número'} · criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''} · versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</p>
       {msg && <p className="pl-hint" role="status">{msg}</p>}
-      {c.situacao && <PainelAgora s={c.situacao} status={st} />}
+      {c.situacao && <PainelAgora s={c.situacao} status={st} rodada={enviando ? rodada : null} />}
       {(c.erro || r?.erro) && <div className="pl-alert pl-alert-error" role="alert">{c.erro ?? r?.erro}</div>}
       {r && r.aDecidir > 0 && <div className="pl-alert" role="status">{r.aDecidir} mensagem(ns) sem confirmação ou com as tentativas esgotadas: decida na lista abaixo (filtro “Falhou”) se reenvia ou considera enviada. O sistema nunca reenvia sozinho o que pode já ter saído.</div>}
 
@@ -256,15 +260,17 @@ const haQuanto = (iso: string | null) => { if (!iso) return 'nunca'; const s = M
 const daquiA = (iso: string | null) => { if (!iso) return null; const s = Math.round((new Date(iso).getTime() - Date.now()) / 1000); return s <= 5 ? 'agora' : s < 60 ? `em ${s} s` : s < 3600 ? `em ${Math.round(s / 60)} min` : dataHora(iso) }
 
 /** O que está acontecendo com o envio agora, em linguagem simples, e o caminho da campanha. */
-function PainelAgora({ s, status }: { s: SituacaoEnvioDisparo; status: StatusCampanhaDisparo }) {
+function PainelAgora({ s, status, rodada }: { s: SituacaoEnvioDisparo; status: StatusCampanhaDisparo; rodada: { em: number; texto: string; erro: boolean } | null }) {
   const atual = ETAPAS.findIndex(e => e.status.includes(status))
-  const prox = ['ENVIANDO', 'INTERVALO', 'NA_FILA', 'NA_HORA'].includes(s.motivo) ? daquiA(s.proximoEnvioEm) : null
+  const prox = ['ENVIANDO', 'INTERVALO', 'NA_FILA', 'NA_HORA', 'ATENDIMENTO'].includes(s.motivo) ? daquiA(s.proximoEnvioEm) : null
   const ativo = ['PREPARANDO', 'NA_HORA', 'NA_FILA', 'ENVIANDO', 'INTERVALO', 'LIMITE_HORA', 'LIMITE_DIA', 'FORA_DA_JANELA', 'SEM_CONEXAO'].includes(s.motivo)
   return (
     <section className={`pl-card dp-agora ${TOM[s.motivo] ?? ''}`} aria-label="Situação do envio" data-situacao={s.motivo}>
       <ol className="dp-etapas">{ETAPAS.map((e, i) => <li key={e.rotulo} className={i < atual ? 'feita' : i === atual ? 'atual' : ''}>{e.rotulo}</li>)}</ol>
       <div className="dp-agora-titulo"><b>{s.titulo}</b>{prox && <span className="pl-hint"> · próxima mensagem {prox}</span>}</div>
       <p style={{ margin: '4px 0' }}>{s.texto}</p>
+      <Cronometros s={s} status={status} proximaRodada={rodada ? rodada.em + 20_000 : null} />
+      {rodada && <p className="pl-hint" style={{ margin: '0 0 4px', color: rodada.erro ? 'var(--ar-estado-critico)' : undefined }} role="status">Última rodada pedida por esta tela: {haQuanto(new Date(rodada.em).toISOString())} · {rodada.erro ? `erro: ${rodada.texto}` : rodada.texto}</p>}
       {ativo && (
         <p className="pl-hint" style={{ margin: 0 }}>
           {s.motor.rotinaParada
@@ -273,5 +279,31 @@ function PainelAgora({ s, status }: { s: SituacaoEnvioDisparo; status: StatusCam
         </p>
       )}
     </section>
+  )
+}
+
+const relogio = (ms: number | null) => { if (ms == null || !Number.isFinite(ms)) return '—'; const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sg = t % 60; const p2 = (x: number) => String(x).padStart(2, '0'); return h ? `${h}:${p2(m)}:${p2(sg)}` : `${p2(m)}:${p2(sg)}` }
+
+/** Cronômetros ao vivo (atualizam a cada segundo): próxima mensagem, desde a última, tempo de envio e ritmo médio. */
+function Cronometros({ s, status, proximaRodada }: { s: SituacaoEnvioDisparo; status: StatusCampanhaDisparo; proximaRodada: number | null }) {
+  const [agora, setAgora] = useState(() => Date.now())
+  const vivo = ['QUEUED', 'RUNNING', 'SCHEDULED', 'VALIDATING'].includes(status)
+  useEffect(() => { if (!vivo) return; const t = setInterval(() => setAgora(Date.now()), 1000); return () => clearInterval(t) }, [vivo])
+  const t = s.tempos
+  if (!t) return null
+  const ms = (iso: string | null) => (iso ? new Date(iso).getTime() : null)
+  // Se a hora prevista já passou, a mensagem sai na próxima rodada pedida pela tela (a cada 20 s).
+  const previsto = ms(s.proximoEnvioEm)
+  const prox = previsto != null && previsto <= agora && proximaRodada != null && proximaRodada > agora ? proximaRodada : previsto, ult = ms(t.ultimaEnviadaEm), prim = ms(t.primeiraEnviadaEm), ini = ms(t.iniciadaEm)
+  const fimRef = vivo ? agora : (ult ?? agora)
+  const ritmo = prim != null && ult != null && t.enviadas > 1 ? (ult - prim) / (t.enviadas - 1) : null
+  const mostraProx = vivo && prox != null && ['ENVIANDO', 'INTERVALO', 'NA_FILA', 'NA_HORA', 'ATENDIMENTO', 'AGENDADA', 'FORA_DA_JANELA'].includes(s.motivo)
+  return (
+    <div className="dp-cronometros" aria-label="Cronômetros do envio" data-cronometros>
+      <div><span>Próxima mensagem</span><b className="pl-mono">{mostraProx ? (prox! - agora <= 0 ? 'agora' : relogio(prox! - agora)) : '—'}</b></div>
+      <div><span>Desde a última enviada</span><b className="pl-mono">{ult != null ? relogio(fimRef - ult) : 'nenhuma ainda'}</b></div>
+      <div><span>Tempo de envio</span><b className="pl-mono">{ini != null ? relogio(fimRef - ini) : '—'}</b></div>
+      <div><span>Ritmo médio</span><b className="pl-mono">{ritmo != null ? `${relogio(ritmo)} / msg` : '—'}</b>{t.intervaloSeg != null && <small className="pl-hint">mínimo {t.intervaloSeg} s · {t.enviadas} enviada(s)</small>}</div>
+    </div>
   )
 }
