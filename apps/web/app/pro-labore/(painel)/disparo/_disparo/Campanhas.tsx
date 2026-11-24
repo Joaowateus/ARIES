@@ -3,8 +3,8 @@
 // Campanhas: lista (paginada no servidor), criação/edição (Assistente) e o acompanhamento de uma
 // campanha (atualiza sozinho a cada 5 s enquanto ela está ativa): números, destinatários, o histórico
 // de cada um (tentativas, eventos, falhas), decisões sobre envios sem confirmação e o resultado comercial.
-import { useCallback, useEffect, useState } from 'react'
-import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type ItemCampanhaDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type ItemCampanhaDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
 import { Assistente } from './Assistente'
 import { Numero, Paginacao, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useMeta } from './util'
 
@@ -84,6 +84,16 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
   useEffect(() => { void carregar() }, [carregar])
   const ativa = !!c && ATIVAS.includes(c.status)
   useEffect(() => { if (!ativa) return; const t = setInterval(() => void carregar(), 5000); return () => clearInterval(t) }, [ativa, carregar])
+  // Com a campanha aberta, a própria tela pede as rodadas do envio (a cada 20 s): o envio não fica
+  // parado esperando a rotina automática. Uma rodada por vez; o servidor respeita intervalo e limites.
+  const enviando = !!c && (['VALIDATING', 'QUEUED', 'RUNNING'].includes(c.status) || (c.status === 'SCHEDULED' && !!c.agendadaPara && new Date(c.agendadaPara) <= new Date()))
+  const emRodada = useRef(false)
+  const rodar = useCallback(() => {
+    if (emRodada.current) return
+    emRodada.current = true
+    disparoApi.processar().catch(() => undefined).finally(() => { emRodada.current = false; void carregar() })
+  }, [carregar])
+  useEffect(() => { if (!enviando) return; rodar(); const t = setInterval(rodar, 20_000); return () => clearInterval(t) }, [enviando, rodar])
 
   async function agir(fn: () => Promise<unknown>, ok: string, confirmar?: string) {
     if (confirmar && !window.confirm(confirmar)) return
@@ -104,7 +114,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
             {st === 'DRAFT' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.validar(c.id), 'Público em preparação.')}>Preparar o público</button>}
             {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.aprovar(c.id), 'Aprovada.')}>Aprovar</button>}
             {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => { const m = window.prompt('Por que devolver?'); if (m) void agir(() => disparoApi.campanhas.reprovar(c.id, m), 'Devolvida ao rascunho.') }}>Devolver</button>}
-            {st === 'READY' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.iniciar(c.id, c.agendadaPara), c.agendadaPara ? 'Agendada.' : 'Na fila: começa na próxima rodada (até 1 minuto).', `Confirmar o envio para ${n(c.totais?.elegiveis)} contato(s)?`)}>{c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar agendamento' : 'Iniciar agora'}</button>}
+            {st === 'READY' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(async () => { const r = await disparoApi.campanhas.iniciar(c.id, c.agendadaPara); if (r.status === 'QUEUED') rodar() }, c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendada.' : 'Começou: a primeira mensagem sai em instantes. Deixe esta tela aberta para acompanhar.', `Confirmar o envio para ${n(c.totais?.elegiveis)} contato(s)?`)}>{c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar agendamento' : 'Iniciar agora'}</button>}
             {(st === 'RUNNING' || st === 'QUEUED') && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.pausar(c.id), 'Pausada: nenhum envio novo até retomar.')}>Pausar</button>}
             {st === 'PAUSED' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.retomar(c.id), 'Retomada.')}>Retomar</button>}
             {!['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st) && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.cancelar(c.id), 'Cancelada: o que não saiu foi cancelado.', 'Cancelar a campanha? O que ainda não foi enviado não sai mais.')}>Cancelar</button>}
@@ -115,6 +125,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
       </div>
       <p className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''} · {c.remetente ? `envia pelo WhatsApp de ${c.remetente.vendedor} ${c.remetente.numero ?? ''}${c.remetente.conectado ? '' : ' (desconectado)'}` : 'sem número'} · criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''} · versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</p>
       {msg && <p className="pl-hint" role="status">{msg}</p>}
+      {c.situacao && <PainelAgora s={c.situacao} status={st} />}
       {(c.erro || r?.erro) && <div className="pl-alert pl-alert-error" role="alert">{c.erro ?? r?.erro}</div>}
       {r && r.aDecidir > 0 && <div className="pl-alert" role="status">{r.aDecidir} mensagem(ns) sem confirmação ou com as tentativas esgotadas: decida na lista abaixo (filtro “Falhou”) se reenvia ou considera enviada. O sistema nunca reenvia sozinho o que pode já ter saído.</div>}
 
@@ -234,5 +245,33 @@ function DetalheDestinatario({ id, fechar, pode, aoMudar }: { id: string; fechar
         )}
       </div>
     </div>
+  )
+}
+
+const ETAPAS: Array<{ rotulo: string; status: StatusCampanhaDisparo[] }> = [
+  { rotulo: 'Montar', status: ['DRAFT', 'VALIDATING'] }, { rotulo: 'Revisar', status: ['NEEDS_REVIEW', 'READY'] }, { rotulo: 'Agendada / na fila', status: ['SCHEDULED', 'QUEUED'] }, { rotulo: 'Enviando', status: ['RUNNING', 'PAUSED'] }, { rotulo: 'Concluída', status: ['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'] },
+]
+const TOM: Partial<Record<SituacaoEnvioDisparo['motivo'], string>> = { SEM_CONEXAO: 'critico', LIMITE_DIA: 'atencao', LIMITE_HORA: 'atencao', FORA_DA_JANELA: 'atencao', PAUSADA: 'atencao', ENVIANDO: 'bom', INTERVALO: 'bom' }
+const haQuanto = (iso: string | null) => { if (!iso) return 'nunca'; const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000)); return s < 60 ? `há ${s} s` : s < 3600 ? `há ${Math.round(s / 60)} min` : `há ${Math.round(s / 3600)} h` }
+const daquiA = (iso: string | null) => { if (!iso) return null; const s = Math.round((new Date(iso).getTime() - Date.now()) / 1000); return s <= 5 ? 'agora' : s < 60 ? `em ${s} s` : s < 3600 ? `em ${Math.round(s / 60)} min` : dataHora(iso) }
+
+/** O que está acontecendo com o envio agora, em linguagem simples, e o caminho da campanha. */
+function PainelAgora({ s, status }: { s: SituacaoEnvioDisparo; status: StatusCampanhaDisparo }) {
+  const atual = ETAPAS.findIndex(e => e.status.includes(status))
+  const prox = ['ENVIANDO', 'INTERVALO', 'NA_FILA', 'NA_HORA'].includes(s.motivo) ? daquiA(s.proximoEnvioEm) : null
+  const ativo = ['PREPARANDO', 'NA_HORA', 'NA_FILA', 'ENVIANDO', 'INTERVALO', 'LIMITE_HORA', 'LIMITE_DIA', 'FORA_DA_JANELA', 'SEM_CONEXAO'].includes(s.motivo)
+  return (
+    <section className={`pl-card dp-agora ${TOM[s.motivo] ?? ''}`} aria-label="Situação do envio" data-situacao={s.motivo}>
+      <ol className="dp-etapas">{ETAPAS.map((e, i) => <li key={e.rotulo} className={i < atual ? 'feita' : i === atual ? 'atual' : ''}>{e.rotulo}</li>)}</ol>
+      <div className="dp-agora-titulo"><b>{s.titulo}</b>{prox && <span className="pl-hint"> · próxima mensagem {prox}</span>}</div>
+      <p style={{ margin: '4px 0' }}>{s.texto}</p>
+      {ativo && (
+        <p className="pl-hint" style={{ margin: 0 }}>
+          {s.motor.rotinaParada
+            ? <>Esta tela está enviando por você: mantenha-a aberta até terminar. O envio automático com a tela fechada {s.motor.ultimaRotinaEm ? `não roda desde ${dataHora(s.motor.ultimaRotinaEm)}` : 'ainda não está ligado'} — veja “Envio automático” em Configurações.</>
+            : <>Envio automático ligado (última rodada {haQuanto(s.motor.ultimaRotinaEm)}): pode fechar esta tela, o envio continua.</>}
+        </p>
+      )}
+    </section>
   )
 }

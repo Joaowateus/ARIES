@@ -115,3 +115,48 @@ test('rotina própria do Disparo: exige o segredo e roda só quando há campanha
   const j = await r.json() as Record<string, unknown>
   assert.ok('disparo' in j || 'disparoEnviadas' in j)
 })
+
+test('tela da campanha aberta envia sem depender da rotina: processar, situação e travas', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const { pegarTrava, soltarTrava } = await import('../src/lib/disparo/travas')
+  // Trava com prazo: a segunda não pega enquanto a primeira vale; solta → pega de novo.
+  const k = `teste:${randomUUID()}`
+  assert.equal(await pegarTrava(k, 60_000), true)
+  assert.equal(await pegarTrava(k, 60_000), false)
+  await soltarTrava(k)
+  assert.equal(await pegarTrava(k, 60_000), true)
+  // Campanha do dono, início imediato: a tela pede a rodada e as mensagens saem.
+  const nova = await api('DONO', 'POST', '/disparo/campanhas', campanha(loja.asSup))
+  assert.equal(nova.status, 201)
+  const id = nova.corpo.id as string
+  assert.equal((await api('DONO', 'POST', `/disparo/campanhas/${id}/validar`)).status, 200)
+  assert.equal((await api('DONO', 'POST', `/disparo/campanhas/${id}/iniciar`, {})).status, 200)
+  let c = await api('DONO', 'GET', `/disparo/campanhas/${id}`)
+  assert.equal((c.corpo.situacao as { motivo: string }).motivo, 'NA_FILA')
+  const p = await api('DONO', 'POST', '/disparo/processar')
+  assert.equal(p.status, 200)
+  assert.equal(p.corpo.rodou, true)
+  assert.ok(Number(p.corpo.disparoEnviadas) >= 2, `enviou ${p.corpo.disparoEnviadas}`)
+  c = await api('DONO', 'GET', `/disparo/campanhas/${id}`)
+  assert.ok(['COMPLETED', 'RUNNING'].includes(String(c.corpo.status)))
+  assert.ok((c.corpo.resumo as { aceitas: number }).aceitas >= 2)
+  // Sem a rotina automática registrada, a tela avisa que ela está parada; a tela conta como rodada.
+  const meta = await api('DONO', 'GET', '/disparo/meta')
+  assert.equal(typeof (meta.corpo.motor as { rotinaLigada: boolean }).rotinaLigada, 'boolean')
+  // Quem não tem o módulo não aciona o envio.
+  assert.equal((await api('NADA', 'POST', '/disparo/processar')).status, 403)
+})
+
+test('situação explica: agendada no futuro e fora do horário de envio', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const { situacaoDoEnvio, proximaAbertura } = await import('../src/lib/disparo/motor')
+  const futura = new Date(Date.now() + 3 * 3600_000).toISOString()
+  const ag = await api('DONO', 'POST', '/disparo/campanhas', { ...campanha(loja.asSup), agendadaPara: futura })
+  const id = ag.corpo.id as string
+  await api('DONO', 'POST', `/disparo/campanhas/${id}/validar`)
+  assert.equal((await api('DONO', 'POST', `/disparo/campanhas/${id}/iniciar`, { quando: futura })).corpo.status, 'SCHEDULED')
+  assert.equal((await situacaoDoEnvio(id))!.motivo, 'AGENDADA')
+  // Janela seg–sáb 09–19 (Brasília): domingo 10h → abre segunda 09:00 (12:00 UTC).
+  const domingo = new Date('2026-11-29T13:00:00Z')
+  assert.equal(proximaAbertura({ inicio: '09:00', fim: '19:00', dias: [1, 2, 3, 4, 5, 6] }, domingo)?.toISOString(), '2026-11-30T12:00:00.000Z')
+})

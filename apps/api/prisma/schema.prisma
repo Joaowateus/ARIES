@@ -5473,3 +5473,13 @@ model DisparoConfig {
 
   @@map("pro_labore_disparo_config")
 }
+
+/// Travas com prazo (seguras no pooler de transação do Supabase) e o registro da última rodada do motor.
+model DisparoTrava {
+  chave        String   @id
+  ate          DateTime
+  dados        Json?
+  atualizadoEm DateTime @updatedAt
+
+  @@map("pro_labore_disparo_travas")
+}

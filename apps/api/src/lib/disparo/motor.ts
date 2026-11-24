@@ -25,6 +25,7 @@ import {
 import { resolverPublico, valoresDoContato, type DefinicaoPublico } from './publico'
 import { registrarAutorizacao, situacaoDe } from './autorizacao'
 import { provedor, type Remetente } from './provedor'
+import { comTrava, pegarTrava, registrarRodada, soltarTrava, ultimasRodadas, type OrigemRodada } from './travas'
 
 const MIN = 60_000
 const TRAVA_MAX_MS = 3 * MIN // ENVIANDO há mais que isso = o processo caiu no meio do envio
@@ -111,10 +112,9 @@ export async function prepararCampanha(campanhaId: string, agora = new Date()): 
 export async function distribuir(campanhaId: string, agora = new Date()): Promise<number> {
   const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { id: true, usuarioId: true, versao: true, status: true, assistenteId: true, conteudo: true } })
   if (!c || c.status !== 'QUEUED') return 0
-  // Duas rodadas ao mesmo tempo: só uma distribui (a outra encontra a trava e sai).
-  const trava = await prisma.$queryRaw<Array<{ ok: boolean }>>`SELECT pg_try_advisory_lock(hashtext(${`disparo:distribuir:${campanhaId}`})) AS ok`
-  if (!trava[0]?.ok) return 0
-  try { return await distribuirComTrava(c, campanhaId, agora) } finally { await prisma.$queryRaw`SELECT pg_advisory_unlock(hashtext(${`disparo:distribuir:${campanhaId}`}))` }
+  // Duas rodadas ao mesmo tempo (rotina e tela): só uma distribui (a outra encontra a trava e sai).
+  const r = await comTrava(`distribuir:${campanhaId}`, 2 * MIN, () => distribuirComTrava(c, campanhaId, agora))
+  return r.ok ? r.valor : 0
 }
 async function distribuirComTrava(c: { id: string; usuarioId: string; versao: number; assistenteId: string | null; conteudo: Prisma.JsonValue }, campanhaId: string, agora: Date): Promise<number> {
   if (!c.assistenteId) { await prisma.disparoCampanha.update({ where: { id: c.id }, data: { erro: 'Escolha o número que vai enviar a campanha' } }); return 0 }
@@ -302,6 +302,13 @@ async function rodarRemetente(assistenteId: string, prazo: number): Promise<{ en
   const out = { enviadas: 0, falhas: 0, puladas: 0, semConexao: false }
   const a = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { id: true, instancia: true, vendedor: { select: { usuarioId: true } } } })
   if (!a) return out
+  // Um laço por número de cada vez (rotina e tela juntas não podem furar o intervalo entre mensagens).
+  const chave = `remetente:${assistenteId}`
+  if (!(await pegarTrava(chave, prazo - Date.now() + 5000))) return out
+  try { return await rodarRemetenteComTrava(a, prazo, out) } finally { await soltarTrava(chave) }
+}
+async function rodarRemetenteComTrava(a: { id: string; instancia: string | null; vendedor: { usuarioId: string } }, prazo: number, out: { enviadas: number; falhas: number; puladas: number; semConexao: boolean }) {
+  const assistenteId = a.id
   const remetente: Remetente = { assistenteId: a.id, instancia: a.instancia }
   const estado = await provedor().verificarConexao(remetente)
   if (estado !== 'CONECTADO') {
@@ -442,7 +449,7 @@ export async function disparoAtivo(agora = new Date()): Promise<boolean> {
   return n > 0
 }
 
-export async function rodarDisparo(prazoMs = 15_000, agora = new Date()): Promise<ResultadoRodada> {
+export async function rodarDisparo(prazoMs = 15_000, agora = new Date(), origem: OrigemRodada = 'ROTINA'): Promise<ResultadoRodada> {
   const fim = Date.now() + prazoMs
   const out: ResultadoRodada = { disparoPreparadas: 0, disparoIniciadas: 0, disparoEnviadas: 0, disparoFalhas: 0, disparoReconciliadas: 0, disparoConcluidas: 0 }
   return comAutor({ origem: 'AUTOMACAO', nome: 'ARIES Disparo' }, async () => {
@@ -450,7 +457,8 @@ export async function rodarDisparo(prazoMs = 15_000, agora = new Date()): Promis
     for (const c of await prisma.disparoCampanha.findMany({ where: { status: 'VALIDATING' }, select: { id: true, preparo: true }, take: 3, orderBy: { atualizadoEm: 'asc' } })) {
       if (Date.now() > fim - 4000) break
       try {
-        if (await prepararCampanha(c.id, agora)) {
+        const prep = await comTrava(`preparar:${c.id}`, 2 * MIN, () => prepararCampanha(c.id, agora))
+        if (prep.ok && prep.valor) {
           out.disparoPreparadas += 1
           // Recorrência: a execução nova já aprovada volta agendada sozinha.
           if ((c.preparo as { agendarDepois?: boolean } | null)?.agendarDepois) await transicionar(c.id, 'SCHEDULED', { de: ['READY'], motivo: 'Execução recorrente agendada' })
@@ -476,6 +484,7 @@ export async function rodarDisparo(prazoMs = 15_000, agora = new Date()): Promis
     for (const r of rs) { out.disparoEnviadas += r.enviadas; out.disparoFalhas += r.falhas }
     // 6) Conclusão.
     out.disparoConcluidas = await concluirTerminadas(new Date())
+    await registrarRodada(origem, { ...out })
     return out
   })
 }
@@ -567,3 +576,68 @@ export async function registrarResposta(assistenteId: string, numero: string, te
 }
 
 export const PADRAO = CONFIG_PADRAO
+
+// ---------- Situação do envio agora (para a tela explicar o que está acontecendo) ----------
+
+export type MotivoSituacao =
+  | 'PREPARANDO' | 'AGENDADA' | 'NA_HORA' | 'NA_FILA' | 'ENVIANDO' | 'INTERVALO' | 'LIMITE_HORA' | 'LIMITE_DIA'
+  | 'FORA_DA_JANELA' | 'SEM_CONEXAO' | 'ATENDIMENTO' | 'PAUSADA' | 'TERMINADA' | 'PARADA'
+export interface SituacaoEnvio {
+  motivo: MotivoSituacao
+  titulo: string
+  texto: string
+  /** Quando a próxima mensagem deve sair (estimativa), se der para saber. */
+  proximoEnvioEm: string | null
+  motor: { ultimaRodadaEm: string | null; origem: OrigemRodada | null; ultimaRotinaEm: string | null; rotinaParada: boolean }
+}
+
+/** Primeiro minuto dentro da janela de envio a partir de agora (até 8 dias). */
+export function proximaAbertura(j: ConfigEnvio['janela'], agora: Date): Date | null {
+  const t = new Date(Math.ceil(agora.getTime() / MIN) * MIN)
+  for (let i = 0; i < 8 * 24 * 60; i += 1) { if (dentroDaJanela(j, t)) return t; t.setTime(t.getTime() + MIN) }
+  return null
+}
+const quando = (d: Date) => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', hour: '2-digit', minute: '2-digit' })
+
+export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): Promise<SituacaoEnvio | null> {
+  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { usuarioId: true, status: true, agendadaPara: true, assistenteId: true, config: true, erro: true } })
+  if (!c) return null
+  const rod = await ultimasRodadas()
+  const ultimaRotinaEm = rod.rotina?.em ?? null
+  // Rotina automática parada: nenhuma rodada da rotina nos últimos 10 min.
+  const rotinaParada = !ultimaRotinaEm || agora.getTime() - new Date(ultimaRotinaEm).getTime() > 10 * MIN
+  const motor = { ultimaRodadaEm: rod.qualquer?.em ?? null, origem: rod.qualquer?.origem ?? null, ultimaRotinaEm, rotinaParada }
+  const s = (motivo: MotivoSituacao, titulo: string, texto: string, proximo: Date | null = null): SituacaoEnvio => ({ motivo, titulo, texto, proximoEnvioEm: proximo?.toISOString() ?? null, motor })
+  const st = c.status as StatusCampanha
+  if (st === 'PAUSED') return s('PAUSADA', 'Pausada', 'Nenhuma mensagem nova sai até você clicar em “Retomar”.')
+  if (['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st)) return s('TERMINADA', 'Terminada', 'Esta campanha não envia mais nada.')
+  if (['DRAFT', 'NEEDS_REVIEW', 'READY'].includes(st)) return s('PARADA', 'Ainda não começou', st === 'READY' ? 'Pronta: clique em “Iniciar agora” ou confirme o agendamento.' : st === 'NEEDS_REVIEW' ? 'Esperando a aprovação do dono ou de um supervisor.' : 'Rascunho: prepare o público para revisar.')
+  if (st === 'VALIDATING') return s('PREPARANDO', 'Preparando o público', 'O ARIES está montando a lista de quem recebe. Leva segundos.')
+  if (st === 'SCHEDULED') {
+    if (c.agendadaPara && c.agendadaPara > agora) return s('AGENDADA', 'Agendada', `Começa ${quando(c.agendadaPara)}.`, c.agendadaPara)
+    return s('NA_HORA', 'Chegou a hora', 'Entra na fila na próxima rodada do envio.', agora)
+  }
+  if (st === 'QUEUED') return s('NA_FILA', 'Na fila', 'As mensagens são criadas na próxima rodada do envio e a primeira sai em seguida.', agora)
+  // RUNNING
+  const cfgLoja = await configDaLoja(c.usuarioId)
+  const cfg = lerConfigEnvio(c.config, cfgLoja.envio)
+  if (c.erro) return s('SEM_CONEXAO', 'Parada: número sem conexão', `${c.erro}. Conecte o WhatsApp do remetente em Conversas › Conexão; o envio continua sozinho quando a conexão voltar.`)
+  if (!dentroDaJanela(cfg.janela, agora)) {
+    const abre = proximaAbertura(cfg.janela, agora)
+    return s('FORA_DA_JANELA', 'Fora do horário de envio', `A campanha só envia ${cfg.janela.inicio}–${cfg.janela.fim} (horário de Brasília) nos dias escolhidos.${abre ? ` Volta ${quando(abre)}.` : ''}`, abre)
+  }
+  if (!c.assistenteId) return s('SEM_CONEXAO', 'Sem número remetente', 'Escolha o número que vai enviar a campanha.')
+  const pendentes = await prisma.disparoMensagem.findFirst({ where: { campanhaId, status: 'AGENDADA' }, orderBy: { enviarApos: 'asc' }, select: { enviarApos: true, proximaTentativaEm: true } })
+  if (!pendentes) return s('ENVIANDO', 'Finalizando', 'Não há mais mensagens na fila: a campanha conclui na próxima rodada.')
+  const [ultima, hora, dia] = await Promise.all([
+    prisma.disparoMensagem.findFirst({ where: { assistenteId: c.assistenteId, aceitaEm: { not: null } }, orderBy: { aceitaEm: 'desc' }, select: { aceitaEm: true } }),
+    prisma.disparoMensagem.count({ where: { assistenteId: c.assistenteId, aceitaEm: { gte: new Date(agora.getTime() - 60 * MIN) } } }),
+    prisma.disparoMensagem.count({ where: { assistenteId: c.assistenteId, aceitaEm: { gte: new Date(agora.getTime() - 24 * 60 * MIN) } } }),
+  ])
+  if (dia >= cfg.maxPorDia) return s('LIMITE_DIA', 'Limite do dia atingido', `Este número já enviou ${dia} mensagens nas últimas 24 h (limite ${cfg.maxPorDia}). Continua sozinho quando o limite liberar.`)
+  if (hora >= cfg.maxPorHora) return s('LIMITE_HORA', 'Limite da hora atingido', `Este número já enviou ${hora} mensagens na última hora (limite ${cfg.maxPorHora}). Continua sozinho em alguns minutos.`)
+  const proximoPorRitmo = ultima?.aceitaEm ? new Date(ultima.aceitaEm.getTime() + cfg.intervaloSeg * 1000) : agora
+  const prox = new Date(Math.max(proximoPorRitmo.getTime(), pendentes.enviarApos.getTime(), pendentes.proximaTentativaEm?.getTime() ?? 0, agora.getTime()))
+  if (prox.getTime() - agora.getTime() > 1000) return s('INTERVALO', 'Enviando com intervalo', `Uma mensagem de cada vez, com pelo menos ${cfg.intervaloSeg} s entre elas, para proteger o número.`, prox)
+  return s('ENVIANDO', 'Enviando', 'A próxima mensagem sai na próxima rodada do envio.', prox)
+}
