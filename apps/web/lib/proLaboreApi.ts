@@ -892,6 +892,8 @@ export const proLaboreApi = {
       request<AssistenteComercial>('/pro-labore/assistente/config', { method: 'PUT', body: JSON.stringify(data) }),
     conectar: (data: { vendedorId?: string; numeroPareamento?: string }) =>
       request<ConexaoAssistente>('/pro-labore/assistente/conectar', { method: 'POST', body: JSON.stringify(data) }),
+    diagnostico: () => request<DiagnosticoWhatsapp>('/pro-labore/assistente/diagnostico'),
+    reapontarAviso: (assistenteId: string) => request<{ ok: true }>(`/pro-labore/assistente/diagnostico/${assistenteId}/webhook`, { method: 'POST' }),
     conexao: (vendedorId?: string) =>
       request<{ status: StatusAssistente; aviso?: string }>(`/pro-labore/assistente/conexao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     desconectar: (vendedorId?: string) =>
@@ -4073,4 +4075,17 @@ export const centralApi = {
   conferirAgora: () => request<{ centralConferidas: number; centralDivergencias: number }>('/pro-labore/central/saude/conferir', { method: 'POST' }),
   resolverDivergencia: (id: string) => request<{ ok: boolean }>(`/pro-labore/central/saude/divergencias/${id}/resolver`, { method: 'POST' }),
   perguntaTratada: (id: string) => request<{ ok: boolean }>(`/pro-labore/central/saude/perguntas/${id}/tratada`, { method: 'POST' }),
+}
+
+// Diagnóstico do WhatsApp (só o dono): por que o lead não entrou no CRM ou o robô não abordou.
+export interface ProblemaWhatsapp { gravidade: 'CRITICO' | 'ATENCAO' | 'INFO'; texto: string; acao: string | null; corrigirWebhook?: boolean }
+export interface DiagnosticoWhatsapp {
+  servidor: { configurado: boolean; ambienteDeTeste: boolean }
+  assistentes: Array<{
+    assistenteId: string; vendedor: string; numero: string | null; status: string; conectadoEm: string | null; ultimoEventoEm: string | null
+    atendimentoAutomatico: boolean; cadastroAutomatico: boolean; responderContatosNovos: boolean
+    aoVivo: { estado: string; erro: string | null; webhook: { configurado: boolean; ativo: boolean; recebeMensagens: boolean; apontaParaCa: boolean; endereco: string | null } | null }
+    ultimas24h: { mensagensDeClientes: number; leadsCadastrados: number; conversasComRobo: number; foraDoCrm: number; enviosQueFalharam: number }
+    problemas: ProblemaWhatsapp[]
+  }>
 }

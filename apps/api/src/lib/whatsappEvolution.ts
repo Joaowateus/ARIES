@@ -128,6 +128,14 @@ async function garantirInstancia(instancia: string, webhookUrl: string): Promise
   })
 }
 
+/** Para onde o servidor do WhatsApp manda os avisos desta instância (null = nenhum webhook configurado). */
+export async function webhookDaInstancia(instancia: string): Promise<{ url: string | null; ativo: boolean; eventos: string[] } | null> {
+  const r = await chamar<{ url?: string | null; enabled?: boolean; events?: string[]; webhook?: { url?: string | null; enabled?: boolean; events?: string[] } } | null>('GET', `/webhook/find/${encodeURIComponent(instancia)}`)
+  const w = r?.webhook ?? r
+  if (!w || (!w.url && w.enabled === undefined)) return null
+  return { url: w.url ?? null, ativo: w.enabled !== false, eventos: Array.isArray(w.events) ? w.events.map(String) : [] }
+}
+
 export async function configurarWebhook(instancia: string, webhookUrl: string): Promise<void> {
   await chamar('POST', `/webhook/set/${encodeURIComponent(instancia)}`, {
     webhook: { enabled: true, url: webhookUrl, byEvents: false, base64: false, events: EVENTOS_WEBHOOK },
