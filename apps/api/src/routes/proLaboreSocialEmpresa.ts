@@ -6,6 +6,7 @@
 // A conta da empresa é a mesma linha de SocialMediaConta do dono (titular
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
+import { rodarDisparo } from '../lib/disparo/motor'
 import { orcamento } from '../lib/cronOrcamento'
 import { cargaInicial as cargaInicialCentral, conferir as conferirCentral, processarEventos as processarEventosCentral } from '../lib/centralConhecimento/rotinas'
 import { reverMetaEmRiscoTodas } from '../lib/metaCoerente'
@@ -423,6 +424,8 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   // Pré-venda do robô (Ajuste 3): cadências escolhidas pelo vendedor e retomada do roteiro parado.
   const cadencias = await o.rodar('cadências', lim => rodarCadencias(agora, Math.min(6000, lim)), { cadenciasEnviadas: 0, cadenciasConcluidas: 0 })
   const retomada = await o.rodar('retomada', lim => retomarRoteiros(agora, Math.min(5000, lim)), { retomadas: 0, entreguesPorSilencio: 0 })
+  // ARIES Disparo: depois do atendimento (follow, varredura, cadências, retomada), que tem prioridade.
+  const disparo = await o.rodar('disparo', lim => rodarDisparo(Math.min(18_000, lim), agora), { disparoPreparadas: 0, disparoIniciadas: 0, disparoEnviadas: 0, disparoFalhas: 0, disparoReconciliadas: 0, disparoConcluidas: 0 }, 4000)
   // PDF 07 · Central de Conhecimento: os eventos gravados pelo banco vão para o índice (frescor de 15 min).
   // Depois do WhatsApp (follow, varredura, cadências e retomada): o índice pode esperar; o cliente, não.
   const centralEventos = await o.rodar('central de conhecimento', lim => processarEventosCentral(Math.min(6000, lim), agora), { centralProcessados: 0, centralFalhas: 0 })
@@ -432,7 +435,7 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const trafego = await o.rodar('tráfego', lim => sincronizarTrafegoPendentes(Math.min(10_000, lim)), { trafegoSincronizadas: 0, trafegoFalhas: 0 })
   // Carga inicial da Central em rodadas, com o tempo que sobrar (para no ponto e continua na próxima).
   const centralCarga = await o.rodar('central: carga inicial', lim => cargaInicialCentral(Math.min(8000, lim)), { centralCarga: 0 }, 3000)
-  res.json({ ...centralEventos, ...centralCarga, ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
+  res.json({ ...disparo, ...centralEventos, ...centralCarga, ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

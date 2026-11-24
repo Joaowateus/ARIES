@@ -1,0 +1,96 @@
+{
+  "geradoEm": "2026-11-24T15:58:13.503Z",
+  "ambiente": "Postgres 16 local, provedor de teste, sem ritmo de proteção",
+  "resultados": [
+    {
+      "destinatarios": 100,
+      "numerosRemetentes": 1,
+      "campanhasSimultaneas": 1,
+      "criacaoDadosMs": 42,
+      "preparacaoMs": 63,
+      "envioMs": 3010,
+      "rodadasDeUmMinuto": 1,
+      "mensagensPorSegundo": 33.2,
+      "aceitas": 100,
+      "falhas": 0,
+      "enviosRepetidos": 0,
+      "memoriaPicoMB": 913,
+      "consultaCrmDuranteEnvioMs": {
+        "mediana": 7,
+        "maxima": 7
+      }
+    },
+    {
+      "destinatarios": 500,
+      "numerosRemetentes": 1,
+      "campanhasSimultaneas": 1,
+      "criacaoDadosMs": 155,
+      "preparacaoMs": 126,
+      "envioMs": 9306,
+      "rodadasDeUmMinuto": 1,
+      "mensagensPorSegundo": 53.7,
+      "aceitas": 500,
+      "falhas": 0,
+      "enviosRepetidos": 0,
+      "memoriaPicoMB": 928,
+      "consultaCrmDuranteEnvioMs": {
+        "mediana": 6,
+        "maxima": 6
+      }
+    },
+    {
+      "destinatarios": 1000,
+      "numerosRemetentes": 1,
+      "campanhasSimultaneas": 1,
+      "criacaoDadosMs": 216,
+      "preparacaoMs": 173,
+      "envioMs": 19026,
+      "rodadasDeUmMinuto": 2,
+      "mensagensPorSegundo": 52.6,
+      "aceitas": 1000,
+      "falhas": 0,
+      "enviosRepetidos": 0,
+      "memoriaPicoMB": 952,
+      "consultaCrmDuranteEnvioMs": {
+        "mediana": 6,
+        "maxima": 6
+      }
+    },
+    {
+      "destinatarios": 5000,
+      "numerosRemetentes": 10,
+      "campanhasSimultaneas": 10,
+      "criacaoDadosMs": 1140,
+      "preparacaoMs": 2538,
+      "envioMs": 28765,
+      "rodadasDeUmMinuto": 2,
+      "mensagensPorSegundo": 173.8,
+      "aceitas": 5000,
+      "falhas": 0,
+      "enviosRepetidos": 0,
+      "memoriaPicoMB": 1179,
+      "consultaCrmDuranteEnvioMs": {
+        "mediana": 12,
+        "maxima": 12
+      }
+    },
+    {
+      "destinatarios": 10000,
+      "numerosRemetentes": 10,
+      "campanhasSimultaneas": 10,
+      "criacaoDadosMs": 2270,
+      "preparacaoMs": 5787,
+      "envioMs": 59588,
+      "rodadasDeUmMinuto": 4,
+      "mensagensPorSegundo": 167.8,
+      "aceitas": 10000,
+      "falhas": 0,
+      "enviosRepetidos": 0,
+      "memoriaPicoMB": 1690,
+      "consultaCrmDuranteEnvioMs": {
+        "mediana": 21,
+        "maxima": 27
+      }
+    }
+  ]
+}
