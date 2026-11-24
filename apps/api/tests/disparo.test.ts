@@ -310,3 +310,26 @@ test('auditoria: eventos e tentativas não podem ser apagados', async t => {
   await assert.rejects(prisma.disparoEvento.deleteMany({ where: { usuarioId: loja.id } }))
   await assert.rejects(prisma.contatoAutorizacao.deleteMany({ where: { usuarioId: loja.id } }))
 })
+
+test('equipe: comunicado para os números conectados; não vira lead nem aciona o robô; resposta fica na campanha', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  falso.enviados.length = 0
+  const segredoBruno = randomUUID()
+  const asBruno = await prisma.assistenteComercial.create({ data: { vendedorId: loja.bruno, instancia: `inst-${randomUUID()}`, webhookSegredo: segredoBruno, status: 'CONECTADO', numeroWhatsapp: '5591900000002' } })
+  const r = await resolverPublico(dono(), { base: 'EQUIPE' }, { finalidade: 'OPERACIONAL', config: lerConfigLoja({}), remetenteNumero: '5591900000001' })
+  assert.deepEqual(r.elegiveis.map(c => c.telefone), ['5591900000002'], 'o número da equipe recebe; o próprio remetente não')
+  assert.equal(r.porMotivo.NUMERO_REMETENTE, 1)
+  const c = await criarCampanha('Comunicado', { publico: { base: 'EQUIPE' }, conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Reunião geral às 18h, {{primeiro_nome}}.' }] } })
+  await iniciarJa(c.id)
+  await rodarDisparo(6000)
+  assert.equal(falso.enviados.filter(e => e.destino === '5591900000002').length, 1)
+  const leadsAntes = await prisma.lead.count({ where: { usuarioId: loja.id } })
+  // Chega no WhatsApp do Bruno (vindo do número da Naiza): não vira lead nem conversa com robô.
+  await processarWebhookAssistente(segredoBruno, { event: 'messages.upsert', data: { key: { remoteJid: '5591900000001@s.whatsapp.net', fromMe: false, id: `E${randomUUID()}` }, pushName: 'Naiza', message: { conversation: 'Reunião geral às 18h, Bruno.' }, messageTimestamp: Math.floor(Date.now() / 1000) } })
+  assert.equal(await prisma.assistenteConversa.count({ where: { assistenteId: asBruno.id } }), 0)
+  // O Bruno responde: chega no WhatsApp da Naiza, fica na campanha, sem lead novo.
+  await processarWebhookAssistente(loja.segredoAna, { event: 'messages.upsert', data: { key: { remoteJid: '5591900000002@s.whatsapp.net', fromMe: false, id: `F${randomUUID()}` }, pushName: 'Bruno', message: { conversation: 'Ok, estarei lá' }, messageTimestamp: Math.floor(Date.now() / 1000) } })
+  assert.equal(await prisma.lead.count({ where: { usuarioId: loja.id } }), leadsAntes, 'nenhum lead novo para a equipe')
+  const d = await prisma.disparoDestinatario.findFirst({ where: { campanhaId: c.id, telefone: '5591900000002' } })
+  assert.ok(d?.respondeuEm, 'a resposta ficou registrada na campanha')
+})

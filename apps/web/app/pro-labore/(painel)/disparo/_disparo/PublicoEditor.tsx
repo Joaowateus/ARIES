@@ -7,12 +7,12 @@ import { disparoApi, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoP
 import { Paginacao, erroDe, n, useMeta } from './util'
 
 const BASES: Array<{ valor: DefinicaoPublicoDisparo['base']; rotulo: string }> = [
-  { valor: 'TODOS', rotulo: 'Todos os contatos' }, { valor: 'LEADS', rotulo: 'Leads' }, { valor: 'CLIENTES', rotulo: 'Clientes' }, { valor: 'CONTATARAM', rotulo: 'Quem já escreveu no WhatsApp' },
+  { valor: 'TODOS', rotulo: 'Todos os contatos' }, { valor: 'LEADS', rotulo: 'Leads' }, { valor: 'CLIENTES', rotulo: 'Clientes' }, { valor: 'CONTATARAM', rotulo: 'Quem já escreveu no WhatsApp' }, { valor: 'EQUIPE', rotulo: 'Equipe (WhatsApp conectado)' },
 ]
 const OPS: Record<string, string> = { igual: 'é', em: 'é um destes', contem: 'contém', vazio: 'está vazio', entre: 'entre', ultimos_dias: 'nos últimos (dias)', ha_mais_de_dias: 'há mais de (dias)', maior: 'maior que', menor: 'menor que' }
 const ETAPAS = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA', 'VENDA']
 const OPCOES: Record<string, Array<[string, string]>> = {
-  situacao: [['ABERTO', 'Lead aberto'], ['PERDIDO', 'Lead perdido'], ['FECHADO', 'Lead com venda'], ['CLIENTE', 'Cliente'], ['CONTATO', 'Só conversa no WhatsApp']],
+  situacao: [['ABERTO', 'Lead aberto'], ['PERDIDO', 'Lead perdido'], ['FECHADO', 'Lead com venda'], ['CLIENTE', 'Cliente'], ['CONTATO', 'Só conversa no WhatsApp'], ['EQUIPE', 'Equipe']],
   etapa: ETAPAS.map(e => [e, e.charAt(0) + e.slice(1).toLowerCase()]),
   regiao: [['Norte', 'Norte'], ['Nordeste', 'Nordeste'], ['Centro-Oeste', 'Centro-Oeste'], ['Sudeste', 'Sudeste'], ['Sul', 'Sul']],
   temperatura: [['QUENTE', 'Quente'], ['MORNO', 'Morno'], ['FRIO', 'Frio']],
@@ -157,7 +157,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
             </div>
             {Object.keys(previa.porMotivo).length > 0 && (
               <ul className="pl-hint" style={{ margin: '6px 0', paddingLeft: 18 }}>
-                {Object.entries(previa.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b>{m === 'NUMERO_DA_EQUIPE' ? ' (número conectado ao ARIES: o robô dele responderia à campanha)' : ''}</li>)}
+                {Object.entries(previa.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b></li>)}
               </ul>
             )}
             {finalidade === 'MARKETING' && previa.porMotivo.SEM_AUTORIZACAO > 0 && <p className="pl-hint">Mensagem promocional só vai para quem autorizou (registre em Públicos › Autorizações){meta.config.baseMarketing === 'RELACAO' ? ' ou já tem relação comercial com a loja' : ''}.</p>}

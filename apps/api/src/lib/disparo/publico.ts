@@ -10,7 +10,7 @@ import { estadosDeAutorizacao } from './autorizacao'
 
 // ---------- Definição ----------
 
-export const BASES = ['TODOS', 'LEADS', 'CLIENTES', 'CONTATARAM'] as const
+export const BASES = ['TODOS', 'LEADS', 'CLIENTES', 'CONTATARAM', 'EQUIPE'] as const
 export type Base = typeof BASES[number]
 export interface Condicao { campo: string; op: string; valor?: unknown }
 export interface Grupo { op: 'E' | 'OU'; itens: Array<Condicao | Grupo> }
@@ -30,6 +30,7 @@ export const PREDEFINIDOS: Array<{ chave: string; nome: string; descricao: strin
   { chave: 'TODOS_CONTATOS', nome: 'Todos os contatos', descricao: 'Leads, clientes e quem já escreveu no WhatsApp, sem repetir o mesmo número.', definicao: { base: 'TODOS' } },
   { chave: 'TODOS_LEADS', nome: 'Todos os leads', descricao: 'Todos os leads do CRM, de qualquer etapa.', definicao: { base: 'LEADS' } },
   { chave: 'CLIENTES', nome: 'Clientes', descricao: 'Clientes cadastrados e leads com venda.', definicao: { base: 'CLIENTES' } },
+  { chave: 'EQUIPE', nome: 'Equipe (WhatsApp conectado)', descricao: 'Cada pessoa da equipe com o WhatsApp conectado ao ARIES (comunicado interno). Use a finalidade Operacional.', definicao: { base: 'EQUIPE' } },
   { chave: 'CONTATARAM', nome: 'Quem já entrou em contato', descricao: 'Quem já escreveu no WhatsApp de algum vendedor.', definicao: { base: 'CONTATARAM' } },
   { chave: 'LEADS_NOVOS', nome: 'Leads novos (30 dias)', descricao: 'Leads cadastrados nos últimos 30 dias.', definicao: { base: 'LEADS', filtros: { op: 'E', itens: [{ campo: 'cadastro', op: 'ultimos_dias', valor: 30 }] } } },
   { chave: 'LEADS_SEM_RESPOSTA', nome: 'Leads sem resposta', descricao: 'Leads abertos ainda em Lead ou Abordado.', definicao: { base: 'LEADS', filtros: { op: 'E', itens: [{ campo: 'situacao', op: 'igual', valor: 'ABERTO' }, { campo: 'etapa', op: 'em', valor: ['LEAD', 'ABORDADO'] }] } } },
@@ -76,7 +77,7 @@ export interface Contato {
   origem: string | null
   cidade: string | null
   etapa: string | null
-  situacao: 'ABERTO' | 'PERDIDO' | 'FECHADO' | 'CLIENTE' | 'CONTATO'
+  situacao: 'ABERTO' | 'PERDIDO' | 'FECHADO' | 'CLIENTE' | 'CONTATO' | 'EQUIPE'
   criadoEm: Date | null
   ultimoContato: Date | null
   ultimaCompra: Date | null
@@ -227,6 +228,17 @@ async function lerConversas(q: Leitor, ids?: string[]): Promise<Contato[]> {
   ]
 }
 
+/** A equipe: o WhatsApp conectado de cada pessoa ativa (só a gestão monta este público). */
+async function lerEquipe(q: Leitor): Promise<Contato[]> {
+  if (q.papel !== 'DONO' && q.papel !== 'SUPERVISOR') return []
+  const as = await prisma.assistenteComercial.findMany({ where: { vendedor: { usuarioId: q.usuarioId, ativo: true }, numeroWhatsapp: { not: null } }, select: { numeroWhatsapp: true, criadoEm: true, vendedor: { select: { id: true, nome: true } } } })
+  return as.map(a => ({
+    telefone: normalizarTelefone(a.numeroWhatsapp), bruto: a.numeroWhatsapp, nome: a.vendedor.nome, leadId: null, clienteId: null, conversaId: null, vendedorId: a.vendedor.id, vendedorNome: a.vendedor.nome,
+    origem: null, cidade: null, etapa: null, situacao: 'EQUIPE' as const, criadoEm: a.criadoEm, ultimoContato: null, ultimaCompra: null, modelo: null, valor: null, temperatura: null,
+    destinoPerda: null, reativado: false, conversas: 0, visitas: 0, propostas: 0, bloqueado: false, autorizacao: PENDENTE,
+  }))
+}
+
 /** Junta as fontes num contato por telefone (o lead mais recente manda; o cliente e a conversa completam). */
 function juntar(grupos: Contato[][]): { contatos: Contato[]; duplicados: number; semTelefone: Contato[] } {
   const porTel = new Map<string, Contato>()
@@ -250,7 +262,7 @@ function juntar(grupos: Contato[][]): { contatos: Contato[]; duplicados: number;
 export const MOTIVOS: Record<string, string> = {
   SEM_TELEFONE: 'Sem telefone ou número inválido', DUPLICADO: 'Número repetido (fica um só)', BLOQUEADO: 'Contato bloqueado',
   DESCADASTRADO: 'Pediu para não receber (descadastrado)', SEM_AUTORIZACAO: 'Sem autorização para mensagens promocionais',
-  NUMERO_DA_EQUIPE: 'Número da própria equipe', VARIAVEL_SEM_VALOR: 'Falta um dado usado na mensagem (sem valor alternativo)',
+  NUMERO_REMETENTE: 'É o próprio número que envia a campanha', VARIAVEL_SEM_VALOR: 'Falta um dado usado na mensagem (sem valor alternativo)',
   RETIRADO: 'Retirado à mão da lista',
 }
 export interface Resultado {
@@ -280,6 +292,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
       if (d.base === 'CLIENTES') grupos.push((await lerLeads(q)).filter(c => c.situacao === 'FECHADO'))
     }
     if (d.base === 'TODOS' || d.base === 'CONTATARAM') grupos.push(await lerConversas(q))
+    if (d.base === 'EQUIPE') grupos.push(await lerEquipe(q))
   }
   // Seleção manual (sempre entra, mesmo fora dos filtros).
   const manuais: Contato[] = [
@@ -298,8 +311,8 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
   const usaAutorizacao = JSON.stringify(d.filtros ?? {}).includes('"autorizacao"')
   const candidatos = usaAutorizacao ? contatos.filter(c => passaGrupo(c, d.filtros, agora) || manuais.some(m => m.telefone === c.telefone)) : contatos
 
-  const equipe = new Set((await prisma.assistenteComercial.findMany({ where: { vendedor: { usuarioId: q.usuarioId } }, select: { numeroWhatsapp: true } })).map(a => normalizarTelefone(a.numeroWhatsapp)).filter(Boolean) as string[])
-  if (opcoes.remetenteNumero) { const n = normalizarTelefone(opcoes.remetenteNumero); if (n) equipe.add(n) }
+  // Números da equipe podem receber (comunicado à empresa toda); só o próprio número que envia fica de fora.
+  const remetente = opcoes.remetenteNumero ? normalizarTelefone(opcoes.remetenteNumero) : null
   const retirados = new Set((manual.excluir ?? []).map(t => normalizarTelefone(t)).filter(Boolean) as string[])
   const loja = (await prisma.proLaboreUsuario.findUnique({ where: { id: q.usuarioId }, select: { nome: true } }))?.nome ?? ''
   const textos = (opcoes.conteudo?.passos ?? []).map(p => p.texto ?? '').filter(Boolean)
@@ -314,7 +327,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
   for (const c of candidatos) {
     const a = c.autorizacao
     if (retirados.has(c.telefone!)) { excluir(c, 'RETIRADO'); continue }
-    if (equipe.has(c.telefone!)) { excluir(c, 'NUMERO_DA_EQUIPE'); continue }
+    if (remetente && c.telefone === remetente) { excluir(c, 'NUMERO_REMETENTE'); continue }
     if (c.bloqueado || a === 'BLOQUEADO') { excluir(c, 'BLOQUEADO'); continue }
     if (opcoes.finalidade === 'MARKETING') {
       if (a === 'REVOGADO') { excluir(c, 'DESCADASTRADO'); continue }
