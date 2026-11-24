@@ -12,7 +12,7 @@ import { resolverPublico, passaGrupo, type Contato } from '../src/lib/disparo/pu
 import { registrarAutorizacao } from '../src/lib/disparo/autorizacao'
 import { cancelarCampanha, distribuir, prepararCampanha, rodarDisparo, transicionar, atualizarStatusDoProvedor, reconciliar } from '../src/lib/disparo/motor'
 import { resumoCampanha } from '../src/lib/disparo/relatorios'
-import { criarProvedorFalso, definirProvedor, type ProvedorFalso } from '../src/lib/disparo/provedor'
+import { ErroEnvio, criarProvedorFalso, definirProvedor, type ProvedorFalso } from '../src/lib/disparo/provedor'
 import { processarWebhookAssistente } from '../src/lib/assistenteMotor'
 
 let temBanco = false
@@ -306,6 +306,41 @@ test('prioridade do atendimento e número desconectado', async t => {
   await rodarDisparo(15_000)
   assert.ok(falso.enviados.length > 0, 'depois do silêncio do atendimento, a campanha segue na mesma rodada')
   void conv
+})
+
+test('"Connection Closed": o motor religa a sessão uma vez e continua; se não voltar, avisa na campanha', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  await prisma.assistenteMensagem.updateMany({ where: { conversa: { assistenteId: loja.asAna } }, data: { criadoEm: new Date(Date.now() - 120_000) } })
+  await prisma.disparoTrava.updateMany({ where: { chave: `reiniciar:${loja.asAna}` }, data: { ate: new Date(0) } })
+  falso.enviados.length = 0
+  const c = await criarCampanha('Sessão caída', { conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Sessão {{primeiro_nome}}' }] } })
+  await iniciarJa(c.id)
+  // verificarConexao diz conectado, mas o envio falha com "connection closed" até religar.
+  const enviarOriginal = falso.enviar.bind(falso)
+  let caida = true
+  falso.enviar = async (r, d, e) => { if (caida) throw new ErroEnvio('Connection Closed', 'CONEXAO'); return enviarOriginal(r, d, e) }
+  falso.religaAoReconectar = true
+  const antes = falso.reconexoes
+  const reconectarOriginal = falso.reconectar.bind(falso)
+  falso.reconectar = async r => { caida = false; return reconectarOriginal(r) }
+  await rodarDisparo(20_000)
+  assert.equal(falso.reconexoes, antes + 1, 'religou uma vez')
+  assert.ok(falso.enviados.length > 0, 'depois de religar, enviou')
+  assert.equal(await prisma.disparoTentativa.count({ where: { mensagem: { campanhaId: c.id }, resultado: 'FALHA_DEFINITIVA' } }), 0)
+  assert.ok(await prisma.disparoEvento.count({ where: { campanhaId: c.id, tipo: 'RECONEXAO' } }) >= 1)
+  // Caiu de novo dentro de 5 min: não reinicia outra vez; a campanha mostra o aviso e nada é perdido.
+  caida = true
+  falso.reconectar = async () => { caida = true; return false }
+  const c2 = await criarCampanha('Sessão caída 2', { conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Outra {{primeiro_nome}}' }] } })
+  await iniciarJa(c2.id)
+  await rodarDisparo(20_000)
+  const cc = await prisma.disparoCampanha.findUnique({ where: { id: c2.id }, select: { erro: true } })
+  assert.match(String(cc?.erro), /Connection Closed/)
+  assert.ok(await prisma.disparoMensagem.count({ where: { campanhaId: c2.id, status: 'AGENDADA' } }) > 0, 'as mensagens esperam na fila')
+  falso.enviar = enviarOriginal
+  falso.reconectar = reconectarOriginal
+  falso.religaAoReconectar = false
+  await prisma.disparoCampanha.updateMany({ where: { id: { in: [c.id, c2.id] } }, data: { status: 'CANCELLED' } })
 })
 
 test('auditoria: eventos e tentativas não podem ser apagados', async t => {

@@ -203,6 +203,13 @@ A rotina `/sm/cron/minuto` é chamada pelo cron-job.org a cada 5 min e, pela eco
 - **Prioridade do atendimento:** antes, se o número tivesse qualquer mensagem de atendimento nos últimos 20 s, a rodada desistia; com o WhatsApp do vendedor movimentado a campanha podia nunca sair. Agora a rodada espera 8 s de silêncio do atendimento e envia na mesma rodada.
 - **Motivo de cada parada:** ao fim de cada rodada, o número remetente grava por que parou (intervalo, limite, fora do horário, atendimento, sem conexão, erro) em `pro_labore_disparo_travas` (`estado:remetente:<id>`); o painel mostra quando é atendimento ou erro, e a tela mostra o resultado da última rodada que ela pediu.
 
+## 10e. Sessão caída ("Connection Closed")
+
+Às vezes o servidor do WhatsApp (Evolution) diz que o número está conectado, mas a ligação com o WhatsApp caiu por baixo e todo envio volta "Connection Closed". O motor agora:
+1. Não gasta tentativa: a mensagem volta para a fila.
+2. Religa a sessão da instância (`/instance/restart`, sem QR) no máximo uma vez a cada 5 min por número, espera ela voltar e continua na mesma rodada. Registra o evento `RECONEXAO` na campanha.
+3. Se não voltar, a campanha mostra o aviso para reconectar o número em Conversas › Conexão (ler o QR de novo). Nada é perdido: as mensagens esperam na fila.
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

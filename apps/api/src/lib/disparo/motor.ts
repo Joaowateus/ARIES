@@ -345,6 +345,7 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
   await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING', erro: { not: null } }, data: { erro: null } })
   const cfgLoja = await configDaLoja(a.vendedor.usuarioId)
   let parada: ParadaRemetente = 'PRAZO'
+  let reconectou = false
   while (Date.now() < prazo - 2000) {
     const agora = new Date()
     // A janela e o ritmo vêm da campanha da próxima mensagem; o número usa o ritmo mais lento entre as campanhas ativas dele.
@@ -382,7 +383,19 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
     })
     if (r === 'ENVIADA') out.enviadas += 1
     else if (r === 'PULADA') out.puladas += 1
-    else if (r === 'SEM_CONEXAO') { out.semConexao = true; parada = 'SEM_CONEXAO'; break }
+    else if (r === 'SEM_CONEXAO') {
+      // "Connection Closed": o servidor diz conectado, mas a sessão caiu. Religa uma vez (no máximo a
+      // cada 5 min por número, para não ficar reiniciando) e tenta de novo; se não voltar, avisa na campanha.
+      if (!reconectou && Date.now() < prazo - 13_000 && await pegarTrava(`reiniciar:${assistenteId}`, 5 * MIN)) {
+        reconectou = true
+        const ok = await provedor().reconectar(remetente, 9000).catch(() => false)
+        await prisma.disparoCampanha.findMany({ where: { assistenteId, status: 'RUNNING' }, select: { id: true, usuarioId: true } }).then(cs => Promise.all(cs.map(c => evento({ usuarioId: c.usuarioId, campanhaId: c.id, tipo: 'RECONEXAO', descricao: ok ? 'A conexão do WhatsApp tinha caído ("Connection Closed"): o ARIES religou a sessão e o envio continua' : 'A conexão do WhatsApp caiu ("Connection Closed") e não voltou ao religar' }))))
+        if (ok) continue
+      }
+      out.semConexao = true; parada = 'SEM_CONEXAO'
+      await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING' }, data: { erro: 'A conexão do WhatsApp deste número caiu no servidor (Connection Closed). O ARIES tenta religar sozinho a cada 5 min; se continuar, reconecte o número em Conversas › Conexão (ler o QR de novo)' } })
+      break
+    }
     else out.falhas += 1
   }
   return { out, parada }
@@ -678,6 +691,7 @@ export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): P
   // O que aconteceu na última rodada deste número (últimos 2 min).
   const recente = remetente && agora.getTime() - new Date(remetente.em).getTime() < 2 * MIN
   if (recente && remetente!.motivo === 'ERRO') return s('SEM_CONEXAO', 'Erro na última tentativa', `O envio deu erro: ${remetente!.erro ?? 'sem detalhe'}. O ARIES tenta de novo na próxima rodada.`)
+  if (recente && remetente!.motivo === 'SEM_CONEXAO') return s('SEM_CONEXAO', 'WhatsApp do remetente sem conexão', 'A conexão do WhatsApp deste número caiu no servidor (Connection Closed). O ARIES tenta religar sozinho (no máximo a cada 5 min) e continua de onde parou. Se não voltar, reconecte o número em Conversas › Conexão (ler o QR de novo). Nenhuma mensagem foi perdida: elas esperam na fila.')
   if (recente && remetente!.motivo === 'ATENDIMENTO') return s('ATENDIMENTO', 'Esperando o atendimento', `O WhatsApp deste número está em conversa com cliente agora. O disparo espera ${SILENCIO_ATENDIMENTO_MS / 1000} s sem mensagens de atendimento e envia em seguida (o atendimento tem prioridade).`, new Date(agora.getTime() + SILENCIO_ATENDIMENTO_MS))
   const pendentes = await prisma.disparoMensagem.findFirst({ where: { campanhaId, status: 'AGENDADA' }, orderBy: { enviarApos: 'asc' }, select: { enviarApos: true, proximaTentativaEm: true } })
   if (!pendentes) return s('ENVIANDO', 'Finalizando', 'Não há mais mensagens na fila: a campanha conclui na próxima rodada.')

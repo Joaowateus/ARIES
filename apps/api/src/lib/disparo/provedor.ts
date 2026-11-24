@@ -3,7 +3,7 @@
 // já tem (Evolution API, uma instância por vendedor — AssistenteComercial), sem conexão paralela e
 // sem credencial nova. Trocar para a API oficial (WhatsApp Cloud API) é escrever outra implementação.
 import { randomUUID } from 'crypto'
-import { ErroWhatsapp, enviadasParaContato, enviarMidia, enviarTexto, estadoInstancia, evolutionConfigurada, numerosComWhatsapp } from '../whatsappEvolution'
+import { ErroWhatsapp, enviadasParaContato, enviarMidia, enviarTexto, estadoInstancia, evolutionConfigurada, numerosComWhatsapp, reiniciarInstancia } from '../whatsappEvolution'
 import { ambienteDeTeste } from '../ambiente'
 import { classificarErro, type ClasseErro, type TipoPasso } from './regras'
 
@@ -34,6 +34,8 @@ export interface ProvedorWhatsapp {
   reconciliar(r: Remetente, destino: string, texto: string, desde: Date): Promise<string | null>
   /** Quais números têm WhatsApp (quando o provedor sabe responder). */
   numerosExistentes(r: Remetente, numeros: string[]): Promise<Set<string> | null>
+  /** Tenta religar a sessão caída ("Connection Closed") sem pedir QR; true se voltou a ficar conectada. */
+  reconectar(r: Remetente, prazoMs?: number): Promise<boolean>
 }
 
 const MB = 1024 * 1024
@@ -81,6 +83,17 @@ export const provedorEvolution: ProvedorWhatsapp = {
     if (!r.instancia || !numeros.length) return null
     try { return await numerosComWhatsapp(r.instancia, numeros) } catch { return null }
   },
+  async reconectar(r, prazoMs = 12_000) {
+    if (!r.instancia || ambienteDeTeste() || !evolutionConfigurada()) return false
+    const fim = Date.now() + prazoMs
+    try { await reiniciarInstancia(r.instancia) } catch { return false }
+    // Dá um tempo para a sessão subir e confere.
+    while (Date.now() < fim) {
+      await new Promise(ok => setTimeout(ok, 2000))
+      try { if ((await estadoInstancia(r.instancia)) === 'open') { await new Promise(ok => setTimeout(ok, 1500)); return true } } catch { /* tenta de novo */ }
+    }
+    return false
+  },
 }
 
 // ---------- Provedor de teste (sem rede): grava o que "enviou" e simula falhas ----------
@@ -91,6 +104,9 @@ export interface ProvedorFalso extends ProvedorWhatsapp {
   falhas: Map<string, ClasseErro>
   conectado: boolean
   atrasoMs: number
+  /** Quantas vezes o motor pediu para religar a sessão; e se religar resolve (simula o "Connection Closed"). */
+  reconexoes: number
+  religaAoReconectar: boolean
 }
 export function criarProvedorFalso(): ProvedorFalso {
   let n = 0
@@ -110,6 +126,8 @@ export function criarProvedorFalso(): ProvedorFalso {
     },
     async reconciliar(_r, destino, texto) { return p.enviados.find(x => x.destino === destino && x.texto === texto)?.providerId ?? null },
     async numerosExistentes() { return null },
+    async reconectar() { p.reconexoes += 1; if (p.religaAoReconectar) p.conectado = true; return p.conectado },
+    reconexoes: 0, religaAoReconectar: false,
   }
   return p
 }
