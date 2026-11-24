@@ -181,6 +181,19 @@ export async function atualizarPerfil(instancia: string, perfil: { nome?: string
 // Desconecta o aparelho e apaga a instância (o próximo "Conectar" começa do
 // zero, com QR novo). Erro de "não existe" é ignorado — o objetivo já foi
 // atingido.
+/**
+ * Reinicia a sessão da instância no servidor (sem desconectar o número nem pedir QR de novo).
+ * Resolve o "Connection Closed": o servidor diz "open", mas a ligação com o WhatsApp caiu por baixo.
+ * Evolution v2 usa POST; versões antigas, PUT.
+ */
+export async function reiniciarInstancia(instancia: string): Promise<void> {
+  const caminho = `/instance/restart/${encodeURIComponent(instancia)}`
+  try { await chamar('POST', caminho, undefined, 10_000) } catch (e) {
+    if (e instanceof ErroWhatsapp && (e.status === 404 || e.status === 405)) { await chamar('PUT', caminho, undefined, 10_000); return }
+    throw e
+  }
+}
+
 export async function removerInstancia(instancia: string): Promise<void> {
   for (const caminho of [`/instance/logout/${encodeURIComponent(instancia)}`, `/instance/delete/${encodeURIComponent(instancia)}`]) {
     try { await chamar('DELETE', caminho) } catch (e) {
