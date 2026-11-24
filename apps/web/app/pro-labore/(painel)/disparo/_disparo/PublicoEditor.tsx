@@ -157,7 +157,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
             </div>
             {Object.keys(previa.porMotivo).length > 0 && (
               <ul className="pl-hint" style={{ margin: '6px 0', paddingLeft: 18 }}>
-                {Object.entries(previa.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b></li>)}
+                {Object.entries(previa.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b>{m === 'NUMERO_DA_EQUIPE' ? ' (número conectado ao ARIES: o robô dele responderia à campanha)' : ''}</li>)}
               </ul>
             )}
             {finalidade === 'MARKETING' && previa.porMotivo.SEM_AUTORIZACAO > 0 && <p className="pl-hint">Mensagem promocional só vai para quem autorizou (registre em Públicos › Autorizações){meta.config.baseMarketing === 'RELACAO' ? ' ou já tem relação comercial com a loja' : ''}.</p>}
