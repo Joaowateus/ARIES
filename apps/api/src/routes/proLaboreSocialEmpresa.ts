@@ -404,8 +404,6 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   // PDF 02 · ATV: as ocorrências de hoje das rotinas e a régua de cobrança.
   const rotinas = await o.rodar('rotinas', () => gerarOcorrenciasDeRotina(agora), { ocorrenciasRotina: 0 })
   const regua = await o.rodar('régua', () => rodarRegua(agora), { reguaRegistros: 0, reguaEnviados: 0 })
-  // PDF 07 · Central de Conhecimento: os eventos gravados pelo banco vão para o índice (frescor de 15 min).
-  const centralEventos = await o.rodar('central de conhecimento', lim => processarEventosCentral(Math.min(6000, lim), agora), { centralProcessados: 0, centralFalhas: 0 })
   // Ligações: aviso na hora e lembrete 30 min depois para quem liga (Aries ou chat "Você").
   const ligacoes = await o.rodar('ligações', () => avisarLigacoes(agora), { avisosLigacao: 0 })
   // Avisa o vendedor de lead esperando resposta (pelo Aries, quando vinculado).
@@ -425,6 +423,9 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   // Pré-venda do robô (Ajuste 3): cadências escolhidas pelo vendedor e retomada do roteiro parado.
   const cadencias = await o.rodar('cadências', lim => rodarCadencias(agora, Math.min(6000, lim)), { cadenciasEnviadas: 0, cadenciasConcluidas: 0 })
   const retomada = await o.rodar('retomada', lim => retomarRoteiros(agora, Math.min(5000, lim)), { retomadas: 0, entreguesPorSilencio: 0 })
+  // PDF 07 · Central de Conhecimento: os eventos gravados pelo banco vão para o índice (frescor de 15 min).
+  // Depois do WhatsApp (follow, varredura, cadências e retomada): o índice pode esperar; o cliente, não.
+  const centralEventos = await o.rodar('central de conhecimento', lim => processarEventosCentral(Math.min(6000, lim), agora), { centralProcessados: 0, centralFalhas: 0 })
   // Aries no WhatsApp: o resumo da manhã no horário escolhido pelo gestor.
   const agente = await o.rodar('Aries manhã', lim => rodarAgente(agora, Math.min(5000, lim)), { manhaAgente: 0 })
   // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).

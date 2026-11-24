@@ -37,6 +37,7 @@ import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
 } from '../lib/whatsappEvolution'
+import { diagnosticarAssistentes } from '../lib/assistenteDiagnostico'
 import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa, avaliarJornada, atualizarNota } from '../lib/assistenteMotor'
 import {
   CAMPOS_LEAD as CAMPOS_LEAD_ASSISTENTE, CONFIG_PADRAO as CONFIG_ASSISTENTE_PADRAO, lerConfig as lerConfigAssistente,
@@ -3094,6 +3095,25 @@ function urlWebhookAssistente(req: Request, segredo: string): string {
   const base = (process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '')
   return `${base}/pro-labore/assistente/webhook/${segredo}`
 }
+
+// Diagnóstico (só o dono): por que o lead não entrou no CRM ou o robô não abordou, número por número.
+router.get('/assistente/diagnostico', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  res.json(await diagnosticarAssistentes(req.proLaboreUser!.sub, segredo => urlWebhookAssistente(req, segredo)))
+})
+// Reaponta o aviso de mensagens (webhook) do servidor do WhatsApp para esta API.
+router.post('/assistente/diagnostico/:assistenteId/webhook', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const a = await prisma.assistenteComercial.findFirst({ where: { id: String(req.params.assistenteId), vendedor: { usuarioId: req.proLaboreUser!.sub } }, select: { id: true, instancia: true, webhookSegredo: true } })
+  if (!a) { res.status(404).json({ error: 'Assistente não encontrado' }); return }
+  if (!a.instancia) { res.status(400).json({ error: 'Esse WhatsApp ainda não foi conectado: conecte em Conversas › Conexão.' }); return }
+  const segredo = a.webhookSegredo ?? randomBytes(24).toString('hex')
+  if (!a.webhookSegredo) await prisma.assistenteComercial.update({ where: { id: a.id }, data: { webhookSegredo: segredo } })
+  try {
+    await configurarWebhookWhatsapp(a.instancia, urlWebhookAssistente(req, segredo))
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(502).json({ error: mensagemErroWhatsapp(e) })
+  }
+})
 
 function mensagemErroWhatsapp(e: unknown): string {
   return e instanceof ErroWhatsapp ? e.message : 'Falha inesperada ao falar com o servidor do WhatsApp'

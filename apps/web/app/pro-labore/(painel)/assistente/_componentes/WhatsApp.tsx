@@ -7,6 +7,7 @@ import { proLaboreApi, type ConfigAssistenteResposta, type ResumoAssistente, typ
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../../PageHeader'
 import { Conexao } from './Conexao'
+import { DiagnosticoWhatsappCard } from './Diagnostico'
 import { AtendimentosPorDia, DesfechoEOrigem, FunilCrm, FunilRoteiro, HorarioChegada, KpisAssistente } from './Desempenho'
 import { Conversas } from './Conversas'
 import { Roteiro } from './Roteiro'
@@ -138,6 +139,7 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
             isDono={isDono}
             onAtualizar={atualizar}
           />
+          {isDono && <DiagnosticoWhatsappCard />}
 
           {!conectado && (
             <ol className="pl-as-como">
