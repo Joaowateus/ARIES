@@ -50,10 +50,12 @@ const nada = (): Permissoes => Object.fromEntries(MODULOS.map(m => [m.chave, 'NE
 const com = (base: Permissoes, extra: Permissoes): Permissoes => ({ ...base, ...extra })
 
 // O mesmo que vendedor e supervisor já viam antes desta tela.
-const PADRAO_VENDEDOR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', socialMedia: 'EDITAR', assistente: 'EDITAR', copiloto: 'EDITAR' })
-const PADRAO_SUPERVISOR = com(PADRAO_VENDEDOR, { agenda: 'EDITAR', ocorrencias: 'EDITAR', disparo: 'EDITAR' })
+const PADRAO_VENDEDOR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', socialMedia: 'EDITAR', assistente: 'EDITAR', copiloto: 'EDITAR', disparo: 'EDITAR' })
+// Disparo liberado para todo o time (o dono restringe em Configurações › Acessos): campanha de quem
+// não é da gestão passa por aprovação, e cada um usa só o próprio número e a própria carteira.
+const PADRAO_SUPERVISOR = com(PADRAO_VENDEDOR, { agenda: 'EDITAR', ocorrencias: 'EDITAR' })
 // SDR (PDF 01): pré-venda e crédito. Sem Vendas, Financeiro nem as cifras do dono.
-const PADRAO_SDR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', assistente: 'EDITAR', copiloto: 'EDITAR' })
+const PADRAO_SDR = com(nada(), { painel: 'VER', crm: 'EDITAR', agenda: 'VER', reunioes: 'EDITAR', anotacoes: 'EDITAR', assistente: 'EDITAR', copiloto: 'EDITAR', disparo: 'EDITAR' })
 
 export interface PerfilPronto { chave: string; rotulo: string; descricao: string; escopo: Escopo; vende: boolean; permissoes: Permissoes }
 

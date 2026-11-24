@@ -22,7 +22,7 @@ before(async () => {
   const u = await prisma.proLaboreUsuario.create({ data: { nome: 'Loja Rotas', email: `rotas-${randomUUID()}@t.local`, senhaHash: 'x' } })
   loja.id = u.id
   const cria = (nome: string, papel: string, permissoes?: object) => prisma.vendedor.create({ data: { usuarioId: u.id, nome, papel, email: `${randomUUID()}@t.local`, senhaHash: 'x', ...(permissoes ? { permissoes } : {}) } })
-  const [s, v, n] = await Promise.all([cria('Sara Supervisora', 'SUPERVISOR'), cria('Vera Vendedora', 'VENDEDOR', { disparo: 'EDITAR' }), cria('Nino Sem Acesso', 'VENDEDOR')])
+  const [s, v, n] = await Promise.all([cria('Sara Supervisora', 'SUPERVISOR'), cria('Vera Vendedora', 'VENDEDOR', { disparo: 'EDITAR' }), cria('Nino Sem Acesso', 'VENDEDOR', { disparo: 'NENHUM' })])
   loja.sup = s.id; loja.vend = v.id; loja.semAcesso = n.id
   loja.asVend = (await prisma.assistenteComercial.create({ data: { vendedorId: v.id, instancia: `i-${randomUUID()}`, status: 'CONECTADO', numeroWhatsapp: '5591900000011' } })).id
   loja.asSup = (await prisma.assistenteComercial.create({ data: { vendedorId: s.id, instancia: `i-${randomUUID()}`, status: 'CONECTADO', numeroWhatsapp: '5591900000012' } })).id
@@ -159,4 +159,13 @@ test('situação explica: agendada no futuro e fora do horário de envio', async
   // Janela seg–sáb 09–19 (Brasília): domingo 10h → abre segunda 09:00 (12:00 UTC).
   const domingo = new Date('2026-11-29T13:00:00Z')
   assert.equal(proximaAbertura({ inicio: '09:00', fim: '19:00', dias: [1, 2, 3, 4, 5, 6] }, domingo)?.toISOString(), '2026-11-30T12:00:00.000Z')
+})
+
+test('Disparo liberado para o time: sem permissões salvas, vendedor e SDR entram com EDITAR', async () => {
+  const { permissoesEfetivas, PERFIS } = await import('../src/lib/acessos')
+  assert.equal(permissoesEfetivas('VENDEDOR', null).disparo, 'EDITAR')
+  assert.equal(permissoesEfetivas('SUPERVISOR', null).disparo, 'EDITAR')
+  assert.equal(PERFIS.find(p => p.chave === 'SDR')!.permissoes.disparo, 'EDITAR')
+  // O dono continua podendo tirar.
+  assert.equal(permissoesEfetivas('VENDEDOR', { disparo: 'NENHUM' }).disparo, 'NENHUM')
 })
