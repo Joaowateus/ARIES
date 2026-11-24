@@ -8,6 +8,7 @@ import { nivelAtende } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
 import { SINAL_APRESENTADOR_MS } from '../lib/apresentacaoTransmissao'
 import { LEAD_EM_ANDAMENTO, contarFollows, fimDoDiaBR } from '../lib/contagemFollows'
+import { disparoAtivo } from '../lib/disparo/motor'
 
 const router = Router()
 const DIA = 864e5
@@ -17,12 +18,14 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
   const u = req.proLaboreUser!
   const dono = u.papel === 'DONO'
   const veCrm = dono || nivelAtende(req.acessos?.crm, 'VER')
+  const veDisparo = dono || nivelAtende(req.acessos?.disparo, 'VER')
+  const gestaoDisparo = dono || u.papel === 'SUPERVISOR'
   const agora = Date.now()
   const hoje = new Date(Math.floor((agora - OFFSET_BR) / DIA) * DIA + OFFSET_BR), amanha = new Date(hoje.getTime() + DIA)
   const lead = veCrm ? leadWhereBase(req) : null
   // Ligações da própria pessoa (o dono: as dos leads sem vendedor) que já chegaram na hora: aviso na tela.
   const minhas = lead ? { status: 'PENDENTE', vendedorId: dono ? null : u.vendedorId ?? '-', agendadaPara: { lte: new Date(agora + 60e3), gte: new Date(agora - 12 * 3600e3) }, lead } : null
-  const [aoVivo, pedidosReuniao, followsAteHoje, avisos, ligAtrasadas, ligHoje, ligAgora] = await Promise.all([
+  const [aoVivo, pedidosReuniao, followsAteHoje, avisos, ligAtrasadas, ligHoje, ligAgora, disparoComEnvio, disparoAprovar] = await Promise.all([
     prisma.apresentacao.count({ where: { usuarioId: u.sub, aoVivo: true, aprovacao: 'APROVADA', apresentadorSinalEm: { gte: new Date(agora - SINAL_APRESENTADOR_MS) } } }),
     dono ? prisma.apresentacao.count({ where: { usuarioId: u.sub, aprovacao: 'PENDENTE' } }) : 0,
     // Follows: a mesma regra da faixa do Funil (lib/contagemFollows), só dos leads em andamento.
@@ -35,9 +38,12 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
       where: minhas, orderBy: { agendadaPara: 'asc' }, take: 5,
       select: { id: true, agendadaPara: true, passo: true, totalPassos: true, instrucao: true, discadaEm: true, discagens: true, status: true, lead: { select: { id: true, nomeCliente: true, telefone: true } } },
     }) : [],
+    // ARIES Disparo: há envio pendente? (a tela aberta ajuda a enviar) e campanhas esperando aprovação.
+    veDisparo ? disparoAtivo().catch(() => false) : false,
+    veDisparo && gestaoDisparo ? prisma.disparoCampanha.count({ where: { usuarioId: u.sub, status: 'NEEDS_REVIEW' } }) : 0,
   ])
   const follows = contarFollows(followsAteHoje, new Date(agora))
-  res.json({ aoVivo, pedidosReuniao, follows: lead ? follows : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje, agora: ligAgora } : null, avisosSocial: avisos.map(a => a.titulo) })
+  res.json({ aoVivo, pedidosReuniao, follows: lead ? follows : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje, agora: ligAgora } : null, avisosSocial: avisos.map(a => a.titulo), disparo: veDisparo ? { ativo: disparoComEnvio, aprovar: disparoAprovar } : null })
 })
 
 export default router

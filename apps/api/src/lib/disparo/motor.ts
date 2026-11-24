@@ -28,7 +28,8 @@ import { provedor, type Remetente } from './provedor'
 import { comTrava, pegarTrava, registrarRodada, soltarTrava, ultimasRodadas, type OrigemRodada } from './travas'
 
 const MIN = 60_000
-const TRAVA_MAX_MS = 3 * MIN // ENVIANDO há mais que isso = o processo caiu no meio do envio
+const TRAVA_MAX_MS = 3 * MIN
+const ENVIO_MIN_MS = 9_000 // tempo mínimo que precisa sobrar na rodada para começar um envio // ENVIANDO há mais que isso = o processo caiu no meio do envio
 const RECONCILIAR_ATE_MS = 30 * MIN
 const LOTE_CRIACAO = 1000
 
@@ -200,7 +201,7 @@ async function avancarSequencia(m: MensagemTravada, passos: Passo[], agora: Date
 }
 
 /** Envia uma mensagem já travada. Devolve se o número remetente deve parar nesta rodada (sem conexão). */
-async function enviarTravada(m: MensagemTravada, remetente: Remetente, agora: Date): Promise<'ENVIADA' | 'PULADA' | 'SEM_CONEXAO' | 'FALHOU'> {
+async function enviarTravada(m: MensagemTravada, remetente: Remetente, agora: Date, prazo = Date.now() + 20_000): Promise<'ENVIADA' | 'PULADA' | 'SEM_CONEXAO' | 'FALHOU'> {
   const c = await prisma.disparoCampanha.findUnique({ where: { id: m.campanhaId }, select: { usuarioId: true, nome: true, finalidade: true, iniciadaEm: true, config: true, conteudo: true } })
   const d = await prisma.disparoDestinatario.findUnique({ where: { id: m.destinatarioId }, select: { telefone: true, status: true, leadId: true, respondeuEm: true, dados: true } })
   if (!c || !d) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'CANCELADA', ultimoErro: 'Campanha ou destinatário não encontrado' } }); return 'PULADA' }
@@ -234,7 +235,7 @@ async function enviarTravada(m: MensagemTravada, remetente: Remetente, agora: Da
   const tentativa = await prisma.disparoTentativa.create({ data: { mensagemId: m.id, numero, inicio: new Date(), resultado: 'EM_ANDAMENTO' } })
   let providerId: string | null = null
   try {
-    providerId = (await provedor().enviar(remetente, d.telefone, { tipo: (passo!.tipo ?? 'TEXTO'), texto, midia, digitandoMs: Math.min(4000, 800 + texto.length * 25) })).providerId
+    providerId = (await provedor().enviar(remetente, d.telefone, { tipo: (passo!.tipo ?? 'TEXTO'), texto, midia, digitandoMs: Math.min(4000, 800 + texto.length * 25), prazoMs: Math.max(5000, Math.min(15_000, prazo - Date.now() - 1500)) })).providerId
   } catch (e) {
     const err = e as { message?: string; classe?: string; codigo?: string | null }
     const classe = err.classe ?? 'TEMPORARIO'
@@ -343,9 +344,13 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
     return { out, parada: 'SEM_CONEXAO' }
   }
   await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING', erro: { not: null } }, data: { erro: null } })
+  // Uma vez a cada 6 h por número: confere se o aviso de entregue/lida está ligado na instância.
+  if (await pegarTrava(`preparar-remetente:${assistenteId}`, 6 * 60 * MIN)) await provedor().prepararRemetente(remetente).catch(() => undefined)
   const cfgLoja = await configDaLoja(a.vendedor.usuarioId)
   let parada: ParadaRemetente = 'PRAZO'
   let reconectou = false
+  // Rodadas curtas (testes, sobras de tempo) usam uma folga proporcional.
+  const envioMin = Math.min(ENVIO_MIN_MS, Math.max(0, prazo - Date.now()) * 0.4)
   while (Date.now() < prazo - 2000) {
     const agora = new Date()
     // A janela e o ritmo vêm da campanha da próxima mensagem; o número usa o ritmo mais lento entre as campanhas ativas dele.
@@ -372,10 +377,13 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
       await espera(Math.max(250, w))
       continue
     }
+    // Só começa um envio se ele cabe no tempo da rodada (a função na Vercel tem limite de 30 s):
+    // um envio cortado no meio vira "sem confirmação" e exige conferência.
+    if (Date.now() > prazo - envioMin) { parada = 'PRAZO'; break }
     const m = await travarProxima(assistenteId, agora)
     if (!m) { parada = 'SEM_MENSAGEM'; break }
     if (!naJanela.some(x => x.id === m.campanhaId)) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'AGENDADA', travadaEm: null } }); parada = 'FORA_DA_JANELA'; break }
-    const r = await enviarTravada(m, remetente, agora).catch(async e => {
+    const r = await enviarTravada(m, remetente, agora, prazo).catch(async e => {
       // Erro do próprio sistema (banco): a mensagem fica DESCONHECIDO se já tinha começado a tentativa.
       logger.error({ err: e, mensagemId: m.id }, 'disparo: falha inesperada no envio')
       await prisma.disparoMensagem.updateMany({ where: { id: m.id, status: 'ENVIANDO' }, data: { status: 'DESCONHECIDO', travadaEm: null, erroClasse: 'DESCONHECIDO', ultimoErro: String((e as Error)?.message ?? e).slice(0, 300) } })
@@ -525,7 +533,8 @@ export async function rodarDisparo(prazoMs = 15_000, agora = new Date(), origem:
       try { if (await distribuir(c.id, agora)) out.disparoIniciadas += 1 } catch (e) { logger.error({ err: e, campanhaId: c.id }, 'disparo: falha ao distribuir') }
     }
     // 4) Reconciliação do que ficou sem resposta.
-    out.disparoReconciliadas = (await reconciliar(agora)).reconciliadas
+    const rec = await comTrava('reconciliar', 60_000, () => reconciliar(agora))
+    out.disparoReconciliadas = rec.ok ? rec.valor.reconciliadas : 0
     // 5) Envio, um laço por número remetente, em paralelo (cada número tem o próprio ritmo).
     const remetentes = await prisma.disparoMensagem.findMany({ where: { status: 'AGENDADA', enviarApos: { lte: new Date() }, campanha: { status: 'RUNNING' } }, distinct: ['assistenteId'], select: { assistenteId: true }, take: 20 })
     const rs = await Promise.all(remetentes.map(r => rodarRemetente(r.assistenteId, fim).catch(e => { logger.error({ err: e }, 'disparo: falha no remetente'); return { enviadas: 0, falhas: 1, puladas: 0, semConexao: false } })))

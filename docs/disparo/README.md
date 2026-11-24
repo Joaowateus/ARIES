@@ -210,6 +210,26 @@ A rotina `/sm/cron/minuto` é chamada pelo cron-job.org a cada 5 min e, pela eco
 2. Religa a sessão da instância (`/instance/restart`, sem QR) no máximo uma vez a cada 5 min por número, espera ela voltar e continua na mesma rodada. Registra o evento `RECONEXAO` na campanha.
 3. Se não voltar, a campanha mostra o aviso para reconectar o número em Conversas › Conexão (ler o QR de novo). Nada é perdido: as mensagens esperam na fila.
 
+## 10f. Revisão para o lançamento (24/11/2026)
+
+Confiabilidade
+- **O envio não depende de uma tela específica:** com campanha pendente, qualquer tela aberta do ARIES (de qualquer pessoa com o módulo) pede uma rodada a cada ~45 s pela barra lateral; a tela da campanha, a cada 20 s; a rotina de 1 minuto (cron-job.org), sempre. Uma rodada da tela por vez (trava) e um laço por número.
+- **Cada envio cabe no limite de 30 s da Vercel:** só começa um envio se sobram ≥ 9 s na rodada e a espera pela resposta do WhatsApp é limitada ao tempo que sobra (antes, um envio cortado no meio virava "sem confirmação").
+- **Entregue/Lida:** uma vez a cada 6 h por número, o motor confere se o aviso da instância manda MESSAGES_UPDATE e, se faltar, reaponta para o mesmo endereço com a lista completa de eventos.
+- **Reconciliação** com trava própria (tela e rotina juntas não conferem a mesma mensagem duas vezes).
+- Teste de carga: 100 / 1.000 / 5.000 destinatários sem nenhum envio repetido.
+
+Experiência
+- Campanha promocional com contatos sem autorização: aviso explicando o motivo e as três saídas (trocar finalidade, registrar autorização ou, para o dono, liberar com um clique a regra "leads e clientes da loja").
+- Confirmação avisa antes de enviar: número desconectado e fora do horário (com quando começa).
+- Barra de progresso por destinatário; erros técnicos traduzidos ("Connection Closed" → "O WhatsApp do remetente estava sem conexão…").
+- Aprovações: selo no menu Disparo e aviso no topo da lista de campanhas para a gestão, com filtro "Aguardando aprovação".
+
+Checklist do dia
+1. Conferir em Conversas › Conexão que os números que vão enviar estão conectados (e rodar o diagnóstico).
+2. Disparo › Configurações: regra das promocionais, janela e ritmo padrão; ligar o Envio automático (cron-job.org, 1 minuto).
+3. Fazer uma campanha Operacional de teste para o público Equipe e ver chegar.
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

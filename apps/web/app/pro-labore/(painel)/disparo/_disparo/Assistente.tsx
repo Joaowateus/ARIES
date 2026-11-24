@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { disparoApi, type CampanhaDisparo, type CampanhaDisparoEntrada, type ConfigEnvioDisparo, type FinalidadeDisparo, type MidiaDisparo, type ModeloDisparo, type PreviaPublicoDisparo, type PublicoSalvoDisparo } from '@/lib/proLaboreApi'
 import { PublicoEditor } from './PublicoEditor'
 import { PassosEditor } from './PassosEditor'
-import { DIAS, SeloStatus, dataHora, erroDe, n, useMeta } from './util'
+import { AvisoAutorizacao, DIAS, SeloStatus, avisoJanela, dataHora, erroDe, n, useMeta } from './util'
 
 const PASSOS = ['Identificação', 'Público', 'Conteúdo', 'Personalização', 'Agendamento', 'Revisão', 'Confirmação', 'Monitoramento']
 const RE_VAR = /\{\{\s*([a-z_]+)\s*(?:\|[^}]*)?\}\}/g
@@ -209,9 +209,22 @@ export function Assistente({ campanha, fechar, abrirMonitor }: { campanha: Campa
           {salva.totais && <div className="dp-totais"><div><span>Selecionados</span><b>{n(salva.totais.selecionados)}</b></div><div><span>Vão receber</span><b>{n(salva.totais.elegiveis)}</b></div><div><span>Excluídos</span><b>{n(salva.totais.excluidos)}</b></div></div>}
           {salva.totais && Object.keys(salva.totais.porMotivo ?? {}).length > 0 && (
             <ul className="pl-hint" style={{ margin: '6px 0', paddingLeft: 18 }} data-motivos-exclusao>
-              {Object.entries(salva.totais.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b>{m === 'SEM_AUTORIZACAO' ? ' — troque para Operacional ou registre a autorização em Públicos › Autorizações' : ''}</li>)}
+              {Object.entries(salva.totais.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b></li>)}
             </ul>
           )}
+          {salva.finalidade === 'MARKETING' && ['READY', 'NEEDS_REVIEW'].includes(salva.status) && <AvisoAutorizacao quantos={salva.totais?.porMotivo?.SEM_AUTORIZACAO ?? 0} aoMudar={() => void preparar()} />}
+          {salva.status === 'READY' && (() => {
+            // Antes de confirmar: o que pode atrasar o envio (número desconectado, fora do horário).
+            const rem = meta.remetentes.find(r => r.id === salva.assistenteId)
+            const agendadaFutura = !!salva.agendadaPara && new Date(salva.agendadaPara) > new Date()
+            const janela = agendadaFutura ? null : avisoJanela(cfg.janela)
+            return (
+              <>
+                {rem && !rem.conectado && <div className="pl-alert pl-alert-error" role="alert">O WhatsApp de {rem.vendedor} está desconectado. A campanha fica na fila e só envia quando ele for reconectado em Conversas › Conexão.</div>}
+                {janela && <div className="pl-alert" role="status">{janela}</div>}
+              </>
+            )
+          })()}
           {salva.status === 'NEEDS_REVIEW' && (meta.gestao
             ? <div className="dp-linha"><button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.aprovar(salva.id), 'Aprovada.')}>Aprovar</button></div>
             : <p className="pl-hint">Aguardando aprovação do dono ou do supervisor.</p>)}

@@ -25,7 +25,7 @@ export function Configuracoes({ aoSalvar }: { aoSalvar: () => void }) {
         {meta.motor.rotinaLigada
           ? <p style={{ margin: 0 }}>✅ Ligado: o ARIES envia as campanhas sozinho, mesmo com o sistema fechado (última rodada {dataHora(meta.motor.ultimaRotinaEm)}).</p>
           : <>
-              <p style={{ margin: 0 }}>⚠️ {meta.motor.ultimaRotinaEm ? `Parado desde ${dataHora(meta.motor.ultimaRotinaEm)}` : 'Ainda não ligado'}. Enquanto isso, as campanhas enviam só com a tela da campanha aberta.</p>
+              <p style={{ margin: 0 }}>⚠️ {meta.motor.ultimaRotinaEm ? `Parado desde ${dataHora(meta.motor.ultimaRotinaEm)}` : 'Ainda não ligado'}. Enquanto isso, as campanhas enviam normalmente sempre que alguém da equipe estiver com o ARIES aberto (qualquer tela).</p>
               <p className="pl-hint" style={{ marginBottom: 0 }}>Para ligar (uma vez só), no cron-job.org crie uma tarefa igual às do ARIES que já existem, com:</p>
               <ul className="pl-hint" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
                 <li>Endereço: <span className="pl-mono">https://ariessistemacomercial.vercel.app/pro-labore/sm/cron/disparo</span></li>

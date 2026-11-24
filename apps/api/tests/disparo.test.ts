@@ -324,7 +324,8 @@ test('"Connection Closed": o motor religa a sessão uma vez e continua; se não 
   const reconectarOriginal = falso.reconectar.bind(falso)
   falso.reconectar = async r => { caida = false; return reconectarOriginal(r) }
   await rodarDisparo(20_000)
-  assert.equal(falso.reconexoes, antes + 1, 'religou uma vez')
+  assert.ok(falso.reconexoes > antes, 'religou a sessão')
+  assert.equal(await prisma.disparoEvento.count({ where: { campanhaId: c.id, tipo: 'RECONEXAO' } }), 1, 'uma vez só por número nesta janela de 5 min')
   assert.ok(falso.enviados.length > 0, 'depois de religar, enviou')
   assert.equal(await prisma.disparoTentativa.count({ where: { mensagem: { campanhaId: c.id }, resultado: 'FALHA_DEFINITIVA' } }), 0)
   assert.ok(await prisma.disparoEvento.count({ where: { campanhaId: c.id, tipo: 'RECONEXAO' } }) >= 1)
@@ -337,6 +338,7 @@ test('"Connection Closed": o motor religa a sessão uma vez e continua; se não 
   const cc = await prisma.disparoCampanha.findUnique({ where: { id: c2.id }, select: { erro: true } })
   assert.match(String(cc?.erro), /Connection Closed/)
   assert.ok(await prisma.disparoMensagem.count({ where: { campanhaId: c2.id, status: 'AGENDADA' } }) > 0, 'as mensagens esperam na fila')
+  assert.ok(falso.preparados >= 1, 'o número foi preparado (aviso de entregue/lida conferido)')
   falso.enviar = enviarOriginal
   falso.reconectar = reconectarOriginal
   falso.religaAoReconectar = false

@@ -6,11 +6,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type ItemCampanhaDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
 import { Assistente } from './Assistente'
-import { Numero, Paginacao, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useMeta } from './util'
+import { Numero, Paginacao, Progresso, erroAmigavel, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useMeta } from './util'
 
 const ATIVAS: StatusCampanhaDisparo[] = ['VALIDATING', 'QUEUED', 'RUNNING', 'SCHEDULED']
 const FILTROS: Array<{ rotulo: string; status?: string }> = [
-  { rotulo: 'Todas' }, { rotulo: 'Em andamento', status: 'QUEUED,RUNNING,PAUSED' }, { rotulo: 'Agendadas', status: 'SCHEDULED' },
+  { rotulo: 'Todas' }, { rotulo: 'Em andamento', status: 'QUEUED,RUNNING,PAUSED' }, { rotulo: 'Aguardando aprovação', status: 'NEEDS_REVIEW' }, { rotulo: 'Agendadas', status: 'SCHEDULED' },
   { rotulo: 'Preparação', status: 'DRAFT,VALIDATING,NEEDS_REVIEW,READY' }, { rotulo: 'Concluídas', status: 'COMPLETED,COMPLETED_WITH_ERRORS' }, { rotulo: 'Canceladas', status: 'CANCELLED' }, { rotulo: 'Arquivadas', status: 'ARCHIVED' },
 ]
 
@@ -24,6 +24,9 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
   const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina])
   useEffect(() => { if (!aberta && !editando) carregar() }, [carregar, aberta, editando])
   const pode = meta.nivel === 'EDITAR'
+  // Gestão: campanhas da equipe esperando aprovação (aviso no topo da lista).
+  const [aprovar, setAprovar] = useState(0)
+  useEffect(() => { if (meta.gestao && !aberta && !editando) disparoApi.campanhas.listar({ status: 'NEEDS_REVIEW' }).then(r => setAprovar(r.total)).catch(() => undefined) }, [meta.gestao, aberta, editando, lista])
 
   if (editando) return <Assistente campanha={editando === 'nova' ? null : editando} fechar={() => setEditando(null)} abrirMonitor={id => { setEditando(null); abrir(id) }} />
   if (aberta) return <Monitor id={aberta} voltar={() => abrir(null)} editar={c => setEditando(c)} abrir={abrir} />
@@ -34,6 +37,12 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
         {pode && <button type="button" className="pl-btn pl-btn-primary" onClick={() => setEditando('nova')} data-nova-campanha>Nova campanha</button>}
       </div>
       {erro && <div className="pl-alert pl-alert-error" role="alert">{erro}</div>}
+      {aprovar > 0 && FILTROS[filtro].status !== 'NEEDS_REVIEW' && (
+        <div className="pl-alert dp-linha" role="status" style={{ justifyContent: 'space-between' }} data-aviso-aprovar>
+          <span><b>{aprovar} {aprovar === 1 ? 'campanha da equipe está' : 'campanhas da equipe estão'} esperando sua aprovação.</b> Nada é enviado antes disso.</span>
+          <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setFiltro(FILTROS.findIndex(x => x.status === 'NEEDS_REVIEW')); setPagina(0) }}>Ver e aprovar</button>
+        </div>
+      )}
       {!lista ? <p className="pl-hint" aria-busy="true">Carregando…</p> : !lista.itens.length ? (
         <div className="pl-empty pl-card"><h3 style={{ margin: 0 }}>Nenhuma campanha aqui</h3><p>{pode ? 'Crie a primeira em “Nova campanha”.' : 'Seu acesso é só para acompanhar.'}</p></div>
       ) : (
@@ -43,7 +52,7 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
             <tbody>
               {lista.itens.map(c => (
                 <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => abrir(c.id)} data-campanha={c.id}>
-                  <td><b>{c.nome}</b><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''}</div>{c.erro && <div className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }}>{c.erro}</div>}</td>
+                  <td><b>{c.nome}</b><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''}</div>{c.erro && <div className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }}>{erroAmigavel(c.erro)}</div>}</td>
                   <td><SeloStatus status={c.status} /></td>
                   <td>{c.assistente?.vendedor.nome ?? '—'}</td>
                   <td className="pl-right">{c.totais ? n(c.totais.elegiveis) : '—'}</td>
@@ -130,9 +139,10 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
       <p className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''} · {c.remetente ? `envia pelo WhatsApp de ${c.remetente.vendedor} ${c.remetente.numero ?? ''}${c.remetente.conectado ? '' : ' (desconectado)'}` : 'sem número'} · criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''} · versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</p>
       {msg && <p className="pl-hint" role="status">{msg}</p>}
       {c.situacao && <PainelAgora s={c.situacao} status={st} rodada={enviando ? rodada : null} />}
-      {(c.erro || r?.erro) && <div className="pl-alert pl-alert-error" role="alert">{c.erro ?? r?.erro}</div>}
+      {(c.erro || r?.erro) && c.situacao?.motivo !== 'SEM_CONEXAO' && <div className="pl-alert pl-alert-error" role="alert">{erroAmigavel(c.erro ?? r?.erro)}</div>}
       {r && r.aDecidir > 0 && <div className="pl-alert" role="status">{r.aDecidir} mensagem(ns) sem confirmação ou com as tentativas esgotadas: decida na lista abaixo (filtro “Falhou”) se reenvia ou considera enviada. O sistema nunca reenvia sozinho o que pode já ter saído.</div>}
 
+      {r && r.elegiveis > 0 && !['DRAFT', 'VALIDATING', 'NEEDS_REVIEW', 'READY'].includes(st) && <Progresso total={r.elegiveis} enviadas={(r.destinatarios.CONCLUIDO ?? 0) + (r.destinatarios.RESPONDEU ?? 0)} falhas={r.destinatarios.FALHOU ?? 0} outras={r.destinatarios.INTERROMPIDO ?? 0} />}
       {r && (
         <>
           <section className="ar-agora" aria-label="Público">
@@ -173,7 +183,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
                       <td>{d.nome ?? '—'} <span className="pl-hint pl-mono">{d.telefone}</span></td>
                       <td>{ROTULO_DESTINATARIO[d.status] ?? d.status}{d.respondeuEm ? ` · respondeu ${dataHora(d.respondeuEm)}` : ''}</td>
                       <td>{m ? `${ROTULO_MENSAGEM[m.status] ?? m.status}${m.lidaEm ? ` ${dataHora(m.lidaEm)}` : m.entregueEm ? ` ${dataHora(m.entregueEm)}` : m.aceitaEm ? ` ${dataHora(m.aceitaEm)}` : ''}` : '—'}</td>
-                      <td className="pl-hint">{d.motivoExclusao ? meta.motivos[d.motivoExclusao] ?? d.motivoExclusao : d.interrompidoPor ? `parou: ${ROTULO_INTERRUPCAO[d.interrompidoPor] ?? d.interrompidoPor}` : m?.ultimoErro ?? ''}</td>
+                      <td className="pl-hint">{d.motivoExclusao ? meta.motivos[d.motivoExclusao] ?? d.motivoExclusao : d.interrompidoPor ? `parou: ${ROTULO_INTERRUPCAO[d.interrompidoPor] ?? d.interrompidoPor}` : erroAmigavel(m?.ultimoErro)}</td>
                     </tr>
                   )
                 })}
@@ -234,8 +244,8 @@ function DetalheDestinatario({ id, fechar, pode, aoMudar }: { id: string; fechar
                 <div className="dp-linha" style={{ justifyContent: 'space-between' }}><b>Mensagem {m.passo + 1}</b><span>{ROTULO_MENSAGEM[m.status] ?? m.status}</span></div>
                 {m.texto && <p style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>{m.texto}</p>}
                 <p className="pl-hint">Na fila desde {dataHora(m.enviarApos)}{m.aceitaEm ? ` · aceita ${dataHora(m.aceitaEm)}` : ''}{m.entregueEm ? ` · entregue ${dataHora(m.entregueEm)}` : ''}{m.lidaEm ? ` · lida ${dataHora(m.lidaEm)}` : ''}{m.falhouEm ? ` · falhou ${dataHora(m.falhouEm)}` : ''}</p>
-                {m.ultimoErro && <p className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }}>{m.ultimoErro}</p>}
-                {m.tentativasRegistro.length > 0 && <ul className="pl-hint" style={{ margin: 0, paddingLeft: 18 }}>{m.tentativasRegistro.map(t => <li key={`${t.numero}-${t.inicio}`}>tentativa {t.numero} · {dataHora(t.inicio)} · {t.resultado.toLowerCase().replace(/_/g, ' ')}{t.erro ? ` · ${t.erro}` : ''}</li>)}</ul>}
+                {m.ultimoErro && <p className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }} title={m.ultimoErro}>{erroAmigavel(m.ultimoErro)}</p>}
+                {m.tentativasRegistro.length > 0 && <ul className="pl-hint" style={{ margin: 0, paddingLeft: 18 }}>{m.tentativasRegistro.map(t => <li key={`${t.numero}-${t.inicio}`}>tentativa {t.numero} · {dataHora(t.inicio)} · {t.resultado.toLowerCase().replace(/_/g, ' ')}{t.erro ? ` · ${erroAmigavel(t.erro)}` : ''}</li>)}</ul>}
                 {pode && (m.status === 'DESCONHECIDO' || (m.status === 'FALHOU' && m.erroClasse === 'ESGOTOU')) && (
                   <div className="dp-linha">
                     <button type="button" className="pl-btn" onClick={() => { if (window.confirm('Reenviar? Se a mensagem já tiver chegado, o cliente recebe duas vezes.')) void decidir(m.id, 'REENVIAR') }}>Reenviar</button>
@@ -266,7 +276,7 @@ function PainelAgora({ s, status, rodada }: { s: SituacaoEnvioDisparo; status: S
   const ativo = ['PREPARANDO', 'NA_HORA', 'NA_FILA', 'ENVIANDO', 'INTERVALO', 'LIMITE_HORA', 'LIMITE_DIA', 'FORA_DA_JANELA', 'SEM_CONEXAO'].includes(s.motivo)
   return (
     <section className={`pl-card dp-agora ${TOM[s.motivo] ?? ''}`} aria-label="Situação do envio" data-situacao={s.motivo}>
-      <ol className="dp-etapas">{ETAPAS.map((e, i) => <li key={e.rotulo} className={i < atual ? 'feita' : i === atual ? 'atual' : ''}>{e.rotulo}</li>)}</ol>
+      <ol className="dp-caminho">{ETAPAS.map((e, i) => <li key={e.rotulo} className={i < atual ? 'feita' : i === atual ? 'atual' : ''}>{e.rotulo}</li>)}</ol>
       <div className="dp-agora-titulo"><b>{s.titulo}</b>{prox && <span className="pl-hint"> · próxima mensagem {prox}</span>}</div>
       <p style={{ margin: '4px 0' }}>{s.texto}</p>
       <Cronometros s={s} status={status} proximaRodada={rodada ? rodada.em + 20_000 : null} />
@@ -274,7 +284,7 @@ function PainelAgora({ s, status, rodada }: { s: SituacaoEnvioDisparo; status: S
       {ativo && (
         <p className="pl-hint" style={{ margin: 0 }}>
           {s.motor.rotinaParada
-            ? <>Esta tela está enviando por você: mantenha-a aberta até terminar. O envio automático com a tela fechada {s.motor.ultimaRotinaEm ? `não roda desde ${dataHora(s.motor.ultimaRotinaEm)}` : 'ainda não está ligado'} — veja “Envio automático” em Configurações.</>
+            ? <>Envio funcionando pelas telas abertas do ARIES (esta e as da equipe){s.motor.ultimaRodadaEm ? ` · última rodada ${haQuanto(s.motor.ultimaRodadaEm)}` : ''}. Para enviar mesmo com o sistema fechado por todos, ligue o “Envio automático” em Configurações.</>
             : <>Envio automático ligado (última rodada {haQuanto(s.motor.ultimaRotinaEm)}): pode fechar esta tela, o envio continua.</>}
         </p>
       )}
@@ -300,7 +310,7 @@ function Cronometros({ s, status, proximaRodada }: { s: SituacaoEnvioDisparo; st
   const mostraProx = vivo && prox != null && ['ENVIANDO', 'INTERVALO', 'NA_FILA', 'NA_HORA', 'ATENDIMENTO', 'AGENDADA', 'FORA_DA_JANELA'].includes(s.motivo)
   return (
     <div className="dp-cronometros" aria-label="Cronômetros do envio" data-cronometros>
-      <div><span>Próxima mensagem</span><b className="pl-mono">{mostraProx ? (prox! - agora <= 0 ? 'agora' : relogio(prox! - agora)) : '—'}</b></div>
+      <div><span>Próxima mensagem</span><b className="pl-mono">{mostraProx ? (prox! - agora <= 0 ? 'agora' : prox! - agora > 3600_000 ? new Date(prox!).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace('.', '') : relogio(prox! - agora)) : '—'}</b></div>
       <div><span>Desde a última enviada</span><b className="pl-mono">{ult != null ? relogio(fimRef - ult) : 'nenhuma ainda'}</b></div>
       <div><span>Tempo de envio</span><b className="pl-mono">{ini != null ? relogio(fimRef - ini) : '—'}</b></div>
       <div><span>Ritmo médio</span><b className="pl-mono">{ritmo != null ? `${relogio(ritmo)} / msg` : '—'}</b>{t.intervaloSeg != null && <small className="pl-hint">mínimo {t.intervaloSeg} s · {t.enviadas} enviada(s)</small>}</div>

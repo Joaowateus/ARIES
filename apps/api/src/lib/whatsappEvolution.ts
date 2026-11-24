@@ -143,6 +143,20 @@ export async function webhookDaInstancia(instancia: string): Promise<{ url: stri
   return { url: w.url ?? null, ativo: w.enabled !== false, eventos: Array.isArray(w.events) ? w.events.map(String) : [] }
 }
 
+/**
+ * O aviso (webhook) da instância manda "entregue" e "lida" (MESSAGES_UPDATE)? Números conectados antes
+ * do Disparo não mandavam. Se faltar, reaponta para o MESMO endereço com a lista completa de eventos.
+ * Devolve true se precisou corrigir.
+ */
+export async function garantirEventosDoWebhook(instancia: string): Promise<boolean> {
+  const w = await webhookDaInstancia(instancia)
+  if (!w?.url) return false
+  const eventos = w.eventos.map(e => e.toUpperCase().replace(/\./g, '_'))
+  if (w.ativo && (!eventos.length || EVENTOS_WEBHOOK.every(e => eventos.includes(e)))) return false
+  await configurarWebhook(instancia, w.url)
+  return true
+}
+
 export async function configurarWebhook(instancia: string, webhookUrl: string): Promise<void> {
   await chamar('POST', `/webhook/set/${encodeURIComponent(instancia)}`, {
     webhook: { enabled: true, url: webhookUrl, byEvents: false, base64: false, events: EVENTOS_WEBHOOK },
@@ -205,11 +219,11 @@ export async function removerInstancia(instancia: string): Promise<void> {
 // Envia texto. `digitandoMs` faz o WhatsApp mostrar "digitando..." antes
 // — deixa a conversa com ritmo humano e reduz o risco de bloqueio por
 // resposta instantânea em massa.
-export async function enviarTexto(instancia: string, destino: string, texto: string, digitandoMs = 0): Promise<string | null> {
+export async function enviarTexto(instancia: string, destino: string, texto: string, digitandoMs = 0, prazoMs = TIMEOUT_MS): Promise<string | null> {
   const numero = destino.includes('@') ? destino : destino.replace(/\D/g, '')
   const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendText/${encodeURIComponent(instancia)}`, {
     number: numero, text: texto, delay: Math.max(0, Math.round(digitandoMs)),
-  })
+  }, prazoMs)
   return r?.key?.id ?? null
 }
 
@@ -225,18 +239,18 @@ export async function enviarImagem(instancia: string, destino: string, imagem: {
 
 // Envia mídia de qualquer tipo (imagem, vídeo, documento) em base64, com legenda; áudio vai como
 // mensagem de voz. Usado pelo Disparo (a vitrine continua com enviarImagem).
-export async function enviarMidia(instancia: string, destino: string, midia: { tipo: 'image' | 'video' | 'audio' | 'document'; mime: string; dados: Buffer; nomeArquivo: string }, legenda: string, digitandoMs = 0): Promise<string | null> {
+export async function enviarMidia(instancia: string, destino: string, midia: { tipo: 'image' | 'video' | 'audio' | 'document'; mime: string; dados: Buffer; nomeArquivo: string }, legenda: string, digitandoMs = 0, prazoMs = TIMEOUT_MS): Promise<string | null> {
   const numero = destino.includes('@') ? destino : destino.replace(/\D/g, '')
   if (midia.tipo === 'audio') {
     const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendWhatsAppAudio/${encodeURIComponent(instancia)}`, {
       number: numero, audio: midia.dados.toString('base64'), delay: Math.max(0, Math.round(digitandoMs)),
-    })
+    }, prazoMs)
     return r?.key?.id ?? null
   }
   const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendMedia/${encodeURIComponent(instancia)}`, {
     number: numero, mediatype: midia.tipo, mimetype: midia.mime, caption: legenda, media: midia.dados.toString('base64'),
     fileName: midia.nomeArquivo, delay: Math.max(0, Math.round(digitandoMs)),
-  })
+  }, prazoMs)
   return r?.key?.id ?? null
 }
 
