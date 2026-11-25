@@ -185,7 +185,7 @@ const authLimiter = rateLimit({
 // Guarda o corpo cru junto: o webhook da Meta assina os bytes exatos que
 // enviou (X-Hub-Signature-256), e o JSON já interpretado não serve pra
 // conferir a assinatura.
-app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { (req as unknown as { rawBody?: Buffer }).rawBody = buf } }))
+app.use(express.json({ limit: '4mb', verify: (req, _res, buf) => { (req as unknown as { rawBody?: Buffer }).rawBody = buf } }))
 
 // Health check
 const START_TIME = Date.now()

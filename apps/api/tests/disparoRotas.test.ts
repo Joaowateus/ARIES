@@ -53,14 +53,14 @@ test('permissões: sem o módulo não entra; vendedor com o módulo vê só o pr
   assert.equal((await api('SUP', 'POST', '/disparo/autorizacoes', { telefones: ['5591981111111', '5591982222222'], situacao: 'AUTORIZADO', baseLegal: 'CONSENTIMENTO', evidencia: 'lista' })).status, 403, 'lote é do dono')
 })
 
-test('fluxo: vendedor cria → revisão → aprovação do supervisor → início; vendedor vê só a própria carteira', async t => {
+test('fluxo com aprovação ligada pelo dono: vendedor cria → revisão → aprovação do supervisor → início; vendedor vê todos os contatos da loja', async t => {
   if (!temBanco) return t.skip('sem banco de teste')
+  assert.equal((await api('DONO', 'PUT', '/disparo/config', { exigirAprovacao: true })).status, 200)
   const nova = await api('VEND', 'POST', '/disparo/campanhas', campanha(loja.asVend))
   assert.equal(nova.status, 201)
   const id = nova.corpo.id as string
   const prev = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao: { base: 'LEADS' }, finalidade: 'OPERACIONAL', conteudo: campanha(loja.asVend).conteudo })
-  assert.equal(prev.corpo.elegiveis, 1, 'a vendedora vê só a Lia')
-  assert.match(String((prev.corpo.exemplo as string[])[0]), /^Oi Lia, sua revisão/)
+  assert.equal(prev.corpo.elegiveis, 2, 'sem trava de carteira: a vendedora vê a Lia e o Rui (lead do supervisor)')
   const val = await api('VEND', 'POST', `/disparo/campanhas/${id}/validar`)
   assert.equal(val.status, 200)
   let c = await api('VEND', 'GET', `/disparo/campanhas/${id}`)
@@ -197,4 +197,26 @@ test('excluir: some da lista e dos relatórios, cancela o que ia sair e não apa
   assert.ok(await prisma.disparoEvento.count({ where: { campanhaId: id, tipo: 'EXCLUIDA' } }) === 1)
   const vg = await api('DONO', 'GET', '/disparo/visao-geral?dias=30')
   assert.ok(!((vg.corpo.recentes as Array<{ id: string }>) ?? []).some(x => x.id === id), 'fora da visão geral')
+})
+
+test('sem travas: aprovação desligada por padrão, lista colada (inclusive fora do CRM) e busca sem corte em 30', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  assert.equal((await api('DONO', 'PUT', '/disparo/config', { exigirAprovacao: false })).status, 200)
+  // Lista colada: um número do CRM (Rui, que é do supervisor) e dois números fora do CRM; um inválido.
+  const definicao = { base: 'LEADS', manual: { apenasManual: true, numeros: [{ telefone: '(91) 98222-2222' }, { telefone: '91 97777-0001', nome: 'Primo do Rui' }, { telefone: '5591977770002' }, { telefone: '123' }] } }
+  const prev = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao, finalidade: 'OPERACIONAL', conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Oi {{primeiro_nome|tudo bem}}!' }] } })
+  assert.equal(prev.status, 200, JSON.stringify(prev.corpo))
+  assert.equal(prev.corpo.elegiveis, 3, 'Rui (do CRM, de outro vendedor) + 2 números avulsos')
+  assert.equal((prev.corpo.porMotivo as Record<string, number>).SEM_TELEFONE, 1, 'o número inválido fica de fora com o motivo')
+  // Campanha da vendedora sai direto (sem aprovação) para a lista colada.
+  const c = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), publico: definicao })
+  assert.equal(c.status, 201)
+  await api('VEND', 'POST', `/disparo/campanhas/${c.corpo.id}/validar`)
+  const v = await api('VEND', 'GET', `/disparo/campanhas/${c.corpo.id}`)
+  assert.equal(v.corpo.status, 'READY', 'sem aprovação obrigatória')
+  const nomes = (await prisma.disparoDestinatario.findMany({ where: { campanhaId: String(c.corpo.id), status: 'ELEGIVEL' }, select: { nome: true } })).map(d => d.nome).sort()
+  assert.deepEqual(nomes, ['+5591977770002', 'Primo do Rui', 'Rui Cliente'])
+  // Busca: devolve o total e não corta em 30.
+  const busca = await api('VEND', 'GET', '/disparo/contatos?busca=Cliente')
+  assert.equal(typeof busca.corpo.total, 'number')
 })
