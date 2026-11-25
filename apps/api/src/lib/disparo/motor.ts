@@ -15,7 +15,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
 import { logger } from '../logger'
-import { lerDoBlob } from '../armazenamento'
 import { comAutor } from '../autorAuditoria'
 import { avisarNoWhatsapp } from '../ligacoesAviso'
 import {
@@ -25,6 +24,7 @@ import {
 import { resolverPublico, valoresDoContato, type DefinicaoPublico } from './publico'
 import { registrarAutorizacao, situacaoDe } from './autorizacao'
 import { provedor, type Remetente } from './provedor'
+import { arquivoParaEnvio } from './midias'
 import { comTrava, pegarTrava, registrarRodada, soltarTrava, ultimasRodadas, type OrigemRodada } from './travas'
 
 const MIN = 60_000
@@ -182,11 +182,8 @@ async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string;
   return null
 }
 
-async function arquivoDaMidia(midiaId: string): Promise<{ mime: string; dados: Buffer; nomeArquivo: string } | null> {
-  const md = await prisma.disparoMidia.findUnique({ where: { id: midiaId } })
-  if (!md) return null
-  const dados = md.blobUrl ? await lerDoBlob(md.blobUrl, md.blobAcesso) : md.dados ? Buffer.from(md.dados) : null
-  return dados ? { mime: md.mime, dados, nomeArquivo: md.nome } : null
+async function arquivoDaMidia(midiaId: string) {
+  return arquivoParaEnvio(midiaId)
 }
 
 /** Depois de um passo aceito: agenda o próximo ou conclui o destinatário. */

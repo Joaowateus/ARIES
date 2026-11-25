@@ -807,3 +807,20 @@ export async function midiasDoPerfil(igUserId: string, accessToken: string, usua
   if (!b) throw new ErroGraphApi('Perfil não encontrado ou não é uma conta profissional', 110)
   return { usuario: b.username, nome: b.name ?? null, fotoUrl: b.profile_picture_url ?? null, seguidores: b.followers_count ?? null, posts: b.media_count ?? null, midias: (b.media?.data ?? []).map(paraMidiaPublica).filter(m => m.permalink) }
 }
+
+// ---------- ARIES Disparo: trazer uma publicação (com os itens do carrossel) para a Biblioteca ----------
+
+export interface ItemDePublicacao { id: string; tipo: 'IMAGE' | 'VIDEO'; url: string | null; capa: string | null }
+export interface PublicacaoCompleta { id: string; tipo: string; formato: string | null; legenda: string | null; link: string | null; publicadoEm: string | null; itens: ItemDePublicacao[] }
+
+/** A publicação com links novos (os da Meta vencem) e, se for carrossel, cada foto/vídeo dela. */
+export async function buscarPublicacaoCompleta(mediaId: string, accessToken: string): Promise<PublicacaoCompleta> {
+  type Filho = { id: string; media_type: string; media_url?: string; thumbnail_url?: string }
+  const m = await chamarGraphApi<Filho & { media_product_type?: string; caption?: string; permalink?: string; timestamp?: string; children?: { data?: Filho[] } }>(`/${mediaId}`, {
+    fields: 'id,media_type,media_product_type,media_url,thumbnail_url,caption,permalink,timestamp,children{id,media_type,media_url,thumbnail_url}',
+    access_token: accessToken,
+  })
+  const item = (f: Filho): ItemDePublicacao => ({ id: f.id, tipo: f.media_type === 'VIDEO' ? 'VIDEO' : 'IMAGE', url: f.media_url ?? null, capa: f.media_type === 'VIDEO' ? f.thumbnail_url ?? null : f.media_url ?? null })
+  const itens = m.media_type === 'CAROUSEL_ALBUM' ? (m.children?.data ?? []).map(item) : [item(m)]
+  return { id: m.id, tipo: m.media_type, formato: m.media_product_type ?? null, legenda: m.caption ?? null, link: m.permalink ?? null, publicadoEm: m.timestamp ?? null, itens }
+}

@@ -188,3 +188,70 @@ export async function linkTemporario(endereco: string, segundos: number): Promis
   if (!rel) throw new Error('Supabase não devolveu o link')
   return /^https?:/.test(rel) ? rel : `${s.url}/storage/v1${rel.startsWith('/') ? '' : '/'}${rel}`
 }
+
+// --- Upload direto do navegador e links assinados (vídeos grandes do Disparo) ---
+// A Vercel aceita pedidos de até 4,5 MB: arquivo maior vai do navegador direto para o Supabase por um
+// link de envio assinado (só serve para aquele caminho, por 2 h). O endereço do armazenamento continua
+// privado; a leitura usa links temporários.
+
+async function garantirBucket() {
+  const s = supabase()
+  if (!s) throw new Error('O armazenamento do Supabase não está configurado')
+  if (!bucketPronto) await criarBucket(s)
+  return s
+}
+
+/** Link para o navegador enviar o arquivo direto ao armazenamento (PUT com o corpo do arquivo). */
+export async function linkDeEnvio(caminho: string): Promise<{ url: string; endereco: string }> {
+  const s = await garantirBucket()
+  const r = await fetch(`${s.url}/storage/v1/object/upload/sign/${BUCKET}/${caminhoSeguro(caminho)}`, { method: 'POST', headers: { ...cabecalhos(s.chave), 'Content-Type': 'application/json', 'x-upsert': 'true' }, body: '{}' })
+  if (!r.ok) throw new Error(`Supabase recusou o link de envio (${r.status}): ${(await r.text().catch(() => '')).slice(0, 150)}`)
+  const j = (await r.json()) as { url?: string }
+  if (!j.url) throw new Error('Supabase não devolveu o link de envio')
+  return { url: /^https?:/.test(j.url) ? j.url : `${s.url}/storage/v1${j.url.startsWith('/') ? '' : '/'}${j.url}`, endereco: `supabase://${BUCKET}/${caminho}` }
+}
+
+/** Vários links temporários de leitura numa chamada só (null para o que não deu). */
+export async function linksTemporarios(enderecos: string[], segundos: number): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const s = supabase()
+  const doBucket = [...new Set(enderecos.filter(e => e.startsWith(`supabase://${BUCKET}/`)))]
+  if (!s || !doBucket.length) return out
+  const caminhos = doBucket.map(e => e.slice(`supabase://${BUCKET}/`.length))
+  const r = await fetch(`${s.url}/storage/v1/object/sign/${BUCKET}`, { method: 'POST', headers: { ...cabecalhos(s.chave), 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: segundos, paths: caminhos }) })
+  if (!r.ok) return out
+  const lista = (await r.json()) as Array<{ path?: string; signedURL?: string; signedUrl?: string; error?: string | null }>
+  for (const it of lista) {
+    const rel = it.signedURL ?? it.signedUrl
+    if (!it.path || !rel || it.error) continue
+    out.set(`supabase://${BUCKET}/${it.path}`, /^https?:/.test(rel) ? rel : `${s.url}/storage/v1${rel.startsWith('/') ? '' : '/'}${rel}`)
+  }
+  return out
+}
+
+/** Os primeiros bytes e o tamanho total de um arquivo do armazenamento (confere o tipo sem baixar tudo). */
+export async function inicioDoArquivo(endereco: string, bytes = 64): Promise<{ inicio: Buffer; tamanho: number | null } | null> {
+  const s = supabase()
+  if (!s || !endereco.startsWith('supabase://')) return null
+  const caminho = endereco.replace(/^supabase:\/\//, '')
+  const r = await fetch(`${s.url}/storage/v1/object/${caminhoSeguro(caminho)}`, { headers: { ...cabecalhos(s.chave), Range: `bytes=0-${bytes - 1}` } })
+  if (!r.ok) return null
+  const total = r.headers.get('content-range')?.match(/\/(\d+)$/)?.[1] ?? (r.status === 200 ? r.headers.get('content-length') : null)
+  const inicio = Buffer.from(await r.arrayBuffer()).subarray(0, bytes)
+  return { inicio, tamanho: total ? Number(total) : null }
+}
+
+/** Grava num caminho exato do bucket (partes do envio em pedaços e o arquivo montado). */
+export async function gravarExato(caminho: string, mime: string, dados: Buffer): Promise<string> {
+  await garantirBucket()
+  return gravarNoSupabase(caminho, mime, dados)
+}
+
+/** Remove arquivos temporários (partes de um envio já montado). Nunca usado para arquivos do usuário. */
+export async function removerTemporarios(enderecos: string[]): Promise<void> {
+  const s = supabase()
+  if (!s || !enderecos.length) return
+  const caminhos = enderecos.filter(e => e.startsWith(`supabase://${BUCKET}/disparo-partes/`)).map(e => e.slice(`supabase://${BUCKET}/`.length))
+  if (!caminhos.length) return
+  await fetch(`${s.url}/storage/v1/object/${BUCKET}`, { method: 'DELETE', headers: { ...cabecalhos(s.chave), 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: caminhos }) }).catch(() => undefined)
+}

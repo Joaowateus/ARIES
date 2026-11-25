@@ -5438,6 +5438,22 @@ model DisparoMidia {
   criadoPorNome String?
   arquivadoEm   DateTime?
   criadoEm      DateTime  @default(now())
+  /// ENVIANDO (upload em andamento, ainda não aparece) | PRONTA
+  status        String    @default("PRONTA")
+  largura       Int?
+  altura        Int?
+  duracaoSeg    Float?
+  /// Capa do vídeo (quadro do vídeo, gerado no navegador ou a miniatura do Instagram), em alta qualidade.
+  capaBlobUrl    String?
+  capaBlobAcesso String?
+  capaDados      Bytes?
+  capaMime       String?
+  /// UPLOAD (do computador) | INSTAGRAM
+  origem        String    @default("UPLOAD")
+  /// Instagram: id da publicação e o link dela.
+  origemRef     String?
+  origemLink    String?
+  legenda       String?
 
   @@index([usuarioId])
   @@map("pro_labore_disparo_midias")
