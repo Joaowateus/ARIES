@@ -59,6 +59,12 @@ export interface ConfigEnvio {
   pararAoComprar: boolean
   pararSeVendedorAssumir: boolean
   maxTentativas: number
+  /** Estratégia contínua: a campanha fica aberta e quem passa a se encaixar no público entra sozinho. */
+  continua: boolean
+  /** Para a sequência quando o contato sai do público (ex.: mudou de etapa no CRM). */
+  pararAoSairDoPublico: boolean
+  /** Envia pelo WhatsApp do vendedor responsável por cada contato (se conectado); senão, pelo número da campanha. */
+  remetentePorVendedor: boolean
 }
 export interface ConfigLoja {
   envio: ConfigEnvio
@@ -69,7 +75,7 @@ export interface ConfigLoja {
   palavrasSair: string[]
 }
 export const CONFIG_PADRAO: ConfigLoja = {
-  envio: { janela: { inicio: '09:00', fim: '19:00', dias: [1, 2, 3, 4, 5, 6] }, intervaloSeg: 20, maxPorHora: 90, maxPorDia: 400, pararAoResponder: true, pararAoComprar: true, pararSeVendedorAssumir: true, maxTentativas: 4 },
+  envio: { janela: { inicio: '09:00', fim: '19:00', dias: [1, 2, 3, 4, 5, 6] }, intervaloSeg: 20, maxPorHora: 90, maxPorDia: 400, pararAoResponder: true, pararAoComprar: true, pararSeVendedorAssumir: true, maxTentativas: 4, continua: false, pararAoSairDoPublico: false, remetentePorVendedor: false },
   baseMarketing: 'EXPLICITA',
   exigirAprovacao: false, // sem aprovação obrigatória (pedido do dono, 25/11/2026); o dono liga em Configurações
   rodapeSair: 'Para não receber mais mensagens como esta, responda SAIR.',
@@ -93,6 +99,9 @@ export function lerConfigEnvio(c: unknown, base: ConfigEnvio = CONFIG_PADRAO.env
     pararAoComprar: typeof o.pararAoComprar === 'boolean' ? o.pararAoComprar : base.pararAoComprar,
     pararSeVendedorAssumir: typeof o.pararSeVendedorAssumir === 'boolean' ? o.pararSeVendedorAssumir : base.pararSeVendedorAssumir,
     maxTentativas: num(o.maxTentativas, base.maxTentativas, 1, 8),
+    continua: typeof o.continua === 'boolean' ? o.continua : base.continua ?? false,
+    pararAoSairDoPublico: typeof o.pararAoSairDoPublico === 'boolean' ? o.pararAoSairDoPublico : base.pararAoSairDoPublico ?? false,
+    remetentePorVendedor: typeof o.remetentePorVendedor === 'boolean' ? o.remetentePorVendedor : base.remetentePorVendedor ?? false,
   }
 }
 export function lerConfigLoja(c: unknown): ConfigLoja {

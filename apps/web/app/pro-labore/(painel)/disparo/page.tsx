@@ -14,10 +14,11 @@ import { Campanhas } from './_disparo/Campanhas'
 import { Publicos } from './_disparo/Publicos'
 import { Biblioteca } from './_disparo/Biblioteca'
 import { Configuracoes } from './_disparo/Configuracoes'
+import { Jornada } from './_disparo/Jornada'
 
-type Sub = 'visao' | 'campanhas' | 'publicos' | 'biblioteca' | 'configuracoes'
+type Sub = 'visao' | 'jornada' | 'campanhas' | 'publicos' | 'biblioteca' | 'configuracoes'
 const SUBS: Array<{ valor: Sub; rotulo: string }> = [
-  { valor: 'visao', rotulo: 'Visão geral' }, { valor: 'campanhas', rotulo: 'Campanhas' }, { valor: 'publicos', rotulo: 'Públicos' },
+  { valor: 'visao', rotulo: 'Visão geral' }, { valor: 'jornada', rotulo: 'Jornada do CRM' }, { valor: 'campanhas', rotulo: 'Campanhas' }, { valor: 'publicos', rotulo: 'Públicos' },
   { valor: 'biblioteca', rotulo: 'Biblioteca' }, { valor: 'configuracoes', rotulo: 'Configurações' },
 ]
 
@@ -47,6 +48,7 @@ function Conteudo() {
         </div>
         <div role="tabpanel" className="dp-painel">
           {sub === 'visao' && <VisaoGeral abrir={id => ir('campanhas', { campanha: id })} />}
+          {sub === 'jornada' && <Jornada abrir={id => ir('campanhas', { campanha: id })} />}
           {sub === 'campanhas' && <Campanhas aberta={campanha} abrir={id => ir('campanhas', id ? { campanha: id } : {})} />}
           {sub === 'publicos' && <Publicos />}
           {sub === 'biblioteca' && <Biblioteca />}

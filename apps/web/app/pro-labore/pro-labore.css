@@ -5798,3 +5798,14 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .dp-escolhidos { border: 1px solid var(--pl-border); border-radius: 10px; padding: 10px 12px; margin-top: 12px; display: grid; gap: 8px; }
 .dp-so-estes { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
 .dp-so-estes input { margin-top: 3px; }
+
+/* Disparo — Jornada do CRM */
+.dp-jornada { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.dp-etapa-cartao { border: 1px solid var(--pl-border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--pl-surface, transparent); }
+.dp-etapa-topo { display: flex; align-items: center; gap: 8px; }
+.dp-etapa-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; border: 1px solid var(--pl-border); }
+.dp-etapa-total { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dp-etapa-total .pl-hint { font-size: 12px; font-weight: 400; }
+.dp-etapa-estrategias { list-style: none; margin: 2px 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.dp-etapa-cartao .pl-btn { margin-top: auto; }
+.dp-link { all: unset; cursor: pointer; text-decoration: underline; font-weight: 600; }

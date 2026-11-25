@@ -13,7 +13,7 @@ import { requireModulo } from '../lib/acessos'
 import { papelDoUsuario } from '../lib/papelHoje'
 import { gravarNoBlob, lerDoBlob } from '../lib/armazenamento'
 import { lerConfigLoja, lerConfigEnvio, normalizarTelefone, renderizar, ROTULO_STATUS, ROTULO_FINALIDADE, VARIAVEIS, EDITAVEL, FINALIDADES, TIPOS_PASSO, type Conteudo, type StatusCampanha } from '../lib/disparo/regras'
-import { CAMPOS, MOTIVOS, PREDEFINIDOS, BASES, resolverPublico, valoresDoContato, type DefinicaoPublico } from '../lib/disparo/publico'
+import { CAMPOS, JORNADA, MOTIVOS, PREDEFINIDOS, BASES, contagemJornada, definicaoDaEtapa, resolverPublico, valoresDoContato, type DefinicaoPublico } from '../lib/disparo/publico'
 import { ErroDisparo, cancelarCampanha, configDaLoja, decidirMensagem, disparoAtivo, evento, prepararCampanha, rodarDisparo, situacaoDoEnvio, transicionar } from '../lib/disparo/motor'
 import { comTrava, ultimasRodadas } from '../lib/disparo/travas'
 import { estadosDeAutorizacao, registrarAutorizacao, ROTULO_BASE, BASES_LEGAIS } from '../lib/disparo/autorizacao'
@@ -106,7 +106,8 @@ router.get('/disparo/meta', ...ver, async (req, res) => {
     midias: { limites: { IMAGEM: limiteDe('IMAGEM'), VIDEO: limiteDe('VIDEO'), AUDIO: limiteDe('AUDIO'), DOCUMENTO: limiteDe('DOCUMENTO') }, uploadDireto: supabaseConfigurado(), instagram: contaInstagram?.nomeUsuario ?? null },
     motor: { ultimaRotinaEm, rotinaLigada: !!ultimaRotinaEm && Date.now() - new Date(ultimaRotinaEm).getTime() <= 10 * 60_000 },
     papel: q.papel, gestao: q.gestao, dono: q.dono, nivel: q.dono ? 'EDITAR' : req.acessos?.disparo ?? 'NENHUM',
-    capacidades: provedor().capacidades(), variaveis: VARIAVEIS, campos: CAMPOS, predefinidos: PREDEFINIDOS.map(p => ({ chave: p.chave, nome: p.nome, descricao: p.descricao, definicao: p.definicao })),
+    capacidades: provedor().capacidades(), variaveis: VARIAVEIS, campos: CAMPOS, predefinidos: PREDEFINIDOS.map(p => ({ chave: p.chave, nome: p.nome, descricao: p.descricao, definicao: p.definicao, grupo: p.grupo ?? null })),
+    jornada: JORNADA.map(j => ({ ...j, definicao: definicaoDaEtapa(j.etapa) })),
     motivos: MOTIVOS, status: ROTULO_STATUS, finalidades: ROTULO_FINALIDADE, basesLegais: BASES_LEGAIS.map(b => ({ chave: b, rotulo: ROTULO_BASE[b] })),
     remetentes: remetentes.map(r => ({ id: r.id, vendedor: r.vendedor.nome, numero: r.numeroWhatsapp ? `final ${r.numeroWhatsapp.slice(-4)}` : null, conectado: r.status === 'CONECTADO', ativo: r.vendedor.ativo })),
     vendedores, config,
@@ -165,6 +166,31 @@ router.post('/disparo/publicos/:id/arquivar', ...editar, async (req, res) => {
   await prisma.disparoPublico.updateMany({ where: { id: String(req.params.id), usuarioId: quem(req).usuarioId }, data: { arquivadoEm: new Date() } })
   res.json({ ok: true })
 })
+// Jornada do CRM: quantos estão em cada etapa agora e as estratégias contínuas de cada etapa.
+const etapaDaDefinicao = (d: unknown): string | null => {
+  const def = (d ?? {}) as DefinicaoPublico
+  if (def.predefinido?.startsWith('ETAPA_')) return def.predefinido.slice(6)
+  const achar = (g: unknown): string | null => {
+    const x = g as { campo?: string; op?: string; valor?: unknown; itens?: unknown[] } | null
+    if (!x) return null
+    if (x.campo === 'etapa' && x.op === 'igual' && typeof x.valor === 'string') return x.valor
+    for (const i of x.itens ?? []) { const r = achar(i); if (r) return r }
+    return null
+  }
+  return achar(def.filtros)
+}
+router.get('/disparo/jornada', ...ver, async (req, res) => {
+  try {
+    const q = quem(req)
+    const [etapas, campanhas] = await Promise.all([
+      contagemJornada(q.usuarioId),
+      prisma.disparoCampanha.findMany({ where: { usuarioId: q.usuarioId, excluidaEm: null, status: { in: ['DRAFT', 'VALIDATING', 'NEEDS_REVIEW', 'READY', 'SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'] } }, select: { id: true, nome: true, status: true, config: true, publico: true, totais: true, objetivo: true } }),
+    ])
+    const estrategias = campanhas.filter(c => lerConfigEnvio(c.config).continua).map(c => ({ id: c.id, nome: c.nome, status: c.status, objetivo: c.objetivo, etapa: etapaDaDefinicao(c.publico), entraram: ((c.totais ?? {}) as { elegiveis?: number }).elegiveis ?? 0 }))
+    res.json({ etapas: etapas.map(e => ({ ...e, estrategias: estrategias.filter(s => s.etapa === e.etapa) })), outras: estrategias.filter(s => !s.etapa || !etapas.some(e => e.etapa === s.etapa)) })
+  } catch (e) { falha(res, e) }
+})
+
 // Seleção manual: busca de contatos no CRM (paginada no servidor).
 router.get('/disparo/contatos', ...ver, async (req, res) => {
   const q = quem(req)
@@ -187,7 +213,7 @@ router.get('/disparo/campanhas', ...ver, async (req, res) => {
   const where: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, excluidaEm: null, ...(q.gestao ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }), ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
   const [total, itens] = await Promise.all([
     prisma.disparoCampanha.count({ where }),
-    prisma.disparoCampanha.findMany({ where, orderBy: { atualizadoEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, objetivo: true, finalidade: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, responsavelNome: true, criadoPorNome: true, erro: true, atualizadoEm: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
+    prisma.disparoCampanha.findMany({ where, orderBy: { atualizadoEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, objetivo: true, finalidade: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, responsavelNome: true, criadoPorNome: true, erro: true, atualizadoEm: true, config: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
   ])
   res.json({ total, pagina, porPagina: POR_PAGINA, itens })
 })

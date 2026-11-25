@@ -379,3 +379,46 @@ test('equipe: comunicado para os números conectados; não vira lead nem aciona 
   const d = await prisma.disparoDestinatario.findFirst({ where: { campanhaId: c.id, telefone: '5591900000002' } })
   assert.ok(d?.respondeuEm, 'a resposta ficou registrada na campanha')
 })
+
+test('estratégia contínua por etapa: entra quem chega na etapa, sai quem muda de etapa, envia pelo número do vendedor do lead', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const { definicaoDaEtapa, contagemJornada } = await import('../src/lib/disparo/publico')
+  const { soltarTrava } = await import('../src/lib/disparo/travas')
+  const asBruno = (await prisma.assistenteComercial.findUnique({ where: { vendedorId: loja.bruno } })) ?? await prisma.assistenteComercial.create({ data: { vendedorId: loja.bruno, instancia: `inst-${randomUUID()}`, webhookSegredo: randomUUID(), status: 'CONECTADO', numeroWhatsapp: '5591900000002' } })
+  await prisma.assistenteComercial.update({ where: { id: asBruno.id }, data: { status: 'CONECTADO' } })
+  await prisma.assistenteComercial.update({ where: { id: loja.asAna }, data: { status: 'CONECTADO' } })
+  falso.enviados.length = 0
+  const c = await criarCampanha('Estratégia Lead', {
+    publico: definicaoDaEtapa('LEAD') as unknown as Prisma.InputJsonValue,
+    conteudo: { passos: [{ tipo: 'TEXTO', texto: 'EST1 Oi {{primeiro_nome}}!' }, { tipo: 'TEXTO', texto: 'EST2 E aí, {{primeiro_nome}}?', esperarMin: 60 }] },
+    config: { ...JANELA_TODA, continua: true, pararAoSairDoPublico: true, remetentePorVendedor: true, pararAoResponder: false },
+  })
+  await iniciarJa(c.id)
+  await rodarDisparo(10_000)
+  const primeiro = () => falso.enviados.filter(e => e.texto.startsWith('EST1'))
+  const nomes = primeiro().map(e => e.texto.slice(8)).sort()
+  assert.ok(nomes.some(n => n.startsWith('Débora')) && nomes.some(n => n.startsWith('Gil')) && nomes.some(n => n.startsWith('Helena')), `entraram os leads em Lead: ${nomes.join(', ')}`)
+  assert.equal(primeiro().find(e => e.texto.includes('Helena'))?.assistenteId, asBruno.id, 'Helena (do Bruno) recebe pelo WhatsApp do Bruno')
+  assert.equal(primeiro().find(e => e.texto.includes('Débora'))?.assistenteId, loja.asAna, 'Débora (da Naiza) pelo da Naiza')
+  assert.equal((await prisma.disparoCampanha.findUnique({ where: { id: c.id } }))?.status, 'RUNNING', 'estratégia não "conclui": fica aberta')
+  // Um lead novo chega na etapa Lead (uso normal do CRM): entra sozinho na próxima atualização.
+  await prisma.lead.create({ data: { usuarioId: loja.id, vendedorId: loja.ana, nomeCliente: 'Nova Entrada', telefone: TEL(30), etapa: 'LEAD' } })
+  await soltarTrava(`alimentar:${c.id}`)
+  await rodarDisparo(10_000)
+  assert.ok(primeiro().some(e => e.texto.includes('Nova')), 'quem entrou na etapa recebeu o 1º passo')
+  assert.equal(await prisma.disparoEvento.count({ where: { campanhaId: c.id, tipo: 'ENTRARAM' } }), 1)
+  // Débora avança para Abordado no CRM: o 2º passo dela não sai; o do Gil sai.
+  const debora = loja.leads[1]
+  await prisma.lead.update({ where: { id: debora }, data: { etapa: 'ABORDADO' } })
+  await prisma.disparoMensagem.updateMany({ where: { campanhaId: c.id, passo: 1 }, data: { enviarApos: new Date(Date.now() - 1000) } })
+  await rodarDisparo(10_000)
+  const segundo = falso.enviados.filter(e => e.texto.startsWith('EST2'))
+  assert.ok(!segundo.some(e => e.texto.includes('Débora')), 'Débora mudou de etapa: a sequência parou')
+  assert.ok(segundo.some(e => e.texto.includes('Gil')), 'Gil continua em Lead: recebeu o 2º passo')
+  const dDeb = await prisma.disparoDestinatario.findFirst({ where: { campanhaId: c.id, leadId: debora } })
+  assert.equal(dDeb?.interrompidoPor, 'SAIU_DO_PUBLICO')
+  // Jornada: contagem por etapa.
+  const j = await contagemJornada(loja.id)
+  assert.ok((j.find(x => x.etapa === 'LEAD')?.total ?? 0) >= 3)
+  await prisma.disparoCampanha.update({ where: { id: c.id }, data: { status: 'CANCELLED' } })
+})
