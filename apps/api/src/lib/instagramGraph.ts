@@ -824,3 +824,11 @@ export async function buscarPublicacaoCompleta(mediaId: string, accessToken: str
   const itens = m.media_type === 'CAROUSEL_ALBUM' ? (m.children?.data ?? []).map(item) : [item(m)]
   return { id: m.id, tipo: m.media_type, formato: m.media_product_type ?? null, legenda: m.caption ?? null, link: m.permalink ?? null, publicadoEm: m.timestamp ?? null, itens }
 }
+
+/** Uma página das publicações (do mais recente para o mais antigo), com o cursor da próxima. Sem limite total. */
+export async function buscarPaginaMidias(igUserId: string, accessToken: string, apos: string | null, limite = 24): Promise<{ itens: MidiaInstagram[]; proximo: string | null }> {
+  const pagina = await chamarGraphApi<{ data: MidiaApi[]; paging?: { next?: string; cursors?: { after?: string } } }>(`/${igUserId}/media`, {
+    fields: CAMPOS_MIDIA, limit: String(Math.min(50, Math.max(1, limite))), access_token: accessToken, ...(apos ? { after: apos } : {}),
+  })
+  return { itens: pagina.data.map(m => mapearMidia(m, 'FEED')), proximo: pagina.paging?.next ? pagina.paging.cursors?.after ?? null : null }
+}

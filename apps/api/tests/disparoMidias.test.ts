@@ -6,6 +6,9 @@ import http from 'http'
 import type { AddressInfo } from 'net'
 const PORTA_FALSA = 39000 + Math.floor(Math.random() * 900)
 const FALSO = `http://127.0.0.1:${PORTA_FALSA}`
+// Ids dos stories únicos por rodada (o id do Instagram é único no banco inteiro).
+const RODADA = String(Date.now()).slice(-7)
+const ST1 = `18${RODADA}1`, ST2 = `18${RODADA}2`, ST_VELHO = `18${RODADA}9`
 process.env.INSTAGRAM_GRAPH_BASE = FALSO
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -52,7 +55,14 @@ const falso = http.createServer(async (req, res) => {
     res.writeHead(200); res.end(o); return
   }
   // Instagram Graph
-  if (caminho === '/me/media') return json(200, { data: [
+  if (caminho === '/me/media' && u.searchParams.get('after') === 'C2') return json(200, { data: [
+    { id: '1790003', caption: 'Foto antiga', media_type: 'IMAGE', media_product_type: 'FEED', media_url: `${FALSO}/cdn/foto2.jpg`, permalink: 'https://instagram.com/p/z', timestamp: '2026-01-02T12:00:00+0000' },
+  ] })
+  if (caminho === '/me/stories') return json(200, { data: [
+    { id: ST1, media_type: 'VIDEO', media_product_type: 'STORY', media_url: `${FALSO}/cdn/video.mp4`, thumbnail_url: `${FALSO}/cdn/capa.jpg`, timestamp: new Date(Date.now() - 3600e3).toISOString() },
+    { id: ST2, media_type: 'IMAGE', media_product_type: 'STORY', media_url: `${FALSO}/cdn/foto.png`, timestamp: new Date(Date.now() - 7200e3).toISOString() },
+  ] })
+  if (caminho === '/me/media') return json(200, { paging: { cursors: { after: 'C2' }, next: `${FALSO}/me/media?after=C2` }, data: [
     { id: '1790001', caption: 'Reels da CG 160 nova\n#motos', media_type: 'VIDEO', media_product_type: 'REELS', media_url: `${FALSO}/cdn/video.mp4`, thumbnail_url: `${FALSO}/cdn/capa.jpg`, permalink: 'https://instagram.com/reel/x', timestamp: '2026-11-20T12:00:00+0000' },
     { id: '1790002', caption: 'Carrossel de ofertas', media_type: 'CAROUSEL_ALBUM', media_product_type: 'FEED', media_url: `${FALSO}/cdn/foto.png`, permalink: 'https://instagram.com/p/y', timestamp: '2026-11-19T12:00:00+0000' },
   ] })
@@ -184,4 +194,49 @@ test('Instagram: sem conta conectada explica; com conta lista e traz reels (com 
   const car = await api('POST', '/instagram/importar', { mediaId: '1790002' })
   assert.equal((car.corpo.criadas as unknown[]).length, 2, 'carrossel traz cada foto')
   assert.equal(((await api('GET', '/instagram')).corpo.itens as Array<{ importada: boolean }>).filter(x => x.importada).length, 2, 'marca as já trazidas')
+})
+
+test('Instagram sem limite: página a página até a primeira postagem; capa do reels como imagem', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  supa(true)
+  const p1 = await api('GET', '/instagram?limite=12')
+  assert.equal((p1.corpo.itens as unknown[]).length, 2)
+  assert.equal(p1.corpo.proximo, 'C2')
+  const p2 = await api('GET', `/instagram?limite=12&apos=${p1.corpo.proximo}`)
+  assert.equal((p2.corpo.itens as Array<{ id: string }>)[0].id, '1790003')
+  assert.equal(p2.corpo.proximo, null, 'chegou na primeira postagem')
+  const capa = await api('POST', '/instagram/importar', { mediaId: '1790001', comoImagem: true })
+  assert.equal(capa.status, 201, JSON.stringify(capa.corpo))
+  assert.equal((capa.corpo.criadas as Array<{ tipo: string; nome: string }>)[0].tipo, 'IMAGEM')
+  assert.match((capa.corpo.criadas as Array<{ nome: string }>)[0].nome, /\(capa\)/)
+})
+
+test('Stories: guardados enquanto estão no ar; importados do arquivo guardado (vídeo, ou a capa como imagem); o que saiu sem guardar explica', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  supa(true)
+  const r = await api('GET', '/instagram?origem=stories')
+  assert.equal(r.status, 200, JSON.stringify(r.corpo))
+  const itens = r.corpo.itens as Array<{ id: string; tipo: string; guardado: boolean; noAr: boolean; capa: string | null }>
+  assert.equal(itens.length, 2)
+  assert.ok(itens.every(i => i.guardado && i.noAr), 'os dois stories no ar foram guardados')
+  assert.match(String(itens.find(i => i.id === ST1)!.capa), /token=leitura/, 'capa vem do arquivo guardado')
+  const st = await prisma.socialMediaMidia.findUnique({ where: { instagramMediaId: ST1 } })
+  assert.ok(st?.arquivoBlobUrl && st.capaBlobUrl)
+  // Depois que sai do ar (simulado: publicado há 3 dias), ainda importa do arquivo guardado.
+  await prisma.socialMediaMidia.update({ where: { instagramMediaId: ST1 }, data: { publicadoEm: new Date(Date.now() - 3 * 864e5) } })
+  const v = await api('POST', '/instagram/importar', { mediaId: ST1 })
+  assert.equal(v.status, 201, JSON.stringify(v.corpo))
+  assert.equal((v.corpo.criadas as Array<{ tipo: string }>)[0].tipo, 'VIDEO')
+  const m = (await api('GET', '/midias')).corpo.find(x => x.id === (v.corpo.criadas as Array<{ id: string }>)[0].id)!
+  assert.ok(m.arquivoUrl && m.capaUrl, 'vídeo do story com arquivo e capa')
+  const c = await api('POST', '/instagram/importar', { mediaId: ST1, comoImagem: true })
+  assert.equal((c.corpo.criadas as Array<{ tipo: string }>)[0].tipo, 'IMAGEM')
+  // Story antigo que nunca foi guardado: explica.
+  const conta = await prisma.socialMediaConta.findUnique({ where: { titular: `dono:${lojaId}` } })
+  await prisma.socialMediaMidia.create({ data: { contaId: conta!.id, instagramMediaId: ST_VELHO, tipo: 'IMAGE', formato: 'STORY', publicadoEm: new Date(Date.now() - 10 * 864e5) } })
+  const velho = await api('POST', '/instagram/importar', { mediaId: ST_VELHO })
+  assert.equal(velho.status, 410)
+  assert.match(String(velho.corpo.error), /saiu do ar antes/)
+  const pag = await api('GET', '/instagram?origem=stories&limite=6')
+  assert.ok((pag.corpo.itens as Array<{ id: string; guardado: boolean }>).some(i => i.id === ST_VELHO && !i.guardado), 'aparece como não guardado')
 })
