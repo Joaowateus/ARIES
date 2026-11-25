@@ -35,8 +35,10 @@ function responderRegraVenda(res: Response, e: unknown) {
 }
 import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
+  sessaoViva as sessaoVivaWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
 } from '../lib/whatsappEvolution'
+import { repararConexao } from '../lib/assistenteReparo'
 import { diagnosticarAssistentes } from '../lib/assistenteDiagnostico'
 import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa, avaliarJornada, atualizarNota } from '../lib/assistenteMotor'
 import {
@@ -3220,7 +3222,10 @@ router.post('/assistente/conectar', requireProLaboreAuth, requireModulo('assiste
 
   try {
     const estado = await estadoInstanciaWhatsapp(instancia)
-    if (estado === 'open') {
+    // "open" com a sessão morta por baixo (Connection Closed): refaz a instância e gera QR novo.
+    const morta = estado === 'open' && (await sessaoVivaWhatsapp(instancia, existente?.numeroWhatsapp ?? null)) === false
+    if (morta) await removerInstanciaWhatsapp(instancia).catch(() => undefined)
+    if (estado === 'open' && !morta) {
       await configurarWebhookWhatsapp(instancia, urlWebhookAssistente(req, webhookSegredo))
       await marcarAssistenteConectado(assistente)
       res.json({ status: 'CONECTADO', qrBase64: null, pairingCode: null })
@@ -3260,6 +3265,32 @@ router.get('/assistente/conexao', requireProLaboreAuth, requireModulo('assistent
   } catch (e) {
     res.json({ status: assistente.status, aviso: mensagemErroWhatsapp(e) })
   }
+})
+
+// Reparar a conexão: testa de verdade, reinicia sem QR e, só se não voltar (e a pessoa pedir), gera QR novo.
+router.post('/assistente/reparar', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {
+  const b = z.object({ vendedorId: z.string().optional(), gerarQr: z.boolean().optional(), numeroPareamento: z.string().optional() }).safeParse(req.body ?? {})
+  if (!b.success) { res.status(400).json({ error: b.error.issues[0].message }); return }
+  if (!evolutionConfigurada()) { res.status(503).json({ error: 'O servidor do WhatsApp não está configurado.' }); return }
+  const vendedor = await resolverVendedorDoAssistente(req, res, b.data.vendedorId)
+  if (!vendedor) return
+  const a = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { id: true, webhookSegredo: true } })
+  if (!a) { res.status(404).json({ error: 'Este WhatsApp ainda não foi conectado.' }); return }
+  const segredo = a.webhookSegredo ?? randomBytes(24).toString('hex')
+  if (!a.webhookSegredo) await prisma.assistenteComercial.update({ where: { id: a.id }, data: { webhookSegredo: segredo } })
+  try {
+    res.json(await repararConexao(a.id, urlWebhookAssistente(req, segredo), { gerarQr: b.data.gerarQr, numeroPareamento: b.data.numeroPareamento?.replace(/\D/g, '') || undefined }))
+  } catch (e) {
+    res.status(502).json({ error: mensagemErroWhatsapp(e) })
+  }
+})
+// A conexão funciona de verdade? (o card confere ao abrir; o servidor pode dizer "conectado" com a sessão morta)
+router.get('/assistente/saude', requireProLaboreAuth, requireModulo('assistente', 'VER'), async (req: Request, res: Response) => {
+  const vendedor = await resolverVendedorDoAssistente(req, res, req.query.vendedorId)
+  if (!vendedor) return
+  const a = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { instancia: true, numeroWhatsapp: true, status: true } })
+  if (!a?.instancia || a.status !== 'CONECTADO' || !evolutionConfigurada()) { res.json({ viva: null }); return }
+  res.json({ viva: await sessaoVivaWhatsapp(a.instancia, a.numeroWhatsapp) })
 })
 
 router.delete('/assistente/config', requireProLaboreAuth, requireModulo('assistente', 'EDITAR'), async (req: Request, res: Response) => {

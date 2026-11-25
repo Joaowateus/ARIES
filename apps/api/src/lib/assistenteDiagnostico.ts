@@ -7,7 +7,7 @@
 import { prisma } from './prisma'
 import { ambienteDeTeste } from './ambiente'
 import { lerConfig } from './assistenteRoteiro'
-import { ErroWhatsapp, estadoInstancia, evolutionConfigurada, webhookDaInstancia } from './whatsappEvolution'
+import { ErroWhatsapp, sessaoViva, estadoInstancia, evolutionConfigurada, webhookDaInstancia } from './whatsappEvolution'
 
 const HORA = 3_600_000
 export type Gravidade = 'CRITICO' | 'ATENCAO' | 'INFO'
@@ -58,6 +58,8 @@ export async function diagnosticarAssistentes(usuarioId: string, urlEsperada: (s
             : { configurado: false, ativo: false, recebeMensagens: false, apontaParaCa: false, endereco: null }
         } catch (e) { erro = `Não consegui ler o webhook: ${e instanceof ErroWhatsapp ? e.message : String(e)}` }
       }
+      // "open" nem sempre é verdade: confere se a sessão responde de fato (Connection Closed).
+      if (estado === 'open' && (await sessaoViva(a.instancia, a.numeroWhatsapp)) === false) estado = 'sessao_caida'
     } else if (!a.instancia) estado = 'sem_instancia'
 
     const p: Problema[] = []
@@ -66,6 +68,7 @@ export async function diagnosticarAssistentes(usuarioId: string, urlEsperada: (s
     if (estado === 'sem_instancia') p.push({ gravidade: 'CRITICO', texto: `O WhatsApp de ${nome} nunca foi conectado.`, acao: 'Conectar em Conversas › Conexão (QR Code).' })
     if (estado === 'inexistente') p.push({ gravidade: 'CRITICO', texto: `O servidor do WhatsApp não tem mais a sessão de ${nome} (foi apagada lá).`, acao: 'Conectar de novo em Conversas › Conexão (QR Code).' })
     if (estado === 'close' || estado === 'connecting') p.push({ gravidade: 'CRITICO', texto: `O WhatsApp de ${nome} está desconectado no servidor${a.status === 'CONECTADO' ? ', mas o ARIES ainda mostra "conectado"' : ''}. Sem conexão, nenhuma mensagem chega: nem cadastro, nem resposta do robô.`, acao: 'Ler o QR Code de novo em Conversas › Conexão, no celular de quem usa esse número.' })
+    if (estado === 'sessao_caida') p.push({ gravidade: 'CRITICO', texto: `A sessão do WhatsApp de ${nome} caiu por baixo: o servidor mostra "conectado", mas o WhatsApp não responde (Connection Closed). Nada chega e nada sai por esse número.`, acao: 'Clicar em "Reparar conexão" em Conversas › Conexão (no WhatsApp de quem usa esse número). Se pedir, ler o QR Code novo no celular.' })
     if (estado === 'erro') p.push({ gravidade: 'CRITICO', texto: `Não consegui falar com o servidor do WhatsApp: ${erro}`, acao: 'Conferir se o servidor da Evolution está no ar e se EVOLUTION_API_URL e EVOLUTION_API_KEY na Vercel estão certas.' })
     if (webhook && (!webhook.configurado || !webhook.ativo || !webhook.recebeMensagens)) p.push({ gravidade: 'CRITICO', texto: `O servidor do WhatsApp não está avisando o ARIES das mensagens de ${nome} (webhook ${!webhook.configurado ? 'sem endereço' : !webhook.ativo ? 'desligado' : 'sem o evento de mensagens'}).`, acao: 'Clicar em "Reapontar o aviso" aqui.', corrigirWebhook: true })
     else if (webhook && !webhook.apontaParaCa) p.push({ gravidade: 'CRITICO', texto: `O servidor do WhatsApp manda os avisos de ${nome} para outro endereço (${webhook.endereco ?? 'desconhecido'}), não para esta API.`, acao: 'Clicar em "Reapontar o aviso" aqui.', corrigirWebhook: true })

@@ -26,6 +26,30 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
 
   const status = assistente?.status ?? 'NAO_CONECTADO'
   const conectado = status === 'CONECTADO'
+  // O servidor pode dizer "conectado" com a sessão morta por baixo (Connection Closed): confere de verdade.
+  const [viva, setViva] = useState<boolean | null>(null)
+  const [reparo, setReparo] = useState<{ fase: 'testando' | 'ok' | 'caida' | 'qr'; mensagem: string } | null>(null)
+  useEffect(() => {
+    if (!conectado) return
+    let vivo = true
+    proLaboreApi.assistente.saude(vendedorId).then(r => { if (vivo) setViva(r.viva) }).catch(() => undefined)
+    return () => { vivo = false }
+  }, [conectado, vendedorId, assistente?.conectadoEm])
+
+  async function reparar(gerarQr = false) {
+    if (gerarQr && !confirm(`Gerar um QR Code novo para ${nomeVendedor}? A sessão antiga do WhatsApp é refeita; conversas, leads e roteiro continuam salvos. Tenha o celular de ${nomeVendedor} em mãos.`)) return
+    setReparo({ fase: 'testando', mensagem: gerarQr ? 'Refazendo a sessão e gerando o QR Code…' : 'Testando a conexão e reiniciando a sessão (até 20 segundos)…' })
+    setErro('')
+    try {
+      const r = await proLaboreApi.assistente.reparar({ vendedorId, gerarQr })
+      if (r.status === 'CONECTADO') { setReparo({ fase: 'ok', mensagem: r.mensagem }); setViva(true); atualizar.current() }
+      else if (r.status === 'AGUARDANDO_QR') { setReparo({ fase: 'qr', mensagem: r.mensagem }); setModoCodigo(false); setCodigo({ status: 'AGUARDANDO_QR', qrBase64: r.qrBase64 ?? null, pairingCode: r.pairingCode ?? null } as ConexaoAssistente); atualizar.current() }
+      else setReparo({ fase: 'caida', mensagem: r.mensagem })
+    } catch (e) {
+      setReparo(null)
+      setErro((e as Error).message)
+    }
+  }
   const quem = isDono ? nomeVendedor : 'você'
 
   async function gerar(numeroPareamento?: string) {
@@ -181,8 +205,22 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
               <small>{assistente.cadastroAutomatico ? 'Contato novo entra sozinho em Leads' : 'Toque pra cadastrar sozinho de novo'}</small>
             </span>
           </button>
+          <button type="button" className="pl-btn" onClick={() => void reparar()} disabled={carregando || reparo?.fase === 'testando'} data-reparar-conexao>Reparar conexão</button>
           <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar} disabled={carregando}>Desconectar</button>
         </div>
+        {viva === false && !reparo && (
+          <div className="pl-alert pl-alert-error" role="alert" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }} data-sessao-caida>
+            <span style={{ flex: '1 1 260px' }}><b>A conexão caiu por baixo.</b> O servidor mostra “conectado”, mas o WhatsApp não responde: nada chega e nada sai por este número (nem o assistente, nem o Disparo).</span>
+            <button type="button" className="pl-btn pl-btn-primary" onClick={() => void reparar()}>Reparar conexão</button>
+          </div>
+        )}
+        {reparo && (
+          <div className={`pl-alert ${reparo.fase === 'caida' ? 'pl-alert-error' : ''}`} role="status" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }} data-reparo={reparo.fase}>
+            <span style={{ flex: '1 1 260px' }}>{reparo.fase === 'testando' && <span className="pl-as-spinner" aria-hidden="true" style={{ marginRight: 8 }} />}{reparo.fase === 'ok' ? '✅ ' : ''}{reparo.mensagem}</span>
+            {reparo.fase === 'caida' && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void reparar(true)} data-gerar-qr-novo>Gerar QR Code novo</button>}
+            {reparo.fase !== 'testando' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setReparo(null)}>Fechar</button>}
+          </div>
+        )}
         {assistente.atendimentoAutomatico && assistente.configuracao && !assistente.configuracao.responderContatosNovos && (
           <div className="pl-alert" role="status" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }} data-aviso-so-campanha>
             <span style={{ flex: '1 1 260px' }}><b>O robô só responde quem vem de anúncio ou usa uma frase de campanha.</b> Contato novo que chama direto (ex.: achou o número no Instagram) entra no CRM, mas fica sem resposta automática.</span>
