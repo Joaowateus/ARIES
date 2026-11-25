@@ -1830,7 +1830,7 @@ export type AnaliseSocialMedia =
 
 // --- Assistente Comercial (WhatsApp) ---
 
-export type StatusAssistente = 'NAO_CONECTADO' | 'AGUARDANDO_QR' | 'CONECTADO' | 'DESCONECTADO'
+export type StatusAssistente = 'NAO_CONECTADO' | 'AGUARDANDO_QR' | 'CONECTADO' | 'DESCONECTADO' | 'SESSAO_CAIDA'
 export type TipoConversaAssistente = 'SUPORTE' | 'LEAD'
 export type StatusConversaAssistente = 'ATIVA' | 'AGUARDANDO_VENDEDOR' | 'ASSUMIDA' | 'ENCERRADA'
 export type ResultadoConversaAssistente = 'QUALIFICADO' | 'PEDIU_ATENDENTE' | 'DESISTIU' | 'NAO_E_LEAD'

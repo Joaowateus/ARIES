@@ -248,7 +248,8 @@ export async function processarWebhookAssistente(segredo: string, corpo: unknown
 
 async function tratarConexao(a: AssistenteCompleto, dados: Obj) {
   const estado = str(dados.state)
-  if (estado === 'open') await marcarConectado(a)
+  // "Precisa reconectar" (envio real falhou): só um QR novo tira desse estado, não o "open" do servidor.
+  if (estado === 'open' && a.status !== 'SESSAO_CAIDA') await marcarConectado(a)
   else if (estado === 'close' && a.status === 'CONECTADO') {
     await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'DESCONECTADO' } })
   }

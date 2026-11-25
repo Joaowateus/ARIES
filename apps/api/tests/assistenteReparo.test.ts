@@ -14,7 +14,7 @@ import { removerInstancia } from '../src/lib/whatsappEvolution'
 import app from '../src/app'
 
 // ---------- Evolution falsa ----------
-const ev = { existe: true, estado: 'open', morta: true, restartConserta: false, chamadas: [] as string[] }
+const ev = { existe: true, estado: 'open', morta: true, restartConserta: false, envioQuebrado: false, chamadas: [] as string[], enviados: [] as string[] }
 const falso = http.createServer((req, res) => {
   const u = new URL(req.url!, 'http://x')
   ev.chamadas.push(`${req.method} ${u.pathname}`)
@@ -23,6 +23,7 @@ const falso = http.createServer((req, res) => {
   req.on('end', () => {
     if (u.pathname.startsWith('/instance/connectionState/')) return ev.existe ? json(200, { instance: { state: ev.estado } }) : json(404, { response: { message: ['not found'] } })
     if (u.pathname.startsWith('/chat/whatsappNumbers/')) return ev.morta ? json(500, { response: { message: ['Error: Connection Closed'] } }) : json(200, [{ exists: true }])
+    if (u.pathname.startsWith('/message/sendText/')) { if (ev.morta || ev.envioQuebrado) return json(500, { response: { message: ['Error: Connection Closed'] } }); ev.enviados.push(u.pathname); return json(201, { key: { id: 'MSGOK' } }) }
     if (u.pathname.startsWith('/instance/restart/')) { if (ev.restartConserta) ev.morta = false; return json(200, { ok: true }) }
     if (u.pathname.startsWith('/instance/logout/')) return ev.morta ? json(500, { response: { message: ['Error: Connection Closed'] } }) : json(200, {})
     if (u.pathname.startsWith('/instance/delete/')) { ev.existe = false; return json(200, {}) }
@@ -38,7 +39,7 @@ let temBanco = false
 let servidor: Server
 let base = ''
 const loja = { id: '', vendedor: '', assistente: '' }
-const reset = (x: Partial<typeof ev>) => Object.assign(ev, { existe: true, estado: 'open', morta: true, restartConserta: false, chamadas: [] }, x)
+const reset = (x: Partial<typeof ev>) => Object.assign(ev, { existe: true, estado: 'open', morta: true, restartConserta: false, envioQuebrado: false, chamadas: [], enviados: [] }, x)
 
 before(async () => {
   try { await prisma.$queryRaw`SELECT 1`; temBanco = true } catch { return }
@@ -99,4 +100,28 @@ test('"Conectar" com sessão morta gera QR (antes respondia "conectado"); "Desco
   reset({})
   await removerInstancia('qualquer')
   assert.ok(ev.chamadas.some(c => c.startsWith('DELETE /instance/delete/')), 'apagou mesmo com o logout falhando')
+})
+
+test('caso da Naiza: o teste de conexão passa, mas o envio real falha → "precisa reconectar" e o QR aparece direto', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  reset({ morta: false, envioQuebrado: true })
+  await prisma.assistenteComercial.update({ where: { id: loja.assistente }, data: { status: 'CONECTADO', instancia: `aries-${loja.vendedor}` } })
+  const r = await repararConexao(loja.assistente, 'https://x/w')
+  assert.equal(r.status, 'SESSAO_CAIDA')
+  assert.ok(ev.chamadas.some(c => c.startsWith('POST /message/sendText/')), 'fez o envio de teste para o próprio número')
+  assert.equal((await prisma.assistenteComercial.findUnique({ where: { id: loja.assistente } }))?.status, 'SESSAO_CAIDA')
+  // O servidor dizendo "open" não devolve o "conectado" (nem pelo acompanhamento nem pelo aviso de conexão).
+  assert.equal((await api('GET', `/assistente/conexao?vendedorId=${loja.vendedor}`)).corpo.status, 'SESSAO_CAIDA')
+  // "Gerar QR Code" refaz a sessão e mostra o QR (antes respondia "conectado").
+  const qr = await api('POST', '/assistente/conectar', { vendedorId: loja.vendedor })
+  assert.equal(qr.corpo.status, 'AGUARDANDO_QR', JSON.stringify(qr.corpo))
+})
+
+test('reparo com envio funcionando: o teste de envio sai e confirma "conectado"', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  reset({ morta: false })
+  await prisma.assistenteComercial.update({ where: { id: loja.assistente }, data: { status: 'CONECTADO' } })
+  const r = await repararConexao(loja.assistente, 'https://x/w')
+  assert.equal(r.status, 'CONECTADO')
+  assert.equal(ev.enviados.length, 1, 'uma mensagem de teste para o próprio número')
 })
