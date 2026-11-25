@@ -4172,7 +4172,7 @@ export interface MidiaDisparo {
   arquivoUrl?: string | null; capaUrl?: string | null; temCapa?: boolean
   origem?: 'UPLOAD' | 'INSTAGRAM'; origemLink?: string | null; legenda?: string | null
 }
-export interface PublicacaoInstagramDisparo { id: string; tipo: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM' | string; formato: string | null; legenda: string | null; capa: string | null; link: string | null; publicadoEm: string; importada: boolean }
+export interface PublicacaoInstagramDisparo { id: string; tipo: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM' | string; formato: string | null; legenda: string | null; capa: string | null; link: string | null; publicadoEm: string; importada: boolean; /** Story: ainda no ar (24 h) e se o arquivo foi guardado pelo ARIES. */ noAr: boolean; guardado: boolean }
 export interface PublicoSalvoDisparo { id: string; nome: string; descricao: string | null; definicao: DefinicaoPublicoDisparo; criadoPorNome: string | null; atualizadoEm: string }
 export interface AutorizacaoDisparo { id: string; telefone: string; situacao: 'AUTORIZADO' | 'REVOGADO' | 'BLOQUEADO'; finalidade: string; baseLegal: string | null; evidencia: string | null; origem: string; registradoPorNome: string | null; criadoEm: string }
 export type CampanhaDisparoEntrada = Pick<CampanhaDisparo, 'nome' | 'descricao' | 'objetivo' | 'finalidade' | 'assistenteId' | 'publicoId' | 'publico' | 'conteudo' | 'config' | 'agendadaPara' | 'recorrencia'>
@@ -4240,8 +4240,8 @@ export const disparoApi = {
     arquivar: (id: string) => postD<{ ok: true }>(`/midias/${id}/arquivar`),
   },
   instagram: {
-    listar: (limite = 30) => request<{ conta: string; itens: PublicacaoInstagramDisparo[] }>(`/pro-labore/disparo/instagram${qsD({ limite })}`),
-    importar: (mediaId: string, itens?: string[] | null) => postD<{ criadas: Array<{ id: string; nome: string; tipo: string }>; falhas: string[]; legenda: string | null }>('/instagram/importar', { mediaId, itens: itens ?? null }),
+    listar: (f: { origem?: 'publicacoes' | 'stories'; apos?: string | null; limite?: number } = {}) => request<{ conta: string; proximo: string | null; itens: PublicacaoInstagramDisparo[] }>(`/pro-labore/disparo/instagram${qsD({ origem: f.origem, apos: f.apos ?? undefined, limite: f.limite })}`),
+    importar: (mediaId: string, opcoes: { itens?: string[] | null; comoImagem?: boolean } = {}) => postD<{ criadas: Array<{ id: string; nome: string; tipo: string }>; falhas: string[]; legenda: string | null }>('/instagram/importar', { mediaId, itens: opcoes.itens ?? null, comoImagem: opcoes.comoImagem }),
   },
   autorizacoes: {
     listar: (f: { telefone?: string; situacao?: string; pagina?: number } = {}) => request<{ total: number; pagina: number; porPagina: number; atual: { situacao: string; criadoEm: string; baseLegal: string | null } | null; itens: AutorizacaoDisparo[] }>(`/pro-labore/disparo/autorizacoes${qsD(f)}`),

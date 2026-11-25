@@ -7,6 +7,7 @@
 // `dono:<id>`), com `tipoConexao = EMPRESA`: converter uma conta pessoal
 // mantém todo o histórico sincronizado.
 import { disparoAtivo, rodarDisparo } from '../lib/disparo/motor'
+import { arquivarStories } from '../lib/disparo/midias'
 import { orcamento } from '../lib/cronOrcamento'
 import { cargaInicial as cargaInicialCentral, conferir as conferirCentral, processarEventos as processarEventosCentral } from '../lib/centralConhecimento/rotinas'
 import { reverMetaEmRiscoTodas } from '../lib/metaCoerente'
@@ -444,11 +445,13 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const centralEventos = await o.rodar('central de conhecimento', lim => processarEventosCentral(Math.min(6000, lim), agora), { centralProcessados: 0, centralFalhas: 0 })
   // Aries no WhatsApp: o resumo da manhã no horário escolhido pelo gestor.
   const agente = await o.rodar('Aries manhã', lim => rodarAgente(agora, Math.min(5000, lim)), { manhaAgente: 0 })
+  // Stories no ar: guarda o arquivo antes de o Instagram apagar (24 h), para o Disparo usar depois.
+  const stories = await o.rodar('stories', lim => arquivarStories(Math.min(8000, lim)), { storiesGuardados: 0 }, 3000)
   // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
   const trafego = await o.rodar('tráfego', lim => sincronizarTrafegoPendentes(Math.min(10_000, lim)), { trafegoSincronizadas: 0, trafegoFalhas: 0 })
   // Carga inicial da Central em rodadas, com o tempo que sobrar (para no ponto e continua na próxima).
   const centralCarga = await o.rodar('central: carga inicial', lim => cargaInicialCentral(Math.min(8000, lim)), { centralCarga: 0 }, 3000)
-  res.json({ ...disparo, ...centralEventos, ...centralCarga, ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
+  res.json({ ...disparo, ...stories, ...centralEventos, ...centralCarga, ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---

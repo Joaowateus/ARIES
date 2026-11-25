@@ -240,6 +240,13 @@ Checklist do dia
 - **No WhatsApp:** arquivo no armazenamento vai por link temporário (3 h) que o servidor do WhatsApp baixa — nada de 64 MB em base64 dentro do pedido.
 - Testes: `tests/disparoMidias.test.ts` (Supabase e Instagram simulados com as mesmas rotas e respostas): envio direto de 20 MB, plano B de 9 MB montado idêntico ao original, recusas, importação de reels e carrossel, link para o WhatsApp.
 
+## 10h. Instagram sem limite e Stories
+
+- **Publicações sem limite:** a janela "Importar do Instagram" carrega 24 por vez e busca a próxima página sozinha ao rolar (cursor da Graph API), até a primeira postagem. Filtros: tudo, fotos, reels/vídeos, carrosséis. Antes, aberta numa mensagem de imagem, a janela escondia os reels.
+- **Capa como imagem:** de qualquer vídeo (reels, vídeo, story) dá para trazer só a capa como imagem.
+- **Stories:** o Instagram apaga o story em 24 h e a API não devolve depois. O ARIES guarda o arquivo (foto/vídeo e capa) de cada story **enquanto está no ar**: na rotina de minuto (`arquivarStories`, até 8 s) e ao abrir a aba Stories. Fica em `instagram/stories/<conta>/<id>` no armazenamento, com as colunas `arquivoBlobUrl`, `capaBlobUrl`… em `pro_labore_social_media_midias` (o sync de hora em hora apaga e recria as linhas e copia essas colunas). Importar um story guardado aponta a mídia da Biblioteca para o mesmo arquivo (sem cópia). Story que saiu do ar antes de ser guardado aparece como "saiu do ar antes de ser guardado".
+- Testes: paginação até a primeira postagem, capa como imagem, stories guardados, importados depois de saírem do ar e o caso não guardado.
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

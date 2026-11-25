@@ -1899,6 +1899,13 @@ model SocialMediaMidia {
   insightsAtualizadoEm   DateTime?
   atualizadoEm           DateTime  @updatedAt
 
+  // Arquivo do story guardado enquanto está no ar (o Instagram apaga em 24 h): o Disparo importa depois.
+  arquivoBlobUrl   String?
+  arquivoMime      String?
+  arquivoTamanho   Int?
+  capaBlobUrl      String?
+  arquivoGuardadoEm DateTime?
+  arquivoErro      String?
   conta SocialMediaConta @relation(fields: [contaId], references: [id])
 
   @@index([contaId, publicadoEm])

@@ -235,54 +235,105 @@ export function EnviarDoComputador({ aceitar = 'TODOS', aoConcluir, rotulo = 'En
 
 // ---------- Importar do Instagram da empresa ----------
 
-const ROTULO_FORMATO = (p: PublicacaoInstagramDisparo) => (p.tipo === 'CAROUSEL_ALBUM' ? 'Carrossel' : p.formato === 'REELS' ? 'Reels' : p.tipo === 'VIDEO' ? 'Vídeo' : 'Foto')
+const ROTULO_FORMATO = (p: PublicacaoInstagramDisparo) => (p.formato === 'STORY' ? 'Story' : p.tipo === 'CAROUSEL_ALBUM' ? 'Carrossel' : p.formato === 'REELS' ? 'Reels' : p.tipo === 'VIDEO' ? 'Vídeo' : 'Foto')
+type FiltroIg = 'TODOS' | 'FOTOS' | 'VIDEOS' | 'CARROSSEL'
+const FILTROS_IG: Array<[FiltroIg, string]> = [['TODOS', 'Tudo'], ['FOTOS', 'Fotos'], ['VIDEOS', 'Reels e vídeos'], ['CARROSSEL', 'Carrosséis']]
+const passaFiltro = (p: PublicacaoInstagramDisparo, f: FiltroIg) => f === 'TODOS' || (f === 'FOTOS' ? p.tipo === 'IMAGE' : f === 'VIDEOS' ? p.tipo === 'VIDEO' : p.tipo === 'CAROUSEL_ALBUM')
 
-export function ImportarDoInstagram({ fechar, aoConcluir, so }: { fechar: () => void; aoConcluir: (ids: string[]) => void; so?: 'IMAGEM' | 'VIDEO' }) {
+/**
+ * Importar do Instagram da empresa: publicações (todas, até a primeira, carregando conforme rola) e
+ * stories (os no ar e os que o ARIES guardou). De um vídeo dá para trazer o vídeo ou só a capa.
+ */
+export function ImportarDoInstagram({ fechar, aoConcluir, contexto }: { fechar: () => void; aoConcluir: (ids: string[]) => void; contexto?: 'IMAGEM' | 'VIDEO' }) {
   const meta = useMeta()
-  const [dados, setDados] = useState<{ conta: string; itens: PublicacaoInstagramDisparo[] } | null>(null)
+  const [aba, setAba] = useState<'publicacoes' | 'stories'>('publicacoes')
+  const [filtro, setFiltro] = useState<FiltroIg>(contexto === 'VIDEO' ? 'VIDEOS' : 'TODOS')
+  const [dados, setDados] = useState<{ conta: string; itens: PublicacaoInstagramDisparo[]; proximo: string | null } | null>(null)
+  const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [estado, setEstado] = useState<Record<string, 'trazendo' | 'ok' | string>>({})
-  useEffect(() => { disparoApi.instagram.listar(36).then(setDados).catch(e => setErro(erroDe(e))) }, [])
+  const fim = useRef<HTMLDivElement>(null)
+  const pedindo = useRef(false)
+  const carregar = useCallback((qual: 'publicacoes' | 'stories', apos: string | null) => {
+    if (pedindo.current) return
+    pedindo.current = true
+    setCarregando(true)
+    disparoApi.instagram.listar({ origem: qual, apos, limite: 24 })
+      .then(r => setDados(d => ({ conta: r.conta, proximo: r.proximo, itens: apos && d ? [...d.itens, ...r.itens.filter(x => !d.itens.some(y => y.id === x.id))] : r.itens })))
+      .catch(e => setErro(erroDe(e)))
+      .finally(() => { pedindo.current = false; setCarregando(false) })
+  }, [])
+  useEffect(() => { carregar(aba, null) }, [aba, carregar])
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') fechar() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [fechar])
-  async function trazer(p: PublicacaoInstagramDisparo) {
-    setEstado(s => ({ ...s, [p.id]: 'trazendo' }))
+  // Carrega a próxima página quando o fim da lista aparece (sem limite de quantidade).
+  useEffect(() => {
+    const el = fim.current
+    if (!el || !dados?.proximo) return
+    const obs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) carregar(aba, dados.proximo) }, { rootMargin: '400px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [dados?.proximo, aba, carregar])
+  const trocarAba = (a: 'publicacoes' | 'stories') => { if (a === aba) return; setDados(null); setErro(null); setAba(a) }
+  async function trazer(p: PublicacaoInstagramDisparo, comoImagem = false) {
+    const chave = comoImagem ? `${p.id}:capa` : p.id
+    setEstado(s => ({ ...s, [chave]: 'trazendo' }))
     try {
-      const r = await disparoApi.instagram.importar(p.id)
-      setEstado(s => ({ ...s, [p.id]: r.falhas.length ? `Trouxe ${r.criadas.length}; ${r.falhas.join(' · ')}` : 'ok' }))
+      const r = await disparoApi.instagram.importar(p.id, { comoImagem })
+      setEstado(s => ({ ...s, [chave]: r.falhas.length ? `Trouxe ${r.criadas.length}; ${r.falhas.join(' · ')}` : 'ok' }))
       aoConcluir(r.criadas.map(c => c.id))
-    } catch (e) { setEstado(s => ({ ...s, [p.id]: erroDe(e) })) }
+    } catch (e) { setEstado(s => ({ ...s, [chave]: erroDe(e) })) }
   }
-  const itens = (dados?.itens ?? []).filter(p => !so || (so === 'VIDEO' ? p.tipo === 'VIDEO' || p.tipo === 'CAROUSEL_ALBUM' : p.tipo !== 'VIDEO'))
+  const itens = (dados?.itens ?? []).filter(p => aba === 'stories' || passaFiltro(p, filtro))
+  const rotuloTrazer = (p: PublicacaoInstagramDisparo) => (p.tipo === 'CAROUSEL_ALBUM' ? 'Trazer tudo' : p.tipo === 'VIDEO' ? 'Trazer o vídeo' : 'Trazer a foto')
   return (
     <div className="dp-visor" role="dialog" aria-label="Importar do Instagram" onClick={fechar}>
       <div className="dp-visor-painel dp-ig" onClick={e => e.stopPropagation()} data-importar-instagram>
         <div className="dp-linha" style={{ justifyContent: 'space-between' }}>
-          <div><b>Importar do Instagram</b>{dados && <span className="pl-hint"> · @{dados.conta} · publicações mais recentes</span>}</div>
+          <div><b>Importar do Instagram</b>{dados && <span className="pl-hint"> · @{dados.conta}</span>}</div>
           <button type="button" className="pl-btn" onClick={fechar}>Fechar</button>
         </div>
-        <p className="pl-hint" style={{ margin: '4px 0 10px' }}>O arquivo vem na qualidade original da publicação e fica guardado na Biblioteca (não depende do post continuar no ar). Carrossel traz todas as fotos e vídeos.</p>
+        <div className="dp-linha" style={{ justifyContent: 'space-between', margin: '8px 0 4px' }}>
+          <div className="pl-sv-tabs cc-subabas" role="tablist" aria-label="Origem">
+            <button type="button" role="tab" aria-selected={aba === 'publicacoes'} className={aba === 'publicacoes' ? 'ativo' : ''} onClick={() => trocarAba('publicacoes')} data-ig-aba="publicacoes">Publicações</button>
+            <button type="button" role="tab" aria-selected={aba === 'stories'} className={aba === 'stories' ? 'ativo' : ''} onClick={() => trocarAba('stories')} data-ig-aba="stories">Stories</button>
+          </div>
+          {aba === 'publicacoes' && <div className="cc-chips">{FILTROS_IG.map(([v, r]) => <button key={v} type="button" className={`pl-chip ${filtro === v ? 'active' : ''}`} onClick={() => setFiltro(v)}>{r}</button>)}</div>}
+        </div>
+        <p className="pl-hint" style={{ margin: '0 0 10px' }}>{aba === 'publicacoes'
+          ? 'Todas as publicações, da mais recente até a primeira (role para carregar mais). Vem na qualidade original e fica guardado na Biblioteca. Carrossel traz cada foto e vídeo; de um vídeo dá para trazer só a capa como imagem.'
+          : 'Os stories no ar agora e os que o ARIES guardou (ele guarda sozinho cada story enquanto está no ar, porque o Instagram apaga em 24 h). Stories de antes desta função só aparecem se ainda estiverem guardados.'}</p>
         {erro && <div className="pl-alert pl-alert-error" role="alert">{erro}</div>}
-        {!dados && !erro && <p className="pl-hint" aria-busy="true">Buscando as publicações de {meta.midias.instagram ? `@${meta.midias.instagram}` : 'Instagram'}…</p>}
-        {dados && !itens.length && <p className="pl-hint">Nenhuma publicação deste tipo.</p>}
+        {!dados && !erro && <p className="pl-hint" aria-busy="true">Buscando {aba === 'stories' ? 'os stories' : 'as publicações'} de {meta.midias.instagram ? `@${meta.midias.instagram}` : 'Instagram'}…</p>}
+        {dados && !itens.length && !carregando && <p className="pl-hint">{aba === 'stories' ? 'Nenhum story no ar nem guardado ainda. A partir de agora, cada story publicado fica guardado sozinho.' : 'Nada deste tipo nas publicações carregadas.'}</p>}
         <div className="dp-galeria">
           {itens.map(p => {
-            const st = estado[p.id]
+            const st = estado[p.id], stCapa = estado[`${p.id}:capa`]
             const feito = st === 'ok' || (p.importada && !st)
+            const indisponivel = p.formato === 'STORY' && !p.guardado && !p.noAr
             return (
               <div key={p.id} className="dp-mini dp-ig-item" data-publicacao={p.id}>
                 <span className="dp-mini-quadro">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {p.capa ? <img src={p.capa} alt={p.legenda ?? 'Publicação'} loading="lazy" referrerPolicy="no-referrer" /> : <span className="dp-mini-icone">📷</span>}
-                  {(p.tipo === 'VIDEO') && <span className="dp-mini-play" aria-hidden="true">▶</span>}
+                  {p.tipo === 'VIDEO' && <span className="dp-mini-play" aria-hidden="true">▶</span>}
                   <span className="dp-mini-dur">{ROTULO_FORMATO(p)}</span>
+                  {p.formato === 'STORY' && <span className="dp-mini-ig" title={p.noAr ? 'No ar agora' : 'Guardado pelo ARIES'}>{p.noAr ? 'no ar' : 'guardado'}</span>}
                 </span>
-                <span className="dp-mini-nome">{p.legenda?.split('\n')[0] || 'Sem legenda'}</span>
+                <span className="dp-mini-nome">{p.legenda?.split('\n')[0] || (p.formato === 'STORY' ? 'Story' : 'Sem legenda')}</span>
                 <span className="dp-mini-info">{dataHora(p.publicadoEm)}{p.link ? <> · <a href={p.link} target="_blank" rel="noreferrer">ver</a></> : null}</span>
-                <button type="button" className={`pl-btn ${feito ? '' : 'pl-btn-primary'}`} disabled={st === 'trazendo'} onClick={() => void trazer(p)}>{st === 'trazendo' ? 'Trazendo…' : feito ? 'Na Biblioteca ✓ (trazer de novo)' : 'Trazer para a Biblioteca'}</button>
-                {st && st !== 'ok' && st !== 'trazendo' && <span className="pl-hint" style={{ color: st.startsWith('Trouxe') ? undefined : 'var(--ar-estado-critico)' }}>{st}</span>}
+                {indisponivel
+                  ? <span className="pl-hint">Saiu do ar antes de ser guardado</span>
+                  : <button type="button" className={`pl-btn ${feito ? '' : 'pl-btn-primary'}`} disabled={st === 'trazendo'} onClick={() => void trazer(p)}>{st === 'trazendo' ? 'Trazendo…' : feito ? 'Na Biblioteca ✓ (de novo)' : rotuloTrazer(p)}</button>}
+                {p.tipo === 'VIDEO' && !indisponivel && <button type="button" className={`pl-btn ${contexto === 'IMAGEM' && stCapa !== 'ok' ? 'pl-btn-primary' : ''}`} disabled={stCapa === 'trazendo'} onClick={() => void trazer(p, true)}>{stCapa === 'trazendo' ? 'Trazendo…' : stCapa === 'ok' ? 'Capa na Biblioteca ✓' : 'Só a capa (imagem)'}</button>}
+                {[st, stCapa].filter(x => x && x !== 'ok' && x !== 'trazendo').map(x => <span key={x} className="pl-hint" style={{ color: x!.startsWith('Trouxe') ? undefined : 'var(--ar-estado-critico)' }}>{x}</span>)}
               </div>
             )
           })}
+        </div>
+        <div ref={fim} className="dp-ig-fim">
+          {carregando ? <span className="pl-hint" aria-busy="true">Carregando mais…</span>
+            : dados?.proximo ? <button type="button" className="pl-btn" onClick={() => carregar(aba, dados.proximo)}>Carregar mais</button>
+            : dados && dados.itens.length > 0 ? <span className="pl-hint">{dados.itens.length} {aba === 'stories' ? 'story(s)' : 'publicação(ões)'} · {aba === 'stories' ? 'são todos os guardados' : 'chegou à primeira postagem'}</span> : null}
         </div>
       </div>
     </div>
@@ -297,7 +348,12 @@ export function EscolherMidia({ tipo, midias, valor, mudar, recarregar }: { tipo
   const [enviar, setEnviar] = useState(false)
   const opcoes = midias.filter(m => m.tipo === tipo)
   const pode = meta.nivel === 'EDITAR'
-  const novos = async (ids: string[]) => { await recarregar?.(); if (ids[0]) mudar(ids[ids.length - 1]) }
+  // Escolhe sozinho o último arquivo trazido que for do tipo desta mensagem (ex.: a capa de um reels numa mensagem de imagem).
+  const novos = async (ids: string[]) => {
+    const lista = (await recarregar?.()) ?? midias
+    const doTipo = ids.filter(id => lista.some(m => m.id === id && m.tipo === tipo))
+    if (doTipo.length) mudar(doTipo[doTipo.length - 1])
+  }
   return (
     <div className="dp-escolha" data-escolher-midia={tipo}>
       <div className="dp-linha">
@@ -309,7 +365,7 @@ export function EscolherMidia({ tipo, midias, valor, mudar, recarregar }: { tipo
       {opcoes.length > 0 && <div className="dp-galeria dp-galeria-compacta">{opcoes.map(m => <Miniatura key={m.id} m={m} selecionada={m.id === valor} abrir={() => mudar(m.id)} />)}</div>}
       {valor && opcoes.some(m => m.id === valor) && <button type="button" className="pl-btn" style={{ marginTop: 6 }} onClick={() => setVer(opcoes.find(m => m.id === valor) ?? null)}>Ver em tamanho real</button>}
       {ver && <Visualizador m={ver} fechar={() => setVer(null)} />}
-      {ig && <ImportarDoInstagram so={tipo === 'VIDEO' ? 'VIDEO' : 'IMAGEM'} fechar={() => setIg(false)} aoConcluir={ids => void novos(ids)} />}
+      {ig && <ImportarDoInstagram contexto={tipo === 'VIDEO' ? 'VIDEO' : 'IMAGEM'} fechar={() => setIg(false)} aoConcluir={ids => void novos(ids.filter(id => id))} />}
     </div>
   )
 }

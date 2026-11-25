@@ -19,7 +19,7 @@ import { comTrava, ultimasRodadas } from '../lib/disparo/travas'
 import { estadosDeAutorizacao, registrarAutorizacao, ROTULO_BASE, BASES_LEGAIS } from '../lib/disparo/autorizacao'
 import { provedor } from '../lib/disparo/provedor'
 import { comparativo, resultadoComercial, resumoCampanha, visaoGeral } from '../lib/disparo/relatorios'
-import { ErroMidia, LIMITE_SEM_ARMAZENAMENTO, MIMES as MIMES_MIDIA, PARTE_BYTES, capaDaMidia, concluirEnvio, guardarCapa, iniciarEnvio, importarDoInstagram, limiteDe, listarMidias, mimePeloConteudo, nomeSeguro, publicacoesDoInstagram, receberParte } from '../lib/disparo/midias'
+import { ErroMidia, LIMITE_SEM_ARMAZENAMENTO, MIMES as MIMES_MIDIA, PARTE_BYTES, capaDaMidia, concluirEnvio, guardarCapa, iniciarEnvio, importarDoInstagram, limiteDe, listarMidias, mimePeloConteudo, nomeSeguro, publicacoesDoInstagram, receberParte, storiesDoInstagram } from '../lib/disparo/midias'
 import { linksTemporarios, supabaseConfigurado } from '../lib/armazenamento'
 
 const router = Router()
@@ -531,13 +531,17 @@ router.post('/disparo/midias/:id/arquivar', ...editar, async (req, res) => {
 })
 // Instagram da empresa: publicações recentes e importação para a Biblioteca.
 router.get('/disparo/instagram', ...ver, async (req, res) => {
-  try { res.json(await publicacoesDoInstagram(quem(req).usuarioId, Math.min(60, Math.max(6, Number(req.query.limite) || 30)))) } catch (e) { falhaMidia(res, e) }
+  try {
+    const q = quem(req)
+    const opcoes = { apos: typeof req.query.apos === 'string' && req.query.apos ? req.query.apos.slice(0, 400) : null, limite: Math.min(50, Math.max(6, Number(req.query.limite) || 24)) }
+    res.json(req.query.origem === 'stories' ? await storiesDoInstagram(q.usuarioId, opcoes) : await publicacoesDoInstagram(q.usuarioId, opcoes))
+  } catch (e) { falhaMidia(res, e) }
 })
 router.post('/disparo/instagram/importar', ...editar, async (req, res) => {
   try {
-    const b = z.object({ mediaId: z.string().regex(/^\d{5,40}$/), itens: z.array(z.string().regex(/^\d{5,40}$/)).max(20).nullable().optional() }).parse(req.body)
+    const b = z.object({ mediaId: z.string().regex(/^\d{5,40}$/), itens: z.array(z.string().regex(/^\d{5,40}$/)).max(20).nullable().optional(), comoImagem: z.boolean().optional() }).parse(req.body)
     const q = quem(req)
-    res.status(201).json(await importarDoInstagram(q.usuarioId, q.nome, b.mediaId, b.itens ?? null))
+    res.status(201).json(await importarDoInstagram(q.usuarioId, q.nome, b.mediaId, b.itens ?? null, { comoImagem: b.comoImagem }))
   } catch (e) { falhaMidia(res, e) }
 })
 

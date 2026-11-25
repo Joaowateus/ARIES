@@ -288,6 +288,9 @@ async function executarSync(conta: ContaParaSync, modo: ModoSync): Promise<Resul
       // A cópia própria da miniatura não depende da URL da CDN, que muda a
       // cada listagem: continua a mesma.
       miniaturaLocal: antigo?.miniaturaLocal ?? null,
+      // Arquivo do story guardado pelo Disparo (o sync apaga e recria a linha: não pode perder).
+      arquivoBlobUrl: antigo?.arquivoBlobUrl ?? null, arquivoMime: antigo?.arquivoMime ?? null, arquivoTamanho: antigo?.arquivoTamanho ?? null,
+      capaBlobUrl: antigo?.capaBlobUrl ?? null, arquivoGuardadoEm: antigo?.arquivoGuardadoEm ?? null, arquivoErro: antigo?.arquivoErro ?? null,
       // Stories não têm like_count/comments_count na listagem — o valor
       // vem do insight, quando existe.
       curtidas: novo?.curtidas ?? (m.formato === 'STORY' ? antigo?.curtidas ?? 0 : m.curtidas),

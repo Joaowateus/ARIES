@@ -5790,3 +5790,5 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
   .dp-visor-midia img, .dp-visor-midia video { max-height: 64vh; }
 }
 .dp-escolha > .pl-btn { justify-self: start; }
+.dp-ig-fim { display: flex; justify-content: center; padding: 14px 0 4px; }
+.dp-ig-item .pl-btn + .pl-btn { margin-top: 2px; }
