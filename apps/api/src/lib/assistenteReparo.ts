@@ -53,7 +53,7 @@ export async function repararConexao(assistenteId: string, webhookUrl: string, o
     }
   }
   // Não envia de verdade: marca como "precisa reconectar" (a tela pede o QR; o Disparo e o robô esperam).
-  await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'SESSAO_CAIDA' } })
+  await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'SESSAO_CAIDA', motivoQueda: 'ENVIO_FALHOU' } })
   return { status: 'SESSAO_CAIDA', mensagem: 'O WhatsApp deste número não está enviando (a sessão no servidor está corrompida). Reiniciar não resolveu: é preciso ler um QR Code novo no celular deste número. Conversas, leads e campanhas ficam salvos e continuam de onde pararam.' }
 }
 

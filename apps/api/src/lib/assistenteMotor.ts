@@ -19,6 +19,7 @@
 import { atualizarStatusDoProvedor, destinatarioRecente, ehEcoDoDisparo, registrarResposta } from './disparo/motor'
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
+import { registrarEventoConexao } from './whatsappConexao'
 import { avancarPorFatos } from './jornadaRegras'
 import { sincronizarLevantamento, linhasDaFicha, criarAtividadeDoBastao } from './assistentePreVendaCrm'
 import { lerCadenciaDaConversa, quandoDoPasso, rotuloCadencia, type CadenciaDaConversa } from './assistenteCadencia'
@@ -248,11 +249,15 @@ export async function processarWebhookAssistente(segredo: string, corpo: unknown
 
 async function tratarConexao(a: AssistenteCompleto, dados: Obj) {
   const estado = str(dados.state)
-  // "Precisa reconectar" (envio real falhou): só um QR novo tira desse estado, não o "open" do servidor.
-  if (estado === 'open' && a.status !== 'SESSAO_CAIDA') await marcarConectado(a)
-  else if (estado === 'close' && a.status === 'CONECTADO') {
-    await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'DESCONECTADO' } })
-  }
+  if (!estado) return
+  // O motivo da queda (statusReason do Baileys) decide se é passageira ou se precisa de QR novo;
+  // queda passageira não derruba o status (o servidor religa sozinho e a tela parava de piscar).
+  // "Precisa reconectar" só sai com QR novo, não com o servidor religando sozinho.
+  const motivoBruto = (dados as { statusReason?: unknown }).statusReason
+  const motivo = motivoBruto != null && Number.isFinite(Number(motivoBruto)) ? Number(motivoBruto) : null
+  const atual = await prisma.assistenteComercial.findUnique({ where: { id: a.id }, select: { id: true, status: true, eventosConexao: true } })
+  if (!atual) return
+  if ((await registrarEventoConexao(atual, estado, motivo)) === 'CONECTAR') await marcarConectado({ ...a, status: atual.status })
 }
 
 export async function marcarConectado(a: { id: string; instancia: string | null; status: string; nomeExibicao: string | null }) {
@@ -263,7 +268,7 @@ export async function marcarConectado(a: { id: string; instancia: string | null;
   await prisma.assistenteComercial.update({
     where: { id: a.id },
     data: {
-      status: 'CONECTADO',
+      status: 'CONECTADO', motivoQueda: null,
       ...(a.status !== 'CONECTADO' && { conectadoEm: new Date() }),
       ...(perfil.numero && { numeroWhatsapp: perfil.numero }),
       ...(perfil.nome && !a.nomeExibicao && { nomeExibicao: perfil.nome }),

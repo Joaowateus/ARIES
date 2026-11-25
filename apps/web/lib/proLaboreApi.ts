@@ -898,6 +898,7 @@ export const proLaboreApi = {
       request<{ status: 'CONECTADO' | 'SESSAO_CAIDA' | 'AGUARDANDO_QR'; mensagem: string; qrBase64?: string | null; pairingCode?: string | null }>('/pro-labore/assistente/reparar', { method: 'POST', body: JSON.stringify(data) }),
     saude: (vendedorId?: string) => request<{ viva: boolean | null }>(`/pro-labore/assistente/saude${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     reapontarAviso: (assistenteId: string) => request<{ ok: true }>(`/pro-labore/assistente/diagnostico/${assistenteId}/webhook`, { method: 'POST' }),
+    desligarDuplicadas: (assistenteId: string) => request<{ desligadas: string[]; mantidas: string[] }>(`/pro-labore/assistente/diagnostico/${assistenteId}/duplicadas`, { method: 'POST' }),
     conexao: (vendedorId?: string) =>
       request<{ status: StatusAssistente; aviso?: string }>(`/pro-labore/assistente/conexao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     desconectar: (vendedorId?: string) =>
@@ -1880,6 +1881,10 @@ export interface AssistenteComercial {
   configuracao: ConfigRoteiroAssistente
   criadoEm: string
   _count?: { ignorados: number }
+  motivoQueda?: string | null
+  explicacaoQueda?: string | null
+  quedasUltimaHora?: number
+  eventosConexao?: EventoConexaoWhatsapp[]
 }
 
 export interface CapturaWhatsappCrm {
@@ -4082,12 +4087,15 @@ export const centralApi = {
 }
 
 // Diagnóstico do WhatsApp (só o dono): por que o lead não entrou no CRM ou o robô não abordou.
-export interface ProblemaWhatsapp { gravidade: 'CRITICO' | 'ATENCAO' | 'INFO'; texto: string; acao: string | null; corrigirWebhook?: boolean }
+export interface ProblemaWhatsapp { gravidade: 'CRITICO' | 'ATENCAO' | 'INFO'; texto: string; acao: string | null; corrigirWebhook?: boolean; corrigirDuplicadas?: boolean }
+export interface EventoConexaoWhatsapp { em: string; estado: string; motivo: number | null; texto?: string }
 export interface DiagnosticoWhatsapp {
   servidor: { configurado: boolean; ambienteDeTeste: boolean }
   assistentes: Array<{
     assistenteId: string; vendedor: string; numero: string | null; status: string; conectadoEm: string | null; ultimoEventoEm: string | null
     atendimentoAutomatico: boolean; cadastroAutomatico: boolean; responderContatosNovos: boolean
+    duplicadas: Array<{ nome: string; estado: string | null; doAgente: boolean; deOutroVendedor: boolean }>
+    eventosConexao: EventoConexaoWhatsapp[]; motivoQueda: string | null
     aoVivo: { estado: string; erro: string | null; webhook: { configurado: boolean; ativo: boolean; recebeMensagens: boolean; apontaParaCa: boolean; endereco: string | null } | null }
     ultimas24h: { mensagensDeClientes: number; leadsCadastrados: number; conversasComRobo: number; foraDoCrm: number; enviosQueFalharam: number }
     problemas: ProblemaWhatsapp[]

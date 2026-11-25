@@ -11,10 +11,11 @@ import { signProLaboreToken } from '../src/lib/jwtProLabore'
 import { repararConexao } from '../src/lib/assistenteReparo'
 import { diagnosticarAssistentes } from '../src/lib/assistenteDiagnostico'
 import { removerInstancia } from '../src/lib/whatsappEvolution'
+import { processarWebhookAssistente } from '../src/lib/assistenteMotor'
 import app from '../src/app'
 
 // ---------- Evolution falsa ----------
-const ev = { existe: true, estado: 'open', morta: true, restartConserta: false, envioQuebrado: false, chamadas: [] as string[], enviados: [] as string[] }
+const ev = { existe: true, estado: 'open', morta: true, restartConserta: false, envioQuebrado: false, chamadas: [] as string[], enviados: [] as string[], instancias: [] as Array<{ name: string; ownerJid: string; connectionStatus: string }> }
 const falso = http.createServer((req, res) => {
   const u = new URL(req.url!, 'http://x')
   ev.chamadas.push(`${req.method} ${u.pathname}`)
@@ -23,10 +24,11 @@ const falso = http.createServer((req, res) => {
   req.on('end', () => {
     if (u.pathname.startsWith('/instance/connectionState/')) return ev.existe ? json(200, { instance: { state: ev.estado } }) : json(404, { response: { message: ['not found'] } })
     if (u.pathname.startsWith('/chat/whatsappNumbers/')) return ev.morta ? json(500, { response: { message: ['Error: Connection Closed'] } }) : json(200, [{ exists: true }])
+    if (u.pathname === '/instance/fetchInstances') return json(200, ev.instancias)
     if (u.pathname.startsWith('/message/sendText/')) { if (ev.morta || ev.envioQuebrado) return json(500, { response: { message: ['Error: Connection Closed'] } }); ev.enviados.push(u.pathname); return json(201, { key: { id: 'MSGOK' } }) }
     if (u.pathname.startsWith('/instance/restart/')) { if (ev.restartConserta) ev.morta = false; return json(200, { ok: true }) }
     if (u.pathname.startsWith('/instance/logout/')) return ev.morta ? json(500, { response: { message: ['Error: Connection Closed'] } }) : json(200, {})
-    if (u.pathname.startsWith('/instance/delete/')) { ev.existe = false; return json(200, {}) }
+    if (u.pathname.startsWith('/instance/delete/')) { const nome = decodeURIComponent(u.pathname.split('/').pop()!); ev.instancias = ev.instancias.filter(i => i.name !== nome); ev.existe = false; return json(200, {}) }
     if (u.pathname === '/instance/create') { ev.existe = true; ev.estado = 'connecting'; ev.morta = false; return json(201, {}) }
     if (u.pathname.startsWith('/instance/connect/')) return json(200, { base64: 'QRFALSO', pairingCode: null })
     if (u.pathname.startsWith('/webhook/set/')) return json(200, {})
@@ -39,7 +41,7 @@ let temBanco = false
 let servidor: Server
 let base = ''
 const loja = { id: '', vendedor: '', assistente: '' }
-const reset = (x: Partial<typeof ev>) => Object.assign(ev, { existe: true, estado: 'open', morta: true, restartConserta: false, envioQuebrado: false, chamadas: [], enviados: [] }, x)
+const reset = (x: Partial<typeof ev>) => Object.assign(ev, { existe: true, estado: 'open', morta: true, restartConserta: false, envioQuebrado: false, chamadas: [], enviados: [], instancias: [] }, x)
 
 before(async () => {
   try { await prisma.$queryRaw`SELECT 1`; temBanco = true } catch { return }
@@ -124,4 +126,65 @@ test('reparo com envio funcionando: o teste de envio sai e confirma "conectado"'
   const r = await repararConexao(loja.assistente, 'https://x/w')
   assert.equal(r.status, 'CONECTADO')
   assert.equal(ev.enviados.length, 1, 'uma mensagem de teste para o próprio número')
+})
+
+const conexao = async (state: string, statusReason?: number) => {
+  const a = await prisma.assistenteComercial.findUnique({ where: { id: loja.assistente }, select: { webhookSegredo: true } })
+  return processarWebhookAssistente(a!.webhookSegredo!, { event: 'connection.update', data: { state, ...(statusReason != null ? { statusReason } : {}) } })
+}
+const statusAgora = async () => (await prisma.assistenteComercial.findUnique({ where: { id: loja.assistente }, select: { status: true, motivoQueda: true, eventosConexao: true } }))!
+
+test('avisos de conexão: queda passageira não derruba; desconectado pelo celular pede QR e o "open" do servidor não desfaz', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  reset({ morta: false })
+  await prisma.assistenteComercial.update({ where: { id: loja.assistente }, data: { status: 'CONECTADO', motivoQueda: null, eventosConexao: [] } })
+  await conexao('close', 428)
+  assert.equal((await statusAgora()).status, 'CONECTADO', 'queda passageira (o servidor religa) não muda o status')
+  await conexao('open')
+  await conexao('close', 401)
+  const s = await statusAgora()
+  assert.equal(s.status, 'SESSAO_CAIDA'); assert.equal(s.motivoQueda, '401')
+  assert.equal((s.eventosConexao as unknown[]).length, 3, 'os avisos ficam guardados com o motivo')
+  await conexao('open')
+  assert.equal((await statusAgora()).status, 'SESSAO_CAIDA', 'só um QR novo tira de "precisa reconectar"')
+})
+
+test('número aberto em dois lugares (440 repetido) vira "precisa reconectar" com o motivo CONFLITO', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  reset({ morta: false })
+  await prisma.assistenteComercial.update({ where: { id: loja.assistente }, data: { status: 'CONECTADO', motivoQueda: null, eventosConexao: [] } })
+  await conexao('close', 440)
+  assert.equal((await statusAgora()).status, 'CONECTADO')
+  await conexao('open'); await conexao('close', 440)
+  const s = await statusAgora()
+  assert.equal(s.status, 'SESSAO_CAIDA'); assert.equal(s.motivoQueda, 'CONFLITO')
+})
+
+test('diagnóstico acha o mesmo número em outra conexão do servidor e desliga só a sobra', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const a = await prisma.assistenteComercial.update({ where: { id: loja.assistente }, data: { status: 'CONECTADO', instancia: `aries-${loja.vendedor}`, numeroWhatsapp: '5591980713982' } })
+  reset({ morta: false, instancias: [
+    { name: a.instancia!, ownerJid: '5591980713982@s.whatsapp.net', connectionStatus: 'open' },
+    { name: 'naiza-antiga', ownerJid: '5591980713982:12@s.whatsapp.net', connectionStatus: 'open' },
+    { name: 'outro-numero', ownerJid: '5591900000000@s.whatsapp.net', connectionStatus: 'open' },
+  ] })
+  const d = await diagnosticarAssistentes(loja.id, x => `https://x/pro-labore/assistente/webhook/${x}`)
+  const diag = d.assistentes.find(x => x.assistenteId === loja.assistente)!
+  assert.deepEqual(diag.duplicadas.map(x => x.nome), ['naiza-antiga'])
+  assert.ok(diag.problemas.some(p => p.corrigirDuplicadas && /2 conexões/.test(p.texto)))
+  const r = await api('POST', `/assistente/diagnostico/${loja.assistente}/duplicadas`)
+  assert.deepEqual(r.corpo.desligadas, ['naiza-antiga'])
+  assert.deepEqual(ev.instancias.map(i => i.name).sort(), [a.instancia!, 'outro-numero'].sort(), 'a do ARIES e a de outro número ficaram')
+})
+
+test('Desconectar: apaga a sessão, confere que sumiu e o Disparo/robô não religam sozinhos', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  reset({ morta: true })
+  await prisma.assistenteComercial.update({ where: { id: loja.assistente }, data: { status: 'CONECTADO' } })
+  const r = await api('DELETE', `/assistente/config?vendedorId=${loja.vendedor}`)
+  assert.equal(r.status, 200, JSON.stringify(r.corpo))
+  assert.ok(ev.chamadas.some(c => c.startsWith('DELETE /instance/delete/')))
+  assert.ok(ev.chamadas.some(c => c.startsWith('GET /instance/connectionState/')), 'conferiu que a sessão sumiu')
+  assert.equal((await statusAgora()).status, 'NAO_CONECTADO')
+  assert.ok(!ev.chamadas.some(c => c.startsWith('POST /instance/restart/')), 'nada religou')
 })

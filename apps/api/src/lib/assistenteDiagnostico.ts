@@ -7,16 +7,21 @@
 import { prisma } from './prisma'
 import { ambienteDeTeste } from './ambiente'
 import { lerConfig } from './assistenteRoteiro'
-import { ErroWhatsapp, sessaoViva, estadoInstancia, evolutionConfigurada, webhookDaInstancia } from './whatsappEvolution'
+import { ErroWhatsapp, sessaoViva, estadoInstancia, evolutionConfigurada, listarInstancias, webhookDaInstancia } from './whatsappEvolution'
+import { explicarQueda, resumoEventos, textoDoMotivo, type EventoConexao } from './whatsappConexao'
 
 const HORA = 3_600_000
 export type Gravidade = 'CRITICO' | 'ATENCAO' | 'INFO'
-export interface Problema { gravidade: Gravidade; texto: string; acao: string | null; corrigirWebhook?: boolean }
+export interface Problema { gravidade: Gravidade; texto: string; acao: string | null; corrigirWebhook?: boolean; corrigirDuplicadas?: boolean }
 
 export interface DiagnosticoAssistente {
   assistenteId: string; vendedor: string; numero: string | null
   status: string; conectadoEm: Date | null; ultimoEventoEm: Date | null
   atendimentoAutomatico: boolean; cadastroAutomatico: boolean; responderContatosNovos: boolean
+  /** Outras conexões no servidor com o mesmo número (uma derruba a outra) e os últimos avisos de conexão. */
+  duplicadas: Array<{ nome: string; estado: string | null; doAgente: boolean; deOutroVendedor: boolean }>
+  eventosConexao: EventoConexao[]
+  motivoQueda: string | null
   aoVivo: { estado: string; erro: string | null; webhook: { configurado: boolean; ativo: boolean; recebeMensagens: boolean; apontaParaCa: boolean; endereco: string | null } | null }
   ultimas24h: { mensagensDeClientes: number; leadsCadastrados: number; conversasComRobo: number; foraDoCrm: number; enviosQueFalharam: number }
   problemas: Problema[]
@@ -31,8 +36,16 @@ export async function diagnosticarAssistentes(usuarioId: string, urlEsperada: (s
   const servidor = { configurado: evolutionConfigurada(), ambienteDeTeste: ambienteDeTeste() }
   const lista = await prisma.assistenteComercial.findMany({
     where: { vendedor: { usuarioId } }, orderBy: { criadoEm: 'asc' },
-    select: { id: true, vendedorId: true, instancia: true, webhookSegredo: true, numeroWhatsapp: true, status: true, conectadoEm: true, ultimoEventoEm: true, atendimentoAutomatico: true, cadastroAutomatico: true, configuracao: true, vendedor: { select: { nome: true, ativo: true } } },
+    select: { id: true, vendedorId: true, instancia: true, webhookSegredo: true, numeroWhatsapp: true, status: true, conectadoEm: true, ultimoEventoEm: true, atendimentoAutomatico: true, cadastroAutomatico: true, configuracao: true, eventosConexao: true, motivoQueda: true, vendedor: { select: { nome: true, ativo: true } } },
   })
+  // Todas as conexões do servidor: o mesmo número aberto em duas faz uma derrubar a outra sem parar.
+  const instancias = servidor.configurado && !servidor.ambienteDeTeste ? await listarInstancias().catch(() => null) : null
+  const [agentes, todosAssistentes] = await Promise.all([
+    prisma.agenteWhatsapp.findMany({ select: { instancia: true } }),
+    prisma.assistenteComercial.findMany({ where: { instancia: { not: null } }, select: { instancia: true } }),
+  ])
+  const doAgente = new Set(agentes.map(x => x.instancia))
+  const deAssistente = new Set(todosAssistentes.map(x => x.instancia!))
   const desde = new Date(agora.getTime() - 24 * HORA)
   const assistentes = await Promise.all(lista.map(async a => {
     const cfg = lerConfig(a.configuracao)
@@ -64,6 +77,16 @@ export async function diagnosticarAssistentes(usuarioId: string, urlEsperada: (s
 
     const p: Problema[] = []
     const nome = a.vendedor.nome.split(/\s+/)[0]
+    const numero = a.numeroWhatsapp?.replace(/\D/g, '') ?? null
+    const duplicadas = numero && instancias ? instancias.filter(i => i.numero && i.numero.endsWith(numero.slice(-10)) && i.nome !== a.instancia).map(i => ({ nome: i.nome, estado: i.estado, doAgente: doAgente.has(i.nome), deOutroVendedor: deAssistente.has(i.nome) })) : []
+    if (duplicadas.length) {
+      const soltas = duplicadas.filter(d => !d.doAgente && !d.deOutroVendedor)
+      p.push({ gravidade: 'CRITICO', texto: `O número de ${nome} está aberto em ${duplicadas.length + 1} conexões no servidor do WhatsApp ao mesmo tempo (${duplicadas.map(d => d.nome).join(', ')}). Uma derruba a outra sem parar: é isso que causa a reconexão automática e o "Connection Closed".`, acao: soltas.length ? 'Clicar em "Desligar conexões duplicadas" aqui (desliga só as sobras; a conexão do ARIES fica). Depois, se pedir, ler o QR de novo.' : duplicadas.some(d => d.doAgente) ? `O mesmo número está como "ARIES no WhatsApp" em Configurações: use outro número para o ARIES.` : 'O mesmo número está ligado no WhatsApp de outro vendedor no ARIES: desconecte de um dos dois.', corrigirDuplicadas: soltas.length > 0 })
+    }
+    const eventos = (a.eventosConexao as unknown as EventoConexao[] | null) ?? []
+    const r = resumoEventos(eventos, agora, 60)
+    if (a.status === 'SESSAO_CAIDA') p.push({ gravidade: 'CRITICO', texto: `O WhatsApp de ${nome} precisa ser reconectado. ${explicarQueda(a.motivoQueda) ?? ''}`.trim(), acao: 'Em Conversas › Conexão, clicar em "Gerar QR Code" e ler no celular de quem usa esse número.' })
+    else if (r.quedas >= 3) p.push({ gravidade: 'ATENCAO', texto: `A conexão de ${nome} caiu ${r.quedas} vez(es) na última hora (${textoDoMotivo(r.motivoComum)}).`, acao: r.motivoComum === 440 ? 'O número está aberto em outro lugar: no celular, em Aparelhos conectados, desconecte os aparelhos que não são o ARIES.' : 'Conferir a internet do celular; se continuar, "Reparar conexão".' })
     if (!a.vendedor.ativo) p.push({ gravidade: 'INFO', texto: `${nome} está inativo na equipe.`, acao: null })
     if (estado === 'sem_instancia') p.push({ gravidade: 'CRITICO', texto: `O WhatsApp de ${nome} nunca foi conectado.`, acao: 'Conectar em Conversas › Conexão (QR Code).' })
     if (estado === 'inexistente') p.push({ gravidade: 'CRITICO', texto: `O servidor do WhatsApp não tem mais a sessão de ${nome} (foi apagada lá).`, acao: 'Conectar de novo em Conversas › Conexão (QR Code).' })
@@ -85,6 +108,7 @@ export async function diagnosticarAssistentes(usuarioId: string, urlEsperada: (s
       assistenteId: a.id, vendedor: a.vendedor.nome, numero: a.numeroWhatsapp ? `final ${a.numeroWhatsapp.slice(-4)}` : null,
       status: a.status, conectadoEm: a.conectadoEm, ultimoEventoEm: a.ultimoEventoEm,
       atendimentoAutomatico: a.atendimentoAutomatico, cadastroAutomatico: a.cadastroAutomatico, responderContatosNovos: cfg.responderContatosNovos,
+      duplicadas, eventosConexao: eventos.slice(-10).reverse(), motivoQueda: a.motivoQueda,
       aoVivo: { estado, erro, webhook }, ultimas24h: { mensagensDeClientes, leadsCadastrados, conversasComRobo, foraDoCrm, enviosQueFalharam },
       problemas: p.sort((x, y) => ['CRITICO', 'ATENCAO', 'INFO'].indexOf(x.gravidade) - ['CRITICO', 'ATENCAO', 'INFO'].indexOf(y.gravidade)),
     } satisfies DiagnosticoAssistente
