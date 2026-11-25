@@ -3276,10 +3276,12 @@ router.post('/assistente/reparar', requireProLaboreAuth, requireModulo('assisten
   if (!vendedor) return
   const a = await prisma.assistenteComercial.findUnique({ where: { vendedorId: vendedor.id }, select: { id: true, webhookSegredo: true } })
   if (!a) { res.status(404).json({ error: 'Este WhatsApp ainda não foi conectado.' }); return }
+  // Envio recusado há pouco com "Connection Closed" (Disparo): reinicia mesmo que o teste passe.
+  const recusouHaPouco = await prisma.disparoTentativa.count({ where: { inicio: { gte: new Date(Date.now() - 24 * 3600e3) }, erro: { contains: 'Connection Closed', mode: 'insensitive' }, mensagem: { assistenteId: a.id } } })
   const segredo = a.webhookSegredo ?? randomBytes(24).toString('hex')
   if (!a.webhookSegredo) await prisma.assistenteComercial.update({ where: { id: a.id }, data: { webhookSegredo: segredo } })
   try {
-    res.json(await repararConexao(a.id, urlWebhookAssistente(req, segredo), { gerarQr: b.data.gerarQr, numeroPareamento: b.data.numeroPareamento?.replace(/\D/g, '') || undefined }))
+    res.json(await repararConexao(a.id, urlWebhookAssistente(req, segredo), { forcarReinicio: recusouHaPouco > 0, gerarQr: b.data.gerarQr, numeroPareamento: b.data.numeroPareamento?.replace(/\D/g, '') || undefined }))
   } catch (e) {
     res.status(502).json({ error: mensagemErroWhatsapp(e) })
   }

@@ -13,7 +13,7 @@ export type ResultadoReparo =
 
 const espera = (ms: number) => new Promise(ok => setTimeout(ok, ms))
 
-export async function repararConexao(assistenteId: string, webhookUrl: string, opcoes: { gerarQr?: boolean; numeroPareamento?: string } = {}): Promise<ResultadoReparo> {
+export async function repararConexao(assistenteId: string, webhookUrl: string, opcoes: { gerarQr?: boolean; numeroPareamento?: string; forcarReinicio?: boolean } = {}): Promise<ResultadoReparo> {
   const a = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { id: true, instancia: true, numeroWhatsapp: true } })
   if (!a?.instancia) throw new ErroWhatsapp('Este WhatsApp ainda não foi conectado: gere o QR Code.')
   if (opcoes.gerarQr) {
@@ -26,10 +26,12 @@ export async function repararConexao(assistenteId: string, webhookUrl: string, o
   // 1) Está mesmo funcionando?
   const estado = await estadoInstancia(a.instancia).catch(() => 'erro' as const)
   if (estado === 'inexistente') return { status: 'SESSAO_CAIDA', mensagem: 'O servidor do WhatsApp não tem mais a sessão deste número: é preciso ler um QR Code novo.' }
-  if (estado === 'open' && (await sessaoViva(a.instancia, a.numeroWhatsapp)) !== false) {
+  // Só confia com resposta positiva do WhatsApp; resposta incerta = reinicia (não tem efeito colateral).
+  const viva = estado === 'open' ? await sessaoViva(a.instancia, a.numeroWhatsapp) : false
+  if (viva === true && !opcoes.forcarReinicio) {
     await configurarWebhook(a.instancia, webhookUrl).catch(() => undefined)
     await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'CONECTADO' } })
-    return { status: 'CONECTADO', mensagem: 'A conexão está funcionando. Também reapontei o aviso de mensagens para o ARIES.' }
+    return { status: 'CONECTADO', mensagem: 'A conexão respondeu ao teste e está funcionando. Também reapontei o aviso de mensagens para o ARIES.' }
   }
   // 2) Reinicia a sessão sem QR e confere de novo.
   try { await reiniciarInstancia(a.instancia) } catch { /* segue para conferir */ }
@@ -41,10 +43,10 @@ export async function repararConexao(assistenteId: string, webhookUrl: string, o
   }
   if (aberta) {
     await espera(1500)
-    if ((await sessaoViva(a.instancia, a.numeroWhatsapp)) !== false) {
+    if ((await sessaoViva(a.instancia, a.numeroWhatsapp)) === true) {
       await configurarWebhook(a.instancia, webhookUrl).catch(() => undefined)
       await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'CONECTADO' } })
-      return { status: 'CONECTADO', mensagem: 'A conexão tinha caído por baixo e foi religada. O envio e o assistente voltam a funcionar.' }
+      return { status: 'CONECTADO', mensagem: 'Sessão reiniciada e conferida: o WhatsApp respondeu. O envio e o assistente voltam a funcionar.' }
     }
   }
   return { status: 'SESSAO_CAIDA', mensagem: 'Reiniciei a sessão, mas o WhatsApp não voltou: o celular provavelmente encerrou este aparelho conectado. É preciso ler um QR Code novo no celular deste número.' }

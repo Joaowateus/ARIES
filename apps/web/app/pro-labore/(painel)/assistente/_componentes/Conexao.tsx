@@ -218,6 +218,7 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
           <div className={`pl-alert ${reparo.fase === 'caida' ? 'pl-alert-error' : ''}`} role="status" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }} data-reparo={reparo.fase}>
             <span style={{ flex: '1 1 260px' }}>{reparo.fase === 'testando' && <span className="pl-as-spinner" aria-hidden="true" style={{ marginRight: 8 }} />}{reparo.fase === 'ok' ? '✅ ' : ''}{reparo.mensagem}</span>
             {reparo.fase === 'caida' && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void reparar(true)} data-gerar-qr-novo>Gerar QR Code novo</button>}
+            {reparo.fase === 'ok' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => void reparar(true)} title="Se as mensagens continuarem sem sair, refaz a sessão do zero com um QR novo">Ainda não envia? Gerar QR novo</button>}
             {reparo.fase !== 'testando' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setReparo(null)}>Fechar</button>}
           </div>
         )}
