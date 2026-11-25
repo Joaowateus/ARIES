@@ -5,12 +5,13 @@
 import { useRef } from 'react'
 import type { ConteudoDisparo, MidiaDisparo, PassoDisparo, TipoPassoDisparo } from '@/lib/proLaboreApi'
 import { useMeta } from './util'
+import { EscolherMidia } from './Midias'
 
 const TIPOS: Array<{ valor: TipoPassoDisparo; rotulo: string }> = [
   { valor: 'TEXTO', rotulo: 'Texto' }, { valor: 'IMAGEM', rotulo: 'Imagem' }, { valor: 'AUDIO', rotulo: 'Áudio' }, { valor: 'VIDEO', rotulo: 'Vídeo' }, { valor: 'DOCUMENTO', rotulo: 'Documento/PDF' },
 ]
 
-function Passo({ p, i, total, midias, mudar, tirar, subir }: { p: PassoDisparo; i: number; total: number; midias: MidiaDisparo[]; mudar: (p: PassoDisparo) => void; tirar: () => void; subir: () => void }) {
+function Passo({ p, i, total, midias, mudar, tirar, subir, recarregarMidias }: { p: PassoDisparo; i: number; total: number; midias: MidiaDisparo[]; mudar: (p: PassoDisparo) => void; tirar: () => void; subir: () => void; recarregarMidias?: () => Promise<MidiaDisparo[]> | void }) {
   const meta = useMeta()
   const ref = useRef<HTMLTextAreaElement>(null)
   const inserir = (chave: string) => {
@@ -21,8 +22,7 @@ function Passo({ p, i, total, midias, mudar, tirar, subir }: { p: PassoDisparo; 
     mudar({ ...p, texto: novo })
     requestAnimationFrame(() => { el?.focus(); const pos = ini + chave.length + 4; el?.setSelectionRange(pos, pos) })
   }
-  const disponiveis = midias.filter(m => m.tipo === p.tipo)
-  const cap = meta.capacidades
+    const cap = meta.capacidades
   const suportado = p.tipo === 'TEXTO' || (p.tipo === 'IMAGEM' && cap.imagem) || (p.tipo === 'AUDIO' && cap.audio) || (p.tipo === 'VIDEO' && cap.video) || (p.tipo === 'DOCUMENTO' && cap.documento)
   return (
     <div className="dp-passo" data-passo={i}>
@@ -41,12 +41,7 @@ function Passo({ p, i, total, midias, mudar, tirar, subir }: { p: PassoDisparo; 
       )}
       <div className="cc-chips">{TIPOS.map(t => <button key={t.valor} type="button" className={`pl-chip ${p.tipo === t.valor ? 'active' : ''}`} onClick={() => mudar({ ...p, tipo: t.valor, midiaId: t.valor === 'TEXTO' ? null : p.midiaId })}>{t.rotulo}</button>)}</div>
       {!suportado && <p className="pl-alert pl-alert-error">O provedor conectado não envia este tipo.</p>}
-      {p.tipo !== 'TEXTO' && (
-        <select className="pl-select" value={p.midiaId ?? ''} onChange={e => mudar({ ...p, midiaId: e.target.value || null })} aria-label="Arquivo da biblioteca" style={{ marginTop: 6 }}>
-          <option value="">{disponiveis.length ? 'Escolha o arquivo da biblioteca…' : 'Nenhum arquivo deste tipo na Biblioteca'}</option>
-          {disponiveis.map(m => <option key={m.id} value={m.id}>{m.nome} ({Math.round(m.tamanho / 1024)} KB)</option>)}
-        </select>
-      )}
+      {p.tipo !== 'TEXTO' && <EscolherMidia tipo={p.tipo} midias={midias} valor={p.midiaId} mudar={id => mudar({ ...p, midiaId: id })} recarregar={recarregarMidias} />}
       {p.tipo !== 'AUDIO' && (
         <>
           <textarea ref={ref} className="pl-input" rows={4} maxLength={4000} value={p.texto ?? ''} onChange={e => mudar({ ...p, texto: e.target.value })} placeholder={p.tipo === 'TEXTO' ? 'Escreva a mensagem. Use as variáveis para personalizar.' : 'Legenda (opcional)'} aria-label={`Texto da mensagem ${i + 1}`} style={{ marginTop: 6 }} />
@@ -59,13 +54,13 @@ function Passo({ p, i, total, midias, mudar, tirar, subir }: { p: PassoDisparo; 
   )
 }
 
-export function PassosEditor({ conteudo, mudar, midias }: { conteudo: ConteudoDisparo; mudar: (c: ConteudoDisparo) => void; midias: MidiaDisparo[] }) {
+export function PassosEditor({ conteudo, mudar, midias, recarregarMidias }: { conteudo: ConteudoDisparo; mudar: (c: ConteudoDisparo) => void; midias: MidiaDisparo[]; recarregarMidias?: () => Promise<MidiaDisparo[]> | void }) {
   const passos = conteudo.passos
   const setPasso = (i: number, p: PassoDisparo) => mudar({ ...conteudo, passos: passos.map((x, j) => (j === i ? p : x)) })
   return (
     <div className="dp-passos">
       {passos.map((p, i) => (
-        <Passo key={i} p={p} i={i} total={passos.length} midias={midias} mudar={x => setPasso(i, x)}
+        <Passo key={i} p={p} i={i} total={passos.length} midias={midias} recarregarMidias={recarregarMidias} mudar={x => setPasso(i, x)}
           tirar={() => mudar({ ...conteudo, passos: passos.filter((_, j) => j !== i) })}
           subir={() => { const l = [...passos]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; mudar({ ...conteudo, passos: l }) }} />
       ))}

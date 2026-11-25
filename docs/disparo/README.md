@@ -230,6 +230,16 @@ Checklist do dia
 2. Disparo › Configurações: regra das promocionais, janela e ritmo padrão; ligar o Envio automático (cron-job.org, 1 minuto).
 3. Fazer uma campanha Operacional de teste para o público Equipe e ver chegar.
 
+## 10g. Biblioteca de arquivos: computador, Instagram, capas e qualidade
+
+- **Do computador:** arraste ou escolha vários arquivos; cada um mostra o progresso. Qualidade original, sem compressão. Limites: imagem 16 MB, vídeo 64 MB (prefira MP4), áudio 16 MB, documento 64 MB (sem o Supabase configurado, 4 MB).
+- **Como o arquivo grande chega:** a API cria a mídia como `ENVIANDO` e devolve um link de envio assinado do Supabase; o navegador manda direto para o armazenamento (a Vercel só aceita 4,5 MB por pedido). Se o navegador não conseguir, o plano B manda em pedaços de 3,5 MB pela API e o servidor monta o arquivo (os pedaços temporários são removidos). No fim, `concluir` confere o tipo pelos **primeiros bytes** (não pelo nome) e só então a mídia fica `PRONTA`.
+- **Capa:** vídeo ganha a imagem de um quadro do próprio vídeo (~1 s), gerada no navegador na resolução original (até 1920 px, JPEG 92%); imagem muito grande ganha uma versão leve só para as miniaturas. O arquivo original nunca é alterado.
+- **Do Instagram:** importa as publicações recentes do Instagram da empresa (Social Media), na qualidade original: reels/vídeo com a capa do próprio Instagram, carrossel com cada foto e vídeo. Fica guardado na Biblioteca (não depende do post continuar no ar), com o link da publicação.
+- **Na tela:** miniaturas mostram a imagem **inteira, sem cortes** (`object-fit: contain`); vídeo pela capa, com ▶ e a duração; o visualizador abre a imagem na resolução original e o vídeo tocando. No editor da campanha, cada mensagem de imagem/vídeo escolhe da galeria ou envia/importa ali mesmo.
+- **No WhatsApp:** arquivo no armazenamento vai por link temporário (3 h) que o servidor do WhatsApp baixa — nada de 64 MB em base64 dentro do pedido.
+- Testes: `tests/disparoMidias.test.ts` (Supabase e Instagram simulados com as mesmas rotas e respostas): envio direto de 20 MB, plano B de 9 MB montado idêntico ao original, recusas, importação de reels e carrossel, link para o WhatsApp.
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

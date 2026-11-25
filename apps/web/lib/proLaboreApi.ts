@@ -4105,6 +4105,7 @@ export interface DefinicaoPublicoDisparo {
 export interface ConfigEnvioDisparo { janela: { inicio: string; fim: string; dias: number[] }; intervaloSeg: number; maxPorHora: number; maxPorDia: number; pararAoResponder: boolean; pararAoComprar: boolean; pararSeVendedorAssumir: boolean; maxTentativas: number }
 export interface ConfigLojaDisparo { envio: ConfigEnvioDisparo; baseMarketing: 'EXPLICITA' | 'RELACAO'; exigirAprovacao: boolean; rodapeSair: string; palavrasSair: string[] }
 export interface MetaDisparo {
+  midias: { limites: Record<'IMAGEM' | 'VIDEO' | 'AUDIO' | 'DOCUMENTO', number>; uploadDireto: boolean; instagram: string | null }
   motor: { ultimaRotinaEm: string | null; rotinaLigada: boolean }
   papel: string; gestao: boolean; dono: boolean; nivel: 'NENHUM' | 'VER' | 'EDITAR'
   capacidades: { provedor: string; texto: boolean; imagem: boolean; audio: boolean; video: boolean; documento: boolean; templates: boolean; interativos: boolean; eventos: Record<string, boolean>; maxMidiaBytes: number; observacoes: string[] }
@@ -4160,7 +4161,14 @@ export interface VisaoGeralDisparo {
 }
 export interface ComercialDisparo { janelaDias: number; ate: string; destinatariosComLead: number; leadsReativados: number; oportunidades: number; fichasDeCredito: number; aprovacoes: number; visitas: number; vendas: number; receita: number | null; custo: null; roi: null; origem: string }
 export interface ModeloDisparo { id: string; nome: string; conteudo: ConteudoDisparo; criadoPorNome: string | null; atualizadoEm: string }
-export interface MidiaDisparo { id: string; nome: string; tipo: Exclude<TipoPassoDisparo, 'TEXTO'>; mime: string; tamanho: number; criadoPorNome: string | null; criadoEm: string }
+export interface MidiaDisparo {
+  id: string; nome: string; tipo: Exclude<TipoPassoDisparo, 'TEXTO'>; mime: string; tamanho: number; criadoPorNome: string | null; criadoEm: string
+  largura?: number | null; altura?: number | null; duracaoSeg?: number | null
+  /** Links temporários (2 h) do arquivo e da capa no armazenamento; null = pedir pela API com login. */
+  arquivoUrl?: string | null; capaUrl?: string | null; temCapa?: boolean
+  origem?: 'UPLOAD' | 'INSTAGRAM'; origemLink?: string | null; legenda?: string | null
+}
+export interface PublicacaoInstagramDisparo { id: string; tipo: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM' | string; formato: string | null; legenda: string | null; capa: string | null; link: string | null; publicadoEm: string; importada: boolean }
 export interface PublicoSalvoDisparo { id: string; nome: string; descricao: string | null; definicao: DefinicaoPublicoDisparo; criadoPorNome: string | null; atualizadoEm: string }
 export interface AutorizacaoDisparo { id: string; telefone: string; situacao: 'AUTORIZADO' | 'REVOGADO' | 'BLOQUEADO'; finalidade: string; baseLegal: string | null; evidencia: string | null; origem: string; registradoPorNome: string | null; criadoEm: string }
 export type CampanhaDisparoEntrada = Pick<CampanhaDisparo, 'nome' | 'descricao' | 'objetivo' | 'finalidade' | 'assistenteId' | 'publicoId' | 'publico' | 'conteudo' | 'config' | 'agendadaPara' | 'recorrencia'>
@@ -4211,12 +4219,53 @@ export const disparoApi = {
   },
   midias: {
     listar: () => request<MidiaDisparo[]>('/pro-labore/disparo/midias'),
-    enviar: (arquivo: File) => request<MidiaDisparo>(`/pro-labore/disparo/midias${qsD({ nome: arquivo.name })}`, { method: 'POST', body: arquivo, headers: { 'Content-Type': arquivo.type || 'application/octet-stream' } }),
+    enviar: (arquivo: Blob, nome: string, extra: { largura?: number | null; altura?: number | null; duracao?: number | null } = {}) => request<MidiaDisparo>(`/pro-labore/disparo/midias${qsD({ nome, ...extra })}`, { method: 'POST', body: arquivo, headers: { 'Content-Type': arquivo.type || 'application/octet-stream' } }),
+    iniciar: (b: { nome: string; mime: string; tamanho: number; largura?: number | null; altura?: number | null; duracaoSeg?: number | null }) => postD<{ id: string; direto: string | null; parteBytes: number; pelaApi: boolean }>('/midias/iniciar', b),
+    concluir: (id: string, partes: number | null) => postD<{ id: string }>(`/midias/${id}/concluir`, { partes }),
+    enviarCapa: (id: string, capa: Blob) => request<{ ok: true }>(`/pro-labore/disparo/midias/${id}/capa`, { method: 'POST', body: capa, headers: { 'Content-Type': capa.type || 'image/jpeg' } }),
+    capa: (id: string) => requestArquivo(`/pro-labore/disparo/midias/${id}/capa`),
     arquivo: (id: string) => requestArquivo(`/pro-labore/disparo/midias/${id}/arquivo`),
+    /** Endereço para ver o arquivo: link temporário do armazenamento ou o conteúdo pela API (blob:). */
+    enderecoDoArquivo: async (id: string): Promise<{ url: string; local: boolean }> => {
+      const b = await requestArquivo(`/pro-labore/disparo/midias/${id}/arquivo`)
+      if (b.type.includes('application/json')) { const j = JSON.parse(await b.text()) as { url: string }; return { url: j.url, local: false } }
+      return { url: URL.createObjectURL(b), local: true }
+    },
     arquivar: (id: string) => postD<{ ok: true }>(`/midias/${id}/arquivar`),
+  },
+  instagram: {
+    listar: (limite = 30) => request<{ conta: string; itens: PublicacaoInstagramDisparo[] }>(`/pro-labore/disparo/instagram${qsD({ limite })}`),
+    importar: (mediaId: string, itens?: string[] | null) => postD<{ criadas: Array<{ id: string; nome: string; tipo: string }>; falhas: string[]; legenda: string | null }>('/instagram/importar', { mediaId, itens: itens ?? null }),
   },
   autorizacoes: {
     listar: (f: { telefone?: string; situacao?: string; pagina?: number } = {}) => request<{ total: number; pagina: number; porPagina: number; atual: { situacao: string; criadoEm: string; baseLegal: string | null } | null; itens: AutorizacaoDisparo[] }>(`/pro-labore/disparo/autorizacoes${qsD(f)}`),
     registrar: (b: { telefones: string[]; situacao: 'AUTORIZADO' | 'REVOGADO' | 'BLOQUEADO'; baseLegal?: string | null; evidencia?: string | null }) => postD<{ registrados: number; invalidos: string[] }>('/autorizacoes', b),
   },
+}
+
+/** Envio de arquivo com progresso (XMLHttpRequest): para a API (com login) ou para um link assinado. Devolve o corpo da resposta. */
+export function enviarComProgresso(destino: { api: string } | { url: string }, corpo: Blob, tipo: string, aoProgredir?: (enviado: number) => void): Promise<string> {
+  return new Promise((ok, falha) => {
+    const x = new XMLHttpRequest()
+    if ('api' in destino) {
+      x.open('POST', `${BASE}${destino.api}`)
+      const token = getToken()
+      if (token) x.setRequestHeader('Authorization', `Bearer ${token}`)
+    } else {
+      x.open('PUT', destino.url)
+      x.setRequestHeader('x-upsert', 'true')
+    }
+    x.setRequestHeader('Content-Type', tipo || 'application/octet-stream')
+    x.upload.onprogress = e => { if (e.lengthComputable) aoProgredir?.(e.loaded) }
+    x.onload = () => {
+      if (x.status >= 200 && x.status < 300) { ok(x.responseText); return }
+      let msg = `Falha no envio (${x.status})`
+      try { const j = JSON.parse(x.responseText) as { error?: string; message?: string }; msg = j.error ?? j.message ?? msg } catch { /* corpo não é JSON */ }
+      falha(Object.assign(new Error(msg), { status: x.status }))
+    }
+    x.onerror = () => falha(Object.assign(new Error('A conexão caiu durante o envio'), { status: 0 }))
+    x.ontimeout = () => falha(Object.assign(new Error('O envio demorou demais'), { status: 0 }))
+    x.timeout = 15 * 60_000
+    x.send(corpo)
+  })
 }

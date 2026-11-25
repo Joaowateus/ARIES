@@ -133,7 +133,7 @@ export function Assistente({ campanha, fechar, abrirMonitor }: { campanha: Campa
               </select>
             </div>
           )}
-          <PassosEditor conteudo={f.conteudo} mudar={c => setF({ ...f, conteudo: c })} midias={midias} />
+          <PassosEditor conteudo={f.conteudo} mudar={c => setF({ ...f, conteudo: c })} midias={midias} recarregarMidias={() => disparoApi.midias.listar().then(m => { setMidias(m); return m })} />
           {!meta.capacidades.templates && <p className="pl-hint">Modelos aprovados pela Meta (templates) e botões interativos só existem na API oficial do WhatsApp Business; o número conectado hoje não tem.</p>}
         </>
       )}

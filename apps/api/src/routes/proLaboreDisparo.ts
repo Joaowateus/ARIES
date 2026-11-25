@@ -19,6 +19,8 @@ import { comTrava, ultimasRodadas } from '../lib/disparo/travas'
 import { estadosDeAutorizacao, registrarAutorizacao, ROTULO_BASE, BASES_LEGAIS } from '../lib/disparo/autorizacao'
 import { provedor } from '../lib/disparo/provedor'
 import { comparativo, resultadoComercial, resumoCampanha, visaoGeral } from '../lib/disparo/relatorios'
+import { ErroMidia, LIMITE_SEM_ARMAZENAMENTO, MIMES as MIMES_MIDIA, PARTE_BYTES, capaDaMidia, concluirEnvio, guardarCapa, iniciarEnvio, importarDoInstagram, limiteDe, listarMidias, mimePeloConteudo, nomeSeguro, publicacoesDoInstagram, receberParte } from '../lib/disparo/midias'
+import { linksTemporarios, supabaseConfigurado } from '../lib/armazenamento'
 
 const router = Router()
 const MB = 1024 * 1024
@@ -90,14 +92,16 @@ function validarConteudo(conteudo: Conteudo) {
 
 router.get('/disparo/meta', ...ver, async (req, res) => {
   const q = quem(req)
-  const [remetentes, vendedores, config, rodadas] = await Promise.all([
+  const [remetentes, vendedores, config, rodadas, contaInstagram] = await Promise.all([
     remetentesDe(q),
     q.gestao ? prisma.vendedor.findMany({ where: { usuarioId: q.usuarioId }, orderBy: [{ ativo: 'desc' }, { nome: 'asc' }], select: { id: true, nome: true, ativo: true } }) : Promise.resolve([]),
     configDaLoja(q.usuarioId),
     ultimasRodadas(),
+    prisma.socialMediaConta.findUnique({ where: { titular: `dono:${q.usuarioId}` }, select: { nomeUsuario: true } }),
   ])
   const ultimaRotinaEm = rodadas.rotina?.em ?? null
   res.json({
+    midias: { limites: { IMAGEM: limiteDe('IMAGEM'), VIDEO: limiteDe('VIDEO'), AUDIO: limiteDe('AUDIO'), DOCUMENTO: limiteDe('DOCUMENTO') }, uploadDireto: supabaseConfigurado(), instagram: contaInstagram?.nomeUsuario ?? null },
     motor: { ultimaRotinaEm, rotinaLigada: !!ultimaRotinaEm && Date.now() - new Date(ultimaRotinaEm).getTime() <= 10 * 60_000 },
     papel: q.papel, gestao: q.gestao, dono: q.dono, nivel: q.dono ? 'EDITAR' : req.acessos?.disparo ?? 'NENHUM',
     capacidades: provedor().capacidades(), variaveis: VARIAVEIS, campos: CAMPOS, predefinidos: PREDEFINIDOS.map(p => ({ chave: p.chave, nome: p.nome, descricao: p.descricao, definicao: p.definicao })),
@@ -431,48 +435,71 @@ router.post('/disparo/modelos/:id/arquivar', ...editar, async (req, res) => {
   res.json({ ok: true })
 })
 
-const MIMES: Record<string, { tipo: 'IMAGEM' | 'AUDIO' | 'VIDEO' | 'DOCUMENTO' }> = {
-  'image/jpeg': { tipo: 'IMAGEM' }, 'image/png': { tipo: 'IMAGEM' }, 'image/webp': { tipo: 'IMAGEM' },
-  'audio/mpeg': { tipo: 'AUDIO' }, 'audio/ogg': { tipo: 'AUDIO' }, 'audio/mp4': { tipo: 'AUDIO' }, 'audio/aac': { tipo: 'AUDIO' },
-  'video/mp4': { tipo: 'VIDEO' }, 'video/3gpp': { tipo: 'VIDEO' },
-  'application/pdf': { tipo: 'DOCUMENTO' }, 'application/msword': { tipo: 'DOCUMENTO' }, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { tipo: 'DOCUMENTO' },
-  'application/vnd.ms-excel': { tipo: 'DOCUMENTO' }, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { tipo: 'DOCUMENTO' },
-}
-/** Confere o tipo pelo conteúdo do arquivo (não pelo que o navegador diz). */
-function mimePeloConteudo(b: Buffer, declarado: string): string | null {
-  const h = b.subarray(0, 16)
-  const ini = (sig: number[], off = 0) => sig.every((x, i) => h[off + i] === x)
-  if (ini([0xff, 0xd8, 0xff])) return 'image/jpeg'
-  if (ini([0x89, 0x50, 0x4e, 0x47])) return 'image/png'
-  if (ini([0x52, 0x49, 0x46, 0x46]) && b.subarray(8, 12).toString() === 'WEBP') return 'image/webp'
-  if (ini([0x25, 0x50, 0x44, 0x46])) return 'application/pdf'
-  if (ini([0x4f, 0x67, 0x67, 0x53])) return 'audio/ogg'
-  if (ini([0x49, 0x44, 0x33]) || ini([0xff, 0xfb]) || ini([0xff, 0xf3])) return 'audio/mpeg'
-  if (b.subarray(4, 8).toString() === 'ftyp') return declarado.startsWith('audio/') ? 'audio/mp4' : declarado === 'video/3gpp' ? 'video/3gpp' : 'video/mp4'
-  if (ini([0xd0, 0xcf, 0x11, 0xe0])) return declarado === 'application/vnd.ms-excel' ? 'application/vnd.ms-excel' : 'application/msword'
-  if (ini([0x50, 0x4b, 0x03, 0x04]) && (declarado.includes('officedocument'))) return declarado
-  return null
+// ---------- Biblioteca de arquivos (lib/disparo/midias.ts) ----------
+
+const falhaMidia = (res: Response, e: unknown) => {
+  if (e instanceof ErroMidia) { res.status(e.status).json({ error: e.message }); return }
+  falha(res, e)
 }
 router.get('/disparo/midias', ...ver, async (req, res) => {
-  res.json(await prisma.disparoMidia.findMany({ where: { usuarioId: quem(req).usuarioId, arquivadoEm: null }, orderBy: { criadoEm: 'desc' }, select: { id: true, nome: true, tipo: true, mime: true, tamanho: true, criadoPorNome: true, criadoEm: true } }))
+  try { res.json(await listarMidias(quem(req).usuarioId)) } catch (e) { falhaMidia(res, e) }
 })
-router.post('/disparo/midias', ...editar, express.raw({ type: '*/*', limit: 4 * MB }), async (req, res) => {
+// Envio simples (arquivo de até 4 MB pela API), usado quando o arquivo é pequeno.
+router.post('/disparo/midias', ...editar, express.raw({ type: '*/*', limit: LIMITE_SEM_ARMAZENAMENTO }), async (req, res) => {
   const q = quem(req)
   const dados = Buffer.isBuffer(req.body) ? req.body : null
-  const nome = String(req.query.nome ?? 'arquivo').replace(/[^\w.\- ()À-ú]/g, '').slice(0, 120) || 'arquivo'
+  const nome = nomeSeguro(String(req.query.nome ?? 'arquivo'))
   const declarado = String(req.headers['content-type'] ?? '').split(';')[0].trim()
   if (!dados?.length) { res.status(400).json({ error: 'Arquivo vazio' }); return }
-  if (dados.length > provedor().capacidades().maxMidiaBytes) { res.status(413).json({ error: 'Arquivo grande demais (máx. 4 MB)' }); return }
   const mime = mimePeloConteudo(dados, declarado)
-  if (!mime || !MIMES[mime]) { res.status(400).json({ error: 'Formato não aceito: use JPG, PNG, WebP, MP3, OGG, M4A, MP4, PDF, DOC(X) ou XLS(X)' }); return }
+  if (!mime || !MIMES_MIDIA[mime]) { res.status(400).json({ error: 'Formato não aceito: use JPG, PNG, WebP, MP4, MOV, MP3, OGG, M4A, PDF, Word ou Excel' }); return }
   const guardado = await gravarNoBlob(`disparo/${q.usuarioId}/${nome}`, mime, dados)
-  const m = await prisma.disparoMidia.create({ data: { usuarioId: q.usuarioId, nome, tipo: MIMES[mime].tipo, mime, tamanho: dados.length, ...(guardado ? { blobUrl: guardado.blobUrl, blobAcesso: guardado.blobAcesso } : { dados }), criadoPorNome: q.nome } })
+  const num = (v: unknown) => (v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null)
+  const m = await prisma.disparoMidia.create({ data: { usuarioId: q.usuarioId, nome, tipo: MIMES_MIDIA[mime].tipo, mime, tamanho: dados.length, largura: num(req.query.largura), altura: num(req.query.altura), duracaoSeg: num(req.query.duracao), ...(guardado ? { blobUrl: guardado.blobUrl, blobAcesso: guardado.blobAcesso } : { dados }), criadoPorNome: q.nome } })
   res.status(201).json({ id: m.id, nome: m.nome, tipo: m.tipo, mime: m.mime, tamanho: m.tamanho, armazenamento: guardado ? 'externo' : 'banco' })
 })
-// O arquivo só sai com login (a tela usa para a prévia).
+// Arquivo grande: 1) iniciar → 2) o navegador manda direto (ou em pedaços) → 3) concluir.
+router.post('/disparo/midias/iniciar', ...editar, async (req, res) => {
+  try {
+    const b = z.object({ nome: z.string().trim().min(1).max(200), mime: z.string().max(120), tamanho: z.number().int().positive(), largura: z.number().int().positive().max(20000).nullable().optional(), altura: z.number().int().positive().max(20000).nullable().optional(), duracaoSeg: z.number().positive().max(36000).nullable().optional() }).parse(req.body)
+    const q = quem(req)
+    res.status(201).json(await iniciarEnvio(q.usuarioId, q.nome, b))
+  } catch (e) { falhaMidia(res, e) }
+})
+router.post('/disparo/midias/:id/parte', ...editar, express.raw({ type: '*/*', limit: PARTE_BYTES + 1024 }), async (req, res) => {
+  try {
+    const dados = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
+    await receberParte(quem(req).usuarioId, String(req.params.id), Number(req.query.n), dados)
+    res.json({ ok: true })
+  } catch (e) { falhaMidia(res, e) }
+})
+router.post('/disparo/midias/:id/concluir', ...editar, async (req, res) => {
+  try {
+    const b = z.object({ partes: z.number().int().min(0).max(40).nullable().optional() }).parse(req.body ?? {})
+    res.json(await concluirEnvio(quem(req).usuarioId, String(req.params.id), b.partes ?? null))
+  } catch (e) { falhaMidia(res, e) }
+})
+router.post('/disparo/midias/:id/capa', ...editar, express.raw({ type: '*/*', limit: LIMITE_SEM_ARMAZENAMENTO }), async (req, res) => {
+  try {
+    await guardarCapa(quem(req).usuarioId, String(req.params.id), Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0))
+    res.json({ ok: true })
+  } catch (e) { falhaMidia(res, e) }
+})
+router.get('/disparo/midias/:id/capa', ...ver, async (req, res) => {
+  const c = await capaDaMidia(quem(req).usuarioId, String(req.params.id))
+  if (!c) { res.status(404).json({ error: 'Sem capa' }); return }
+  res.setHeader('Content-Type', c.mime)
+  res.setHeader('Cache-Control', 'private, max-age=3600')
+  res.send(c.dados)
+})
+// O arquivo só sai com login (a tela usa para a prévia). Arquivo no armazenamento externo: link temporário.
 router.get('/disparo/midias/:id/arquivo', ...ver, async (req, res) => {
   const m = await prisma.disparoMidia.findFirst({ where: { id: String(req.params.id), usuarioId: quem(req).usuarioId } })
   if (!m) { res.status(404).json({ error: 'Arquivo não encontrado' }); return }
+  if (m.tamanho > LIMITE_SEM_ARMAZENAMENTO && m.blobUrl) {
+    const url = (await linksTemporarios([m.blobUrl], 2 * 3600).catch(() => new Map<string, string>())).get(m.blobUrl)
+    if (url) { res.json({ url }); return }
+  }
   const dados = m.blobUrl ? await lerDoBlob(m.blobUrl, m.blobAcesso) : m.dados ? Buffer.from(m.dados) : null
   if (!dados) { res.status(410).json({ error: 'Arquivo indisponível no armazenamento' }); return }
   res.setHeader('Content-Type', m.mime)
@@ -482,6 +509,17 @@ router.get('/disparo/midias/:id/arquivo', ...ver, async (req, res) => {
 router.post('/disparo/midias/:id/arquivar', ...editar, async (req, res) => {
   await prisma.disparoMidia.updateMany({ where: { id: String(req.params.id), usuarioId: quem(req).usuarioId }, data: { arquivadoEm: new Date() } })
   res.json({ ok: true })
+})
+// Instagram da empresa: publicações recentes e importação para a Biblioteca.
+router.get('/disparo/instagram', ...ver, async (req, res) => {
+  try { res.json(await publicacoesDoInstagram(quem(req).usuarioId, Math.min(60, Math.max(6, Number(req.query.limite) || 30)))) } catch (e) { falhaMidia(res, e) }
+})
+router.post('/disparo/instagram/importar', ...editar, async (req, res) => {
+  try {
+    const b = z.object({ mediaId: z.string().regex(/^\d{5,40}$/), itens: z.array(z.string().regex(/^\d{5,40}$/)).max(20).nullable().optional() }).parse(req.body)
+    const q = quem(req)
+    res.status(201).json(await importarDoInstagram(q.usuarioId, q.nome, b.mediaId, b.itens ?? null))
+  } catch (e) { falhaMidia(res, e) }
 })
 
 // ---------- Autorizações e supressão ----------

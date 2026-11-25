@@ -17,7 +17,7 @@ export interface Capacidades {
   maxMidiaBytes: number
   observacoes: string[]
 }
-export interface Envio { tipo: TipoPasso; texto: string; midia?: { mime: string; dados: Buffer; nomeArquivo: string } | null; digitandoMs?: number; /** Tempo máximo de espera pela resposta do servidor (cabe no limite da função). */ prazoMs?: number }
+export interface Envio { tipo: TipoPasso; texto: string; midia?: { mime: string; dados?: Buffer | null; url?: string | null; nomeArquivo: string } | null; digitandoMs?: number; /** Tempo máximo de espera pela resposta do servidor (cabe no limite da função). */ prazoMs?: number }
 export type EstadoRemetente = 'CONECTADO' | 'DESCONECTADO' | 'SEM_SERVIDOR' | 'ERRO'
 
 export class ErroEnvio extends Error {
@@ -55,8 +55,8 @@ export const provedorEvolution: ProvedorWhatsapp = {
   capacidades: () => ({
     provedor: 'EVOLUTION', texto: true, imagem: true, audio: true, video: true, documento: true, templates: false, interativos: false,
     eventos: { aceita: true, entregue: true, lida: true, resposta: true },
-    // A Vercel aceita pedidos de até 4,5 MB: o arquivo da biblioteca vai até 4 MB.
-    maxMidiaBytes: 4 * MB,
+    // Arquivo grande vai do navegador direto para o armazenamento e o WhatsApp baixa por link temporário.
+    maxMidiaBytes: 64 * MB,
     observacoes: [
       'Conexão não oficial (WhatsApp Web do número do vendedor): o WhatsApp pode restringir ou banir o número se receber muitas denúncias ou envios em massa para quem não conhece o número.',
       'Modelos aprovados (templates) e botões só existem na API oficial do WhatsApp Business (Cloud API).',
