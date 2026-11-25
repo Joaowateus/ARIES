@@ -19,7 +19,7 @@ export async function estadosDeAutorizacao(usuarioId: string, telefones: string[
     const lote = unicos.slice(i, i + 5000)
     const linhas = await prisma.$queryRaw<Array<{ telefone: string; situacao: Situacao; criadoEm: Date; baseLegal: string | null }>>`
       SELECT DISTINCT ON (telefone) telefone, situacao, "criadoEm", "baseLegal" FROM pro_labore_contato_autorizacoes
-      WHERE "usuarioId" = ${usuarioId} AND canal = 'WHATSAPP' AND telefone IN (${Prisma.join(lote)})
+      WHERE "usuarioId" = ${usuarioId} AND (canal = 'WHATSAPP' OR (canal = 'INSTAGRAM' AND telefone LIKE 'ig:%')) AND telefone IN (${Prisma.join(lote)})
       ORDER BY telefone, (situacao = 'BLOQUEADO') DESC, "criadoEm" DESC`
     for (const l of linhas) r.set(l.telefone, { situacao: l.situacao, criadoEm: l.criadoEm, baseLegal: l.baseLegal })
   }
@@ -31,11 +31,13 @@ export async function situacaoDe(usuarioId: string, telefone: string) {
 }
 
 export async function registrarAutorizacao(a: { usuarioId: string; telefone: string; situacao: Situacao; finalidade?: string; baseLegal?: string | null; evidencia?: string | null; origem: string; leadId?: string | null; autorNome?: string | null }) {
-  const telefone = normalizarTelefone(a.telefone)
+  // Contato do Instagram: a chave é "ig:<id do Instagram>" (canal INSTAGRAM), sem número de telefone.
+  const instagram = /^ig:\d+$/.test(a.telefone)
+  const telefone = instagram ? a.telefone : normalizarTelefone(a.telefone)
   if (!telefone) throw new Error('Telefone inválido')
   const linha = await prisma.contatoAutorizacao.create({
     data: {
-      usuarioId: a.usuarioId, telefone, canal: 'WHATSAPP', finalidade: a.finalidade ?? 'MARKETING', situacao: a.situacao,
+      usuarioId: a.usuarioId, telefone, canal: instagram ? 'INSTAGRAM' : 'WHATSAPP', finalidade: a.finalidade ?? 'MARKETING', situacao: a.situacao,
       baseLegal: a.baseLegal ?? null, evidencia: a.evidencia?.slice(0, 1000) ?? null, origem: a.origem, leadId: a.leadId ?? null, registradoPorNome: a.autorNome ?? null,
     },
   })

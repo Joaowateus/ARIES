@@ -255,6 +255,20 @@ Checklist do dia
 - **Sai do público, para** (`config.pararAoSairDoPublico`): antes de cada envio o lead é relido e conferido contra os filtros; quem mudou de etapa fica `INTERROMPIDO` com `SAIU_DO_PUBLICO`.
 - **Pelo WhatsApp do vendedor de cada contato** (`config.remetentePorVendedor`): cada mensagem sai pelo número conectado do vendedor responsável pelo lead; sem ele, pelo número da campanha. O laço de envio de cada número considera as campanhas que têm mensagens dele.
 
+## 10j. Disparo pelo Instagram (direct da conta da empresa)
+
+- **Canal na campanha**: no passo 1 escolhe-se WhatsApp ou Instagram. No Instagram não há número: quem envia é a conta da empresa conectada em Social Media › Conexão (gravada como remetente `ig:<conta>`).
+- **Públicos do Instagram** (bases `INSTAGRAM_DM` e `INSTAGRAM_COMENTARIOS`, prontos `IG_DM`, `IG_STORY`, `IG_COMENTARIOS`), lidos das conversas do Atendimento do Social Media:
+  - direct e resposta a story: só quem escreveu nas últimas **24 h** (a janela conta da última mensagem da pessoa no direct; o comentário do "Comente QUERO" não abre a janela);
+  - comentários: quem comentou nos últimos **7 dias**, que recebe **uma resposta privada** (só texto, uma por comentário; quem já recebeu a do Disparo fica de fora).
+- **Regra conferida duas vezes**: na prévia (coluna "Pode receber": "janela fecha em 3 h") e de novo antes de cada mensagem. Fora da janela a mensagem não sai e o contato fica "fora da janela da Meta" (`JANELA_FECHADA`), sem gastar tentativa. Passos seguintes só saem se a pessoa tiver escrito nas últimas 24 h — a tela avisa quando uma espera passa de 24 h.
+- **Seguidor que nunca interagiu não recebe DM**: a API oficial da Meta não entrega a lista de seguidores nem deixa iniciar conversa. O caminho para alcançar todos é post/story com "comente QUERO" ou "responda este story": quem interage entra no público. Etiqueta `HUMAN_AGENT` não é usada (é proibida para promoção).
+- **Conteúdo**: texto, foto, vídeo e áudio (por link do armazenamento). Documento não vai pelo direct. Foto/vídeo + texto chegam como duas mensagens.
+- **Histórico e respostas**: cada mensagem enviada entra na conversa do Atendimento como automação "DISPARO" (não conta como resposta humana nem zera a espera). O eco da Meta não duplica. Quando a pessoa responde no direct, a resposta é ligada à campanha (para a sequência, evento RESPOSTA, retorno para o vendedor se houver lead, aviso no WhatsApp). "SAIR" descadastra das promocionais (autorização com canal `INSTAGRAM`, chave `ig:<id>`).
+- **Ritmo**: o mesmo da campanha (horário, intervalo, por hora e por dia), com teto de 180 por hora no Instagram. Limite da Meta (códigos 4/17/32/613) devolve a mensagem para a fila por 15 min. Token vencido (190) ou permissão retirada (10/200/3) param a conta, mostram o motivo na campanha e continuam sozinhos quando o acesso voltar. Sem resposta da Meta = "resultado desconhecido": conferido no histórico do Atendimento (eco) antes de qualquer reenvio.
+- **Requisito da Meta**: a conta precisa da permissão `instagram_manage_messages` aprovada (a mesma que o Atendimento usa para responder pelo sistema).
+- Testes: `tests/disparoInstagram.test.ts` (API do Instagram falsa local: públicos e janelas, rotas, envio pelo direct, histórico, eco, resposta pelo webhook, SAIR, janela que fecha antes do envio, resposta privada única, foto + texto, token vencido).
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

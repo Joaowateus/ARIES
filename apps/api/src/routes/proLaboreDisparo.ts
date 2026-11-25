@@ -13,9 +13,10 @@ import { requireModulo } from '../lib/acessos'
 import { papelDoUsuario } from '../lib/papelHoje'
 import { gravarNoBlob, lerDoBlob } from '../lib/armazenamento'
 import { lerConfigLoja, lerConfigEnvio, normalizarTelefone, renderizar, ROTULO_STATUS, ROTULO_FINALIDADE, VARIAVEIS, EDITAVEL, FINALIDADES, TIPOS_PASSO, type Conteudo, type StatusCampanha } from '../lib/disparo/regras'
-import { CAMPOS, JORNADA, MOTIVOS, PREDEFINIDOS, BASES, contagemJornada, definicaoDaEtapa, resolverPublico, valoresDoContato, type DefinicaoPublico } from '../lib/disparo/publico'
+import { CAMPOS, JORNADA, MOTIVOS, PREDEFINIDOS, BASES, BASES_INSTAGRAM, contagemJornada, definicaoDaEtapa, resolverPublico, valoresDoContato, type DefinicaoPublico } from '../lib/disparo/publico'
 import { ErroDisparo, cancelarCampanha, configDaLoja, decidirMensagem, disparoAtivo, evento, prepararCampanha, rodarDisparo, situacaoDoEnvio, transicionar } from '../lib/disparo/motor'
 import { comTrava, ultimasRodadas } from '../lib/disparo/travas'
+import { MAX_POR_HORA_INSTAGRAM } from '../lib/disparo/instagram'
 import { estadosDeAutorizacao, registrarAutorizacao, ROTULO_BASE, BASES_LEGAIS } from '../lib/disparo/autorizacao'
 import { provedor } from '../lib/disparo/provedor'
 import { comparativo, resultadoComercial, resumoCampanha, visaoGeral } from '../lib/disparo/relatorios'
@@ -77,9 +78,24 @@ const zConteudo = z.object({ passos: z.array(zPasso).min(1).max(10), fallbacks: 
 const zCampanha = z.object({
   nome: z.string().trim().min(2).max(120), descricao: z.string().max(1000).nullable().optional(), objetivo: z.string().max(200).nullable().optional(),
   finalidade: z.enum(FINALIDADES), assistenteId: z.string().max(40).nullable().optional(), publicoId: z.string().max(40).nullable().optional(),
+  canal: z.enum(['WHATSAPP', 'INSTAGRAM']).default('WHATSAPP'),
   publico: zDefinicao, conteudo: zConteudo, config: z.record(z.string(), z.unknown()).optional(),
   agendadaPara: z.string().datetime().nullable().optional(), recorrencia: z.object({ tipo: z.enum(['DIARIA', 'SEMANAL', 'MENSAL']), ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).nullable().optional(),
 })
+
+/** Regras do canal Instagram (Meta): público de quem interagiu, sem documento, resposta privada só texto. */
+function validarCanal(canal: string, publico: DefinicaoPublico, conteudo: Conteudo) {
+  const baseIg = BASES_INSTAGRAM.includes(publico.base)
+  if (canal !== 'INSTAGRAM') {
+    if (baseIg) throw new ErroDisparo('Este público é do Instagram: escolha o canal Instagram na campanha')
+    return
+  }
+  if (!baseIg) throw new ErroDisparo('No Instagram só dá para enviar para quem falou com a conta: escolha um público do Instagram (direct, story ou comentários)')
+  for (const [i, p] of conteudo.passos.entries()) {
+    if (p.tipo === 'DOCUMENTO') throw new ErroDisparo(`A mensagem ${i + 1} é um documento: o direct do Instagram aceita texto, foto, vídeo ou áudio`)
+  }
+  if (publico.base === 'INSTAGRAM_COMENTARIOS' && (conteudo.passos[0]?.tipo !== 'TEXTO' || !conteudo.passos[0]?.texto?.trim())) throw new ErroDisparo('Para quem comentou, a 1ª mensagem vai como resposta privada e precisa ser só texto (regra da Meta)')
+}
 
 function validarConteudo(conteudo: Conteudo) {
   for (const [i, p] of conteudo.passos.entries()) {
@@ -99,7 +115,7 @@ router.get('/disparo/meta', ...ver, async (req, res) => {
     q.gestao ? prisma.vendedor.findMany({ where: { usuarioId: q.usuarioId }, orderBy: [{ ativo: 'desc' }, { nome: 'asc' }], select: { id: true, nome: true, ativo: true } }) : Promise.resolve([]),
     configDaLoja(q.usuarioId),
     ultimasRodadas(),
-    prisma.socialMediaConta.findUnique({ where: { titular: `dono:${q.usuarioId}` }, select: { nomeUsuario: true } }),
+    prisma.socialMediaConta.findUnique({ where: { titular: `dono:${q.usuarioId}` }, select: { nomeUsuario: true, tipoConexao: true } }),
   ])
   const ultimaRotinaEm = rodadas.rotina?.em ?? null
   res.json({
@@ -111,6 +127,7 @@ router.get('/disparo/meta', ...ver, async (req, res) => {
     motivos: MOTIVOS, status: ROTULO_STATUS, finalidades: ROTULO_FINALIDADE, basesLegais: BASES_LEGAIS.map(b => ({ chave: b, rotulo: ROTULO_BASE[b] })),
     remetentes: remetentes.map(r => ({ id: r.id, vendedor: r.vendedor.nome, numero: r.numeroWhatsapp ? `final ${r.numeroWhatsapp.slice(-4)}` : null, conectado: r.status === 'CONECTADO', ativo: r.vendedor.ativo })),
     vendedores, config,
+    instagram: { conectado: !!contaInstagram, usuario: contaInstagram?.nomeUsuario ?? null, maxPorHora: MAX_POR_HORA_INSTAGRAM },
   })
 })
 router.get('/disparo/config', ...ver, soDono, async (req, res) => { res.json(await configDaLoja(quem(req).usuarioId)) })
@@ -132,7 +149,7 @@ router.post('/disparo/publicos/previa', ...ver, async (req, res) => {
     const remetente = b.assistenteId ? await prisma.assistenteComercial.findFirst({ where: { id: b.assistenteId, vendedor: { usuarioId: q.usuarioId } }, select: { numeroWhatsapp: true } }) : null
     const r = await resolverPublico(leitorDe(q), b.definicao as DefinicaoPublico, { finalidade: b.finalidade, config: await configDaLoja(q.usuarioId), conteudo: b.conteudo as Conteudo | null, remetenteNumero: remetente?.numeroWhatsapp ?? null })
     const fonte = b.excluidos ? r.excluidos.map(x => ({ ...x.contato, motivo: x.motivo })) : r.elegiveis.map(c => ({ ...c, motivo: null as string | null }))
-    const pagina = fonte.slice(b.pagina * POR_PAGINA, (b.pagina + 1) * POR_PAGINA).map(c => ({ telefone: c.telefone ? `+${c.telefone.slice(0, 4)} •••• ${c.telefone.slice(-4)}` : null, telefoneCompleto: c.telefone, nome: c.nome, vendedor: c.vendedorNome, situacao: c.situacao, etapa: c.etapa, origem: c.origem, cidade: c.cidade, autorizacao: c.autorizacao, leadId: c.leadId, clienteId: c.clienteId, motivo: c.motivo }))
+    const pagina = fonte.slice(b.pagina * POR_PAGINA, (b.pagina + 1) * POR_PAGINA).map(c => ({ telefone: c.instagram ? c.bruto : c.telefone ? `+${c.telefone.slice(0, 4)} •••• ${c.telefone.slice(-4)}` : null, telefoneCompleto: c.telefone, instagram: c.instagram ? { janelaAte: c.instagram.janelaAte?.toISOString() ?? null, modo: c.instagram.comentarioId ? 'COMENTARIO' : 'DM', canal: c.instagram.canal } : null, nome: c.nome, vendedor: c.vendedorNome, situacao: c.situacao, etapa: c.etapa, origem: c.origem, cidade: c.cidade, autorizacao: c.autorizacao, leadId: c.leadId, clienteId: c.clienteId, motivo: c.motivo }))
     // Prévia da mensagem com o primeiro contato elegível (variáveis já trocadas).
     let exemplo: string[] | null = null
     if (b.conteudo && r.elegiveis[0]) {
@@ -213,7 +230,7 @@ router.get('/disparo/campanhas', ...ver, async (req, res) => {
   const where: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, excluidaEm: null, ...(q.gestao ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }), ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
   const [total, itens] = await Promise.all([
     prisma.disparoCampanha.count({ where }),
-    prisma.disparoCampanha.findMany({ where, orderBy: { atualizadoEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, objetivo: true, finalidade: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, responsavelNome: true, criadoPorNome: true, erro: true, atualizadoEm: true, config: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
+    prisma.disparoCampanha.findMany({ where, orderBy: { atualizadoEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, objetivo: true, finalidade: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, responsavelNome: true, criadoPorNome: true, erro: true, atualizadoEm: true, config: true, canal: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
   ])
   res.json({ total, pagina, porPagina: POR_PAGINA, itens })
 })
@@ -242,10 +259,11 @@ router.post('/disparo/campanhas', ...editar, async (req, res) => {
     const q = quem(req)
     const b = zCampanha.parse(req.body)
     validarConteudo(b.conteudo as Conteudo)
+    validarCanal(b.canal, b.publico as DefinicaoPublico, b.conteudo as Conteudo)
     if (b.assistenteId && !(await remetentesDe(q)).some(r => r.id === b.assistenteId)) throw new ErroDisparo('Você não pode enviar por esse número', 403)
     const c = await prisma.disparoCampanha.create({
       data: {
-        usuarioId: q.usuarioId, nome: b.nome, descricao: b.descricao ?? null, objetivo: b.objetivo ?? null, finalidade: b.finalidade, assistenteId: b.assistenteId ?? null, publicoId: b.publicoId ?? null,
+        usuarioId: q.usuarioId, nome: b.nome, descricao: b.descricao ?? null, objetivo: b.objetivo ?? null, finalidade: b.finalidade, canal: b.canal, assistenteId: b.canal === 'INSTAGRAM' ? null : b.assistenteId ?? null, publicoId: b.publicoId ?? null,
         publico: b.publico as Prisma.InputJsonValue, conteudo: b.conteudo as Prisma.InputJsonValue, config: (b.config ?? {}) as Prisma.InputJsonValue,
         agendadaPara: b.agendadaPara ? new Date(b.agendadaPara) : null, recorrencia: (b.recorrencia ?? Prisma.DbNull) as Prisma.InputJsonValue,
         responsavelId: q.vendedorId, responsavelNome: q.nome, criadoPorId: q.vendedorId, criadoPorNome: q.nome,
@@ -266,7 +284,8 @@ router.get('/disparo/campanhas/:id', ...ver, async (req, res) => {
       c.assistenteId ? prisma.assistenteComercial.findUnique({ where: { id: c.assistenteId }, select: { id: true, status: true, numeroWhatsapp: true, vendedor: { select: { nome: true } } } }) : null,
       situacaoDoEnvio(c.id),
     ])
-    res.json({ ...c, resumo, versoes, situacao, remetente: remetente ? { id: remetente.id, vendedor: remetente.vendedor.nome, numero: remetente.numeroWhatsapp ? `final ${remetente.numeroWhatsapp.slice(-4)}` : null, conectado: remetente.status === 'CONECTADO' } : null })
+    const contaIg = c.canal === 'INSTAGRAM' ? await prisma.socialMediaConta.findUnique({ where: { titular: `dono:${c.usuarioId}` }, select: { id: true, nomeUsuario: true } }) : null
+    res.json({ ...c, resumo, versoes, situacao, remetente: c.canal === 'INSTAGRAM' ? { id: contaIg ? `ig:${contaIg.id}` : 'ig', vendedor: contaIg ? `@${contaIg.nomeUsuario} (Instagram)` : 'Instagram não conectado', numero: null, conectado: !!contaIg } : remetente ? { id: remetente.id, vendedor: remetente.vendedor.nome, numero: remetente.numeroWhatsapp ? `final ${remetente.numeroWhatsapp.slice(-4)}` : null, conectado: remetente.status === 'CONECTADO' } : null })
   } catch (e) { falha(res, e) }
 })
 
@@ -277,13 +296,14 @@ router.put('/disparo/campanhas/:id', ...editar, async (req, res) => {
     if (!EDITAVEL.includes(c.status as StatusCampanha)) throw new ErroDisparo('Esta campanha já começou: duplique para fazer outra', 409)
     const b = zCampanha.parse(req.body)
     validarConteudo(b.conteudo as Conteudo)
+    validarCanal(b.canal, b.publico as DefinicaoPublico, b.conteudo as Conteudo)
     if (b.assistenteId && !(await remetentesDe(q)).some(r => r.id === b.assistenteId)) throw new ErroDisparo('Você não pode enviar por esse número', 403)
     const versao = c.versao + 1
     await prisma.$transaction([
       prisma.disparoCampanha.update({
         where: { id: c.id },
         data: {
-          nome: b.nome, descricao: b.descricao ?? null, objetivo: b.objetivo ?? null, finalidade: b.finalidade, assistenteId: b.assistenteId ?? null, publicoId: b.publicoId ?? null,
+          nome: b.nome, descricao: b.descricao ?? null, objetivo: b.objetivo ?? null, finalidade: b.finalidade, canal: b.canal, assistenteId: b.canal === 'INSTAGRAM' ? null : b.assistenteId ?? null, publicoId: b.publicoId ?? null,
           publico: b.publico as Prisma.InputJsonValue, conteudo: b.conteudo as Prisma.InputJsonValue, config: (b.config ?? {}) as Prisma.InputJsonValue,
           agendadaPara: b.agendadaPara ? new Date(b.agendadaPara) : null, recorrencia: (b.recorrencia ?? Prisma.DbNull) as Prisma.InputJsonValue,
           status: 'DRAFT', versao, totais: Prisma.DbNull, aprovadoEm: null, aprovadoPorNome: null, erro: null,
@@ -302,7 +322,7 @@ router.post('/disparo/campanhas/:id/duplicar', ...editar, async (req, res) => {
     const c = await campanhaDe(req, String(req.params.id))
     const nova = await prisma.disparoCampanha.create({
       data: {
-        usuarioId: q.usuarioId, nome: `${c.nome} (cópia)`.slice(0, 120), descricao: c.descricao, objetivo: c.objetivo, finalidade: c.finalidade, assistenteId: c.assistenteId, publicoId: c.publicoId,
+        usuarioId: q.usuarioId, nome: `${c.nome} (cópia)`.slice(0, 120), descricao: c.descricao, objetivo: c.objetivo, finalidade: c.finalidade, canal: c.canal, assistenteId: c.assistenteId, publicoId: c.publicoId,
         publico: c.publico as Prisma.InputJsonValue, conteudo: c.conteudo as Prisma.InputJsonValue, config: c.config as Prisma.InputJsonValue, origemId: c.id,
         responsavelId: q.vendedorId, responsavelNome: q.nome, criadoPorId: q.vendedorId, criadoPorNome: q.nome,
         versoes: { create: { versao: 1, nome: `${c.nome} (cópia)`.slice(0, 120), publico: c.publico as Prisma.InputJsonValue, conteudo: c.conteudo as Prisma.InputJsonValue, config: c.config as Prisma.InputJsonValue, autorNome: q.nome, motivo: `Duplicada de ${c.nome}` } },
@@ -318,8 +338,11 @@ router.post('/disparo/campanhas/:id/validar', ...editar, async (req, res) => {
   try {
     const q = quem(req)
     const c = await campanhaDe(req, String(req.params.id))
-    if (!c.assistenteId) throw new ErroDisparo('Escolha o número que vai enviar')
+    if (c.canal === 'INSTAGRAM') {
+      if (!(await prisma.socialMediaConta.findUnique({ where: { titular: `dono:${q.usuarioId}` }, select: { id: true } }))) throw new ErroDisparo('Conecte o Instagram da empresa em Social Media › Conexão para enviar por lá')
+    } else if (!c.assistenteId) throw new ErroDisparo('Escolha o número que vai enviar')
     validarConteudo(c.conteudo as unknown as Conteudo)
+    validarCanal(c.canal, c.publico as unknown as DefinicaoPublico, c.conteudo as unknown as Conteudo)
     const config = await configDaLoja(q.usuarioId)
     const aprovacao = config.exigirAprovacao && !q.gestao
     const ok = await transicionar(c.id, 'VALIDATING', { de: ['DRAFT'], autorNome: q.nome, motivo: 'Preparação do público', dados: { preparo: { leitor: leitorDe(q), aprovacao } as unknown as Prisma.InputJsonValue, erro: null } })

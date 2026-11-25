@@ -3,7 +3,7 @@
 // Editor da sequência de mensagens: texto, imagem, áudio, vídeo ou documento (da biblioteca), a
 // espera antes de cada passo e as variáveis do CRM ({{nome}}, {{cidade}}…) inseridas onde o cursor está.
 import { useRef } from 'react'
-import type { ConteudoDisparo, MidiaDisparo, PassoDisparo, TipoPassoDisparo } from '@/lib/proLaboreApi'
+import type { CanalDisparo, ConteudoDisparo, MidiaDisparo, PassoDisparo, TipoPassoDisparo } from '@/lib/proLaboreApi'
 import { useMeta } from './util'
 import { EscolherMidia } from './Midias'
 
@@ -11,7 +11,7 @@ const TIPOS: Array<{ valor: TipoPassoDisparo; rotulo: string }> = [
   { valor: 'TEXTO', rotulo: 'Texto' }, { valor: 'IMAGEM', rotulo: 'Imagem' }, { valor: 'AUDIO', rotulo: 'Áudio' }, { valor: 'VIDEO', rotulo: 'Vídeo' }, { valor: 'DOCUMENTO', rotulo: 'Documento/PDF' },
 ]
 
-function Passo({ p, i, total, midias, mudar, tirar, subir, recarregarMidias }: { p: PassoDisparo; i: number; total: number; midias: MidiaDisparo[]; mudar: (p: PassoDisparo) => void; tirar: () => void; subir: () => void; recarregarMidias?: () => Promise<MidiaDisparo[]> | void }) {
+function Passo({ p, i, total, midias, mudar, tirar, subir, recarregarMidias, ig = false }: { ig?: boolean; p: PassoDisparo; i: number; total: number; midias: MidiaDisparo[]; mudar: (p: PassoDisparo) => void; tirar: () => void; subir: () => void; recarregarMidias?: () => Promise<MidiaDisparo[]> | void }) {
   const meta = useMeta()
   const ref = useRef<HTMLTextAreaElement>(null)
   const inserir = (chave: string) => {
@@ -39,7 +39,7 @@ function Passo({ p, i, total, midias, mudar, tirar, subir, recarregarMidias }: {
           <span className="pl-hint">hora(s) depois da mensagem anterior (se a pessoa não tiver respondido)</span>
         </div>
       )}
-      <div className="cc-chips">{TIPOS.map(t => <button key={t.valor} type="button" className={`pl-chip ${p.tipo === t.valor ? 'active' : ''}`} onClick={() => mudar({ ...p, tipo: t.valor, midiaId: t.valor === 'TEXTO' ? null : p.midiaId })}>{t.rotulo}</button>)}</div>
+      <div className="cc-chips">{TIPOS.filter(t => !ig || t.valor !== 'DOCUMENTO').map(t => <button key={t.valor} type="button" className={`pl-chip ${p.tipo === t.valor ? 'active' : ''}`} onClick={() => mudar({ ...p, tipo: t.valor, midiaId: t.valor === 'TEXTO' ? null : p.midiaId })}>{t.rotulo}</button>)}</div>
       {!suportado && <p className="pl-alert pl-alert-error">O provedor conectado não envia este tipo.</p>}
       {p.tipo !== 'TEXTO' && <EscolherMidia tipo={p.tipo} midias={midias} valor={p.midiaId} mudar={id => mudar({ ...p, midiaId: id })} recarregar={recarregarMidias} />}
       {p.tipo !== 'AUDIO' && (
@@ -54,17 +54,27 @@ function Passo({ p, i, total, midias, mudar, tirar, subir, recarregarMidias }: {
   )
 }
 
-export function PassosEditor({ conteudo, mudar, midias, recarregarMidias }: { conteudo: ConteudoDisparo; mudar: (c: ConteudoDisparo) => void; midias: MidiaDisparo[]; recarregarMidias?: () => Promise<MidiaDisparo[]> | void }) {
+export function PassosEditor({ conteudo, mudar, midias, recarregarMidias, canal = 'WHATSAPP', comentarios = false }: { conteudo: ConteudoDisparo; mudar: (c: ConteudoDisparo) => void; midias: MidiaDisparo[]; recarregarMidias?: () => Promise<MidiaDisparo[]> | void; canal?: CanalDisparo; comentarios?: boolean }) {
   const passos = conteudo.passos
   const setPasso = (i: number, p: PassoDisparo) => mudar({ ...conteudo, passos: passos.map((x, j) => (j === i ? p : x)) })
+  const ig = canal === 'INSTAGRAM'
+  const depoisDaJanela = ig && passos.some((p, i) => i > 0 && (p.esperarMin ?? 0) >= 24 * 60)
   return (
     <div className="dp-passos">
+      {ig && (
+        <div className="pl-alert" role="note" data-regras-instagram>
+          <b>Instagram:</b> texto, foto, vídeo ou áudio (documento não vai pelo direct). Foto/vídeo e texto chegam como duas mensagens.
+          {comentarios ? ' Para quem comentou, a 1ª mensagem vai como resposta privada: só texto, uma vez por comentário.' : ''}
+          {' '}As mensagens seguintes só saem se a pessoa tiver escrito nas últimas 24 h — use esperas curtas (minutos ou poucas horas).
+        </div>
+      )}
+      {depoisDaJanela && <div className="pl-alert pl-alert-error" role="alert">Uma mensagem espera 24 h ou mais: no Instagram ela só sai se a pessoa escrever de novo nesse meio-tempo. Diminua a espera.</div>}
       {passos.map((p, i) => (
-        <Passo key={i} p={p} i={i} total={passos.length} midias={midias} recarregarMidias={recarregarMidias} mudar={x => setPasso(i, x)}
+        <Passo key={i} p={p} i={i} total={passos.length} midias={midias} ig={ig} recarregarMidias={recarregarMidias} mudar={x => setPasso(i, x)}
           tirar={() => mudar({ ...conteudo, passos: passos.filter((_, j) => j !== i) })}
           subir={() => { const l = [...passos]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; mudar({ ...conteudo, passos: l }) }} />
       ))}
-      {passos.length < 10 && <button type="button" className="pl-btn" onClick={() => mudar({ ...conteudo, passos: [...passos, { tipo: 'TEXTO', texto: '', esperarMin: 24 * 60 }] })}>+ Mensagem na sequência</button>}
+      {passos.length < 10 && <button type="button" className="pl-btn" onClick={() => mudar({ ...conteudo, passos: [...passos, { tipo: 'TEXTO', texto: '', esperarMin: ig ? 60 : 24 * 60 }] })}>+ Mensagem na sequência</button>}
     </div>
   )
 }

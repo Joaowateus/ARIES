@@ -4105,13 +4105,14 @@ export interface DiagnosticoWhatsapp {
 // ===================== ARIES DISPARO =====================
 export type StatusCampanhaDisparo = 'DRAFT' | 'VALIDATING' | 'NEEDS_REVIEW' | 'READY' | 'SCHEDULED' | 'QUEUED' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'COMPLETED_WITH_ERRORS' | 'CANCELLED' | 'ARCHIVED'
 export type FinalidadeDisparo = 'MARKETING' | 'OPERACIONAL' | 'RELACIONAMENTO'
+export type CanalDisparo = 'WHATSAPP' | 'INSTAGRAM'
 export type TipoPassoDisparo = 'TEXTO' | 'IMAGEM' | 'AUDIO' | 'VIDEO' | 'DOCUMENTO'
 export interface PassoDisparo { tipo: TipoPassoDisparo; texto?: string | null; midiaId?: string | null; esperarMin?: number }
 export interface ConteudoDisparo { passos: PassoDisparo[]; fallbacks?: Record<string, string>; rodapeSair?: boolean }
 export interface CondicaoDisparo { campo: string; op: string; valor?: unknown }
 export interface GrupoDisparo { op: 'E' | 'OU'; itens: Array<CondicaoDisparo | GrupoDisparo> }
 export interface DefinicaoPublicoDisparo {
-  base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM' | 'EQUIPE'; predefinido?: string | null; filtros?: GrupoDisparo | null
+  base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM' | 'EQUIPE' | 'INSTAGRAM_DM' | 'INSTAGRAM_COMENTARIOS'; predefinido?: string | null; filtros?: GrupoDisparo | null
   manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada: números de qualquer pessoa, mesmo fora do CRM. */ numeros?: Array<{ telefone: string; nome?: string | null }> } | null
 }
 export interface ConfigEnvioDisparo { janela: { inicio: string; fim: string; dias: number[] }; intervaloSeg: number; maxPorHora: number; maxPorDia: number; pararAoResponder: boolean; pararAoComprar: boolean; pararSeVendedorAssumir: boolean; maxTentativas: number; continua?: boolean; pararAoSairDoPublico?: boolean; remetentePorVendedor?: boolean }
@@ -4125,8 +4126,10 @@ export interface MetaDisparo {
   capacidades: { provedor: string; texto: boolean; imagem: boolean; audio: boolean; video: boolean; documento: boolean; templates: boolean; interativos: boolean; eventos: Record<string, boolean>; maxMidiaBytes: number; observacoes: string[] }
   variaveis: Array<{ chave: string; rotulo: string; exemplo: string }>
   campos: Array<{ campo: string; rotulo: string; ops: string[] }>
-  predefinidos: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublicoDisparo; grupo?: 'JORNADA' | null }>
+  predefinidos: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublicoDisparo; grupo?: 'JORNADA' | 'INSTAGRAM' | null }>
   jornada: EtapaJornadaDisparo[]
+  /** Instagram da empresa (canal do Disparo): DM só dentro da janela da Meta. */
+  instagram?: { conectado: boolean; usuario: string | null; maxPorHora: number }
   motivos: Record<string, string>; status: Record<StatusCampanhaDisparo, string>; finalidades: Record<FinalidadeDisparo, string>
   basesLegais: Array<{ chave: string; rotulo: string }>
   remetentes: Array<{ id: string; vendedor: string; numero: string | null; conectado: boolean; ativo: boolean }>
@@ -4135,7 +4138,7 @@ export interface MetaDisparo {
 }
 export interface PreviaPublicoDisparo {
   selecionados: number; elegiveis: number; excluidos: number; porMotivo: Record<string, number>; total: number; porPagina: number; exemplo: string[] | null
-  pagina: Array<{ telefone: string | null; telefoneCompleto: string | null; nome: string; vendedor: string | null; situacao: string; etapa: string | null; origem: string | null; cidade: string | null; autorizacao: string | null; leadId: string | null; clienteId: string | null; motivo: string | null }>
+  pagina: Array<{ telefone: string | null; telefoneCompleto: string | null; nome: string; vendedor: string | null; situacao: string; etapa: string | null; origem: string | null; cidade: string | null; autorizacao: string | null; leadId: string | null; clienteId: string | null; motivo: string | null; instagram?: { janelaAte: string | null; modo: 'DM' | 'COMENTARIO'; canal: string } | null }>
 }
 export interface ResumoCampanhaDisparo {
   status: StatusCampanhaDisparo; erro: string | null; selecionados: number; elegiveis: number; excluidos: number; porMotivo: Record<string, number>; destinatarios: Record<string, number>
@@ -4144,6 +4147,7 @@ export interface ResumoCampanhaDisparo {
 }
 export interface CampanhaDisparo {
   id: string; nome: string; descricao: string | null; objetivo: string | null; finalidade: FinalidadeDisparo; assistenteId: string | null; publicoId: string | null
+  canal?: CanalDisparo
   publico: DefinicaoPublicoDisparo; conteudo: ConteudoDisparo; config: Partial<ConfigEnvioDisparo>; agendadaPara: string | null; recorrencia: { tipo: 'DIARIA' | 'SEMANAL' | 'MENSAL'; ate?: string } | null
   status: StatusCampanhaDisparo; versao: number; responsavelNome: string | null; criadoPorNome: string | null; aprovadoPorNome: string | null; aprovadoEm: string | null
   iniciadaEm: string | null; concluidaEm: string | null; erro: string | null; totais: { selecionados: number; elegiveis: number; excluidos: number; porMotivo: Record<string, number> } | null
@@ -4159,7 +4163,7 @@ export interface SituacaoEnvioDisparo {
   tempos: { iniciadaEm: string | null; primeiraEnviadaEm: string | null; ultimaEnviadaEm: string | null; enviadas: number; intervaloSeg: number | null }
   remetente: { motivo: string; em: string; erro?: string } | null
 }
-export interface ItemCampanhaDisparo { id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; totais: CampanhaDisparo['totais']; responsavelNome: string | null; criadoPorNome: string | null; erro: string | null; atualizadoEm: string; config?: Partial<ConfigEnvioDisparo> | null; assistente: { vendedor: { nome: string } } | null }
+export interface ItemCampanhaDisparo { id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; totais: CampanhaDisparo['totais']; responsavelNome: string | null; criadoPorNome: string | null; erro: string | null; atualizadoEm: string; config?: Partial<ConfigEnvioDisparo> | null; canal?: CanalDisparo; assistente: { vendedor: { nome: string } } | null }
 export interface DestinatarioDisparo { id: string; nome: string | null; telefone: string; status: string; motivoExclusao: string | null; passoAtual: number; respondeuEm: string | null; interrompidoPor: string | null; leadId: string | null; mensagens: Array<{ status: string; aceitaEm: string | null; entregueEm: string | null; lidaEm: string | null; ultimoErro: string | null }> }
 export interface DetalheDestinatarioDisparo extends Omit<DestinatarioDisparo, 'mensagens'> {
   campanhaId: string; dados: Record<string, string | null> | null
@@ -4186,7 +4190,7 @@ export interface MidiaDisparo {
 export interface PublicacaoInstagramDisparo { id: string; tipo: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM' | string; formato: string | null; legenda: string | null; capa: string | null; link: string | null; publicadoEm: string; importada: boolean; /** Story: ainda no ar (24 h) e se o arquivo foi guardado pelo ARIES. */ noAr: boolean; guardado: boolean }
 export interface PublicoSalvoDisparo { id: string; nome: string; descricao: string | null; definicao: DefinicaoPublicoDisparo; criadoPorNome: string | null; atualizadoEm: string }
 export interface AutorizacaoDisparo { id: string; telefone: string; situacao: 'AUTORIZADO' | 'REVOGADO' | 'BLOQUEADO'; finalidade: string; baseLegal: string | null; evidencia: string | null; origem: string; registradoPorNome: string | null; criadoEm: string }
-export type CampanhaDisparoEntrada = Pick<CampanhaDisparo, 'nome' | 'descricao' | 'objetivo' | 'finalidade' | 'assistenteId' | 'publicoId' | 'publico' | 'conteudo' | 'config' | 'agendadaPara' | 'recorrencia'>
+export type CampanhaDisparoEntrada = Pick<CampanhaDisparo, 'nome' | 'descricao' | 'objetivo' | 'finalidade' | 'assistenteId' | 'publicoId' | 'publico' | 'conteudo' | 'config' | 'agendadaPara' | 'recorrencia' | 'canal'>
 
 const qsD = (o: Record<string, string | number | null | undefined>) => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(o)) if (v != null && v !== '') p.set(k, String(v)); const s = p.toString(); return s ? `?${s}` : '' }
 const postD = <T,>(caminho: string, corpo?: unknown) => request<T>(`/pro-labore/disparo${caminho}`, { method: 'POST', body: corpo === undefined ? undefined : JSON.stringify(corpo) })

@@ -7,10 +7,13 @@ import { prisma } from '../prisma'
 import { leadWhereDe } from '../escopoLead'
 import { chaveTelefone, normalizarTelefone, dddDe, regiaoDoDdd, renderizar, variaveisUsadas, type ConfigLoja, type Conteudo, type Finalidade, type ValoresVariaveis } from './regras'
 import { estadosDeAutorizacao } from './autorizacao'
+import { comentariosJaRespondidos, ultimasEntradasDm } from './instagram'
 
 // ---------- Definição ----------
 
-export const BASES = ['TODOS', 'LEADS', 'CLIENTES', 'CONTATARAM', 'EQUIPE'] as const
+export const BASES = ['TODOS', 'LEADS', 'CLIENTES', 'CONTATARAM', 'EQUIPE', 'INSTAGRAM_DM', 'INSTAGRAM_COMENTARIOS'] as const
+/** Bases do canal Instagram (as outras são do WhatsApp). */
+export const BASES_INSTAGRAM: readonly string[] = ['INSTAGRAM_DM', 'INSTAGRAM_COMENTARIOS']
 export type Base = typeof BASES[number]
 export interface Condicao { campo: string; op: string; valor?: unknown }
 export interface Grupo { op: 'E' | 'OU'; itens: Array<Condicao | Grupo> }
@@ -61,7 +64,10 @@ export const JORNADA: Array<{ etapa: typeof ETAPAS[number]; rotulo: string; obje
 export const definicaoDaEtapa = (etapa: string): DefinicaoPublico => ({ base: 'LEADS', filtros: { op: 'E', itens: etapa === 'VENDA' ? [{ campo: 'etapa', op: 'igual', valor: 'VENDA' }] : [{ campo: 'situacao', op: 'igual', valor: 'ABERTO' }, { campo: 'etapa', op: 'igual', valor: etapa }] } })
 
 /** Públicos prontos (cada um é uma base + filtros, que a pessoa pode ajustar depois). */
-export const PREDEFINIDOS: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublico; grupo?: 'JORNADA' }> = [
+export const PREDEFINIDOS: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublico; grupo?: 'JORNADA' | 'INSTAGRAM' }> = [
+  { chave: 'IG_DM', nome: 'Instagram: quem mandou DM', descricao: 'Quem mandou mensagem, respondeu story ou comentou a palavra-chave e ainda está na janela de 24 h da Meta.', definicao: { base: 'INSTAGRAM_DM' }, grupo: 'INSTAGRAM' as const },
+  { chave: 'IG_STORY', nome: 'Instagram: respondeu story', descricao: 'Quem respondeu a um story (janela de 24 h).', definicao: { base: 'INSTAGRAM_DM', filtros: { op: 'E', itens: [{ campo: 'origem', op: 'igual', valor: 'RESPOSTA_STORY' }] } }, grupo: 'INSTAGRAM' as const },
+  { chave: 'IG_COMENTARIOS', nome: 'Instagram: quem comentou', descricao: 'Quem comentou nos posts nos últimos 7 dias: recebe uma resposta privada no direct (uma por comentário).', definicao: { base: 'INSTAGRAM_COMENTARIOS' }, grupo: 'INSTAGRAM' as const },
   ...JORNADA.map(j => ({ chave: `ETAPA_${j.etapa}`, nome: j.rotulo, descricao: `Leads ${j.etapa === 'VENDA' ? 'que compraram' : 'abertos'} na etapa ${j.rotulo} agora (atualiza sozinho conforme o CRM).`, definicao: definicaoDaEtapa(j.etapa), grupo: 'JORNADA' as const })),
   { chave: 'TODOS_CONTATOS', nome: 'Todos os contatos', descricao: 'Leads, clientes e quem já escreveu no WhatsApp, sem repetir o mesmo número.', definicao: { base: 'TODOS' } },
   { chave: 'TODOS_LEADS', nome: 'Todos os leads', descricao: 'Todos os leads do CRM, de qualquer etapa.', definicao: { base: 'LEADS' } },
@@ -130,6 +136,8 @@ export interface Contato {
   propostas: number
   bloqueado: boolean
   autorizacao: string | null // AUTORIZADO | REVOGADO | BLOQUEADO | null (preenchido depois)
+  /** Contato do Instagram (telefone = "ig:<id>"): conversa, janela da Meta e o comentário (resposta privada). */
+  instagram?: { conversaId: string; igId: string; janelaAte: Date | null; comentarioId: string | null; canal: string } | null
 }
 
 interface Leitor { usuarioId: string; papel: string; vendedorId: string | null; sdr?: boolean }
@@ -312,7 +320,7 @@ function juntar(grupos: Contato[][]): { contatos: Contato[]; duplicados: number;
 export const MOTIVOS: Record<string, string> = {
   SEM_TELEFONE: 'Sem telefone ou número inválido', DUPLICADO: 'Número repetido (fica um só)', BLOQUEADO: 'Contato bloqueado',
   DESCADASTRADO: 'Pediu para não receber (descadastrado)', SEM_AUTORIZACAO: 'Sem autorização para mensagens promocionais',
-  NUMERO_REMETENTE: 'É o próprio número que envia a campanha', VARIAVEL_SEM_VALOR: 'Falta um dado usado na mensagem (sem valor alternativo)',
+  NUMERO_REMETENTE: 'É o próprio número que envia a campanha', JANELA_FECHADA: 'Instagram: fora da janela da Meta (24 h desde a última mensagem da pessoa; 7 dias para comentário)', VARIAVEL_SEM_VALOR: 'Falta um dado usado na mensagem (sem valor alternativo)',
   RETIRADO: 'Retirado à mão da lista',
 }
 export interface Resultado {
@@ -325,9 +333,44 @@ export interface Resultado {
 
 export async function valoresDoContato(c: Contato, nomeLoja: string): Promise<ValoresVariaveis> {
   return {
-    nome: c.nome?.trim() || null, primeiro_nome: c.nome?.trim().split(/\s+/)[0] || null, cidade: c.cidade, vendedor: c.vendedorNome?.split(/\s+/)[0] ?? null,
+    nome: c.nome?.trim() || null, primeiro_nome: c.nome?.trim().startsWith('@') ? null : c.nome?.trim().split(/\s+/)[0] || null, cidade: c.cidade, vendedor: c.vendedorNome?.split(/\s+/)[0] ?? null,
     modelo_interesse: c.modelo, ultimo_contato: c.ultimoContato ? c.ultimoContato.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : null, loja: nomeLoja || null,
+    // Instagram: para onde e como mandar (não são variáveis de texto).
+    ...(c.instagram ? { _igConversa: c.instagram.conversaId, _igId: c.instagram.igId, _igComentario: c.instagram.comentarioId, _igCanal: c.instagram.canal } : {}),
   }
+}
+
+const DIA_MS_IG = 86_400_000
+/**
+ * Instagram da empresa (Atendimento do Social Media). A Meta só deixa mandar DM para quem falou com a
+ * conta: até 24 h depois da última mensagem da pessoa (DM ou resposta a story), ou uma resposta privada
+ * a um comentário em até 7 dias. Seguidor que nunca interagiu não pode receber DM pela API oficial.
+ */
+async function lerInstagram(q: Leitor, tipo: 'DM' | 'COMENTARIOS'): Promise<Contato[]> {
+  const cs = await prisma.smConversa.findMany({
+    where: { usuarioId: q.usuarioId, ...(tipo === 'DM' ? { canal: { in: ['DIRECT', 'COMENTARIO_AUTOMACAO', 'RESPOSTA_STORY'] } } : { canal: 'COMENTARIO', criadoEm: { gte: new Date(Date.now() - 7 * DIA_MS_IG) } }) },
+    orderBy: { ultimaMsgEm: 'desc' }, take: 20_000,
+    select: { id: true, canal: true, clienteIgId: true, clienteNome: true, clienteUsuario: true, motoInteresse: true, ultimaEntradaEm: true, criadoEm: true, comentarioIgId: true, chave: true, leadId: true, status: true },
+  })
+  const vistos = new Set<string>()
+  const unicas = cs.filter(c => (vistos.has(c.clienteIgId) ? false : (vistos.add(c.clienteIgId), true)))
+  // DM: a janela conta da última mensagem da pessoa no direct (o comentário do "Comente QUERO" não abre).
+  // Comentário: 7 dias, uma resposta privada só (quem já recebeu a do Disparo fica de fora).
+  const entradas = tipo === 'DM' ? await ultimasEntradasDm(unicas.map(c => c.id)) : new Map<string, Date>()
+  const jaRespondidos = tipo === 'COMENTARIOS' ? await comentariosJaRespondidos(unicas.map(c => c.id)) : new Set<string>()
+  const out: Contato[] = []
+  for (const c of unicas) {
+    const ultima = entradas.get(c.id)
+    const janelaAte = tipo === 'DM' ? (ultima ? new Date(ultima.getTime() + DIA_MS_IG) : null) : jaRespondidos.has(c.id) ? null : new Date(c.criadoEm.getTime() + 7 * DIA_MS_IG)
+    out.push({
+      telefone: `ig:${c.clienteIgId}`, bruto: c.clienteUsuario ? `@${c.clienteUsuario}` : c.clienteIgId, nome: c.clienteNome ?? (c.clienteUsuario ? `@${c.clienteUsuario}` : 'Contato do Instagram'),
+      leadId: c.leadId, clienteId: null, conversaId: null, vendedorId: null, vendedorNome: null, origem: c.canal, cidade: null, etapa: null, situacao: 'CONTATO',
+      criadoEm: c.criadoEm, ultimoContato: ultima ?? c.ultimaEntradaEm, ultimaCompra: null, modelo: c.motoInteresse, valor: null, temperatura: null, destinoPerda: null, reativado: false,
+      conversas: 1, visitas: 0, propostas: 0, bloqueado: false, autorizacao: null,
+      instagram: { conversaId: c.id, igId: c.clienteIgId, janelaAte, comentarioId: tipo === 'COMENTARIOS' ? c.comentarioIgId ?? c.chave : null, canal: c.canal },
+    })
+  }
+  return out
 }
 
 /**
@@ -362,6 +405,8 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
     }
     if (d.base === 'TODOS' || d.base === 'CONTATARAM') grupos.push(await lerConversas(q))
     if (d.base === 'EQUIPE') grupos.push(await lerEquipe(q))
+    if (d.base === 'INSTAGRAM_DM') grupos.push(await lerInstagram(q, 'DM'))
+    if (d.base === 'INSTAGRAM_COMENTARIOS') grupos.push(await lerInstagram(q, 'COMENTARIOS'))
   }
   // Seleção manual (sempre entra, mesmo fora dos filtros).
   const manuais: Contato[] = [
@@ -383,7 +428,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
 
   // Números da equipe podem receber (comunicado à empresa toda); só o próprio número que envia fica de fora.
   const remetente = opcoes.remetenteNumero ? normalizarTelefone(opcoes.remetenteNumero) : null
-  const retirados = new Set((manual.excluir ?? []).map(t => normalizarTelefone(t)).filter(Boolean) as string[])
+  const retirados = new Set((manual.excluir ?? []).map(t => (t.startsWith('ig:') ? t : normalizarTelefone(t))).filter(Boolean) as string[])
   const loja = (await prisma.proLaboreUsuario.findUnique({ where: { id: q.usuarioId }, select: { nome: true } }))?.nome ?? ''
   const textos = (opcoes.conteudo?.passos ?? []).map(p => p.texto ?? '').filter(Boolean)
   const usadas = new Set(textos.flatMap(t => variaveisUsadas(t).map(v => v.chave)))
@@ -399,7 +444,12 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
     if (retirados.has(c.telefone!)) { excluir(c, 'RETIRADO'); continue }
     if (remetente && c.telefone === remetente) { excluir(c, 'NUMERO_REMETENTE'); continue }
     if (c.bloqueado || a === 'BLOQUEADO') { excluir(c, 'BLOQUEADO'); continue }
-    if (opcoes.finalidade === 'MARKETING') {
+    // Instagram: só dentro da janela da Meta. A pessoa falou com a conta (é o consentimento da Meta);
+    // quem pediu para sair (SAIR) continua de fora das promocionais.
+    if (c.instagram) {
+      if (!c.instagram.janelaAte || c.instagram.janelaAte.getTime() <= agora.getTime()) { excluir(c, 'JANELA_FECHADA'); continue }
+      if (opcoes.finalidade === 'MARKETING' && a === 'REVOGADO') { excluir(c, 'DESCADASTRADO'); continue }
+    } else if (opcoes.finalidade === 'MARKETING') {
       if (a === 'REVOGADO') { excluir(c, 'DESCADASTRADO'); continue }
       const temRelacao = !!c.leadId || !!c.clienteId
       if (a !== 'AUTORIZADO' && !(opcoes.config.baseMarketing === 'RELACAO' && temRelacao)) { excluir(c, 'SEM_AUTORIZACAO'); continue }

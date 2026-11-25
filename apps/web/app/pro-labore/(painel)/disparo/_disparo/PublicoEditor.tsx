@@ -3,12 +3,24 @@
 // Construtor de públicos: prontos, filtros E/OU (com um nível de subgrupo), seleção manual e a prévia
 // (contagem, motivos de exclusão e a lista paginada no servidor — nunca milhares de contatos no navegador).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { disparoApi, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoPublicoDisparo, type FinalidadeDisparo, type GrupoDisparo, type PreviaPublicoDisparo } from '@/lib/proLaboreApi'
+import { disparoApi, type CanalDisparo, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoPublicoDisparo, type FinalidadeDisparo, type GrupoDisparo, type PreviaPublicoDisparo } from '@/lib/proLaboreApi'
 import { Paginacao, erroDe, n, useMeta, AvisoAutorizacao } from './util'
 
 const BASES: Array<{ valor: DefinicaoPublicoDisparo['base']; rotulo: string }> = [
   { valor: 'TODOS', rotulo: 'Todos os contatos' }, { valor: 'LEADS', rotulo: 'Leads' }, { valor: 'CLIENTES', rotulo: 'Clientes' }, { valor: 'CONTATARAM', rotulo: 'Quem já escreveu no WhatsApp' }, { valor: 'EQUIPE', rotulo: 'Equipe (WhatsApp conectado)' },
 ]
+const BASES_IG: Array<{ valor: DefinicaoPublicoDisparo['base']; rotulo: string }> = [
+  { valor: 'INSTAGRAM_DM', rotulo: 'Quem mandou mensagem no direct (inclui resposta a story)' }, { valor: 'INSTAGRAM_COMENTARIOS', rotulo: 'Quem comentou nos posts (resposta privada)' },
+]
+/** "fecha em 3 h" / "até 28/11" — quanto tempo a Meta ainda deixa mandar para esta pessoa. */
+export function textoJanela(iso: string | null, modo: 'DM' | 'COMENTARIO'): string {
+  if (!iso) return 'janela fechada'
+  const ms = new Date(iso).getTime() - Date.now()
+  if (ms <= 0) return 'janela fechada'
+  if (modo === 'COMENTARIO') return `resposta privada até ${new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+  const h = Math.floor(ms / 3_600_000)
+  return h >= 1 ? `janela fecha em ${h} h` : `janela fecha em ${Math.max(1, Math.round(ms / 60_000))} min`
+}
 const OPS: Record<string, string> = { igual: 'é', em: 'é um destes', contem: 'contém', vazio: 'está vazio', entre: 'entre', ultimos_dias: 'nos últimos (dias)', ha_mais_de_dias: 'há mais de (dias)', maior: 'maior que', menor: 'menor que' }
 const ETAPAS = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA', 'VENDA']
 const OPCOES: Record<string, Array<[string, string]>> = {
@@ -21,6 +33,7 @@ const OPCOES: Record<string, Array<[string, string]>> = {
   autorizacao: [['AUTORIZADO', 'Autorizou'], ['REVOGADO', 'Pediu para sair'], ['BLOQUEADO', 'Bloqueado'], ['SEM_REGISTRO', 'Sem registro']],
   destino_perda: [['REATIVACAO', 'Reativação']],
 }
+const ORIGEM_IG: Record<string, string> = { DIRECT: 'Direct', RESPOSTA_STORY: 'Respondeu story', COMENTARIO_AUTOMACAO: 'Comente a palavra-chave', COMENTARIO: 'Comentário' }
 const ehGrupo = (x: CondicaoDisparo | GrupoDisparo): x is GrupoDisparo => Array.isArray((x as GrupoDisparo).itens)
 
 function ValorCondicao({ c, mudar }: { c: CondicaoDisparo; mudar: (v: unknown) => void }) {
@@ -95,8 +108,9 @@ export function lerLista(texto: string): { numeros: Array<{ telefone: string; no
   return { numeros, ignoradas }
 }
 
-export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assistenteId }: { definicao: DefinicaoPublicoDisparo; mudar: (d: DefinicaoPublicoDisparo) => void; finalidade: FinalidadeDisparo; conteudo?: ConteudoDisparo | null; assistenteId?: string | null }) {
+export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assistenteId, canal = 'WHATSAPP' }: { definicao: DefinicaoPublicoDisparo; mudar: (d: DefinicaoPublicoDisparo) => void; finalidade: FinalidadeDisparo; conteudo?: ConteudoDisparo | null; assistenteId?: string | null; canal?: CanalDisparo }) {
   const meta = useMeta()
+  const ig = canal === 'INSTAGRAM'
   const [busca, setBusca] = useState('')
   const [achados, setAchados] = useState<Awaited<ReturnType<typeof disparoApi.publicos.contatos>>['itens']>([])
   const [previa, setPrevia] = useState<PreviaPublicoDisparo | null>(null)
@@ -132,6 +146,30 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
   const lida = useMemo(() => lerLista(lista), [lista])
   return (
     <div className="dp-publico" data-publico-editor>
+      {ig && (
+        <div className="dp-guia" role="note" data-guia-instagram>
+          <b>Quem pode receber pelo Instagram (regra da Meta)</b>
+          <ol>
+            <li><b>Quem mandou mensagem ou respondeu um story</b>: até 24 h depois da última mensagem da pessoa. Cada vez que ela escreve, a janela abre de novo.</li>
+            <li><b>Quem comentou num post</b>: uma resposta privada no direct, em até 7 dias do comentário (só texto). Se a pessoa responder, as próximas mensagens saem normalmente.</li>
+            <li><b>Seguidor que nunca interagiu não pode receber DM</b> pela API oficial — a Meta não libera a lista de seguidores. Para alcançar todos, use um story ou post com “comente QUERO”: quem comenta entra aqui.</li>
+          </ol>
+          <span className="pl-hint">A prévia mostra até quando cada pessoa pode receber. O envio confere a janela de novo antes de cada mensagem: quem passou do prazo fica de fora (nunca é enviado fora da regra).</span>
+        </div>
+      )}
+      {ig && (
+        <div className="pl-field"><label>① Públicos do Instagram</label>
+          <div className="cc-chips">
+            {meta.predefinidos.filter(p => p.grupo === 'INSTAGRAM').map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave })} data-ig-chip={p.chave}>{p.nome}</button>)}
+          </div>
+          <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-base-ig">② De onde vêm os contatos</label>
+            <select id="dp-base-ig" className="pl-select" value={definicao.base} onChange={e => mudar({ base: e.target.value as DefinicaoPublicoDisparo['base'], predefinido: null })}>
+              {BASES_IG.map(b => <option key={b.valor} value={b.valor}>{b.rotulo}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+      {!ig && <>
       <div className="dp-guia" role="note">
         <b>Como montar quem vai receber</b> — use um caminho ou combine:
         <ol>
@@ -144,7 +182,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
       </div>
       <div className="pl-field"><label>① Públicos prontos</label>
         <div className="cc-chips">
-          {meta.predefinidos.filter(p => p.grupo !== 'JORNADA').map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })}>{p.nome}</button>)}
+          {meta.predefinidos.filter(p => !p.grupo).map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })}>{p.nome}</button>)}
         </div>
         <span className="pl-hint" style={{ marginTop: 8 }}>Etapas do CRM (atualizam sozinhas conforme a equipe move os leads):</span>
         <div className="cc-chips">
@@ -212,6 +250,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
           )}
         </div>
       )}
+      </>}
       <div>
         {(manual.excluir ?? []).length > 0 && <p className="pl-hint">{manual.excluir!.length} número(s) tirado(s) à mão. <button type="button" className="pl-btn" onClick={() => mudar({ ...definicao, manual: { ...manual, excluir: [] } })}>Devolver todos</button></p>}
       </div>
@@ -234,7 +273,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
                 {Object.entries(previa.porMotivo).sort((a, b) => b[1] - a[1]).map(([m, q]) => <li key={m}>{meta.motivos[m] ?? m}: <b>{n(q)}</b></li>)}
               </ul>
             )}
-            {finalidade === 'MARKETING' && <AvisoAutorizacao quantos={previa.porMotivo.SEM_AUTORIZACAO ?? 0} aoMudar={() => void atualizar(0)} />}
+            {finalidade === 'MARKETING' && !ig && <AvisoAutorizacao quantos={previa.porMotivo.SEM_AUTORIZACAO ?? 0} aoMudar={() => void atualizar(0)} />}
             {previa.exemplo && <div className="dp-exemplo"><span className="pl-hint">Como o primeiro contato vai receber:</span>{previa.exemplo.map((t, i) => <p key={i}>{t || <i>(arquivo)</i>}</p>)}</div>}
             <div className="dp-linha">
               <button type="button" className={`pl-chip ${!verExcluidos ? 'active' : ''}`} onClick={() => { setVerExcluidos(false); void atualizar(0, false) }}>Quem vai receber</button>
@@ -242,12 +281,17 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
             </div>
             <div className="pl-table-wrap">
               <table className="pl-table">
-                <thead><tr><th>Contato</th><th>Telefone</th><th>Situação</th><th>Vendedor</th><th>{verExcluidos ? 'Motivo' : 'Autorização'}</th><th /></tr></thead>
+                <thead><tr><th>Contato</th><th>{ig ? 'Instagram' : 'Telefone'}</th><th>{ig ? 'Origem' : 'Situação'}</th><th>{ig ? 'Pode receber' : 'Vendedor'}</th><th>{verExcluidos ? 'Motivo' : ig ? 'Como vai' : 'Autorização'}</th><th /></tr></thead>
                 <tbody>
                   {previa.pagina.map((c, i) => (
                     <tr key={`${c.telefoneCompleto ?? i}`}>
+                      {c.instagram ? <>
+                        <td>{c.nome}</td><td className="pl-mono">{c.telefone ?? '—'}</td><td>{ORIGEM_IG[c.instagram.canal] ?? c.instagram.canal}</td><td data-janela>{textoJanela(c.instagram.janelaAte, c.instagram.modo)}</td>
+                        <td>{verExcluidos ? meta.motivos[c.motivo ?? ''] ?? c.motivo : c.instagram.modo === 'COMENTARIO' ? 'resposta privada' : 'direct'}</td>
+                      </> : <>
                       <td>{c.nome}</td><td className="pl-mono">{c.telefone ?? '—'}</td><td>{c.situacao.toLowerCase()}{c.etapa ? ` · ${c.etapa.toLowerCase()}` : ''}</td><td>{c.vendedor ?? '—'}</td>
                       <td>{verExcluidos ? meta.motivos[c.motivo ?? ''] ?? c.motivo : c.autorizacao === 'AUTORIZADO' ? 'autorizou' : 'sem registro'}</td>
+                      </>}
                       <td>{!verExcluidos && c.telefoneCompleto && <button type="button" className="pl-btn" onClick={() => mudar({ ...definicao, manual: { ...manual, excluir: [...(manual.excluir ?? []), c.telefoneCompleto!] } })}>Tirar</button>}</td>
                     </tr>
                   ))}
