@@ -23,7 +23,7 @@ export function SeloStatus({ status }: { status: StatusCampanhaDisparo }) {
 
 export const ROTULO_DESTINATARIO: Record<string, string> = { ELEGIVEL: 'Aguardando', EXCLUIDO: 'Excluído', DESCARTADO: 'Versão anterior', EM_ANDAMENTO: 'Em andamento', CONCLUIDO: 'Concluído', RESPONDEU: 'Respondeu', INTERROMPIDO: 'Interrompido', FALHOU: 'Falhou' }
 export const ROTULO_MENSAGEM: Record<string, string> = { AGENDADA: 'Na fila', ENVIANDO: 'Enviando', ACEITA: 'Aceita pelo WhatsApp', ENTREGUE: 'Entregue', LIDA: 'Lida', FALHOU: 'Falhou', DESCONHECIDO: 'Sem confirmação', CANCELADA: 'Cancelada', PULADA: 'Não enviada (regra)' }
-export const ROTULO_INTERRUPCAO: Record<string, string> = { RESPONDEU: 'respondeu', COMPROU: 'comprou', VENDEDOR_ASSUMIU: 'o vendedor assumiu a conversa', DESCADASTRADO: 'pediu para não receber', BLOQUEADO: 'bloqueado', SEM_AUTORIZACAO: 'sem autorização', CANCELAMENTO: 'campanha cancelada', REVOGADO: 'revogou a autorização', PASSO_REMOVIDO: 'mensagem removida', SAIU_DO_PUBLICO: 'saiu do público (mudou de etapa)' }
+export const ROTULO_INTERRUPCAO: Record<string, string> = { RESPONDEU: 'respondeu', COMPROU: 'comprou', VENDEDOR_ASSUMIU: 'o vendedor assumiu a conversa', DESCADASTRADO: 'pediu para não receber', BLOQUEADO: 'bloqueado', SEM_AUTORIZACAO: 'sem autorização', CANCELAMENTO: 'campanha cancelada', REVOGADO: 'revogou a autorização', PASSO_REMOVIDO: 'mensagem removida', SAIU_DO_PUBLICO: 'saiu do público (mudou de etapa)', JANELA_FECHADA: 'fora da janela da Meta (Instagram)' }
 export const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export function Numero({ rotulo, valor, detalhe, titulo }: { rotulo: string; valor: string; detalhe?: string; titulo?: string }) {

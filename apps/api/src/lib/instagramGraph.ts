@@ -713,6 +713,16 @@ export async function enviarMensagemDirect(remetente: string, accessToken: strin
   return r.message_id ?? null
 }
 
+/** Anexo (foto, vídeo ou áudio) no direct, por link público do arquivo. */
+export async function enviarAnexoDirect(remetente: string, accessToken: string, destinatarioId: string, tipo: 'image' | 'video' | 'audio', url: string): Promise<string | null> {
+  const r = await postarGraphApi<{ message_id?: string }>(`/${remetente}/messages`, {
+    recipient: JSON.stringify({ id: destinatarioId }),
+    message: JSON.stringify({ attachment: { type: tipo, payload: { url } } }),
+    access_token: accessToken,
+  })
+  return r.message_id ?? null
+}
+
 /** Resposta privada a um comentário: a mensagem chega no direct de quem comentou. */
 export async function enviarRespostaPrivada(remetente: string, accessToken: string, comentarioId: string, texto: string): Promise<string | null> {
   const r = await postarGraphApi<{ message_id?: string }>(`/${remetente}/messages`, {

@@ -26,6 +26,7 @@ import { registrarAutorizacao, situacaoDe } from './autorizacao'
 import { provedor, type Remetente } from './provedor'
 import { arquivoParaEnvio } from './midias'
 import { comTrava, pegarTrava, registrarRodada, soltarTrava, ultimasRodadas, type OrigemRodada } from './travas'
+import { alvoDoEnvio, contaInstagramDaLoja, ehRemetenteInstagram, enviarPeloInstagram, MAX_POR_HORA_INSTAGRAM, reconciliarInstagram, remetenteInstagram, type DadosIg } from './instagram'
 
 const MIN = 60_000
 const TRAVA_MAX_MS = 3 * MIN
@@ -111,18 +112,23 @@ export async function prepararCampanha(campanhaId: string, agora = new Date()): 
 // ---------- Distribuição: cria as mensagens do 1º passo ----------
 
 export async function distribuir(campanhaId: string, agora = new Date()): Promise<number> {
-  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { id: true, usuarioId: true, versao: true, status: true, assistenteId: true, conteudo: true, config: true } })
+  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { id: true, usuarioId: true, versao: true, status: true, assistenteId: true, conteudo: true, config: true, canal: true } })
   if (!c || c.status !== 'QUEUED') return 0
   // Duas rodadas ao mesmo tempo (rotina e tela): só uma distribui (a outra encontra a trava e sai).
   const r = await comTrava(`distribuir:${campanhaId}`, 2 * MIN, () => distribuirComTrava(c, campanhaId, agora))
   return r.ok ? r.valor : 0
 }
-async function distribuirComTrava(c: { id: string; usuarioId: string; versao: number; assistenteId: string | null; conteudo: Prisma.JsonValue; config?: Prisma.JsonValue }, campanhaId: string, agora: Date): Promise<number> {
-  if (!c.assistenteId) { await prisma.disparoCampanha.update({ where: { id: c.id }, data: { erro: 'Escolha o número que vai enviar a campanha' } }); return 0 }
+async function distribuirComTrava(c: { id: string; usuarioId: string; versao: number; assistenteId: string | null; conteudo: Prisma.JsonValue; config?: Prisma.JsonValue; canal?: string }, campanhaId: string, agora: Date): Promise<number> {
+  // Instagram: quem envia é a conta da empresa ("ig:<conta>"), no lugar do número do WhatsApp.
+  const instagram = c.canal === 'INSTAGRAM'
+  const contaIg = instagram ? await contaInstagramDaLoja(c.usuarioId) : null
+  if (instagram && !contaIg) { await prisma.disparoCampanha.update({ where: { id: c.id }, data: { erro: 'O Instagram da empresa não está conectado: conecte em Social Media › Conexão' } }); return 0 }
+  const remetentePadrao = instagram ? remetenteInstagram(contaIg!.id) : c.assistenteId
+  if (!remetentePadrao) { await prisma.disparoCampanha.update({ where: { id: c.id }, data: { erro: 'Escolha o número que vai enviar a campanha' } }); return 0 }
   const passos = (c.conteudo as unknown as Conteudo).passos ?? []
   if (!passos.length) throw new ErroDisparo('Campanha sem mensagem')
   // "Pelo WhatsApp do vendedor de cada contato": o lead recebe de quem já fala com ele (se conectado).
-  const porVendedor = lerConfigEnvio(c.config ?? {}).remetentePorVendedor
+  const porVendedor = !instagram && lerConfigEnvio(c.config ?? {}).remetentePorVendedor
   const numeroDoVendedor = porVendedor
     ? new Map((await prisma.assistenteComercial.findMany({ where: { vendedor: { usuarioId: c.usuarioId }, status: 'CONECTADO', instancia: { not: null } }, select: { id: true, vendedorId: true } })).map(a => [a.vendedorId, a.id]))
     : new Map<string, string>()
@@ -131,7 +137,7 @@ async function distribuirComTrava(c: { id: string; usuarioId: string; versao: nu
     const lote = await prisma.disparoDestinatario.findMany({ where: { campanhaId, versao: c.versao, status: 'ELEGIVEL' }, select: { id: true, vendedorId: true }, take: LOTE_CRIACAO, orderBy: { criadoEm: 'asc' } })
     if (!lote.length) break
     await prisma.$transaction([
-      prisma.disparoMensagem.createMany({ data: lote.map(d => ({ campanhaId, destinatarioId: d.id, passo: 0, chave: `${campanhaId}:${d.id}:0`, assistenteId: (d.vendedorId && numeroDoVendedor.get(d.vendedorId)) || c.assistenteId!, tipo: passos[0].tipo, midiaId: passos[0].midiaId ?? null, enviarApos: agora })), skipDuplicates: true }),
+      prisma.disparoMensagem.createMany({ data: lote.map(d => ({ campanhaId, destinatarioId: d.id, passo: 0, chave: `${campanhaId}:${d.id}:0`, assistenteId: (d.vendedorId && numeroDoVendedor.get(d.vendedorId)) || remetentePadrao, tipo: passos[0].tipo, midiaId: passos[0].midiaId ?? null, enviarApos: agora })), skipDuplicates: true }),
       prisma.disparoDestinatario.updateMany({ where: { id: { in: lote.map(d => d.id) }, status: 'ELEGIVEL' }, data: { status: 'EM_ANDAMENTO' } }),
     ])
     criadas += lote.length
@@ -150,7 +156,7 @@ const ALIMENTAR_A_CADA_MS = 10 * MIN
  */
 export async function alimentarContinuas(fim: number, agora = new Date()): Promise<number> {
   let novos = 0
-  const cs = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, versao: true, assistenteId: true, conteudo: true, config: true, publico: true, finalidade: true, preparo: true, totais: true, assistente: { select: { numeroWhatsapp: true } } } })
+  const cs = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, versao: true, assistenteId: true, canal: true, conteudo: true, config: true, publico: true, finalidade: true, preparo: true, totais: true, assistente: { select: { numeroWhatsapp: true } } } })
   for (const c of cs) {
     if (!lerConfigEnvio(c.config).continua) continue
     if (Date.now() > fim - 5000) break
@@ -201,9 +207,10 @@ async function travarProxima(assistenteId: string, agora: Date): Promise<Mensage
 }
 
 /** Motivo para não mandar agora (revalidado na hora de cada mensagem), ou null. */
-async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string; finalidade: string; iniciadaEm: Date | null; cfg: ConfigEnvio; publico?: Prisma.JsonValue; preparo?: Prisma.JsonValue }, d: { telefone: string; status: string; leadId: string | null; respondeuEm: Date | null }): Promise<string | null> {
+async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string; finalidade: string; iniciadaEm: Date | null; cfg: ConfigEnvio; publico?: Prisma.JsonValue; preparo?: Prisma.JsonValue }, d: { telefone: string; status: string; leadId: string | null; respondeuEm: Date | null; dados?: Prisma.JsonValue }): Promise<string | null> {
   if (d.status === 'INTERROMPIDO' || d.status === 'FALHOU') return d.status
   if (c.cfg.pararAoResponder && d.respondeuEm) return 'RESPONDEU'
+  if (ehRemetenteInstagram(m.assistenteId)) return motivoInstagram(m, c, d)
   // Saiu do público (ex.: o lead mudou de etapa no CRM): a sequência para. Conferido na hora de cada envio.
   if (c.cfg.pararAoSairDoPublico && d.leadId && c.publico) {
     const def = c.publico as unknown as DefinicaoPublico
@@ -234,6 +241,29 @@ async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string;
   return null
 }
 
+/**
+ * Instagram: bloqueado/descadastrado (pediu SAIR no direct), alguém da loja já respondeu a pessoa e,
+ * principalmente, a janela da Meta (24 h desde a última mensagem dela; resposta privada a comentário
+ * só no 1º passo, em até 7 dias). A pessoa falou com a conta: é o consentimento que a Meta exige.
+ */
+async function motivoInstagram(m: MensagemTravada, c: { usuarioId: string; finalidade: string; iniciadaEm: Date | null; cfg: ConfigEnvio }, d: { telefone: string; leadId: string | null; dados?: Prisma.JsonValue }): Promise<string | null> {
+  const aut = await situacaoDe(c.usuarioId, d.telefone)
+  if (aut?.situacao === 'BLOQUEADO') return 'BLOQUEADO'
+  if (c.finalidade === 'MARKETING' && aut?.situacao === 'REVOGADO') return 'DESCADASTRADO'
+  const dados = (d.dados ?? {}) as DadosIg
+  const desde = c.iniciadaEm ?? new Date(0)
+  if (c.cfg.pararAoComprar && d.leadId) {
+    const comprou = await prisma.lead.count({ where: { id: d.leadId, estagio: 'FECHADO', fechadoEm: { gte: desde } } })
+    if (comprou) return 'COMPROU'
+  }
+  if (c.cfg.pararSeVendedorAssumir && m.passo > 0 && dados._igId) {
+    const assumiu = await prisma.smMensagem.count({ where: { direcao: 'OUT', autor: 'HUMANO', enviadaEm: { gte: desde }, conversa: { usuarioId: c.usuarioId, clienteIgId: dados._igId } } })
+    if (assumiu) return 'VENDEDOR_ASSUMIU'
+  }
+  const alvo = await alvoDoEnvio(c.usuarioId, dados, m.passo)
+  return alvo.modo === 'FECHADA' ? 'JANELA_FECHADA' : null
+}
+
 async function arquivoDaMidia(midiaId: string) {
   return arquivoParaEnvio(midiaId)
 }
@@ -250,7 +280,7 @@ async function avancarSequencia(m: MensagemTravada, passos: Passo[], agora: Date
 }
 
 /** Envia uma mensagem já travada. Devolve se o número remetente deve parar nesta rodada (sem conexão). */
-async function enviarTravada(m: MensagemTravada, remetente: Remetente, agora: Date, prazo = Date.now() + 20_000): Promise<'ENVIADA' | 'PULADA' | 'SEM_CONEXAO' | 'FALHOU'> {
+async function enviarTravada(m: MensagemTravada, remetente: Remetente | null, agora: Date, prazo = Date.now() + 20_000): Promise<'ENVIADA' | 'PULADA' | 'SEM_CONEXAO' | 'FALHOU' | 'LIMITE'> {
   const c = await prisma.disparoCampanha.findUnique({ where: { id: m.campanhaId }, select: { usuarioId: true, nome: true, finalidade: true, iniciadaEm: true, config: true, conteudo: true, publico: true, preparo: true } })
   const d = await prisma.disparoDestinatario.findUnique({ where: { id: m.destinatarioId }, select: { telefone: true, status: true, leadId: true, respondeuEm: true, dados: true } })
   if (!c || !d) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'CANCELADA', ultimoErro: 'Campanha ou destinatário não encontrado' } }); return 'PULADA' }
@@ -284,7 +314,10 @@ async function enviarTravada(m: MensagemTravada, remetente: Remetente, agora: Da
   const tentativa = await prisma.disparoTentativa.create({ data: { mensagemId: m.id, numero, inicio: new Date(), resultado: 'EM_ANDAMENTO' } })
   let providerId: string | null = null
   try {
-    providerId = (await provedor().enviar(remetente, d.telefone, { tipo: (passo!.tipo ?? 'TEXTO'), texto, midia, digitandoMs: Math.min(4000, 800 + texto.length * 25), prazoMs: Math.max(5000, Math.min(15_000, prazo - Date.now() - 1500)) })).providerId
+    const prazoMs = Math.max(5000, Math.min(15_000, prazo - Date.now() - 1500))
+    providerId = ehRemetenteInstagram(m.assistenteId)
+      ? (await enviarPeloInstagram(m.assistenteId, c.usuarioId, (d.dados ?? {}) as DadosIg, m.passo, { tipo: passo!.tipo ?? 'TEXTO', texto, midia: midia ? { url: midia.url } : null, prazoMs })).providerId
+      : (await provedor().enviar(remetente!, d.telefone, { tipo: (passo!.tipo ?? 'TEXTO'), texto, midia, digitandoMs: Math.min(4000, 800 + texto.length * 25), prazoMs })).providerId
   } catch (e) {
     const err = e as { message?: string; classe?: string; codigo?: string | null }
     const classe = err.classe ?? 'TEMPORARIO'
@@ -295,6 +328,11 @@ async function enviarTravada(m: MensagemTravada, remetente: Remetente, agora: Da
       // Não gasta tentativa: volta para a fila e o número para nesta rodada.
       await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'AGENDADA', travadaEm: null, ultimoErro: msg, erroClasse: 'CONEXAO' } })
       return 'SEM_CONEXAO'
+    }
+    if (classe === 'LIMITE') {
+      // Limite da Meta: não gasta tentativa; volta para a fila daqui a 15 min e a conta para nesta rodada.
+      await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'AGENDADA', travadaEm: null, ultimoErro: msg, erroClasse: 'LIMITE', proximaTentativaEm: new Date(fim.getTime() + 15 * MIN) } })
+      return 'LIMITE'
     }
     if (classe === 'DESCONHECIDO') {
       await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'DESCONHECIDO', tentativas: numero, travadaEm: null, ultimoErro: msg, erroClasse: 'DESCONHECIDO' } })
@@ -376,6 +414,7 @@ async function marcarPrecisaReconectar(a: { id: string; vendedorId: string; vend
 
 /** Envia pelo número remetente até o prazo, respeitando ritmo, limites, janela e o atendimento. */
 async function rodarRemetente(assistenteId: string, prazo: number): Promise<{ enviadas: number; falhas: number; puladas: number; semConexao: boolean }> {
+  if (ehRemetenteInstagram(assistenteId)) return rodarRemetenteInstagram(assistenteId, prazo)
   const out = { enviadas: 0, falhas: 0, puladas: 0, semConexao: false }
   const a = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { id: true, instancia: true, status: true, vendedorId: true, vendedor: { select: { usuarioId: true, nome: true } } } })
   if (!a) return out
@@ -486,29 +525,108 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
   return { out, parada }
 }
 
+/** Laço do Instagram da empresa: mesmo ritmo, limites e horário; a janela da Meta é conferida por mensagem. */
+async function rodarRemetenteInstagram(remetenteId: string, prazo: number): Promise<{ enviadas: number; falhas: number; puladas: number; semConexao: boolean }> {
+  const out = { enviadas: 0, falhas: 0, puladas: 0, semConexao: false }
+  const daConta = { status: 'RUNNING', mensagens: { some: { assistenteId: remetenteId, status: 'AGENDADA' } } } as const
+  const conta = await prisma.socialMediaConta.findUnique({ where: { id: remetenteId.slice(3) }, select: { id: true, usuarioId: true } })
+  if (!conta) {
+    out.semConexao = true
+    const msg = 'O Instagram da empresa não está conectado: conecte em Social Media › Conexão e a campanha continua sozinha'
+    await prisma.disparoCampanha.updateMany({ where: daConta, data: { erro: msg } })
+    await gravarEstadoRemetente(remetenteId, 'SEM_CONEXAO', { erro: msg })
+    return out
+  }
+  const chave = `remetente:${remetenteId}`
+  if (!(await pegarTrava(chave, prazo - Date.now() + 5000))) return out
+  let parada: ParadaRemetente = 'PRAZO'
+  let erro: string | null = null
+  try {
+    const cfgLoja = await configDaLoja(conta.usuarioId)
+    const envioMin = Math.min(ENVIO_MIN_MS, Math.max(0, prazo - Date.now()) * 0.4)
+    let limpou = false
+    while (Date.now() < prazo - 2000) {
+      const agora = new Date()
+      const ativas = await prisma.disparoCampanha.findMany({ where: daConta, select: { id: true, config: true, erro: true } })
+      if (!ativas.length) { parada = 'SEM_CAMPANHA'; break }
+      if (!limpou && ativas.some(a => a.erro)) { await prisma.disparoCampanha.updateMany({ where: { id: { in: ativas.map(a => a.id) }, erro: { not: null } }, data: { erro: null } }); limpou = true }
+      const cfgs = ativas.map(c => ({ id: c.id, cfg: lerConfigEnvio(c.config, cfgLoja.envio) }))
+      const naJanela = cfgs.filter(x => dentroDaJanela(x.cfg.janela, agora))
+      if (!naJanela.length) { parada = 'FORA_DA_JANELA'; break }
+      const lento: ConfigEnvio = { ...naJanela[0].cfg, intervaloSeg: Math.max(...naJanela.map(x => x.cfg.intervaloSeg)), maxPorHora: Math.min(MAX_POR_HORA_INSTAGRAM, ...naJanela.map(x => x.cfg.maxPorHora)), maxPorDia: Math.min(...naJanela.map(x => x.cfg.maxPorDia)) }
+      const folga = await folgaDoRemetente(remetenteId, lento, agora)
+      if (!folga.podeAgora) {
+        const pausa = folga.esperarMs + Math.round(lento.intervaloSeg * 1000 * Math.random() * 0.3)
+        if (!Number.isFinite(pausa)) { parada = 'LIMITE'; break }
+        if (Date.now() + pausa > prazo - 3000) { parada = 'INTERVALO'; break }
+        await espera(pausa)
+        continue
+      }
+      if (Date.now() > prazo - envioMin) { parada = 'PRAZO'; break }
+      const m = await travarProxima(remetenteId, agora)
+      if (!m) { parada = 'SEM_MENSAGEM'; break }
+      if (!naJanela.some(x => x.id === m.campanhaId)) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'AGENDADA', travadaEm: null } }); parada = 'FORA_DA_JANELA'; break }
+      const r = await enviarTravada(m, null, agora, prazo).catch(async e => {
+        logger.error({ err: e, mensagemId: m.id }, 'disparo: falha inesperada no envio pelo Instagram')
+        await prisma.disparoMensagem.updateMany({ where: { id: m.id, status: 'ENVIANDO' }, data: { status: 'DESCONHECIDO', travadaEm: null, erroClasse: 'DESCONHECIDO', ultimoErro: String((e as Error)?.message ?? e).slice(0, 300) } })
+        return 'FALHOU' as const
+      })
+      if (r === 'ENVIADA') out.enviadas += 1
+      else if (r === 'PULADA') out.puladas += 1
+      else if (r === 'LIMITE') { parada = 'LIMITE'; break }
+      else if (r === 'SEM_CONEXAO') {
+        // Token vencido ou permissão retirada: para e mostra o motivo na campanha (nada se perde).
+        out.semConexao = true; parada = 'SEM_CONEXAO'
+        const motivo = (await prisma.disparoMensagem.findUnique({ where: { id: m.id }, select: { ultimoErro: true } }))?.ultimoErro ?? 'O Instagram da empresa recusou o envio'
+        erro = motivo
+        await prisma.disparoCampanha.updateMany({ where: daConta, data: { erro: motivo } })
+        break
+      }
+      else out.falhas += 1
+    }
+    return out
+  } catch (e) {
+    parada = 'ERRO'; erro = String((e as Error)?.message ?? e).slice(0, 300)
+    throw e
+  } finally {
+    await soltarTrava(chave)
+    await gravarEstadoRemetente(remetenteId, parada, { enviadas: out.enviadas, falhas: out.falhas, ...(erro ? { erro } : {}) })
+  }
+}
+
 // ---------- Reconciliação ----------
 
 export async function reconciliar(agora = new Date(), limite = 20): Promise<{ reconciliadas: number; recuperadas: number }> {
   // Processo caiu no meio do envio: não se sabe se saiu.
   const presas = await prisma.disparoMensagem.updateMany({ where: { status: 'ENVIANDO', travadaEm: { lt: new Date(agora.getTime() - TRAVA_MAX_MS) } }, data: { status: 'DESCONHECIDO', erroClasse: 'DESCONHECIDO', ultimoErro: 'O envio foi interrompido no meio (o processo caiu)', travadaEm: null } })
   let reconciliadas = 0
-  const pendentes = await prisma.disparoMensagem.findMany({ where: { status: 'DESCONHECIDO', erroClasse: 'DESCONHECIDO' }, take: limite, orderBy: { atualizadoEm: 'asc' }, include: { destinatario: { select: { telefone: true } }, campanha: { select: { usuarioId: true, conteudo: true } } } })
+  const pendentes = await prisma.disparoMensagem.findMany({ where: { status: 'DESCONHECIDO', erroClasse: 'DESCONHECIDO' }, take: limite, orderBy: { atualizadoEm: 'asc' }, include: { destinatario: { select: { telefone: true, dados: true } }, campanha: { select: { usuarioId: true, conteudo: true } } } })
   for (const m of pendentes) {
-    const a = await prisma.assistenteComercial.findUnique({ where: { id: m.assistenteId }, select: { id: true, instancia: true } })
-    if (!a) continue
+    const ig = ehRemetenteInstagram(m.assistenteId)
+    const a = ig ? null : await prisma.assistenteComercial.findUnique({ where: { id: m.assistenteId }, select: { id: true, instancia: true } })
     const tentativa = await prisma.disparoTentativa.findFirst({ where: { mensagemId: m.id }, orderBy: { numero: 'desc' }, select: { inicio: true } })
     const desde = tentativa?.inicio ?? m.atualizadoEm
+    if (!ig && !a) {
+      // Número removido: não há onde conferir. Vai para a decisão de uma pessoa (não trava a fila).
+      if (agora.getTime() - desde.getTime() > RECONCILIAR_ATE_MS) await prisma.disparoMensagem.update({ where: { id: m.id }, data: { erroClasse: 'DECIDIR', ultimoErro: 'Não confirmada: decida na tela se reenvia ou considera enviada' } })
+      else await prisma.disparoMensagem.update({ where: { id: m.id }, data: { atualizadoEm: agora } })
+      continue
+    }
     let id: string | null = null
-    try { id = await provedor().reconciliar({ assistenteId: a.id, instancia: a.instancia }, m.destinatario.telefone, m.texto ?? '', desde) } catch (e) { logger.warn({ err: e }, 'disparo: reconciliação indisponível') }
+    try {
+      id = ig
+        ? await reconciliarInstagram(m.campanha.usuarioId, ((m.destinatario.dados ?? {}) as DadosIg)._igId ?? null, m.texto ?? '', desde)
+        : await provedor().reconciliar({ assistenteId: a!.id, instancia: a!.instancia }, m.destinatario.telefone, m.texto ?? '', desde)
+    } catch (e) { logger.warn({ err: e }, 'disparo: reconciliação indisponível') }
     if (id) {
       await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'ACEITA', providerId: id, aceitaEm: desde, erroClasse: null, ultimoErro: null } }).catch(() => undefined)
-      await prisma.disparoTentativa.create({ data: { mensagemId: m.id, numero: m.tentativas, inicio: agora, fim: new Date(), resultado: 'RECONCILIADA', erro: 'Encontrada no WhatsApp: tinha saído' } })
+      await prisma.disparoTentativa.create({ data: { mensagemId: m.id, numero: m.tentativas, inicio: agora, fim: new Date(), resultado: 'RECONCILIADA', erro: `Encontrada no ${ig ? 'Instagram' : 'WhatsApp'}: tinha saído` } })
       await avancarSequencia({ id: m.id, campanhaId: m.campanhaId, destinatarioId: m.destinatarioId, passo: m.passo, assistenteId: m.assistenteId, tipo: m.tipo, midiaId: m.midiaId, tentativas: m.tentativas, travadaEm: agora }, (m.campanha.conteudo as unknown as Conteudo).passos ?? [], agora)
-      await evento({ usuarioId: m.campanha.usuarioId, campanhaId: m.campanhaId, destinatarioId: m.destinatarioId, mensagemId: m.id, tipo: 'RECONCILIADA', descricao: 'A mensagem tinha saído: confirmada no WhatsApp, sem reenviar' })
+      await evento({ usuarioId: m.campanha.usuarioId, campanhaId: m.campanhaId, destinatarioId: m.destinatarioId, mensagemId: m.id, tipo: 'RECONCILIADA', descricao: `A mensagem tinha saído: confirmada no ${ig ? 'Instagram' : 'WhatsApp'}, sem reenviar` })
       reconciliadas += 1
     } else if (agora.getTime() - desde.getTime() > RECONCILIAR_ATE_MS) {
       // Não achou depois de 30 min: fica para decisão de uma pessoa (reenviar ou considerar enviada). Nunca repete sozinho.
-      await prisma.disparoMensagem.update({ where: { id: m.id }, data: { erroClasse: 'DECIDIR', ultimoErro: 'Não confirmada no WhatsApp: decida na tela se reenvia ou considera enviada' } })
+      await prisma.disparoMensagem.update({ where: { id: m.id }, data: { erroClasse: 'DECIDIR', ultimoErro: `Não confirmada no ${ig ? 'Instagram' : 'WhatsApp'}: decida na tela se reenvia ou considera enviada` } })
       await evento({ usuarioId: m.campanha.usuarioId, campanhaId: m.campanhaId, destinatarioId: m.destinatarioId, mensagemId: m.id, tipo: 'DECIDIR_REENVIO', descricao: 'Resultado do envio não confirmado: precisa de decisão' })
     }
   }
@@ -742,8 +860,13 @@ export function proximaAbertura(j: ConfigEnvio['janela'], agora: Date): Date | n
 const quando = (d: Date) => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', hour: '2-digit', minute: '2-digit' })
 
 export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): Promise<SituacaoEnvio | null> {
-  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { usuarioId: true, status: true, agendadaPara: true, assistenteId: true, config: true, erro: true, iniciadaEm: true } })
-  if (!c) return null
+  const c0 = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { usuarioId: true, status: true, agendadaPara: true, assistenteId: true, config: true, erro: true, iniciadaEm: true, canal: true } })
+  if (!c0) return null
+  // Instagram: o "remetente" é a conta da empresa.
+  const ig = c0.canal === 'INSTAGRAM'
+  const contaIg = ig ? await contaInstagramDaLoja(c0.usuarioId) : null
+  const c = { ...c0, assistenteId: ig ? (contaIg ? remetenteInstagram(contaIg.id) : null) : c0.assistenteId }
+  const quem = ig ? 'Esta conta do Instagram' : 'Este número'
   const [rod, prim, ult, enviadas, est, cfgLoja0] = await Promise.all([
     ultimasRodadas(),
     prisma.disparoMensagem.findFirst({ where: { campanhaId, aceitaEm: { not: null } }, orderBy: { aceitaEm: 'asc' }, select: { aceitaEm: true } }),
@@ -772,15 +895,19 @@ export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): P
   // RUNNING
   const cfgLoja = await configDaLoja(c.usuarioId)
   const cfg = lerConfigEnvio(c.config, cfgLoja.envio)
-  if (c.erro) return s('SEM_CONEXAO', 'Parada: número sem conexão', `${c.erro}. Conecte o WhatsApp do remetente em Conversas › Conexão; o envio continua sozinho quando a conexão voltar.`)
+  if (c.erro) return ig
+    ? s('SEM_CONEXAO', 'Parada: Instagram sem acesso', `${c.erro}. Reconecte o Instagram da empresa em Social Media › Conexão; o envio continua sozinho quando o acesso voltar.`)
+    : s('SEM_CONEXAO', 'Parada: número sem conexão', `${c.erro}. Conecte o WhatsApp do remetente em Conversas › Conexão; o envio continua sozinho quando a conexão voltar.`)
   if (!dentroDaJanela(cfg.janela, agora)) {
     const abre = proximaAbertura(cfg.janela, agora)
     return s('FORA_DA_JANELA', 'Fora do horário de envio', `A campanha só envia ${cfg.janela.inicio}–${cfg.janela.fim} (horário de Brasília) nos dias escolhidos.${abre ? ` Volta ${quando(abre)}.` : ''}`, abre)
   }
-  if (!c.assistenteId) return s('SEM_CONEXAO', 'Sem número remetente', 'Escolha o número que vai enviar a campanha.')
+  if (!c.assistenteId) return ig ? s('SEM_CONEXAO', 'Instagram não conectado', 'Conecte o Instagram da empresa em Social Media › Conexão.') : s('SEM_CONEXAO', 'Sem número remetente', 'Escolha o número que vai enviar a campanha.')
   // O que aconteceu na última rodada deste número (últimos 2 min).
   const recente = remetente && agora.getTime() - new Date(remetente.em).getTime() < 2 * MIN
   if (recente && remetente!.motivo === 'ERRO') return s('SEM_CONEXAO', 'Erro na última tentativa', `O envio deu erro: ${remetente!.erro ?? 'sem detalhe'}. O ARIES tenta de novo na próxima rodada.`)
+  if (recente && remetente!.motivo === 'SEM_CONEXAO' && ig) return s('SEM_CONEXAO', 'Instagram sem acesso', `${remetente!.erro ?? 'A Meta recusou o envio'}. Nenhuma mensagem foi perdida: elas esperam na fila.`)
+  if (recente && remetente!.motivo === 'LIMITE' && ig) return s('LIMITE_HORA', 'Limite da Meta', `O Instagram limita mensagens automáticas por hora: o Disparo continua sozinho em alguns minutos (até ${MAX_POR_HORA_INSTAGRAM} por hora).`)
   if (recente && remetente!.motivo === 'SEM_CONEXAO') return s('SEM_CONEXAO', 'WhatsApp do remetente sem conexão', 'A conexão do WhatsApp deste número caiu no servidor (Connection Closed). O ARIES tenta religar sozinho (no máximo a cada 5 min) e continua de onde parou. Se não voltar, reconecte o número em Conversas › Conexão (ler o QR de novo). Nenhuma mensagem foi perdida: elas esperam na fila.')
   if (recente && remetente!.motivo === 'ATENDIMENTO') return s('ATENDIMENTO', 'Esperando o atendimento', `O WhatsApp deste número está em conversa com cliente agora. O disparo espera ${SILENCIO_ATENDIMENTO_MS / 1000} s sem mensagens de atendimento e envia em seguida (o atendimento tem prioridade).`, new Date(agora.getTime() + SILENCIO_ATENDIMENTO_MS))
   const pendentes = await prisma.disparoMensagem.findFirst({ where: { campanhaId, status: 'AGENDADA' }, orderBy: { enviarApos: 'asc' }, select: { enviarApos: true, proximaTentativaEm: true } })
@@ -790,10 +917,11 @@ export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): P
     prisma.disparoMensagem.count({ where: { assistenteId: c.assistenteId, aceitaEm: { gte: new Date(agora.getTime() - 60 * MIN) } } }),
     prisma.disparoMensagem.count({ where: { assistenteId: c.assistenteId, aceitaEm: { gte: new Date(agora.getTime() - 24 * 60 * MIN) } } }),
   ])
-  if (dia >= cfg.maxPorDia) return s('LIMITE_DIA', 'Limite do dia atingido', `Este número já enviou ${dia} mensagens nas últimas 24 h (limite ${cfg.maxPorDia}). Continua sozinho quando o limite liberar.`)
-  if (hora >= cfg.maxPorHora) return s('LIMITE_HORA', 'Limite da hora atingido', `Este número já enviou ${hora} mensagens na última hora (limite ${cfg.maxPorHora}). Continua sozinho em alguns minutos.`)
+  if (dia >= cfg.maxPorDia) return s('LIMITE_DIA', 'Limite do dia atingido', `${quem} já enviou ${dia} mensagens nas últimas 24 h (limite ${cfg.maxPorDia}). Continua sozinho quando o limite liberar.`)
+  const maxHora = ig ? Math.min(cfg.maxPorHora, MAX_POR_HORA_INSTAGRAM) : cfg.maxPorHora
+  if (hora >= maxHora) return s('LIMITE_HORA', 'Limite da hora atingido', `${quem} já enviou ${hora} mensagens na última hora (limite ${maxHora}). Continua sozinho em alguns minutos.`)
   const proximoPorRitmo = ultima?.aceitaEm ? new Date(ultima.aceitaEm.getTime() + cfg.intervaloSeg * 1000) : agora
   const prox = new Date(Math.max(proximoPorRitmo.getTime(), pendentes.enviarApos.getTime(), pendentes.proximaTentativaEm?.getTime() ?? 0, agora.getTime()))
-  if (prox.getTime() - agora.getTime() > 1000) return s('INTERVALO', 'Enviando com intervalo', `Uma mensagem de cada vez, com pelo menos ${cfg.intervaloSeg} s entre elas, para proteger o número.`, prox)
+  if (prox.getTime() - agora.getTime() > 1000) return s('INTERVALO', 'Enviando com intervalo', `Uma mensagem de cada vez, com pelo menos ${cfg.intervaloSeg} s entre elas, para proteger ${ig ? 'a conta' : 'o número'}.${ig ? ' Cada pessoa só recebe dentro da janela da Meta.' : ''}`, prox)
   return s('ENVIANDO', 'Enviando', 'A próxima mensagem sai na próxima rodada do envio.', prox)
 }

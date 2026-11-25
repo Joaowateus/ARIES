@@ -73,7 +73,7 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
                   {pode && <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Selecionar ${c.nome}`} checked={marcadas.includes(c.id)} onChange={e => setMarcadas(m => (e.target.checked ? [...m, c.id] : m.filter(x => x !== c.id)))} /></td>}
                   <td><b>{c.nome}</b><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''}</div>{c.erro && <div className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }}>{erroAmigavel(c.erro)}</div>}</td>
                   <td><SeloStatus status={c.status} />{c.config?.continua && <span className="pl-status-badge" title="Estratégia contínua: quem entra no público entra sozinho" style={{ marginLeft: 4 }}>Contínua</span>}</td>
-                  <td>{c.assistente?.vendedor.nome ?? '—'}</td>
+                  <td>{c.canal === 'INSTAGRAM' ? 'Instagram (direct)' : c.assistente?.vendedor.nome ?? '—'}</td>
                   <td className="pl-right">{c.totais ? n(c.totais.elegiveis) : '—'}</td>
                   <td>{c.concluidaEm ? `terminou ${dataHora(c.concluidaEm)}` : c.iniciadaEm ? `começou ${dataHora(c.iniciadaEm)}` : c.agendadaPara ? `agendada ${dataHora(c.agendadaPara)}` : '—'}</td>
                   <td>{c.responsavelNome ?? c.criadoPorNome ?? '—'}</td>
@@ -156,7 +156,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
           </span>
         )}
       </div>
-      <p className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''} · {c.remetente ? `envia pelo WhatsApp de ${c.remetente.vendedor} ${c.remetente.numero ?? ''}${c.remetente.conectado ? '' : ' (desconectado)'}` : 'sem número'} · criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''} · versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</p>
+      <p className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''} · {c.canal === 'INSTAGRAM' ? `envia pelo direct do ${c.remetente?.vendedor ?? 'Instagram'}` : c.remetente ? `envia pelo WhatsApp de ${c.remetente.vendedor} ${c.remetente.numero ?? ''}${c.remetente.conectado ? '' : ' (desconectado)'}` : 'sem número'} · criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''} · versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</p>
       {msg && <p className="pl-hint" role="status">{msg}</p>}
       {c.config?.continua && <div className="pl-alert" role="status" data-estrategia-continua><b>Estratégia contínua.</b> Quem passar a fazer parte do público entra sozinho (conferido a cada 10 min){c.config.pararAoSairDoPublico ? ', e quem sair do público (ex.: mudou de etapa) para de receber' : ''}{c.config.remetentePorVendedor ? '. Cada contato recebe pelo WhatsApp do próprio vendedor' : ''}. Ela fica ligada até você pausar ou cancelar.</div>}
       {c.situacao && <PainelAgora s={c.situacao} status={st} rodada={enviando ? rodada : null} />}
@@ -201,7 +201,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
                   const m = d.mensagens[0]
                   return (
                     <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => setDetalhe(d.id)} data-destinatario={d.status}>
-                      <td>{d.nome ?? '—'} <span className="pl-hint pl-mono">{d.telefone}</span></td>
+                      <td>{d.nome ?? '—'} <span className="pl-hint pl-mono">{d.telefone.startsWith('ig:') ? 'Instagram' : d.telefone}</span></td>
                       <td>{ROTULO_DESTINATARIO[d.status] ?? d.status}{d.respondeuEm ? ` · respondeu ${dataHora(d.respondeuEm)}` : ''}</td>
                       <td>{m ? `${ROTULO_MENSAGEM[m.status] ?? m.status}${m.lidaEm ? ` ${dataHora(m.lidaEm)}` : m.entregueEm ? ` ${dataHora(m.entregueEm)}` : m.aceitaEm ? ` ${dataHora(m.aceitaEm)}` : ''}` : '—'}</td>
                       <td className="pl-hint">{d.motivoExclusao ? meta.motivos[d.motivoExclusao] ?? d.motivoExclusao : d.interrompidoPor ? `parou: ${ROTULO_INTERRUPCAO[d.interrompidoPor] ?? d.interrompidoPor}` : erroAmigavel(m?.ultimoErro)}</td>
@@ -259,7 +259,7 @@ function DetalheDestinatario({ id, fechar, pode, aoMudar }: { id: string; fechar
         {erro && <div className="pl-alert pl-alert-error">{erro}</div>}
         {!d ? <p className="pl-hint">Carregando…</p> : (
           <>
-            <p className="pl-hint">{d.telefone} · {ROTULO_DESTINATARIO[d.status] ?? d.status}{d.interrompidoPor ? ` (${ROTULO_INTERRUPCAO[d.interrompidoPor] ?? d.interrompidoPor})` : ''}{d.respondeuEm ? ` · respondeu ${dataHora(d.respondeuEm)}` : ''}{d.leadId ? ' · ' : ''}{d.leadId && <a href={`/pro-labore/leads?lead=${d.leadId}`}>abrir o lead</a>}</p>
+            <p className="pl-hint">{d.telefone.startsWith('ig:') ? 'Instagram (direct)' : d.telefone} · {ROTULO_DESTINATARIO[d.status] ?? d.status}{d.interrompidoPor ? ` (${ROTULO_INTERRUPCAO[d.interrompidoPor] ?? d.interrompidoPor})` : ''}{d.respondeuEm ? ` · respondeu ${dataHora(d.respondeuEm)}` : ''}{d.leadId ? ' · ' : ''}{d.leadId && <a href={`/pro-labore/leads?lead=${d.leadId}`}>abrir o lead</a>}</p>
             {d.mensagens.map(m => (
               <div key={m.id} className="dp-passo">
                 <div className="dp-linha" style={{ justifyContent: 'space-between' }}><b>Mensagem {m.passo + 1}</b><span>{ROTULO_MENSAGEM[m.status] ?? m.status}</span></div>

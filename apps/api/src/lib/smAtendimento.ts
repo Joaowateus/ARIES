@@ -9,6 +9,7 @@
 // - a conversa nasce ligada ao post de origem (pauta e código), quando há.
 import { Prisma, SmConversa } from '@prisma/client'
 import { prisma } from './prisma'
+import { logger } from './logger'
 import { aplicarCadenciasDoLeadNovo } from './ligacoes'
 import {
   buscarPerfilRemetente, comApiDaEmpresa, enviarMensagemDirect, enviarRespostaPrivada, ErroGraphApi, responderComentario,
@@ -139,7 +140,7 @@ async function registrarEntrada(conversa: SmConversa, texto: string, instante: D
 }
 
 /** Registra uma saída. Se for humana e houver cliente esperando, mede o tempo de resposta. */
-async function registrarSaida(conversa: SmConversa, texto: string, autor: 'HUMANO' | 'AUTOMACAO', igMensagemId: string | null, automacao?: string, instante = new Date()) {
+export async function registrarSaida(conversa: SmConversa, texto: string, autor: 'HUMANO' | 'AUTOMACAO', igMensagemId: string | null, automacao?: string, instante = new Date()) {
   if (igMensagemId && await prisma.smMensagem.findUnique({ where: { igMensagemId } })) return
   const atual = await prisma.smConversa.findUniqueOrThrow({ where: { id: conversa.id } })
   const humana = autor === 'HUMANO'
@@ -202,6 +203,8 @@ async function processarMensagem(conta: ContaAtendimento, m: MsgWebhook, config:
   if (eco) { await registrarSaida(conversa, texto, 'HUMANO', msg.mid ?? null, undefined, instante); return }
   const nova = await registrarEntrada(conversa, texto, instante, msg.mid ?? null)
   if (!nova) return
+  // Respondeu a uma campanha do Disparo pelo Instagram: liga à campanha e para a sequência.
+  await import('./disparo/instagram').then(d => d.registrarRespostaInstagram(usuarioId, clienteId, texto, conversa!.id)).catch(e => logger.warn({ err: e }, 'disparo: resposta do Instagram'))
 
   // Fora do expediente: avisa uma vez a cada 12 h (não conta como resposta).
   const fora = await prisma.smAutomacao.findUnique({ where: { usuarioId_tipo: { usuarioId, tipo: 'FORA_HORARIO' } } })

@@ -4,7 +4,7 @@
 // agendamento, revisão, confirmação e monitoramento. Salvar em qualquer passo guarda o rascunho;
 // "Preparar" manda o servidor montar o público (snapshot) e, se for o caso, pedir aprovação.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { disparoApi, type CampanhaDisparo, type CampanhaDisparoEntrada, type ConfigEnvioDisparo, type FinalidadeDisparo, type MidiaDisparo, type ModeloDisparo, type PreviaPublicoDisparo, type PublicoSalvoDisparo } from '@/lib/proLaboreApi'
+import { disparoApi, type CanalDisparo, type CampanhaDisparo, type CampanhaDisparoEntrada, type ConfigEnvioDisparo, type FinalidadeDisparo, type MidiaDisparo, type ModeloDisparo, type PreviaPublicoDisparo, type PublicoSalvoDisparo } from '@/lib/proLaboreApi'
 import { PublicoEditor } from './PublicoEditor'
 import { PassosEditor } from './PassosEditor'
 import { AvisoAutorizacao, DIAS, SeloStatus, avisoJanela, dataHora, erroDe, n, useMeta } from './util'
@@ -15,8 +15,8 @@ const RE_VAR = /\{\{\s*([a-z_]+)\s*(?:\|[^}]*)?\}\}/g
 const paraLocal = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) }
 
 function inicial(c: CampanhaDisparo | null, padrao: ConfigEnvioDisparo, remetente: string | null): CampanhaDisparoEntrada {
-  if (c) return { nome: c.nome, descricao: c.descricao, objetivo: c.objetivo, finalidade: c.finalidade, assistenteId: c.assistenteId, publicoId: c.publicoId, publico: c.publico, conteudo: c.conteudo, config: { ...padrao, ...c.config }, agendadaPara: c.agendadaPara ? paraLocal(c.agendadaPara) : null, recorrencia: c.recorrencia }
-  return { nome: '', descricao: '', objetivo: '', finalidade: 'MARKETING', assistenteId: remetente, publicoId: null, publico: { base: 'LEADS' }, conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Oi, {{primeiro_nome}}! ' }], fallbacks: {}, rodapeSair: true }, config: { ...padrao }, agendadaPara: null, recorrencia: null }
+  if (c) return { nome: c.nome, descricao: c.descricao, objetivo: c.objetivo, finalidade: c.finalidade, canal: c.canal ?? 'WHATSAPP', assistenteId: c.assistenteId, publicoId: c.publicoId, publico: c.publico, conteudo: c.conteudo, config: { ...padrao, ...c.config }, agendadaPara: c.agendadaPara ? paraLocal(c.agendadaPara) : null, recorrencia: c.recorrencia }
+  return { nome: '', descricao: '', objetivo: '', finalidade: 'MARKETING', canal: 'WHATSAPP', assistenteId: remetente, publicoId: null, publico: { base: 'LEADS' }, conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Oi, {{primeiro_nome}}! ' }], fallbacks: {}, rodapeSair: true }, config: { ...padrao }, agendadaPara: null, recorrencia: null }
 }
 
 export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanha: CampanhaDisparo | null; fechar: () => void; abrirMonitor: (id: string) => void; preset?: Partial<CampanhaDisparoEntrada> | null }) {
@@ -41,6 +41,14 @@ export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanh
   const setCfg = (c: Partial<ConfigEnvioDisparo>) => setF(x => ({ ...x, config: { ...cfg, ...c } }))
   const usadas = useMemo(() => [...new Set(f.conteudo.passos.flatMap(p => [...(p.texto ?? '').matchAll(RE_VAR)].map(m => m[1])))], [f.conteudo])
   const remetente = meta.remetentes.find(r => r.id === f.assistenteId)
+  const ig = f.canal === 'INSTAGRAM'
+  // Trocar o canal troca o público (os do Instagram são só de quem falou com a conta) e tira o que o direct não aceita.
+  const trocarCanal = (canal: CanalDisparo) => setF(x => (x.canal === canal ? x : {
+    ...x, canal, publicoId: null,
+    publico: canal === 'INSTAGRAM' ? { base: 'INSTAGRAM_DM', predefinido: 'IG_DM' } : { base: 'LEADS' },
+    config: { ...x.config, remetentePorVendedor: false },
+    conteudo: canal === 'INSTAGRAM' ? { ...x.conteudo, passos: x.conteudo.passos.map(p => (p.tipo === 'DOCUMENTO' ? { ...p, tipo: 'TEXTO' as const, midiaId: null } : p)) } : x.conteudo,
+  }))
 
   // Prévia com o conteúdo (exemplo real com as variáveis trocadas) para Personalização e Revisão.
   const verPrevia = useCallback(() => {
@@ -104,27 +112,35 @@ export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanh
             <div className="cc-chips">{(Object.keys(meta.finalidades) as FinalidadeDisparo[]).map(k => <button key={k} type="button" className={`pl-chip ${f.finalidade === k ? 'active' : ''}`} onClick={() => setF({ ...f, finalidade: k })}>{meta.finalidades[k]}</button>)}</div>
             <p className="pl-hint">Promocional só vai para quem autorizou{meta.config.baseMarketing === 'RELACAO' ? ' ou já tem relação comercial com a loja' : ''} e sempre leva a opção de sair. Operacional e relacionamento são para assuntos que o cliente já tem com a loja; ninguém bloqueado recebe nada.</p>
           </div>
-          <div className="pl-field"><label htmlFor="dp-rem">Número que envia</label>
+          <div className="pl-field" style={{ gridColumn: '1 / -1' }}><label>Canal</label>
+            <div className="cc-chips" data-canal>
+              <button type="button" className={`pl-chip ${!ig ? 'active' : ''}`} onClick={() => trocarCanal('WHATSAPP')}>WhatsApp</button>
+              <button type="button" className={`pl-chip ${ig ? 'active' : ''}`} onClick={() => trocarCanal('INSTAGRAM')} data-canal-instagram>Instagram (direct)</button>
+            </div>
+            {ig && <p className="pl-hint">Pelo direct do Instagram da empresa{meta.instagram?.usuario ? ` (@${meta.instagram.usuario})` : ''}, só para quem falou com a conta: mandou mensagem, respondeu story (até 24 h) ou comentou (resposta privada em até 7 dias). Até {meta.instagram?.maxPorHora ?? 180} mensagens por hora. Quem responde cai no Atendimento do Social Media.</p>}
+            {ig && !meta.instagram?.conectado && <div className="pl-alert pl-alert-error" role="alert">O Instagram da empresa não está conectado. Conecte em Social Media › Conexão.</div>}
+          </div>
+          {!ig && <div className="pl-field"><label htmlFor="dp-rem">Número que envia</label>
             <select id="dp-rem" className="pl-select" value={f.assistenteId ?? ''} onChange={e => setF({ ...f, assistenteId: e.target.value || null })}>
               <option value="">Escolha…</option>
               {meta.remetentes.map(r => <option key={r.id} value={r.id}>{r.vendedor} {r.numero ? `(${r.numero})` : ''}{r.conectado ? '' : ' — desconectado'}</option>)}
             </select>
             {remetente && !remetente.conectado && <p className="pl-hint" style={{ color: 'var(--ar-estado-atencao)' }}>Este número está desconectado: a campanha espera a conexão voltar.</p>}
             {!meta.remetentes.length && <p className="pl-hint">Nenhum WhatsApp conectado. Conecte em Conversas › Conexão.</p>}
-          </div>
+          </div>}
         </div>
       )}
 
       {passo === 1 && (
         <>
-          {publicos.length > 0 && (
+          {publicos.length > 0 && !ig && (
             <div className="pl-field" style={{ marginBottom: 10 }}><label htmlFor="dp-pub">Usar um público salvo</label>
               <select id="dp-pub" className="pl-select" value={f.publicoId ?? ''} onChange={e => { const p = publicos.find(x => x.id === e.target.value); setF({ ...f, publicoId: p?.id ?? null, publico: p ? p.definicao : f.publico }) }}>
                 <option value="">—</option>{publicos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>
             </div>
           )}
-          <PublicoEditor definicao={f.publico} mudar={d => setF({ ...f, publico: d, publicoId: null })} finalidade={f.finalidade} conteudo={null} assistenteId={f.assistenteId} />
+          <PublicoEditor definicao={f.publico} mudar={d => setF({ ...f, publico: d, publicoId: null })} finalidade={f.finalidade} conteudo={null} assistenteId={ig ? null : f.assistenteId} canal={f.canal ?? 'WHATSAPP'} />
         </>
       )}
 
@@ -137,7 +153,7 @@ export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanh
               </select>
             </div>
           )}
-          <PassosEditor conteudo={f.conteudo} mudar={c => setF({ ...f, conteudo: c })} midias={midias} recarregarMidias={() => disparoApi.midias.listar().then(m => { setMidias(m); return m })} />
+          <PassosEditor canal={f.canal ?? 'WHATSAPP'} comentarios={f.publico.base === 'INSTAGRAM_COMENTARIOS'} conteudo={f.conteudo} mudar={c => setF({ ...f, conteudo: c })} midias={midias} recarregarMidias={() => disparoApi.midias.listar().then(m => { setMidias(m); return m })} />
           {!meta.capacidades.templates && <p className="pl-hint">Modelos aprovados pela Meta (templates) e botões interativos só existem na API oficial do WhatsApp Business; o número conectado hoje não tem.</p>}
         </>
       )}
@@ -190,7 +206,7 @@ export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanh
           </div>
           <div className="pl-field dp-estrategia-opcoes" style={{ gridColumn: '1 / -1' }} data-opcoes-estrategia><label>Estratégia</label>
             <label className="pl-hint"><input type="checkbox" checked={!!cfg.continua} onChange={e => setCfg({ continua: e.target.checked, ...(e.target.checked ? { pararAoSairDoPublico: true } : {}) })} /> <b>Contínua</b>: fica ligada e quem passar a fazer parte do público (ex.: lead que entrar na etapa) entra sozinho, a cada 10 min. Sem isso, envia uma vez para a lista de agora.</label>
-            <label className="pl-hint"><input type="checkbox" checked={!!cfg.remetentePorVendedor} onChange={e => setCfg({ remetentePorVendedor: e.target.checked })} /> <b>Pelo WhatsApp do vendedor de cada contato</b> (quem já conversa com o cliente); se o dele não estiver conectado, sai pelo número escolhido no passo 1.</label>
+            {!ig && <label className="pl-hint"><input type="checkbox" checked={!!cfg.remetentePorVendedor} onChange={e => setCfg({ remetentePorVendedor: e.target.checked })} /> <b>Pelo WhatsApp do vendedor de cada contato</b> (quem já conversa com o cliente); se o dele não estiver conectado, sai pelo número escolhido no passo 1.</label>}
           </div>
         </div>
       )}
@@ -199,7 +215,7 @@ export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanh
         <div data-revisao>
           <dl className="dp-resumo">
             <dt>Campanha</dt><dd>{f.nome || '—'} · {meta.finalidades[f.finalidade]}{f.objetivo ? ` · ${f.objetivo}` : ''}</dd>
-            <dt>Número que envia</dt><dd>{remetente ? `${remetente.vendedor} ${remetente.numero ?? ''}${remetente.conectado ? '' : ' (desconectado)'}` : <b style={{ color: 'var(--ar-estado-critico)' }}>escolha no passo 1</b>}</dd>
+            <dt>{ig ? 'Envia por' : 'Número que envia'}</dt><dd>{ig ? `Instagram${meta.instagram?.usuario ? ` @${meta.instagram.usuario}` : ''} (direct, dentro da janela da Meta)` : remetente ? `${remetente.vendedor} ${remetente.numero ?? ''}${remetente.conectado ? '' : ' (desconectado)'}` : <b style={{ color: 'var(--ar-estado-critico)' }}>escolha no passo 1</b>}</dd>
             <dt>Público</dt><dd>{exemplo ? <>{n(exemplo.elegiveis)} vão receber · {n(exemplo.excluidos)} excluídos de {n(exemplo.selecionados)}</> : 'contando…'}</dd>
             <dt>Mensagens</dt><dd>{f.conteudo.passos.length} na sequência</dd>
             <dt>Quando</dt><dd>{f.agendadaPara ? dataHora(new Date(f.agendadaPara).toISOString()) : 'ao confirmar'} · das {cfg.janela.inicio} às {cfg.janela.fim} ({cfg.janela.dias.map(d => DIAS[d]).join(', ')}){f.recorrencia ? ` · repete ${f.recorrencia.tipo.toLowerCase()}${f.recorrencia.ate ? ` até ${f.recorrencia.ate}` : ''}` : ''}</dd>
@@ -240,7 +256,7 @@ export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanh
             : <p className="pl-hint">Aguardando aprovação do dono ou do supervisor.</p>)}
           {salva.status === 'READY' && (
             <div className="dp-linha">
-              {salva.totais?.elegiveis ? <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado || !meta.remetentes.find(r => r.id === salva.assistenteId)} onClick={() => void agir(async () => { await disparoApi.campanhas.iniciar(salva.id, salva.agendadaPara); abrirMonitor(salva.id) }, 'Começou.')}>{salva.agendadaPara && new Date(salva.agendadaPara) > new Date() ? `Confirmar agendamento (${dataHora(salva.agendadaPara)})` : `Confirmar e enviar para ${n(salva.totais.elegiveis)}`}</button> : <p className="pl-hint">Ninguém para receber: ajuste o público.</p>}
+              {salva.totais?.elegiveis ? <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado || (salva.canal === 'INSTAGRAM' ? !meta.instagram?.conectado : !meta.remetentes.find(r => r.id === salva.assistenteId))} onClick={() => void agir(async () => { await disparoApi.campanhas.iniciar(salva.id, salva.agendadaPara); abrirMonitor(salva.id) }, 'Começou.')}>{salva.agendadaPara && new Date(salva.agendadaPara) > new Date() ? `Confirmar agendamento (${dataHora(salva.agendadaPara)})` : `Confirmar e enviar para ${n(salva.totais.elegiveis)}`}</button> : <p className="pl-hint">Ninguém para receber: ajuste o público.</p>}
               <button type="button" className="pl-btn" onClick={() => setPasso(1)}>Ajustar</button>
             </div>
           )}
