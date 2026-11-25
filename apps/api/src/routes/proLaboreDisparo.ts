@@ -50,7 +50,7 @@ function falha(res: Response, e: unknown) {
 /** Campanha visível para quem pede (gestão vê todas da loja; operador, só as que criou). */
 async function campanhaDe(req: Request, id: string) {
   const q = quem(req)
-  const c = await prisma.disparoCampanha.findFirst({ where: { id, usuarioId: q.usuarioId, ...(q.gestao ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }) } })
+  const c = await prisma.disparoCampanha.findFirst({ where: { id, usuarioId: q.usuarioId, excluidaEm: null, ...(q.gestao ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }) } })
   if (!c) throw new ErroDisparo('Campanha não encontrada', 404)
   return c
 }
@@ -182,12 +182,31 @@ router.get('/disparo/campanhas', ...ver, async (req, res) => {
   const q = quem(req)
   const status = typeof req.query.status === 'string' && req.query.status ? req.query.status.split(',') : null
   const pagina = Math.max(0, Number(req.query.pagina ?? 0) || 0)
-  const where: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, ...(q.gestao ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }), ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
+  const where: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, excluidaEm: null, ...(q.gestao ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }), ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
   const [total, itens] = await Promise.all([
     prisma.disparoCampanha.count({ where }),
     prisma.disparoCampanha.findMany({ where, orderBy: { atualizadoEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, objetivo: true, finalidade: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, responsavelNome: true, criadoPorNome: true, erro: true, atualizadoEm: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
   ])
   res.json({ total, pagina, porPagina: POR_PAGINA, itens })
+})
+
+// Excluir (uma ou várias): some da tela e dos relatórios. Se ainda pode enviar, é cancelada antes
+// (nada mais sai). Nada é apagado: mensagens, destinatários e auditoria ficam no banco.
+const ATIVAS_PARA_CANCELAR = ['VALIDATING', 'NEEDS_REVIEW', 'READY', 'SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED']
+router.post('/disparo/campanhas/excluir', ...editar, async (req, res) => {
+  try {
+    const q = quem(req)
+    const { ids } = z.object({ ids: z.array(z.string().min(1).max(40)).min(1).max(100) }).parse(req.body)
+    let excluidas = 0, canceladas = 0
+    for (const id of [...new Set(ids)]) {
+      const c = await campanhaDe(req, id).catch(() => null)
+      if (!c) continue
+      if (ATIVAS_PARA_CANCELAR.includes(c.status)) { await cancelarCampanha(c.id, q.nome); canceladas += 1 }
+      const r = await prisma.disparoCampanha.updateMany({ where: { id: c.id, excluidaEm: null }, data: { excluidaEm: new Date(), excluidaPorNome: q.nome } })
+      if (r.count) { excluidas += 1; await evento({ usuarioId: c.usuarioId, campanhaId: c.id, tipo: 'EXCLUIDA', descricao: 'Excluída da tela (os registros continuam guardados)', autorNome: q.nome }) }
+    }
+    res.json({ excluidas, canceladas })
+  } catch (e) { falha(res, e) }
 })
 
 router.post('/disparo/campanhas', ...editar, async (req, res) => {
