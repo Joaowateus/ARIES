@@ -4192,6 +4192,8 @@ export const disparoApi = {
     criar: (c: CampanhaDisparoEntrada) => postD<CampanhaDisparo>('/campanhas', c),
     salvar: (id: string, c: CampanhaDisparoEntrada) => request<{ ok: true; versao: number }>(`/pro-labore/disparo/campanhas/${id}`, { method: 'PUT', body: JSON.stringify(c) }),
     duplicar: (id: string) => postD<CampanhaDisparo>(`/campanhas/${id}/duplicar`),
+    /** Tira da tela (e cancela o que ainda ia sair). Nada é apagado do banco. */
+    excluir: (ids: string[]) => postD<{ excluidas: number; canceladas: number }>('/campanhas/excluir', { ids }),
     validar: (id: string) => postD<{ ok: true; preparada: boolean; elegiveis?: number; excluidos?: number }>(`/campanhas/${id}/validar`),
     aprovar: (id: string) => postD<{ ok: true }>(`/campanhas/${id}/aprovar`),
     reprovar: (id: string, motivo: string) => postD<{ ok: true }>(`/campanhas/${id}/reprovar`, { motivo }),

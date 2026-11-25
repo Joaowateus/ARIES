@@ -21,12 +21,20 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
   const [lista, setLista] = useState<{ total: number; porPagina: number; itens: ItemCampanhaDisparo[] } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [editando, setEditando] = useState<CampanhaDisparo | null | 'nova'>(null)
+  const [marcadas, setMarcadas] = useState<string[]>([])
+  const [aviso, setAviso] = useState<string | null>(null)
   const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina])
   useEffect(() => { if (!aberta && !editando) carregar() }, [carregar, aberta, editando])
   const pode = meta.nivel === 'EDITAR'
   // Gestão: campanhas da equipe esperando aprovação (aviso no topo da lista).
   const [aprovar, setAprovar] = useState(0)
   useEffect(() => { if (meta.gestao && !aberta && !editando) disparoApi.campanhas.listar({ status: 'NEEDS_REVIEW' }).then(r => setAprovar(r.total)).catch(() => undefined) }, [meta.gestao, aberta, editando, lista])
+
+  async function excluir(ids: string[]) {
+    const ativas = (lista?.itens ?? []).filter(c => ids.includes(c.id) && ['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(c.status)).length
+    if (!window.confirm(`Excluir ${ids.length} campanha(s)?${ativas ? `\n\n${ativas} ainda está(ão) enviando ou agendada(s): o que não saiu será cancelado.` : ''}\n\nElas somem da lista e dos relatórios. Os registros (quem recebeu o quê) continuam guardados.`)) return
+    try { const r = await disparoApi.campanhas.excluir(ids); setAviso(`${r.excluidas} campanha(s) excluída(s)${r.canceladas ? `, ${r.canceladas} cancelada(s) antes` : ''}.`); setMarcadas([]); carregar() } catch (e) { setErro(erroDe(e)) }
+  }
 
   if (editando) return <Assistente campanha={editando === 'nova' ? null : editando} fechar={() => setEditando(null)} abrirMonitor={id => { setEditando(null); abrir(id) }} />
   if (aberta) return <Monitor id={aberta} voltar={() => abrir(null)} editar={c => setEditando(c)} abrir={abrir} />
@@ -43,15 +51,26 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
           <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setFiltro(FILTROS.findIndex(x => x.status === 'NEEDS_REVIEW')); setPagina(0) }}>Ver e aprovar</button>
         </div>
       )}
+      {aviso && <p className="pl-hint" role="status">{aviso}</p>}
+      {pode && marcadas.length > 0 && (
+        <div className="pl-alert dp-linha" role="status" style={{ justifyContent: 'space-between' }} data-barra-excluir>
+          <span><b>{marcadas.length} selecionada(s).</b> Excluir tira da lista e dos relatórios; o que ainda ia sair é cancelado. Os registros ficam guardados.</span>
+          <span className="cc-chips">
+            <button type="button" className="pl-btn" onClick={() => setMarcadas([])}>Limpar seleção</button>
+            <button type="button" className="pl-btn pl-btn-primary" data-excluir-selecionadas onClick={() => void excluir(marcadas)}>Excluir {marcadas.length}</button>
+          </span>
+        </div>
+      )}
       {!lista ? <p className="pl-hint" aria-busy="true">Carregando…</p> : !lista.itens.length ? (
         <div className="pl-empty pl-card"><h3 style={{ margin: 0 }}>Nenhuma campanha aqui</h3><p>{pode ? 'Crie a primeira em “Nova campanha”.' : 'Seu acesso é só para acompanhar.'}</p></div>
       ) : (
         <div className="pl-table-wrap">
           <table className="pl-table">
-            <thead><tr><th>Campanha</th><th>Situação</th><th>Número</th><th className="pl-right">Destinatários</th><th>Quando</th><th>Responsável</th></tr></thead>
+            <thead><tr>{pode && <th style={{ width: 32 }}><input type="checkbox" aria-label="Selecionar todas desta página" checked={lista.itens.length > 0 && lista.itens.every(c => marcadas.includes(c.id))} onChange={e => setMarcadas(e.target.checked ? [...new Set([...marcadas, ...lista.itens.map(c => c.id)])] : marcadas.filter(id => !lista.itens.some(c => c.id === id)))} /></th>}<th>Campanha</th><th>Situação</th><th>Número</th><th className="pl-right">Destinatários</th><th>Quando</th><th>Responsável</th></tr></thead>
             <tbody>
               {lista.itens.map(c => (
                 <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => abrir(c.id)} data-campanha={c.id}>
+                  {pode && <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Selecionar ${c.nome}`} checked={marcadas.includes(c.id)} onChange={e => setMarcadas(m => (e.target.checked ? [...m, c.id] : m.filter(x => x !== c.id)))} /></td>}
                   <td><b>{c.nome}</b><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''}</div>{c.erro && <div className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }}>{erroAmigavel(c.erro)}</div>}</td>
                   <td><SeloStatus status={c.status} /></td>
                   <td>{c.assistente?.vendedor.nome ?? '—'}</td>
@@ -133,6 +152,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
             {!['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st) && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.cancelar(c.id), 'Cancelada: o que não saiu foi cancelado.', 'Cancelar a campanha? O que ainda não foi enviado não sai mais.')}>Cancelar</button>}
             <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(async () => { const nova = await disparoApi.campanhas.duplicar(c.id); abrir(nova.id) }, 'Cópia criada.')}>Duplicar</button>
             {['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'DRAFT'].includes(st) && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.arquivar(c.id), 'Arquivada.')}>Arquivar</button>}
+            <button type="button" className="pl-btn" disabled={ocupado} data-excluir-campanha onClick={() => { if (window.confirm(`Excluir “${c.nome}”?${['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(st) ? '\n\nEla ainda está enviando ou agendada: o que não saiu será cancelado.' : ''}\n\nEla some da lista e dos relatórios; os registros continuam guardados.`)) void disparoApi.campanhas.excluir([c.id]).then(voltar).catch(e => setMsg(erroDe(e))) }}>Excluir</button>
           </span>
         )}
       </div>

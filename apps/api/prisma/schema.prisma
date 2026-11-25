@@ -5240,6 +5240,9 @@ model DisparoCampanha {
   pausadaEm       DateTime?
   concluidaEm     DateTime?
   canceladaEm     DateTime?
+  /// Excluída da tela pelo usuário (some das listas e relatórios; nada é apagado, a auditoria fica).
+  excluidaEm      DateTime?
+  excluidaPorNome String?
   origemId        String?
   // Resultado da preparação: selecionados, elegíveis e excluídos por motivo (cada contato contado uma vez).
   totais          Json?

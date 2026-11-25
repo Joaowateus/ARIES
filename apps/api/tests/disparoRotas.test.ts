@@ -169,3 +169,32 @@ test('Disparo liberado para o time: sem permissões salvas, vendedor e SDR entra
   // O dono continua podendo tirar.
   assert.equal(permissoesEfetivas('VENDEDOR', { disparo: 'NENHUM' }).disparo, 'NENHUM')
 })
+
+test('excluir: some da lista e dos relatórios, cancela o que ia sair e não apaga nada; vendedor não exclui a de outro', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const a = await api('DONO', 'POST', '/disparo/campanhas', campanha(loja.asSup))
+  const b = await api('DONO', 'POST', '/disparo/campanhas', { ...campanha(loja.asSup), nome: 'Rascunho de teste' })
+  const id = a.corpo.id as string, rascunho = b.corpo.id as string
+  await api('DONO', 'POST', `/disparo/campanhas/${id}/validar`)
+  await api('DONO', 'POST', `/disparo/campanhas/${id}/iniciar`, {})
+  const { distribuir } = await import('../src/lib/disparo/motor')
+  await distribuir(id)
+  const antes = await prisma.disparoMensagem.count({ where: { campanhaId: id } })
+  assert.ok(antes > 0)
+  // Vendedora não exclui campanha que não é dela (para ela, não existe).
+  assert.equal((await api('VEND', 'POST', '/disparo/campanhas/excluir', { ids: [id] })).corpo.excluidas, 0)
+  const r = await api('DONO', 'POST', '/disparo/campanhas/excluir', { ids: [id, rascunho] })
+  assert.equal(r.status, 200)
+  assert.equal(r.corpo.excluidas, 2)
+  assert.equal(r.corpo.canceladas, 1, 'a que estava na fila foi cancelada antes')
+  const lista = await api('DONO', 'GET', '/disparo/campanhas')
+  assert.ok(!(lista.corpo.itens as Array<{ id: string }>).some(c => c.id === id || c.id === rascunho))
+  assert.equal((await api('DONO', 'GET', `/disparo/campanhas/${id}`)).status, 404)
+  const c = await prisma.disparoCampanha.findUnique({ where: { id } })
+  assert.equal(c?.status, 'CANCELLED'); assert.ok(c?.excluidaEm); assert.equal(c?.excluidaPorNome, 'Dono')
+  assert.equal(await prisma.disparoMensagem.count({ where: { campanhaId: id } }), antes, 'mensagens continuam no banco')
+  assert.equal(await prisma.disparoMensagem.count({ where: { campanhaId: id, status: 'AGENDADA' } }), 0, 'nada mais sai')
+  assert.ok(await prisma.disparoEvento.count({ where: { campanhaId: id, tipo: 'EXCLUIDA' } }) === 1)
+  const vg = await api('DONO', 'GET', '/disparo/visao-geral?dias=30')
+  assert.ok(!((vg.corpo.recentes as Array<{ id: string }>) ?? []).some(x => x.id === id), 'fora da visão geral')
+})

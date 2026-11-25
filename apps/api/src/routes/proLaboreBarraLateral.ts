@@ -40,7 +40,7 @@ router.get('/barra-lateral', requireProLaboreAuth, async (req: Request, res: Res
     }) : [],
     // ARIES Disparo: há envio pendente? (a tela aberta ajuda a enviar) e campanhas esperando aprovação.
     veDisparo ? disparoAtivo().catch(() => false) : false,
-    veDisparo && gestaoDisparo ? prisma.disparoCampanha.count({ where: { usuarioId: u.sub, status: 'NEEDS_REVIEW' } }) : 0,
+    veDisparo && gestaoDisparo ? prisma.disparoCampanha.count({ where: { usuarioId: u.sub, status: 'NEEDS_REVIEW', excluidaEm: null } }) : 0,
   ])
   const follows = contarFollows(followsAteHoje, new Date(agora))
   res.json({ aoVivo, pedidosReuniao, follows: lead ? follows : null, ligacoes: lead ? { atrasadas: ligAtrasadas, hoje: ligHoje, agora: ligAgora } : null, avisosSocial: avisos.map(a => a.titulo), disparo: veDisparo ? { ativo: disparoComEnvio, aprovar: disparoAprovar } : null })
