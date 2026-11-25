@@ -21,7 +21,7 @@
     "test:central": "node --require ts-node/register --test tests/central.test.ts",
     "test:painel": "node --require ts-node/register --test tests/painelPessoal.test.ts",
     "test:diagnostico": "node --require ts-node/register --test tests/assistenteDiagnostico.test.ts tests/assistenteReparo.test.ts",
-    "test:disparo": "node --require ts-node/register --test tests/disparo.test.ts tests/disparoRotas.test.ts tests/disparoMidias.test.ts"
+    "test:disparo": "node --require ts-node/register --test --test-concurrency=1 tests/disparo.test.ts tests/disparoRotas.test.ts tests/disparoMidias.test.ts"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
