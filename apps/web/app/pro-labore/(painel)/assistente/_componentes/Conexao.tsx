@@ -73,8 +73,12 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
   // Enquanto o QR/código está na tela: confere a conexão a cada 3s e troca
   // o QR antes de ele expirar (o WhatsApp invalida em ~1 min).
   const exibindoCodigo = !!codigo && !conectado
+  // O QR é renovado por até ~6 min (8 vezes); depois para, para o servidor não ficar religando sem ninguém ler.
+  const renovacoes = useRef(0)
+  const [qrExpirou, setQrExpirou] = useState(false)
   useEffect(() => {
     if (!exibindoCodigo) return
+    renovacoes.current = 0
     const status = setInterval(async () => {
       try {
         const r = await proLaboreApi.assistente.conexao(vendedorId)
@@ -85,6 +89,8 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
       } catch { /* tenta de novo no próximo ciclo */ }
     }, INTERVALO_STATUS_MS)
     const renovar = modoCodigo ? null : setInterval(async () => {
+      renovacoes.current += 1
+      if (renovacoes.current > 8) { setCodigo(null); setQrExpirou(true); return }
       try {
         const r = await proLaboreApi.assistente.conectar({ vendedorId })
         if (r.status === 'CONECTADO') { setCodigo(null); atualizar.current() } else setCodigo(r)
@@ -208,6 +214,11 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
           <button type="button" className="pl-btn" onClick={() => void reparar()} disabled={carregando || reparo?.fase === 'testando'} data-reparar-conexao>Reparar conexão</button>
           <button type="button" className="pl-btn pl-btn-ghost" onClick={desconectar} disabled={carregando}>Desconectar</button>
         </div>
+        {(assistente.quedasUltimaHora ?? 0) >= 3 && !reparo && viva !== false && (
+          <div className="pl-alert" role="status" style={{ width: '100%' }} data-quedas>
+            <b>A conexão caiu {assistente.quedasUltimaHora} vezes na última hora e o servidor religou sozinho.</b> {assistente.eventosConexao?.[0]?.texto ? `Último aviso: ${assistente.eventosConexao.find(e => e.estado === 'close')?.texto ?? ''}.` : ''} Se o motivo for “aberto em outro lugar”, desconecte no celular (Aparelhos conectados) os aparelhos que não são o ARIES. Veja os detalhes no Diagnóstico abaixo.
+          </div>
+        )}
         {viva === false && !reparo && (
           <div className="pl-alert pl-alert-error" role="alert" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }} data-sessao-caida>
             <span style={{ flex: '1 1 260px' }}><b>A conexão caiu por baixo.</b> O servidor mostra “conectado”, mas o WhatsApp não responde: nada chega e nada sai por este número (nem o assistente, nem o Disparo).</span>
@@ -247,6 +258,8 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
             : 'Funciona igual ao WhatsApp Web: o número continua normal no celular. Todo contato novo que chamar entra sozinho no CRM, na etapa Lead, e o assistente pode responder os leads novos por você.'}
         </div>
 
+        {status === 'SESSAO_CAIDA' && assistente?.explicacaoQueda && <div className="pl-alert" role="status" style={{ marginTop: 10 }} data-motivo-queda>{assistente.explicacaoQueda}</div>}
+        {qrExpirou && !codigo && <div className="pl-alert" role="status" style={{ marginTop: 10 }}>O QR Code expirou sem ser lido. Clique em “Gerar QR Code” quando estiver com o celular em mãos.</div>}
         {!codigo ? (
           <>
             <ol className="pl-as-passos">
@@ -255,7 +268,7 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
               <li>Toque em <b>Conectar um aparelho</b> e aponte a câmera pro QR</li>
             </ol>
             <div className="pl-as-botoes">
-              <button type="button" className="pl-btn pl-btn-primary" disabled={carregando} onClick={() => { setModoCodigo(false); gerar() }}>
+              <button type="button" className="pl-btn pl-btn-primary" disabled={carregando} onClick={() => { setModoCodigo(false); setQrExpirou(false); gerar() }}>
                 {carregando && !modoCodigo ? 'Gerando…' : 'Gerar QR Code'}
               </button>
               <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setModoCodigo(m => !m)} aria-expanded={modoCodigo}>

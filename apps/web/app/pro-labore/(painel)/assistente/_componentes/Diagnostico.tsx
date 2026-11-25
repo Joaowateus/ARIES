@@ -8,7 +8,7 @@ import { proLaboreApi, type DiagnosticoWhatsapp } from '@/lib/proLaboreApi'
 import { tempoRelativo } from './util'
 
 const SELO: Record<string, { rotulo: string; classe: string }> = { CRITICO: { rotulo: 'impede', classe: 'critico' }, ATENCAO: { rotulo: 'atenção', classe: 'atencao' }, INFO: { rotulo: 'informação', classe: '' } }
-const ESTADO: Record<string, string> = { open: 'conectado no servidor', close: 'desconectado no servidor', connecting: 'reconectando no servidor', inexistente: 'sessão apagada no servidor', erro: 'servidor sem resposta', sem_instancia: 'nunca conectado', nao_verificado: 'não verificado' }
+const ESTADO: Record<string, string> = { open: 'conectado no servidor', close: 'desconectado no servidor', connecting: 'reconectando no servidor', inexistente: 'sessão apagada no servidor', erro: 'servidor sem resposta', sem_instancia: 'nunca conectado', sessao_caida: 'conectado, mas sem enviar (sessão caída)', nao_verificado: 'não verificado' }
 
 export function DiagnosticoWhatsappCard() {
   const [d, setD] = useState<DiagnosticoWhatsapp | null>(null)
@@ -19,6 +19,11 @@ export function DiagnosticoWhatsappCard() {
     setCarregando(true); setErro(null)
     try { setD(await proLaboreApi.assistente.diagnostico()) } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível diagnosticar') } finally { setCarregando(false) }
   }, [])
+  async function desligarDuplicadas(id: string) {
+    if (!window.confirm('Desligar as conexões que sobraram no servidor com este mesmo número? A conexão do ARIES deste vendedor fica; só as sobras são desligadas.')) return
+    setMsg(null)
+    try { const r = await proLaboreApi.assistente.desligarDuplicadas(id); setMsg(r.desligadas.length ? `Desligadas: ${r.desligadas.join(', ')}. Se o card de conexão pedir, leia o QR de novo.` : 'Nenhuma sobra para desligar.'); await rodar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível desligar') }
+  }
   async function reapontar(id: string) {
     setMsg(null)
     try { await proLaboreApi.assistente.reapontarAviso(id); setMsg('Aviso reapontado para o ARIES. Mande uma mensagem de teste de outro número.'); await rodar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível reapontar') }
@@ -49,6 +54,12 @@ export function DiagnosticoWhatsappCard() {
                 Último aviso de mensagem: {a.ultimoEventoEm ? tempoRelativo(a.ultimoEventoEm) : 'nunca'} · cadastro automático {a.cadastroAutomatico ? 'ligado' : 'desligado'} · respostas do robô {a.atendimentoAutomatico ? 'ligadas' : 'pausadas'}
                 {a.aoVivo.webhook && <> · aviso {a.aoVivo.webhook.apontaParaCa && a.aoVivo.webhook.ativo ? 'apontado para o ARIES' : 'fora do lugar'}</>}
               </div>
+              {a.eventosConexao.length > 0 && (
+                <details className="pl-hint" style={{ margin: '2px 0' }}>
+                  <summary>Últimos avisos de conexão ({a.eventosConexao.length})</summary>
+                  <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{a.eventosConexao.map((e, i) => <li key={i}>{new Date(e.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })} · {e.estado === 'open' ? 'conectou' : e.estado === 'close' ? `caiu${e.motivo != null ? ` (código ${e.motivo})` : ''}` : e.estado}</li>)}</ul>
+                </details>
+              )}
               <div className="pl-hint">Últimas 24 h: {a.ultimas24h.mensagensDeClientes} mensagem(ns) de clientes · {a.ultimas24h.leadsCadastrados} lead(s) cadastrado(s) · {a.ultimas24h.conversasComRobo} abordagem(ns) do robô · {a.ultimas24h.foraDoCrm} fora do CRM · {a.ultimas24h.enviosQueFalharam} envio(s) que falharam</div>
               {!a.problemas.length ? <p className="pl-hint" style={{ color: 'var(--ar-estado-bom)' }}>Nada impede o cadastro nem a abordagem neste número.</p> : (
                 <ul className="ar-fila" style={{ marginTop: 6 }}>
@@ -59,6 +70,7 @@ export function DiagnosticoWhatsappCard() {
                         {p.acao && <div className="pl-hint">O que fazer: {p.acao}</div>}
                       </div>
                       {p.corrigirWebhook && <button type="button" className="pl-btn" onClick={() => void reapontar(a.assistenteId)}>Reapontar o aviso</button>}
+                      {p.corrigirDuplicadas && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void desligarDuplicadas(a.assistenteId)} data-desligar-duplicadas>Desligar conexões duplicadas</button>}
                     </li>
                   ))}
                 </ul>

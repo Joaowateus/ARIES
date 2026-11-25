@@ -2072,6 +2072,10 @@ model AssistenteComercial {
   cadastroAutomatico    Boolean   @default(true)
   // Roteiro e regras (ver ConfigAssistente em lib/assistenteRoteiro.ts).
   configuracao          Json?
+  // Últimos eventos de conexão vindos do servidor (estado + motivo da queda), para explicar na tela
+  // quedas e reconexões em sequência. SESSAO_CAIDA (status): precisa de QR novo.
+  eventosConexao        Json?
+  motivoQueda           String?
   criadoEm              DateTime  @default(now())
   atualizadoEm          DateTime  @updatedAt
 

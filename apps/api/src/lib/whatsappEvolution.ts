@@ -365,3 +365,15 @@ export async function conversasRecentes(instancia: string, desde: Date, ate: Dat
     return { jid: o.remoteJid ?? '', nome: o.pushName ?? null, atualizadaEm: Number.isFinite(atualizada) ? atualizada : null, salvo: o.isSaved === true, ultimaDeMim: typeof o.lastMessage?.key?.fromMe === 'boolean' ? o.lastMessage.key.fromMe : null }
   }).filter(c => c.jid && !/@(g\.us|broadcast|newsletter)$/.test(c.jid))
 }
+
+/** Todas as instâncias do servidor (nome, número dono e estado): acha o mesmo número aberto em duas. */
+export async function listarInstancias(): Promise<Array<{ nome: string; numero: string | null; estado: string | null }>> {
+  const r = await chamar<unknown>('GET', '/instance/fetchInstances', undefined, 12_000)
+  const lista = Array.isArray(r) ? r : []
+  return lista.map(x => {
+    const i = x as { name?: string; ownerJid?: string | null; connectionStatus?: string; instance?: { instanceName?: string; owner?: string | null; status?: string } }
+    const nome = i.name ?? i.instance?.instanceName ?? ''
+    const dono = i.ownerJid ?? i.instance?.owner ?? null
+    return { nome, numero: dono ? dono.split('@')[0].split(':')[0].replace(/\D/g, '') || null : null, estado: i.connectionStatus ?? i.instance?.status ?? null }
+  }).filter(i => i.nome)
+}

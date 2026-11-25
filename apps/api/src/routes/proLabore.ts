@@ -35,10 +35,12 @@ function responderRegraVenda(res: Response, e: unknown) {
 }
 import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
+  listarInstancias as listarInstanciasWhatsapp,
   sessaoViva as sessaoVivaWhatsapp,
   configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
 } from '../lib/whatsappEvolution'
 import { repararConexao } from '../lib/assistenteReparo'
+import { explicarQueda, resumoEventos, textoDoMotivo, type EventoConexao } from '../lib/whatsappConexao'
 import { diagnosticarAssistentes } from '../lib/assistenteDiagnostico'
 import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa, avaliarJornada, atualizarNota } from '../lib/assistenteMotor'
 import {
@@ -3063,11 +3065,13 @@ router.get('/plano-crescimento/historico', requireProLaboreAuth, requireModulo('
 const ASSISTENTE_SELECT = {
   id: true, vendedorId: true, numeroWhatsapp: true, nomeExibicao: true, status: true, criadoEm: true,
   fotoPerfilUrl: true, conectadoEm: true, ultimoEventoEm: true, atendimentoAutomatico: true, cadastroAutomatico: true, configuracao: true,
+  motivoQueda: true, eventosConexao: true,
 } as const
 
-function assistenteParaResposta<T extends { configuracao: Prisma.JsonValue }>(a: T | null) {
+function assistenteParaResposta<T extends { configuracao: Prisma.JsonValue; motivoQueda?: string | null; eventosConexao?: Prisma.JsonValue }>(a: T | null) {
   if (!a) return null
-  return { ...a, configuracao: lerConfigAssistente(a.configuracao) }
+  const eventos = (a.eventosConexao as unknown as EventoConexao[] | null | undefined) ?? []
+  return { ...a, configuracao: lerConfigAssistente(a.configuracao), eventosConexao: eventos.slice(-8).reverse().map(e => ({ ...e, texto: e.estado === 'open' ? 'conectou' : e.estado === 'close' ? `caiu: ${textoDoMotivo(e.motivo)}` : e.estado })), explicacaoQueda: explicarQueda(a.motivoQueda), quedasUltimaHora: resumoEventos(eventos).quedas }
 }
 
 // VENDEDOR/SUPERVISOR só enxergam o próprio assistente (é pessoal, ligado
@@ -3102,6 +3106,28 @@ function urlWebhookAssistente(req: Request, segredo: string): string {
 router.get('/assistente/diagnostico', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   res.json(await diagnosticarAssistentes(req.proLaboreUser!.sub, segredo => urlWebhookAssistente(req, segredo)))
 })
+// Desliga as conexões que sobraram no servidor com o mesmo número (uma derrubava a outra). Só apaga
+// as sobras: nunca a do próprio vendedor, a de outro vendedor nem a do ARIES no WhatsApp.
+router.post('/assistente/diagnostico/:assistenteId/duplicadas', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
+  const a = await prisma.assistenteComercial.findFirst({ where: { id: String(req.params.assistenteId), vendedor: { usuarioId: req.proLaboreUser!.sub } }, select: { id: true, instancia: true, numeroWhatsapp: true } })
+  if (!a?.numeroWhatsapp) { res.status(404).json({ error: 'Assistente sem número conectado' }); return }
+  try {
+    const numero = a.numeroWhatsapp.replace(/\D/g, '').slice(-10)
+    const [instancias, agentes, assistentes] = await Promise.all([
+      listarInstanciasWhatsapp(),
+      prisma.agenteWhatsapp.findMany({ select: { instancia: true } }),
+      prisma.assistenteComercial.findMany({ where: { instancia: { not: null } }, select: { instancia: true } }),
+    ])
+    const protegidas = new Set([...agentes.map(x => x.instancia), ...assistentes.map(x => x.instancia!)])
+    const sobras = instancias.filter(i => i.numero?.endsWith(numero) && i.nome !== a.instancia && !protegidas.has(i.nome))
+    const desligadas: string[] = []
+    for (const i of sobras) { await removerInstanciaWhatsapp(i.nome).then(() => desligadas.push(i.nome)).catch(() => undefined) }
+    res.json({ desligadas, mantidas: instancias.filter(i => i.numero?.endsWith(numero) && protegidas.has(i.nome) && i.nome !== a.instancia).map(i => i.nome) })
+  } catch (e) {
+    res.status(502).json({ error: mensagemErroWhatsapp(e) })
+  }
+})
+
 // Reaponta o aviso de mensagens (webhook) do servidor do WhatsApp para esta API.
 router.post('/assistente/diagnostico/:assistenteId/webhook', requireProLaboreAuth, requireDono, async (req: Request, res: Response) => {
   const a = await prisma.assistenteComercial.findFirst({ where: { id: String(req.params.assistenteId), vendedor: { usuarioId: req.proLaboreUser!.sub } }, select: { id: true, instancia: true, webhookSegredo: true } })
@@ -3257,7 +3283,8 @@ router.get('/assistente/conexao', requireProLaboreAuth, requireModulo('assistent
       res.json({ status: 'CONECTADO' })
       return
     }
-    if (assistente.status === 'CONECTADO') {
+    // "connecting" é o servidor religando (passageiro): não derruba o status nem faz a tela piscar.
+    if (assistente.status === 'CONECTADO' && estado !== 'connecting') {
       await prisma.assistenteComercial.update({ where: { id: assistente.id }, data: { status: 'DESCONECTADO' } })
       res.json({ status: 'DESCONECTADO' })
       return
@@ -3305,8 +3332,15 @@ router.delete('/assistente/config', requireProLaboreAuth, requireModulo('assiste
     return
   }
   if (assistente.instancia && evolutionConfigurada()) {
+    // Desconectar de verdade: apaga a sessão no servidor e CONFERE que sumiu (senão o servidor religa
+    // sozinho e a tela volta a mostrar "conectado").
     try {
-      await removerInstanciaWhatsapp(assistente.instancia)
+      for (let tentativa = 1; ; tentativa += 1) {
+        await removerInstanciaWhatsapp(assistente.instancia)
+        await new Promise(ok => setTimeout(ok, 1200))
+        if ((await estadoInstanciaWhatsapp(assistente.instancia)) === 'inexistente') break
+        if (tentativa >= 3) { res.status(502).json({ error: 'O servidor do WhatsApp não apagou a sessão. Tente de novo em alguns segundos.' }); return }
+      }
     } catch (e) {
       res.status(502).json({ error: mensagemErroWhatsapp(e) })
       return
@@ -3316,7 +3350,7 @@ router.delete('/assistente/config', requireProLaboreAuth, requireModulo('assiste
   // do webhook é trocado — evento atrasado da sessão antiga cai no vazio.
   await prisma.assistenteComercial.update({
     where: { id: assistente.id },
-    data: { status: 'NAO_CONECTADO', numeroWhatsapp: null, fotoPerfilUrl: null, conectadoEm: null, webhookSegredo: randomBytes(24).toString('hex') },
+    data: { status: 'NAO_CONECTADO', motivoQueda: null, numeroWhatsapp: null, fotoPerfilUrl: null, conectadoEm: null, webhookSegredo: randomBytes(24).toString('hex') },
   })
   res.json({ ok: true })
 })

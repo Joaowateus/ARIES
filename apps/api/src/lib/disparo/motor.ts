@@ -313,7 +313,7 @@ const MSG_RECONECTAR = (nome: string) => `O WhatsApp de ${nome.split(/\s+/)[0]} 
 
 /** Sessão que não envia mesmo depois de reiniciar: "precisa reconectar" + aviso (no máximo a cada 6 h). */
 async function marcarPrecisaReconectar(a: { id: string; vendedorId: string; vendedor: { usuarioId: string; nome: string } }) {
-  await prisma.assistenteComercial.updateMany({ where: { id: a.id, status: 'CONECTADO' }, data: { status: 'SESSAO_CAIDA' } })
+  await prisma.assistenteComercial.updateMany({ where: { id: a.id, status: 'CONECTADO' }, data: { status: 'SESSAO_CAIDA', motivoQueda: 'ENVIO_FALHOU' } })
   await prisma.disparoCampanha.updateMany({ where: { assistenteId: a.id, status: 'RUNNING' }, data: { erro: MSG_RECONECTAR(a.vendedor.nome) } })
   if (await pegarTrava(`aviso-reconectar:${a.id}`, 6 * 60 * MIN)) {
     const texto = `⚠️ ${MSG_RECONECTAR(a.vendedor.nome)}`
@@ -327,11 +327,14 @@ async function rodarRemetente(assistenteId: string, prazo: number): Promise<{ en
   const out = { enviadas: 0, falhas: 0, puladas: 0, semConexao: false }
   const a = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { id: true, instancia: true, status: true, vendedorId: true, vendedor: { select: { usuarioId: true, nome: true } } } })
   if (!a) return out
-  // Número marcado como "precisa reconectar" (envio real falhou): não tenta; a campanha espera o QR novo.
-  if (a.status === 'SESSAO_CAIDA') {
+  // Só envia por número CONECTADO. Desconectado, aguardando QR ou "precisa reconectar": não tenta
+  // nada (nem envio, nem reinício) — o ARIES nunca religa sozinho um número que alguém desconectou.
+  if (a.status !== 'CONECTADO') {
     out.semConexao = true
-    await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING' }, data: { erro: MSG_RECONECTAR(a.vendedor.nome) } })
-    await gravarEstadoRemetente(assistenteId, 'SEM_CONEXAO', { erro: 'Precisa reconectar (QR Code)' })
+    const nome = a.vendedor.nome.split(/\s+/)[0]
+    const msg = a.status === 'SESSAO_CAIDA' ? MSG_RECONECTAR(a.vendedor.nome) : a.status === 'AGUARDANDO_QR' ? `O WhatsApp de ${nome} está esperando a leitura do QR Code: a campanha continua quando conectar.` : `O WhatsApp de ${nome} está desconectado: conecte em Conversas › Conexão e a campanha continua sozinha.`
+    await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING' }, data: { erro: msg } })
+    await gravarEstadoRemetente(assistenteId, 'SEM_CONEXAO', { erro: msg })
     return out
   }
   // Um laço por número de cada vez (rotina e tela juntas não podem furar o intervalo entre mensagens).
@@ -550,7 +553,7 @@ export async function rodarDisparo(prazoMs = 15_000, agora = new Date(), origem:
     // 2) Agendadas que chegaram na hora.
     for (const c of await prisma.disparoCampanha.findMany({ where: { status: 'SCHEDULED', agendadaPara: { lte: agora } }, select: { id: true } })) await transicionar(c.id, 'QUEUED', { de: ['SCHEDULED'], motivo: 'Chegou a hora agendada' })
     // 3) Distribuição (fila → mensagens do 1º passo).
-    for (const c of await prisma.disparoCampanha.findMany({ where: { status: 'QUEUED' }, select: { id: true }, take: 5 })) {
+    for (const c of await prisma.disparoCampanha.findMany({ where: { status: 'QUEUED' }, select: { id: true }, orderBy: { atualizadoEm: 'asc' }, take: 50 })) {
       if (Date.now() > fim - 4000) break
       try { if (await distribuir(c.id, agora)) out.disparoIniciadas += 1 } catch (e) { logger.error({ err: e, campanhaId: c.id }, 'disparo: falha ao distribuir') }
     }
