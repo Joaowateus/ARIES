@@ -309,11 +309,31 @@ async function gravarEstadoRemetente(assistenteId: string, motivo: ParadaRemeten
 
 const espera = (ms: number) => new Promise(ok => setTimeout(ok, ms))
 
+const MSG_RECONECTAR = (nome: string) => `O WhatsApp de ${nome.split(/\s+/)[0]} precisa ser reconectado: o número não está enviando (sessão caída no servidor). Abra Conversas › Conexão e leia o QR Code no celular dele(a). As mensagens esperam na fila e saem sozinhas depois.`
+
+/** Sessão que não envia mesmo depois de reiniciar: "precisa reconectar" + aviso (no máximo a cada 6 h). */
+async function marcarPrecisaReconectar(a: { id: string; vendedorId: string; vendedor: { usuarioId: string; nome: string } }) {
+  await prisma.assistenteComercial.updateMany({ where: { id: a.id, status: 'CONECTADO' }, data: { status: 'SESSAO_CAIDA' } })
+  await prisma.disparoCampanha.updateMany({ where: { assistenteId: a.id, status: 'RUNNING' }, data: { erro: MSG_RECONECTAR(a.vendedor.nome) } })
+  if (await pegarTrava(`aviso-reconectar:${a.id}`, 6 * 60 * MIN)) {
+    const texto = `⚠️ ${MSG_RECONECTAR(a.vendedor.nome)}`
+    await avisarNoWhatsapp(a.vendedor.usuarioId, a.vendedorId, texto).catch(e => logger.warn({ err: e }, 'disparo: aviso de reconexão ao vendedor'))
+    await avisarNoWhatsapp(a.vendedor.usuarioId, null, texto).catch(e => logger.warn({ err: e }, 'disparo: aviso de reconexão ao dono'))
+  }
+}
+
 /** Envia pelo número remetente até o prazo, respeitando ritmo, limites, janela e o atendimento. */
 async function rodarRemetente(assistenteId: string, prazo: number): Promise<{ enviadas: number; falhas: number; puladas: number; semConexao: boolean }> {
   const out = { enviadas: 0, falhas: 0, puladas: 0, semConexao: false }
-  const a = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { id: true, instancia: true, vendedor: { select: { usuarioId: true } } } })
+  const a = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { id: true, instancia: true, status: true, vendedorId: true, vendedor: { select: { usuarioId: true, nome: true } } } })
   if (!a) return out
+  // Número marcado como "precisa reconectar" (envio real falhou): não tenta; a campanha espera o QR novo.
+  if (a.status === 'SESSAO_CAIDA') {
+    out.semConexao = true
+    await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING' }, data: { erro: MSG_RECONECTAR(a.vendedor.nome) } })
+    await gravarEstadoRemetente(assistenteId, 'SEM_CONEXAO', { erro: 'Precisa reconectar (QR Code)' })
+    return out
+  }
   // Um laço por número de cada vez (rotina e tela juntas não podem furar o intervalo entre mensagens).
   const chave = `remetente:${assistenteId}`
   if (!(await pegarTrava(chave, prazo - Date.now() + 5000))) return out
@@ -331,7 +351,7 @@ async function rodarRemetente(assistenteId: string, prazo: number): Promise<{ en
     await gravarEstadoRemetente(assistenteId, parada, { enviadas: out.enviadas, falhas: out.falhas, ...(erro ? { erro } : {}) })
   }
 }
-async function rodarRemetenteComTrava(a: { id: string; instancia: string | null; vendedor: { usuarioId: string } }, prazo: number, out: { enviadas: number; falhas: number; puladas: number; semConexao: boolean }): Promise<{ out: typeof out; parada: ParadaRemetente }> {
+async function rodarRemetenteComTrava(a: { id: string; instancia: string | null; vendedorId: string; vendedor: { usuarioId: string; nome: string } }, prazo: number, out: { enviadas: number; falhas: number; puladas: number; semConexao: boolean }): Promise<{ out: typeof out; parada: ParadaRemetente }> {
   const assistenteId = a.id
   const remetente: Remetente = { assistenteId: a.id, instancia: a.instancia }
   const estado = await provedor().verificarConexao(remetente)
@@ -390,15 +410,20 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
     else if (r === 'PULADA') out.puladas += 1
     else if (r === 'SEM_CONEXAO') {
       // "Connection Closed": o servidor diz conectado, mas a sessão caiu. Religa uma vez (no máximo a
-      // cada 5 min por número, para não ficar reiniciando) e tenta de novo; se não voltar, avisa na campanha.
-      if (!reconectou && Date.now() < prazo - 13_000 && await pegarTrava(`reiniciar:${assistenteId}`, 5 * MIN)) {
-        reconectou = true
-        const ok = await provedor().reconectar(remetente, 9000).catch(() => false)
-        await prisma.disparoCampanha.findMany({ where: { assistenteId, status: 'RUNNING' }, select: { id: true, usuarioId: true } }).then(cs => Promise.all(cs.map(c => evento({ usuarioId: c.usuarioId, campanhaId: c.id, tipo: 'RECONEXAO', descricao: ok ? 'A conexão do WhatsApp tinha caído ("Connection Closed"): o ARIES religou a sessão e o envio continua' : 'A conexão do WhatsApp caiu ("Connection Closed") e não voltou ao religar' }))))
-        if (ok) continue
+      // cada 5 min por número) e tenta de novo. Se já religou e continua recusando, a sessão está
+      // corrompida: marca "precisa reconectar" (a tela pede o QR direto), para de tentar e avisa.
+      let reiniciadoHaPouco = false
+      if (!reconectou && Date.now() < prazo - 13_000) {
+        if (await pegarTrava(`reiniciar:${assistenteId}`, 5 * MIN)) {
+          reconectou = true
+          const ok = await provedor().reconectar(remetente, 9000).catch(() => false)
+          await prisma.disparoCampanha.findMany({ where: { assistenteId, status: 'RUNNING' }, select: { id: true, usuarioId: true } }).then(cs => Promise.all(cs.map(c => evento({ usuarioId: c.usuarioId, campanhaId: c.id, tipo: 'RECONEXAO', descricao: ok ? 'A conexão do WhatsApp tinha caído ("Connection Closed"): o ARIES religou a sessão e vai tentar de novo' : 'A conexão do WhatsApp caiu ("Connection Closed") e não voltou ao religar' }))))
+          if (ok) continue
+        } else reiniciadoHaPouco = true
       }
       out.semConexao = true; parada = 'SEM_CONEXAO'
-      await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING' }, data: { erro: 'A conexão do WhatsApp deste número caiu no servidor (Connection Closed). O ARIES tenta religar sozinho a cada 5 min; se continuar, reconecte o número em Conversas › Conexão (ler o QR de novo)' } })
+      if (reconectou || reiniciadoHaPouco) await marcarPrecisaReconectar(a)
+      else await prisma.disparoCampanha.updateMany({ where: { assistenteId, status: 'RUNNING' }, data: { erro: 'A conexão do WhatsApp deste número caiu no servidor (Connection Closed). O ARIES está tentando religar sozinho.' } })
       break
     }
     else out.falhas += 1

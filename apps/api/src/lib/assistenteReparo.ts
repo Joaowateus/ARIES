@@ -4,7 +4,7 @@
 // logout. O reparo: 1) testa de verdade; 2) reinicia a sessão sem QR; 3) só se não voltar, gera um QR
 // novo (a pessoa lê no celular). Conversas, leads e roteiro ficam: só a sessão do WhatsApp é refeita.
 import { prisma } from './prisma'
-import { configurarWebhook, estadoInstancia, prepararConexao, reiniciarInstancia, removerInstancia, sessaoViva, ErroWhatsapp } from './whatsappEvolution'
+import { configurarWebhook, estadoInstancia, prepararConexao, reiniciarInstancia, removerInstancia, sessaoViva, testarEnvio, ErroWhatsapp } from './whatsappEvolution'
 
 export type ResultadoReparo =
   | { status: 'CONECTADO'; mensagem: string }
@@ -29,9 +29,12 @@ export async function repararConexao(assistenteId: string, webhookUrl: string, o
   // Só confia com resposta positiva do WhatsApp; resposta incerta = reinicia (não tem efeito colateral).
   const viva = estado === 'open' ? await sessaoViva(a.instancia, a.numeroWhatsapp) : false
   if (viva === true && !opcoes.forcarReinicio) {
-    await configurarWebhook(a.instancia, webhookUrl).catch(() => undefined)
-    await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'CONECTADO' } })
-    return { status: 'CONECTADO', mensagem: 'A conexão respondeu ao teste e está funcionando. Também reapontei o aviso de mensagens para o ARIES.' }
+    const teste = await provaDeEnvio(a)
+    if (teste !== false) {
+      await configurarWebhook(a.instancia, webhookUrl).catch(() => undefined)
+      await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'CONECTADO' } })
+      return { status: 'CONECTADO', mensagem: 'Teste de envio feito: uma mensagem de teste saiu para o próprio número. A conexão está funcionando e o aviso de mensagens foi reapontado.' }
+    }
   }
   // 2) Reinicia a sessão sem QR e confere de novo.
   try { await reiniciarInstancia(a.instancia) } catch { /* segue para conferir */ }
@@ -43,11 +46,19 @@ export async function repararConexao(assistenteId: string, webhookUrl: string, o
   }
   if (aberta) {
     await espera(1500)
-    if ((await sessaoViva(a.instancia, a.numeroWhatsapp)) === true) {
+    if ((await sessaoViva(a.instancia, a.numeroWhatsapp)) === true && (await provaDeEnvio(a)) !== false) {
       await configurarWebhook(a.instancia, webhookUrl).catch(() => undefined)
       await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'CONECTADO' } })
-      return { status: 'CONECTADO', mensagem: 'Sessão reiniciada e conferida: o WhatsApp respondeu. O envio e o assistente voltam a funcionar.' }
+      return { status: 'CONECTADO', mensagem: 'Sessão reiniciada e testada com um envio real para o próprio número. O envio e o assistente voltam a funcionar.' }
     }
   }
-  return { status: 'SESSAO_CAIDA', mensagem: 'Reiniciei a sessão, mas o WhatsApp não voltou: o celular provavelmente encerrou este aparelho conectado. É preciso ler um QR Code novo no celular deste número.' }
+  // Não envia de verdade: marca como "precisa reconectar" (a tela pede o QR; o Disparo e o robô esperam).
+  await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'SESSAO_CAIDA' } })
+  return { status: 'SESSAO_CAIDA', mensagem: 'O WhatsApp deste número não está enviando (a sessão no servidor está corrompida). Reiniciar não resolveu: é preciso ler um QR Code novo no celular deste número. Conversas, leads e campanhas ficam salvos e continuam de onde pararam.' }
+}
+
+/** Envio real para o próprio número. true = saiu; false = recusado; null = sem número para testar. */
+async function provaDeEnvio(a: { instancia: string | null; numeroWhatsapp: string | null }): Promise<boolean | null> {
+  if (!a.instancia || !a.numeroWhatsapp) return null
+  return (await testarEnvio(a.instancia, a.numeroWhatsapp)).ok
 }

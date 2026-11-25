@@ -336,7 +336,13 @@ test('"Connection Closed": o motor religa a sessão uma vez e continua; se não 
   await iniciarJa(c2.id)
   await rodarDisparo(20_000)
   const cc = await prisma.disparoCampanha.findUnique({ where: { id: c2.id }, select: { erro: true } })
-  assert.match(String(cc?.erro), /Connection Closed/)
+  assert.match(String(cc?.erro), /precisa ser reconectado/)
+  // Reiniciou há pouco e continua recusando: "precisa reconectar" — a tela pede o QR e o motor para de tentar.
+  assert.equal((await prisma.assistenteComercial.findUnique({ where: { id: loja.asAna }, select: { status: true } }))?.status, 'SESSAO_CAIDA')
+  const tentativasAntes = await prisma.disparoTentativa.count({ where: { mensagem: { campanhaId: c2.id } } })
+  await rodarDisparo(8000)
+  assert.equal(await prisma.disparoTentativa.count({ where: { mensagem: { campanhaId: c2.id } } }), tentativasAntes, 'não fica batendo no número caído')
+  await prisma.assistenteComercial.update({ where: { id: loja.asAna }, data: { status: 'CONECTADO' } })
   assert.ok(await prisma.disparoMensagem.count({ where: { campanhaId: c2.id, status: 'AGENDADA' } }) > 0, 'as mensagens esperam na fila')
   assert.ok(falso.preparados >= 1, 'o número foi preparado (aviso de entregue/lida conferido)')
   falso.enviar = enviarOriginal

@@ -235,10 +235,27 @@ export async function sessaoViva(instancia: string, numero: string | null): Prom
 // resposta instantânea em massa.
 export async function enviarTexto(instancia: string, destino: string, texto: string, digitandoMs = 0, prazoMs = TIMEOUT_MS): Promise<string | null> {
   const numero = destino.includes('@') ? destino : destino.replace(/\D/g, '')
-  const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendText/${encodeURIComponent(instancia)}`, {
-    number: numero, text: texto, delay: Math.max(0, Math.round(digitandoMs)),
-  }, prazoMs)
-  return r?.key?.id ?? null
+  const enviar = (delay: number) => chamar<{ key?: { id?: string } }>('POST', `/message/sendText/${encodeURIComponent(instancia)}`, { number: numero, text: texto, delay }, prazoMs)
+  try {
+    return (await enviar(Math.max(0, Math.round(digitandoMs))))?.key?.id ?? null
+  } catch (e) {
+    // O "digitando…" (presença) é um passo a mais antes do envio e é o primeiro a cair com a sessão
+    // instável ("Connection Closed"): tenta uma vez sem ele. Sem isso, nada sai do número.
+    if (digitandoMs > 0 && e instanceof ErroWhatsapp && !e.talvezEnviado && ehQuedaDeConexao(e.message)) return (await enviar(0))?.key?.id ?? null
+    throw e
+  }
+}
+
+export const ehQuedaDeConexao = (m: string) => /connection closed|not connected|disconnected|conex[aã]o (caiu|fechada)/i.test(m)
+
+/** Envio de verdade para o próprio número (mensagem para si mesmo): prova que o número envia. */
+export async function testarEnvio(instancia: string, numeroProprio: string): Promise<{ ok: true } | { ok: false; erro: string }> {
+  try {
+    await enviarTexto(instancia, numeroProprio, '✅ Teste de conexão do ARIES: este WhatsApp está enviando mensagens normalmente. (Pode apagar esta mensagem.)', 0, 12_000)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : String(e) }
+  }
 }
 
 // Envia uma foto (em base64, sem depender de endereço público) com legenda.
@@ -263,11 +280,14 @@ export async function enviarMidia(instancia: string, destino: string, midia: { t
     }, prazoMs)
     return r?.key?.id ?? null
   }
-  const r = await chamar<{ key?: { id?: string } }>('POST', `/message/sendMedia/${encodeURIComponent(instancia)}`, {
+  const enviar = (delay: number) => chamar<{ key?: { id?: string } }>('POST', `/message/sendMedia/${encodeURIComponent(instancia)}`, {
     number: numero, mediatype: midia.tipo, mimetype: midia.mime === 'video/quicktime' ? 'video/mp4' : midia.mime, caption: legenda, media: conteudo,
-    fileName: midia.nomeArquivo, delay: Math.max(0, Math.round(digitandoMs)),
+    fileName: midia.nomeArquivo, delay,
   }, prazoMs)
-  return r?.key?.id ?? null
+  try { return (await enviar(Math.max(0, Math.round(digitandoMs))))?.key?.id ?? null } catch (e) {
+    if (digitandoMs > 0 && e instanceof ErroWhatsapp && !e.talvezEnviado && ehQuedaDeConexao(e.message)) return (await enviar(0))?.key?.id ?? null
+    throw e
+  }
 }
 
 // Quais números têm WhatsApp (o servidor consulta o WhatsApp). Devolve só os confirmados como existentes.

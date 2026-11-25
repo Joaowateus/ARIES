@@ -3223,7 +3223,7 @@ router.post('/assistente/conectar', requireProLaboreAuth, requireModulo('assiste
   try {
     const estado = await estadoInstanciaWhatsapp(instancia)
     // "open" com a sessão morta por baixo (Connection Closed): refaz a instância e gera QR novo.
-    const morta = estado === 'open' && (await sessaoVivaWhatsapp(instancia, existente?.numeroWhatsapp ?? null)) === false
+    const morta = estado === 'open' && (existente?.status === 'SESSAO_CAIDA' || (await sessaoVivaWhatsapp(instancia, existente?.numeroWhatsapp ?? null)) === false)
     if (morta) await removerInstanciaWhatsapp(instancia).catch(() => undefined)
     if (estado === 'open' && !morta) {
       await configurarWebhookWhatsapp(instancia, urlWebhookAssistente(req, webhookSegredo))
@@ -3251,6 +3251,7 @@ router.get('/assistente/conexao', requireProLaboreAuth, requireModulo('assistent
   }
   try {
     const estado = await estadoInstanciaWhatsapp(assistente.instancia)
+    if (estado === 'open' && assistente.status === 'SESSAO_CAIDA') { res.json({ status: 'SESSAO_CAIDA' }); return }
     if (estado === 'open') {
       if (assistente.status !== 'CONECTADO' || !assistente.numeroWhatsapp) await marcarAssistenteConectado(assistente)
       res.json({ status: 'CONECTADO' })

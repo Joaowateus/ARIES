@@ -237,10 +237,12 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
     <div className="pl-card pl-as-conectar">
       <div className="pl-as-conectar-texto">
         <div className="pl-card-title">
-          {status === 'DESCONECTADO' ? 'A conexão com o WhatsApp caiu' : `Conectar o WhatsApp de ${isDono ? nomeVendedor : 'você'}`}
+          {status === 'SESSAO_CAIDA' ? `O WhatsApp de ${isDono ? nomeVendedor : 'você'} precisa ser reconectado` : status === 'DESCONECTADO' ? 'A conexão com o WhatsApp caiu' : `Conectar o WhatsApp de ${isDono ? nomeVendedor : 'você'}`}
         </div>
         <div className="pl-card-sub" style={{ lineHeight: 1.55, marginTop: 4 }}>
-          {status === 'DESCONECTADO'
+          {status === 'SESSAO_CAIDA'
+            ? `O número aparecia como conectado, mas não estava enviando: a sessão no servidor do WhatsApp corrompeu e reiniciar não resolveu. Leia o QR Code de novo no celular ${quem === 'você' ? 'do seu número' : `de ${nomeVendedor}`} — conversas, leads e campanhas ficam salvos, e as mensagens que estavam na fila saem sozinhas depois.`
+            : status === 'DESCONECTADO'
             ? `O aparelho foi desconectado pelo celular ou ficou tempo demais sem internet. Leia o QR Code de novo pra ${quem === 'você' ? 'voltar' : `${nomeVendedor} voltar`} a ter o assistente.`
             : 'Funciona igual ao WhatsApp Web: o número continua normal no celular. Todo contato novo que chamar entra sozinho no CRM, na etapa Lead, e o assistente pode responder os leads novos por você.'}
         </div>
