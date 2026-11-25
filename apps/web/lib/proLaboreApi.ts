@@ -893,6 +893,10 @@ export const proLaboreApi = {
     conectar: (data: { vendedorId?: string; numeroPareamento?: string }) =>
       request<ConexaoAssistente>('/pro-labore/assistente/conectar', { method: 'POST', body: JSON.stringify(data) }),
     diagnostico: () => request<DiagnosticoWhatsapp>('/pro-labore/assistente/diagnostico'),
+    /** Testa de verdade, reinicia sem QR e (com gerarQr) refaz a sessão com QR novo. */
+    reparar: (data: { vendedorId?: string; gerarQr?: boolean; numeroPareamento?: string }) =>
+      request<{ status: 'CONECTADO' | 'SESSAO_CAIDA' | 'AGUARDANDO_QR'; mensagem: string; qrBase64?: string | null; pairingCode?: string | null }>('/pro-labore/assistente/reparar', { method: 'POST', body: JSON.stringify(data) }),
+    saude: (vendedorId?: string) => request<{ viva: boolean | null }>(`/pro-labore/assistente/saude${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     reapontarAviso: (assistenteId: string) => request<{ ok: true }>(`/pro-labore/assistente/diagnostico/${assistenteId}/webhook`, { method: 'POST' }),
     conexao: (vendedorId?: string) =>
       request<{ status: StatusAssistente; aviso?: string }>(`/pro-labore/assistente/conexao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),

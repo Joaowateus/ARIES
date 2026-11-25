@@ -209,10 +209,24 @@ export async function reiniciarInstancia(instancia: string): Promise<void> {
 }
 
 export async function removerInstancia(instancia: string): Promise<void> {
-  for (const caminho of [`/instance/logout/${encodeURIComponent(instancia)}`, `/instance/delete/${encodeURIComponent(instancia)}`]) {
-    try { await chamar('DELETE', caminho) } catch (e) {
-      if (!(e instanceof ErroWhatsapp) || (e.status !== 404 && e.status !== 400)) throw e
-    }
+  // Logout com a sessão morta falha ("Connection Closed"): não pode impedir de apagar a instância,
+  // senão o número fica preso, sem como gerar um QR novo.
+  try { await chamar('DELETE', `/instance/logout/${encodeURIComponent(instancia)}`, undefined, 10_000) } catch { /* segue para apagar */ }
+  try { await chamar('DELETE', `/instance/delete/${encodeURIComponent(instancia)}`, undefined, 10_000) } catch (e) {
+    if (!(e instanceof ErroWhatsapp) || (e.status !== 404 && e.status !== 400)) throw e
+  }
+}
+
+/** A conexão funciona de verdade? (o servidor às vezes diz "open" com a sessão morta por baixo).
+ * Faz uma consulta que passa pelo WhatsApp. true = viva; false = caída; null = não deu para saber. */
+export async function sessaoViva(instancia: string, numero: string | null): Promise<boolean | null> {
+  try {
+    await chamar('POST', `/chat/whatsappNumbers/${encodeURIComponent(instancia)}`, { numbers: [numero?.replace(/\D/g, '') || '5511999999999'] }, 10_000)
+    return true
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e)
+    if (/connection closed|not connected|disconnected|closed|socket/i.test(m)) return false
+    return null
   }
 }
 
