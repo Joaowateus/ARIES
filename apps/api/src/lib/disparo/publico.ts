@@ -25,8 +25,44 @@ export interface DefinicaoPublico {
 export const ETAPAS = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA', 'VENDA'] as const
 const ETAPA_LEGADA: Record<string, string> = { LEAD: 'LEAD', ABORDADO: 'ABORDADO', NEGOCIACAO: 'NEGOCIACAO', PROPOSTA: 'PROPOSTA', FECHADO: 'VENDA' }
 
+/**
+ * Jornada de compra do CRM: um público vivo por etapa (os leads abertos que estão nela agora). Como o
+ * público é avaliado de novo a cada uso, ele se atualiza sozinho conforme a equipe move os leads no CRM.
+ */
+export const JORNADA: Array<{ etapa: typeof ETAPAS[number]; rotulo: string; objetivo: string; sugestao: Array<{ texto: string; esperarDias: number }> }> = [
+  { etapa: 'LEAD', rotulo: 'Lead', objetivo: 'Fazer o lead responder (virar Abordado)', sugestao: [
+    { esperarDias: 0, texto: 'Oi, {{primeiro_nome}}! Aqui é {{vendedor|a equipe}} da {{loja}}. Vi que você se interessou por {{modelo_interesse|uma moto}}. Posso te ajudar com valores e condições?' },
+    { esperarDias: 2, texto: '{{primeiro_nome}}, ainda está procurando {{modelo_interesse|sua moto}}? Consigo montar uma simulação rapidinho pra você.' },
+    { esperarDias: 5, texto: 'Oi, {{primeiro_nome}}! Última chamada por aqui: se ainda tiver interesse, é só responder que eu te mando as condições de hoje.' } ] },
+  { etapa: 'ABORDADO', rotulo: 'Abordado', objetivo: 'Entender a necessidade (levantamento)', sugestao: [
+    { esperarDias: 0, texto: '{{primeiro_nome}}, pra eu te mandar a melhor opção: você pensa em pagar à vista ou financiado? Tem moto pra dar na troca?' },
+    { esperarDias: 3, texto: 'Oi, {{primeiro_nome}}! Conseguiu ver minha pergunta? Com essas duas respostas já consigo te passar valores.' } ] },
+  { etapa: 'LEVANTAMENTO', rotulo: 'Levantamento', objetivo: 'Qualificar (virar MQL)', sugestao: [
+    { esperarDias: 0, texto: '{{primeiro_nome}}, com o que você me contou já dá pra simular. Quer que eu te mande as parcelas da {{modelo_interesse|moto}}?' },
+    { esperarDias: 3, texto: 'Oi, {{primeiro_nome}}! Separei uma condição boa pra você esta semana. Posso te mandar?' } ] },
+  { etapa: 'MQL', rotulo: 'MQL', objetivo: 'Confirmar o interesse de compra (virar SQL)', sugestao: [
+    { esperarDias: 0, texto: '{{primeiro_nome}}, pelo seu perfil a {{modelo_interesse|moto}} cabe direitinho. Quer que eu já veja a aprovação do crédito pra você?' },
+    { esperarDias: 4, texto: 'Oi, {{primeiro_nome}}! Ainda posso te ajudar com a {{modelo_interesse|sua moto}}?' } ] },
+  { etapa: 'SQL', rotulo: 'SQL', objetivo: 'Levar para a negociação', sugestao: [
+    { esperarDias: 0, texto: '{{primeiro_nome}}, vamos fechar os detalhes? Me diz o melhor valor de entrada e de parcela pra você que eu monto a proposta.' } ] },
+  { etapa: 'NEGOCIACAO', rotulo: 'Negociação', objetivo: 'Chegar na proposta', sugestao: [
+    { esperarDias: 0, texto: '{{primeiro_nome}}, consegui uma condição especial pra fecharmos. Posso te mandar a proposta?' },
+    { esperarDias: 3, texto: 'Oi, {{primeiro_nome}}! A condição que conversamos ainda está de pé, mas por pouco tempo. Vamos fechar?' } ] },
+  { etapa: 'PROPOSTA', rotulo: 'Proposta', objetivo: 'Agendar a visita ou fechar', sugestao: [
+    { esperarDias: 1, texto: '{{primeiro_nome}}, conseguiu ver a proposta? Se quiser, já deixo agendada sua visita aqui na {{loja}} pra ver a moto de perto.' },
+    { esperarDias: 4, texto: 'Oi, {{primeiro_nome}}! Ficou alguma dúvida na proposta? Posso ajustar o que precisar.' } ] },
+  { etapa: 'AGENDAMENTO', rotulo: 'Agendamento', objetivo: 'Garantir a visita', sugestao: [
+    { esperarDias: 0, texto: 'Oi, {{primeiro_nome}}! Passando pra confirmar sua visita aqui na {{loja}}. Qualquer imprevisto, me avisa que a gente remarca.' } ] },
+  { etapa: 'VISITA', rotulo: 'Visita', objetivo: 'Fechar a venda', sugestao: [
+    { esperarDias: 1, texto: '{{primeiro_nome}}, foi um prazer te receber! Ficou com alguma dúvida? Consigo segurar a condição que conversamos até amanhã.' } ] },
+  { etapa: 'VENDA', rotulo: 'Venda', objetivo: 'Pós-venda e indicação', sugestao: [
+    { esperarDias: 3, texto: 'Oi, {{primeiro_nome}}! Tudo certo com a moto nova? Qualquer coisa, conte com a gente. E se tiver alguém procurando moto, indica a {{loja}} 😉' } ] },
+]
+export const definicaoDaEtapa = (etapa: string): DefinicaoPublico => ({ base: 'LEADS', filtros: { op: 'E', itens: etapa === 'VENDA' ? [{ campo: 'etapa', op: 'igual', valor: 'VENDA' }] : [{ campo: 'situacao', op: 'igual', valor: 'ABERTO' }, { campo: 'etapa', op: 'igual', valor: etapa }] } })
+
 /** Públicos prontos (cada um é uma base + filtros, que a pessoa pode ajustar depois). */
-export const PREDEFINIDOS: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublico }> = [
+export const PREDEFINIDOS: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublico; grupo?: 'JORNADA' }> = [
+  ...JORNADA.map(j => ({ chave: `ETAPA_${j.etapa}`, nome: j.rotulo, descricao: `Leads ${j.etapa === 'VENDA' ? 'que compraram' : 'abertos'} na etapa ${j.rotulo} agora (atualiza sozinho conforme o CRM).`, definicao: definicaoDaEtapa(j.etapa), grupo: 'JORNADA' as const })),
   { chave: 'TODOS_CONTATOS', nome: 'Todos os contatos', descricao: 'Leads, clientes e quem já escreveu no WhatsApp, sem repetir o mesmo número.', definicao: { base: 'TODOS' } },
   { chave: 'TODOS_LEADS', nome: 'Todos os leads', descricao: 'Todos os leads do CRM, de qualquer etapa.', definicao: { base: 'LEADS' } },
   { chave: 'CLIENTES', nome: 'Clientes', descricao: 'Clientes cadastrados e leads com venda.', definicao: { base: 'CLIENTES' } },
@@ -50,6 +86,7 @@ export const CAMPOS = [
   { campo: 'ddd', rotulo: 'DDD', ops: ['igual', 'em'] },
   { campo: 'situacao', rotulo: 'Situação comercial', ops: ['igual', 'em'] },
   { campo: 'etapa', rotulo: 'Etapa da jornada', ops: ['igual', 'em'] },
+  { campo: 'na_etapa', rotulo: 'Tempo na etapa atual (entrou na etapa)', ops: ['ultimos_dias', 'ha_mais_de_dias'] },
   { campo: 'vendedor', rotulo: 'Vendedor responsável', ops: ['igual', 'em', 'vazio'] },
   { campo: 'cadastro', rotulo: 'Data de cadastro', ops: ['entre', 'ultimos_dias', 'ha_mais_de_dias'] },
   { campo: 'ultimo_contato', rotulo: 'Último contato no WhatsApp', ops: ['entre', 'ultimos_dias', 'ha_mais_de_dias', 'vazio'] },
@@ -80,6 +117,8 @@ export interface Contato {
   situacao: 'ABERTO' | 'PERDIDO' | 'FECHADO' | 'CLIENTE' | 'CONTATO' | 'EQUIPE'
   criadoEm: Date | null
   ultimoContato: Date | null
+  /** Desde quando o lead está na etapa atual (histórico do CRM). */
+  etapaDesde?: Date | null
   ultimaCompra: Date | null
   modelo: string | null
   valor: number | null
@@ -115,6 +154,7 @@ function valorDoCampo(c: Contato, campo: string): unknown {
     case 'ddd': return c.telefone ? dddDe(c.telefone) : null
     case 'situacao': return c.situacao
     case 'etapa': return c.etapa
+    case 'na_etapa': return c.etapaDesde ?? null
     case 'vendedor': return c.vendedorId
     case 'cadastro': return c.criadoEm
     case 'ultimo_contato': return c.ultimoContato
@@ -168,6 +208,9 @@ export function passaGrupo(c: Contato, g: Grupo | null | undefined, agora = new 
 
 const SITUACAO_LEAD = (estagio: string): Contato['situacao'] => (estagio === 'PERDIDO' ? 'PERDIDO' : estagio === 'FECHADO' ? 'FECHADO' : 'ABERTO')
 
+/** Leads pelo id (a campanha confere, na hora de cada envio, se o contato ainda está no público). */
+export const lerLeadsPorId = (q: Leitor, ids: string[]) => lerLeads(q, ids)
+
 async function lerLeads(q: Leitor, ids?: string[]): Promise<Contato[]> {
   const where = leadWhereDe({ usuarioId: q.usuarioId, papel: q.papel, sdr: !!q.sdr, vendedorId: q.vendedorId })
   const ls = await prisma.lead.findMany({
@@ -177,6 +220,7 @@ async function lerLeads(q: Leitor, ids?: string[]): Promise<Contato[]> {
       valorNegociacao: true, temperatura: true, temperaturaManual: true, levantamento: true, clienteId: true, fechadoEm: true, reativadoEm: true, destinoPerda: true,
       vendedor: { select: { nome: true } }, cliente: { select: { bloqueado: true } },
       assistenteConversas: { orderBy: { ultimaMensagemEm: 'desc' }, take: 1, select: { id: true, ultimaMensagemEm: true } },
+      historico: { orderBy: { criadoEm: 'desc' }, take: 1, select: { criadoEm: true } },
       _count: { select: { assistenteConversas: true, visitas: true, propostas: true } },
     },
     orderBy: { criadoEm: 'desc' },
@@ -186,7 +230,7 @@ async function lerLeads(q: Leitor, ids?: string[]): Promise<Contato[]> {
     return {
       telefone: normalizarTelefone(l.telefone), bruto: l.telefone, nome: l.nomeCliente, leadId: l.id, clienteId: l.clienteId, conversaId: l.assistenteConversas[0]?.id ?? null,
       vendedorId: l.vendedorId, vendedorNome: l.vendedor?.nome ?? null, origem: l.origemTipo ?? l.tipoLead ?? null, cidade: typeof lev.cidade === 'string' ? lev.cidade : null,
-      etapa: l.etapa ?? ETAPA_LEGADA[l.estagio] ?? null, situacao: SITUACAO_LEAD(l.estagio), criadoEm: l.criadoEm, ultimoContato: l.assistenteConversas[0]?.ultimaMensagemEm ?? null,
+      etapa: l.etapa ?? ETAPA_LEGADA[l.estagio] ?? null, situacao: SITUACAO_LEAD(l.estagio), criadoEm: l.criadoEm, ultimoContato: l.assistenteConversas[0]?.ultimaMensagemEm ?? null, etapaDesde: l.historico[0]?.criadoEm ?? l.criadoEm,
       ultimaCompra: l.estagio === 'FECHADO' ? l.fechadoEm : null, modelo: l.modeloInteresse, valor: l.valorNegociacao ?? null, temperatura: l.temperaturaManual ?? l.temperatura ?? null,
       destinoPerda: l.destinoPerda, reativado: !!l.reativadoEm, conversas: l._count.assistenteConversas, visitas: l._count.visitas, propostas: l._count.propostas,
       bloqueado: !!l.cliente?.bloqueado, autorizacao: PENDENTE,
@@ -367,4 +411,14 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
     elegiveis.push(c)
   }
   return { selecionados, elegiveis, excluidos, porMotivo }
+}
+
+/** Quantos leads há em cada etapa agora e quantos estão parados nela há mais de 7 dias. */
+export async function contagemJornada(usuarioId: string, agora = new Date()) {
+  const leads = await lerLeads({ usuarioId, papel: 'DONO', vendedorId: null })
+  const limite = agora.getTime() - 7 * DIA
+  return JORNADA.map(j => {
+    const nela = leads.filter(l => l.etapa === j.etapa && (j.etapa === 'VENDA' || l.situacao === 'ABERTO'))
+    return { etapa: j.etapa, rotulo: j.rotulo, objetivo: j.objetivo, total: nela.length, comTelefone: nela.filter(l => l.telefone).length, parados7d: nela.filter(l => (l.etapaDesde ?? l.criadoEm ?? agora).getTime() < limite).length }
+  })
 }

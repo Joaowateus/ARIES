@@ -21,7 +21,7 @@ import {
   CONFIG_PADRAO, esperaDaTentativa, dentroDaJanela, lerConfigEnvio, lerConfigLoja, normalizarTelefone, chaveTelefone, pedeParaSair, podeIr, renderizar,
   type ConfigEnvio, type ConfigLoja, type Conteudo, type Passo, type StatusCampanha, type ValoresVariaveis, type Finalidade,
 } from './regras'
-import { resolverPublico, valoresDoContato, type DefinicaoPublico } from './publico'
+import { lerLeadsPorId, passaGrupo, resolverPublico, valoresDoContato, type DefinicaoPublico } from './publico'
 import { registrarAutorizacao, situacaoDe } from './autorizacao'
 import { provedor, type Remetente } from './provedor'
 import { arquivoParaEnvio } from './midias'
@@ -111,28 +111,73 @@ export async function prepararCampanha(campanhaId: string, agora = new Date()): 
 // ---------- Distribuição: cria as mensagens do 1º passo ----------
 
 export async function distribuir(campanhaId: string, agora = new Date()): Promise<number> {
-  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { id: true, usuarioId: true, versao: true, status: true, assistenteId: true, conteudo: true } })
+  const c = await prisma.disparoCampanha.findUnique({ where: { id: campanhaId }, select: { id: true, usuarioId: true, versao: true, status: true, assistenteId: true, conteudo: true, config: true } })
   if (!c || c.status !== 'QUEUED') return 0
   // Duas rodadas ao mesmo tempo (rotina e tela): só uma distribui (a outra encontra a trava e sai).
   const r = await comTrava(`distribuir:${campanhaId}`, 2 * MIN, () => distribuirComTrava(c, campanhaId, agora))
   return r.ok ? r.valor : 0
 }
-async function distribuirComTrava(c: { id: string; usuarioId: string; versao: number; assistenteId: string | null; conteudo: Prisma.JsonValue }, campanhaId: string, agora: Date): Promise<number> {
+async function distribuirComTrava(c: { id: string; usuarioId: string; versao: number; assistenteId: string | null; conteudo: Prisma.JsonValue; config?: Prisma.JsonValue }, campanhaId: string, agora: Date): Promise<number> {
   if (!c.assistenteId) { await prisma.disparoCampanha.update({ where: { id: c.id }, data: { erro: 'Escolha o número que vai enviar a campanha' } }); return 0 }
   const passos = (c.conteudo as unknown as Conteudo).passos ?? []
   if (!passos.length) throw new ErroDisparo('Campanha sem mensagem')
+  // "Pelo WhatsApp do vendedor de cada contato": o lead recebe de quem já fala com ele (se conectado).
+  const porVendedor = lerConfigEnvio(c.config ?? {}).remetentePorVendedor
+  const numeroDoVendedor = porVendedor
+    ? new Map((await prisma.assistenteComercial.findMany({ where: { vendedor: { usuarioId: c.usuarioId }, status: 'CONECTADO', instancia: { not: null } }, select: { id: true, vendedorId: true } })).map(a => [a.vendedorId, a.id]))
+    : new Map<string, string>()
   let criadas = 0
   for (;;) {
-    const lote = await prisma.disparoDestinatario.findMany({ where: { campanhaId, versao: c.versao, status: 'ELEGIVEL' }, select: { id: true }, take: LOTE_CRIACAO, orderBy: { criadoEm: 'asc' } })
+    const lote = await prisma.disparoDestinatario.findMany({ where: { campanhaId, versao: c.versao, status: 'ELEGIVEL' }, select: { id: true, vendedorId: true }, take: LOTE_CRIACAO, orderBy: { criadoEm: 'asc' } })
     if (!lote.length) break
     await prisma.$transaction([
-      prisma.disparoMensagem.createMany({ data: lote.map(d => ({ campanhaId, destinatarioId: d.id, passo: 0, chave: `${campanhaId}:${d.id}:0`, assistenteId: c.assistenteId!, tipo: passos[0].tipo, midiaId: passos[0].midiaId ?? null, enviarApos: agora })), skipDuplicates: true }),
+      prisma.disparoMensagem.createMany({ data: lote.map(d => ({ campanhaId, destinatarioId: d.id, passo: 0, chave: `${campanhaId}:${d.id}:0`, assistenteId: (d.vendedorId && numeroDoVendedor.get(d.vendedorId)) || c.assistenteId!, tipo: passos[0].tipo, midiaId: passos[0].midiaId ?? null, enviarApos: agora })), skipDuplicates: true }),
       prisma.disparoDestinatario.updateMany({ where: { id: { in: lote.map(d => d.id) }, status: 'ELEGIVEL' }, data: { status: 'EM_ANDAMENTO' } }),
     ])
     criadas += lote.length
   }
   await transicionar(campanhaId, 'RUNNING', { de: ['QUEUED'], motivo: `${criadas} destinatário(s) na fila de envio`, dados: { iniciadaEm: agora } })
   return criadas
+}
+
+// ---------- Estratégias contínuas: quem entra no público entra na campanha ----------
+
+const ALIMENTAR_A_CADA_MS = 10 * MIN
+/**
+ * Para cada estratégia contínua em andamento (no máximo a cada 10 min): avalia o público de novo e
+ * coloca na fila quem passou a se encaixar (ex.: lead que entrou na etapa no CRM). Cada contato entra
+ * uma vez; quem sai do público para na hora do próximo envio (pararAoSairDoPublico).
+ */
+export async function alimentarContinuas(fim: number, agora = new Date()): Promise<number> {
+  let novos = 0
+  const cs = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, versao: true, assistenteId: true, conteudo: true, config: true, publico: true, finalidade: true, preparo: true, totais: true, assistente: { select: { numeroWhatsapp: true } } } })
+  for (const c of cs) {
+    if (!lerConfigEnvio(c.config).continua) continue
+    if (Date.now() > fim - 5000) break
+    if (!(await pegarTrava(`alimentar:${c.id}`, ALIMENTAR_A_CADA_MS))) continue // trava sem soltar = no máximo 1 vez a cada 10 min
+    try {
+      const preparo = (c.preparo ?? {}) as unknown as Preparo
+      if (!preparo.leitor) continue
+      const config = await configDaLoja(c.usuarioId)
+      const conteudo = c.conteudo as unknown as Conteudo
+      const r = await resolverPublico(preparo.leitor, c.publico as unknown as DefinicaoPublico, { finalidade: c.finalidade as Finalidade, config, conteudo, remetenteNumero: c.assistente?.numeroWhatsapp ?? null }, agora)
+      const ja = new Set((await prisma.disparoDestinatario.findMany({ where: { campanhaId: c.id, versao: c.versao }, select: { telefone: true } })).map(x => x.telefone))
+      const novosContatos = r.elegiveis.filter(e => e.telefone && !ja.has(e.telefone))
+      if (!novosContatos.length) continue
+      const loja = (await prisma.proLaboreUsuario.findUnique({ where: { id: c.usuarioId }, select: { nome: true } }))?.nome ?? ''
+      const linhas: Prisma.DisparoDestinatarioCreateManyInput[] = []
+      for (const x of novosContatos) {
+        linhas.push({ campanhaId: c.id, versao: c.versao, usuarioId: c.usuarioId, telefone: x.telefone!, nome: x.nome?.slice(0, 160) ?? null, leadId: x.leadId, clienteId: x.clienteId, conversaId: x.conversaId, vendedorId: x.vendedorId, dados: (await valoresDoContato(x, loja)) as unknown as Prisma.InputJsonValue, status: 'ELEGIVEL' })
+      }
+      for (let i = 0; i < linhas.length; i += LOTE_CRIACAO) await prisma.disparoDestinatario.createMany({ data: linhas.slice(i, i + LOTE_CRIACAO), skipDuplicates: true })
+      await comTrava(`distribuir:${c.id}`, 2 * MIN, () => distribuirComTrava(c, c.id, agora))
+      const t = (c.totais ?? {}) as { selecionados?: number; elegiveis?: number }
+      await prisma.disparoCampanha.update({ where: { id: c.id }, data: { totais: { ...(c.totais as object ?? {}), selecionados: (t.selecionados ?? 0) + linhas.length, elegiveis: (t.elegiveis ?? 0) + linhas.length } as unknown as Prisma.InputJsonValue } })
+      await evento({ usuarioId: c.usuarioId, campanhaId: c.id, tipo: 'ENTRARAM', descricao: `${linhas.length} contato(s) entraram na estratégia (passaram a fazer parte do público)` })
+      novos += linhas.length
+    } catch (e) { logger.error({ err: e, campanhaId: c.id }, 'disparo: falha ao alimentar a estratégia') }
+  }
+  return novos
 }
 
 // ---------- Envio ----------
@@ -156,9 +201,16 @@ async function travarProxima(assistenteId: string, agora: Date): Promise<Mensage
 }
 
 /** Motivo para não mandar agora (revalidado na hora de cada mensagem), ou null. */
-async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string; finalidade: string; iniciadaEm: Date | null; cfg: ConfigEnvio }, d: { telefone: string; status: string; leadId: string | null; respondeuEm: Date | null }): Promise<string | null> {
+async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string; finalidade: string; iniciadaEm: Date | null; cfg: ConfigEnvio; publico?: Prisma.JsonValue; preparo?: Prisma.JsonValue }, d: { telefone: string; status: string; leadId: string | null; respondeuEm: Date | null }): Promise<string | null> {
   if (d.status === 'INTERROMPIDO' || d.status === 'FALHOU') return d.status
   if (c.cfg.pararAoResponder && d.respondeuEm) return 'RESPONDEU'
+  // Saiu do público (ex.: o lead mudou de etapa no CRM): a sequência para. Conferido na hora de cada envio.
+  if (c.cfg.pararAoSairDoPublico && d.leadId && c.publico) {
+    const def = c.publico as unknown as DefinicaoPublico
+    const leitor = ((c.preparo ?? {}) as unknown as Preparo).leitor ?? { usuarioId: c.usuarioId, papel: 'DONO', vendedorId: null }
+    const [atual] = await lerLeadsPorId(leitor, [d.leadId])
+    if (!atual || !passaGrupo(atual, def.filtros, new Date())) return 'SAIU_DO_PUBLICO'
+  }
   const aut = await situacaoDe(c.usuarioId, d.telefone)
   if (aut?.situacao === 'BLOQUEADO') return 'BLOQUEADO'
   if (c.finalidade === 'MARKETING' && aut?.situacao === 'REVOGADO') return 'DESCADASTRADO'
@@ -199,14 +251,14 @@ async function avancarSequencia(m: MensagemTravada, passos: Passo[], agora: Date
 
 /** Envia uma mensagem já travada. Devolve se o número remetente deve parar nesta rodada (sem conexão). */
 async function enviarTravada(m: MensagemTravada, remetente: Remetente, agora: Date, prazo = Date.now() + 20_000): Promise<'ENVIADA' | 'PULADA' | 'SEM_CONEXAO' | 'FALHOU'> {
-  const c = await prisma.disparoCampanha.findUnique({ where: { id: m.campanhaId }, select: { usuarioId: true, nome: true, finalidade: true, iniciadaEm: true, config: true, conteudo: true } })
+  const c = await prisma.disparoCampanha.findUnique({ where: { id: m.campanhaId }, select: { usuarioId: true, nome: true, finalidade: true, iniciadaEm: true, config: true, conteudo: true, publico: true, preparo: true } })
   const d = await prisma.disparoDestinatario.findUnique({ where: { id: m.destinatarioId }, select: { telefone: true, status: true, leadId: true, respondeuEm: true, dados: true } })
   if (!c || !d) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'CANCELADA', ultimoErro: 'Campanha ou destinatário não encontrado' } }); return 'PULADA' }
   const cfgLoja = await configDaLoja(c.usuarioId)
   const cfg = lerConfigEnvio(c.config, cfgLoja.envio)
   const conteudo = c.conteudo as unknown as Conteudo
   const passo = conteudo.passos?.[m.passo]
-  const motivo = passo ? await motivoParaInterromper(m, { usuarioId: c.usuarioId, finalidade: c.finalidade, iniciadaEm: c.iniciadaEm, cfg }, d) : 'PASSO_REMOVIDO'
+  const motivo = passo ? await motivoParaInterromper(m, { usuarioId: c.usuarioId, finalidade: c.finalidade, iniciadaEm: c.iniciadaEm, cfg, publico: c.publico, preparo: c.preparo }, d) : 'PASSO_REMOVIDO'
   if (motivo) {
     await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'PULADA', ultimoErro: motivo, travadaEm: null } })
     await prisma.disparoDestinatario.updateMany({ where: { id: m.destinatarioId, status: { in: ['EM_ANDAMENTO', 'ELEGIVEL'] } }, data: { status: motivo === 'RESPONDEU' ? 'RESPONDEU' : 'INTERROMPIDO', interrompidoPor: motivo } })
@@ -374,7 +426,7 @@ async function rodarRemetenteComTrava(a: { id: string; instancia: string | null;
   while (Date.now() < prazo - 2000) {
     const agora = new Date()
     // A janela e o ritmo vêm da campanha da próxima mensagem; o número usa o ritmo mais lento entre as campanhas ativas dele.
-    const ativas = await prisma.disparoCampanha.findMany({ where: { assistenteId, status: 'RUNNING' }, select: { id: true, config: true } })
+    const ativas = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING', OR: [{ assistenteId }, { mensagens: { some: { assistenteId, status: 'AGENDADA' } } }] }, select: { id: true, config: true } })
     if (!ativas.length) { parada = 'SEM_CAMPANHA'; break }
     const cfgs = ativas.map(c => ({ id: c.id, cfg: lerConfigEnvio(c.config, cfgLoja.envio) }))
     const naJanela = cfgs.filter(x => dentroDaJanela(x.cfg.janela, agora))
@@ -482,9 +534,11 @@ export async function decidirMensagem(mensagemId: string, decisao: 'REENVIAR' | 
 // ---------- Conclusão e recorrência ----------
 
 async function concluirTerminadas(agora: Date): Promise<number> {
-  const ativas = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, recorrencia: true } })
+  const ativas = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, recorrencia: true, config: true } })
   let n = 0
   for (const c of ativas) {
+    // Estratégia contínua não "termina": fica aberta recebendo quem entra no público (até pausar/cancelar).
+    if (lerConfigEnvio(c.config).continua) continue
     const pendentes = await prisma.disparoMensagem.count({ where: { campanhaId: c.id, status: { in: ['AGENDADA', 'ENVIANDO', 'DESCONHECIDO'] } } })
     if (pendentes) continue
     const falhas = await prisma.disparoMensagem.count({ where: { campanhaId: c.id, status: 'FALHOU' } })
@@ -557,6 +611,8 @@ export async function rodarDisparo(prazoMs = 15_000, agora = new Date(), origem:
       if (Date.now() > fim - 4000) break
       try { if (await distribuir(c.id, agora)) out.disparoIniciadas += 1 } catch (e) { logger.error({ err: e, campanhaId: c.id }, 'disparo: falha ao distribuir') }
     }
+    // 3b) Estratégias contínuas: quem entrou no público (ex.: mudou de etapa no CRM) entra na fila.
+    await alimentarContinuas(fim, agora).catch(e => logger.error({ err: e }, 'disparo: estratégias contínuas'))
     // 4) Reconciliação do que ficou sem resposta.
     const rec = await comTrava('reconciliar', 60_000, () => reconciliar(agora))
     out.disparoReconciliadas = rec.ok ? rec.valor.reconciliadas : 0

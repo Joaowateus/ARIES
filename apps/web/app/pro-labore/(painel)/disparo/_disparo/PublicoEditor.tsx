@@ -144,7 +144,11 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
       </div>
       <div className="pl-field"><label>① Públicos prontos</label>
         <div className="cc-chips">
-          {meta.predefinidos.map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })}>{p.nome}</button>)}
+          {meta.predefinidos.filter(p => p.grupo !== 'JORNADA').map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })}>{p.nome}</button>)}
+        </div>
+        <span className="pl-hint" style={{ marginTop: 8 }}>Etapas do CRM (atualizam sozinhas conforme a equipe move os leads):</span>
+        <div className="cc-chips">
+          {meta.predefinidos.filter(p => p.grupo === 'JORNADA').map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })} data-etapa-chip={p.chave}>{p.nome}</button>)}
         </div>
       </div>
       <div className="pl-field-grid" style={{ marginTop: 12 }}>

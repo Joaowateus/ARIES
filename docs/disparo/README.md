@@ -247,6 +247,14 @@ Checklist do dia
 - **Stories:** o Instagram apaga o story em 24 h e a API não devolve depois. O ARIES guarda o arquivo (foto/vídeo e capa) de cada story **enquanto está no ar**: na rotina de minuto (`arquivarStories`, até 8 s) e ao abrir a aba Stories. Fica em `instagram/stories/<conta>/<id>` no armazenamento, com as colunas `arquivoBlobUrl`, `capaBlobUrl`… em `pro_labore_social_media_midias` (o sync de hora em hora apaga e recria as linhas e copia essas colunas). Importar um story guardado aponta a mídia da Biblioteca para o mesmo arquivo (sem cópia). Story que saiu do ar antes de ser guardado aparece como "saiu do ar antes de ser guardado".
 - Testes: paginação até a primeira postagem, capa como imagem, stories guardados, importados depois de saírem do ar e o caso não guardado.
 
+## 10i. Jornada do CRM e estratégias contínuas
+
+- **Públicos vivos por etapa** (`JORNADA` em `publico.ts`): Lead, Abordado, Levantamento, MQL, SQL, Negociação, Proposta, Agendamento, Visita e Venda. Cada um é `base LEADS + situação ABERTO + etapa = X` (Venda: só a etapa). Como o público é avaliado de novo a cada uso, ele acompanha o CRM sozinho. Novo filtro: **Tempo na etapa atual** (`na_etapa`, pelo histórico de etapas).
+- **Aba "Jornada do CRM"**: cartões das 10 etapas com quantos estão nela agora, parados há mais de 7 dias, o objetivo e as estratégias de cada etapa; "Criar estratégia" abre o assistente já preenchido (público da etapa, mensagens sugeridas pelo ARIES com os dias de espera, finalidade Relacionamento).
+- **Estratégia contínua** (`config.continua`): a campanha não conclui; a cada 10 min (`alimentarContinuas`, trava `alimentar:<id>`) o público é avaliado de novo e quem passou a se encaixar entra na fila (cada contato entra uma vez; evento `ENTRARAM`).
+- **Sai do público, para** (`config.pararAoSairDoPublico`): antes de cada envio o lead é relido e conferido contra os filtros; quem mudou de etapa fica `INTERROMPIDO` com `SAIU_DO_PUBLICO`.
+- **Pelo WhatsApp do vendedor de cada contato** (`config.remetentePorVendedor`): cada mensagem sai pelo número conectado do vendedor responsável pelo lead; sem ele, pelo número da campanha. O laço de envio de cada número considera as campanhas que têm mensagens dele.
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

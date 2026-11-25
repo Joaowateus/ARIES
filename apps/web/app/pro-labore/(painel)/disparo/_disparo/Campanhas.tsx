@@ -72,7 +72,7 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
                 <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => abrir(c.id)} data-campanha={c.id}>
                   {pode && <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Selecionar ${c.nome}`} checked={marcadas.includes(c.id)} onChange={e => setMarcadas(m => (e.target.checked ? [...m, c.id] : m.filter(x => x !== c.id)))} /></td>}
                   <td><b>{c.nome}</b><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''}</div>{c.erro && <div className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }}>{erroAmigavel(c.erro)}</div>}</td>
-                  <td><SeloStatus status={c.status} /></td>
+                  <td><SeloStatus status={c.status} />{c.config?.continua && <span className="pl-status-badge" title="Estratégia contínua: quem entra no público entra sozinho" style={{ marginLeft: 4 }}>Contínua</span>}</td>
                   <td>{c.assistente?.vendedor.nome ?? '—'}</td>
                   <td className="pl-right">{c.totais ? n(c.totais.elegiveis) : '—'}</td>
                   <td>{c.concluidaEm ? `terminou ${dataHora(c.concluidaEm)}` : c.iniciadaEm ? `começou ${dataHora(c.iniciadaEm)}` : c.agendadaPara ? `agendada ${dataHora(c.agendadaPara)}` : '—'}</td>
@@ -158,6 +158,7 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
       </div>
       <p className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''} · {c.remetente ? `envia pelo WhatsApp de ${c.remetente.vendedor} ${c.remetente.numero ?? ''}${c.remetente.conectado ? '' : ' (desconectado)'}` : 'sem número'} · criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''} · versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</p>
       {msg && <p className="pl-hint" role="status">{msg}</p>}
+      {c.config?.continua && <div className="pl-alert" role="status" data-estrategia-continua><b>Estratégia contínua.</b> Quem passar a fazer parte do público entra sozinho (conferido a cada 10 min){c.config.pararAoSairDoPublico ? ', e quem sair do público (ex.: mudou de etapa) para de receber' : ''}{c.config.remetentePorVendedor ? '. Cada contato recebe pelo WhatsApp do próprio vendedor' : ''}. Ela fica ligada até você pausar ou cancelar.</div>}
       {c.situacao && <PainelAgora s={c.situacao} status={st} rodada={enviando ? rodada : null} />}
       {(c.erro || r?.erro) && c.situacao?.motivo !== 'SEM_CONEXAO' && <div className="pl-alert pl-alert-error" role="alert">{erroAmigavel(c.erro ?? r?.erro)}</div>}
       {r && r.aDecidir > 0 && <div className="pl-alert" role="status">{r.aDecidir} mensagem(ns) sem confirmação ou com as tentativas esgotadas: decida na lista abaixo (filtro “Falhou”) se reenvia ou considera enviada. O sistema nunca reenvia sozinho o que pode já ter saído.</div>}

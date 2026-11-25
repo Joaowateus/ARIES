@@ -19,10 +19,14 @@ function inicial(c: CampanhaDisparo | null, padrao: ConfigEnvioDisparo, remetent
   return { nome: '', descricao: '', objetivo: '', finalidade: 'MARKETING', assistenteId: remetente, publicoId: null, publico: { base: 'LEADS' }, conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Oi, {{primeiro_nome}}! ' }], fallbacks: {}, rodapeSair: true }, config: { ...padrao }, agendadaPara: null, recorrencia: null }
 }
 
-export function Assistente({ campanha, fechar, abrirMonitor }: { campanha: CampanhaDisparo | null; fechar: () => void; abrirMonitor: (id: string) => void }) {
+export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanha: CampanhaDisparo | null; fechar: () => void; abrirMonitor: (id: string) => void; preset?: Partial<CampanhaDisparoEntrada> | null }) {
   const meta = useMeta()
   const [passo, setPasso] = useState(0)
-  const [f, setF] = useState<CampanhaDisparoEntrada>(() => inicial(campanha, meta.config.envio, meta.remetentes.find(r => r.conectado)?.id ?? meta.remetentes[0]?.id ?? null))
+  const [f, setF] = useState<CampanhaDisparoEntrada>(() => {
+    const base = inicial(campanha, meta.config.envio, meta.remetentes.find(r => r.conectado)?.id ?? meta.remetentes[0]?.id ?? null)
+    // Estratégia criada a partir da Jornada do CRM: já vem com público, mensagens e regras da etapa.
+    return !campanha && preset ? { ...base, ...preset, config: { ...base.config, ...(preset.config ?? {}) } } : base
+  })
   const [id, setId] = useState<string | null>(campanha?.id ?? null)
   const [salva, setSalva] = useState<CampanhaDisparo | null>(campanha)
   const [midias, setMidias] = useState<MidiaDisparo[]>([])
@@ -181,7 +185,12 @@ export function Assistente({ campanha, fechar, abrirMonitor }: { campanha: Campa
             <label className="pl-hint"><input type="checkbox" checked={cfg.pararAoResponder} onChange={e => setCfg({ pararAoResponder: e.target.checked })} /> o contato responder (e passar para o vendedor)</label>
             <label className="pl-hint"><input type="checkbox" checked={cfg.pararAoComprar} onChange={e => setCfg({ pararAoComprar: e.target.checked })} /> o contato comprar</label>
             <label className="pl-hint"><input type="checkbox" checked={cfg.pararSeVendedorAssumir} onChange={e => setCfg({ pararSeVendedorAssumir: e.target.checked })} /> o vendedor assumir a conversa</label>
+            <label className="pl-hint"><input type="checkbox" checked={!!cfg.pararAoSairDoPublico} onChange={e => setCfg({ pararAoSairDoPublico: e.target.checked })} /> o contato sair do público (ex.: mudou de etapa no CRM)</label>
             <span className="pl-hint">Descadastro, bloqueio e perda da autorização sempre param.</span>
+          </div>
+          <div className="pl-field dp-estrategia-opcoes" style={{ gridColumn: '1 / -1' }} data-opcoes-estrategia><label>Estratégia</label>
+            <label className="pl-hint"><input type="checkbox" checked={!!cfg.continua} onChange={e => setCfg({ continua: e.target.checked, ...(e.target.checked ? { pararAoSairDoPublico: true } : {}) })} /> <b>Contínua</b>: fica ligada e quem passar a fazer parte do público (ex.: lead que entrar na etapa) entra sozinho, a cada 10 min. Sem isso, envia uma vez para a lista de agora.</label>
+            <label className="pl-hint"><input type="checkbox" checked={!!cfg.remetentePorVendedor} onChange={e => setCfg({ remetentePorVendedor: e.target.checked })} /> <b>Pelo WhatsApp do vendedor de cada contato</b> (quem já conversa com o cliente); se o dele não estiver conectado, sai pelo número escolhido no passo 1.</label>
           </div>
         </div>
       )}
@@ -195,6 +204,7 @@ export function Assistente({ campanha, fechar, abrirMonitor }: { campanha: Campa
             <dt>Mensagens</dt><dd>{f.conteudo.passos.length} na sequência</dd>
             <dt>Quando</dt><dd>{f.agendadaPara ? dataHora(new Date(f.agendadaPara).toISOString()) : 'ao confirmar'} · das {cfg.janela.inicio} às {cfg.janela.fim} ({cfg.janela.dias.map(d => DIAS[d]).join(', ')}){f.recorrencia ? ` · repete ${f.recorrencia.tipo.toLowerCase()}${f.recorrencia.ate ? ` até ${f.recorrencia.ate}` : ''}` : ''}</dd>
             <dt>Ritmo</dt><dd>1 a cada {cfg.intervaloSeg} s · até {cfg.maxPorHora}/h e {cfg.maxPorDia}/dia</dd>
+            <dt>Tipo</dt><dd>{cfg.continua ? 'Estratégia contínua — novos contatos do público entram sozinhos' : 'Envio único para a lista de agora'}{cfg.pararAoSairDoPublico ? ' · para quando o contato sai do público' : ''}{cfg.remetentePorVendedor ? ' · pelo WhatsApp do vendedor de cada contato' : ''}</dd>
           </dl>
           {exemplo?.exemplo && <div className="dp-exemplo"><span className="pl-hint">Exemplo:</span>{exemplo.exemplo.map((t, i) => <p key={i}>{t}</p>)}</div>}
           <p className="pl-hint">Ao preparar, o servidor monta a lista final (um snapshot do público agora){meta.config.exigirAprovacao && !meta.gestao ? ' e manda para aprovação do dono ou do supervisor' : ''}. Nada é enviado antes da sua confirmação.</p>
