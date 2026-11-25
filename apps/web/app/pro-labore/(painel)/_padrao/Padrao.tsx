@@ -34,7 +34,12 @@ export function StatusChip({ status }: { status: StatusNumero | undefined }) {
 }
 
 // --- Cabeçalho da ficha ---
+// Dentro da moldura padrão (telas novas) o cabeçalho já está desenhado: o da página não repete.
+const DentroDaTelaPadrao = createContext(false)
+
 export function Cabecalho({ aba, acao }: { aba: Pick<AbaAries, 'nome' | 'pergunta' | 'paraQuem' | 'acaoPrincipal' | 'acaoHref'>; acao?: React.ReactNode }) {
+  const dentro = useContext(DentroDaTelaPadrao)
+  if (dentro) return null
   return (
     <header className="ar-cabecalho" data-cabecalho-ficha>
       <div>
@@ -177,6 +182,7 @@ export function TelaPadrao({ aba, children }: { aba: AbaAries; children: React.R
   return (
     <div data-tela-padrao={aba.chave}>
       <Cabecalho aba={aba} />
+      <DentroDaTelaPadrao.Provider value={true}>
       {aba.largo ? (
         <div className="ar-tela-larga">
           <div className="ar-topo-largo"><Agora chaves={aba.numeros} /><Lente aba={aba.lente} /></div>
@@ -191,6 +197,7 @@ export function TelaPadrao({ aba, children }: { aba: AbaAries; children: React.R
         <Lente aba={aba.lente} />
       </div>
       )}
+      </DentroDaTelaPadrao.Provider>
     </div>
   )
 }
