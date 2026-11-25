@@ -2,7 +2,7 @@
 
 // Construtor de públicos: prontos, filtros E/OU (com um nível de subgrupo), seleção manual e a prévia
 // (contagem, motivos de exclusão e a lista paginada no servidor — nunca milhares de contatos no navegador).
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { disparoApi, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoPublicoDisparo, type FinalidadeDisparo, type GrupoDisparo, type PreviaPublicoDisparo } from '@/lib/proLaboreApi'
 import { Paginacao, erroDe, n, useMeta, AvisoAutorizacao } from './util'
 
@@ -75,6 +75,26 @@ function EditorGrupo({ g, mudar, nivel = 0, remover }: { g: GrupoDisparo; mudar:
   )
 }
 
+/** Lê uma lista colada: um número por linha (com ou sem nome), ou vários números numa linha. */
+export function lerLista(texto: string): { numeros: Array<{ telefone: string; nome: string | null }>; ignoradas: number } {
+  const numeros: Array<{ telefone: string; nome: string | null }> = []
+  const vistos = new Set<string>()
+  let ignoradas = 0
+  for (const linha of texto.split(/\r?\n/)) {
+    if (!linha.trim()) continue
+    const achados = [...linha.matchAll(/\+?\(?\d[\d\s().-]{6,}\d/g)].map(m => m[0]).filter(m => m.replace(/\D/g, '').length >= 8)
+    if (!achados.length) { ignoradas += 1; continue }
+    const nome = achados.length === 1 ? linha.replace(achados[0], '').replace(/["']/g, '').replace(/[;,\t|]+/g, ' ').replace(/\s+-\s+/g, ' ').replace(/\s+/g, ' ').trim() || null : null
+    for (const a of achados) {
+      const dig = a.replace(/\D/g, '')
+      if (vistos.has(dig)) continue
+      vistos.add(dig)
+      numeros.push({ telefone: a.trim(), nome: nome && /[a-zA-ZÀ-ú]/.test(nome) ? nome.slice(0, 160) : null })
+    }
+  }
+  return { numeros, ignoradas }
+}
+
 export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assistenteId }: { definicao: DefinicaoPublicoDisparo; mudar: (d: DefinicaoPublicoDisparo) => void; finalidade: FinalidadeDisparo; conteudo?: ConteudoDisparo | null; assistenteId?: string | null }) {
   const meta = useMeta()
   const [busca, setBusca] = useState('')
@@ -85,6 +105,10 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const ultima = useRef(0)
+  const [totalAchados, setTotalAchados] = useState(0)
+  const [mostrar, setMostrar] = useState(50)
+  const [lista, setLista] = useState('')
+  const [verEscolhidos, setVerEscolhidos] = useState(false)
   const manual = definicao.manual ?? {}
   const filtros = definicao.filtros ?? { op: 'E', itens: [] }
 
@@ -99,46 +123,92 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
   useEffect(() => { const t = setTimeout(() => void atualizar(0), 600); return () => clearTimeout(t) }, [atualizar])
   useEffect(() => {
     if (busca.trim().length < 2) return
-    const t = setTimeout(() => { disparoApi.publicos.contatos(busca).then(r => setAchados(r.itens)).catch(() => setAchados([])) }, 350)
+    const t = setTimeout(() => { disparoApi.publicos.contatos(busca).then(r => { setAchados(r.itens); setTotalAchados(r.total ?? r.itens.length) }).catch(() => setAchados([])) }, 350)
     return () => clearTimeout(t)
   }, [busca])
 
   const incluidos = manual.incluir ?? []
+  const numerosLista = manual.numeros ?? []
+  const lida = useMemo(() => lerLista(lista), [lista])
   return (
     <div className="dp-publico" data-publico-editor>
-      <div className="pl-field"><label>Públicos prontos</label>
+      <div className="dp-guia" role="note">
+        <b>Como montar quem vai receber</b> — use um caminho ou combine:
+        <ol>
+          <li><b>Público pronto</b>: um clique (ex.: todos os leads, leads novos, clientes).</li>
+          <li><b>Base e filtros</b>: refine por etapa, vendedor, cidade, origem, última conversa…</li>
+          <li><b>Escolher pessoas</b>: busque e adicione uma a uma, ou todas as encontradas.</li>
+          <li><b>Colar uma lista</b>: números de qualquer lugar, mesmo de quem não está no CRM.</li>
+        </ol>
+        <span className="pl-hint">A prévia no fim mostra exatamente quem vai receber e quem fica de fora (com o motivo).</span>
+      </div>
+      <div className="pl-field"><label>① Públicos prontos</label>
         <div className="cc-chips">
           {meta.predefinidos.map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })}>{p.nome}</button>)}
         </div>
       </div>
       <div className="pl-field-grid" style={{ marginTop: 12 }}>
-        <div className="pl-field"><label htmlFor="dp-base">De onde vêm os contatos</label>
+        <div className="pl-field"><label htmlFor="dp-base">② De onde vêm os contatos</label>
           <select id="dp-base" className="pl-select" value={definicao.base} onChange={e => mudar({ ...definicao, base: e.target.value as DefinicaoPublicoDisparo['base'], predefinido: null })}>
             {BASES.map(b => <option key={b.valor} value={b.valor}>{b.rotulo}</option>)}
           </select>
         </div>
       </div>
-      <div className="pl-field" style={{ marginTop: 12 }}><label>Filtros</label>
+      <div className="pl-field" style={{ marginTop: 12 }}><label>Filtros (opcional)</label>
         <EditorGrupo g={filtros} mudar={g => mudar({ ...definicao, filtros: g, predefinido: null })} />
       </div>
-      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-busca">Seleção manual</label>
-        <input id="dp-busca" className="pl-input" placeholder="Buscar contato por nome ou telefone" value={busca} onChange={e => setBusca(e.target.value)} />
-        {busca.trim().length >= 2 && achados.length > 0 && (
-          <ul className="ar-fila" style={{ marginTop: 6 }}>
-            {achados.map(a => (
-              <li key={`${a.tipo}:${a.id}`} className="ar-fila-item">
-                <div><div className="ar-fila-titulo">{a.nome}</div><div className="pl-hint">{a.telefone ?? 'sem telefone'} · {a.situacao.toLowerCase()}{a.vendedor ? ` · ${a.vendedor}` : ''}</div></div>
-                <button type="button" className="pl-btn" disabled={incluidos.some(x => x.id === a.id)} onClick={() => mudar({ ...definicao, manual: { ...manual, incluir: [...incluidos, { tipo: a.tipo, id: a.id, nome: a.nome }] } })}>Adicionar</button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {incluidos.length > 0 && (
-          <div className="cc-chips" style={{ marginTop: 6 }}>
-            {incluidos.map(x => <button key={x.id} type="button" className="pl-chip active" onClick={() => mudar({ ...definicao, manual: { ...manual, incluir: incluidos.filter(y => y.id !== x.id) } })} title="Tirar">{x.nome ?? x.id} ✕</button>)}
-            <label className="pl-hint" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={!!manual.apenasManual} onChange={e => mudar({ ...definicao, manual: { ...manual, apenasManual: e.target.checked } })} /> Só estes (ignorar a base e os filtros)</label>
+      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-busca">③ Escolher pessoas (busca em todos os contatos da loja)</label>
+        <input id="dp-busca" className="pl-input" placeholder="Nome ou telefone (ex.: João, 9822)" value={busca} onChange={e => { setBusca(e.target.value); setMostrar(50) }} />
+        {busca.trim().length >= 2 && (
+          <div className="dp-linha" style={{ justifyContent: 'space-between', marginTop: 6 }}>
+            <span className="pl-hint">{achados.length ? `${achados.length}${totalAchados > achados.length ? ` de ${totalAchados}` : ''} encontrado(s)` : 'Ninguém encontrado'}</span>
+            {achados.length > 1 && <button type="button" className="pl-btn" data-adicionar-todos onClick={() => { const novos = achados.filter(a => !incluidos.some(x => x.id === a.id)).map(a => ({ tipo: a.tipo, id: a.id, nome: a.nome })); mudar({ ...definicao, manual: { ...manual, incluir: [...incluidos, ...novos] } }) }}>Adicionar todos ({achados.filter(a => !incluidos.some(x => x.id === a.id)).length})</button>}
           </div>
         )}
+        {busca.trim().length >= 2 && achados.length > 0 && (
+          <ul className="ar-fila" style={{ marginTop: 6 }}>
+            {achados.slice(0, mostrar).map(a => {
+              const ja = incluidos.some(x => x.id === a.id)
+              return (
+                <li key={`${a.tipo}:${a.id}`} className="ar-fila-item">
+                  <div><div className="ar-fila-titulo">{a.nome}</div><div className="pl-hint">{a.telefone ?? 'sem telefone'} · {a.situacao.toLowerCase()}{a.vendedor ? ` · ${a.vendedor}` : ''}</div></div>
+                  <button type="button" className={`pl-btn ${ja ? '' : 'pl-btn-primary'}`} onClick={() => mudar({ ...definicao, manual: { ...manual, incluir: ja ? incluidos.filter(x => x.id !== a.id) : [...incluidos, { tipo: a.tipo, id: a.id, nome: a.nome }] } })}>{ja ? 'Adicionado ✓' : 'Adicionar'}</button>
+                </li>
+              )
+            })}
+            {achados.length > mostrar && <li className="ar-fila-item"><button type="button" className="pl-btn" onClick={() => setMostrar(m => m + 100)}>Mostrar mais ({achados.length - mostrar})</button></li>}
+          </ul>
+        )}
+      </div>
+
+      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-lista">④ Colar uma lista de números (de planilha, conversa ou qualquer lugar — mesmo quem não está no CRM)</label>
+        <textarea id="dp-lista" className="pl-input" rows={4} value={lista} onChange={e => setLista(e.target.value)} placeholder={'Um por linha. Pode ter o nome junto:\nMaria Souza; (91) 98888-7777\n91 99999-0000\nJoão, 5591988887777'} />
+        <div className="dp-linha" style={{ marginTop: 6 }}>
+          <span className="pl-hint">{lida.numeros.length ? `${lida.numeros.length} número(s) reconhecido(s)${lida.ignoradas ? ` · ${lida.ignoradas} linha(s) sem número` : ''}` : 'Cole ou envie um arquivo .csv/.txt'}</span>
+          <label className="pl-btn" style={{ cursor: 'pointer' }}>Enviar arquivo<input type="file" hidden accept=".csv,.txt,text/csv,text/plain" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void f.text().then(t => setLista(l => (l ? `${l}\n${t}` : t))) }} /></label>
+          <button type="button" className="pl-btn pl-btn-primary" disabled={!lida.numeros.length} data-adicionar-lista onClick={() => { const ja = new Set(numerosLista.map(x => x.telefone.replace(/\D/g, ''))); const novos = lida.numeros.filter(x => !ja.has(x.telefone.replace(/\D/g, ''))); mudar({ ...definicao, manual: { ...manual, numeros: [...numerosLista, ...novos] } }); setLista('') }}>Adicionar {lida.numeros.length || ''} à lista</button>
+        </div>
+      </div>
+
+      {(incluidos.length > 0 || numerosLista.length > 0) && (
+        <div className="dp-escolhidos" data-escolhidos>
+          <div className="dp-linha" style={{ justifyContent: 'space-between' }}>
+            <b>{incluidos.length + numerosLista.length} escolhido(s) à mão{numerosLista.length ? ` (${numerosLista.length} da lista colada)` : ''}</b>
+            <span className="cc-chips">
+              <button type="button" className="pl-btn" onClick={() => setVerEscolhidos(v => !v)}>{verEscolhidos ? 'Esconder' : 'Ver quem'}</button>
+              <button type="button" className="pl-btn" onClick={() => mudar({ ...definicao, manual: { ...manual, incluir: [], numeros: [] } })}>Tirar todos</button>
+            </span>
+          </div>
+          <label className="dp-so-estes"><input type="checkbox" checked={!!manual.apenasManual} onChange={e => mudar({ ...definicao, manual: { ...manual, apenasManual: e.target.checked } })} /> <span><b>Enviar só para os escolhidos</b> — ignora o público pronto, a base e os filtros acima. Desmarcado, os escolhidos são somados ao público.</span></label>
+          {verEscolhidos && (
+            <div className="cc-chips" style={{ marginTop: 6, maxHeight: 220, overflow: 'auto' }}>
+              {incluidos.map(x => <button key={x.id} type="button" className="pl-chip active" onClick={() => mudar({ ...definicao, manual: { ...manual, incluir: incluidos.filter(y => y.id !== x.id) } })} title="Tirar">{x.nome ?? x.id} ✕</button>)}
+              {numerosLista.map(x => <button key={x.telefone} type="button" className="pl-chip active" onClick={() => mudar({ ...definicao, manual: { ...manual, numeros: numerosLista.filter(y => y.telefone !== x.telefone) } })} title="Tirar">{x.nome ? `${x.nome} · ` : ''}{x.telefone} ✕</button>)}
+            </div>
+          )}
+        </div>
+      )}
+      <div>
         {(manual.excluir ?? []).length > 0 && <p className="pl-hint">{manual.excluir!.length} número(s) tirado(s) à mão. <button type="button" className="pl-btn" onClick={() => mudar({ ...definicao, manual: { ...manual, excluir: [] } })}>Devolver todos</button></p>}
       </div>
 

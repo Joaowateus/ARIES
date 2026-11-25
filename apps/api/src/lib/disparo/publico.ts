@@ -5,7 +5,7 @@
 // telefone normalizado) e cada excluído tem um motivo só.
 import { prisma } from '../prisma'
 import { leadWhereDe } from '../escopoLead'
-import { normalizarTelefone, dddDe, regiaoDoDdd, renderizar, variaveisUsadas, type ConfigLoja, type Conteudo, type Finalidade, type ValoresVariaveis } from './regras'
+import { chaveTelefone, normalizarTelefone, dddDe, regiaoDoDdd, renderizar, variaveisUsadas, type ConfigLoja, type Conteudo, type Finalidade, type ValoresVariaveis } from './regras'
 import { estadosDeAutorizacao } from './autorizacao'
 
 // ---------- Definição ----------
@@ -19,7 +19,7 @@ export interface DefinicaoPublico {
   predefinido?: string | null
   filtros?: Grupo | null
   /** Seleção manual: incluir = contatos escolhidos um a um (somente eles, se apenasManual); excluir = telefones tirados da lista. */
-  manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string }>; excluir?: string[]; apenasManual?: boolean } | null
+  manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string | null }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada (números de qualquer pessoa, mesmo fora do CRM). */ numeros?: Array<{ telefone: string; nome?: string | null }> } | null
 }
 
 export const ETAPAS = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA', 'VENDA'] as const
@@ -94,6 +94,12 @@ export interface Contato {
 }
 
 interface Leitor { usuarioId: string; papel: string; vendedorId: string | null; sdr?: boolean }
+
+/** Contato avulso (lista colada, fora do CRM): sem lead, cliente nem conversa. */
+const CONTATO_AVULSO: Omit<Contato, 'telefone' | 'bruto' | 'nome' | 'criadoEm'> = {
+  leadId: null, clienteId: null, conversaId: null, vendedorId: null, vendedorNome: null, origem: 'LISTA', cidade: null, etapa: null, situacao: 'CONTATO',
+  ultimoContato: null, ultimaCompra: null, modelo: null, valor: null, temperatura: null, destinoPerda: null, reativado: false, conversas: 0, visitas: 0, propostas: 0, bloqueado: false, autorizacao: null,
+}
 
 const DIA = 86_400_000
 const PENDENTE = '__PENDENTE__'
@@ -280,6 +286,25 @@ export async function valoresDoContato(c: Contato, nomeLoja: string): Promise<Va
   }
 }
 
+/**
+ * Lista colada: cada número vira um destinatário. Se o número já é lead/cliente da loja, usa o cadastro
+ * (nome, vendedor e variáveis); senão entra como contato avulso, com o nome que veio na lista.
+ */
+async function contatosDaLista(q: Leitor, lista: Array<{ telefone: string; nome?: string | null }>, agora: Date): Promise<Contato[]> {
+  if (!lista.length) return []
+  const pedidos = lista.map(x => ({ tel: normalizarTelefone(x.telefone), bruto: x.telefone, nome: x.nome?.trim() || null }))
+  const validos = pedidos.filter(x => x.tel)
+  const chaves = new Set(validos.map(x => chaveTelefone(x.tel!)))
+  // Cadastro existente com o mesmo número (pelos últimos dígitos): aproveita o que o CRM já sabe.
+  const doCrm = chaves.size ? (await Promise.all([lerLeads(q), lerClientes(q)])).flat().filter(c => c.telefone && chaves.has(chaveTelefone(c.telefone))) : []
+  const porChave = new Map(doCrm.map(c => [chaveTelefone(c.telefone!), c]))
+  return pedidos.map(x => {
+    const crm = x.tel ? porChave.get(chaveTelefone(x.tel)) : undefined
+    if (crm) return { ...crm, nome: crm.nome ?? x.nome }
+    return { ...CONTATO_AVULSO, telefone: x.tel, bruto: x.bruto, nome: x.nome ?? (x.tel ? `+${x.tel}` : x.bruto), criadoEm: agora } as Contato
+  })
+}
+
 export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { finalidade?: Finalidade; config: ConfigLoja; conteudo?: Conteudo | null; remetenteNumero?: string | null }, agora = new Date()): Promise<Resultado> {
   const manual = d.manual ?? {}
   const porTipo = (t: 'LEAD' | 'CLIENTE' | 'CONVERSA') => (manual.incluir ?? []).filter(x => x.tipo === t).map(x => x.id)
@@ -299,6 +324,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
     ...(porTipo('LEAD').length ? await lerLeads(q, porTipo('LEAD')) : []),
     ...(porTipo('CLIENTE').length ? await lerClientes(q, porTipo('CLIENTE')) : []),
     ...(porTipo('CONVERSA').length ? await lerConversas(q, porTipo('CONVERSA')) : []),
+    ...(await contatosDaLista(q, manual.numeros ?? [], agora)),
   ]
   const filtrados = grupos.map(g => g.filter(c => passaGrupo(c, d.filtros, agora)))
   const { contatos, duplicados, semTelefone } = juntar([manuais, ...filtrados])

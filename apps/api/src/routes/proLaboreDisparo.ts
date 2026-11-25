@@ -34,7 +34,9 @@ function quem(req: Request): Quem {
   const papel = papelDoUsuario(u)
   return { usuarioId: u.sub, papelLogin: u.papel, papel, gestao: papel === 'DONO' || papel === 'SUPERVISOR', dono: papel === 'DONO', vendedorId: u.vendedorId ?? null, sdr: !!u.sdr, nome: u.nome }
 }
-const leitorDe = (q: Quem) => ({ usuarioId: q.usuarioId, papel: q.papelLogin, vendedorId: q.vendedorId, sdr: q.sdr })
+// Sem trava de carteira: qualquer pessoa com o Disparo monta público com todos os contatos da loja
+// (leads, clientes, conversas e equipe) e escolhe quem quiser (pedido do dono, 25/11/2026).
+const leitorDe = (q: Quem) => ({ usuarioId: q.usuarioId, papel: 'DONO', vendedorId: null, sdr: false })
 const semSocial = (req: Request, res: Response, next: () => void) => { if (req.proLaboreUser?.papel === 'SOCIAL_MEDIA') { res.status(403).json({ error: 'O Disparo não faz parte do espaço do Social Media.' }); return } next() }
 const ver = [requireProLaboreAuth, semSocial, requireModulo('disparo', 'VER')]
 const editar = [requireProLaboreAuth, semSocial, requireModulo('disparo', 'EDITAR')]
@@ -68,7 +70,7 @@ const zCond: z.ZodType<unknown> = z.lazy(() => z.union([z.object({ campo: z.stri
 const zDefinicao = z.object({
   base: z.enum(BASES), predefinido: z.string().max(40).nullable().optional(),
   filtros: z.object({ op: z.enum(['E', 'OU']), itens: z.array(zCond).max(30) }).nullable().optional(),
-  manual: z.object({ incluir: z.array(z.object({ tipo: z.enum(['LEAD', 'CLIENTE', 'CONVERSA']), id: z.string().max(40) })).max(5000).optional(), excluir: z.array(z.string().max(30)).max(5000).optional(), apenasManual: z.boolean().optional() }).nullable().optional(),
+  manual: z.object({ incluir: z.array(z.object({ tipo: z.enum(['LEAD', 'CLIENTE', 'CONVERSA']), id: z.string().max(40), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), excluir: z.array(z.string().max(30)).max(50_000).optional(), numeros: z.array(z.object({ telefone: z.string().max(30), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), apenasManual: z.boolean().optional() }).nullable().optional(),
 })
 const zPasso = z.object({ tipo: z.enum(TIPOS_PASSO), texto: z.string().max(4000).nullable().optional(), midiaId: z.string().max(40).nullable().optional(), esperarMin: z.number().int().min(0).max(60 * 24 * 30).optional() })
 const zConteudo = z.object({ passos: z.array(zPasso).min(1).max(10), fallbacks: z.record(z.string(), z.string().max(120)).optional(), rodapeSair: z.boolean().optional() })
@@ -173,7 +175,7 @@ router.get('/disparo/contatos', ...ver, async (req, res) => {
   const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   const alvo = norm(busca)
   const todos = [...r.elegiveis, ...r.excluidos.map(x => x.contato)].filter(c => norm(c.nome ?? '').includes(alvo) || (dig.length >= 4 && (c.telefone ?? '').includes(dig)))
-  res.json({ itens: todos.slice(0, 30).map(c => ({ tipo: c.leadId ? 'LEAD' : c.clienteId ? 'CLIENTE' : 'CONVERSA', id: c.leadId ?? c.clienteId ?? c.conversaId, nome: c.nome, telefone: c.telefone ? `final ${c.telefone.slice(-4)}` : null, telefoneCompleto: c.telefone, vendedor: c.vendedorNome, situacao: c.situacao })).filter(x => x.id) })
+  res.json({ total: todos.length, itens: todos.slice(0, 2000).map(c => ({ tipo: c.leadId ? 'LEAD' : c.clienteId ? 'CLIENTE' : 'CONVERSA', id: c.leadId ?? c.clienteId ?? c.conversaId, nome: c.nome, telefone: c.telefone ? `final ${c.telefone.slice(-4)}` : null, telefoneCompleto: c.telefone, vendedor: c.vendedorNome, situacao: c.situacao })).filter(x => x.id) })
 })
 
 // ---------- Campanhas ----------

@@ -5792,3 +5792,9 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .dp-escolha > .pl-btn { justify-self: start; }
 .dp-ig-fim { display: flex; justify-content: center; padding: 14px 0 4px; }
 .dp-ig-item .pl-btn + .pl-btn { margin-top: 2px; }
+/* Disparo — montar o público: guia, escolhidos à mão e "só estes" */
+.dp-guia { border: 1px solid var(--pl-border); border-left: 3px solid var(--pl-accent); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; }
+.dp-guia ol { margin: 6px 0; padding-left: 20px; display: grid; gap: 2px; }
+.dp-escolhidos { border: 1px solid var(--pl-border); border-radius: 10px; padding: 10px 12px; margin-top: 12px; display: grid; gap: 8px; }
+.dp-so-estes { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+.dp-so-estes input { margin-top: 3px; }
