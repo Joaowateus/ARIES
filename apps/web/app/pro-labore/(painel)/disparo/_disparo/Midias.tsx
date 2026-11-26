@@ -189,7 +189,8 @@ export function Visualizador({ m, fechar, acoes }: { m: MidiaDisparo; fechar: ()
 
 interface Envio { chave: string; nome: string; tamanho: number; fracao: number; etapa: string; erro: string | null; pronto: boolean }
 
-export function EnviarDoComputador({ aceitar = 'TODOS', aoConcluir, rotulo = 'Enviar do computador', multiplo = true }: { aceitar?: TipoMidia | 'TODOS'; aoConcluir: (ids: string[]) => void; rotulo?: string; multiplo?: boolean }) {
+/** `soltos`: arquivos soltos fora daqui (ex.: em cima da Biblioteca inteira) — cada novo pedido é enviado. */
+export function EnviarDoComputador({ aceitar = 'TODOS', aoConcluir, rotulo = 'Enviar do computador', multiplo = true, soltos }: { aceitar?: TipoMidia | 'TODOS'; aoConcluir: (ids: string[]) => void; rotulo?: string; multiplo?: boolean; soltos?: { arquivos: File[]; n: number } | null }) {
   const meta = useMeta()
   const [envios, setEnvios] = useState<Envio[]>([])
   const [sobre, setSobre] = useState(false)
@@ -209,9 +210,11 @@ export function EnviarDoComputador({ aceitar = 'TODOS', aoConcluir, rotulo = 'En
     }
     if (ids.length) aoConcluir(ids)
   }, [aceitar, aoConcluir, meta, multiplo])
+  const ultimo = useRef(0)
+  useEffect(() => { if (soltos && soltos.n !== ultimo.current) { ultimo.current = soltos.n; void enviar(soltos.arquivos) } }, [soltos, enviar])
   const max = aceitar === 'TODOS' ? Math.max(...Object.values(meta.midias.limites)) : meta.midias.limites[aceitar]
   return (
-    <div className={`dp-envio${sobre ? ' sobre' : ''}`} onDragOver={e => { e.preventDefault(); setSobre(true) }} onDragLeave={() => setSobre(false)} onDrop={e => { e.preventDefault(); setSobre(false); void enviar([...e.dataTransfer.files]) }} data-envio-computador>
+    <div className={`dp-envio${sobre ? ' sobre' : ''}`} onDragOver={e => { e.preventDefault(); e.stopPropagation(); setSobre(true) }} onDragLeave={() => setSobre(false)} onDrop={e => { e.preventDefault(); e.stopPropagation(); setSobre(false); void enviar([...e.dataTransfer.files]) }} data-envio-computador>
       <div className="dp-linha" style={{ justifyContent: 'space-between' }}>
         <span className="pl-hint">Arraste {multiplo ? 'os arquivos' : 'o arquivo'} para cá ou</span>
         <button type="button" className="pl-btn pl-btn-primary" onClick={() => input.current?.click()}>{rotulo}</button>
