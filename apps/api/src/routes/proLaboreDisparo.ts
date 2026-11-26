@@ -13,7 +13,7 @@ import { requireModulo } from '../lib/acessos'
 import { papelDoUsuario } from '../lib/papelHoje'
 import { gravarNoBlob, lerDoBlob } from '../lib/armazenamento'
 import { lerConfigLoja, lerConfigEnvio, normalizarTelefone, renderizar, ROTULO_STATUS, ROTULO_FINALIDADE, VARIAVEIS, EDITAVEL, FINALIDADES, TIPOS_PASSO, type Conteudo, type StatusCampanha } from '../lib/disparo/regras'
-import { CAMPOS, JORNADA, MOTIVOS, PREDEFINIDOS, BASES, BASES_INSTAGRAM, contagemJornada, definicaoDaEtapa, resolverPublico, valoresDoContato, type DefinicaoPublico } from '../lib/disparo/publico'
+import { leitorDoPapel, CAMPOS, JORNADA, MOTIVOS, PREDEFINIDOS, BASES, BASES_INSTAGRAM, contagemJornada, definicaoDaEtapa, resolverPublico, valoresDoContato, type DefinicaoPublico } from '../lib/disparo/publico'
 import { ErroDisparo, cancelarCampanha, configDaLoja, decidirMensagem, disparoAtivo, evento, prepararCampanha, rodarDisparo, situacaoDoEnvio, transicionar } from '../lib/disparo/motor'
 import { comTrava, ultimasRodadas } from '../lib/disparo/travas'
 import { MAX_POR_HORA_INSTAGRAM } from '../lib/disparo/instagram'
@@ -35,9 +35,9 @@ function quem(req: Request): Quem {
   const papel = papelDoUsuario(u)
   return { usuarioId: u.sub, papelLogin: u.papel, papel, gestao: papel === 'DONO' || papel === 'SUPERVISOR', dono: papel === 'DONO', vendedorId: u.vendedorId ?? null, sdr: !!u.sdr, nome: u.nome }
 }
-// Sem trava de carteira: qualquer pessoa com o Disparo monta público com todos os contatos da loja
-// (leads, clientes, conversas e equipe) e escolhe quem quiser (pedido do dono, 25/11/2026).
-const leitorDe = (q: Quem) => ({ usuarioId: q.usuarioId, papel: 'DONO', vendedorId: null, sdr: false })
+// Carteira (pedido do dono, 26/11/2026): vendedor e SDR montam público só com os próprios leads e
+// conversas (mesma regra do CRM); dono e supervisor, com a loja toda.
+const leitorDe = (q: Quem) => leitorDoPapel(q.usuarioId, q.papel, q.vendedorId)
 const semSocial = (req: Request, res: Response, next: () => void) => { if (req.proLaboreUser?.papel === 'SOCIAL_MEDIA') { res.status(403).json({ error: 'O Disparo não faz parte do espaço do Social Media.' }); return } next() }
 const ver = [requireProLaboreAuth, semSocial, requireModulo('disparo', 'VER')]
 const editar = [requireProLaboreAuth, semSocial, requireModulo('disparo', 'EDITAR')]
@@ -215,7 +215,7 @@ router.get('/disparo/jornada', ...ver, async (req, res) => {
   try {
     const q = quem(req)
     const [etapas, campanhas] = await Promise.all([
-      contagemJornada(q.usuarioId),
+      contagemJornada(leitorDe(q)),
       prisma.disparoCampanha.findMany({ where: { usuarioId: q.usuarioId, excluidaEm: null, ...escopo(q, req.query.de), status: { in: ['DRAFT', 'VALIDATING', 'NEEDS_REVIEW', 'READY', 'SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'] } }, select: { id: true, nome: true, status: true, config: true, publico: true, totais: true, objetivo: true } }),
     ])
     const estrategias = campanhas.filter(c => lerConfigEnvio(c.config).continua).map(c => ({ id: c.id, nome: c.nome, status: c.status, objetivo: c.objetivo, etapa: etapaDaDefinicao(c.publico), entraram: ((c.totais ?? {}) as { elegiveis?: number }).elegiveis ?? 0 }))
@@ -275,6 +275,7 @@ router.post('/disparo/campanhas', ...editar, async (req, res) => {
     const b = zCampanha.parse(req.body)
     validarConteudo(b.conteudo as Conteudo)
     validarCanal(b.canal, b.publico as DefinicaoPublico, b.conteudo as Conteudo)
+    if (b.canal === 'INSTAGRAM' && !q.gestao) throw new ErroDisparo('O Instagram da empresa é usado pelo dono e pelo supervisor: envie pelo seu WhatsApp', 403)
     if (b.assistenteId && !(await remetentesDe(q)).some(r => r.id === b.assistenteId)) throw new ErroDisparo('Você não pode enviar por esse número', 403)
     const c = await prisma.disparoCampanha.create({
       data: {
@@ -312,6 +313,7 @@ router.put('/disparo/campanhas/:id', ...editar, async (req, res) => {
     const b = zCampanha.parse(req.body)
     validarConteudo(b.conteudo as Conteudo)
     validarCanal(b.canal, b.publico as DefinicaoPublico, b.conteudo as Conteudo)
+    if (b.canal === 'INSTAGRAM' && !q.gestao) throw new ErroDisparo('O Instagram da empresa é usado pelo dono e pelo supervisor: envie pelo seu WhatsApp', 403)
     if (b.assistenteId && !(await remetentesDe(q)).some(r => r.id === b.assistenteId)) throw new ErroDisparo('Você não pode enviar por esse número', 403)
     const versao = c.versao + 1
     await prisma.$transaction([

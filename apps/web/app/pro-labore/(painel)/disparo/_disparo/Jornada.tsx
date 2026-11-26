@@ -37,7 +37,7 @@ export function Jornada({ abrir }: { abrir: (id: string) => void }) {
       <section className="pl-card dp-guia" style={{ marginBottom: 12 }}>
         <b>Estratégias pela jornada de compra</b>
         <p style={{ margin: '4px 0' }}>Cada etapa do CRM é um público vivo: quem a equipe move para a etapa entra sozinho, e quem sai dela para de receber. Crie uma estratégia para fazer o lead avançar — o ARIES sugere as mensagens, você ajusta.</p>
-        <span className="pl-hint">Elas saem pelo WhatsApp do vendedor de cada lead, respeitam o ritmo de proteção e param quando o cliente responde.</span>
+        <span className="pl-hint">{meta.gestao ? 'Os números contam os leads da loja toda. As estratégias saem pelo WhatsApp do vendedor de cada lead' : 'Os números contam só os seus leads (a sua carteira no CRM). As estratégias saem pelo seu WhatsApp'}, respeitam o ritmo de proteção e param quando o cliente responde.</span>
       </section>
       {erro && <div className="pl-alert pl-alert-error" role="alert">{erro}</div>}
       {!d ? <p className="pl-hint" aria-busy="true">Contando a jornada…</p> : (

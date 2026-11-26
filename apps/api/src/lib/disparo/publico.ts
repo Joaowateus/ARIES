@@ -138,9 +138,30 @@ export interface Contato {
   autorizacao: string | null // AUTORIZADO | REVOGADO | BLOQUEADO | null (preenchido depois)
   /** Contato do Instagram (telefone = "ig:<id>"): conversa, janela da Meta e o comentário (resposta privada). */
   instagram?: { conversaId: string; igId: string; janelaAte: Date | null; comentarioId: string | null; canal: string } | null
+  /** Lista colada: o número é lead da carteira de outro vendedor (nome dele). Quem não é da gestão não envia. */
+  deOutroVendedor?: string | null
 }
 
-interface Leitor { usuarioId: string; papel: string; vendedorId: string | null; sdr?: boolean }
+export interface Leitor { usuarioId: string; papel: string; vendedorId: string | null; sdr?: boolean }
+const ehGestao = (q: Leitor) => q.papel === 'DONO' || q.papel === 'SUPERVISOR'
+
+/**
+ * Carteira de quem monta o público (papel de papelDoUsuario): dono, supervisor e quem vê a loja
+ * (tráfego, financeiro) trabalham com todos os leads; vendedor e SDR, só com os próprios (mesma regra
+ * do CRM). Sem vendedor vinculado, não vê nenhum.
+ */
+export function leitorDoPapel(usuarioId: string, papel: string, vendedorId: string | null): Leitor {
+  if (papel === 'DONO' || papel === 'TRAFEGO' || papel === 'FINANCEIRO') return { usuarioId, papel: 'DONO', vendedorId: null, sdr: false }
+  if (papel === 'SUPERVISOR') return { usuarioId, papel: 'SUPERVISOR', vendedorId, sdr: false }
+  return { usuarioId, papel: 'VENDEDOR', vendedorId: vendedorId ?? '__nenhum__', sdr: papel === 'SDR' }
+}
+/** Carteira de quem criou a campanha (estratégias contínuas e conferência na hora do envio). */
+export async function leitorDaCampanha(usuarioId: string, criadoPorId: string | null): Promise<Leitor> {
+  if (!criadoPorId) return leitorDoPapel(usuarioId, 'DONO', null)
+  const v = await prisma.vendedor.findFirst({ where: { id: criadoPorId, usuarioId }, select: { papel: true, funcao: true } })
+  const papel = !v ? 'VENDEDOR' : v.funcao === 'GESTOR_TRAFEGO' ? 'TRAFEGO' : v.funcao === 'FINANCEIRO' ? 'FINANCEIRO' : v.papel === 'SDR' ? 'SDR' : v.papel === 'SUPERVISOR' ? 'SUPERVISOR' : 'VENDEDOR'
+  return leitorDoPapel(usuarioId, papel, criadoPorId)
+}
 
 /** Contato avulso (lista colada, fora do CRM): sem lead, cliente nem conversa. */
 const CONTATO_AVULSO: Omit<Contato, 'telefone' | 'bruto' | 'nome' | 'criadoEm'> = {
@@ -320,7 +341,7 @@ function juntar(grupos: Contato[][]): { contatos: Contato[]; duplicados: number;
 export const MOTIVOS: Record<string, string> = {
   SEM_TELEFONE: 'Sem telefone ou número inválido', DUPLICADO: 'Número repetido (fica um só)', BLOQUEADO: 'Contato bloqueado',
   DESCADASTRADO: 'Pediu para não receber (descadastrado)', SEM_AUTORIZACAO: 'Sem autorização para mensagens promocionais',
-  NUMERO_REMETENTE: 'É o próprio número que envia a campanha', JANELA_FECHADA: 'Instagram: fora da janela da Meta (24 h desde a última mensagem da pessoa; 7 dias para comentário)', VARIAVEL_SEM_VALOR: 'Falta um dado usado na mensagem (sem valor alternativo)',
+  NUMERO_REMETENTE: 'É o próprio número que envia a campanha', CARTEIRA_DE_OUTRO: 'É lead da carteira de outro vendedor', JANELA_FECHADA: 'Instagram: fora da janela da Meta (24 h desde a última mensagem da pessoa; 7 dias para comentário)', VARIAVEL_SEM_VALOR: 'Falta um dado usado na mensagem (sem valor alternativo)',
   RETIRADO: 'Retirado à mão da lista',
 }
 export interface Resultado {
@@ -347,6 +368,8 @@ const DIA_MS_IG = 86_400_000
  * a um comentário em até 7 dias. Seguidor que nunca interagiu não pode receber DM pela API oficial.
  */
 async function lerInstagram(q: Leitor, tipo: 'DM' | 'COMENTARIOS'): Promise<Contato[]> {
+  // O Instagram é a conta da empresa: só a gestão monta público com ele.
+  if (!ehGestao(q)) return []
   const cs = await prisma.smConversa.findMany({
     where: { usuarioId: q.usuarioId, ...(tipo === 'DM' ? { canal: { in: ['DIRECT', 'COMENTARIO_AUTOMACAO', 'RESPOSTA_STORY'] } } : { canal: 'COMENTARIO', criadoEm: { gte: new Date(Date.now() - 7 * DIA_MS_IG) } }) },
     orderBy: { ultimaMsgEm: 'desc' }, take: 20_000,
@@ -385,10 +408,19 @@ async function contatosDaLista(q: Leitor, lista: Array<{ telefone: string; nome?
   // Cadastro existente com o mesmo número (pelos últimos dígitos): aproveita o que o CRM já sabe.
   const doCrm = chaves.size ? (await Promise.all([lerLeads(q), lerClientes(q)])).flat().filter(c => c.telefone && chaves.has(chaveTelefone(c.telefone))) : []
   const porChave = new Map(doCrm.map(c => [chaveTelefone(c.telefone!), c]))
+  // Vendedor/SDR: número colado que é lead de outro vendedor fica de fora (cada um com a sua carteira).
+  const deOutro = new Map<string, string>()
+  if (!ehGestao(q) && chaves.size) {
+    const todos = await prisma.lead.findMany({ where: { usuarioId: q.usuarioId, telefone: { not: null } }, select: { telefone: true, vendedor: { select: { nome: true } } } })
+    for (const l of todos) {
+      const k = l.telefone ? normalizarTelefone(l.telefone) : null
+      if (k && chaves.has(chaveTelefone(k)) && !porChave.has(chaveTelefone(k))) deOutro.set(chaveTelefone(k), l.vendedor?.nome ?? 'outro vendedor')
+    }
+  }
   return pedidos.map(x => {
     const crm = x.tel ? porChave.get(chaveTelefone(x.tel)) : undefined
     if (crm) return { ...crm, nome: crm.nome ?? x.nome }
-    return { ...CONTATO_AVULSO, telefone: x.tel, bruto: x.bruto, nome: x.nome ?? (x.tel ? `+${x.tel}` : x.bruto), criadoEm: agora } as Contato
+    return { ...CONTATO_AVULSO, telefone: x.tel, bruto: x.bruto, nome: x.nome ?? (x.tel ? `+${x.tel}` : x.bruto), criadoEm: agora, deOutroVendedor: x.tel ? deOutro.get(chaveTelefone(x.tel)) ?? null : null } as Contato
   })
 }
 
@@ -442,6 +474,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
   for (const c of candidatos) {
     const a = c.autorizacao
     if (retirados.has(c.telefone!)) { excluir(c, 'RETIRADO'); continue }
+    if (c.deOutroVendedor) { excluir(c, 'CARTEIRA_DE_OUTRO'); continue }
     if (remetente && c.telefone === remetente) { excluir(c, 'NUMERO_REMETENTE'); continue }
     if (c.bloqueado || a === 'BLOQUEADO') { excluir(c, 'BLOQUEADO'); continue }
     // Instagram: só dentro da janela da Meta. A pessoa falou com a conta (é o consentimento da Meta);
@@ -464,8 +497,8 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
 }
 
 /** Quantos leads há em cada etapa agora e quantos estão parados nela há mais de 7 dias. */
-export async function contagemJornada(usuarioId: string, agora = new Date()) {
-  const leads = await lerLeads({ usuarioId, papel: 'DONO', vendedorId: null })
+export async function contagemJornada(q: Leitor, agora = new Date()) {
+  const leads = await lerLeads(q)
   const limite = agora.getTime() - 7 * DIA
   return JORNADA.map(j => {
     const nela = leads.filter(l => l.etapa === j.etapa && (j.etapa === 'VENDA' || l.situacao === 'ABERTO'))

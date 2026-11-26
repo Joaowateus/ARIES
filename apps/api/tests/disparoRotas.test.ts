@@ -60,7 +60,7 @@ test('fluxo com aprovação ligada pelo dono: vendedor cria → revisão → apr
   assert.equal(nova.status, 201)
   const id = nova.corpo.id as string
   const prev = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao: { base: 'LEADS' }, finalidade: 'OPERACIONAL', conteudo: campanha(loja.asVend).conteudo })
-  assert.equal(prev.corpo.elegiveis, 2, 'sem trava de carteira: a vendedora vê a Lia e o Rui (lead do supervisor)')
+  assert.equal(prev.corpo.elegiveis, 1, 'carteira: a vendedora vê só a Lia (o Rui é do supervisor)')
   const val = await api('VEND', 'POST', `/disparo/campanhas/${id}/validar`)
   assert.equal(val.status, 200)
   let c = await api('VEND', 'GET', `/disparo/campanhas/${id}`)
@@ -199,14 +199,15 @@ test('excluir: some da lista e dos relatórios, cancela o que ia sair e não apa
   assert.ok(!((vg.corpo.recentes as Array<{ id: string }>) ?? []).some(x => x.id === id), 'fora da visão geral')
 })
 
-test('sem travas: aprovação desligada por padrão, lista colada (inclusive fora do CRM) e busca sem corte em 30', async t => {
+test('aprovação desligada por padrão, lista colada (inclusive fora do CRM, sem o lead de outro vendedor) e busca sem corte em 30', async t => {
   if (!temBanco) return t.skip('sem banco de teste')
   assert.equal((await api('DONO', 'PUT', '/disparo/config', { exigirAprovacao: false })).status, 200)
   // Lista colada: um número do CRM (Rui, que é do supervisor) e dois números fora do CRM; um inválido.
   const definicao = { base: 'LEADS', manual: { apenasManual: true, numeros: [{ telefone: '(91) 98222-2222' }, { telefone: '91 97777-0001', nome: 'Primo do Rui' }, { telefone: '5591977770002' }, { telefone: '123' }] } }
   const prev = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao, finalidade: 'OPERACIONAL', conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Oi {{primeiro_nome|tudo bem}}!' }] } })
   assert.equal(prev.status, 200, JSON.stringify(prev.corpo))
-  assert.equal(prev.corpo.elegiveis, 3, 'Rui (do CRM, de outro vendedor) + 2 números avulsos')
+  assert.equal(prev.corpo.elegiveis, 2, '2 números avulsos; o Rui (lead do supervisor) fica de fora')
+  assert.equal((prev.corpo.porMotivo as Record<string, number>).CARTEIRA_DE_OUTRO, 1)
   assert.equal((prev.corpo.porMotivo as Record<string, number>).SEM_TELEFONE, 1, 'o número inválido fica de fora com o motivo')
   // Campanha da vendedora sai direto (sem aprovação) para a lista colada.
   const c = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), publico: definicao })
@@ -215,7 +216,7 @@ test('sem travas: aprovação desligada por padrão, lista colada (inclusive for
   const v = await api('VEND', 'GET', `/disparo/campanhas/${c.corpo.id}`)
   assert.equal(v.corpo.status, 'READY', 'sem aprovação obrigatória')
   const nomes = (await prisma.disparoDestinatario.findMany({ where: { campanhaId: String(c.corpo.id), status: 'ELEGIVEL' }, select: { nome: true } })).map(d => d.nome).sort()
-  assert.deepEqual(nomes, ['+5591977770002', 'Primo do Rui', 'Rui Cliente'])
+  assert.deepEqual(nomes, ['+5591977770002', 'Primo do Rui'])
   // Busca: devolve o total e não corta em 30.
   const busca = await api('VEND', 'GET', '/disparo/contatos?busca=Cliente')
   assert.equal(typeof busca.corpo.total, 'number')
@@ -280,4 +281,49 @@ test('aviso de resposta vai para quem criou a campanha e para quem recebeu no Wh
   assert.deepEqual(avisadosDaResposta(null, 'v1'), [null, 'v1'])
   assert.deepEqual(avisadosDaResposta('v1', 'v1'), ['v1'])
   assert.deepEqual(avisadosDaResposta('v2', null), ['v2'])
+})
+
+test('carteira: vendedora monta público, busca e Jornada só com os próprios leads; dono vê a loja; Instagram é da gestão', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const nomesPrevia = async (quem: 'DONO' | 'VEND' | 'SUP', definicao: unknown) => {
+    const r = await api(quem, 'POST', '/disparo/publicos/previa', { definicao, finalidade: 'OPERACIONAL' })
+    return (r.corpo.pagina as Array<{ nome: string }>).map(x => x.nome).sort()
+  }
+  assert.deepEqual(await nomesPrevia('VEND', { base: 'LEADS' }), ['Lia Cliente'])
+  assert.deepEqual(await nomesPrevia('VEND', { base: 'TODOS' }), ['Lia Cliente'])
+  assert.deepEqual(await nomesPrevia('DONO', { base: 'LEADS' }), ['Lia Cliente', 'Rui Cliente'])
+  // Escolher a dedo um lead de outro vendedor pelo id: não entra.
+  const rui = await prisma.lead.findFirstOrThrow({ where: { usuarioId: loja.id, nomeCliente: 'Rui Cliente' } })
+  assert.deepEqual(await nomesPrevia('VEND', { base: 'LEADS', manual: { apenasManual: true, incluir: [{ tipo: 'LEAD', id: rui.id }] } }), [])
+  // Busca de contatos e Jornada contam só a carteira.
+  const busca = await api('VEND', 'GET', '/disparo/contatos?busca=Cliente')
+  assert.deepEqual((busca.corpo.itens as Array<{ nome: string }>).map(x => x.nome), ['Lia Cliente'])
+  const jv = await api('VEND', 'GET', '/disparo/jornada')
+  const jd = await api('DONO', 'GET', '/disparo/jornada')
+  const total = (j: { corpo: Record<string, unknown> }, etapa: string) => (j.corpo.etapas as Array<{ etapa: string; total: number }>).find(e => e.etapa === etapa)!.total
+  assert.equal(total(jv, 'MQL'), 0, 'o MQL é do supervisor')
+  assert.equal(total(jd, 'MQL'), 1)
+  // Campanha da vendedora preparada por outra pessoa continua com a carteira dela.
+  const c = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), nome: 'Carteira' })
+  await api('SUP', 'POST', `/disparo/campanhas/${c.corpo.id}/validar`)
+  const dest = (await prisma.disparoDestinatario.findMany({ where: { campanhaId: String(c.corpo.id), status: 'ELEGIVEL' }, select: { nome: true } })).map(d => d.nome)
+  assert.deepEqual(dest, ['Lia Cliente'])
+  // Instagram da empresa: só a gestão.
+  const ig = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), canal: 'INSTAGRAM', publico: { base: 'INSTAGRAM_DM' } })
+  assert.equal(ig.status, 403)
+})
+
+test('estratégia contínua criada antes da regra de carteira: só entram os leads de quem criou', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const { alimentarContinuas } = await import('../src/lib/disparo/motor')
+  const c = await prisma.disparoCampanha.create({ data: {
+    usuarioId: loja.id, nome: 'Contínua antiga', finalidade: 'OPERACIONAL', assistenteId: loja.asVend, criadoPorId: loja.vend, status: 'RUNNING', iniciadaEm: new Date(),
+    publico: { base: 'LEADS' }, conteudo: { passos: [{ tipo: 'TEXTO', texto: 'Oi!' }] }, totais: { selecionados: 0, elegiveis: 0 },
+    config: { continua: true, janela: { inicio: '00:00', fim: '23:59', dias: [0, 1, 2, 3, 4, 5, 6] }, intervaloSeg: 0 },
+    preparo: { leitor: { usuarioId: loja.id, papel: 'DONO', vendedorId: null }, aprovacao: false }, // como era antes: loja toda
+  } })
+  await prisma.disparoTrava.deleteMany({ where: { chave: `alimentar:${c.id}` } })
+  await alimentarContinuas(Date.now() + 20_000)
+  const nomes = (await prisma.disparoDestinatario.findMany({ where: { campanhaId: c.id }, select: { nome: true } })).map(d => d.nome)
+  assert.deepEqual(nomes, ['Lia Cliente'])
 })
