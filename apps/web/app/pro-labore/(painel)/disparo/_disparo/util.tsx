@@ -14,7 +14,7 @@ export const useEscopo = () => useContext(EscopoCtx)
 export function SeletorEscopo() {
   const meta = useContext(MetaCtx)
   const { de, setDe } = useEscopo()
-  if (!meta?.gestao) return <p className="pl-hint" data-escopo="minhas">Você vê só as suas campanhas, os seus números e as respostas que chegaram para você.</p>
+  if (!meta?.gestao) return <p className="pl-hint" data-escopo="minhas">Você trabalha com a sua carteira: só os seus leads e conversas, as suas campanhas, os seus números e as respostas que chegaram para você.</p>
   const eu = meta.eu?.vendedorId ?? null
   return (
     <div className="dp-linha" data-escopo={de}>

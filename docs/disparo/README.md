@@ -279,6 +279,20 @@ Checklist do dia
 - Públicos, Biblioteca e modelos continuam da loja toda (sem trava de carteira, pedido de 25/11/2026).
 - Testes: `tests/disparoRotas.test.ts` ("cada pessoa vê só as próprias campanhas…" e o aviso de resposta).
 
+## 10l. Carteira: cada vendedor trabalha com os próprios leads (26/11/2026)
+
+- Substitui o "sem trava de carteira" de 25/11. `leitorDoPapel` (em `publico.ts`) segue a mesma regra do CRM (`leadWhereDe`):
+  - **Dono, supervisor, tráfego e financeiro**: a loja toda.
+  - **Vendedor**: só os leads dele. **SDR**: os dele e os que qualificou.
+- Vale para tudo do Disparo:
+  - públicos e prévia, busca de contatos, escolha a dedo por id (um lead de outro vendedor não entra);
+  - conversas do próprio WhatsApp;
+  - contagem da Jornada;
+  - lista colada: um número que é lead de outro vendedor fica de fora com o motivo `CARTEIRA_DE_OUTRO`; números fora do CRM continuam entrando.
+- **A carteira é sempre a de quem criou a campanha** (`leitorDaCampanha`), inclusive quando a gestão prepara a campanha de um vendedor, e também nas estratégias contínuas e na conferência "saiu do público" na hora do envio. Estratégias criadas antes desta regra passam a seguir a carteira de quem criou. Um lead passado para outro vendedor para de receber.
+- Clientes, Equipe e Instagram da empresa: só a gestão. A tela esconde essas opções para o vendedor.
+- Testes: `tests/disparoRotas.test.ts`, casos "carteira: …" e "estratégia contínua criada antes da regra de carteira".
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

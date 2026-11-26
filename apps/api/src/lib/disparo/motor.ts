@@ -21,7 +21,7 @@ import {
   CONFIG_PADRAO, esperaDaTentativa, dentroDaJanela, lerConfigEnvio, lerConfigLoja, normalizarTelefone, chaveTelefone, pedeParaSair, podeIr, renderizar,
   type ConfigEnvio, type ConfigLoja, type Conteudo, type Passo, type StatusCampanha, type ValoresVariaveis, type Finalidade,
 } from './regras'
-import { lerLeadsPorId, passaGrupo, resolverPublico, valoresDoContato, type DefinicaoPublico } from './publico'
+import { leitorDaCampanha, lerLeadsPorId, passaGrupo, resolverPublico, valoresDoContato, type DefinicaoPublico } from './publico'
 import { registrarAutorizacao, situacaoDe } from './autorizacao'
 import { provedor, type Remetente } from './provedor'
 import { arquivoParaEnvio } from './midias'
@@ -89,7 +89,8 @@ export async function prepararCampanha(campanhaId: string, agora = new Date()): 
   if (!preparo.leitor) throw new ErroDisparo('Campanha sem o contexto de quem a montou')
   const config = await configDaLoja(c.usuarioId)
   const conteudo = c.conteudo as unknown as Conteudo
-  const r = await resolverPublico(preparo.leitor, c.publico as unknown as DefinicaoPublico, { finalidade: c.finalidade as Finalidade, config, conteudo, remetenteNumero: c.assistente?.numeroWhatsapp ?? null }, agora)
+  // Sempre a carteira de quem criou a campanha (mesmo que outra pessoa da gestão a prepare).
+  const r = await resolverPublico(await leitorDaCampanha(c.usuarioId, c.criadoPorId), c.publico as unknown as DefinicaoPublico, { finalidade: c.finalidade as Finalidade, config, conteudo, remetenteNumero: c.assistente?.numeroWhatsapp ?? null }, agora)
   const loja = (await prisma.proLaboreUsuario.findUnique({ where: { id: c.usuarioId }, select: { nome: true } }))?.nome ?? ''
   const linhas: Prisma.DisparoDestinatarioCreateManyInput[] = []
   for (const x of [...r.elegiveis.map(e => ({ contato: e, motivo: null as string | null })), ...r.excluidos]) {
@@ -156,7 +157,7 @@ const ALIMENTAR_A_CADA_MS = 10 * MIN
  */
 export async function alimentarContinuas(fim: number, agora = new Date()): Promise<number> {
   let novos = 0
-  const cs = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, versao: true, assistenteId: true, canal: true, conteudo: true, config: true, publico: true, finalidade: true, preparo: true, totais: true, assistente: { select: { numeroWhatsapp: true } } } })
+  const cs = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, versao: true, assistenteId: true, canal: true, criadoPorId: true, conteudo: true, config: true, publico: true, finalidade: true, preparo: true, totais: true, assistente: { select: { numeroWhatsapp: true } } } })
   for (const c of cs) {
     if (!lerConfigEnvio(c.config).continua) continue
     if (Date.now() > fim - 5000) break
@@ -166,7 +167,8 @@ export async function alimentarContinuas(fim: number, agora = new Date()): Promi
       if (!preparo.leitor) continue
       const config = await configDaLoja(c.usuarioId)
       const conteudo = c.conteudo as unknown as Conteudo
-      const r = await resolverPublico(preparo.leitor, c.publico as unknown as DefinicaoPublico, { finalidade: c.finalidade as Finalidade, config, conteudo, remetenteNumero: c.assistente?.numeroWhatsapp ?? null }, agora)
+      // Carteira de quem criou (vale também para estratégias criadas antes da regra de carteira).
+      const r = await resolverPublico(await leitorDaCampanha(c.usuarioId, c.criadoPorId), c.publico as unknown as DefinicaoPublico, { finalidade: c.finalidade as Finalidade, config, conteudo, remetenteNumero: c.assistente?.numeroWhatsapp ?? null }, agora)
       const ja = new Set((await prisma.disparoDestinatario.findMany({ where: { campanhaId: c.id, versao: c.versao }, select: { telefone: true } })).map(x => x.telefone))
       const novosContatos = r.elegiveis.filter(e => e.telefone && !ja.has(e.telefone))
       if (!novosContatos.length) continue
@@ -207,14 +209,15 @@ async function travarProxima(assistenteId: string, agora: Date): Promise<Mensage
 }
 
 /** Motivo para não mandar agora (revalidado na hora de cada mensagem), ou null. */
-async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string; finalidade: string; iniciadaEm: Date | null; cfg: ConfigEnvio; publico?: Prisma.JsonValue; preparo?: Prisma.JsonValue }, d: { telefone: string; status: string; leadId: string | null; respondeuEm: Date | null; dados?: Prisma.JsonValue }): Promise<string | null> {
+async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string; finalidade: string; iniciadaEm: Date | null; cfg: ConfigEnvio; publico?: Prisma.JsonValue; preparo?: Prisma.JsonValue; criadoPorId?: string | null }, d: { telefone: string; status: string; leadId: string | null; respondeuEm: Date | null; dados?: Prisma.JsonValue }): Promise<string | null> {
   if (d.status === 'INTERROMPIDO' || d.status === 'FALHOU') return d.status
   if (c.cfg.pararAoResponder && d.respondeuEm) return 'RESPONDEU'
   if (ehRemetenteInstagram(m.assistenteId)) return motivoInstagram(m, c, d)
   // Saiu do público (ex.: o lead mudou de etapa no CRM): a sequência para. Conferido na hora de cada envio.
   if (c.cfg.pararAoSairDoPublico && d.leadId && c.publico) {
     const def = c.publico as unknown as DefinicaoPublico
-    const leitor = ((c.preparo ?? {}) as unknown as Preparo).leitor ?? { usuarioId: c.usuarioId, papel: 'DONO', vendedorId: null }
+    // Carteira de quem criou: lead passado para outro vendedor também sai do público.
+    const leitor = await leitorDaCampanha(c.usuarioId, c.criadoPorId ?? null)
     const [atual] = await lerLeadsPorId(leitor, [d.leadId])
     if (!atual || !passaGrupo(atual, def.filtros, new Date())) return 'SAIU_DO_PUBLICO'
   }
@@ -281,14 +284,14 @@ async function avancarSequencia(m: MensagemTravada, passos: Passo[], agora: Date
 
 /** Envia uma mensagem já travada. Devolve se o número remetente deve parar nesta rodada (sem conexão). */
 async function enviarTravada(m: MensagemTravada, remetente: Remetente | null, agora: Date, prazo = Date.now() + 20_000): Promise<'ENVIADA' | 'PULADA' | 'SEM_CONEXAO' | 'FALHOU' | 'LIMITE'> {
-  const c = await prisma.disparoCampanha.findUnique({ where: { id: m.campanhaId }, select: { usuarioId: true, nome: true, finalidade: true, iniciadaEm: true, config: true, conteudo: true, publico: true, preparo: true } })
+  const c = await prisma.disparoCampanha.findUnique({ where: { id: m.campanhaId }, select: { usuarioId: true, nome: true, finalidade: true, iniciadaEm: true, config: true, conteudo: true, publico: true, preparo: true, criadoPorId: true } })
   const d = await prisma.disparoDestinatario.findUnique({ where: { id: m.destinatarioId }, select: { telefone: true, status: true, leadId: true, respondeuEm: true, dados: true } })
   if (!c || !d) { await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'CANCELADA', ultimoErro: 'Campanha ou destinatário não encontrado' } }); return 'PULADA' }
   const cfgLoja = await configDaLoja(c.usuarioId)
   const cfg = lerConfigEnvio(c.config, cfgLoja.envio)
   const conteudo = c.conteudo as unknown as Conteudo
   const passo = conteudo.passos?.[m.passo]
-  const motivo = passo ? await motivoParaInterromper(m, { usuarioId: c.usuarioId, finalidade: c.finalidade, iniciadaEm: c.iniciadaEm, cfg, publico: c.publico, preparo: c.preparo }, d) : 'PASSO_REMOVIDO'
+  const motivo = passo ? await motivoParaInterromper(m, { usuarioId: c.usuarioId, finalidade: c.finalidade, iniciadaEm: c.iniciadaEm, cfg, publico: c.publico, preparo: c.preparo, criadoPorId: c.criadoPorId }, d) : 'PASSO_REMOVIDO'
   if (motivo) {
     await prisma.disparoMensagem.update({ where: { id: m.id }, data: { status: 'PULADA', ultimoErro: motivo, travadaEm: null } })
     await prisma.disparoDestinatario.updateMany({ where: { id: m.destinatarioId, status: { in: ['EM_ANDAMENTO', 'ELEGIVEL'] } }, data: { status: motivo === 'RESPONDEU' ? 'RESPONDEU' : 'INTERROMPIDO', interrompidoPor: motivo } })

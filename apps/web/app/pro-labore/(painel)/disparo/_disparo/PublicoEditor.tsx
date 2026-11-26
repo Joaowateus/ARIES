@@ -192,14 +192,14 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
       <div className="pl-field-grid" style={{ marginTop: 12 }}>
         <div className="pl-field"><label htmlFor="dp-base">② De onde vêm os contatos</label>
           <select id="dp-base" className="pl-select" value={definicao.base} onChange={e => mudar({ ...definicao, base: e.target.value as DefinicaoPublicoDisparo['base'], predefinido: null })}>
-            {BASES.map(b => <option key={b.valor} value={b.valor}>{b.rotulo}</option>)}
+            {BASES.filter(b => meta.gestao || (b.valor !== 'CLIENTES' && b.valor !== 'EQUIPE')).map(b => <option key={b.valor} value={b.valor}>{b.rotulo}</option>)}
           </select>
         </div>
       </div>
       <div className="pl-field" style={{ marginTop: 12 }}><label>Filtros (opcional)</label>
         <EditorGrupo g={filtros} mudar={g => mudar({ ...definicao, filtros: g, predefinido: null })} />
       </div>
-      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-busca">③ Escolher pessoas (busca em todos os contatos da loja)</label>
+      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-busca">③ Escolher pessoas ({meta.gestao ? 'busca em todos os contatos da loja' : 'busca nos seus leads e conversas'})</label>
         <input id="dp-busca" className="pl-input" placeholder="Nome ou telefone (ex.: João, 9822)" value={busca} onChange={e => { setBusca(e.target.value); setMostrar(50) }} />
         {busca.trim().length >= 2 && (
           <div className="dp-linha" style={{ justifyContent: 'space-between', marginTop: 6 }}>
@@ -223,7 +223,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
         )}
       </div>
 
-      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-lista">④ Colar uma lista de números (de planilha, conversa ou qualquer lugar — mesmo quem não está no CRM)</label>
+      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-lista">④ Colar uma lista de números (de planilha, conversa ou qualquer lugar — mesmo quem não está no CRM{meta.gestao ? '' : '; lead de outro vendedor fica de fora'})</label>
         <textarea id="dp-lista" className="pl-input" rows={4} value={lista} onChange={e => setLista(e.target.value)} placeholder={'Um por linha. Pode ter o nome junto:\nMaria Souza; (91) 98888-7777\n91 99999-0000\nJoão, 5591988887777'} />
         <div className="dp-linha" style={{ marginTop: 6 }}>
           <span className="pl-hint">{lida.numeros.length ? `${lida.numeros.length} número(s) reconhecido(s)${lida.ignoradas ? ` · ${lida.ignoradas} linha(s) sem número` : ''}` : 'Cole ou envie um arquivo .csv/.txt'}</span>

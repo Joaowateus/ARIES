@@ -418,7 +418,7 @@ test('estratégia contínua por etapa: entra quem chega na etapa, sai quem muda 
   const dDeb = await prisma.disparoDestinatario.findFirst({ where: { campanhaId: c.id, leadId: debora } })
   assert.equal(dDeb?.interrompidoPor, 'SAIU_DO_PUBLICO')
   // Jornada: contagem por etapa.
-  const j = await contagemJornada(loja.id)
+  const j = await contagemJornada(dono())
   assert.ok((j.find(x => x.etapa === 'LEAD')?.total ?? 0) >= 3)
   await prisma.disparoCampanha.update({ where: { id: c.id }, data: { status: 'CANCELLED' } })
 })

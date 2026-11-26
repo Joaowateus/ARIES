@@ -112,14 +112,14 @@ export function Assistente({ campanha, fechar, abrirMonitor, preset }: { campanh
             <div className="cc-chips">{(Object.keys(meta.finalidades) as FinalidadeDisparo[]).map(k => <button key={k} type="button" className={`pl-chip ${f.finalidade === k ? 'active' : ''}`} onClick={() => setF({ ...f, finalidade: k })}>{meta.finalidades[k]}</button>)}</div>
             <p className="pl-hint">Promocional só vai para quem autorizou{meta.config.baseMarketing === 'RELACAO' ? ' ou já tem relação comercial com a loja' : ''} e sempre leva a opção de sair. Operacional e relacionamento são para assuntos que o cliente já tem com a loja; ninguém bloqueado recebe nada.</p>
           </div>
-          <div className="pl-field" style={{ gridColumn: '1 / -1' }}><label>Canal</label>
+          {(meta.gestao || ig) && <div className="pl-field" style={{ gridColumn: '1 / -1' }}><label>Canal</label>
             <div className="cc-chips" data-canal>
               <button type="button" className={`pl-chip ${!ig ? 'active' : ''}`} onClick={() => trocarCanal('WHATSAPP')}>WhatsApp</button>
               <button type="button" className={`pl-chip ${ig ? 'active' : ''}`} onClick={() => trocarCanal('INSTAGRAM')} data-canal-instagram>Instagram (direct)</button>
             </div>
             {ig && <p className="pl-hint">Pelo direct do Instagram da empresa{meta.instagram?.usuario ? ` (@${meta.instagram.usuario})` : ''}, só para quem falou com a conta: mandou mensagem, respondeu story (até 24 h) ou comentou (resposta privada em até 7 dias). Até {meta.instagram?.maxPorHora ?? 180} mensagens por hora. Quem responde cai no Atendimento do Social Media.</p>}
             {ig && !meta.instagram?.conectado && <div className="pl-alert pl-alert-error" role="alert">O Instagram da empresa não está conectado. Conecte em Social Media › Conexão.</div>}
-          </div>
+          </div>}
           {!ig && <div className="pl-field"><label htmlFor="dp-rem">Número que envia</label>
             <select id="dp-rem" className="pl-select" value={f.assistenteId ?? ''} onChange={e => setF({ ...f, assistenteId: e.target.value || null })}>
               <option value="">Escolha…</option>
