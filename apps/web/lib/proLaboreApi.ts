@@ -4180,6 +4180,14 @@ export interface VisaoGeralDisparo {
   taxaEntrega: number | null; taxaLeitura: number | null; taxaResposta: number | null
   recentes: Array<{ id: string; nome: string; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; finalidade: FinalidadeDisparo; totais: CampanhaDisparo['totais'] }>
   atividade: EventoDisparo[]
+  /** Painel (redesign 26/11): o mesmo período antes deste, para as variações. */
+  anterior?: { aceitas: number; entregues: number; lidas: number; falhas: number; respostas: number; taxaEntrega: number | null; taxaLeitura: number | null; taxaResposta: number | null }
+  porDia?: Array<{ dia: string; aceitas: number; falhas: number }>
+  atencao?: Array<{ id: string; nome: string; status: StatusCampanhaDisparo; motivo: string; titulo: string; texto: string }>
+  andamento?: Array<{ id: string; nome: string; status: StatusCampanhaDisparo; canal: string; remetente: string | null; criadoPor: string | null; elegiveis: number; enviadas: number; falhas: number; paradas: number; situacao: { motivo: string; titulo: string; proximoEnvioEm: string | null } | null }>
+  agora?: { enviando: number; naFila: number; pausadas: number; proximoEnvioEm: string | null; intervaloSeg: number | null }
+  aprovacao?: { quantos: number; primeira: { id: string; nome: string; de: string | null; desde: string } | null }
+  proximaAgendada?: { id: string; nome: string; em: string } | null
 }
 export interface ComercialDisparo { janelaDias: number; ate: string; destinatariosComLead: number; leadsReativados: number; oportunidades: number; fichasDeCredito: number; aprovacoes: number; visitas: number; vendas: number; receita: number | null; custo: null; roi: null; origem: string }
 export interface ModeloDisparo { id: string; nome: string; conteudo: ConteudoDisparo; criadoPorNome: string | null; atualizadoEm: string }

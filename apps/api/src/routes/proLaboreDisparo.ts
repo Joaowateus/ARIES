@@ -19,7 +19,7 @@ import { comTrava, ultimasRodadas } from '../lib/disparo/travas'
 import { MAX_POR_HORA_INSTAGRAM } from '../lib/disparo/instagram'
 import { estadosDeAutorizacao, registrarAutorizacao, ROTULO_BASE, BASES_LEGAIS } from '../lib/disparo/autorizacao'
 import { provedor } from '../lib/disparo/provedor'
-import { comparativo, resultadoComercial, resumoCampanha, visaoGeral } from '../lib/disparo/relatorios'
+import { comparativo, painelDaVisao, resultadoComercial, resumoCampanha, visaoGeral } from '../lib/disparo/relatorios'
 import { ErroMidia, LIMITE_SEM_ARMAZENAMENTO, MIMES as MIMES_MIDIA, PARTE_BYTES, capaDaMidia, concluirEnvio, guardarCapa, iniciarEnvio, importarDoInstagram, limiteDe, listarMidias, mimePeloConteudo, nomeSeguro, publicacoesDoInstagram, receberParte, storiesDoInstagram } from '../lib/disparo/midias'
 import { linksTemporarios, supabaseConfigurado } from '../lib/armazenamento'
 
@@ -500,7 +500,13 @@ router.get('/disparo/campanhas/:id/comercial', ...ver, async (req, res) => {
 // ---------- Visão geral e relatórios ----------
 
 const desdeDias = (v: unknown) => new Date(Date.now() - Math.min(365, Math.max(1, Number(v ?? 30) || 30)) * 86_400_000)
-router.get('/disparo/visao-geral', ...ver, async (req, res) => { const q = quem(req); res.json(await visaoGeral(q.usuarioId, desdeDias(req.query.dias), escopo(q, req.query.de))) })
+router.get('/disparo/visao-geral', ...ver, async (req, res) => {
+  const q = quem(req)
+  const desde = desdeDias(req.query.dias)
+  const esc = escopo(q, req.query.de)
+  const [base, painel] = await Promise.all([visaoGeral(q.usuarioId, desde, esc), painelDaVisao(q.usuarioId, desde, esc)])
+  res.json({ ...base, ...painel })
+})
 router.get('/disparo/relatorios/comparativo', ...ver, async (req, res) => { const q = quem(req); res.json(await comparativo(q.usuarioId, desdeDias(req.query.dias), escopo(q, req.query.de))) })
 
 // Respostas às campanhas do escopo: quem respondeu, o quê, quando e por qual campanha.

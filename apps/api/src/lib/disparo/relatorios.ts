@@ -105,3 +105,80 @@ export async function comparativo(usuarioId: string, desde: Date, escopo: Prisma
   }
   return linhas
 }
+
+// ---------- Painel da Visão geral (redesign 26/11/2026): só leitura ----------
+
+const DIA_MS = 86_400_000
+/** Os números de um período [de, ate) das campanhas dadas, como a Visão geral já calcula. */
+async function numerosDoPeriodo(usuarioId: string, ids: string[], de: Date, ate: Date) {
+  const [msgs, respostas] = await Promise.all([
+    prisma.disparoMensagem.groupBy({ by: ['status'], where: { campanhaId: { in: ids }, criadoEm: { gte: de, lt: ate } }, _count: { _all: true } }),
+    prisma.disparoDestinatario.count({ where: { usuarioId, campanhaId: { in: ids }, respondeuEm: { gte: de, lt: ate } } }),
+  ])
+  const m = Object.fromEntries(msgs.map(x => [x.status, x._count._all])) as Record<string, number>
+  const aceitas = (m.ACEITA ?? 0) + (m.ENTREGUE ?? 0) + (m.LIDA ?? 0), entregues = (m.ENTREGUE ?? 0) + (m.LIDA ?? 0)
+  return { aceitas, entregues, lidas: m.LIDA ?? 0, falhas: m.FALHOU ?? 0, respostas, taxaEntrega: pct(entregues, aceitas), taxaLeitura: pct(m.LIDA ?? 0, aceitas), taxaResposta: pct(respostas, aceitas) }
+}
+
+export type ItemAtencao = { id: string; nome: string; status: string; motivo: string; titulo: string; texto: string }
+/**
+ * O que a Visão geral mostra no topo: o período anterior (para as variações), envios por dia, o que
+ * pede atenção (parada, limite, decisão de reenvio, aprovação), as campanhas em andamento com o
+ * progresso e o que vem a seguir. Nada aqui muda dado: são as mesmas tabelas, lidas de outro jeito.
+ */
+export async function painelDaVisao(usuarioId: string, desde: Date, escopo: Prisma.DisparoCampanhaWhereInput = {}, agora = new Date()) {
+  const { situacaoDoEnvio } = await import('./motor')
+  const campanhas: Prisma.DisparoCampanhaWhereInput = { usuarioId, excluidaEm: null, ...escopo }
+  const ids = (await prisma.disparoCampanha.findMany({ where: campanhas, select: { id: true } })).map(c => c.id)
+  const dur = Math.max(DIA_MS, agora.getTime() - desde.getTime())
+  const [anterior, dias, ativas, aprovacao, proxima] = await Promise.all([
+    numerosDoPeriodo(usuarioId, ids, new Date(desde.getTime() - dur), desde),
+    ids.length ? prisma.$queryRaw<Array<{ dia: string; aceitas: bigint; falhas: bigint }>>`
+      SELECT to_char(date_trunc('day', coalesce(m."aceitaEm", m."falhouEm") AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD') AS dia,
+        count(*) FILTER (WHERE m."aceitaEm" IS NOT NULL) AS aceitas, count(*) FILTER (WHERE m."aceitaEm" IS NULL AND m."falhouEm" IS NOT NULL) AS falhas
+      FROM pro_labore_disparo_mensagens m
+      WHERE m."campanhaId" IN (${Prisma.join(ids)}) AND coalesce(m."aceitaEm", m."falhouEm") >= ${desde}
+      GROUP BY 1 ORDER BY 1` : Promise.resolve([]),
+    prisma.disparoCampanha.findMany({ where: { ...campanhas, status: { in: ['RUNNING', 'QUEUED', 'PAUSED'] } }, orderBy: { iniciadaEm: 'desc' }, take: 12, select: { id: true, nome: true, status: true, canal: true, totais: true, criadoPorNome: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
+    prisma.disparoCampanha.findMany({ where: { ...campanhas, status: 'NEEDS_REVIEW' }, orderBy: { atualizadoEm: 'asc' }, select: { id: true, nome: true, criadoPorNome: true, atualizadoEm: true } }),
+    prisma.disparoCampanha.findFirst({ where: { ...campanhas, status: 'SCHEDULED', agendadaPara: { gte: agora } }, orderBy: { agendadaPara: 'asc' }, select: { id: true, nome: true, agendadaPara: true } }),
+  ])
+  // Envios por dia: todos os dias do período, inclusive os sem envio (a coluna vazia também informa).
+  const porDiaMapa = new Map(dias.map(d => [d.dia, { aceitas: Number(d.aceitas), falhas: Number(d.falhas) }]))
+  const porDia: Array<{ dia: string; aceitas: number; falhas: number }> = []
+  const fmt = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
+  for (let t = desde.getTime(); t <= agora.getTime() + 1; t += DIA_MS) {
+    const dia = fmt(new Date(t))
+    if (porDia.some(x => x.dia === dia)) continue
+    porDia.push({ dia, ...(porDiaMapa.get(dia) ?? { aceitas: 0, falhas: 0 }) })
+  }
+  const hoje = fmt(agora)
+  if (!porDia.some(x => x.dia === hoje)) porDia.push({ dia: hoje, ...(porDiaMapa.get(hoje) ?? { aceitas: 0, falhas: 0 }) })
+  // Progresso e situação de cada campanha em andamento.
+  const progresso = ativas.length ? await prisma.disparoDestinatario.groupBy({ by: ['campanhaId', 'status'], where: { campanhaId: { in: ativas.map(a => a.id) } }, _count: { _all: true } }) : []
+  const aDecidir = ativas.length ? await prisma.disparoMensagem.groupBy({ by: ['campanhaId'], where: { campanhaId: { in: ativas.map(a => a.id) }, OR: [{ status: 'DESCONHECIDO' }, { status: 'FALHOU', erroClasse: 'ESGOTOU' }] }, _count: { _all: true } }) : []
+  const andamento = []
+  const atencao: ItemAtencao[] = []
+  let proximoEnvioEm: string | null = null
+  let intervaloSeg: number | null = null
+  for (const c of ativas) {
+    const sit = await situacaoDoEnvio(c.id, agora).catch(() => null)
+    const conta = (st: string) => progresso.filter(p => p.campanhaId === c.id && p.status === st).reduce((a, p) => a + p._count._all, 0)
+    const elegiveis = ((c.totais ?? {}) as { elegiveis?: number }).elegiveis ?? 0
+    const enviadas = conta('CONCLUIDO') + conta('RESPONDEU'), falhas = conta('FALHOU'), paradas = conta('INTERROMPIDO')
+    const decidir = aDecidir.find(x => x.campanhaId === c.id)?._count._all ?? 0
+    andamento.push({ id: c.id, nome: c.nome, status: c.status, canal: c.canal, remetente: c.canal === 'INSTAGRAM' ? 'Instagram' : c.assistente?.vendedor.nome ?? null, criadoPor: c.criadoPorNome, elegiveis, enviadas, falhas, paradas, situacao: sit ? { motivo: sit.motivo, titulo: sit.titulo, proximoEnvioEm: sit.proximoEnvioEm } : null })
+    if (c.status === 'RUNNING' && sit?.proximoEnvioEm && (!proximoEnvioEm || sit.proximoEnvioEm < proximoEnvioEm)) { proximoEnvioEm = sit.proximoEnvioEm; intervaloSeg = sit.tempos.intervaloSeg }
+    if (sit && ['SEM_CONEXAO', 'LIMITE_HORA', 'LIMITE_DIA'].includes(sit.motivo)) atencao.push({ id: c.id, nome: c.nome, status: c.status, motivo: sit.motivo, titulo: sit.titulo, texto: sit.texto })
+    if (decidir) atencao.push({ id: c.id, nome: c.nome, status: c.status, motivo: 'DECIDIR', titulo: `${decidir} mensagem(ns) para decidir`, texto: 'Sem confirmação ou com as tentativas esgotadas: decida se reenvia ou considera enviada.' })
+  }
+  return {
+    anterior,
+    porDia,
+    atencao,
+    andamento,
+    agora: { enviando: ativas.filter(a => a.status === 'RUNNING').length, naFila: ativas.filter(a => a.status === 'QUEUED').length, pausadas: ativas.filter(a => a.status === 'PAUSED').length, proximoEnvioEm, intervaloSeg },
+    aprovacao: { quantos: aprovacao.length, primeira: aprovacao[0] ? { id: aprovacao[0].id, nome: aprovacao[0].nome, de: aprovacao[0].criadoPorNome, desde: aprovacao[0].atualizadoEm } : null },
+    proximaAgendada: proxima ? { id: proxima.id, nome: proxima.nome, em: proxima.agendadaPara } : null,
+  }
+}

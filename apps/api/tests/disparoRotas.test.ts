@@ -365,3 +365,29 @@ test('número novo (fora do WhatsApp e do CRM) em promoção: com a declaração
   assert.equal(saiu.corpo.elegiveis, 0)
   assert.equal((saiu.corpo.porMotivo as Record<string, number>).DESCADASTRADO, 1)
 })
+
+test('Visão geral (painel): período anterior, envios por dia, pedem atenção e andamento, só leitura e no escopo', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const c = await api('DONO', 'POST', '/disparo/campanhas', { ...campanha(loja.asSup), nome: 'Painel' })
+  const id = String(c.corpo.id)
+  await prisma.disparoCampanha.update({ where: { id }, data: { status: 'RUNNING', iniciadaEm: new Date(), erro: 'O WhatsApp de Sara precisa ser reconectado: leia o QR Code' } })
+  const d = await prisma.disparoDestinatario.create({ data: { campanhaId: id, versao: 1, usuarioId: loja.id, telefone: '5591987650001', nome: 'P1', status: 'CONCLUIDO' } })
+  await prisma.disparoMensagem.create({ data: { campanhaId: id, destinatarioId: d.id, passo: 0, chave: `${id}:${d.id}:0`, assistenteId: loja.asSup, tipo: 'TEXTO', status: 'ACEITA', aceitaEm: new Date(), enviarApos: new Date() } })
+  const antes = await prisma.disparoCampanha.findUnique({ where: { id }, select: { atualizadoEm: true } })
+  const v = await api('DONO', 'GET', '/disparo/visao-geral?dias=7&de=equipe')
+  assert.equal(v.status, 200)
+  const porDia = v.corpo.porDia as Array<{ dia: string; aceitas: number }>
+  assert.ok(porDia.length >= 7 && porDia.length <= 9, String(porDia.length))
+  assert.ok(porDia[porDia.length - 1].aceitas >= 1, 'o envio de hoje aparece no último dia')
+  assert.ok(v.corpo.anterior && typeof (v.corpo.anterior as { aceitas: number }).aceitas === 'number')
+  const atencao = v.corpo.atencao as Array<{ id: string; motivo: string }>
+  assert.ok(atencao.some(a => a.id === id && a.motivo === 'SEM_CONEXAO'), JSON.stringify(atencao))
+  const andamento = v.corpo.andamento as Array<{ id: string; enviadas: number; elegiveis: number }>
+  assert.equal(andamento.find(a => a.id === id)?.enviadas, 1)
+  // Vendedora não vê a campanha do dono no painel.
+  const vv = await api('VEND', 'GET', '/disparo/visao-geral?dias=7&de=equipe')
+  assert.ok(!(vv.corpo.andamento as Array<{ id: string }>).some(a => a.id === id))
+  // Só leitura: nada mudou na campanha.
+  assert.deepEqual(await prisma.disparoCampanha.findUnique({ where: { id }, select: { atualizadoEm: true } }), antes)
+  await prisma.disparoCampanha.update({ where: { id }, data: { status: 'CANCELLED' } })
+})
