@@ -6,7 +6,9 @@
 import { randomBytes } from 'crypto'
 import { prisma } from './prisma'
 import { logger } from './logger'
-import { configurarWebhook, estadoInstancia, listarInstancias, prepararConexao, reiniciarInstancia, removerInstancia, sessaoViva, testarEnvio, ErroWhatsapp, type CodigoConexao } from './whatsappEvolution'
+import { pegarTrava } from './disparo/travas'
+import { ambienteDeTeste } from './ambiente'
+import { configurarWebhook, estadoInstancia, evolutionConfigurada, listarInstancias, prepararConexao, reiniciarInstancia, removerInstancia, sessaoViva, testarEnvio, ErroWhatsapp, type CodigoConexao } from './whatsappEvolution'
 
 export type ResultadoReparo =
   | { status: 'CONECTADO'; mensagem: string }
@@ -72,7 +74,7 @@ export async function apagarInstancia(instancia: string, prazoMs = 7000): Promis
 
 /** Nome da sessão de um vendedor no servidor: o de sempre ou um novo com sufixo (quando o antigo ficou preso). */
 export const nomeDaSessao = (vendedorId: string, nova = false) => (nova ? `aries-${vendedorId}-${Date.now().toString(36)}` : `aries-${vendedorId}`)
-const daMesmaPessoa = (vendedorId: string, nome: string) => nome === `aries-${vendedorId}` || nome.startsWith(`aries-${vendedorId}-`)
+export const daMesmaPessoa = (vendedorId: string, nome: string) => nome === `aries-${vendedorId}` || nome.startsWith(`aries-${vendedorId}-`)
 
 /**
  * Sessão nova do WhatsApp com QR, sem depender de apagar a antiga. Tenta apagar a antiga; se o
@@ -103,14 +105,46 @@ export async function limparSobras(vendedorId: string, atual: string | null, pra
   const apagadas: string[] = [], presas: string[] = []
   for (const s of sobras) {
     if (Date.now() > fim) { presas.push(s.nome); continue }
-    if (await apagarInstancia(s.nome, 4000)) { apagadas.push(s.nome); continue }
-    await reiniciarInstancia(s.nome).catch(() => undefined)
-    await espera(1500)
-    if (Date.now() < fim && await apagarInstancia(s.nome, 3000)) apagadas.push(s.nome)
+    if (await apagarSobra(s.nome)) apagadas.push(s.nome)
     else presas.push(s.nome)
   }
   if (apagadas.length || presas.length) logger.info({ vendedorId, apagadas, presas }, 'whatsapp: limpeza de sessões antigas')
   return { apagadas, presas }
+}
+
+/** Apaga uma sobra; presa em "open" (sessão morta), reinicia (com o aparelho removido no celular ela cai) e tenta de novo. */
+async function apagarSobra(nome: string): Promise<boolean> {
+  if (await apagarInstancia(nome, 4000)) return true
+  await reiniciarInstancia(nome).catch(() => undefined)
+  await espera(1500)
+  return apagarInstancia(nome, 3000)
+}
+
+/**
+ * Faxina automática (rotina de cada minuto, no máximo a cada 15 min): para cada número CONECTADO,
+ * apaga as sessões antigas da mesma pessoa que ficaram no servidor (ex.: a que travou e foi trocada
+ * por uma nova). Nunca toca na sessão em uso nem em sessões de outra pessoa ou do ARIES no WhatsApp.
+ */
+export async function limparSobrasDeTodos(prazoMs = 8000): Promise<{ sobrasApagadas: number; sobrasPresas: number }> {
+  const out = { sobrasApagadas: 0, sobrasPresas: 0 }
+  if (!evolutionConfigurada() || ambienteDeTeste() || !(await pegarTrava('whatsapp:limpar-sobras', 15 * 60_000))) return out
+  const fim = Date.now() + prazoMs
+  const [conectados, todos, agentes, instancias] = await Promise.all([
+    prisma.assistenteComercial.findMany({ where: { status: 'CONECTADO', instancia: { not: null } }, select: { vendedorId: true, instancia: true } }),
+    prisma.assistenteComercial.findMany({ where: { instancia: { not: null } }, select: { instancia: true } }),
+    prisma.agenteWhatsapp.findMany({ select: { instancia: true } }),
+    listarInstancias().catch(() => []),
+  ])
+  const emUso = new Set([...todos.map(x => x.instancia), ...agentes.map(x => x.instancia)])
+  for (const a of conectados) {
+    for (const s of instancias.filter(i => daMesmaPessoa(a.vendedorId, i.nome) && !emUso.has(i.nome))) {
+      if (Date.now() > fim) return out
+      if (await apagarSobra(s.nome)) out.sobrasApagadas += 1
+      else out.sobrasPresas += 1
+    }
+  }
+  if (out.sobrasApagadas || out.sobrasPresas) logger.info(out, 'whatsapp: faxina de sessões antigas')
+  return out
 }
 
 /** Envio real para o próprio número. true = saiu; false = recusado; null = sem número para testar. */

@@ -8,11 +8,12 @@ import { prisma } from './prisma'
 import { ambienteDeTeste } from './ambiente'
 import { lerConfig } from './assistenteRoteiro'
 import { ErroWhatsapp, sessaoViva, estadoInstancia, evolutionConfigurada, listarInstancias, webhookDaInstancia } from './whatsappEvolution'
+import { daMesmaPessoa } from './assistenteReparo'
 import { explicarQueda, resumoEventos, textoDoMotivo, type EventoConexao } from './whatsappConexao'
 
 const HORA = 3_600_000
 export type Gravidade = 'CRITICO' | 'ATENCAO' | 'INFO'
-export interface Problema { gravidade: Gravidade; texto: string; acao: string | null; corrigirWebhook?: boolean; corrigirDuplicadas?: boolean }
+export interface Problema { gravidade: Gravidade; texto: string; acao: string | null; corrigirWebhook?: boolean; corrigirDuplicadas?: boolean; sessaoAntiga?: boolean }
 
 export interface DiagnosticoAssistente {
   assistenteId: string; vendedor: string; numero: string | null
@@ -79,7 +80,15 @@ export async function diagnosticarAssistentes(usuarioId: string, urlEsperada: (s
     const nome = a.vendedor.nome.split(/\s+/)[0]
     const numero = a.numeroWhatsapp?.replace(/\D/g, '') ?? null
     const duplicadas = numero && instancias ? instancias.filter(i => i.numero && i.numero.endsWith(numero.slice(-10)) && i.nome !== a.instancia).map(i => ({ nome: i.nome, estado: i.estado, doAgente: doAgente.has(i.nome), deOutroVendedor: deAssistente.has(i.nome) })) : []
-    if (duplicadas.length) {
+    // Sessão antiga da mesma pessoa que sobrou no servidor (a que travou e foi trocada por uma nova):
+    // não é outra conexão disputando o número; é só faxina.
+    const antigas = duplicadas.filter(d => daMesmaPessoa(a.vendedorId, d.nome) && !d.doAgente && !d.deOutroVendedor)
+    if (antigas.length) {
+      p.push({ gravidade: 'ATENCAO', texto: `Sobrou no servidor a sessão antiga do WhatsApp de ${nome} (${antigas.map(d => d.nome).join(', ')}), a que travou e foi trocada pela nova. A conexão em uso é a nova; o ARIES apaga a antiga sozinho a cada 15 min.`, acao: `Para apagar agora: no celular de ${nome}, em WhatsApp › Aparelhos conectados, remova o aparelho antigo (o que não conecta há dias) e clique em "Apagar sessão antiga".`, corrigirDuplicadas: true, sessaoAntiga: true })
+    }
+    const outras = duplicadas.filter(d => !antigas.includes(d))
+    if (outras.length) {
+      const duplicadas = outras
       const soltas = duplicadas.filter(d => !d.doAgente && !d.deOutroVendedor)
       p.push({ gravidade: 'CRITICO', texto: `O número de ${nome} está aberto em ${duplicadas.length + 1} conexões no servidor do WhatsApp ao mesmo tempo (${duplicadas.map(d => d.nome).join(', ')}). Uma derruba a outra sem parar: é isso que causa a reconexão automática e o "Connection Closed".`, acao: soltas.length ? 'Clicar em "Desligar conexões duplicadas" aqui (desliga só as sobras; a conexão do ARIES fica). Depois, se pedir, ler o QR de novo.' : duplicadas.some(d => d.doAgente) ? `O mesmo número está como "ARIES no WhatsApp" em Configurações: use outro número para o ARIES.` : 'O mesmo número está ligado no WhatsApp de outro vendedor no ARIES: desconecte de um dos dois.', corrigirDuplicadas: soltas.length > 0 })
     }

@@ -56,6 +56,7 @@ import { rodarConcorrentes } from '../lib/smConcorrentes'
 import { rodarPlanejamento } from '../lib/smPlanejamento'
 import { pularHora, pularMinuto } from '../lib/cronEconomia'
 import { sincronizarTrafegoPendentes } from '../lib/trafegoSync'
+import { limparSobrasDeTodos } from '../lib/assistenteReparo'
 
 const router = Router()
 
@@ -449,9 +450,11 @@ router.post('/sm/cron/minuto', async (req: Request, res: Response) => {
   const stories = await o.rodar('stories', lim => arquivarStories(Math.min(8000, lim)), { storiesGuardados: 0 }, 3000)
   // Tráfego: completa o histórico e mantém os totais da conta em dia (no máximo 1 vez por hora quando já está completo).
   const trafego = await o.rodar('tráfego', lim => sincronizarTrafegoPendentes(Math.min(10_000, lim)), { trafegoSincronizadas: 0, trafegoFalhas: 0 })
+  // WhatsApp: apaga as sessões antigas que sobraram no servidor (ex.: a que travou e foi trocada), a cada 15 min.
+  const sobras = await o.rodar('sessões antigas do WhatsApp', lim => limparSobrasDeTodos(Math.min(8000, lim)), { sobrasApagadas: 0, sobrasPresas: 0 }, 3000)
   // Carga inicial da Central em rodadas, com o tempo que sobrar (para no ponto e continua na próxima).
   const centralCarga = await o.rodar('central: carga inicial', lim => cargaInicialCentral(Math.min(8000, lim)), { centralCarga: 0 }, 3000)
-  res.json({ ...disparo, ...stories, ...centralEventos, ...centralCarga, ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
+  res.json({ ...disparo, ...stories, ...sobras, ...centralEventos, ...centralCarga, ...sincronizacao, publicacao, atendimento, ...pulso, ...trafego, ...follow, ...cadencias, ...retomada, ...varredura, ...espera, ...agente, ...ligacoes, ...credito, ...rotinas, ...regua, adiadas: o.adiadas, tempos: o.tempos })
 })
 
 // --- Webhook da Meta (comentários, menções, mensagens, insights de story) ---
