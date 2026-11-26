@@ -5,6 +5,7 @@
 // quando. Ctrl+Enter salva. Só o autor (e o dono) edita ou apaga.
 import { useEffect, useRef, useState } from 'react'
 import { proLaboreApi, type NotaLead } from '@/lib/proLaboreApi'
+import { useConfirmar } from '../../_ui/ui'
 
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 const editada = (n: NotaLead) => new Date(n.atualizadoEm).getTime() - new Date(n.criadoEm).getTime() > 1000
@@ -19,6 +20,7 @@ export function NotasLead({ leadId, focar, podeEscrever, onContagem }: {
   podeEscrever: boolean
   onContagem: (n: number) => void
 }) {
+  const confirmar = useConfirmar()
   const [notas, setNotas] = useState<NotaLead[] | null>(null)
   const [texto, setTexto] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -63,7 +65,7 @@ export function NotasLead({ leadId, focar, podeEscrever, onContagem }: {
   }
 
   async function apagar(n: NotaLead) {
-    if (!confirm('Apagar esta nota?')) return
+    if (!(await confirmar({ titulo: 'Apagar esta nota?', acao: 'Apagar', perigo: true }))) return
     setErro('')
     try {
       await proLaboreApi.notasLead.remover(n.id)

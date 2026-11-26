@@ -9,6 +9,7 @@ import { proLaboreApi, type AuditoriaLigacoes, type CadenciaLigacao, type Gatilh
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 import { ALERTA, BotaoLigar, GATILHO, RESULTADO, RegistrarLigacao, dataHora, duracao, horaBR, quandoLigar, rotuloPasso, telefoneLegivel } from '../_ligacoes/Ligacoes'
+import { useConfirmar } from '../_ui/ui'
 
 type Aba = 'ligar' | 'auditoria' | 'cadencias'
 const ETAPA: Record<string, string> = { LEAD: 'Lead', ABORDADO: 'Abordado', NEGOCIACAO: 'Negociação', PROPOSTA: 'Proposta', FECHADO: 'Fechado', PERDIDO: 'Perdido' }
@@ -248,6 +249,7 @@ const NOVA: CadenciaEditavel = {
 const resumoPasso = (p: PassoCadencia) => (p.aposMinutos != null && p.hora == null ? `${p.aposMinutos} min depois` : `${p.dia === 0 ? 'no dia' : `D+${p.dia}`} às ${p.hora}`)
 
 function Cadencias({ podeEditar }: { podeEditar: boolean }) {
+  const confirmar = useConfirmar()
   const [lista, setLista] = useState<CadenciaLigacao[] | null>(null)
   const [editando, setEditando] = useState<CadenciaEditavel | null>(null)
   const [erro, setErro] = useState('')
@@ -270,7 +272,7 @@ function Cadencias({ podeEditar }: { podeEditar: boolean }) {
     try { await proLaboreApi.ligacoes.cadencias.editar(id, { ...dados, ativa: !c.ativa }); await carregar() } catch (e) { setErro((e as Error).message) }
   }
   async function remover(c: CadenciaLigacao) {
-    if (!confirm(`Remover a cadência "${c.nome}"? As ligações pendentes dela são canceladas.`)) return
+    if (!(await confirmar({ titulo: `Remover a cadência “${c.nome}”?`, texto: 'As ligações pendentes dela são canceladas.', acao: 'Remover', perigo: true }))) return
     try { await proLaboreApi.ligacoes.cadencias.remover(c.id); await carregar() } catch (e) { setErro((e as Error).message) }
   }
   const mudarPasso = (i: number, p: Partial<PassoCadencia>) => editando && setEditando({ ...editando, passos: editando.passos.map((x, j) => (j === i ? { ...x, ...p } : x)) })

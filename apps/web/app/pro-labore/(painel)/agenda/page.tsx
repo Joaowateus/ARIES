@@ -8,6 +8,7 @@ import {
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
 import { MeuDia, diaBR, type RotinaDoDia } from './_meudia/MeuDia'
+import { useConfirmar } from '../_ui/ui'
 
 const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const DIAS_SEMANA_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -411,6 +412,7 @@ function linkMapa(latitude: number, longitude: number): string {
 }
 
 export default function ProLaboreAgendaPage() {
+  const confirmar = useConfirmar()
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel === 'DONO'
   const isSupervisor = usuario?.papel === 'SUPERVISOR'
@@ -864,7 +866,7 @@ export default function ProLaboreAgendaPage() {
   }
 
   async function removerItem(item: AgendaItem) {
-    if (!confirm(`Remover "${item.titulo}" da agenda? O histórico de conclusões dele também será apagado.`)) return
+    if (!(await confirmar({ titulo: `Remover “${item.titulo}” da agenda?`, texto: 'O histórico de conclusões dele também será apagado.', acao: 'Remover', perigo: true }))) return
     await proLaboreApi.agenda.itens.remover(item.id)
     carregarItens()
   }

@@ -27,6 +27,7 @@ import { EtiquetasLead, ORDEM_ETIQUETAS, ROTULO_ETIQUETA } from '../assistente/_
 import { NOME_ETAPA } from '@/lib/etapasJornada'
 import { PainelLead } from './_painel/PainelLead'
 import { quandoLigar } from '../_ligacoes/Ligacoes'
+import { useAvisar, useConfirmar } from '../_ui/ui'
 
 const COLUNAS: { estagio: EstagioFunilPL; titulo: string }[] = [
   { estagio: 'LEAD', titulo: 'Leads' },
@@ -186,6 +187,8 @@ const FORM_VAZIO: FormLead = { nomeCliente: '', telefone: '', email: '', cpf: ''
 const paramDaUrl = (nome: string) => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(nome))
 
 export default function ProLaboreLeadsPage() {
+  const confirmarNaTela = useConfirmar()
+  const avisar = useAvisar()
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel === 'DONO'
   const isSupervisor = usuario?.papel === 'SUPERVISOR'
@@ -389,12 +392,12 @@ export default function ProLaboreLeadsPage() {
       } catch (err) {
         // Lead que chamou no WhatsApp já entra sozinho: confirma antes de duplicar.
         if ((err as ErroApi).status !== 409) throw err
-        if (!confirm(`${(err as Error).message}\n\nCadastrar outro mesmo assim?`)) return
+        if (!(await confirmarNaTela({ titulo: 'Cadastrar outro mesmo assim?', texto: (err as Error).message, acao: 'Cadastrar' }))) return
         criado = await enviar(true)
       }
       // Criado pelo "+" de uma coluna: vai para aquela etapa (o que faltar fica como pendência, como no Avançar).
       if (etapaNovo && etapaNovo !== 'LEAD' && criado?.id) {
-        await proLaboreApi.jornada.mover(criado.id, etapaNovo, undefined, true).catch(e => alert(`O lead foi criado em Lead. Não deu para levar para a etapa escolhida: ${e instanceof Error ? e.message : 'erro'}`))
+        await proLaboreApi.jornada.mover(criado.id, etapaNovo, undefined, true).catch(e => avisar(`O lead foi criado em Lead. Não deu para levar para a etapa escolhida: ${e instanceof Error ? e.message : 'erro'}`, 'erro'))
       }
       setEtapaNovo(null)
       setForm(FORM_VAZIO)
@@ -418,7 +421,7 @@ export default function ProLaboreLeadsPage() {
       await proLaboreApi.leads.desfazerAvanco(lead.id)
       carregar()
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Não deu para desfazer')
+      avisar(err instanceof Error ? err.message : 'Não deu para desfazer', 'erro')
     }
   }
 
@@ -427,13 +430,13 @@ export default function ProLaboreLeadsPage() {
   }
 
   async function remover(lead: Lead) {
-    const aviso = lead.origemCadastro === 'WHATSAPP' ? '\n\nEle entrou sozinho pelo WhatsApp: esse número não será mais cadastrado automaticamente.' : ''
-    if (!confirm(`Remover o lead de ${lead.nomeCliente}?${aviso}`)) return
+    const aviso = lead.origemCadastro === 'WHATSAPP' ? 'Ele entrou sozinho pelo WhatsApp: esse número não será mais cadastrado automaticamente.' : undefined
+    if (!(await confirmarNaTela({ titulo: `Remover o lead de ${lead.nomeCliente}?`, texto: aviso, acao: 'Remover', perigo: true }))) return
     try {
       await proLaboreApi.leads.remover(lead.id)
       carregar()
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao remover lead')
+      avisar(err instanceof Error ? err.message : 'Erro ao remover lead', 'erro')
     }
   }
 

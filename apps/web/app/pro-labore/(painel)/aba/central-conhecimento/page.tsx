@@ -59,7 +59,8 @@ function Conteudo() {
   return (
     <div data-central-conhecimento={sub}>
       <Cabecalho aba={aba} />
-      <div className="ar-tela">
+      <div className="ar-tela-larga ar-tela-compacta">
+        <Lente aba={aba.lente} compacta />
         <div className="ar-trabalho">
           <Topo />
           <div className="pl-sv-tabs cc-subabas" role="tablist" aria-label="Seções da Central de Conhecimento">
@@ -74,7 +75,6 @@ function Conteudo() {
             {sub === 'saude' && dono && <SaudeCentral />}
           </div>
         </div>
-        <Lente aba={aba.lente} />
       </div>
     </div>
   )

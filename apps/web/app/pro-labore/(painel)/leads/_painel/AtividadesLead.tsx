@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { proLaboreApi, type FollowLead, type Ligacao, type NotaLead } from '@/lib/proLaboreApi'
 import { situacaoFollow } from '../../_follow/follow'
 import { ALERTA, BotaoLigar, RESULTADO, RegistrarLigacao, duracao, quandoLigar, rotuloPasso } from '../../_ligacoes/Ligacoes'
+import { useConfirmar } from '../../_ui/ui'
 
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 const editada = (n: NotaLead) => new Date(n.atualizadoEm).getTime() - new Date(n.criadoEm).getTime() > 1000
@@ -34,6 +35,7 @@ export function AtividadesLead({ leadId, nomeCliente, telefone, follows, ativida
   onLigacoesMudaram: () => void
   onContagem?: (n: number) => void
 }) {
+  const confirmar = useConfirmar()
   const [notas, setNotas] = useState<NotaLead[] | null>(null)
   const [lig, setLig] = useState<{ ligacoes: Ligacao[]; cadencias: Array<{ id: string; nome: string; passos: number }> } | null>(null)
   const [versao, setVersao] = useState(0)
@@ -83,7 +85,7 @@ export function AtividadesLead({ leadId, nomeCliente, telefone, follows, ativida
     try { const n = await proLaboreApi.notasLead.editar(editando.id, editando.texto.trim()); setNotas(a => (a ?? []).map(x => (x.id === n.id ? n : x))); setEditando(null) } catch (e) { setErro((e as Error).message) } finally { setSalvando(false) }
   }
   async function apagar(n: NotaLead) {
-    if (!confirm('Apagar esta nota?')) return
+    if (!(await confirmar({ titulo: 'Apagar esta nota?', acao: 'Apagar', perigo: true }))) return
     try { await proLaboreApi.notasLead.remover(n.id); const l = (notas ?? []).filter(x => x.id !== n.id); setNotas(l); onContagemNotas(l.length) } catch (e) { setErro((e as Error).message) }
   }
   async function agendarLigacao() {
