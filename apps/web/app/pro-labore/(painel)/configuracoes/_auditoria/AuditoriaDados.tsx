@@ -6,6 +6,7 @@
 // correção pode ser desfeita.
 import { useEffect, useMemo, useState } from 'react'
 import { proLaboreApi, type AchadoAuditoria, type AuditoriaDados as Dados, type TipoAchadoAuditoria, type VendaRevisao } from '@/lib/proLaboreApi'
+import { useConfirmar } from '../../_ui/ui'
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const dia = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
@@ -21,6 +22,7 @@ const CONFIANCA: Record<AchadoAuditoria['confianca'], string> = { alta: 'Repetid
 const POR_PAGINA = 40
 
 export function AuditoriaDados() {
+  const confirmar = useConfirmar()
   const [dados, setDados] = useState<Dados | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [tipo, setTipo] = useState<TipoAchadoAuditoria>('vendas')
@@ -62,7 +64,7 @@ export function AuditoriaDados() {
     if (!dados) return
     const chaves = dados.achados.filter(a => marcados.has(a.chave)).map(a => a.chave)
     if (!chaves.length) return
-    if (!window.confirm(`Corrigir ${chaves.length} ${chaves.length === 1 ? 'item' : 'itens'}? Os registros repetidos saem e ficam guardados: dá para desfazer depois.`)) return
+    if (!(await confirmar({ titulo: `Corrigir ${chaves.length} ${chaves.length === 1 ? 'item' : 'itens'}?`, texto: 'Os registros repetidos saem e ficam guardados: dá para desfazer depois.', acao: 'Corrigir' }))) return
     setOcupado('corrigir'); setErro(null); setOk(null)
     let correcaoId: string | null = null, feitos = 0, falhas = 0, pendentes = chaves, tentativas = 0
     try {
@@ -86,7 +88,7 @@ export function AuditoriaDados() {
 
   async function desfazer() {
     const c = dados?.ultimaCorrecao
-    if (!c || !window.confirm(`Desfazer a correção de ${new Date(c.criadoEm).toLocaleString('pt-BR')} (${c.quantidade} itens)? Tudo volta como estava antes dela.`)) return
+    if (!c || !(await confirmar({ titulo: 'Desfazer a correção?', texto: `Correção de ${new Date(c.criadoEm).toLocaleString('pt-BR')} (${c.quantidade} itens). Tudo volta como estava antes dela.`, acao: 'Desfazer' }))) return
     setOcupado('desfazer'); setErro(null); setOk(null)
     try {
       for (let i = 0; i < 200; i++) { const r = await proLaboreApi.sistema.auditoria.desfazer(c.id); if (!r.restantes) break }
@@ -234,6 +236,7 @@ function Registro({ titulo, r, tipo }: { titulo: string; r: AchadoAuditoria['rem
 
 // Revisão manual: todas as vendas do mês, com a origem, para tirar uma a uma o que não é verdade.
 function RevisaoMes({ mes, onFechar, onCorrigido }: { mes: string; onFechar: () => void; onCorrigido: () => void }) {
+  const confirmar = useConfirmar()
   const [vendas, setVendas] = useState<VendaRevisao[] | null>(null)
   const [fechadosCrm, setFechadosCrm] = useState(0)
   const [tirar, setTirar] = useState<Set<string>>(new Set())
@@ -247,7 +250,7 @@ function RevisaoMes({ mes, onFechar, onCorrigido }: { mes: string; onFechar: () 
 
   async function remover() {
     const ids = [...tirar]
-    if (!ids.length || !window.confirm(`Tirar ${ids.length} ${ids.length === 1 ? 'venda' : 'vendas'} de ${nomeMes(mes)}? Elas ficam guardadas e dá para desfazer depois.`)) return
+    if (!ids.length || !(await confirmar({ titulo: `Tirar ${ids.length} ${ids.length === 1 ? 'venda' : 'vendas'} de ${nomeMes(mes)}?`, texto: 'Elas ficam guardadas e dá para desfazer depois.', acao: 'Tirar' }))) return
     setOcupado(true); setMsg(null)
     try {
       let pend = ids.map(id => `manual:vendas:${id}`), correcaoId: string | null = null, feitos = 0

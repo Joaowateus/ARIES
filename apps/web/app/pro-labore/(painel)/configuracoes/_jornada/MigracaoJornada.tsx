@@ -6,6 +6,7 @@
 // teste até o dono liberar a troca na produção.
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type SimulacaoJornada, type StatusJornada } from '@/lib/proLaboreApi'
+import { useConfirmar } from '../../_ui/ui'
 
 const num = (n: number) => n.toLocaleString('pt-BR')
 const ETAPA: Record<string, string> = {
@@ -36,6 +37,7 @@ const nomeEtapa = (s: string) => {
 }
 
 export function MigracaoJornada() {
+  const confirmar = useConfirmar()
   const [sim, setSim] = useState<SimulacaoJornada | null>(null)
   const [st, setSt] = useState<StatusJornada | null>(null)
   const [ocupado, setOcupado] = useState(false)
@@ -51,7 +53,7 @@ export function MigracaoJornada() {
     const msg = acao === 'rodada'
       ? `Aplicar a migração em ${num(sim?.aMigrar ?? 0)} leads e criar ${num(sim?.clientes.aCriar ?? 0)} clientes? Tudo fica registrado na auditoria e pode ser desfeito.`
       : 'Desfazer a migração e voltar os leads às 5 etapas?'
-    if (!window.confirm(msg)) return
+    if (!(await confirmar({ titulo: acao === 'rodada' ? 'Aplicar a migração?' : 'Desfazer a migração?', texto: msg, acao: acao === 'rodada' ? 'Aplicar' : 'Desfazer', perigo: acao === 'desfazer' }))) return
     setOcupado(true); setErro(null)
     try {
       let s: StatusJornada, falhas = 0

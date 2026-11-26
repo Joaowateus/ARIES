@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { telasApi, type AceitePdf04, type PilotoPessoa } from '@/lib/proLaboreApi'
 import { pl } from '@/lib/format'
+import { useConfirmar } from '../../_ui/ui'
 
 function Selo({ passa }: { passa: boolean | null }) {
   if (passa == null) return <span className="pl-hint">sem casos ainda</span>
@@ -13,6 +14,7 @@ function Selo({ passa }: { passa: boolean | null }) {
 }
 
 export function TelasNovas() {
+  const confirmar = useConfirmar()
   const [p, setP] = useState<{ liberadaEm: string | null; pessoas: PilotoPessoa[] } | null>(null)
   const [uso, setUso] = useState<Array<{ aba: string; aberturas: number; pessoas: number; acoes: number; ultima: string }>>([])
   const [ia, setIa] = useState<{ total: number; envios: Array<{ id: string; finalidade: string; conteudo: string; criadoEm: string; seguro: boolean }> } | null>(null)
@@ -25,7 +27,7 @@ export function TelasNovas() {
   async function mudar(id: string, participa: boolean) { try { setP(await telasApi.definirPiloto(id, participa)) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }
   async function liberar() {
     if (just.trim().length < 5) { setMsg('Registre a liberação: por que e com base em quê.'); return }
-    if (!window.confirm('Liberar as telas novas para toda a equipe? As telas antigas deixam de aparecer.')) return
+    if (!(await confirmar({ titulo: 'Liberar as telas novas para toda a equipe?', texto: 'As telas antigas deixam de aparecer.', acao: 'Liberar' }))) return
     try { const r = await telasApi.liberarParaTodos(just.trim()); setMsg(`Liberado em ${new Date(r.liberadaEm).toLocaleString('pt-BR')}.`); setP(await telasApi.piloto()) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
   }
   async function rodarAceite() { setRodando(true); try { setA(await telasApi.aceite()) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } finally { setRodando(false) } }

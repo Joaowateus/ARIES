@@ -6,6 +6,7 @@
 // decisão vencem no fim do expediente). Toda mudança de expediente fica no histórico.
 import { useEffect, useState } from 'react'
 import { bussolaApi, dailyApi, type Expediente, type FraseBiblioteca } from '@/lib/proLaboreApi'
+import { Hora } from '../../_ui/ui'
 
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const ORIGEM: Record<string, string> = { DONO: 'cadastrada por você', ARIES: 'sugerida pelo ARIES', INICIAL: 'conjunto inicial' }
@@ -74,9 +75,9 @@ export function ConfigExpediente() {
         <div className="pl-card-sub">Atividades criadas pelos detectores e pelas decisões do Daily vencem no fim do expediente do dia escolhido, nunca de madrugada.</div>
       </div></div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <label style={{ fontSize: 13 }}>Início <input className="pl-input" type="time" value={e.inicio} onChange={x => setE({ ...e, inicio: x.target.value })} data-expediente-inicio /></label>
-        <label style={{ fontSize: 13 }}>Fim <input className="pl-input" type="time" value={e.fim} onChange={x => setE({ ...e, fim: x.target.value })} data-expediente-fim /></label>
-        {DIAS.map((d, i) => <label key={d} style={{ fontSize: 13 }}><input type="checkbox" checked={e.dias.includes(i)} onChange={x => setE({ ...e, dias: x.target.checked ? [...e.dias, i] : e.dias.filter(y => y !== i) })} /> {d}</label>)}
+        <span className="dp-linha" data-expediente-inicio><Hora valor={e.inicio} mudar={v => setE({ ...e, inicio: v })} rotulo="Início do expediente" id="exp-ini" /><span className="pl-hint">até</span></span>
+        <span data-expediente-fim><Hora valor={e.fim} mudar={v => setE({ ...e, fim: v })} rotulo="Fim do expediente" id="exp-fim" /></span>
+        <div className="dp-dias" role="group" aria-label="Dias do expediente">{DIAS.map((d, i) => <button key={d} type="button" aria-pressed={e.dias.includes(i)} className={e.dias.includes(i) ? 'on' : ''} onClick={() => setE({ ...e, dias: e.dias.includes(i) ? e.dias.filter(y => y !== i) : [...e.dias, i].sort() })}>{d}</button>)}</div>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         <input className="pl-input" style={{ flex: 1, minWidth: 220 }} placeholder="Motivo da mudança (obrigatório)" value={just} onChange={x => setJust(x.target.value)} aria-label="Motivo" />
