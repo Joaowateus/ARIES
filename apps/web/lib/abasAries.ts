@@ -15,6 +15,8 @@ export interface AbaAries {
   proprio?: boolean
   /** Tela larga: números e Lente numa linha no topo, o trabalho ocupa a largura toda (ex.: CRM). */
   largo?: boolean
+  /** Cabeçalho de uma linha e Lente recolhida quando não há nada a dizer (piloto: Disparo, 26/11/2026). */
+  compacto?: boolean
   // Outras rotas que pertencem a esta aba.
   tambem?: string[]
 }
@@ -39,7 +41,7 @@ export const ABAS: AbaAries[] = [
   // Marketing
   { chave: 'trafego', nome: 'Tráfego', grupo: 'Tráfego', href: '/pro-labore/trafego', paraQuem: 'Gestor de tráfego, dono', pergunta: 'O dinheiro em anúncio está virando venda?', acaoPrincipal: 'Pausar, trocar ou escalar', numeros: ['gasto_anuncio', 'custo_por_lead', 'roas'], lente: 'trafego', papeis: ['DONO', 'TRAFEGO'], modulo: 'trafego' },
   { chave: 'social-media', nome: 'Social Media', grupo: 'Tráfego', href: '/pro-labore/social-media', paraQuem: 'Social media', pergunta: 'O que publicar hoje e o que funcionou?', acaoPrincipal: 'Produzir e publicar a pauta', numeros: ['posts_publicados', 'leads_dos_posts', 'vendas_por_post'], lente: 'social-media', papeis: ['DONO', 'SOCIAL_MEDIA'], modulo: 'socialMedia', tambem: ['/pro-labore/sm'] },
-  { chave: 'disparo', nome: 'Disparo', grupo: 'Tráfego', href: '/pro-labore/disparo', paraQuem: 'Gestão e quem tiver o acesso liberado', pergunta: 'Quem vai receber, o quê, quando, e o que aconteceu depois?', acaoPrincipal: 'Criar e acompanhar uma campanha', numeros: [], lente: 'disparo', papeis: ['DONO', 'SUPERVISOR', 'SDR', 'VENDEDOR', 'TRAFEGO', 'FINANCEIRO'], modulo: 'disparo' },
+  { chave: 'disparo', nome: 'Disparo', grupo: 'Tráfego', href: '/pro-labore/disparo', paraQuem: 'Gestão e quem tiver o acesso liberado', pergunta: 'Quem vai receber, o quê, quando, e o que aconteceu depois?', acaoPrincipal: 'Criar e acompanhar uma campanha', numeros: [], lente: 'disparo', papeis: ['DONO', 'SUPERVISOR', 'SDR', 'VENDEDOR', 'TRAFEGO', 'FINANCEIRO'], modulo: 'disparo', compacto: true },
   { chave: 'origem-vendas', nome: 'Origem das vendas', grupo: 'Tráfego', href: '/pro-labore/aba/origem-vendas', paraQuem: 'Marketing, dono', pergunta: 'De onde vêm as vendas e quanto custa cada uma?', acaoPrincipal: 'Mover esforço para a origem que vende', numeros: ['faturamento_por_origem', 'custo_por_lead', 'roas'], lente: 'origem-vendas', papeis: ['DONO', 'TRAFEGO'], tambem: ['/pro-labore/indicadores'] },
   // Pessoas
   { chave: 'vitrine', nome: 'Vitrine', grupo: 'Produtos', href: '/pro-labore/whatsapp?aba=estoque', paraQuem: 'Vendas e gestão', pergunta: 'Quais motos estão na vitrine e o que mandar ao cliente?', acaoPrincipal: 'Cadastrar ou enviar uma moto', numeros: [], lente: 'conversas', papeis: COMERCIAL, proprio: true, modulo: 'assistente' },

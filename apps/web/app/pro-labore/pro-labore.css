@@ -5922,3 +5922,27 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .dp-salvar { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 50; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: space-between; background: var(--pl-surface-3); border: 1px solid var(--pl-border-strong); border-radius: 12px; padding: 10px 12px 10px 16px; box-shadow: 0 16px 40px -16px rgba(0,0,0,.6); width: min(640px, calc(100vw - 32px)); font-size: 13.5px; color: var(--pl-ink-1); }
 @media (max-width: 900px) { .dp-config { grid-template-columns: minmax(0, 1fr); } .dp-config-indice { position: static; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 4px; } .dp-config-indice a { white-space: nowrap; border: 1px solid var(--pl-border); } }
 @media (max-width: 640px) { .dp-config-linha { grid-template-columns: minmax(0, 1fr); gap: 6px; } .dp-opcoes, .dp-config-duas { grid-template-columns: minmax(0, 1fr); } }
+
+/* Cabeçalho de uma linha e Lente recolhida (abas com compacto: true; piloto Disparo 26/11) */
+.ar-cabecalho.compacto { align-items: baseline; gap: 6px 14px; margin-bottom: 12px; padding-bottom: 12px; }
+.ar-cabecalho.compacto h1 { font-size: 1.5rem; margin: 0; }
+.ar-cabecalho.compacto .ar-pergunta { font-size: .9rem; color: var(--pl-ink-muted); }
+.ar-lente.compacta { position: static; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 12px; border-radius: 10px; border-color: var(--pl-border); font-size: 13px; color: var(--pl-ink-muted); margin-bottom: 12px; }
+.ar-lente.compacta .ar-marca { width: 14px; height: 14px; border-radius: 4px; background: var(--pl-grad-brand); display: inline-block; }
+.ar-lente.compacta b { color: var(--pl-ink-1); font-weight: 600; }
+.ar-lente.compacta-cheia { position: static; margin-bottom: 14px; }
+
+/* Disparo · barra única: abas por frequência, de quem são as campanhas e "Nova campanha" */
+.dp-barra { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.dp-abas { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--pl-border); border-radius: 10px; background: var(--pl-surface); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.dp-abas::-webkit-scrollbar { display: none; }
+.dp-abas button { border: 0; background: transparent; color: var(--pl-ink-2); font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; }
+.dp-abas button:hover { color: var(--pl-ink-1); }
+.dp-abas button.ativo { background: var(--pl-surface-3); color: var(--pl-ink-1); box-shadow: inset 0 0 0 1px var(--pl-border-strong); }
+.dp-abas button.icone { padding: 6px 10px; margin-left: 4px; }
+.dp-abas button:focus-visible { outline: 2px solid var(--pl-ink-1); outline-offset: 1px; }
+.dp-barra-acoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.dp-escopo { display: flex; align-items: center; gap: 8px; }
+.dp-escopo .pl-select { min-width: 170px; max-width: 240px; height: 34px; padding-top: 0; padding-bottom: 0; }
+@media (max-width: 640px) { .dp-barra-acoes { margin-left: 0; width: 100%; justify-content: space-between; } .dp-escopo .pl-select { min-width: 0; } }
+.ar-cabecalho.compacto { justify-content: flex-start; }

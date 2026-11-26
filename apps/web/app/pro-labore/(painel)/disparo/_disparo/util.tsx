@@ -15,12 +15,12 @@ export const useEscopo = () => useContext(EscopoCtx)
 export function SeletorEscopo() {
   const meta = useContext(MetaCtx)
   const { de, setDe } = useEscopo()
-  if (!meta?.gestao) return <p className="pl-hint" data-escopo="minhas">Você trabalha com a sua carteira: só os seus leads e conversas, as suas campanhas, os seus números e as respostas que chegaram para você.</p>
+  if (!meta?.gestao) return <span className="dp-selo tipo" data-escopo="minhas" title="Você trabalha com a sua carteira: só os seus leads e conversas, as suas campanhas, os seus números e as respostas que chegaram para você.">Minha carteira</span>
   const eu = meta.eu?.vendedorId ?? null
   return (
-    <div className="dp-linha" data-escopo={de}>
+    <div className="dp-escopo" data-escopo={de}>
       <label className="pl-hint" htmlFor="dp-escopo">Mostrando</label>
-      <select id="dp-escopo" className="pl-select" style={{ maxWidth: 280 }} value={de} onChange={e => setDe(e.target.value)}>
+      <select id="dp-escopo" className="pl-select" value={de} onChange={e => setDe(e.target.value)}>
         <option value="minhas">Minhas campanhas</option>
         <option value="equipe">Equipe toda</option>
         {eu && <option value="dono">Do dono</option>}

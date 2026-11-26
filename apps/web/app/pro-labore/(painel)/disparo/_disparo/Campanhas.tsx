@@ -15,13 +15,16 @@ const FILTROS: Array<{ rotulo: string; status?: string }> = [
   { rotulo: 'Preparação', status: 'DRAFT,VALIDATING,NEEDS_REVIEW,READY' }, { rotulo: 'Concluídas', status: 'COMPLETED,COMPLETED_WITH_ERRORS' }, { rotulo: 'Canceladas', status: 'CANCELLED' }, { rotulo: 'Arquivadas', status: 'ARCHIVED' },
 ]
 
-export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id: string | null) => void }) {
+export function Campanhas({ aberta, abrir, nova = false }: { aberta: string | null; abrir: (id: string | null) => void; nova?: boolean }) {
   const meta = useMeta()
   const [filtro, setFiltro] = useState(0)
   const [pagina, setPagina] = useState(0)
   const [lista, setLista] = useState<{ total: number; porPagina: number; itens: ItemCampanhaDisparo[] } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const [editando, setEditando] = useState<CampanhaDisparo | null | 'nova'>(null)
+  const [editando, setEditando] = useState<CampanhaDisparo | null | 'nova'>(nova ? 'nova' : null)
+  // "+ Nova campanha" da barra do topo (?nova=1) abre o assistente.
+  const [novaAntes, setNovaAntes] = useState(nova)
+  if (nova !== novaAntes) { setNovaAntes(nova); if (nova) setEditando('nova') }
   const [marcadas, setMarcadas] = useState<string[]>([])
   const { de, setDe } = useEscopo()
   const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina, de }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina, de])
@@ -39,13 +42,13 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
     try { const r = await disparoApi.campanhas.excluir(ids); avisar(`${r.excluidas} campanha(s) excluída(s)${r.canceladas ? `, ${r.canceladas} cancelada(s) antes` : ''}`); setMarcadas([]); carregar() } catch (e) { setErro(erroDe(e)) }
   }
 
-  if (editando) return <Assistente campanha={editando === 'nova' ? null : editando} fechar={() => setEditando(null)} abrirMonitor={id => { setEditando(null); abrir(id) }} />
+  if (editando) return <Assistente campanha={editando === 'nova' ? null : editando} fechar={() => { setEditando(null); if (nova) abrir(null) }} abrirMonitor={id => { setEditando(null); abrir(id) }} />
   if (aberta) return <Monitor id={aberta} voltar={() => abrir(null)} editar={c => setEditando(c)} abrir={abrir} />
   return (
     <div data-disparo-campanhas>
       <div className="dp-linha" style={{ justifyContent: 'space-between' }}>
         <div className="cc-chips">{FILTROS.map((x, i) => <button key={x.rotulo} type="button" className={`pl-chip ${filtro === i ? 'active' : ''}`} onClick={() => { setFiltro(i); setPagina(0) }}>{x.rotulo}</button>)}</div>
-        {pode && <button type="button" className="pl-btn pl-btn-primary" onClick={() => setEditando('nova')} data-nova-campanha>Nova campanha</button>}
+        <span />
       </div>
       {erro && <div className="pl-alert pl-alert-error" role="alert">{erro}</div>}
       {aprovar > 0 && FILTROS[filtro].status !== 'NEEDS_REVIEW' && (

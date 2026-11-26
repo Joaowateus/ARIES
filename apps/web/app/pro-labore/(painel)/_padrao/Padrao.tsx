@@ -37,9 +37,16 @@ export function StatusChip({ status }: { status: StatusNumero | undefined }) {
 // Dentro da moldura padrão (telas novas) o cabeçalho já está desenhado: o da página não repete.
 const DentroDaTelaPadrao = createContext(false)
 
-export function Cabecalho({ aba, acao }: { aba: Pick<AbaAries, 'nome' | 'pergunta' | 'paraQuem' | 'acaoPrincipal' | 'acaoHref'>; acao?: React.ReactNode }) {
+export function Cabecalho({ aba, acao }: { aba: Pick<AbaAries, 'nome' | 'pergunta' | 'paraQuem' | 'acaoPrincipal' | 'acaoHref' | 'compacto'>; acao?: React.ReactNode }) {
   const dentro = useContext(DentroDaTelaPadrao)
   if (dentro) return null
+  // Cabeçalho de uma linha: o nome e a pergunta da aba, sem repetir "ARIES" e "Para:" (a aba é autoexplicativa).
+  if (aba.compacto) return (
+    <header className="ar-cabecalho compacto" data-cabecalho-ficha>
+      <h1>{aba.nome}</h1>
+      <p className="ar-pergunta" data-pergunta title={`Para: ${aba.paraQuem} · Ação principal: ${aba.acaoPrincipal}`}>{aba.pergunta}</p>
+    </header>
+  )
   return (
     <header className="ar-cabecalho" data-cabecalho-ficha>
       <div>
@@ -113,7 +120,7 @@ export function AgoraHoje({ numeros }: { numeros: NumeroHoje[] }) {
 }
 
 // --- Lente do ARIES ---
-export function Lente({ aba, dados, aoMudar }: { aba: string; dados?: LenteDados | null; aoMudar?: () => void }) {
+export function Lente({ aba, dados, aoMudar, compacta }: { aba: string; dados?: LenteDados | null; aoMudar?: () => void; compacta?: boolean }) {
   const { registrarAcao } = useTelas()
   const [carregada, setL] = useState<LenteDados | null>(null)
   const l = dados !== undefined ? dados : carregada
@@ -131,8 +138,14 @@ export function Lente({ aba, dados, aoMudar }: { aba: string; dados?: LenteDados
     if (motivo.trim().length < 3) { setMsg('Escreva o motivo do descarte.'); return }
     try { await recApi.descartar(id, motivo.trim()); registrarAcao('lente:descartar'); setDescartando(null); setMotivo(''); setMsg('Descartada com motivo.'); recarregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
   }
+  // Compacta: sem nada fora do normal, vira uma linha só (não ocupa uma coluna dizendo "nada").
+  if (compacta && (!l || l.vazio)) return (
+    <aside className="ar-lente compacta" aria-label="Lente do ARIES" data-lente={aba} data-lente-vazia={l ? '' : undefined}>
+      <span className="ar-marca" aria-hidden /><b>Lente do ARIES</b><span>{!l ? 'Carregando…' : l.mensagem ?? 'Nada fora do normal nesta aba'}</span>
+    </aside>
+  )
   return (
-    <aside className="ar-lente" aria-label="Lente do ARIES" data-lente={aba}>
+    <aside className={`ar-lente ${compacta ? 'compacta-cheia' : ''}`} aria-label="Lente do ARIES" data-lente={aba}>
       <div className="ar-lente-titulo"><span className="ar-marca" aria-hidden />Lente do ARIES</div>
       {!l && <p className="pl-hint" style={{ margin: 0 }}>Carregando…</p>}
       {l && l.vazio && (
@@ -183,7 +196,12 @@ export function TelaPadrao({ aba, children }: { aba: AbaAries; children: React.R
     <div data-tela-padrao={aba.chave}>
       <Cabecalho aba={aba} />
       <DentroDaTelaPadrao.Provider value={true}>
-      {aba.largo ? (
+      {aba.compacto ? (
+        <div className="ar-tela-larga ar-tela-compacta">
+          <Lente aba={aba.lente} compacta />
+          <div className="ar-trabalho">{children}</div>
+        </div>
+      ) : aba.largo ? (
         <div className="ar-tela-larga">
           <div className="ar-topo-largo"><Agora chaves={aba.numeros} /><Lente aba={aba.lente} /></div>
           <div className="ar-trabalho">{children}</div>
