@@ -902,7 +902,7 @@ export const proLaboreApi = {
     conexao: (vendedorId?: string) =>
       request<{ status: StatusAssistente; aviso?: string }>(`/pro-labore/assistente/conexao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     desconectar: (vendedorId?: string) =>
-      request<{ ok: boolean }>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`, { method: 'DELETE' }),
+      request<{ ok: boolean; aviso?: string }>(`/pro-labore/assistente/config${vendedorId ? `?vendedorId=${vendedorId}` : ''}`, { method: 'DELETE' }),
     conversas: (params?: { vendedorId?: string; tipo?: TipoConversaAssistente; status?: StatusConversaAssistente; busca?: string }) => {
       const qs = new URLSearchParams()
       if (params?.vendedorId) qs.set('vendedorId', params.vendedorId)

@@ -104,8 +104,9 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
     setCarregando(true)
     setErro('')
     try {
-      await proLaboreApi.assistente.desconectar(vendedorId)
+      const r = await proLaboreApi.assistente.desconectar(vendedorId)
       setCodigo(null)
+      if (r?.aviso) setErro(r.aviso)
       atualizar.current()
     } catch (e) {
       setErro((e as Error).message)
@@ -231,6 +232,15 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
             {reparo.fase === 'caida' && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void reparar(true)} data-gerar-qr-novo>Gerar QR Code novo</button>}
             {reparo.fase === 'ok' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => void reparar(true)} title="Se as mensagens continuarem sem sair, refaz a sessão do zero com um QR novo">Ainda não envia? Gerar QR novo</button>}
             {reparo.fase !== 'testando' && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setReparo(null)}>Fechar</button>}
+          </div>
+        )}
+        {reparo?.fase === 'qr' && (codigo?.qrBase64 || codigo?.pairingCode) && (
+          <div className="pl-as-qr" style={{ width: '100%' }} data-qr-reparo>
+            {codigo.qrBase64
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={codigo.qrBase64} alt="QR Code pra conectar o WhatsApp" width={240} height={240} />
+              : <p style={{ fontSize: 28, fontWeight: 700, letterSpacing: 4, margin: 0 }}>{codigo.pairingCode}</p>}
+            <div className="pl-as-aguardando"><span className="pl-as-spinner" aria-hidden="true" />Esperando a leitura no celular…</div>
           </div>
         )}
         {assistente.atendimentoAutomatico && assistente.configuracao && !assistente.configuracao.responderContatosNovos && (
