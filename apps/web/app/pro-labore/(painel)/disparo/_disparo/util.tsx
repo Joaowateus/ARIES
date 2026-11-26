@@ -129,6 +129,7 @@ export function AvisoAutorizacao({ quantos, aoMudar }: { quantos: number; aoMuda
         : 'Pela regra atual da loja, promoção só vai para quem autorizou (registro com base legal e evidência).'}</p>
       <ul style={{ margin: '4px 0', paddingLeft: 18 }}>
         <li>Se não é promoção (aviso, lembrete, pós-venda), troque a finalidade para <b>Operacional</b> ou <b>Relacionamento</b> no passo 1.</li>
+        <li>Números novos da <b>lista colada</b>: marque “As pessoas da lista colada aceitaram receber mensagens da loja”, logo abaixo da lista.</li>
         <li>Registre quem autorizou em <b>Públicos › Autorizações</b>.</li>
         {!relacao && !meta.dono && <li>Ou peça ao dono para liberar promoções para os leads e clientes da loja.</li>}
       </ul>

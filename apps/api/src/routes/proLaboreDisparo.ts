@@ -84,7 +84,7 @@ const zCond: z.ZodType<unknown> = z.lazy(() => z.union([z.object({ campo: z.stri
 const zDefinicao = z.object({
   base: z.enum(BASES), predefinido: z.string().max(40).nullable().optional(),
   filtros: z.object({ op: z.enum(['E', 'OU']), itens: z.array(zCond).max(30) }).nullable().optional(),
-  manual: z.object({ incluir: z.array(z.object({ tipo: z.enum(['LEAD', 'CLIENTE', 'CONVERSA']), id: z.string().max(40), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), excluir: z.array(z.string().max(30)).max(50_000).optional(), numeros: z.array(z.object({ telefone: z.string().max(30), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), apenasManual: z.boolean().optional() }).nullable().optional(),
+  manual: z.object({ incluir: z.array(z.object({ tipo: z.enum(['LEAD', 'CLIENTE', 'CONVERSA']), id: z.string().max(40), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), excluir: z.array(z.string().max(30)).max(50_000).optional(), numeros: z.array(z.object({ telefone: z.string().max(30), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), apenasManual: z.boolean().optional(), listaAutorizada: z.boolean().optional(), listaAutorizadaPor: z.string().max(160).nullable().optional() }).nullable().optional(),
 })
 const zPasso = z.object({ tipo: z.enum(TIPOS_PASSO), texto: z.string().max(4000).nullable().optional(), midiaId: z.string().max(40).nullable().optional(), esperarMin: z.number().int().min(0).max(60 * 24 * 30).optional() })
 const zConteudo = z.object({ passos: z.array(zPasso).min(1).max(10), fallbacks: z.record(z.string(), z.string().max(120)).optional(), rodapeSair: z.boolean().optional() })
@@ -108,6 +108,14 @@ function validarCanal(canal: string, publico: DefinicaoPublico, conteudo: Conteu
     if (p.tipo === 'DOCUMENTO') throw new ErroDisparo(`A mensagem ${i + 1} é um documento: o direct do Instagram aceita texto, foto, vídeo ou áudio`)
   }
   if (publico.base === 'INSTAGRAM_COMENTARIOS' && (conteudo.passos[0]?.tipo !== 'TEXTO' || !conteudo.passos[0]?.texto?.trim())) throw new ErroDisparo('Para quem comentou, a 1ª mensagem vai como resposta privada e precisa ser só texto (regra da Meta)')
+}
+
+/** A declaração da lista colada é de quem salva (o servidor grava o nome; não vem da tela). */
+function comDeclarante(publico: unknown, q: Quem): Prisma.InputJsonValue {
+  const p = (publico ?? {}) as DefinicaoPublico
+  const m = p.manual
+  if (!m) return p as unknown as Prisma.InputJsonValue
+  return { ...p, manual: { ...m, listaAutorizadaPor: m.listaAutorizada && (m.numeros?.length ?? 0) > 0 ? q.nome : null } } as unknown as Prisma.InputJsonValue
 }
 
 function validarConteudo(conteudo: Conteudo) {
@@ -280,7 +288,7 @@ router.post('/disparo/campanhas', ...editar, async (req, res) => {
     const c = await prisma.disparoCampanha.create({
       data: {
         usuarioId: q.usuarioId, nome: b.nome, descricao: b.descricao ?? null, objetivo: b.objetivo ?? null, finalidade: b.finalidade, canal: b.canal, assistenteId: b.canal === 'INSTAGRAM' ? null : b.assistenteId ?? null, publicoId: b.publicoId ?? null,
-        publico: b.publico as Prisma.InputJsonValue, conteudo: b.conteudo as Prisma.InputJsonValue, config: (b.config ?? {}) as Prisma.InputJsonValue,
+        publico: comDeclarante(b.publico, q), conteudo: b.conteudo as Prisma.InputJsonValue, config: (b.config ?? {}) as Prisma.InputJsonValue,
         agendadaPara: b.agendadaPara ? new Date(b.agendadaPara) : null, recorrencia: (b.recorrencia ?? Prisma.DbNull) as Prisma.InputJsonValue,
         responsavelId: q.vendedorId, responsavelNome: q.nome, criadoPorId: q.vendedorId, criadoPorNome: q.nome,
         versoes: { create: { versao: 1, nome: b.nome, publico: b.publico as Prisma.InputJsonValue, conteudo: b.conteudo as Prisma.InputJsonValue, config: (b.config ?? {}) as Prisma.InputJsonValue, autorNome: q.nome, motivo: 'Criada' } },
@@ -321,7 +329,7 @@ router.put('/disparo/campanhas/:id', ...editar, async (req, res) => {
         where: { id: c.id },
         data: {
           nome: b.nome, descricao: b.descricao ?? null, objetivo: b.objetivo ?? null, finalidade: b.finalidade, canal: b.canal, assistenteId: b.canal === 'INSTAGRAM' ? null : b.assistenteId ?? null, publicoId: b.publicoId ?? null,
-          publico: b.publico as Prisma.InputJsonValue, conteudo: b.conteudo as Prisma.InputJsonValue, config: (b.config ?? {}) as Prisma.InputJsonValue,
+          publico: comDeclarante(b.publico, q), conteudo: b.conteudo as Prisma.InputJsonValue, config: (b.config ?? {}) as Prisma.InputJsonValue,
           agendadaPara: b.agendadaPara ? new Date(b.agendadaPara) : null, recorrencia: (b.recorrencia ?? Prisma.DbNull) as Prisma.InputJsonValue,
           status: 'DRAFT', versao, totais: Prisma.DbNull, aprovadoEm: null, aprovadoPorNome: null, erro: null,
         },

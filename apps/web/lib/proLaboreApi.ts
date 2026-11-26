@@ -4113,7 +4113,7 @@ export interface CondicaoDisparo { campo: string; op: string; valor?: unknown }
 export interface GrupoDisparo { op: 'E' | 'OU'; itens: Array<CondicaoDisparo | GrupoDisparo> }
 export interface DefinicaoPublicoDisparo {
   base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM' | 'EQUIPE' | 'INSTAGRAM_DM' | 'INSTAGRAM_COMENTARIOS'; predefinido?: string | null; filtros?: GrupoDisparo | null
-  manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada: números de qualquer pessoa, mesmo fora do CRM. */ numeros?: Array<{ telefone: string; nome?: string | null }> } | null
+  manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada: números de qualquer pessoa, mesmo fora do CRM. */ numeros?: Array<{ telefone: string; nome?: string | null }>; /** Declaração de quem colou: as pessoas aceitaram receber mensagens (vale para promoção). */ listaAutorizada?: boolean; listaAutorizadaPor?: string | null } | null
 }
 export interface ConfigEnvioDisparo { janela: { inicio: string; fim: string; dias: number[] }; intervaloSeg: number; maxPorHora: number; maxPorDia: number; pararAoResponder: boolean; pararAoComprar: boolean; pararSeVendedorAssumir: boolean; maxTentativas: number; continua?: boolean; pararAoSairDoPublico?: boolean; remetentePorVendedor?: boolean }
 export interface ConfigLojaDisparo { envio: ConfigEnvioDisparo; baseMarketing: 'EXPLICITA' | 'RELACAO'; exigirAprovacao: boolean; rodapeSair: string; palavrasSair: string[] }

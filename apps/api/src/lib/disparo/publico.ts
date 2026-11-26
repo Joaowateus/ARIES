@@ -22,7 +22,8 @@ export interface DefinicaoPublico {
   predefinido?: string | null
   filtros?: Grupo | null
   /** Seleção manual: incluir = contatos escolhidos um a um (somente eles, se apenasManual); excluir = telefones tirados da lista. */
-  manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string | null }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada (números de qualquer pessoa, mesmo fora do CRM). */ numeros?: Array<{ telefone: string; nome?: string | null }> } | null
+  manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string | null }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada (números de qualquer pessoa, mesmo fora do CRM). */ numeros?: Array<{ telefone: string; nome?: string | null }>
+    /** Quem colou declarou que essas pessoas aceitaram receber mensagens da loja (vale para promoção; vira autorização registrada). */ listaAutorizada?: boolean; listaAutorizadaPor?: string | null } | null
 }
 
 export const ETAPAS = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA', 'VENDA'] as const
@@ -140,6 +141,8 @@ export interface Contato {
   instagram?: { conversaId: string; igId: string; janelaAte: Date | null; comentarioId: string | null; canal: string } | null
   /** Lista colada: o número é lead da carteira de outro vendedor (nome dele). Quem não é da gestão não envia. */
   deOutroVendedor?: string | null
+  /** Veio da lista colada. */
+  daLista?: boolean
 }
 
 export interface Leitor { usuarioId: string; papel: string; vendedorId: string | null; sdr?: boolean }
@@ -348,6 +351,8 @@ export interface Resultado {
   selecionados: number
   elegiveis: Contato[]
   excluidos: Array<{ contato: Contato; motivo: string }>
+  /** Elegíveis para promoção só pela declaração da lista colada: a preparação registra a autorização de cada um. */
+  autorizarPelaLista?: Contato[]
   /** Contagem por motivo, cada contato uma vez (duplicados e sem telefone não viram linha). */
   porMotivo: Record<string, number>
 }
@@ -419,8 +424,8 @@ async function contatosDaLista(q: Leitor, lista: Array<{ telefone: string; nome?
   }
   return pedidos.map(x => {
     const crm = x.tel ? porChave.get(chaveTelefone(x.tel)) : undefined
-    if (crm) return { ...crm, nome: crm.nome ?? x.nome }
-    return { ...CONTATO_AVULSO, telefone: x.tel, bruto: x.bruto, nome: x.nome ?? (x.tel ? `+${x.tel}` : x.bruto), criadoEm: agora, deOutroVendedor: x.tel ? deOutro.get(chaveTelefone(x.tel)) ?? null : null } as Contato
+    if (crm) return { ...crm, nome: crm.nome ?? x.nome, daLista: true }
+    return { ...CONTATO_AVULSO, daLista: true, telefone: x.tel, bruto: x.bruto, nome: x.nome ?? (x.tel ? `+${x.tel}` : x.bruto), criadoEm: agora, deOutroVendedor: x.tel ? deOutro.get(chaveTelefone(x.tel)) ?? null : null } as Contato
   })
 }
 
@@ -468,6 +473,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
   const elegiveis: Contato[] = []
   const excluidos: Resultado['excluidos'] = []
   const porMotivo: Record<string, number> = {}
+  const autorizarPelaLista: Contato[] = []
   const excluir = (contato: Contato, motivo: string) => { excluidos.push({ contato, motivo }); porMotivo[motivo] = (porMotivo[motivo] ?? 0) + 1 }
   if (duplicados) porMotivo.DUPLICADO = duplicados
   if (semTelefone.length) porMotivo.SEM_TELEFONE = semTelefone.length
@@ -485,7 +491,11 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
     } else if (opcoes.finalidade === 'MARKETING') {
       if (a === 'REVOGADO') { excluir(c, 'DESCADASTRADO'); continue }
       const temRelacao = !!c.leadId || !!c.clienteId
-      if (a !== 'AUTORIZADO' && !(opcoes.config.baseMarketing === 'RELACAO' && temRelacao)) { excluir(c, 'SEM_AUTORIZACAO'); continue }
+      if (a !== 'AUTORIZADO' && !(opcoes.config.baseMarketing === 'RELACAO' && temRelacao)) {
+        // Lista colada com a declaração de quem colou ("essas pessoas aceitaram"): entra e a autorização é registrada.
+        if (c.daLista && manual.listaAutorizada) autorizarPelaLista.push(c)
+        else { excluir(c, 'SEM_AUTORIZACAO'); continue }
+      }
     }
     if (usadas.size) {
       const valores = await valoresDoContato(c, loja)
@@ -493,7 +503,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
     }
     elegiveis.push(c)
   }
-  return { selecionados, elegiveis, excluidos, porMotivo }
+  return { selecionados, elegiveis, excluidos, porMotivo, autorizarPelaLista: autorizarPelaLista.filter(c => elegiveis.includes(c)) }
 }
 
 /** Quantos leads há em cada etapa agora e quantos estão parados nela há mais de 7 dias. */

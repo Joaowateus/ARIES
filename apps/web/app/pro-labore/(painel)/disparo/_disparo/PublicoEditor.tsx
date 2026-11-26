@@ -228,7 +228,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
         <div className="dp-linha" style={{ marginTop: 6 }}>
           <span className="pl-hint">{lida.numeros.length ? `${lida.numeros.length} número(s) reconhecido(s)${lida.ignoradas ? ` · ${lida.ignoradas} linha(s) sem número` : ''}` : 'Cole ou envie um arquivo .csv/.txt'}</span>
           <label className="pl-btn" style={{ cursor: 'pointer' }}>Enviar arquivo<input type="file" hidden accept=".csv,.txt,text/csv,text/plain" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void f.text().then(t => setLista(l => (l ? `${l}\n${t}` : t))) }} /></label>
-          <button type="button" className="pl-btn pl-btn-primary" disabled={!lida.numeros.length} data-adicionar-lista onClick={() => { const ja = new Set(numerosLista.map(x => x.telefone.replace(/\D/g, ''))); const novos = lida.numeros.filter(x => !ja.has(x.telefone.replace(/\D/g, ''))); mudar({ ...definicao, manual: { ...manual, numeros: [...numerosLista, ...novos] } }); setLista('') }}>Adicionar {lida.numeros.length || ''} à lista</button>
+          <button type="button" className="pl-btn pl-btn-primary" disabled={!lida.numeros.length} data-adicionar-lista onClick={() => { const ja = new Set(numerosLista.map(x => x.telefone.replace(/\D/g, ''))); const novos = lida.numeros.filter(x => !ja.has(x.telefone.replace(/\D/g, ''))); mudar({ ...definicao, manual: { ...manual, numeros: [...numerosLista, ...novos], listaAutorizada: manual.listaAutorizada ?? true } }); setLista('') }}>Adicionar {lida.numeros.length || ''} à lista</button>
         </div>
       </div>
 
@@ -241,6 +241,12 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
               <button type="button" className="pl-btn" onClick={() => mudar({ ...definicao, manual: { ...manual, incluir: [], numeros: [] } })}>Tirar todos</button>
             </span>
           </div>
+          {numerosLista.length > 0 && (
+            <label className="dp-so-estes" data-lista-autorizada>
+              <input type="checkbox" checked={!!manual.listaAutorizada} onChange={e => mudar({ ...definicao, manual: { ...manual, listaAutorizada: e.target.checked } })} />
+              <span><b>As pessoas da lista colada aceitaram receber mensagens da loja</b> — assim números novos recebem também promoção. O ARIES registra a autorização de cada número em seu nome (data e campanha) para a LGPD. Quem já pediu para sair continua de fora.</span>
+            </label>
+          )}
           <label className="dp-so-estes"><input type="checkbox" checked={!!manual.apenasManual} onChange={e => mudar({ ...definicao, manual: { ...manual, apenasManual: e.target.checked } })} /> <span><b>Enviar só para os escolhidos</b> — ignora o público pronto, a base e os filtros acima. Desmarcado, os escolhidos são somados ao público.</span></label>
           {verEscolhidos && (
             <div className="cc-chips" style={{ marginTop: 6, maxHeight: 220, overflow: 'auto' }}>
