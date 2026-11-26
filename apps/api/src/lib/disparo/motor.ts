@@ -91,6 +91,7 @@ export async function prepararCampanha(campanhaId: string, agora = new Date()): 
   const conteudo = c.conteudo as unknown as Conteudo
   // Sempre a carteira de quem criou a campanha (mesmo que outra pessoa da gestão a prepare).
   const r = await resolverPublico(await leitorDaCampanha(c.usuarioId, c.criadoPorId), c.publico as unknown as DefinicaoPublico, { finalidade: c.finalidade as Finalidade, config, conteudo, remetenteNumero: c.assistente?.numeroWhatsapp ?? null }, agora)
+  await registrarAutorizacoesDaLista(c, r.autorizarPelaLista ?? [])
   const loja = (await prisma.proLaboreUsuario.findUnique({ where: { id: c.usuarioId }, select: { nome: true } }))?.nome ?? ''
   const linhas: Prisma.DisparoDestinatarioCreateManyInput[] = []
   for (const x of [...r.elegiveis.map(e => ({ contato: e, motivo: null as string | null })), ...r.excluidos]) {
@@ -108,6 +109,27 @@ export async function prepararCampanha(campanhaId: string, agora = new Date()): 
   const proximo: StatusCampanha = preparo.aprovacao ? 'NEEDS_REVIEW' : 'READY'
   await transicionar(campanhaId, proximo, { de: ['VALIDATING'], motivo: `Público preparado: ${totais.elegiveis} elegíveis de ${totais.selecionados}`, dados: { totais: totais as unknown as Prisma.InputJsonValue, preparadaEm: new Date(), erro: null } })
   return { elegiveis: totais.elegiveis, excluidos: totais.excluidos }
+}
+
+/**
+ * Lista colada com a declaração "essas pessoas aceitaram receber mensagens da loja": cada número que
+ * só entrou na promoção por essa declaração ganha uma autorização registrada (quem declarou, quando,
+ * em qual campanha). Fica na auditoria e vale para as próximas campanhas; "SAIR" revoga como sempre.
+ */
+async function registrarAutorizacoesDaLista(c: { id: string; usuarioId: string; nome: string; publico: Prisma.JsonValue; criadoPorNome?: string | null }, contatos: Array<{ telefone: string | null; leadId: string | null }>) {
+  const novos = contatos.filter(x => x.telefone)
+  if (!novos.length) return
+  const manual = ((c.publico ?? {}) as unknown as DefinicaoPublico).manual ?? {}
+  const quem = manual.listaAutorizadaPor ?? c.criadoPorNome ?? 'quem montou a campanha'
+  const quando = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  for (let i = 0; i < novos.length; i += LOTE_CRIACAO) {
+    await prisma.contatoAutorizacao.createMany({ data: novos.slice(i, i + LOTE_CRIACAO).map(x => ({
+      usuarioId: c.usuarioId, telefone: x.telefone!, canal: 'WHATSAPP', finalidade: 'MARKETING', situacao: 'AUTORIZADO', baseLegal: 'CONSENTIMENTO',
+      evidencia: `Declarado por ${quem} ao colar a lista na campanha "${c.nome}" em ${quando}: as pessoas aceitaram receber mensagens da loja.`,
+      origem: 'LISTA_COLADA', leadId: x.leadId, registradoPorNome: quem,
+    })) })
+  }
+  await evento({ usuarioId: c.usuarioId, campanhaId: c.id, tipo: 'AUTORIZACAO_LISTA', descricao: `${novos.length} número(s) da lista colada autorizados por declaração de ${quem}`, autorNome: quem })
 }
 
 // ---------- Distribuição: cria as mensagens do 1º passo ----------
@@ -157,7 +179,7 @@ const ALIMENTAR_A_CADA_MS = 10 * MIN
  */
 export async function alimentarContinuas(fim: number, agora = new Date()): Promise<number> {
   let novos = 0
-  const cs = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, versao: true, assistenteId: true, canal: true, criadoPorId: true, conteudo: true, config: true, publico: true, finalidade: true, preparo: true, totais: true, assistente: { select: { numeroWhatsapp: true } } } })
+  const cs = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING' }, select: { id: true, usuarioId: true, nome: true, criadoPorNome: true, versao: true, assistenteId: true, canal: true, criadoPorId: true, conteudo: true, config: true, publico: true, finalidade: true, preparo: true, totais: true, assistente: { select: { numeroWhatsapp: true } } } })
   for (const c of cs) {
     if (!lerConfigEnvio(c.config).continua) continue
     if (Date.now() > fim - 5000) break
@@ -172,6 +194,7 @@ export async function alimentarContinuas(fim: number, agora = new Date()): Promi
       const ja = new Set((await prisma.disparoDestinatario.findMany({ where: { campanhaId: c.id, versao: c.versao }, select: { telefone: true } })).map(x => x.telefone))
       const novosContatos = r.elegiveis.filter(e => e.telefone && !ja.has(e.telefone))
       if (!novosContatos.length) continue
+      await registrarAutorizacoesDaLista({ ...c, nome: c.nome }, (r.autorizarPelaLista ?? []).filter(x => novosContatos.includes(x)))
       const loja = (await prisma.proLaboreUsuario.findUnique({ where: { id: c.usuarioId }, select: { nome: true } }))?.nome ?? ''
       const linhas: Prisma.DisparoDestinatarioCreateManyInput[] = []
       for (const x of novosContatos) {

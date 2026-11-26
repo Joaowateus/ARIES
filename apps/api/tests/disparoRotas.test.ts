@@ -327,3 +327,41 @@ test('estratégia contínua criada antes da regra de carteira: só entram os lea
   const nomes = (await prisma.disparoDestinatario.findMany({ where: { campanhaId: c.id }, select: { nome: true } })).map(d => d.nome)
   assert.deepEqual(nomes, ['Lia Cliente'])
 })
+
+test('número novo (fora do WhatsApp e do CRM) em promoção: com a declaração da lista colada entra, a autorização fica registrada e sai', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const novo = '91987243987'
+  const definicao = (listaAutorizada?: boolean) => ({ base: 'LEADS', manual: { apenasManual: true, numeros: [{ telefone: novo, nome: 'Guilherme' }], ...(listaAutorizada === undefined ? {} : { listaAutorizada }) } })
+  const conteudo = { passos: [{ tipo: 'TEXTO', texto: 'Oi {{primeiro_nome|tudo bem}}! Promoção da semana.' }] }
+  // Sem a declaração: fica de fora (como no print).
+  const sem = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao: definicao(false), finalidade: 'MARKETING', conteudo })
+  assert.equal(sem.corpo.elegiveis, 0)
+  assert.equal((sem.corpo.porMotivo as Record<string, number>).SEM_AUTORIZACAO, 1)
+  // Com a declaração: entra.
+  const com = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao: definicao(true), finalidade: 'MARKETING', conteudo })
+  assert.equal(com.corpo.elegiveis, 1, JSON.stringify(com.corpo))
+  // A campanha grava quem declarou (o servidor, não a tela) e a preparação registra a autorização.
+  const c = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), nome: 'Promo números novos', finalidade: 'MARKETING', conteudo, publico: { ...definicao(true), manual: { ...definicao(true).manual, listaAutorizadaPor: 'Alguém Falso' } } })
+  assert.equal(c.status, 201, JSON.stringify(c.corpo))
+  const id = String(c.corpo.id)
+  assert.equal(((c.corpo.publico as { manual: { listaAutorizadaPor: string } }).manual).listaAutorizadaPor, 'VEND')
+  await api('VEND', 'POST', `/disparo/campanhas/${id}/validar`)
+  const d = await prisma.disparoDestinatario.findFirst({ where: { campanhaId: id } })
+  assert.equal(d?.status, 'ELEGIVEL')
+  const aut = await prisma.contatoAutorizacao.findFirst({ where: { usuarioId: loja.id, telefone: '5591987243987' }, orderBy: { criadoEm: 'desc' } })
+  assert.equal(aut?.situacao, 'AUTORIZADO')
+  assert.equal(aut?.origem, 'LISTA_COLADA')
+  assert.match(String(aut?.evidencia), /Declarado por VEND .*Promo números novos/)
+  assert.ok(await prisma.disparoEvento.count({ where: { campanhaId: id, tipo: 'AUTORIZACAO_LISTA' } }) === 1)
+  // Sai de verdade (a conferência na hora do envio vê a autorização).
+  await api('VEND', 'POST', `/disparo/campanhas/${id}/iniciar`, {})
+  const { rodarDisparo } = await import('../src/lib/disparo/motor')
+  await rodarDisparo(8000)
+  const m = await prisma.disparoMensagem.findFirst({ where: { campanhaId: id } })
+  assert.equal(m?.status, 'ACEITA', JSON.stringify(m))
+  // Quem pediu para sair continua de fora mesmo com a declaração.
+  await prisma.contatoAutorizacao.create({ data: { usuarioId: loja.id, telefone: '5591987243988', canal: 'WHATSAPP', finalidade: 'MARKETING', situacao: 'REVOGADO', origem: 'TESTE' } })
+  const saiu = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao: { base: 'LEADS', manual: { apenasManual: true, listaAutorizada: true, numeros: [{ telefone: '91987243988' }] } }, finalidade: 'MARKETING', conteudo })
+  assert.equal(saiu.corpo.elegiveis, 0)
+  assert.equal((saiu.corpo.porMotivo as Record<string, number>).DESCADASTRADO, 1)
+})

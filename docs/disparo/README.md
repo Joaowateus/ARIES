@@ -293,6 +293,15 @@ Checklist do dia
 - Clientes, Equipe e Instagram da empresa: só a gestão. A tela esconde essas opções para o vendedor.
 - Testes: `tests/disparoRotas.test.ts`, casos "carteira: …" e "estratégia contínua criada antes da regra de carteira".
 
+## 10m. Números novos em promoção (lista colada com declaração)
+
+- Promoção continua exigindo autorização (ou relação com a loja, se o dono liberou). Número novo, fora do WhatsApp e do CRM, não tem nenhum dos dois e ficava de fora (`SEM_AUTORIZACAO`).
+- Na lista colada há a caixa **"As pessoas da lista colada aceitaram receber mensagens da loja"**. Ela já vem marcada ao adicionar uma lista e pode ser desmarcada.
+- Com a caixa marcada, os números da lista entram na promoção, e a preparação grava para cada um uma autorização: `AUTORIZADO`, base legal consentimento, origem `LISTA_COLADA`, evidência "Declarado por <quem> ao colar a lista na campanha <nome> em <data>". Também fica um evento `AUTORIZACAO_LISTA` na campanha.
+- O nome de quem declarou é gravado pelo servidor, a partir de quem salvou; a tela não consegue informar outro.
+- Quem pediu para sair (`REVOGADO`) ou está bloqueado continua de fora. "SAIR" revoga como sempre.
+- Teste: `tests/disparoRotas.test.ts` ("número novo … em promoção").
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).
