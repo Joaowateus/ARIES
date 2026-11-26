@@ -6278,3 +6278,18 @@ a.dp-tile:hover { border-color: var(--pl-border-strong); }
 }
 /* Caixas e botões de opção nativos no mesmo tom do sistema (as telas trocam pelos interruptores aos poucos). */
 :where(.pl-app) input[type="checkbox"], :where(.pl-app) input[type="radio"] { accent-color: var(--pl-ink-1); }
+
+/* ===== Configurações do sistema (redesign): índice por grupos, um grupo de cada vez ===== */
+.dp-config-indice button { text-align: left; border: 0; background: transparent; color: var(--pl-ink-2); font: inherit; font-size: 13.5px; padding: 7px 10px; border-radius: 7px; cursor: pointer; }
+.dp-config-indice button:hover { color: var(--pl-ink-1); background: var(--pl-surface-2); }
+.dp-config-indice button.on { color: var(--pl-ink-1); background: var(--pl-surface-3); font-weight: 500; }
+.ar-config { padding-bottom: 24px; }
+.ar-config-topo { margin-bottom: 2px; }
+.ar-config-topo h2 { margin: 0; font-size: 18px; font-weight: 600; color: var(--pl-ink-1); letter-spacing: -.01em; }
+.ar-config-topo .pl-hint { margin: 2px 0 0; }
+.ar-config-corpo > .pl-card, .ar-config-corpo > form.pl-card, .ar-config-corpo > div > .pl-card { margin-top: 0 !important; margin-bottom: 0 !important; }
+@media (max-width: 900px) {
+  .dp-config { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .dp-config-indice { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--pl-border); padding-bottom: 6px; }
+  .dp-config-indice button, .dp-config-indice a { white-space: nowrap; }
+}

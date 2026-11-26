@@ -1,11 +1,12 @@
 'use client'
 
 import { useModoGuiado } from '../leads/_topo/modoGuiado'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Interruptor } from '../_ui/ui'
 import { temAcesso, proLaboreApi, ParametroLiquidez } from '@/lib/proLaboreApi'
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
-import { PageHeader } from '../../PageHeader'
 import { AgenteWhatsapp } from './_agente/AgenteWhatsapp'
 import { ImportacaoNeon } from './_importacao/ImportacaoNeon'
 import { EspacoBanco } from './_espaco/EspacoBanco'
@@ -207,31 +208,8 @@ export default function ProLaboreConfiguracoesPage() {
     )
   }
 
-  return (
-    <div>
-      <PageHeader eyebrow="Sistema" title="Configurações" subtitle="O Aries no WhatsApp, teto de pró-labore, teto padrão de comissão e meta anual de faturamento" />
-
-      <SeuJeito />
-      <CopiaSeguranca />
-      <MigracaoJornada />
-      <RodizioLeads />
-      <PremissasJornada podeEditar={usuario?.papel === 'DONO'} />
-      <ReguaCobranca podeEditar={usuario?.papel === 'DONO'} />
-      <DicionarioMetricas podeEditar={usuario?.papel === 'DONO'} />
-      <Detectores podeEditar={usuario?.papel === 'DONO'} />
-      <MatrizAcoes />
-      {usuario?.papel === 'DONO' && <AreasOnda4 />}
-      {usuario?.papel === 'DONO' && <ConfigExpediente />}
-      {usuario?.papel === 'DONO' && <BibliotecaFrases />}
-      {usuario?.papel === 'DONO' && <AceiteAjuste1Card />}
-      {usuario?.papel === 'DONO' && <TelasNovas />}
-      {usuario?.papel === 'DONO' && <AceitePdf03 />}
-      {usuario?.papel === 'DONO' && <AceitePdf02 />}
-      <EspacoBanco />
-      <AuditoriaDados />
-
-      <div style={{ marginBottom: 20 }}><AgenteWhatsapp /></div>
-
+  const dono = usuario?.papel === 'DONO'
+  const formTetos = (
       <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
         <div className="pl-card-head">
           <div>
@@ -288,7 +266,8 @@ export default function ProLaboreConfiguracoesPage() {
 
         <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando} style={{ marginTop: 18 }}>{salvando ? 'Salvando...' : 'Salvar'}</button>
       </form>
-
+  )
+  const formAgenda = (
       <form onSubmit={handleSubmitAgenda} className="pl-card">
         <div className="pl-card-head">
           <div>
@@ -351,8 +330,9 @@ export default function ProLaboreConfiguracoesPage() {
 
         <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoAgenda} style={{ marginTop: 18 }}>{salvandoAgenda ? 'Salvando...' : 'Salvar'}</button>
       </form>
-
-      <form onSubmit={handleSubmitPlano} className="pl-card" style={{ marginTop: 20 }}>
+  )
+  const formPlano = (
+      <form onSubmit={handleSubmitPlano} className="pl-card">
         <div className="pl-card-head">
           <div>
             <div className="pl-card-title">Metas do Plano de Crescimento</div>
@@ -409,8 +389,40 @@ export default function ProLaboreConfiguracoesPage() {
 
         <button type="submit" className="pl-btn pl-btn-primary" disabled={salvandoPlano} style={{ marginTop: 18 }}>{salvandoPlano ? 'Salvando...' : 'Salvar'}</button>
       </form>
+  )
 
-      <div style={{ marginTop: 20 }}><ImportacaoNeon /></div>
+  // Redesign 26/11: as ~25 seções em grupos, com um índice; uma página de cada vez (antes, uma rolagem
+  // de 18 mil px). Os mesmos formulários, componentes e regras de antes.
+  const grupos: GrupoConfig[] = [
+    { id: 'voce', rotulo: 'Seu jeito', descricao: 'Preferências que valem só para você.', corpo: <SeuJeito /> },
+    { id: 'metas', rotulo: 'Metas e limites', descricao: 'Tetos de pró-labore e comissão, metas de faturamento e as premissas da jornada.', corpo: <>{formTetos}<PremissasJornada podeEditar={dono} />{formPlano}</> },
+    { id: 'rotina', rotulo: 'Rotina da equipe', descricao: 'Expediente, rodízio de leads, régua de cobrança e a auditoria da Agenda.', corpo: <>{dono && <ConfigExpediente />}<RodizioLeads /><ReguaCobranca podeEditar={dono} />{formAgenda}{dono && <BibliotecaFrases />}</> },
+    { id: 'aries', rotulo: 'Métricas e ARIES', descricao: 'Como o ARIES mede, detecta e recomenda.', corpo: <><DicionarioMetricas podeEditar={dono} /><Detectores podeEditar={dono} />{dono && <AreasOnda4 />}<MatrizAcoes /></> },
+    { id: 'whatsapp', rotulo: 'WhatsApp', descricao: 'O ARIES no WhatsApp da loja.', corpo: <AgenteWhatsapp /> },
+    { id: 'dados', rotulo: 'Dados e segurança', descricao: 'Cópias de segurança, espaço do banco, auditoria e migrações.', corpo: <><CopiaSeguranca /><EspacoBanco /><AuditoriaDados /><MigracaoJornada /><ImportacaoNeon /></> },
+    ...(dono ? [{ id: 'telas', rotulo: 'Telas e aceites', descricao: 'Versão das telas e os aceites das entregas.', corpo: <><TelasNovas /><AceiteAjuste1Card /><AceitePdf03 /><AceitePdf02 /></> }] : []),
+  ]
+  return <IndiceConfig grupos={grupos} />
+}
+
+type GrupoConfig = { id: string; rotulo: string; descricao: string; corpo: ReactNode }
+
+/** Índice à esquerda (no celular, no topo) e o grupo escolhido; o grupo fica no endereço (?secao=). */
+function IndiceConfig({ grupos }: { grupos: GrupoConfig[] }) {
+  const params = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const atual = grupos.find(g => g.id === params.get('secao')) ?? grupos[1] ?? grupos[0]
+  const ir = (id: string) => router.replace(`${pathname}?secao=${id}`, { scroll: false })
+  return (
+    <div className="dp-config ar-config" data-configuracoes>
+      <nav className="dp-config-indice" aria-label="Seções das configurações">
+        {grupos.map(g => <button key={g.id} type="button" className={g.id === atual.id ? 'on' : ''} aria-current={g.id === atual.id ? 'page' : undefined} onClick={() => ir(g.id)} data-secao={g.id}>{g.rotulo}</button>)}
+      </nav>
+      <div className="dp-config-corpo ar-config-corpo" data-secao-aberta={atual.id}>
+        <header className="ar-config-topo"><h2>{atual.rotulo}</h2><p className="pl-hint">{atual.descricao}</p></header>
+        {atual.corpo}
+      </div>
     </div>
   )
 }
@@ -422,10 +434,7 @@ function SeuJeito() {
   return (
     <div className="pl-card" style={{ marginBottom: 20 }} data-seu-jeito>
       <div className="pl-card-head"><div><div className="pl-card-title">Seu jeito de usar</div><div className="pl-card-sub">Vale só para você, em qualquer aparelho.</div></div></div>
-      <label className="fn-alternar" data-config-guiado>
-        <input type="checkbox" checked={guiado} onChange={e => setGuiado(e.target.checked)} />
-        <span><b>Modo guiado no Funil</b><br /><small>Mostra a dica do quadro, a pergunta de cada coluna e o que fazer em cada card. Sem isso, essas orientações ficam só no painel do lead.</small></span>
-      </label>
+      <div data-config-guiado><Interruptor id="modo-guiado" ligado={guiado} mudar={setGuiado} rotulo="Modo guiado no Funil" detalhe="Mostra a dica do quadro, a pergunta de cada coluna e o que fazer em cada card. Sem isso, essas orientações ficam só no painel do lead." /></div>
     </div>
   )
 }

@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { proLaboreApi, type AgentePainel, type AgenteVinculoInfo } from '@/lib/proLaboreApi'
 import '../../_agente/agente.css'
+import { useConfirmar } from '../../_ui/ui'
 
 const fone = (n: string | null) => {
   if (!n) return ''
@@ -14,6 +15,7 @@ const fone = (n: string | null) => {
 }
 
 export function AgenteWhatsapp() {
+  const confirmar = useConfirmar()
   const [painel, setPainel] = useState<AgentePainel | null>(null)
   const [codigo, setCodigo] = useState<{ qrBase64: string | null; pairingCode: string | null } | null>(null)
   const [numeroPareamento, setNumeroPareamento] = useState('')
@@ -109,7 +111,7 @@ export function AgenteWhatsapp() {
             <div className="ag-botoes">
               <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => acao(() => proLaboreApi.agente.config({ nome, manhaHora }), 'Salvo.')}>Salvar</button>
               <button type="button" className="pl-btn pl-btn-ghost" disabled={ocupado} onClick={() => acao(() => proLaboreApi.agente.perfil(), 'Foto e nome enviados ao WhatsApp.')} data-agente-perfil>{a!.perfilEm ? 'Reaplicar foto e nome' : 'Aplicar foto e nome'}</button>
-              <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" disabled={ocupado} onClick={() => { if (confirm('Desconectar o número do agente? A equipe deixa de receber as mensagens até conectar de novo.')) acao(() => proLaboreApi.agente.desconectar()) }}>Desconectar</button>
+              <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" disabled={ocupado} onClick={() => void confirmar({ titulo: 'Desconectar o número do agente?', texto: 'A equipe deixa de receber as mensagens até conectar de novo.', acao: 'Desconectar', perigo: true }).then(ok => { if (ok) acao(() => proLaboreApi.agente.desconectar()) })}>Desconectar</button>
             </div>
           </div>
 

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { recApi, type AceiteArea, type AreaOnda4 } from '@/lib/proLaboreApi'
 import { DetalheRec, ForcaChip } from '../../recomendacoes/DetalheRec'
 import { pl } from '@/lib/format'
+import { useConfirmar } from '../../_ui/ui'
 
 function Selo({ passa }: { passa: boolean | null | undefined }) {
   if (passa == null) return <span className="pl-hint">sem casos ainda</span>
@@ -16,6 +17,7 @@ function Selo({ passa }: { passa: boolean | null | undefined }) {
 const estado = (a: AreaOnda4) => (!a.ligada ? 'Desligada' : a.modo === 'SILENCIOSO' ? 'Semana silenciosa' : 'Roteamento normal')
 
 export function AreasOnda4() {
+  const confirmar = useConfirmar()
   const [areas, setAreas] = useState<AreaOnda4[] | null>(null)
   const [just, setJust] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
@@ -25,7 +27,7 @@ export function AreasOnda4() {
   useEffect(() => { carregar() }, [carregar])
   async function mudar(g: string, d: { ligada?: boolean; modo?: 'SILENCIOSO' | 'NORMAL' }, texto: string) {
     if (just.trim().length < 5) { setMsg('Escreva o motivo (fica no histórico).'); return }
-    if (!window.confirm(texto)) return
+    if (!(await confirmar({ titulo: texto, acao: 'Confirmar' }))) return
     try { const r = await recApi.mudarArea(g, { ...d, justificativa: just.trim() }); setMsg(`Feito.${r.afetadas ? ` ${pl(r.afetadas, 'recomendação aberta passou', 'recomendações abertas passaram')} a ir para quem deve agir.` : ''}${r.recsCriadas != null ? ` Os detectores rodaram: ${pl(r.recsCriadas, "recomendação nova", "recomendações novas")}.` : ''}`); setJust(''); carregar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') }
   }
   async function rodarAgora(g: string) { setMsg('Rodando os detectores…'); try { const r = await recApi.rodarArea(g); setMsg(`Os detectores rodaram: ${pl(r.recsCriadas, "recomendação nova", "recomendações novas")}. Elas aparecem em Recomendações para quem pode ver.`); setAceite(x => { const y = { ...x }; delete y[g]; return y }) } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível') } }
