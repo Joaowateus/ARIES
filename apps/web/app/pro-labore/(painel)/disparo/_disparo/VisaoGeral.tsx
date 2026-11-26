@@ -4,7 +4,7 @@
 // campanhas recentes, atividade e a comparação entre campanhas. Tudo vem do servidor (dados reais).
 import { useEffect, useState } from 'react'
 import { disparoApi, type VisaoGeralDisparo } from '@/lib/proLaboreApi'
-import { Numero, SeloStatus, dataHora, erroDe, n, pct, useMeta } from './util'
+import { Numero, SeloStatus, dataHora, erroDe, n, pct, useEscopo, useMeta } from './util'
 
 const ROTULO_EVENTO: Record<string, string> = {
   RESPOSTA: 'Resposta', DESCADASTRO: 'Descadastro', FALHA: 'Falha', STATUS_RUNNING: 'Começou a enviar', STATUS_COMPLETED: 'Concluída',
@@ -17,11 +17,12 @@ export function VisaoGeral({ abrir }: { abrir: (id: string) => void }) {
   const [d, setD] = useState<VisaoGeralDisparo | null>(null)
   const [comp, setComp] = useState<Awaited<ReturnType<typeof disparoApi.comparativo>> | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const { de } = useEscopo()
   useEffect(() => {
     let vivo = true
-    Promise.all([disparoApi.visaoGeral(dias), disparoApi.comparativo(dias)]).then(([v, c]) => { if (vivo) { setD(v); setComp(c); setErro(null) } }).catch(e => vivo && setErro(erroDe(e)))
+    Promise.all([disparoApi.visaoGeral(dias, de), disparoApi.comparativo(dias, de)]).then(([v, c]) => { if (vivo) { setD(v); setComp(c); setErro(null) } }).catch(e => vivo && setErro(erroDe(e)))
     return () => { vivo = false }
-  }, [dias])
+  }, [dias, de])
   if (erro) return <div className="pl-alert pl-alert-error" role="alert">{erro}</div>
   if (!d) return <p className="pl-hint" aria-busy="true">Lendo as campanhas…</p>
   return (

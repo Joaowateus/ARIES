@@ -2,6 +2,7 @@
 // Tudo sai das tabelas do Disparo e do CRM na hora; cada número diz de onde vem.
 // Resultado comercial é correlação no período (o destinatário avançou depois de receber), não
 // atribuição de venda à campanha: o ARIES não tem regra de atribuição aprovada.
+import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
 
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null)
@@ -37,19 +38,27 @@ export async function resumoCampanha(campanhaId: string) {
   }
 }
 
-export async function visaoGeral(usuarioId: string, desde: Date) {
+/**
+ * Números do período só das campanhas do escopo (as da pessoa; a gestão pode ver a equipe toda ou
+ * as de alguém). `escopo` vazio = loja inteira.
+ */
+export async function visaoGeral(usuarioId: string, desde: Date, escopo: Prisma.DisparoCampanhaWhereInput = {}) {
+  const campanhas: Prisma.DisparoCampanhaWhereInput = { usuarioId, excluidaEm: null, ...escopo }
+  const ids = (await prisma.disparoCampanha.findMany({ where: campanhas, select: { id: true } })).map(c => c.id)
+  const daLoja = Object.keys(escopo).length === 0
   const [porStatus, recentes, msgs, respostas, destinatarios, eventos] = await Promise.all([
-    prisma.disparoCampanha.groupBy({ by: ['status'], where: { usuarioId, excluidaEm: null }, _count: { _all: true } }),
-    prisma.disparoCampanha.findMany({ where: { usuarioId, excluidaEm: null }, orderBy: { atualizadoEm: 'desc' }, take: 8, select: { id: true, nome: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, finalidade: true } }),
-    prisma.disparoMensagem.groupBy({ by: ['status'], where: { campanha: { usuarioId, excluidaEm: null }, criadoEm: { gte: desde } }, _count: { _all: true } }),
-    prisma.disparoDestinatario.count({ where: { usuarioId, respondeuEm: { gte: desde }, campanha: { excluidaEm: null } } }),
-    prisma.disparoDestinatario.count({ where: { usuarioId, criadoEm: { gte: desde }, status: { notIn: ['EXCLUIDO', 'DESCARTADO'] }, campanha: { excluidaEm: null } } }),
-    prisma.disparoEvento.findMany({ where: { usuarioId, tipo: { in: ['RESPOSTA', 'DESCADASTRO', 'FALHA', 'STATUS_RUNNING', 'STATUS_COMPLETED', 'STATUS_COMPLETED_WITH_ERRORS', 'STATUS_CANCELLED', 'DECIDIR_REENVIO'] }, OR: [{ campanhaId: null }, { campanhaId: { notIn: (await prisma.disparoCampanha.findMany({ where: { usuarioId, excluidaEm: { not: null } }, select: { id: true } })).map(c => c.id) } }] }, orderBy: { criadoEm: 'desc' }, take: 15, select: { id: true, tipo: true, descricao: true, criadoEm: true, campanhaId: true } }),
+    prisma.disparoCampanha.groupBy({ by: ['status'], where: campanhas, _count: { _all: true } }),
+    prisma.disparoCampanha.findMany({ where: campanhas, orderBy: { atualizadoEm: 'desc' }, take: 8, select: { id: true, nome: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, finalidade: true } }),
+    prisma.disparoMensagem.groupBy({ by: ['status'], where: { campanhaId: { in: ids }, criadoEm: { gte: desde } }, _count: { _all: true } }),
+    prisma.disparoDestinatario.count({ where: { usuarioId, campanhaId: { in: ids }, respondeuEm: { gte: desde } } }),
+    prisma.disparoDestinatario.count({ where: { usuarioId, campanhaId: { in: ids }, criadoEm: { gte: desde }, status: { notIn: ['EXCLUIDO', 'DESCARTADO'] } } }),
+    // Eventos sem campanha (ex.: configurações) só na visão da loja inteira.
+    prisma.disparoEvento.findMany({ where: { usuarioId, tipo: { in: ['RESPOSTA', 'DESCADASTRO', 'FALHA', 'STATUS_RUNNING', 'STATUS_COMPLETED', 'STATUS_COMPLETED_WITH_ERRORS', 'STATUS_CANCELLED', 'DECIDIR_REENVIO'] }, OR: [{ campanhaId: { in: ids } }, ...(daLoja ? [{ campanhaId: null }] : [])] }, orderBy: { criadoEm: 'desc' }, take: 15, select: { id: true, tipo: true, descricao: true, criadoEm: true, campanhaId: true } }),
   ])
   const s = Object.fromEntries(porStatus.map(x => [x.status, x._count._all])) as Record<string, number>
   const m = Object.fromEntries(msgs.map(x => [x.status, x._count._all])) as Record<string, number>
   const aceitas = (m.ACEITA ?? 0) + (m.ENTREGUE ?? 0) + (m.LIDA ?? 0), entregues = (m.ENTREGUE ?? 0) + (m.LIDA ?? 0)
-  const nomes = new Map(recentes.map(r => [r.id, r.nome]))
+  const nomes = new Map((await prisma.disparoCampanha.findMany({ where: { id: { in: [...new Set(eventos.map(e => e.campanhaId).filter(Boolean) as string[])] } }, select: { id: true, nome: true } })).map(r => [r.id, r.nome]))
   return {
     campanhas: { criadas: Object.values(s).reduce((a, b) => a + b, 0), emAndamento: (s.RUNNING ?? 0) + (s.QUEUED ?? 0) + (s.PAUSED ?? 0), agendadas: s.SCHEDULED ?? 0, concluidas: (s.COMPLETED ?? 0) + (s.COMPLETED_WITH_ERRORS ?? 0), rascunhos: (s.DRAFT ?? 0) + (s.VALIDATING ?? 0) + (s.NEEDS_REVIEW ?? 0) + (s.READY ?? 0) },
     destinatarios, processadas: Object.entries(m).filter(([k]) => k !== 'AGENDADA').reduce((a, [, n]) => a + n, 0),
@@ -86,8 +95,8 @@ export async function resultadoComercial(campanhaId: string, verValores: boolean
 }
 
 /** Comparação entre campanhas do período (por campanha, com objetivo, finalidade, responsável e público). */
-export async function comparativo(usuarioId: string, desde: Date) {
-  const cs = await prisma.disparoCampanha.findMany({ where: { usuarioId, excluidaEm: null, iniciadaEm: { gte: desde } }, orderBy: { iniciadaEm: 'desc' }, take: 50, select: { id: true, nome: true, objetivo: true, finalidade: true, responsavelNome: true, publico: true, status: true, iniciadaEm: true } })
+export async function comparativo(usuarioId: string, desde: Date, escopo: Prisma.DisparoCampanhaWhereInput = {}) {
+  const cs = await prisma.disparoCampanha.findMany({ where: { usuarioId, excluidaEm: null, iniciadaEm: { gte: desde }, ...escopo }, orderBy: { iniciadaEm: 'desc' }, take: 50, select: { id: true, nome: true, objetivo: true, finalidade: true, responsavelNome: true, publico: true, status: true, iniciadaEm: true } })
   const linhas = []
   for (const c of cs) {
     const r = await resumoCampanha(c.id)

@@ -788,7 +788,7 @@ export async function destinatarioRecente(assistenteId: string, numero: string) 
   return prisma.disparoDestinatario.findFirst({
     where: { telefone: tel, campanha: { assistenteId, iniciadaEm: { gte: new Date(Date.now() - 30 * 24 * 60 * MIN) } }, mensagens: { some: { status: { in: ['ACEITA', 'ENTREGUE', 'LIDA'] } } } },
     orderBy: { criadoEm: 'desc' },
-    select: { id: true, campanhaId: true, usuarioId: true, leadId: true, vendedorId: true, nome: true, respondeuEm: true, status: true, campanha: { select: { nome: true, config: true, finalidade: true } } },
+    select: { id: true, campanhaId: true, usuarioId: true, leadId: true, vendedorId: true, nome: true, respondeuEm: true, status: true, campanha: { select: { nome: true, config: true, finalidade: true, criadoPorId: true } } },
   })
 }
 
@@ -826,9 +826,18 @@ export async function registrarResposta(assistenteId: string, numero: string, te
       const jaTem = await prisma.leadFollow.count({ where: { leadId, status: 'PENDENTE', tipo: 'CONTATO' } })
       if (!jaTem) await prisma.leadFollow.create({ data: { usuarioId: d.usuarioId, leadId, vendedorId: d.vendedorId, agendadoPara: agora, canal: 'WHATSAPP', nota: `Respondeu à campanha "${d.campanha.nome}": responder no WhatsApp`, contexto: { origem: 'DISPARO', campanhaId: d.campanhaId }, criadoPor: 'ARIES Disparo' } }).catch(e => logger.warn({ err: e }, 'disparo: follow da resposta'))
     }
-    await avisarNoWhatsapp(d.usuarioId, d.vendedorId, `💬 ${d.nome ?? 'Um contato'} respondeu à campanha "${d.campanha.nome}": "${texto.slice(0, 160)}"`).catch(e => logger.warn({ err: e }, 'disparo: aviso ao vendedor'))
+    // A resposta é de quem fez a campanha e de quem recebeu no WhatsApp (o número que enviou).
+    const dono = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { vendedorId: true } })
+    for (const quem of avisadosDaResposta(d.campanha.criadoPorId, dono?.vendedorId ?? null)) {
+      await avisarNoWhatsapp(d.usuarioId, quem, `💬 ${d.nome ?? 'Um contato'} respondeu à campanha "${d.campanha.nome}": "${texto.slice(0, 160)}"`).catch(e => logger.warn({ err: e }, 'disparo: aviso da resposta'))
+    }
   }
   return true
+}
+
+/** Quem é avisado de uma resposta: o criador da campanha (null = dono) e quem recebeu no WhatsApp, sem repetir. */
+export function avisadosDaResposta(criadoPorId: string | null, recebeuVendedorId: string | null): Array<string | null> {
+  return [...new Set<string | null>([criadoPorId ?? null, ...(recebeuVendedorId && recebeuVendedorId !== criadoPorId ? [recebeuVendedorId] : [])])]
 }
 
 export const PADRAO = CONFIG_PADRAO

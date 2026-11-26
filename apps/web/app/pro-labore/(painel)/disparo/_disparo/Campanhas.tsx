@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type ItemCampanhaDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
 import { Assistente } from './Assistente'
-import { Numero, Paginacao, Progresso, erroAmigavel, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useMeta } from './util'
+import { Numero, Paginacao, Progresso, erroAmigavel, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useEscopo, useMeta } from './util'
 
 const ATIVAS: StatusCampanhaDisparo[] = ['VALIDATING', 'QUEUED', 'RUNNING', 'SCHEDULED']
 const FILTROS: Array<{ rotulo: string; status?: string }> = [
@@ -23,12 +23,13 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
   const [editando, setEditando] = useState<CampanhaDisparo | null | 'nova'>(null)
   const [marcadas, setMarcadas] = useState<string[]>([])
   const [aviso, setAviso] = useState<string | null>(null)
-  const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina])
+  const { de, setDe } = useEscopo()
+  const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina, de }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina, de])
   useEffect(() => { if (!aberta && !editando) carregar() }, [carregar, aberta, editando])
   const pode = meta.nivel === 'EDITAR'
   // Gestão: campanhas da equipe esperando aprovação (aviso no topo da lista).
   const [aprovar, setAprovar] = useState(0)
-  useEffect(() => { if (meta.gestao && !aberta && !editando) disparoApi.campanhas.listar({ status: 'NEEDS_REVIEW' }).then(r => setAprovar(r.total)).catch(() => undefined) }, [meta.gestao, aberta, editando, lista])
+  useEffect(() => { if (meta.gestao && !aberta && !editando) disparoApi.campanhas.listar({ status: 'NEEDS_REVIEW', de: 'equipe' }).then(r => setAprovar(r.total)).catch(() => undefined) }, [meta.gestao, aberta, editando, lista])
 
   async function excluir(ids: string[]) {
     const ativas = (lista?.itens ?? []).filter(c => ids.includes(c.id) && ['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(c.status)).length
@@ -48,7 +49,7 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
       {aprovar > 0 && FILTROS[filtro].status !== 'NEEDS_REVIEW' && (
         <div className="pl-alert dp-linha" role="status" style={{ justifyContent: 'space-between' }} data-aviso-aprovar>
           <span><b>{aprovar} {aprovar === 1 ? 'campanha da equipe está' : 'campanhas da equipe estão'} esperando sua aprovação.</b> Nada é enviado antes disso.</span>
-          <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setFiltro(FILTROS.findIndex(x => x.status === 'NEEDS_REVIEW')); setPagina(0) }}>Ver e aprovar</button>
+          <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setDe('equipe'); setFiltro(FILTROS.findIndex(x => x.status === 'NEEDS_REVIEW')); setPagina(0) }}>Ver e aprovar</button>
         </div>
       )}
       {aviso && <p className="pl-hint" role="status">{aviso}</p>}

@@ -173,7 +173,7 @@ export async function registrarRespostaInstagram(usuarioId: string, igId: string
   const d = await prisma.disparoDestinatario.findFirst({
     where: { usuarioId, telefone: `ig:${igId}`, campanha: { iniciadaEm: { gte: new Date(Date.now() - 30 * DIA_MS) } }, mensagens: { some: { status: { in: ['ACEITA', 'ENTREGUE', 'LIDA'] } } } },
     orderBy: { criadoEm: 'desc' },
-    select: { id: true, campanhaId: true, usuarioId: true, leadId: true, vendedorId: true, nome: true, respondeuEm: true, campanha: { select: { nome: true, config: true } } },
+    select: { id: true, campanhaId: true, usuarioId: true, leadId: true, vendedorId: true, nome: true, respondeuEm: true, campanha: { select: { nome: true, config: true, criadoPorId: true } } },
   })
   if (!d) return false
   const cfgLoja = lerConfigLoja((await prisma.disparoConfig.findUnique({ where: { usuarioId }, select: { config: true } }))?.config ?? {})
@@ -197,7 +197,8 @@ export async function registrarRespostaInstagram(usuarioId: string, igId: string
       const jaTem = await prisma.leadFollow.count({ where: { leadId, status: 'PENDENTE', tipo: 'CONTATO' } })
       if (!jaTem) await prisma.leadFollow.create({ data: { usuarioId, leadId, vendedorId: d.vendedorId, agendadoPara: agora, canal: 'OUTRO', nota: `Respondeu no Instagram à campanha "${d.campanha.nome}": responder no Atendimento do Social Media`, contexto: { origem: 'DISPARO', campanhaId: d.campanhaId, canal: 'INSTAGRAM' }, criadoPor: 'ARIES Disparo' } }).catch(e => logger.warn({ err: e }, 'disparo: follow da resposta do Instagram'))
     }
-    await avisarNoWhatsapp(usuarioId, d.vendedorId, `💬 ${d.nome ?? 'Um contato'} respondeu no Instagram à campanha "${d.campanha.nome}": "${texto.slice(0, 160)}"`).catch(e => logger.warn({ err: e }, 'disparo: aviso da resposta do Instagram'))
+    // Aviso para quem fez a campanha (null = dono).
+    await avisarNoWhatsapp(usuarioId, d.campanha.criadoPorId ?? null, `💬 ${d.nome ?? 'Um contato'} respondeu no Instagram à campanha "${d.campanha.nome}": "${texto.slice(0, 160)}"`).catch(e => logger.warn({ err: e }, 'disparo: aviso da resposta do Instagram'))
   }
   return true
 }

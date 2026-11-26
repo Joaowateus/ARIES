@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { disparoApi, type CampanhaDisparoEntrada, type EstrategiaDisparo } from '@/lib/proLaboreApi'
 import { Assistente } from './Assistente'
-import { SeloStatus, erroDe, n, useMeta } from './util'
+import { SeloStatus, erroDe, n, useEscopo, useMeta } from './util'
 
 type Dados = Awaited<ReturnType<typeof disparoApi.jornada>>
 
@@ -15,7 +15,8 @@ export function Jornada({ abrir }: { abrir: (id: string) => void }) {
   const [d, setD] = useState<Dados | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [preset, setPreset] = useState<Partial<CampanhaDisparoEntrada> | null>(null)
-  const carregar = useCallback(() => { disparoApi.jornada().then(setD).catch(e => setErro(erroDe(e))) }, [])
+  const { de } = useEscopo()
+  const carregar = useCallback(() => { disparoApi.jornada(de).then(setD).catch(e => setErro(erroDe(e))) }, [de])
   useEffect(() => { carregar() }, [carregar])
   const pode = meta.nivel === 'EDITAR'
 

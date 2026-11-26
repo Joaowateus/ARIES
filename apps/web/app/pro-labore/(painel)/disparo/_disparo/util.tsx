@@ -5,6 +5,29 @@ import { createContext, useContext, useState } from 'react'
 import { disparoApi, type ConfigEnvioDisparo, type MetaDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
 
 export const MetaCtx = createContext<MetaDisparo | null>(null)
+/**
+ * De quem são as campanhas mostradas: "minhas" (padrão), "equipe", "dono" ou o id de um vendedor.
+ * Só dono e supervisor trocam; o servidor ignora a escolha de quem não é da gestão.
+ */
+export const EscopoCtx = createContext<{ de: string; setDe: (v: string) => void }>({ de: 'minhas', setDe: () => undefined })
+export const useEscopo = () => useContext(EscopoCtx)
+export function SeletorEscopo() {
+  const meta = useContext(MetaCtx)
+  const { de, setDe } = useEscopo()
+  if (!meta?.gestao) return <p className="pl-hint" data-escopo="minhas">Você vê só as suas campanhas, os seus números e as respostas que chegaram para você.</p>
+  const eu = meta.eu?.vendedorId ?? null
+  return (
+    <div className="dp-linha" data-escopo={de}>
+      <label className="pl-hint" htmlFor="dp-escopo">Mostrando</label>
+      <select id="dp-escopo" className="pl-select" style={{ maxWidth: 280 }} value={de} onChange={e => setDe(e.target.value)}>
+        <option value="minhas">Minhas campanhas</option>
+        <option value="equipe">Equipe toda</option>
+        {eu && <option value="dono">Do dono</option>}
+        {meta.vendedores.filter(v => v.id !== eu).map(v => <option key={v.id} value={v.id}>De {v.nome}{v.ativo ? '' : ' (inativo)'}</option>)}
+      </select>
+    </div>
+  )
+}
 export const useMeta = () => useContext(MetaCtx)!
 /** Recarrega os metadados (ex.: depois de o dono mudar uma regra da loja). */
 export const RecarregarMetaCtx = createContext<() => void>(() => undefined)

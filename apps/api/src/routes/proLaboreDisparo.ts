@@ -57,6 +57,19 @@ async function campanhaDe(req: Request, id: string) {
   if (!c) throw new ErroDisparo('Campanha não encontrada', 404)
   return c
 }
+/**
+ * De quem são as campanhas que a tela mostra (lista, números, respostas, comparação, Jornada).
+ * Cada pessoa vê só as que ela criou. Dono e supervisor escolhem: "minhas" (padrão), "equipe"
+ * (todas da loja), "dono" ou o id de um vendedor. Campanha criada pelo dono tem criadoPorId vazio.
+ */
+function escopo(q: Quem, de: unknown): Prisma.DisparoCampanhaWhereInput {
+  if (!q.gestao) return { criadoPorId: q.vendedorId ?? '__nenhum__' }
+  const v = typeof de === 'string' ? de.trim() : ''
+  if (v === 'equipe') return {}
+  if (v === 'dono') return { criadoPorId: null }
+  if (v && v !== 'minhas') return { criadoPorId: v.slice(0, 40) }
+  return { criadoPorId: q.vendedorId ?? null }
+}
 /** Números que a pessoa pode usar para enviar. */
 async function remetentesDe(q: Quem) {
   return prisma.assistenteComercial.findMany({
@@ -127,6 +140,8 @@ router.get('/disparo/meta', ...ver, async (req, res) => {
     motivos: MOTIVOS, status: ROTULO_STATUS, finalidades: ROTULO_FINALIDADE, basesLegais: BASES_LEGAIS.map(b => ({ chave: b, rotulo: ROTULO_BASE[b] })),
     remetentes: remetentes.map(r => ({ id: r.id, vendedor: r.vendedor.nome, numero: r.numeroWhatsapp ? `final ${r.numeroWhatsapp.slice(-4)}` : null, conectado: r.status === 'CONECTADO', ativo: r.vendedor.ativo })),
     vendedores, config,
+    // Quem está vendo (para "minhas campanhas") e de quem a gestão pode filtrar.
+    eu: { vendedorId: q.vendedorId, nome: q.nome },
     instagram: { conectado: !!contaInstagram, usuario: contaInstagram?.nomeUsuario ?? null, maxPorHora: MAX_POR_HORA_INSTAGRAM },
   })
 })
@@ -201,7 +216,7 @@ router.get('/disparo/jornada', ...ver, async (req, res) => {
     const q = quem(req)
     const [etapas, campanhas] = await Promise.all([
       contagemJornada(q.usuarioId),
-      prisma.disparoCampanha.findMany({ where: { usuarioId: q.usuarioId, excluidaEm: null, status: { in: ['DRAFT', 'VALIDATING', 'NEEDS_REVIEW', 'READY', 'SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'] } }, select: { id: true, nome: true, status: true, config: true, publico: true, totais: true, objetivo: true } }),
+      prisma.disparoCampanha.findMany({ where: { usuarioId: q.usuarioId, excluidaEm: null, ...escopo(q, req.query.de), status: { in: ['DRAFT', 'VALIDATING', 'NEEDS_REVIEW', 'READY', 'SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'] } }, select: { id: true, nome: true, status: true, config: true, publico: true, totais: true, objetivo: true } }),
     ])
     const estrategias = campanhas.filter(c => lerConfigEnvio(c.config).continua).map(c => ({ id: c.id, nome: c.nome, status: c.status, objetivo: c.objetivo, etapa: etapaDaDefinicao(c.publico), entraram: ((c.totais ?? {}) as { elegiveis?: number }).elegiveis ?? 0 }))
     res.json({ etapas: etapas.map(e => ({ ...e, estrategias: estrategias.filter(s => s.etapa === e.etapa) })), outras: estrategias.filter(s => !s.etapa || !etapas.some(e => e.etapa === s.etapa)) })
@@ -227,7 +242,7 @@ router.get('/disparo/campanhas', ...ver, async (req, res) => {
   const q = quem(req)
   const status = typeof req.query.status === 'string' && req.query.status ? req.query.status.split(',') : null
   const pagina = Math.max(0, Number(req.query.pagina ?? 0) || 0)
-  const where: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, excluidaEm: null, ...(q.gestao ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }), ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
+  const where: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, excluidaEm: null, ...escopo(q, req.query.de), ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
   const [total, itens] = await Promise.all([
     prisma.disparoCampanha.count({ where }),
     prisma.disparoCampanha.findMany({ where, orderBy: { atualizadoEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, objetivo: true, finalidade: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, responsavelNome: true, criadoPorNome: true, erro: true, atualizadoEm: true, config: true, canal: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
@@ -475,8 +490,36 @@ router.get('/disparo/campanhas/:id/comercial', ...ver, async (req, res) => {
 // ---------- Visão geral e relatórios ----------
 
 const desdeDias = (v: unknown) => new Date(Date.now() - Math.min(365, Math.max(1, Number(v ?? 30) || 30)) * 86_400_000)
-router.get('/disparo/visao-geral', ...ver, async (req, res) => { res.json(await visaoGeral(quem(req).usuarioId, desdeDias(req.query.dias))) })
-router.get('/disparo/relatorios/comparativo', ...ver, async (req, res) => { res.json(await comparativo(quem(req).usuarioId, desdeDias(req.query.dias))) })
+router.get('/disparo/visao-geral', ...ver, async (req, res) => { const q = quem(req); res.json(await visaoGeral(q.usuarioId, desdeDias(req.query.dias), escopo(q, req.query.de))) })
+router.get('/disparo/relatorios/comparativo', ...ver, async (req, res) => { const q = quem(req); res.json(await comparativo(q.usuarioId, desdeDias(req.query.dias), escopo(q, req.query.de))) })
+
+// Respostas às campanhas do escopo: quem respondeu, o quê, quando e por qual campanha.
+router.get('/disparo/respostas', ...ver, async (req, res) => {
+  const q = quem(req)
+  const pagina = Math.max(0, Number(req.query.pagina ?? 0) || 0)
+  const busca = String(req.query.busca ?? '').trim()
+  const where: Prisma.DisparoDestinatarioWhereInput = {
+    usuarioId: q.usuarioId, respondeuEm: { gte: desdeDias(req.query.dias) },
+    campanha: { usuarioId: q.usuarioId, excluidaEm: null, ...escopo(q, req.query.de) },
+    ...(busca ? { nome: { contains: busca, mode: 'insensitive' } } : {}),
+  }
+  const [total, itens] = await Promise.all([
+    prisma.disparoDestinatario.count({ where }),
+    prisma.disparoDestinatario.findMany({ where, orderBy: { respondeuEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, telefone: true, status: true, respondeuEm: true, leadId: true, campanhaId: true, campanha: { select: { nome: true, canal: true, criadoPorNome: true } } } }),
+  ])
+  const evs = await prisma.disparoEvento.findMany({ where: { destinatarioId: { in: itens.map(d => d.id) }, tipo: { in: ['RESPOSTA', 'DESCADASTRO'] } }, orderBy: { criadoEm: 'desc' }, select: { destinatarioId: true, tipo: true, descricao: true } })
+  const ultima = new Map<string, string | null>()
+  const saiu = new Set<string>()
+  for (const e of evs) { if (e.tipo === 'RESPOSTA' && !ultima.has(e.destinatarioId!)) ultima.set(e.destinatarioId!, e.descricao); if (e.tipo === 'DESCADASTRO') saiu.add(e.destinatarioId!) }
+  res.json({
+    total, pagina, porPagina: POR_PAGINA,
+    itens: itens.map(d => ({
+      id: d.id, nome: d.nome, contato: d.telefone.startsWith('ig:') ? 'Instagram' : `final ${d.telefone.slice(-4)}`, respondeuEm: d.respondeuEm, leadId: d.leadId,
+      resposta: (ultima.get(d.id) ?? '').replace(/^Instagram: /, '') || null, descadastrou: saiu.has(d.id),
+      campanha: { id: d.campanhaId, nome: d.campanha.nome, canal: d.campanha.canal, criadoPor: d.campanha.criadoPorNome },
+    })),
+  })
+})
 
 // ---------- Biblioteca ----------
 
