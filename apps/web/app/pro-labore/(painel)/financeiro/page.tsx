@@ -13,11 +13,14 @@ import { PageHeader } from '../../PageHeader'
 import { FechamentoDiario } from '../_fechamento/FechamentoDiario'
 import { NovoPagamento } from './NovoPagamento'
 import { PagarSalarios } from './PagarSalarios'
+import { Interruptor, MenuAcoes, useAvisar, useConfirmar } from '../_ui/ui'
 import { abrirRecibo, dataCurta, mesAtualLocal, mesExtenso, ROTULO_FORMA, somarMes } from './util'
 
 const EQUIPE: CategoriaFinanceira[] = ['SALARIO', 'ADIANTAMENTO', 'BONIFICACAO', 'REEMBOLSO']
 
 export default function FinanceiroPage() {
+  const confirmar = useConfirmar()
+  const avisar = useAvisar()
   const { usuario } = useProLaboreAuth()
   const [mes, setMes] = useState(mesAtualLocal)
   const [dados, setDados] = useState<PainelFinanceiro | null>(null)
@@ -44,9 +47,9 @@ export default function FinanceiroPage() {
   }, [atual, busca, filtro, verCancelados])
 
   async function cancelar(l: LancamentoFinanceiro) {
-    if (!window.confirm(`Cancelar o recibo nº ${l.numero} de ${l.favorecido} (${formatMoeda(l.valorTotal)})? O número não é reaproveitado e o recibo passa a aparecer como cancelado.`)) return
+    if (!(await confirmar({ titulo: `Cancelar o recibo nº ${l.numero}?`, texto: `${l.favorecido} · ${formatMoeda(l.valorTotal)}. O número não é reaproveitado e o recibo passa a aparecer como cancelado.`, acao: 'Cancelar o recibo', perigo: true }))) return
     setCancelando(l.id)
-    try { await proLaboreApi.financeiro.cancelar(l.id); carregar() } catch (e) { window.alert(e instanceof Error ? e.message : 'Não deu pra cancelar') } finally { setCancelando(null) }
+    try { await proLaboreApi.financeiro.cancelar(l.id); carregar() } catch (e) { avisar(e instanceof Error ? e.message : 'Não deu pra cancelar', 'erro') } finally { setCancelando(null) }
   }
 
   const p = atual?.totais.porCategoria
@@ -108,25 +111,22 @@ export default function FinanceiroPage() {
 
       <div className="pl-card pl-fin-lista">
         <div className="pl-cms-filtros">
-          <div className="pl-cms-abas" role="group" aria-label="Tipo de pagamento">
-            <button type="button" className={filtro === 'TODOS' ? 'ativo' : undefined} aria-pressed={filtro === 'TODOS'} onClick={() => setFiltro('TODOS')}>Todos</button>
+          <div className="dp-chips-filtro" role="group" aria-label="Tipo de pagamento">
+            <button type="button" className={filtro === 'TODOS' ? 'on' : undefined} aria-pressed={filtro === 'TODOS'} onClick={() => setFiltro('TODOS')}>Todos{atual && <small>{atual.lancamentos.length}</small>}</button>
             {dados?.categorias.filter(c => atual?.lancamentos.some(l => l.categoria === c.chave)).map(c => (
-              <button key={c.chave} type="button" className={filtro === c.chave ? 'ativo' : undefined} aria-pressed={filtro === c.chave} onClick={() => setFiltro(c.chave)}>{c.plural}</button>
+              <button key={c.chave} type="button" className={filtro === c.chave ? 'on' : undefined} aria-pressed={filtro === c.chave} onClick={() => setFiltro(c.chave)}>{c.plural}<small>{atual?.lancamentos.filter(l => l.categoria === c.chave).length}</small></button>
             ))}
           </div>
           <div className="pl-fin-filtros-dir">
-            <label className="pl-fin-cancelados"><input type="checkbox" checked={verCancelados} onChange={e => setVerCancelados(e.target.checked)} /> Mostrar cancelados</label>
+            <span className="pl-fin-cancelados"><Interruptor id="ver-cancelados" ligado={verCancelados} mudar={setVerCancelados} rotulo="Mostrar cancelados" /></span>
             <input className="pl-input pl-fin-busca" type="search" placeholder="Buscar por nome ou referente" aria-label="Buscar pagamento" value={busca} onChange={e => setBusca(e.target.value)} />
           </div>
         </div>
 
         {!atual ? <p className="pl-hint">Carregando…</p> : lista.length === 0 ? (
-          <div className="pl-empty">
-            <div className="pl-emoji">🧾</div>
-            <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>
-              {atual.lancamentos.length ? 'Nenhum pagamento com esse filtro' : `Nenhum pagamento em ${mesExtenso(mes)}`}
-            </h3>
-            {pode && !atual.lancamentos.length && <p style={{ marginTop: 6 }}>Use &quot;Pagar ajudas de custo&quot; para a folha da equipe ou &quot;Novo pagamento&quot; para custos, investimentos e outros gastos.</p>}
+          <div className="dp-vazio-grande">
+            <h3>{atual.lancamentos.length ? 'Nenhum pagamento com esse filtro' : `Nenhum pagamento em ${mesExtenso(mes)}`}</h3>
+            {pode && !atual.lancamentos.length && <p className="pl-hint">Use “Pagar ajudas de custo” para a folha da equipe ou “Novo pagamento” para custos, investimentos e outros gastos.</p>}
           </div>
         ) : (
           <div className="pl-table-wrap">
@@ -144,8 +144,10 @@ export default function FinanceiroPage() {
                     <td>{l.descricao}{l.canceladoEm && <small className="pl-fin-sub">Cancelado em {dataCurta(l.canceladoEm)}</small>}</td>
                     <td className="pl-right pl-mono">{formatMoeda(l.valorTotal)}</td>
                     <td className="pl-fin-acoes-linha">
-                      <button type="button" className="pl-link-action" onClick={() => abrirRecibo(l.id)}>Abrir recibo</button>
-                      {pode && !l.canceladoEm && <button type="button" className="pl-link-action pl-danger" disabled={cancelando === l.id} onClick={() => void cancelar(l)}>Cancelar</button>}
+                      <span className="dp-linha ar-acoes-linha">
+                        <button type="button" className="pl-btn pl-btn-ghost" onClick={() => abrirRecibo(l.id)}>Abrir recibo</button>
+                        {pode && !l.canceladoEm && <MenuAcoes itens={[{ rotulo: 'Cancelar o recibo', aoClicar: () => void cancelar(l), perigo: true, desabilitado: cancelando === l.id }]} />}
+                      </span>
                     </td>
                   </tr>
                 ))}

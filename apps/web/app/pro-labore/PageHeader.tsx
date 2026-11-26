@@ -13,7 +13,8 @@ export function PageHeader({ eyebrow, title, subtitle, actions }: {
 }) {
   // Versão nova (PDF 04): o cabeçalho da ficha da aba já está no topo; aqui fica só o que a página faz.
   const { versao } = useTelas()
-  if (versao === 'NOVA') return actions ? <div className="pl-section-head pl-page-head" style={{ justifyContent: 'flex-end' }}>{actions}</div> : null
+  // Redesign 26/11: as ações viram uma barra compacta à direita (sem faixa larga nem divisória).
+  if (versao === 'NOVA') return actions ? <div className="ar-acoes-pagina">{actions}</div> : null
   return (
     <div className="pl-section-head pl-page-head">
       <div>

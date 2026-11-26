@@ -6,12 +6,14 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { proLaboreApi, type ConferenciaMensal, type FechamentoMesVendas } from '@/lib/proLaboreApi'
+import { useConfirmar } from '../_ui/ui'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const nome = (m: string) => `${MESES[Number(m.slice(5, 7)) - 1]}/${m.slice(0, 4)}`
 const moeda = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export function FechamentoMes({ podeAlterar, onMudou }: { podeAlterar: boolean; onMudou?: (fechados: Set<string>) => void }) {
+  const confirmar = useConfirmar()
   const hoje = new Date()
   const [ano, setAno] = useState(hoje.getFullYear())
   const [meses, setMeses] = useState<FechamentoMesVendas[] | null>(null)
@@ -35,7 +37,7 @@ export function FechamentoMes({ podeAlterar, onMudou }: { podeAlterar: boolean; 
     const txt = acao === 'fechar'
       ? `${pontos.length ? `Atenção: a conferência ainda aponta ${pontos.length} ${pontos.length === 1 ? 'ponto' : 'pontos'} neste mês.\n\n` : ''}Fechar as vendas de ${nome(m.mes)} (${m.vendas} vendas, ${moeda(m.receita)})? Depois disso ninguém lança, edita ou apaga venda desse mês até você reabrir.`
       : `Reabrir ${nome(m.mes)}? As vendas desse mês voltam a poder ser lançadas, editadas e apagadas.`
-    if (!window.confirm(txt)) return
+    if (!(await confirmar({ titulo: acao === 'fechar' ? `Fechar ${nome(m.mes)}?` : `Reabrir ${nome(m.mes)}?`, texto: txt, acao: acao === 'fechar' ? 'Fechar o mês' : 'Reabrir' }))) return
     setOcupado(true); setErro('')
     try { aplicar(await proLaboreApi.vendas.alterarFechamento(m.mes, acao)) } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível') } finally { setOcupado(false) }
   }
@@ -51,10 +53,10 @@ export function FechamentoMes({ podeAlterar, onMudou }: { podeAlterar: boolean; 
           {[hoje.getFullYear() - 1, hoje.getFullYear()].map(a => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div className="dp-chips-filtro" role="group" aria-label="Mês">
         {visiveis.map(x => (
-          <button key={x.mes} type="button" className={`pl-btn ${sel === x.mes ? 'pl-btn-primary' : 'pl-btn-ghost'}`} onClick={() => setSel(x.mes)} data-mes-fechamento={x.mes} aria-pressed={sel === x.mes}>
-            {nome(x.mes)}{x.fechado ? ' · fechado' : ''}
+          <button key={x.mes} type="button" className={sel === x.mes ? 'on' : ''} onClick={() => setSel(x.mes)} data-mes-fechamento={x.mes} aria-pressed={sel === x.mes}>
+            {nome(x.mes)}{x.fechado && <small>fechado</small>}
           </button>
         ))}
       </div>
@@ -62,9 +64,9 @@ export function FechamentoMes({ podeAlterar, onMudou }: { podeAlterar: boolean; 
         <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }} data-detalhe-fechamento>
           <span><b>{nome(m.mes)}</b>: {m.vendas} vendas · {moeda(m.receita)}{m.fechado && m.fechadoEm ? ` · fechado em ${new Date(m.fechadoEm).toLocaleDateString('pt-BR')}` : ''}</span>
           {!m.fechado && (pontos.length
-            ? <div className="pl-alert" style={{ flexBasis: '100%', margin: 0 }} data-conferencia-fechamento><b>Antes de fechar, confira:</b><ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{pontos.map((p, i) => <li key={i}>{p.texto}</li>)}</ul><Link href="/pro-labore/configuracoes#auditoria">Abrir a auditoria</Link></div>
+            ? <div className="pl-alert" style={{ flexBasis: '100%', margin: 0 }} data-conferencia-fechamento><b>Antes de fechar, confira:</b><ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{pontos.map((p, i) => <li key={i}>{p.texto}</li>)}</ul><Link href="/pro-labore/configuracoes?secao=dados#auditoria">Abrir a auditoria</Link></div>
             : <span className="pl-hint" data-conferencia-ok>Conferência: tudo bate neste mês.</span>)}
-          {!m.fechado && m.semLead > 0 && <span className="pl-hint">{m.semLead} {m.semLead === 1 ? 'venda não está ligada' : 'vendas não estão ligadas'} a lead do CRM. <Link href="/pro-labore/configuracoes#auditoria">Conferir na auditoria</Link></span>}
+          {!m.fechado && m.semLead > 0 && <span className="pl-hint">{m.semLead} {m.semLead === 1 ? 'venda não está ligada' : 'vendas não estão ligadas'} a lead do CRM. <Link href="/pro-labore/configuracoes?secao=dados#auditoria">Conferir na auditoria</Link></span>}
           {podeAlterar && (m.fechado
             ? <button type="button" className="pl-btn pl-btn-ghost" disabled={ocupado} onClick={() => alterar('reabrir')} data-reabrir-mes>Reabrir mês</button>
             : <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => alterar('fechar')} data-fechar-mes>Fechar {nome(m.mes)}</button>)}
