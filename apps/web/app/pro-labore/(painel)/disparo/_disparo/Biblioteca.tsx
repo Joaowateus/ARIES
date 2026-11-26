@@ -7,10 +7,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { disparoApi, type ConteudoDisparo, type MidiaDisparo, type ModeloDisparo } from '@/lib/proLaboreApi'
 import { PassosEditor } from './PassosEditor'
 import { erroDe, useMeta } from './util'
+import { useAvisar, useConfirmar } from './ui'
 import { EnviarDoComputador, ImportarDoInstagram, Miniatura, Visualizador, type TipoMidia } from './Midias'
 
 export function Biblioteca() {
   const meta = useMeta()
+  const confirmar = useConfirmar()
+  const avisar = useAvisar()
   const [modelos, setModelos] = useState<ModeloDisparo[] | null>(null)
   const [midias, setMidias] = useState<MidiaDisparo[]>([])
   const [edit, setEdit] = useState<{ id: string | null; nome: string; conteudo: ConteudoDisparo } | null>(null)
@@ -59,7 +62,7 @@ export function Biblioteca() {
         </div>
         {!visiveis.length ? <p className="pl-hint">Nenhum arquivo aqui ainda.</p> : <div className="dp-galeria">{visiveis.map(m => <Miniatura key={m.id} m={m} abrir={() => setVer(m)} />)}</div>}
       </section>
-      {ver && <Visualizador m={ver} fechar={() => setVer(null)} acoes={pode ? <button type="button" className="pl-btn" onClick={() => { if (window.confirm('Tirar este arquivo da Biblioteca? Campanhas que já usam continuam funcionando.')) void disparoApi.midias.arquivar(ver.id).then(() => { setVer(null); void recarregarMidias() }) }}>Tirar da Biblioteca</button> : null} />}
+      {ver && <Visualizador m={ver} fechar={() => setVer(null)} acoes={pode ? <button type="button" className="pl-btn" onClick={() => void confirmar({ titulo: 'Tirar este arquivo da Biblioteca?', texto: 'Campanhas que já usam continuam funcionando.', acao: 'Tirar', perigo: true }).then(ok => { if (ok) void disparoApi.midias.arquivar(ver.id).then(() => { setVer(null); avisar('Arquivo tirado da Biblioteca'); void recarregarMidias() }) })}>Tirar da Biblioteca</button> : null} />}
       {ig && <ImportarDoInstagram fechar={() => setIg(false)} aoConcluir={ids => { void recarregarMidias(); setMsg(`${ids.length} arquivo(s) trazido(s) do Instagram.`) }} />}
     </div>
   )

@@ -10,6 +10,7 @@ import { disparoApi, type MetaDisparo } from '@/lib/proLaboreApi'
 import { Cabecalho } from '../_padrao/Padrao'
 import { EscopoCtx, MetaCtx, RecarregarMetaCtx, SeletorEscopo, erroDe } from './_disparo/util'
 import { Respostas } from './_disparo/Respostas'
+import { DisparoUi } from './_disparo/ui'
 import { VisaoGeral } from './_disparo/VisaoGeral'
 import { Campanhas } from './_disparo/Campanhas'
 import { Publicos } from './_disparo/Publicos'
@@ -46,7 +47,7 @@ function Conteudo() {
   if (!meta) return <div><Cabecalho aba={aba} /><p className="pl-hint" aria-busy="true">Carregando o Disparo…</p></div>
   return (
     <MetaCtx.Provider value={meta}><RecarregarMetaCtx.Provider value={recarregarMeta}><EscopoCtx.Provider value={escopo}>
-      <div data-disparo={sub}>
+      <div data-disparo={sub}><DisparoUi>
         <Cabecalho aba={aba} />
         <div className="pl-sv-tabs cc-subabas" role="tablist" aria-label="Áreas do Disparo">
           {SUBS.map(s => <button key={s.valor} type="button" role="tab" aria-selected={sub === s.valor} className={sub === s.valor ? 'ativo' : ''} onClick={() => ir(s.valor)} data-subaba={s.valor}>{s.rotulo}</button>)}
@@ -61,7 +62,7 @@ function Conteudo() {
           {sub === 'biblioteca' && <Biblioteca />}
           {sub === 'configuracoes' && <Configuracoes aoSalvar={recarregarMeta} />}
         </div>
-      </div>
+      </DisparoUi></div>
     </EscopoCtx.Provider></RecarregarMetaCtx.Provider></MetaCtx.Provider>
   )
 }
