@@ -26,9 +26,9 @@ export default function AtividadesPage() {
   return (
     <div>
       <Cabecalho aba={aba} />
-      <div className="ar-tela">
+      <div className="ar-tela-larga ar-tela-compacta">
+        <div className="ar-faixa"><Agora chaves={aba.numeros} compacta /><Lente aba="atividades" compacta /></div>
         <div className="ar-trabalho">
-          <Agora chaves={aba.numeros} />
           {gestao && (
             <div style={{ marginBottom: 10 }}>
               <select className="pl-input" style={{ width: 'auto' }} value={pessoa} onChange={e => setPessoa(e.target.value)} aria-label="De quem" data-filtro-pessoa>
@@ -44,7 +44,6 @@ export default function AtividadesPage() {
           {d && d.proximas.length > 0 && <Detalhes titulo={`Próximas (${d.proximas.length}, até 7 dias)`}><Bloco titulo="" itens={d.proximas} aoMudar={carregar} chave="proximas" /></Detalhes>}
           <p className="pl-hint" style={{ marginTop: 12 }}>Ligações do dia: <Link href="/pro-labore/ligacoes">abrir a lista de ligações</Link> · Agenda da equipe: <Link href="/pro-labore/agenda">abrir a agenda</Link></p>
         </div>
-        <Lente aba="atividades" />
       </div>
     </div>
   )

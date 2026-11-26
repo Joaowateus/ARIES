@@ -47,9 +47,10 @@ export default function AbaExtensaoPage() {
   return (
     <div data-aba-extensao={chave}>
       <Cabecalho aba={aba} />
-      <div className="ar-tela">
+      {/* Moldura padrão (redesign 26/11): números numa faixa e a Lente numa linha; o trabalho na largura toda. */}
+      <div className="ar-tela-larga ar-tela-compacta">
+        {aba.numeros.length > 0 ? <div className="ar-faixa"><Agora chaves={aba.numeros} compacta /><Lente aba={aba.lente} compacta /></div> : <Lente aba={aba.lente} compacta />}
         <div className="ar-trabalho">
-          <Agora chaves={aba.numeros} />
           <div className="ar-fila-grupo">O que já existe hoje</div>
           <ul className="ar-fila">{c.hoje.map(l => (
             <li key={l.href + l.texto} className="ar-fila-item"><div className="ar-fila-titulo">{l.texto}</div><Link className="pl-btn" href={l.href}>Abrir</Link></li>
@@ -58,7 +59,6 @@ export default function AbaExtensaoPage() {
           <div className="ar-vazio" style={{ marginTop: 14, textAlign: 'left' }} data-ponto-extensao><b>Ponto de extensão.</b> {c.extensao}</div>
           <Detalhes titulo="Sobre esta aba"><p style={{ margin: 0 }}>Para: {aba.paraQuem}. Pergunta: {aba.pergunta} Ação principal: {aba.acaoPrincipal}.</p></Detalhes>
         </div>
-        <Lente aba={aba.lente} />
       </div>
     </div>
   )

@@ -17,6 +17,7 @@ import { Follow } from './Follow'
 import { Simulacao } from './Simulacao'
 import { Processo } from './Processo'
 import { nomeProprio } from './util'
+import { Segmentado } from '../../_ui/ui'
 
 type Aba = 'visao' | 'conversas' | 'processo' | 'conhecimento' | 'estoque' | 'simulacao' | 'follow' | 'roteiro'
 const ABAS: Array<{ valor: Aba; rotulo: string }> = [
@@ -112,7 +113,7 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
       {isDono && vendedores && vendedores.length > 0 && (
         <div className="pl-as-seletor">
           <span className="pl-hint">Vendedor</span>
-          <select className="pl-select-chip active" value={vendedorId} onChange={e => setVendedorEscolhido(e.target.value)} aria-label="Escolher vendedor">
+          <select className="pl-select ar-select-curto" value={vendedorId} onChange={e => setVendedorEscolhido(e.target.value)} aria-label="Escolher vendedor">
             {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
           </select>
         </div>
@@ -141,16 +142,20 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
           />
           {isDono && <DiagnosticoWhatsappCard />}
 
+          {/* Redesign 26/11: a explicação fica recolhida (antes ocupava o topo enquanto o número não conectava). */}
           {!conectado && (
-            <ol className="pl-as-como">
-              {COMO_FUNCIONA.map((p, i) => (
-                <li key={p.titulo}>
-                  <span className="pl-sv-num">{String(i + 1).padStart(2, '0')}</span>
-                  <b>{p.titulo}</b>
-                  <span>{p.texto}</span>
-                </li>
-              ))}
-            </ol>
+            <details className="dp-detalhes ar-como-funciona">
+              <summary>Como o assistente funciona</summary>
+              <ol className="pl-as-como">
+                {COMO_FUNCIONA.map((p, i) => (
+                  <li key={p.titulo}>
+                    <span className="pl-sv-num">{String(i + 1).padStart(2, '0')}</span>
+                    <b>{p.titulo}</b>
+                    <span>{p.texto}</span>
+                  </li>
+                ))}
+              </ol>
+            </details>
           )}
 
           <div className="pl-as-abas">
@@ -163,11 +168,7 @@ export function WhatsApp({ cabecalho = true }: { cabecalho?: boolean }) {
               ))}
             </div>
             {aba === 'visao' && (
-              <div className="pl-as-periodos" role="group" aria-label="Período">
-                {PERIODOS.map(p => (
-                  <button key={p} type="button" className={`pl-chip ${dias === p ? 'active' : ''}`} onClick={() => setDias(p)}>{p} dias</button>
-                ))}
-              </div>
+              <div className="pl-as-periodos"><Segmentado rotulo="Período" pequeno valor={dias} mudar={setDias} opcoes={PERIODOS.map(p => ({ valor: p, rotulo: `${p} dias` }))} /></div>
             )}
           </div>
 

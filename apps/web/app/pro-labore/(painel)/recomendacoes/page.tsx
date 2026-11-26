@@ -33,7 +33,7 @@ export default function RecomendacoesPage() {
   return (
     <div>
       <Cabecalho aba={abaPorChave('recomendacoes')!} />
-      <div className="ar-tela"><div className="ar-trabalho">
+      <div className="ar-tela-larga ar-tela-compacta"><Lente aba="recomendacoes" compacta aoMudar={() => void carregar()} /><div className="ar-trabalho">
       {d?.modo === 'SILENCIOSO' && <div className="pl-alert" style={{ marginBottom: 12 }} data-modo-silencioso>Modo silencioso: as recomendações estão indo só para o dono e o supervisor. O roteamento para a equipe é ligado pelo dono em Configurações.</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
         <select className="pl-input" style={{ width: 'auto' }} value={f.area} onChange={e => setF({ ...f, area: e.target.value })} aria-label="Área" data-filtro-area>
@@ -66,7 +66,7 @@ export default function RecomendacoesPage() {
         </div>
       )}
       {aberta && <DetalheRec id={aberta} onFechar={() => setAberta(null)} onMudou={() => void carregar()} avaliarPertinencia />}
-      </div><Lente aba="recomendacoes" aoMudar={() => void carregar()} /></div>
+      </div></div>
     </div>
   )
 }

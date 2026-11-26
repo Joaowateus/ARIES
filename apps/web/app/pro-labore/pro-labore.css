@@ -6317,3 +6317,7 @@ a.dp-tile:hover { border-color: var(--pl-border-strong); }
 .ar-acoes-linha { justify-content: flex-end; gap: 4px; flex-wrap: nowrap; }
 .ar-acoes-linha .pl-btn { min-height: 30px; padding: 4px 10px; }
 .ar-janela-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--pl-border); }
+/* Conversas (redesign): explicação recolhida. */
+.ar-como-funciona { border: 1px solid var(--pl-border); border-radius: 12px; padding: 10px 14px; margin: 12px 0; background: var(--pl-surface); }
+.ar-como-funciona[open] summary { margin-bottom: 10px; }
+.ar-como-funciona .pl-as-como { margin: 0; }
