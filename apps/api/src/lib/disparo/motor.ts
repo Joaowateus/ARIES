@@ -948,7 +948,7 @@ export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): P
   const cfg = lerConfigEnvio(c.config, cfgLoja.envio)
   if (c.erro) return ig
     ? s('SEM_CONEXAO', 'Parada: Instagram sem acesso', `${c.erro}. Reconecte o Instagram da empresa em Social Media › Conexão; o envio continua sozinho quando o acesso voltar.`)
-    : s('SEM_CONEXAO', 'Parada: número sem conexão', `${c.erro}. Conecte o WhatsApp do remetente em Conversas › Conexão; o envio continua sozinho quando a conexão voltar.`)
+    : s('SEM_CONEXAO', 'Parada: número sem conexão', /conex[aã]o|qr code|conecte/i.test(c.erro) ? c.erro.trim().replace(/\.*$/, '.') : `${c.erro.trim().replace(/\.*$/, '')}. Conecte o WhatsApp do remetente em Conversas › Conexão; o envio continua sozinho quando a conexão voltar.`)
   if (!dentroDaJanela(cfg.janela, agora)) {
     const abre = proximaAbertura(cfg.janela, agora)
     return s('FORA_DA_JANELA', 'Fora do horário de envio', `A campanha só envia ${cfg.janela.inicio}–${cfg.janela.fim} (horário de Brasília) nos dias escolhidos.${abre ? ` Volta ${quando(abre)}.` : ''}`, abre)

@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type ItemCampanhaDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
 import { Assistente } from './Assistente'
+import { Quando, useAvisar, useConfirmar, usePerguntar } from './ui'
 import { Numero, Paginacao, Progresso, erroAmigavel, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useEscopo, useMeta } from './util'
 
 const ATIVAS: StatusCampanhaDisparo[] = ['VALIDATING', 'QUEUED', 'RUNNING', 'SCHEDULED']
@@ -22,7 +23,6 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
   const [erro, setErro] = useState<string | null>(null)
   const [editando, setEditando] = useState<CampanhaDisparo | null | 'nova'>(null)
   const [marcadas, setMarcadas] = useState<string[]>([])
-  const [aviso, setAviso] = useState<string | null>(null)
   const { de, setDe } = useEscopo()
   const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina, de }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina, de])
   useEffect(() => { if (!aberta && !editando) carregar() }, [carregar, aberta, editando])
@@ -31,10 +31,12 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
   const [aprovar, setAprovar] = useState(0)
   useEffect(() => { if (meta.gestao && !aberta && !editando) disparoApi.campanhas.listar({ status: 'NEEDS_REVIEW', de: 'equipe' }).then(r => setAprovar(r.total)).catch(() => undefined) }, [meta.gestao, aberta, editando, lista])
 
+  const confirmar = useConfirmar()
+  const avisar = useAvisar()
   async function excluir(ids: string[]) {
     const ativas = (lista?.itens ?? []).filter(c => ids.includes(c.id) && ['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(c.status)).length
-    if (!window.confirm(`Excluir ${ids.length} campanha(s)?${ativas ? `\n\n${ativas} ainda está(ão) enviando ou agendada(s): o que não saiu será cancelado.` : ''}\n\nElas somem da lista e dos relatórios. Os registros (quem recebeu o quê) continuam guardados.`)) return
-    try { const r = await disparoApi.campanhas.excluir(ids); setAviso(`${r.excluidas} campanha(s) excluída(s)${r.canceladas ? `, ${r.canceladas} cancelada(s) antes` : ''}.`); setMarcadas([]); carregar() } catch (e) { setErro(erroDe(e)) }
+    if (!(await confirmar({ titulo: `Excluir ${ids.length} campanha(s)?`, texto: `${ativas ? `${ativas} ainda está(ão) enviando ou agendada(s): o que não saiu será cancelado.\n\n` : ''}Elas somem da lista e dos relatórios. Os registros (quem recebeu o quê) continuam guardados.`, acao: 'Excluir', perigo: true }))) return
+    try { const r = await disparoApi.campanhas.excluir(ids); avisar(`${r.excluidas} campanha(s) excluída(s)${r.canceladas ? `, ${r.canceladas} cancelada(s) antes` : ''}`); setMarcadas([]); carregar() } catch (e) { setErro(erroDe(e)) }
   }
 
   if (editando) return <Assistente campanha={editando === 'nova' ? null : editando} fechar={() => setEditando(null)} abrirMonitor={id => { setEditando(null); abrir(id) }} />
@@ -52,7 +54,6 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
           <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setDe('equipe'); setFiltro(FILTROS.findIndex(x => x.status === 'NEEDS_REVIEW')); setPagina(0) }}>Ver e aprovar</button>
         </div>
       )}
-      {aviso && <p className="pl-hint" role="status">{aviso}</p>}
       {pode && marcadas.length > 0 && (
         <div className="pl-alert dp-linha" role="status" style={{ justifyContent: 'space-between' }} data-barra-excluir>
           <span><b>{marcadas.length} selecionada(s).</b> Excluir tira da lista e dos relatórios; o que ainda ia sair é cancelado. Os registros ficam guardados.</span>
@@ -76,7 +77,7 @@ export function Campanhas({ aberta, abrir }: { aberta: string | null; abrir: (id
                   <td><SeloStatus status={c.status} />{c.config?.continua && <span className="pl-status-badge" title="Estratégia contínua: quem entra no público entra sozinho" style={{ marginLeft: 4 }}>Contínua</span>}</td>
                   <td>{c.canal === 'INSTAGRAM' ? 'Instagram (direct)' : c.assistente?.vendedor.nome ?? '—'}</td>
                   <td className="pl-right">{c.totais ? n(c.totais.elegiveis) : '—'}</td>
-                  <td>{c.concluidaEm ? `terminou ${dataHora(c.concluidaEm)}` : c.iniciadaEm ? `começou ${dataHora(c.iniciadaEm)}` : c.agendadaPara ? `agendada ${dataHora(c.agendadaPara)}` : '—'}</td>
+                  <td>{c.concluidaEm ? <Quando iso={c.concluidaEm} prefixo="terminou" /> : c.iniciadaEm ? <Quando iso={c.iniciadaEm} prefixo="começou" /> : c.agendadaPara ? <Quando iso={c.agendadaPara} prefixo="agendada" /> : '—'}</td>
                   <td>{c.responsavelNome ?? c.criadoPorNome ?? '—'}</td>
                 </tr>
               ))}
@@ -128,10 +129,13 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
   }, [carregar])
   useEffect(() => { if (!enviando) return; rodar(); const t = setInterval(rodar, 20_000); return () => clearInterval(t) }, [enviando, rodar])
 
-  async function agir(fn: () => Promise<unknown>, ok: string, confirmar?: string) {
-    if (confirmar && !window.confirm(confirmar)) return
+  const confirmarUi = useConfirmar()
+  const perguntar = usePerguntar()
+  const avisar = useAvisar()
+  async function agir(fn: () => Promise<unknown>, ok: string, confirmar?: Parameters<typeof confirmarUi>[0]) {
+    if (confirmar && !(await confirmarUi(confirmar))) return
     setOcupado(true); setMsg(null)
-    try { await fn(); setMsg(ok); await carregar() } catch (e) { setMsg(erroDe(e)) } finally { setOcupado(false) }
+    try { await fn(); avisar(ok); await carregar() } catch (e) { avisar(erroDe(e), 'erro'); setMsg(erroDe(e)) } finally { setOcupado(false) }
   }
   if (erro) return <div><button type="button" className="pl-btn" onClick={voltar}>Voltar</button><div className="pl-alert pl-alert-error" role="alert">{erro}</div></div>
   if (!c) return <p className="pl-hint" aria-busy="true">Carregando a campanha…</p>
@@ -146,14 +150,14 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
             {['DRAFT', 'NEEDS_REVIEW', 'READY', 'SCHEDULED'].includes(st) && <button type="button" className="pl-btn" onClick={() => editar(c)}>Editar</button>}
             {st === 'DRAFT' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.validar(c.id), 'Público em preparação.')}>Preparar o público</button>}
             {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.aprovar(c.id), 'Aprovada.')}>Aprovar</button>}
-            {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => { const m = window.prompt('Por que devolver?'); if (m) void agir(() => disparoApi.campanhas.reprovar(c.id, m), 'Devolvida ao rascunho.') }}>Devolver</button>}
-            {st === 'READY' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(async () => { const r = await disparoApi.campanhas.iniciar(c.id, c.agendadaPara); if (r.status === 'QUEUED') rodar() }, c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendada.' : 'Começou: a primeira mensagem sai em instantes. Deixe esta tela aberta para acompanhar.', `Confirmar o envio para ${n(c.totais?.elegiveis)} contato(s)?`)}>{c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar agendamento' : 'Iniciar agora'}</button>}
+            {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void perguntar({ titulo: 'Devolver a campanha ao rascunho?', texto: 'Quem criou recebe o motivo e pode ajustar e mandar de novo.', acao: 'Devolver', campo: { rotulo: 'Por que devolver?', minimo: 3 } }).then(m => { if (m) void agir(() => disparoApi.campanhas.reprovar(c.id, m), 'Devolvida ao rascunho') })}>Devolver</button>}
+            {st === 'READY' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(async () => { const r = await disparoApi.campanhas.iniciar(c.id, c.agendadaPara); if (r.status === 'QUEUED') rodar() }, c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendada.' : 'Começou: a primeira mensagem sai em instantes', { titulo: c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar o agendamento?' : `Enviar para ${n(c.totais?.elegiveis)} contato(s)?`, texto: 'As mensagens saem no ritmo de proteção do número, dentro da janela de envio. Você pode pausar a qualquer momento.', acao: c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendar' : 'Começar o envio' })}>{c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar agendamento' : 'Iniciar agora'}</button>}
             {(st === 'RUNNING' || st === 'QUEUED') && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.pausar(c.id), 'Pausada: nenhum envio novo até retomar.')}>Pausar</button>}
             {st === 'PAUSED' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.retomar(c.id), 'Retomada.')}>Retomar</button>}
-            {!['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st) && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.cancelar(c.id), 'Cancelada: o que não saiu foi cancelado.', 'Cancelar a campanha? O que ainda não foi enviado não sai mais.')}>Cancelar</button>}
+            {!['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st) && <button type="button" className="pl-btn pl-btn-perigo" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.cancelar(c.id), 'Cancelada: o que não saiu foi cancelado', { titulo: 'Cancelar a campanha?', texto: 'O que ainda não foi enviado não sai mais. O que já saiu e os registros continuam.', acao: 'Cancelar a campanha', perigo: true })}>Cancelar</button>}
             <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(async () => { const nova = await disparoApi.campanhas.duplicar(c.id); abrir(nova.id) }, 'Cópia criada.')}>Duplicar</button>
             {['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'DRAFT'].includes(st) && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.arquivar(c.id), 'Arquivada.')}>Arquivar</button>}
-            <button type="button" className="pl-btn" disabled={ocupado} data-excluir-campanha onClick={() => { if (window.confirm(`Excluir “${c.nome}”?${['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(st) ? '\n\nEla ainda está enviando ou agendada: o que não saiu será cancelado.' : ''}\n\nEla some da lista e dos relatórios; os registros continuam guardados.`)) void disparoApi.campanhas.excluir([c.id]).then(voltar).catch(e => setMsg(erroDe(e))) }}>Excluir</button>
+            <button type="button" className="pl-btn pl-btn-perigo" disabled={ocupado} data-excluir-campanha onClick={() => void confirmarUi({ titulo: `Excluir “${c.nome}”?`, texto: `${['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(st) ? 'Ela ainda está enviando ou agendada: o que não saiu será cancelado.\n\n' : ''}Ela some da lista e dos relatórios; os registros continuam guardados.`, acao: 'Excluir', perigo: true }).then(ok => { if (ok) void disparoApi.campanhas.excluir([c.id]).then(() => { avisar('Campanha excluída'); voltar() }).catch(e => setMsg(erroDe(e))) })}>Excluir</button>
           </span>
         )}
       </div>
@@ -250,6 +254,7 @@ function DetalheDestinatario({ id, fechar, pode, aoMudar }: { id: string; fechar
   const [erro, setErro] = useState<string | null>(null)
   const carregar = useCallback(() => { disparoApi.destinatario(id).then(setD).catch(e => setErro(erroDe(e))) }, [id])
   useEffect(() => { carregar() }, [carregar])
+  const confirmar = useConfirmar()
   async function decidir(mid: string, dec: 'REENVIAR' | 'CONSIDERAR_ENVIADA') {
     try { await disparoApi.decidir(mid, dec); carregar(); aoMudar() } catch (e) { setErro(erroDe(e)) }
   }
@@ -270,7 +275,7 @@ function DetalheDestinatario({ id, fechar, pode, aoMudar }: { id: string; fechar
                 {m.tentativasRegistro.length > 0 && <ul className="pl-hint" style={{ margin: 0, paddingLeft: 18 }}>{m.tentativasRegistro.map(t => <li key={`${t.numero}-${t.inicio}`}>tentativa {t.numero} · {dataHora(t.inicio)} · {t.resultado.toLowerCase().replace(/_/g, ' ')}{t.erro ? ` · ${erroAmigavel(t.erro)}` : ''}</li>)}</ul>}
                 {pode && (m.status === 'DESCONHECIDO' || (m.status === 'FALHOU' && m.erroClasse === 'ESGOTOU')) && (
                   <div className="dp-linha">
-                    <button type="button" className="pl-btn" onClick={() => { if (window.confirm('Reenviar? Se a mensagem já tiver chegado, o cliente recebe duas vezes.')) void decidir(m.id, 'REENVIAR') }}>Reenviar</button>
+                    <button type="button" className="pl-btn" onClick={() => void confirmar({ titulo: 'Reenviar esta mensagem?', texto: 'Se ela já tiver chegado, o cliente recebe duas vezes.', acao: 'Reenviar' }).then(ok => { if (ok) void decidir(m.id, 'REENVIAR') })}>Reenviar</button>
                     <button type="button" className="pl-btn" onClick={() => void decidir(m.id, 'CONSIDERAR_ENVIADA')}>Considerar enviada</button>
                   </div>
                 )}

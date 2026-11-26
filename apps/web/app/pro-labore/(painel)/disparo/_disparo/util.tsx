@@ -3,6 +3,7 @@
 // ARIES Disparo — utilitários das telas (formatos, selos de situação, metadados compartilhados).
 import { createContext, useContext, useState } from 'react'
 import { disparoApi, type ConfigEnvioDisparo, type MetaDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
+import { useConfirmar } from './ui'
 
 export const MetaCtx = createContext<MetaDisparo | null>(null)
 /**
@@ -38,10 +39,15 @@ export const dataHora = (iso: string | null | undefined) => (iso ? new Date(iso)
 export const duracao = (ms: number | null | undefined) => { if (ms == null) return '—'; const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min` }
 export const erroDe = (e: unknown) => (e instanceof Error ? e.message : 'Não foi possível concluir')
 
-const CLASSE: Partial<Record<StatusCampanhaDisparo, string>> = { RUNNING: 'bom', COMPLETED: 'bom', QUEUED: 'atencao', SCHEDULED: 'atencao', NEEDS_REVIEW: 'atencao', PAUSED: 'atencao', VALIDATING: 'atencao', COMPLETED_WITH_ERRORS: 'critico', CANCELLED: '' }
-export function SeloStatus({ status }: { status: StatusCampanhaDisparo }) {
+// Verde só para "enviando agora"; o que terminou bem fica neutro com ✓ (não pede atenção).
+const TOM: Record<StatusCampanhaDisparo, string> = {
+  DRAFT: '', VALIDATING: '', NEEDS_REVIEW: 'warn', READY: 'info', SCHEDULED: 'info', QUEUED: 'info', RUNNING: 'ok vivo', PAUSED: 'warn',
+  COMPLETED: 'feito', COMPLETED_WITH_ERRORS: 'alert', CANCELLED: '', ARCHIVED: '',
+}
+export function SeloStatus({ status, parada }: { status: StatusCampanhaDisparo; parada?: boolean }) {
   const meta = useMeta()
-  return <span className={`pl-status-badge ${CLASSE[status] ?? ''}`} data-status={status}>{meta?.status[status] ?? status}</span>
+  if (parada && status === 'RUNNING') return <span className="dp-selo crit" data-status={status}>Parada</span>
+  return <span className={`dp-selo ${TOM[status] ?? ''}`} data-status={status}>{meta?.status[status] ?? status}</span>
 }
 
 export const ROTULO_DESTINATARIO: Record<string, string> = { ELEGIVEL: 'Aguardando', EXCLUIDO: 'Excluído', DESCARTADO: 'Versão anterior', EM_ANDAMENTO: 'Em andamento', CONCLUIDO: 'Concluído', RESPONDEU: 'Respondeu', INTERROMPIDO: 'Interrompido', FALHOU: 'Falhou' }
@@ -114,9 +120,10 @@ export function AvisoAutorizacao({ quantos, aoMudar }: { quantos: number; aoMuda
   const recarregar = useContext(RecarregarMetaCtx)
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const confirmar = useConfirmar()
   if (!quantos) return null
   async function liberar() {
-    if (!window.confirm('Liberar mensagens promocionais para os leads e clientes da loja que nunca pediram para sair?\n\nA base é o legítimo interesse (relação comercial existente). Toda promoção leva no fim a opção de responder SAIR, e quem responder sai na hora. Você pode voltar atrás em Disparo › Configurações.')) return
+    if (!(await confirmar({ titulo: 'Liberar promoções para leads e clientes da loja?', texto: 'Vale para quem nunca pediu para sair. A base é o legítimo interesse (relação comercial existente). Toda promoção leva no fim a opção de responder SAIR, e quem responder sai na hora. Você pode voltar atrás em Disparo › Configurações.', acao: 'Liberar' }))) return
     setOcupado(true); setErro(null)
     try { await disparoApi.config.salvar({ baseMarketing: 'RELACAO' }); recarregar(); aoMudar?.() } catch (e) { setErro(erroDe(e)) } finally { setOcupado(false) }
   }
