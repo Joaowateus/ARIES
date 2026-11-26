@@ -40,11 +40,13 @@ const DentroDaTelaPadrao = createContext(false)
 export function Cabecalho({ aba, acao }: { aba: Pick<AbaAries, 'nome' | 'pergunta' | 'paraQuem' | 'acaoPrincipal' | 'acaoHref' | 'compacto'>; acao?: React.ReactNode }) {
   const dentro = useContext(DentroDaTelaPadrao)
   if (dentro) return null
-  // Cabeçalho de uma linha: o nome e a pergunta da aba, sem repetir "ARIES" e "Para:" (a aba é autoexplicativa).
-  if (aba.compacto) return (
+  // Cabeçalho de uma linha (padrão do sistema desde o redesign de 26/11): o nome e a pergunta da aba,
+  // sem repetir "ARIES" e "Para:" (ficam no título, ao passar o mouse). compacto: false volta ao antigo.
+  if (aba.compacto !== false) return (
     <header className="ar-cabecalho compacto" data-cabecalho-ficha>
       <h1>{aba.nome}</h1>
       <p className="ar-pergunta" data-pergunta title={`Para: ${aba.paraQuem} · Ação principal: ${aba.acaoPrincipal}`}>{aba.pergunta}</p>
+      {(acao ?? (aba.acaoHref ? <Link className="pl-btn pl-btn-primary ar-acao-principal" href={aba.acaoHref} data-acao-principal>{aba.acaoPrincipal}</Link> : null)) && <div className="ar-cabecalho-acao">{acao ?? <Link className="pl-btn pl-btn-primary ar-acao-principal" href={aba.acaoHref!} data-acao-principal>{aba.acaoPrincipal}</Link>}</div>}
     </header>
   )
   return (
@@ -95,7 +97,7 @@ export function subDoNumero(n: NumeroHoje): string {
 }
 
 /** Agora: até três números do dicionário (nunca mais que três). */
-export function Agora({ chaves }: { chaves: string[] }) {
+export function Agora({ chaves, compacta }: { chaves: string[]; compacta?: boolean }) {
   const lista = chaves.slice(0, 3)
   const [periodo] = useState(() => { const h = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10); return { inicio: `${h.slice(0, 8)}01`, fim: h } })
   const leituras = useMetricas(lista, lista.length ? periodo : null)
@@ -103,9 +105,9 @@ export function Agora({ chaves }: { chaves: string[] }) {
   const [esperou, setEsperou] = useState(false)
   useEffect(() => { const t = setTimeout(() => setEsperou(true), 45_000); return () => clearTimeout(t) }, [])
   // Enquanto o dicionário calcula, o lugar dos números fica reservado (a tela não pula).
-  if (!visiveis.length) return lista.length && !esperou ? <section className="ar-agora" aria-label="Agora" aria-busy="true">{lista.map(c => <div key={c} className="ar-numero" style={{ minHeight: 78, opacity: .5 }}><div className="ar-num-nome">Calculando…</div></div>)}</section> : null
+  if (!visiveis.length) return lista.length && !esperou ? <section className={`ar-agora ${compacta ? 'compacta' : ''}`} aria-label="Agora" aria-busy="true">{lista.map(c => <div key={c} className="ar-numero" style={{ minHeight: 78, opacity: .5 }}><div className="ar-num-nome">Calculando…</div></div>)}</section> : null
   return (
-    <section className="ar-agora" aria-label="Agora" data-agora>
+    <section className={`ar-agora ${compacta ? 'compacta' : ''}`} aria-label="Agora" data-agora>
       {visiveis.map(c => { const l = leituras[c]; return <CartaoNumero key={c} chave={c} nome={l.nome} valor={l.valor} unidade={l.unidade} status={l.faixa} sub={subDaLeitura(l)} /> })}
     </section>
   )
@@ -196,9 +198,11 @@ export function TelaPadrao({ aba, children }: { aba: AbaAries; children: React.R
     <div data-tela-padrao={aba.chave}>
       <Cabecalho aba={aba} />
       <DentroDaTelaPadrao.Provider value={true}>
-      {aba.compacto ? (
+      {aba.compacto !== false ? (
+        // Padrão do sistema: números numa faixa, a Lente numa linha quando não há nada a dizer e o
+        // trabalho na largura toda.
         <div className="ar-tela-larga ar-tela-compacta">
-          <Lente aba={aba.lente} compacta />
+          {aba.numeros.length > 0 ? <div className="ar-faixa"><Agora chaves={aba.numeros} compacta /><Lente aba={aba.lente} compacta /></div> : <Lente aba={aba.lente} compacta />}
           <div className="ar-trabalho">{children}</div>
         </div>
       ) : aba.largo ? (

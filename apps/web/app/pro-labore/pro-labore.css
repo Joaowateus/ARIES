@@ -5818,8 +5818,8 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
    Cor só para estado; branco para a ação principal; grafite para o resto.
    Tudo escopado em [data-disparo] para não mudar outras telas.
    ===================================================================== */
-[data-disparo] { --dp-ok: #15803d; --dp-info: #0e7490; --dp-warn: #a16207; --dp-alert: #c2410c; --dp-crit: #dc2626; }
-.pl-app[data-theme="dark"] [data-disparo], .pl-app[data-theme="dark"] .dp-modal-fundo, .pl-app[data-theme="dark"] .dp-toasts { --dp-ok: #4ade80; --dp-info: #67c6e6; --dp-warn: #facc15; --dp-alert: #fb923c; --dp-crit: #f87171; }
+.pl-app, [data-disparo] { --dp-ok: #15803d; --dp-info: #0e7490; --dp-warn: #a16207; --dp-alert: #c2410c; --dp-crit: #dc2626; }
+.pl-app[data-theme="dark"], .pl-app[data-theme="dark"] [data-disparo], .pl-app[data-theme="dark"] .dp-modal-fundo, .pl-app[data-theme="dark"] .dp-toasts { --dp-ok: #4ade80; --dp-info: #67c6e6; --dp-warn: #facc15; --dp-alert: #fb923c; --dp-crit: #f87171; }
 .dp-modal-fundo, .dp-toasts { --dp-ok: #15803d; --dp-crit: #dc2626; --dp-info: #0e7490; }
 
 /* Botões: secundário com borda; principal branco; discreto só texto; destrutivo vermelho */
@@ -6246,3 +6246,35 @@ a.dp-tile:hover { border-color: var(--pl-border-strong); }
 .dp-separar-grupo > b { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); line-height: 1.1; }
 .dp-separar-grupo .dp-linha { margin-top: 6px; }
 @media (max-width: 640px) { .dp-separar-grupos { grid-template-columns: 1fr; } }
+
+/* =====================================================================
+   ARIES · redesign do sistema (26/11/2026) — base para todas as abas.
+   O kit do Disparo (dp-*) vale em qualquer tela; aqui, a moldura padrão:
+   cabeçalho de uma linha, números numa faixa e a Lente recolhida.
+   ===================================================================== */
+.ar-cabecalho.compacto { flex-wrap: wrap; }
+.ar-cabecalho-acao { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.ar-faixa { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-bottom: 14px; }
+.ar-faixa:has(.ar-lente.compacta-cheia) { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); align-items: stretch; }
+.ar-faixa .ar-lente.compacta { margin-bottom: 0; }
+.ar-faixa .ar-lente.compacta-cheia { position: static; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.ar-faixa .ar-lente.compacta-cheia .ar-lente-titulo { margin-bottom: 2px; font-size: 13px; }
+.ar-faixa .ar-lente.compacta-cheia .ar-lente-item { padding: 4px 0; border: 0; }
+.ar-faixa .ar-lente.compacta-cheia .ar-lente-achado { margin: 0; font-size: 13px; }
+.ar-faixa .ar-lente.compacta-cheia .ar-lente-evid { margin: 2px 0 4px; font-size: 12px; }
+.ar-faixa .ar-lente.compacta-cheia .ar-lente-botoes .pl-btn { font-size: 12px; }
+.ar-faixa .ar-lente.compacta-cheia > .pl-hint:last-child { font-size: 11px !important; }
+.ar-tela-compacta > .ar-lente.compacta-cheia { position: static; margin-bottom: 14px; }
+.ar-agora.compacta { margin: 0; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.ar-agora.compacta .ar-numero { padding: 10px 14px; border-radius: 12px; }
+.ar-agora.compacta .ar-num-valor { font-size: 1.3rem; margin: 2px 0 0; }
+.ar-agora.compacta .ar-num-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) { .ar-faixa:has(.ar-lente.compacta-cheia) { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .ar-agora.compacta { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .ar-agora.compacta .ar-numero { padding: 8px; }
+  .ar-agora.compacta .ar-num-valor { font-size: 1.05rem; }
+  .ar-cabecalho-acao { margin-left: 0; width: 100%; }
+}
+/* Caixas e botões de opção nativos no mesmo tom do sistema (as telas trocam pelos interruptores aos poucos). */
+:where(.pl-app) input[type="checkbox"], :where(.pl-app) input[type="radio"] { accent-color: var(--pl-ink-1); }
