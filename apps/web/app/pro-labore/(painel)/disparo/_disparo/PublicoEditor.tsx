@@ -2,9 +2,13 @@
 
 // Construtor de públicos: prontos, filtros E/OU (com um nível de subgrupo), seleção manual e a prévia
 // (contagem, motivos de exclusão e a lista paginada no servidor — nunca milhares de contatos no navegador).
+// Redesign 26/11: os quatro caminhos em abas (Prontos · Filtros · Escolher · Colar lista) e interruptores.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { disparoApi, type CanalDisparo, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoPublicoDisparo, type FinalidadeDisparo, type GrupoDisparo, type PreviaPublicoDisparo } from '@/lib/proLaboreApi'
 import { Paginacao, erroDe, n, useMeta, AvisoAutorizacao } from './util'
+import { Interruptor } from './ui'
+
+type AbaPublico = 'prontos' | 'filtros' | 'escolher' | 'colar'
 
 const BASES: Array<{ valor: DefinicaoPublicoDisparo['base']; rotulo: string }> = [
   { valor: 'TODOS', rotulo: 'Todos os contatos' }, { valor: 'LEADS', rotulo: 'Leads' }, { valor: 'CLIENTES', rotulo: 'Clientes' }, { valor: 'CONTATARAM', rotulo: 'Quem já escreveu no WhatsApp' }, { valor: 'EQUIPE', rotulo: 'Equipe (WhatsApp conectado)' },
@@ -125,6 +129,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
   const [verEscolhidos, setVerEscolhidos] = useState(false)
   const manual = definicao.manual ?? {}
   const filtros = definicao.filtros ?? { op: 'E', itens: [] }
+  const [aba, setAba] = useState<AbaPublico>(() => (manual.numeros?.length ? 'colar' : filtros.itens.length ? 'filtros' : manual.incluir?.length ? 'escolher' : 'prontos'))
 
   const atualizar = useCallback(async (p = 0, exc = verExcluidos) => {
     const id = ++ultima.current
@@ -170,17 +175,15 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
         </div>
       )}
       {!ig && <>
-      <div className="dp-guia" role="note">
-        <b>Como montar quem vai receber</b> — use um caminho ou combine:
-        <ol>
-          <li><b>Público pronto</b>: um clique (ex.: todos os leads, leads novos, clientes).</li>
-          <li><b>Base e filtros</b>: refine por etapa, vendedor, cidade, origem, última conversa…</li>
-          <li><b>Escolher pessoas</b>: busque e adicione uma a uma, ou todas as encontradas.</li>
-          <li><b>Colar uma lista</b>: números de qualquer lugar, mesmo de quem não está no CRM.</li>
-        </ol>
-        <span className="pl-hint">A prévia no fim mostra exatamente quem vai receber e quem fica de fora (com o motivo).</span>
+      <p className="pl-hint dp-publico-guia">Use um caminho ou combine: quem você escolhe à mão ou cola soma ao público pronto e aos filtros. A prévia abaixo mostra exatamente quem vai receber e quem fica de fora (com o motivo).</p>
+      <div className="dp-subabas" role="tablist" aria-label="Como montar o público">
+        {([['prontos', 'Prontos', definicao.predefinido ? '●' : ''], ['filtros', 'Filtros', filtros.itens.length || ''], ['escolher', 'Escolher pessoas', (manual.incluir ?? []).length || ''], ['colar', 'Colar lista', (manual.numeros ?? []).length || '']] as Array<[AbaPublico, string, string | number]>).map(([k, r, q]) => (
+          <button key={k} type="button" role="tab" aria-selected={aba === k} className={aba === k ? 'on' : ''} onClick={() => setAba(k)} data-aba-publico={k}>{r}{q !== '' && <small>{q}</small>}</button>
+        ))}
       </div>
-      <div className="pl-field"><label>① Públicos prontos</label>
+      <div className="dp-subaba-corpo" role="tabpanel">
+      {aba === 'prontos' && (
+      <div className="pl-field"><label>Públicos prontos</label>
         <div className="cc-chips">
           {meta.predefinidos.filter(p => !p.grupo).map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })}>{p.nome}</button>)}
         </div>
@@ -189,8 +192,10 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
           {meta.predefinidos.filter(p => p.grupo === 'JORNADA').map(p => <button key={p.chave} type="button" title={p.descricao} className={`pl-chip ${definicao.predefinido === p.chave ? 'active' : ''}`} onClick={() => mudar({ ...p.definicao, predefinido: p.chave, manual: definicao.manual })} data-etapa-chip={p.chave}>{p.nome}</button>)}
         </div>
       </div>
-      <div className="pl-field-grid" style={{ marginTop: 12 }}>
-        <div className="pl-field"><label htmlFor="dp-base">② De onde vêm os contatos</label>
+      )}
+      {aba === 'filtros' && <>
+      <div className="pl-field-grid">
+        <div className="pl-field"><label htmlFor="dp-base">De onde vêm os contatos</label>
           <select id="dp-base" className="pl-select" value={definicao.base} onChange={e => mudar({ ...definicao, base: e.target.value as DefinicaoPublicoDisparo['base'], predefinido: null })}>
             {BASES.filter(b => meta.gestao || (b.valor !== 'CLIENTES' && b.valor !== 'EQUIPE')).map(b => <option key={b.valor} value={b.valor}>{b.rotulo}</option>)}
           </select>
@@ -199,7 +204,9 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
       <div className="pl-field" style={{ marginTop: 12 }}><label>Filtros (opcional)</label>
         <EditorGrupo g={filtros} mudar={g => mudar({ ...definicao, filtros: g, predefinido: null })} />
       </div>
-      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-busca">③ Escolher pessoas ({meta.gestao ? 'busca em todos os contatos da loja' : 'busca nos seus leads e conversas'})</label>
+      </>}
+      {aba === 'escolher' && (
+      <div className="pl-field"><label htmlFor="dp-busca">Escolher pessoas ({meta.gestao ? 'busca em todos os contatos da loja' : 'busca nos seus leads e conversas'})</label>
         <input id="dp-busca" className="pl-input" placeholder="Nome ou telefone (ex.: João, 9822)" value={busca} onChange={e => { setBusca(e.target.value); setMostrar(50) }} />
         {busca.trim().length >= 2 && (
           <div className="dp-linha" style={{ justifyContent: 'space-between', marginTop: 6 }}>
@@ -222,14 +229,17 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
           </ul>
         )}
       </div>
-
-      <div className="pl-field" style={{ marginTop: 12 }}><label htmlFor="dp-lista">④ Colar uma lista de números (de planilha, conversa ou qualquer lugar — mesmo quem não está no CRM{meta.gestao ? '' : '; lead de outro vendedor fica de fora'})</label>
+      )}
+      {aba === 'colar' && (
+      <div className="pl-field"><label htmlFor="dp-lista">Colar uma lista de números (de planilha, conversa ou qualquer lugar — mesmo quem não está no CRM{meta.gestao ? '' : '; lead de outro vendedor fica de fora'})</label>
         <textarea id="dp-lista" className="pl-input" rows={4} value={lista} onChange={e => setLista(e.target.value)} placeholder={'Um por linha. Pode ter o nome junto:\nMaria Souza; (91) 98888-7777\n91 99999-0000\nJoão, 5591988887777'} />
         <div className="dp-linha" style={{ marginTop: 6 }}>
           <span className="pl-hint">{lida.numeros.length ? `${lida.numeros.length} número(s) reconhecido(s)${lida.ignoradas ? ` · ${lida.ignoradas} linha(s) sem número` : ''}` : 'Cole ou envie um arquivo .csv/.txt'}</span>
           <label className="pl-btn" style={{ cursor: 'pointer' }}>Enviar arquivo<input type="file" hidden accept=".csv,.txt,text/csv,text/plain" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void f.text().then(t => setLista(l => (l ? `${l}\n${t}` : t))) }} /></label>
           <button type="button" className="pl-btn pl-btn-primary" disabled={!lida.numeros.length} data-adicionar-lista onClick={() => { const ja = new Set(numerosLista.map(x => x.telefone.replace(/\D/g, ''))); const novos = lida.numeros.filter(x => !ja.has(x.telefone.replace(/\D/g, ''))); mudar({ ...definicao, manual: { ...manual, numeros: [...numerosLista, ...novos], listaAutorizada: manual.listaAutorizada ?? true } }); setLista('') }}>Adicionar {lida.numeros.length || ''} à lista</button>
         </div>
+      </div>
+      )}
       </div>
 
       {(incluidos.length > 0 || numerosLista.length > 0) && (
@@ -242,12 +252,9 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
             </span>
           </div>
           {numerosLista.length > 0 && (
-            <label className="dp-so-estes" data-lista-autorizada>
-              <input type="checkbox" checked={!!manual.listaAutorizada} onChange={e => mudar({ ...definicao, manual: { ...manual, listaAutorizada: e.target.checked } })} />
-              <span><b>As pessoas da lista colada aceitaram receber mensagens da loja</b> — assim números novos recebem também promoção. O ARIES registra a autorização de cada número em seu nome (data e campanha) para a LGPD. Quem já pediu para sair continua de fora.</span>
-            </label>
+            <div data-lista-autorizada><Interruptor id="lista-autorizada" ligado={!!manual.listaAutorizada} mudar={v => mudar({ ...definicao, manual: { ...manual, listaAutorizada: v } })} rotulo="As pessoas da lista colada aceitaram receber mensagens da loja" detalhe="Assim números novos recebem também promoção. O ARIES registra a autorização de cada número em seu nome (data e campanha) para a LGPD. Quem já pediu para sair continua de fora." /></div>
           )}
-          <label className="dp-so-estes"><input type="checkbox" checked={!!manual.apenasManual} onChange={e => mudar({ ...definicao, manual: { ...manual, apenasManual: e.target.checked } })} /> <span><b>Enviar só para os escolhidos</b> — ignora o público pronto, a base e os filtros acima. Desmarcado, os escolhidos são somados ao público.</span></label>
+          <Interruptor id="apenas-manual" ligado={!!manual.apenasManual} mudar={v => mudar({ ...definicao, manual: { ...manual, apenasManual: v } })} rotulo="Enviar só para os escolhidos" detalhe="Ignora o público pronto, a base e os filtros. Desligado, os escolhidos são somados ao público." />
           {verEscolhidos && (
             <div className="cc-chips" style={{ marginTop: 6, maxHeight: 220, overflow: 'auto' }}>
               {incluidos.map(x => <button key={x.id} type="button" className="pl-chip active" onClick={() => mudar({ ...definicao, manual: { ...manual, incluir: incluidos.filter(y => y.id !== x.id) } })} title="Tirar">{x.nome ?? x.id} ✕</button>)}
