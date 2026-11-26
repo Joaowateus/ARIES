@@ -6126,3 +6126,115 @@ a.dp-tile:hover { border-color: var(--pl-border-strong); }
   .dp-assist-resumo > .dp-assist-resumo-linha:not(.chave), .dp-assist-resumo .dp-balao-area { display: none; }
   .dp-assistente[data-passo="4"] .dp-assist-resumo .dp-balao-area { display: grid; grid-column: 1 / -1; }
 }
+
+/* ===== Disparo · redesign fase 6: Respostas, Públicos, Jornada e Biblioteca ===== */
+.dp-ferramentas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.dp-ferramentas-fim { margin-left: auto; }
+.dp-seg-n { font-size: 11px; color: var(--pl-ink-muted); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.dp-bloco { margin-bottom: 22px; }
+.dp-bloco-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.dp-bloco-topo h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--pl-ink-1); }
+.dp-bloco-topo .pl-hint { margin: 2px 0 0; }
+
+/* Cartões (públicos salvos, prontos e modelos) */
+.dp-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.dp-cartoes.compactos { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.dp-cartao { border: 1px solid var(--pl-border); border-radius: 12px; background: var(--pl-surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; transition: border-color .15s; }
+.dp-cartao:hover { border-color: var(--pl-border-strong); }
+.dp-cartao > b, .dp-cartao-topo b { font-size: 14px; font-weight: 600; color: var(--pl-ink-1); overflow-wrap: anywhere; }
+.dp-cartao > .pl-hint { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.dp-cartao-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.dp-cartao-topo .dp-menu .pl-btn { padding: 2px 8px; min-height: 0; }
+.dp-cartao-rodape { margin-top: auto; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.dp-cartao-rodape .pl-hint { font-size: 12px; }
+.dp-cartoes.compactos .dp-cartao { padding: 10px 12px; gap: 4px; }
+.dp-cartoes.compactos .dp-cartao > .pl-hint { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dp-cartoes.compactos .dp-cartao-rodape { padding-top: 2px; }
+.dp-cartoes.compactos .dp-cartao-rodape .pl-btn { padding: 4px 10px; min-height: 0; font-size: 12.5px; }
+.dp-galeria-prontos { margin-bottom: 14px; }
+.dp-criterios { display: flex; flex-wrap: wrap; gap: 4px; }
+.dp-criterios i { font-style: normal; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pl-border-strong); color: var(--pl-ink-2); }
+.dp-modelo .dp-balao-area { padding: 8px; }
+
+/* Respostas: caixa de entrada */
+.dp-caixa { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); padding: 0; overflow: hidden; min-height: 460px; }
+.dp-caixa-lista { border-right: 1px solid var(--pl-border); display: flex; flex-direction: column; min-width: 0; }
+.dp-caixa-lista ul { list-style: none; margin: 0; padding: 4px; overflow: auto; max-height: 620px; }
+.dp-caixa-lista .pl-paginacao, .dp-caixa-lista > :last-child:not(ul) { padding: 8px 12px; border-top: 1px solid var(--pl-border); }
+.dp-caixa-lista li button { width: 100%; display: flex; gap: 10px; text-align: left; border: 0; background: transparent; padding: 10px; border-radius: 8px; cursor: pointer; color: inherit; }
+.dp-caixa-lista li button:hover { background: var(--pl-surface-2); }
+.dp-caixa-lista li button.on { background: var(--pl-surface-3); }
+.dp-avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--pl-surface-3); border: 1px solid var(--pl-border-strong); font-size: 12px; font-weight: 600; color: var(--pl-ink-2); }
+.dp-avatar.grande { width: 44px; height: 44px; font-size: 15px; }
+.dp-caixa-item { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.dp-caixa-item-topo { display: flex; justify-content: space-between; gap: 8px; }
+.dp-caixa-item-topo b { font-size: 13.5px; font-weight: 600; color: var(--pl-ink-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-caixa-item-topo .dp-quando { font-size: 11.5px; color: var(--pl-ink-muted); white-space: nowrap; }
+.dp-caixa-trecho { font-size: 13px; color: var(--pl-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-caixa-camp { font-size: 11.5px; color: var(--pl-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.dp-caixa-camp .dp-selo { font-style: normal; }
+.dp-caixa-detalhe { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dp-caixa-detalhe-topo { display: flex; align-items: center; gap: 12px; }
+.dp-caixa-detalhe-topo > div { flex: 1; min-width: 0; }
+.dp-caixa-detalhe-topo h3 { margin: 0; font-size: 17px; font-weight: 600; color: var(--pl-ink-1); }
+.dp-caixa .dp-caixa-voltar { display: none; align-self: flex-start; }
+.dp-conversa { border: 1px solid var(--pl-border); border-radius: 12px; background: var(--pl-surface-2); padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.dp-conversa-quando { align-self: center; font-size: 11.5px; color: var(--pl-ink-muted); }
+.dp-balao.entrada { max-width: 80%; font-size: 14px; }
+.dp-caixa-dados { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.dp-caixa-dados dt { color: var(--pl-ink-muted); font-size: 12.5px; }
+.dp-caixa-dados dd { margin: 0; font-size: 13.5px; }
+
+/* Públicos: autorizações */
+.dp-tabela-cartao { padding: 0; overflow: auto; }
+.dp-tabela-cartao .pl-table { margin: 0; }
+.dp-modal-largo { width: min(520px, 100%); }
+.dp-modal-campos { display: grid; gap: 12px; margin: 12px 0; }
+
+/* Jornada: trilho das etapas */
+.dp-trilho-cartao { padding: 16px 16px 10px; }
+.dp-trilho { display: grid; grid-template-columns: repeat(10, minmax(72px, 1fr)); gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.dp-trilho button { display: flex; flex-direction: column; align-items: stretch; gap: 4px; border: 1px solid transparent; background: transparent; border-radius: 10px; padding: 8px 6px; cursor: pointer; color: var(--pl-ink-2); text-align: center; min-width: 0; }
+.dp-trilho button:hover { background: var(--pl-surface-2); }
+.dp-trilho button.on { border-color: var(--pl-ink-1); background: var(--pl-surface-2); color: var(--pl-ink-1); }
+.dp-trilho button:focus-visible { outline: 2px solid var(--pl-ink-1); outline-offset: 1px; }
+.dp-trilho-col { height: 110px; display: flex; align-items: flex-end; justify-content: center; }
+.dp-trilho-barra { width: 60%; max-width: 44px; background: var(--pl-ink-2); opacity: .55; border-radius: 4px 4px 0 0; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.dp-trilho button.on .dp-trilho-barra { opacity: 1; background: var(--pl-ink-1); }
+.dp-trilho-parados { width: 100%; background: var(--dp-warn); flex: none; }
+.dp-trilho b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); }
+.dp-trilho-nome { font-size: 12px; line-height: 1.3; overflow-wrap: normal; hyphens: auto; }
+.dp-trilho-nome small { display: block; font-size: 10.5px; color: var(--pl-ink-muted); }
+.dp-trilho-marca { font-size: 10.5px; color: var(--pl-ink-muted); min-height: 14px; }
+.dp-legenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--pl-ink-muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--pl-border); }
+.dp-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.dp-legenda i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.dp-legenda i.neutro { background: var(--pl-ink-2); }
+.dp-legenda i.warn { background: var(--dp-warn); }
+.dp-etapa-detalhe { margin-top: 12px; display: grid; gap: 14px; }
+.dp-etapa-detalhe h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--pl-ink-1); }
+.dp-etapa-detalhe .dp-config-rotulo { margin: 0 0 6px; }
+.dp-etapa-colunas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; border-top: 1px solid var(--pl-border); padding-top: 14px; }
+
+/* Biblioteca */
+.dp-biblio { position: relative; min-height: 240px; }
+.dp-biblio .dp-envio { margin-bottom: 12px; }
+.dp-soltar { position: absolute; inset: -6px; border: 2px dashed var(--pl-ink-2); border-radius: 14px; background: color-mix(in srgb, var(--pl-surface) 88%, transparent); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; pointer-events: none; z-index: 5; }
+.dp-soltar b { font-size: 16px; color: var(--pl-ink-1); }
+.dp-soltar span { font-size: 12.5px; color: var(--pl-ink-muted); }
+
+@media (max-width: 900px) {
+  .dp-etapa-colunas { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .dp-caixa { grid-template-columns: 1fr; min-height: 0; }
+  .dp-caixa-lista { border-right: 0; }
+  .dp-caixa .dp-caixa-detalhe { display: none; }
+  .dp-caixa.detalhe .dp-caixa-lista { display: none; }
+  .dp-caixa.detalhe .dp-caixa-detalhe { display: flex; padding: 14px; }
+  .dp-caixa .dp-caixa-voltar { display: inline-flex; }
+  .dp-ferramentas-fim { margin-left: 0; }
+  .dp-trilho { grid-template-columns: repeat(10, 92px); }
+  .dp-bloco-topo { flex-wrap: wrap; }
+  .dp-trilho-col { height: 80px; }
+}
