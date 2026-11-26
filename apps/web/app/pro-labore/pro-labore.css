@@ -5809,3 +5809,6 @@ button.fn-num:hover, .fn-num-duplo button:hover { background: var(--pl-surface-2
 .dp-etapa-estrategias { list-style: none; margin: 2px 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
 .dp-etapa-cartao .pl-btn { margin-top: auto; }
 .dp-link { all: unset; cursor: pointer; text-decoration: underline; font-weight: 600; }
+/* Disparo: respostas às campanhas */
+.dp-resposta { border-left: 3px solid var(--pl-accent); background: var(--pl-surface-2); border-radius: 6px; padding: 6px 10px; margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dp-link { background: none; border: 0; padding: 0; color: var(--pl-accent); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }

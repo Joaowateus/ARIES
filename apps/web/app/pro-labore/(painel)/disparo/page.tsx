@@ -3,12 +3,13 @@
 // ARIES DISPARO — central de campanhas e distribuição de mensagens pelo WhatsApp.
 // Cinco áreas: Visão geral, Campanhas, Públicos, Biblioteca e Configurações. Toda regra (permissão,
 // autorização, ritmo, envio) é do servidor; a tela só mostra e pede.
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { abaPorChave } from '@/lib/abasAries'
 import { disparoApi, type MetaDisparo } from '@/lib/proLaboreApi'
 import { Cabecalho } from '../_padrao/Padrao'
-import { MetaCtx, RecarregarMetaCtx, erroDe } from './_disparo/util'
+import { EscopoCtx, MetaCtx, RecarregarMetaCtx, SeletorEscopo, erroDe } from './_disparo/util'
+import { Respostas } from './_disparo/Respostas'
 import { VisaoGeral } from './_disparo/VisaoGeral'
 import { Campanhas } from './_disparo/Campanhas'
 import { Publicos } from './_disparo/Publicos'
@@ -16,9 +17,9 @@ import { Biblioteca } from './_disparo/Biblioteca'
 import { Configuracoes } from './_disparo/Configuracoes'
 import { Jornada } from './_disparo/Jornada'
 
-type Sub = 'visao' | 'jornada' | 'campanhas' | 'publicos' | 'biblioteca' | 'configuracoes'
+type Sub = 'visao' | 'jornada' | 'campanhas' | 'respostas' | 'publicos' | 'biblioteca' | 'configuracoes'
 const SUBS: Array<{ valor: Sub; rotulo: string }> = [
-  { valor: 'visao', rotulo: 'Visão geral' }, { valor: 'jornada', rotulo: 'Jornada do CRM' }, { valor: 'campanhas', rotulo: 'Campanhas' }, { valor: 'publicos', rotulo: 'Públicos' },
+  { valor: 'visao', rotulo: 'Visão geral' }, { valor: 'jornada', rotulo: 'Jornada do CRM' }, { valor: 'campanhas', rotulo: 'Campanhas' }, { valor: 'respostas', rotulo: 'Respostas' }, { valor: 'publicos', rotulo: 'Públicos' },
   { valor: 'biblioteca', rotulo: 'Biblioteca' }, { valor: 'configuracoes', rotulo: 'Configurações' },
 ]
 
@@ -28,6 +29,10 @@ function Conteudo() {
   const aba = abaPorChave('disparo')!
   const [meta, setMeta] = useState<MetaDisparo | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  // De quem são as campanhas mostradas (só dono e supervisor trocam; fica lembrado neste navegador).
+  const [de, setDeEstado] = useState(() => { try { return (typeof window !== 'undefined' && localStorage.getItem('aries:disparo:de')) || 'minhas' } catch { return 'minhas' } })
+  const setDe = useCallback((v: string) => { setDeEstado(v); try { localStorage.setItem('aries:disparo:de', v) } catch { /* sem armazenamento */ } }, [])
+  const escopo = useMemo(() => ({ de: meta?.gestao ? de : 'minhas', setDe }), [de, setDe, meta?.gestao])
   const recarregarMeta = useCallback(() => { disparoApi.meta().then(setMeta).catch(e => setErro(erroDe(e))) }, [])
   useEffect(() => { recarregarMeta() }, [recarregarMeta])
   const pedida = params.get('sub') as Sub | null
@@ -40,22 +45,24 @@ function Conteudo() {
   if (erro) return <div><Cabecalho aba={aba} /><div className="pl-alert pl-alert-error" role="alert">{erro}</div></div>
   if (!meta) return <div><Cabecalho aba={aba} /><p className="pl-hint" aria-busy="true">Carregando o Disparo…</p></div>
   return (
-    <MetaCtx.Provider value={meta}><RecarregarMetaCtx.Provider value={recarregarMeta}>
+    <MetaCtx.Provider value={meta}><RecarregarMetaCtx.Provider value={recarregarMeta}><EscopoCtx.Provider value={escopo}>
       <div data-disparo={sub}>
         <Cabecalho aba={aba} />
         <div className="pl-sv-tabs cc-subabas" role="tablist" aria-label="Áreas do Disparo">
           {SUBS.map(s => <button key={s.valor} type="button" role="tab" aria-selected={sub === s.valor} className={sub === s.valor ? 'ativo' : ''} onClick={() => ir(s.valor)} data-subaba={s.valor}>{s.rotulo}</button>)}
         </div>
+        {['visao', 'jornada', 'campanhas', 'respostas'].includes(sub) && !campanha && <div style={{ margin: '8px 0' }}><SeletorEscopo /></div>}
         <div role="tabpanel" className="dp-painel">
           {sub === 'visao' && <VisaoGeral abrir={id => ir('campanhas', { campanha: id })} />}
           {sub === 'jornada' && <Jornada abrir={id => ir('campanhas', { campanha: id })} />}
           {sub === 'campanhas' && <Campanhas aberta={campanha} abrir={id => ir('campanhas', id ? { campanha: id } : {})} />}
+          {sub === 'respostas' && <Respostas abrir={id => ir('campanhas', { campanha: id })} />}
           {sub === 'publicos' && <Publicos />}
           {sub === 'biblioteca' && <Biblioteca />}
           {sub === 'configuracoes' && <Configuracoes aoSalvar={recarregarMeta} />}
         </div>
       </div>
-    </RecarregarMetaCtx.Provider></MetaCtx.Provider>
+    </EscopoCtx.Provider></RecarregarMetaCtx.Provider></MetaCtx.Provider>
   )
 }
 

@@ -4128,6 +4128,8 @@ export interface MetaDisparo {
   campos: Array<{ campo: string; rotulo: string; ops: string[] }>
   predefinidos: Array<{ chave: string; nome: string; descricao: string; definicao: DefinicaoPublicoDisparo; grupo?: 'JORNADA' | 'INSTAGRAM' | null }>
   jornada: EtapaJornadaDisparo[]
+  /** Quem está vendo: "minhas campanhas" são as criadas por este vendedor (null = dono). */
+  eu?: { vendedorId: string | null; nome: string }
   /** Instagram da empresa (canal do Disparo): DM só dentro da janela da Meta. */
   instagram?: { conectado: boolean; usuario: string | null; maxPorHora: number }
   motivos: Record<string, string>; status: Record<StatusCampanhaDisparo, string>; finalidades: Record<FinalidadeDisparo, string>
@@ -4136,6 +4138,7 @@ export interface MetaDisparo {
   vendedores: Array<{ id: string; nome: string; ativo: boolean }>
   config: ConfigLojaDisparo
 }
+export interface RespostaDisparo { id: string; nome: string | null; contato: string; respondeuEm: string; leadId: string | null; resposta: string | null; descadastrou: boolean; campanha: { id: string; nome: string; canal: string; criadoPor: string | null } }
 export interface PreviaPublicoDisparo {
   selecionados: number; elegiveis: number; excluidos: number; porMotivo: Record<string, number>; total: number; porPagina: number; exemplo: string[] | null
   pagina: Array<{ telefone: string | null; telefoneCompleto: string | null; nome: string; vendedor: string | null; situacao: string; etapa: string | null; origem: string | null; cidade: string | null; autorizacao: string | null; leadId: string | null; clienteId: string | null; motivo: string | null; instagram?: { janelaAte: string | null; modo: 'DM' | 'COMENTARIO'; canal: string } | null }>
@@ -4199,11 +4202,13 @@ export const disparoApi = {
   /** Pede uma rodada do envio (a tela da campanha aberta envia mesmo sem a rotina automática). */
   processar: () => postD<{ rodou: boolean; motivo?: string; disparoEnviadas?: number; disparoFalhas?: number }>('/processar'),
   config: { salvar: (c: Partial<ConfigLojaDisparo>) => request<ConfigLojaDisparo>('/pro-labore/disparo/config', { method: 'PUT', body: JSON.stringify(c) }) },
-  visaoGeral: (dias = 30) => request<VisaoGeralDisparo>(`/pro-labore/disparo/visao-geral${qsD({ dias })}`),
-  jornada: () => request<{ etapas: Array<{ etapa: string; rotulo: string; objetivo: string; total: number; comTelefone: number; parados7d: number; estrategias: EstrategiaDisparo[] }>; outras: EstrategiaDisparo[] }>('/pro-labore/disparo/jornada'),
-  comparativo: (dias = 90) => request<Array<{ id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; responsavel: string | null; publico: string | null; status: StatusCampanhaDisparo; iniciadaEm: string | null; aceitas: number; entregues: number; lidas: number; respostas: number; falhas: number; descadastros: number; taxaResposta: number | null }>>(`/pro-labore/disparo/relatorios/comparativo${qsD({ dias })}`),
+  visaoGeral: (dias = 30, de?: string) => request<VisaoGeralDisparo>(`/pro-labore/disparo/visao-geral${qsD({ dias, de })}`),
+  /** Respostas às campanhas de quem está vendo (a gestão escolhe: minhas, equipe ou de alguém). */
+  respostas: (f: { dias?: number; de?: string; pagina?: number; busca?: string } = {}) => request<{ total: number; pagina: number; porPagina: number; itens: RespostaDisparo[] }>(`/pro-labore/disparo/respostas${qsD(f)}`),
+  jornada: (de?: string) => request<{ etapas: Array<{ etapa: string; rotulo: string; objetivo: string; total: number; comTelefone: number; parados7d: number; estrategias: EstrategiaDisparo[] }>; outras: EstrategiaDisparo[] }>(`/pro-labore/disparo/jornada${qsD({ de })}`),
+  comparativo: (dias = 90, de?: string) => request<Array<{ id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; responsavel: string | null; publico: string | null; status: StatusCampanhaDisparo; iniciadaEm: string | null; aceitas: number; entregues: number; lidas: number; respostas: number; falhas: number; descadastros: number; taxaResposta: number | null }>>(`/pro-labore/disparo/relatorios/comparativo${qsD({ dias, de })}`),
   campanhas: {
-    listar: (f: { status?: string; pagina?: number } = {}) => request<{ total: number; pagina: number; porPagina: number; itens: ItemCampanhaDisparo[] }>(`/pro-labore/disparo/campanhas${qsD(f)}`),
+    listar: (f: { status?: string; pagina?: number; de?: string } = {}) => request<{ total: number; pagina: number; porPagina: number; itens: ItemCampanhaDisparo[] }>(`/pro-labore/disparo/campanhas${qsD(f)}`),
     ver: (id: string) => request<CampanhaDisparo>(`/pro-labore/disparo/campanhas/${id}`),
     criar: (c: CampanhaDisparoEntrada) => postD<CampanhaDisparo>('/campanhas', c),
     salvar: (id: string, c: CampanhaDisparoEntrada) => request<{ ok: true; versao: number }>(`/pro-labore/disparo/campanhas/${id}`, { method: 'PUT', body: JSON.stringify(c) }),

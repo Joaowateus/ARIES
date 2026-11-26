@@ -220,3 +220,64 @@ test('sem travas: aprovação desligada por padrão, lista colada (inclusive for
   const busca = await api('VEND', 'GET', '/disparo/contatos?busca=Cliente')
   assert.equal(typeof busca.corpo.total, 'number')
 })
+
+test('cada pessoa vê só as próprias campanhas, números e respostas; dono e supervisor escolhem de quem', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const otto = await prisma.vendedor.create({ data: { usuarioId: loja.id, nome: 'Otto Vendedor', papel: 'VENDEDOR', email: `${randomUUID()}@t.local`, senhaHash: 'x', permissoes: { disparo: 'EDITAR' } } })
+  const tokOtto = signProLaboreToken({ sub: loja.id, email: 'o@t.local', nome: 'Otto', papel: 'VENDEDOR', vendedorId: otto.id })
+  const comoOtto = async (metodo: string, caminho: string, corpo?: unknown) => {
+    const r = await fetch(`${base}/pro-labore${caminho}`, { method: metodo, headers: { Authorization: `Bearer ${tokOtto}`, 'Content-Type': 'application/json' }, body: corpo === undefined ? undefined : JSON.stringify(corpo) })
+    return { status: r.status, corpo: await r.json().catch(() => null) as Record<string, unknown> }
+  }
+  const asOtto = (await prisma.assistenteComercial.create({ data: { vendedorId: otto.id, instancia: `i-${randomUUID()}`, status: 'CONECTADO', numeroWhatsapp: '5591900000013' } })).id
+  const dono = await api('DONO', 'POST', '/disparo/campanhas', { ...campanha(loja.asSup), nome: 'Do dono' })
+  const vera = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), nome: 'Da Vera' })
+  const ot = await comoOtto('POST', '/disparo/campanhas', { ...campanha(asOtto), nome: 'Do Otto' })
+  assert.deepEqual([dono.status, vera.status, ot.status], [201, 201, 201])
+  const [idD, idV, idO] = [dono.corpo.id as string, vera.corpo.id as string, ot.corpo.id as string]
+  // Uma resposta em cada campanha (e as três começaram, para entrar na comparação).
+  for (const [id, nome] of [[idD, 'Resp Dono'], [idV, 'Resp Vera'], [idO, 'Resp Otto']]) {
+    await prisma.disparoCampanha.update({ where: { id }, data: { iniciadaEm: new Date(), status: 'RUNNING' } })
+    const d = await prisma.disparoDestinatario.create({ data: { campanhaId: id, versao: 1, usuarioId: loja.id, telefone: `55919${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`, nome, status: 'RESPONDEU', respondeuEm: new Date() } })
+    await prisma.disparoEvento.create({ data: { usuarioId: loja.id, campanhaId: id, destinatarioId: d.id, tipo: 'RESPOSTA', descricao: `Oi, sou ${nome}` } })
+  }
+  const ids = (r: { corpo: Record<string, unknown> }) => (r.corpo.itens as Array<{ id: string }>).map(x => x.id)
+  const nomes = (r: { corpo: Record<string, unknown> }) => (r.corpo.itens as Array<{ nome: string }>).map(x => x.nome)
+
+  // Vendedora: só as dela, mesmo pedindo a equipe; a do Otto não abre.
+  for (const q of ['', '?de=equipe', `?de=${otto.id}`]) {
+    const l = await api('VEND', 'GET', `/disparo/campanhas${q}`)
+    assert.ok(ids(l).includes(idV) && !ids(l).includes(idO) && !ids(l).includes(idD), `lista da Vera ${q}`)
+  }
+  assert.equal((await api('VEND', 'GET', `/disparo/campanhas/${idO}`)).status, 404)
+  assert.equal((await api('VEND', 'GET', `/disparo/campanhas/${idO}/destinatarios`)).status, 404)
+  assert.deepEqual(nomes(await api('VEND', 'GET', '/disparo/respostas?de=equipe')), ['Resp Vera'])
+  assert.deepEqual(nomes(await comoOtto('GET', '/disparo/respostas')), ['Resp Otto'])
+  const vg = await api('VEND', 'GET', '/disparo/visao-geral?de=equipe')
+  const minhas = await prisma.disparoCampanha.count({ where: { usuarioId: loja.id, criadoPorId: loja.vend, excluidaEm: null } })
+  assert.equal((vg.corpo.campanhas as { criadas: number }).criadas, minhas)
+  assert.equal(vg.corpo.respostas, 1)
+  const cmp = await api('VEND', 'GET', '/disparo/relatorios/comparativo')
+  assert.ok((cmp.corpo as unknown as Array<{ id: string }>).every(x => x.id !== idO && x.id !== idD))
+
+  // Dono: "minhas" por padrão; equipe toda; de um vendedor.
+  assert.deepEqual(ids(await api('DONO', 'GET', '/disparo/campanhas')).filter(i => [idD, idV, idO].includes(i)), [idD])
+  const equipe = ids(await api('DONO', 'GET', '/disparo/campanhas?de=equipe'))
+  assert.ok([idD, idV, idO].every(i => equipe.includes(i)))
+  assert.deepEqual(ids(await api('DONO', 'GET', `/disparo/campanhas?de=${otto.id}`)), [idO])
+  assert.deepEqual(nomes(await api('DONO', 'GET', '/disparo/respostas')), ['Resp Dono'])
+  assert.deepEqual(nomes(await api('DONO', 'GET', '/disparo/respostas?de=equipe')).sort(), ['Resp Dono', 'Resp Otto', 'Resp Vera'])
+  assert.equal((await api('DONO', 'GET', '/disparo/visao-geral?de=equipe')).corpo.respostas, 3)
+  // Supervisor vê as do dono pelo filtro e abre a de qualquer um (para acompanhar e aprovar).
+  assert.deepEqual(nomes(await api('SUP', 'GET', '/disparo/respostas?de=dono')), ['Resp Dono'])
+  assert.equal((await api('SUP', 'GET', `/disparo/campanhas/${idO}`)).status, 200)
+  const meta = await api('VEND', 'GET', '/disparo/meta')
+  assert.equal((meta.corpo.eu as { vendedorId: string }).vendedorId, loja.vend)
+})
+
+test('aviso de resposta vai para quem criou a campanha e para quem recebeu no WhatsApp, sem repetir', async () => {
+  const { avisadosDaResposta } = await import('../src/lib/disparo/motor')
+  assert.deepEqual(avisadosDaResposta(null, 'v1'), [null, 'v1'])
+  assert.deepEqual(avisadosDaResposta('v1', 'v1'), ['v1'])
+  assert.deepEqual(avisadosDaResposta('v2', null), ['v2'])
+})

@@ -269,6 +269,16 @@ Checklist do dia
 - **Requisito da Meta**: a conta precisa da permissão `instagram_manage_messages` aprovada (a mesma que o Atendimento usa para responder pelo sistema).
 - Testes: `tests/disparoInstagram.test.ts` (API do Instagram falsa local: públicos e janelas, rotas, envio pelo direct, histórico, eco, resposta pelo webhook, SAIR, janela que fecha antes do envio, resposta privada única, foto + texto, token vencido).
 
+## 10k. Cada pessoa com as próprias campanhas, números e respostas
+
+- **Dono da campanha** = quem criou (`criadoPorId`; vazio = o dono da loja). A regra fica no servidor (`escopo()` em `routes/proLaboreDisparo.ts`).
+- **Vendedor, SDR e demais**: lista de campanhas, Visão geral (números do período, recentes, atividade), comparação, estratégias da Jornada e **Respostas** mostram só as campanhas que a pessoa criou. Abrir, ver destinatários ou mexer na campanha de outra pessoa responde "não encontrada". Pedir `?de=equipe` não muda nada para quem não é da gestão.
+- **Dono e supervisor**: seletor "Mostrando" no topo (Visão geral, Jornada, Campanhas, Respostas): *Minhas campanhas* (padrão), *Equipe toda*, *Do dono* ou *De <vendedor>*; a escolha fica lembrada no navegador. Continuam abrindo qualquer campanha para acompanhar e aprovar; o aviso de aprovações conta a equipe toda e "Ver e aprovar" muda para *Equipe toda*.
+- **Aba Respostas**: quem respondeu, o texto, quando, por qual campanha (e canal), se pediu para sair, com atalho para o lead e para a campanha. Período 7/30/90 dias e busca por nome.
+- **Aviso de resposta no WhatsApp**: vai para quem criou a campanha e para o dono do número que recebeu a resposta (sem repetir). No Instagram, para quem criou a campanha. O retorno no CRM (follow) continua com o vendedor do lead.
+- Públicos, Biblioteca e modelos continuam da loja toda (sem trava de carteira, pedido de 25/11/2026).
+- Testes: `tests/disparoRotas.test.ts` ("cada pessoa vê só as próprias campanhas…" e o aviso de resposta).
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).
