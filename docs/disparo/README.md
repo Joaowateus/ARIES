@@ -302,6 +302,14 @@ Checklist do dia
 - Quem pediu para sair (`REVOGADO`) ou está bloqueado continua de fora. "SAIR" revoga como sempre.
 - Teste: `tests/disparoRotas.test.ts` ("número novo … em promoção").
 
+## 10n. Revezamento entre campanhas do mesmo número e limite explicado
+
+- O limite por hora e por dia é do **número**: soma todas as campanhas que saem por ele e vale o menor limite entre as campanhas ativas. Protege o número contra bloqueio.
+- **Antes:** quando a vaga abria, saía a mensagem mais antiga da fila. Uma campanha de 1 pessoa esperava todo o acúmulo de uma campanha grande do mesmo número.
+- **Agora** (`travarProxima`): revezamento. A vez é da campanha que enviou há mais tempo, ou que ainda não enviou nada.
+- **Tela do limite:** mostra a hora exata da próxima vaga (`proximoEnvioEm`) e quantas campanhas estão usando o número (e quantas mensagens são desta), e diz que dá para aumentar o limite em Configurações (até 400 por hora).
+- Teste: `tests/disparo.test.ts` ("revezamento…").
+
 ## 11. Variáveis de ambiente
 
 Nenhuma variável nova na produção. Usa as que já existem: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `SOCIAL_MEDIA_CRON_SECRET` e o armazenamento (`SUPABASE_*` ou `BLOB_READ_WRITE_TOKEN`).

@@ -422,3 +422,32 @@ test('estratégia contínua por etapa: entra quem chega na etapa, sai quem muda 
   assert.ok((j.find(x => x.etapa === 'LEAD')?.total ?? 0) >= 3)
   await prisma.disparoCampanha.update({ where: { id: c.id }, data: { status: 'CANCELLED' } })
 })
+
+test('revezamento: campanha pequena não espera a fila de uma grande do mesmo número; limite mostra a hora da próxima vaga', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const { situacaoDoEnvio } = await import('../src/lib/disparo/motor')
+  // Nenhuma outra campanha do número na frente (as dos testes anteriores terminam aqui).
+  await prisma.disparoCampanha.updateMany({ where: { usuarioId: loja.id, status: { in: ['RUNNING', 'QUEUED', 'PAUSED'] } }, data: { status: 'CANCELLED' } })
+  falso.enviados.length = 0
+  const grande = await criarCampanha('Grande', { conteudo: { passos: [{ tipo: 'TEXTO', texto: 'GRANDE {{primeiro_nome}}' }] } })
+  await iniciarJa(grande.id)
+  assert.ok((await distribuir(grande.id)) >= 4)
+  // A grande está na fila há 10 min (acúmulo).
+  await prisma.disparoMensagem.updateMany({ where: { campanhaId: grande.id }, data: { enviarApos: new Date(Date.now() - 10 * 60_000) } })
+  const pequena = await criarCampanha('Pequena', { publico: { base: 'LEADS', manual: { apenasManual: true, numeros: [{ telefone: '91 98123-4567', nome: 'Guilherme' }] } }, conteudo: { passos: [{ tipo: 'TEXTO', texto: 'PEQUENA {{primeiro_nome|oi}}' }] } })
+  await iniciarJa(pequena.id)
+  assert.equal(await distribuir(pequena.id), 1)
+  await rodarDisparo(8000)
+  const ordem = falso.enviados.map(e => e.texto.split(' ')[0])
+  assert.ok(ordem.includes('PEQUENA'), JSON.stringify(ordem))
+  assert.ok(ordem.indexOf('PEQUENA') <= 1, `a pequena entra no revezamento (antes saía por último): ${JSON.stringify(ordem)}`)
+  // Limite da hora: a tela diz quando abre a próxima vaga e que é o número todo.
+  const c = await criarCampanha('Limite', { config: { ...JANELA_TODA, maxPorHora: 2 } })
+  await iniciarJa(c.id)
+  await distribuir(c.id)
+  const s = await situacaoDoEnvio(c.id)
+  assert.equal(s?.motivo, 'LIMITE_HORA', JSON.stringify(s))
+  assert.ok(s?.proximoEnvioEm && new Date(s.proximoEnvioEm).getTime() > Date.now())
+  assert.match(String(s?.texto), /somando as \d+ campanhas .*desta: 0.*revezam/)
+  await prisma.disparoCampanha.updateMany({ where: { id: { in: [grande.id, pequena.id, c.id] } }, data: { status: 'CANCELLED' } })
+})
