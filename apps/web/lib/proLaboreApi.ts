@@ -4166,7 +4166,7 @@ export interface SituacaoEnvioDisparo {
   tempos: { iniciadaEm: string | null; primeiraEnviadaEm: string | null; ultimaEnviadaEm: string | null; enviadas: number; intervaloSeg: number | null }
   remetente: { motivo: string; em: string; erro?: string } | null
 }
-export interface ItemCampanhaDisparo { id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; totais: CampanhaDisparo['totais']; responsavelNome: string | null; criadoPorNome: string | null; erro: string | null; atualizadoEm: string; config?: Partial<ConfigEnvioDisparo> | null; canal?: CanalDisparo; assistente: { vendedor: { nome: string } } | null }
+export interface ItemCampanhaDisparo { id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; status: StatusCampanhaDisparo; agendadaPara: string | null; iniciadaEm: string | null; concluidaEm: string | null; totais: CampanhaDisparo['totais']; responsavelNome: string | null; criadoPorNome: string | null; erro: string | null; atualizadoEm: string; config?: Partial<ConfigEnvioDisparo> | null; canal?: CanalDisparo; assistente: { vendedor: { nome: string } } | null; progresso?: { enviadas: number; falhas: number; paradas: number } }
 export interface DestinatarioDisparo { id: string; nome: string | null; telefone: string; status: string; motivoExclusao: string | null; passoAtual: number; respondeuEm: string | null; interrompidoPor: string | null; leadId: string | null; mensagens: Array<{ status: string; aceitaEm: string | null; entregueEm: string | null; lidaEm: string | null; ultimoErro: string | null }> }
 export interface DetalheDestinatarioDisparo extends Omit<DestinatarioDisparo, 'mensagens'> {
   campanhaId: string; dados: Record<string, string | null> | null
@@ -4216,7 +4216,7 @@ export const disparoApi = {
   jornada: (de?: string) => request<{ etapas: Array<{ etapa: string; rotulo: string; objetivo: string; total: number; comTelefone: number; parados7d: number; estrategias: EstrategiaDisparo[] }>; outras: EstrategiaDisparo[] }>(`/pro-labore/disparo/jornada${qsD({ de })}`),
   comparativo: (dias = 90, de?: string) => request<Array<{ id: string; nome: string; objetivo: string | null; finalidade: FinalidadeDisparo; responsavel: string | null; publico: string | null; status: StatusCampanhaDisparo; iniciadaEm: string | null; aceitas: number; entregues: number; lidas: number; respostas: number; falhas: number; descadastros: number; taxaResposta: number | null }>>(`/pro-labore/disparo/relatorios/comparativo${qsD({ dias, de })}`),
   campanhas: {
-    listar: (f: { status?: string; pagina?: number; de?: string } = {}) => request<{ total: number; pagina: number; porPagina: number; itens: ItemCampanhaDisparo[] }>(`/pro-labore/disparo/campanhas${qsD(f)}`),
+    listar: (f: { status?: string; pagina?: number; de?: string; busca?: string } = {}) => request<{ total: number; pagina: number; porPagina: number; itens: ItemCampanhaDisparo[]; contagens?: Partial<Record<StatusCampanhaDisparo, number>> }>(`/pro-labore/disparo/campanhas${qsD(f)}`),
     ver: (id: string) => request<CampanhaDisparo>(`/pro-labore/disparo/campanhas/${id}`),
     criar: (c: CampanhaDisparoEntrada) => postD<CampanhaDisparo>('/campanhas', c),
     salvar: (id: string, c: CampanhaDisparoEntrada) => request<{ ok: true; versao: number }>(`/pro-labore/disparo/campanhas/${id}`, { method: 'PUT', body: JSON.stringify(c) }),

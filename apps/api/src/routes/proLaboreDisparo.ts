@@ -250,12 +250,22 @@ router.get('/disparo/campanhas', ...ver, async (req, res) => {
   const q = quem(req)
   const status = typeof req.query.status === 'string' && req.query.status ? req.query.status.split(',') : null
   const pagina = Math.max(0, Number(req.query.pagina ?? 0) || 0)
-  const where: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, excluidaEm: null, ...escopo(q, req.query.de), ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
-  const [total, itens] = await Promise.all([
+  const busca = typeof req.query.busca === 'string' ? req.query.busca.trim().slice(0, 80) : ''
+  const base: Prisma.DisparoCampanhaWhereInput = { usuarioId: q.usuarioId, excluidaEm: null, ...escopo(q, req.query.de), ...(busca ? { nome: { contains: busca, mode: 'insensitive' } } : {}) }
+  const where: Prisma.DisparoCampanhaWhereInput = { ...base, ...(status ? { status: { in: status } } : { status: { not: 'ARCHIVED' } }) }
+  const [total, itens, porStatus] = await Promise.all([
     prisma.disparoCampanha.count({ where }),
     prisma.disparoCampanha.findMany({ where, orderBy: { atualizadoEm: 'desc' }, skip: pagina * POR_PAGINA, take: POR_PAGINA, select: { id: true, nome: true, objetivo: true, finalidade: true, status: true, agendadaPara: true, iniciadaEm: true, concluidaEm: true, totais: true, responsavelNome: true, criadoPorNome: true, erro: true, atualizadoEm: true, config: true, canal: true, assistente: { select: { vendedor: { select: { nome: true } } } } } }),
+    // Contagem por situação (para os filtros) e o progresso de cada campanha da página: só leitura.
+    prisma.disparoCampanha.groupBy({ by: ['status'], where: base, _count: { _all: true } }),
   ])
-  res.json({ total, pagina, porPagina: POR_PAGINA, itens })
+  const prog = itens.length ? await prisma.disparoDestinatario.groupBy({ by: ['campanhaId', 'status'], where: { campanhaId: { in: itens.map(i => i.id) }, status: { in: ['CONCLUIDO', 'RESPONDEU', 'FALHOU', 'INTERROMPIDO'] } }, _count: { _all: true } }) : []
+  const conta = (id: string, sts: string[]) => prog.filter(p => p.campanhaId === id && sts.includes(p.status)).reduce((a, p) => a + p._count._all, 0)
+  res.json({
+    total, pagina, porPagina: POR_PAGINA,
+    contagens: Object.fromEntries(porStatus.map(x => [x.status, x._count._all])),
+    itens: itens.map(i => ({ ...i, progresso: { enviadas: conta(i.id, ['CONCLUIDO', 'RESPONDEU']), falhas: conta(i.id, ['FALHOU']), paradas: conta(i.id, ['INTERROMPIDO']) } })),
+  })
 })
 
 // Excluir (uma ou várias): some da tela e dos relatórios. Se ainda pode enviar, é cancelada antes
