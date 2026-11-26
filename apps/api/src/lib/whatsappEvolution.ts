@@ -208,11 +208,13 @@ export async function reiniciarInstancia(instancia: string): Promise<void> {
   }
 }
 
-export async function removerInstancia(instancia: string): Promise<void> {
+export async function removerInstancia(instancia: string, prazoMs = 10_000): Promise<void> {
   // Logout com a sessão morta falha ("Connection Closed"): não pode impedir de apagar a instância,
-  // senão o número fica preso, sem como gerar um QR novo.
-  try { await chamar('DELETE', `/instance/logout/${encodeURIComponent(instancia)}`, undefined, 10_000) } catch { /* segue para apagar */ }
-  try { await chamar('DELETE', `/instance/delete/${encodeURIComponent(instancia)}`, undefined, 10_000) } catch (e) {
+  // senão o número fica preso, sem como gerar um QR novo. Atenção: com a sessão morta e o estado
+  // "open", o servidor também pode recusar apagar (400 "precisa estar desconectada"): quem chama
+  // confere com estadoInstancia se sumiu de verdade.
+  try { await chamar('DELETE', `/instance/logout/${encodeURIComponent(instancia)}`, undefined, prazoMs) } catch { /* segue para apagar */ }
+  try { await chamar('DELETE', `/instance/delete/${encodeURIComponent(instancia)}`, undefined, prazoMs) } catch (e) {
     if (!(e instanceof ErroWhatsapp) || (e.status !== 404 && e.status !== 400)) throw e
   }
 }

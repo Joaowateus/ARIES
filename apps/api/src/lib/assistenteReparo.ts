@@ -3,8 +3,10 @@
 // "Connection Closed"; o ARIES mostrava "conectado", "Conectar" não gerava QR e "Desconectar" travava no
 // logout. O reparo: 1) testa de verdade; 2) reinicia a sessão sem QR; 3) só se não voltar, gera um QR
 // novo (a pessoa lê no celular). Conversas, leads e roteiro ficam: só a sessão do WhatsApp é refeita.
+import { randomBytes } from 'crypto'
 import { prisma } from './prisma'
-import { configurarWebhook, estadoInstancia, prepararConexao, reiniciarInstancia, removerInstancia, sessaoViva, testarEnvio, ErroWhatsapp } from './whatsappEvolution'
+import { logger } from './logger'
+import { configurarWebhook, estadoInstancia, listarInstancias, prepararConexao, reiniciarInstancia, removerInstancia, sessaoViva, testarEnvio, ErroWhatsapp, type CodigoConexao } from './whatsappEvolution'
 
 export type ResultadoReparo =
   | { status: 'CONECTADO'; mensagem: string }
@@ -17,11 +19,10 @@ export async function repararConexao(assistenteId: string, webhookUrl: string, o
   const a = await prisma.assistenteComercial.findUnique({ where: { id: assistenteId }, select: { id: true, instancia: true, numeroWhatsapp: true } })
   if (!a?.instancia) throw new ErroWhatsapp('Este WhatsApp ainda não foi conectado: gere o QR Code.')
   if (opcoes.gerarQr) {
-    // Refaz a sessão do zero: apaga a instância no servidor (mesmo com o logout falhando) e gera o QR.
-    await removerInstancia(a.instancia)
-    const codigo = await prepararConexao(a.instancia, webhookUrl, opcoes.numeroPareamento)
-    await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'AGUARDANDO_QR' } })
-    return { status: 'AGUARDANDO_QR', mensagem: 'Leia o QR Code no celular deste número (WhatsApp › Aparelhos conectados › Conectar um aparelho).', ...codigo }
+    // Refaz a sessão do zero. Se o servidor não apagar a antiga (sessão morta presa em "open"), abre
+    // uma sessão nova com outro nome: o QR aparece de qualquer jeito.
+    const r = await novaSessao(a.id, () => webhookUrl, opcoes.numeroPareamento)
+    return { status: 'AGUARDANDO_QR', mensagem: MSG_LER_QR, qrBase64: r.qrBase64, pairingCode: r.pairingCode }
   }
   // 1) Está mesmo funcionando?
   const estado = await estadoInstancia(a.instancia).catch(() => 'erro' as const)
@@ -55,6 +56,61 @@ export async function repararConexao(assistenteId: string, webhookUrl: string, o
   // Não envia de verdade: marca como "precisa reconectar" (a tela pede o QR; o Disparo e o robô esperam).
   await prisma.assistenteComercial.update({ where: { id: a.id }, data: { status: 'SESSAO_CAIDA', motivoQueda: 'ENVIO_FALHOU' } })
   return { status: 'SESSAO_CAIDA', mensagem: 'O WhatsApp deste número não está enviando (a sessão no servidor está corrompida). Reiniciar não resolveu: é preciso ler um QR Code novo no celular deste número. Conversas, leads e campanhas ficam salvos e continuam de onde pararam.' }
+}
+
+export const MSG_LER_QR = 'Leia o QR Code no celular deste número (WhatsApp › Aparelhos conectados › Conectar um aparelho). Antes, nesse mesmo lugar, remova os aparelhos antigos que aparecem como desconectados ou "Chrome/Ubuntu" de outra data.'
+
+/**
+ * Apaga a instância e CONFERE que sumiu. Com a sessão morta e o estado "open", o servidor recusa
+ * apagar e o logout falha: aí devolve false (quem chama abre uma sessão com outro nome).
+ */
+export async function apagarInstancia(instancia: string, prazoMs = 7000): Promise<boolean> {
+  try { await removerInstancia(instancia, prazoMs) } catch { /* confere abaixo */ }
+  await espera(600)
+  return (await estadoInstancia(instancia).catch(() => 'erro' as const)) === 'inexistente'
+}
+
+/** Nome da sessão de um vendedor no servidor: o de sempre ou um novo com sufixo (quando o antigo ficou preso). */
+export const nomeDaSessao = (vendedorId: string, nova = false) => (nova ? `aries-${vendedorId}-${Date.now().toString(36)}` : `aries-${vendedorId}`)
+const daMesmaPessoa = (vendedorId: string, nome: string) => nome === `aries-${vendedorId}` || nome.startsWith(`aries-${vendedorId}-`)
+
+/**
+ * Sessão nova do WhatsApp com QR, sem depender de apagar a antiga. Tenta apagar a antiga; se o
+ * servidor recusar, usa outro nome. O segredo do aviso (webhook) é trocado: o que a sessão antiga
+ * mandar cai no vazio e não derruba o status. Conversas, leads, roteiro e campanhas ficam.
+ */
+export async function novaSessao(assistenteId: string, webhookDe: (segredo: string) => string, numeroPareamento?: string): Promise<CodigoConexao & { instancia: string; antigaPresa: string | null }> {
+  const a = await prisma.assistenteComercial.findUniqueOrThrow({ where: { id: assistenteId }, select: { id: true, vendedorId: true, instancia: true } })
+  const antiga = a.instancia
+  const estadoAntiga = antiga ? await estadoInstancia(antiga).catch(() => 'erro' as const) : 'inexistente'
+  // "open" com a sessão morta: o servidor não deixa apagar; nem tenta (economiza o tempo do pedido).
+  const livre = !antiga || estadoAntiga === 'inexistente' || (estadoAntiga !== 'open' && await apagarInstancia(antiga))
+  const instancia = livre ? (antiga ?? nomeDaSessao(a.vendedorId)) : nomeDaSessao(a.vendedorId, true)
+  const segredo = randomBytes(24).toString('hex')
+  await prisma.assistenteComercial.update({ where: { id: a.id }, data: { instancia, webhookSegredo: segredo, status: 'AGUARDANDO_QR' } })
+  if (!livre) logger.warn({ antiga, nova: instancia }, 'whatsapp: sessão antiga presa no servidor; aberta uma nova')
+  const codigo = await prepararConexao(instancia, webhookDe(segredo), numeroPareamento)
+  return { ...codigo, instancia, antigaPresa: livre ? null : antiga }
+}
+
+/**
+ * Sobras deste vendedor no servidor (sessões antigas que não apagaram na hora): reinicia (com o
+ * aparelho removido no celular, ela cai para "close") e apaga. Nunca toca na sessão atual.
+ */
+export async function limparSobras(vendedorId: string, atual: string | null, prazoMs = 9000): Promise<{ apagadas: string[]; presas: string[] }> {
+  const fim = Date.now() + prazoMs
+  const sobras = (await listarInstancias().catch(() => [])).filter(i => daMesmaPessoa(vendedorId, i.nome) && i.nome !== atual)
+  const apagadas: string[] = [], presas: string[] = []
+  for (const s of sobras) {
+    if (Date.now() > fim) { presas.push(s.nome); continue }
+    if (await apagarInstancia(s.nome, 4000)) { apagadas.push(s.nome); continue }
+    await reiniciarInstancia(s.nome).catch(() => undefined)
+    await espera(1500)
+    if (Date.now() < fim && await apagarInstancia(s.nome, 3000)) apagadas.push(s.nome)
+    else presas.push(s.nome)
+  }
+  if (apagadas.length || presas.length) logger.info({ vendedorId, apagadas, presas }, 'whatsapp: limpeza de sessões antigas')
+  return { apagadas, presas }
 }
 
 /** Envio real para o próprio número. true = saiu; false = recusado; null = sem número para testar. */

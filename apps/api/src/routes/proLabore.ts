@@ -37,9 +37,9 @@ import {
   ErroWhatsapp, evolutionConfigurada, estadoInstancia as estadoInstanciaWhatsapp, prepararConexao as prepararConexaoWhatsapp,
   listarInstancias as listarInstanciasWhatsapp,
   sessaoViva as sessaoVivaWhatsapp,
-  configurarWebhook as configurarWebhookWhatsapp, removerInstancia as removerInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
+  configurarWebhook as configurarWebhookWhatsapp, reiniciarInstancia as reiniciarInstanciaWhatsapp, enviarTexto as enviarTextoWhatsapp,
 } from '../lib/whatsappEvolution'
-import { repararConexao } from '../lib/assistenteReparo'
+import { repararConexao, novaSessao as novaSessaoWhatsapp, limparSobras as limparSobrasWhatsapp, apagarInstancia as apagarInstanciaWhatsapp } from '../lib/assistenteReparo'
 import { explicarQueda, resumoEventos, textoDoMotivo, type EventoConexao } from '../lib/whatsappConexao'
 import { diagnosticarAssistentes } from '../lib/assistenteDiagnostico'
 import { processarWebhookAssistente, marcarConectado as marcarAssistenteConectado, vincularOuCriarLead as vincularOuCriarLeadAssistente, enviarFotoNaConversa, avaliarJornada, atualizarNota } from '../lib/assistenteMotor'
@@ -3121,8 +3121,14 @@ router.post('/assistente/diagnostico/:assistenteId/duplicadas', requireProLabore
     const protegidas = new Set([...agentes.map(x => x.instancia), ...assistentes.map(x => x.instancia!)])
     const sobras = instancias.filter(i => i.numero?.endsWith(numero) && i.nome !== a.instancia && !protegidas.has(i.nome))
     const desligadas: string[] = []
-    for (const i of sobras) { await removerInstanciaWhatsapp(i.nome).then(() => desligadas.push(i.nome)).catch(() => undefined) }
-    res.json({ desligadas, mantidas: instancias.filter(i => i.numero?.endsWith(numero) && protegidas.has(i.nome) && i.nome !== a.instancia).map(i => i.nome) })
+    const presas: string[] = []
+    for (const i of sobras) {
+      // Confere que sumiu; presa em "open" (sessão morta), reinicia e tenta de novo.
+      let ok = await apagarInstanciaWhatsapp(i.nome, 4000)
+      if (!ok) { await reiniciarInstanciaWhatsapp(i.nome).catch(() => undefined); await new Promise(r => setTimeout(r, 1500)); ok = await apagarInstanciaWhatsapp(i.nome, 4000) }
+      ;(ok ? desligadas : presas).push(i.nome)
+    }
+    res.json({ desligadas, presas, mantidas: instancias.filter(i => i.numero?.endsWith(numero) && protegidas.has(i.nome) && i.nome !== a.instancia).map(i => i.nome) })
   } catch (e) {
     res.status(502).json({ error: mensagemErroWhatsapp(e) })
   }
@@ -3248,10 +3254,17 @@ router.post('/assistente/conectar', requireProLaboreAuth, requireModulo('assiste
 
   try {
     const estado = await estadoInstanciaWhatsapp(instancia)
-    // "open" com a sessão morta por baixo (Connection Closed): refaz a instância e gera QR novo.
-    const morta = estado === 'open' && (existente?.status === 'SESSAO_CAIDA' || (await sessaoVivaWhatsapp(instancia, existente?.numeroWhatsapp ?? null)) === false)
-    if (morta) await removerInstanciaWhatsapp(instancia).catch(() => undefined)
-    if (estado === 'open' && !morta) {
+    // "open" com a sessão morta por baixo (Connection Closed), ou marcada como caída: sessão nova com QR.
+    // O servidor não deixa apagar a morta: novaSessao abre outra com outro nome se precisar.
+    // Desconectada no ARIES mas "open" no servidor (sobra presa): só aproveita se o WhatsApp responder.
+    const viva = estado === 'open' && existente?.status !== 'SESSAO_CAIDA' ? await sessaoVivaWhatsapp(instancia, existente?.numeroWhatsapp ?? null) : null
+    const morta = estado === 'open' && (existente?.status === 'SESSAO_CAIDA' || viva === false || (existente?.status === 'NAO_CONECTADO' && viva !== true))
+    if (morta || (estado !== 'open' && existente?.status === 'SESSAO_CAIDA')) {
+      const r = await novaSessaoWhatsapp(assistente.id, s => urlWebhookAssistente(req, s), numeroPareamento)
+      res.json({ status: 'AGUARDANDO_QR', qrBase64: r.qrBase64, pairingCode: r.pairingCode })
+      return
+    }
+    if (estado === 'open') {
       await configurarWebhookWhatsapp(instancia, urlWebhookAssistente(req, webhookSegredo))
       await marcarAssistenteConectado(assistente)
       res.json({ status: 'CONECTADO', qrBase64: null, pairingCode: null })
@@ -3279,7 +3292,13 @@ router.get('/assistente/conexao', requireProLaboreAuth, requireModulo('assistent
     const estado = await estadoInstanciaWhatsapp(assistente.instancia)
     if (estado === 'open' && assistente.status === 'SESSAO_CAIDA') { res.json({ status: 'SESSAO_CAIDA' }); return }
     if (estado === 'open') {
-      if (assistente.status !== 'CONECTADO' || !assistente.numeroWhatsapp) await marcarAssistenteConectado(assistente)
+      if (assistente.status !== 'CONECTADO' || !assistente.numeroWhatsapp) {
+        // Só vira "conectado" se o WhatsApp responder de verdade (sessão morta também diz "open").
+        if (assistente.status === 'AGUARDANDO_QR' && (await sessaoVivaWhatsapp(assistente.instancia, null)) === false) { res.json({ status: 'AGUARDANDO_QR' }); return }
+        await marcarAssistenteConectado(assistente)
+        // Acabou de conectar: apaga as sessões antigas deste número que tinham ficado presas no servidor.
+        await limparSobrasWhatsapp(vendedor.id, assistente.instancia, 8000).catch(() => undefined)
+      }
       res.json({ status: 'CONECTADO' })
       return
     }
@@ -3334,15 +3353,16 @@ router.delete('/assistente/config', requireProLaboreAuth, requireModulo('assiste
   if (assistente.instancia && evolutionConfigurada()) {
     // Desconectar de verdade: apaga a sessão no servidor e CONFERE que sumiu (senão o servidor religa
     // sozinho e a tela volta a mostrar "conectado").
+    // Sessão morta presa em "open": o servidor recusa apagar. Desconecta do ARIES do mesmo jeito (o
+    // segredo do aviso é trocado: o que ela mandar cai no vazio) e a sobra é apagada na próxima conexão.
+    let presa = false
     try {
-      for (let tentativa = 1; ; tentativa += 1) {
-        await removerInstanciaWhatsapp(assistente.instancia)
-        await new Promise(ok => setTimeout(ok, 1200))
-        if ((await estadoInstanciaWhatsapp(assistente.instancia)) === 'inexistente') break
-        if (tentativa >= 3) { res.status(502).json({ error: 'O servidor do WhatsApp não apagou a sessão. Tente de novo em alguns segundos.' }); return }
-      }
-    } catch (e) {
-      res.status(502).json({ error: mensagemErroWhatsapp(e) })
+      presa = !(await apagarInstanciaWhatsapp(assistente.instancia))
+      if (presa) { await reiniciarInstanciaWhatsapp(assistente.instancia).catch(() => undefined); await new Promise(ok => setTimeout(ok, 1500)); presa = !(await apagarInstanciaWhatsapp(assistente.instancia, 4000)) }
+    } catch { presa = true }
+    if (presa) {
+      await prisma.assistenteComercial.update({ where: { id: assistente.id }, data: { status: 'NAO_CONECTADO', motivoQueda: null, numeroWhatsapp: null, fotoPerfilUrl: null, conectadoEm: null, webhookSegredo: randomBytes(24).toString('hex') } })
+      res.json({ ok: true, aviso: 'Desconectado do ARIES. A sessão antiga ficou presa no servidor do WhatsApp e será apagada sozinha na próxima conexão. No celular deste número, em WhatsApp › Aparelhos conectados, remova o aparelho antigo.' })
       return
     }
   }

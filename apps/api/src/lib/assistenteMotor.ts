@@ -220,6 +220,9 @@ export async function processarWebhookAssistente(segredo: string, corpo: unknown
   if (!assistente) return 404
   const c = obj(corpo)
   const evento = (str(c.event) ?? '').toLowerCase().replace(/_/g, '.')
+  // Aviso de outra sessão (ex.: a antiga que ficou presa no servidor): ignora, não mexe no status.
+  const deOnde = str(c.instance)
+  if (deOnde && assistente.instancia && deOnde !== assistente.instancia) return 200
 
   if (evento === 'connection.update') {
     await tratarConexao(assistente, obj(c.data))
