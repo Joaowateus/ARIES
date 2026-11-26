@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   proLaboreApi, Reuniao, ReuniaoDetalhe, ReuniaoResumo, TIPOS_REUNIAO, TipoReuniao,
 } from '@/lib/proLaboreApi'
+import { useConfirmarTexto } from '../../_ui/ui'
 
 const TIPO_LABEL: Record<TipoReuniao, string> = { REUNIAO: 'Reunião', AULA: 'Aula', VIDEO: 'Vídeo', OUTRO: 'Outro' }
 
@@ -128,6 +129,7 @@ function FormNovaReuniao({ onCriada, onCancelar }: { onCriada: (r: Reuniao) => v
 }
 
 function PainelReuniao({ id, onExcluida }: { id: string; onExcluida: () => void }) {
+  const confirmarTexto = useConfirmarTexto()
   const [reuniao, setReuniao] = useState<ReuniaoDetalhe | null>(null)
   const [editandoTranscricao, setEditandoTranscricao] = useState(false)
   const [rascunhoTranscricao, setRascunhoTranscricao] = useState('')
@@ -151,7 +153,7 @@ function PainelReuniao({ id, onExcluida }: { id: string; onExcluida: () => void 
   }
 
   async function excluir() {
-    if (!confirm('Excluir essa reunião e o vínculo das notas associadas?')) return
+    if (!(await confirmarTexto('Excluir essa reunião e o vínculo das notas associadas?'))) return
     await proLaboreApi.reunioes.excluir(id)
     onExcluida()
   }

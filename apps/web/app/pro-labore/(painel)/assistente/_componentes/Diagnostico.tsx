@@ -6,11 +6,13 @@
 import { useCallback, useState } from 'react'
 import { proLaboreApi, type DiagnosticoWhatsapp } from '@/lib/proLaboreApi'
 import { tempoRelativo } from './util'
+import { useConfirmarTexto } from '../../_ui/ui'
 
 const SELO: Record<string, { rotulo: string; classe: string }> = { CRITICO: { rotulo: 'impede', classe: 'critico' }, ATENCAO: { rotulo: 'atenção', classe: 'atencao' }, INFO: { rotulo: 'informação', classe: '' } }
 const ESTADO: Record<string, string> = { open: 'conectado no servidor', close: 'desconectado no servidor', connecting: 'reconectando no servidor', inexistente: 'sessão apagada no servidor', erro: 'servidor sem resposta', sem_instancia: 'nunca conectado', sessao_caida: 'conectado, mas sem enviar (sessão caída)', nao_verificado: 'não verificado' }
 
 export function DiagnosticoWhatsappCard() {
+  const confirmarTexto = useConfirmarTexto()
   const [d, setD] = useState<DiagnosticoWhatsapp | null>(null)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -20,7 +22,7 @@ export function DiagnosticoWhatsappCard() {
     try { setD(await proLaboreApi.assistente.diagnostico()) } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível diagnosticar') } finally { setCarregando(false) }
   }, [])
   async function desligarDuplicadas(id: string) {
-    if (!window.confirm('Apagar as conexões que sobraram no servidor com este mesmo número? A conexão em uso no ARIES fica; só as sobras são apagadas.')) return
+    if (!(await confirmarTexto('Apagar as conexões que sobraram no servidor com este mesmo número? A conexão em uso no ARIES fica; só as sobras são apagadas.'))) return
     setMsg(null)
     try {
       const r = await proLaboreApi.assistente.desligarDuplicadas(id)

@@ -14,6 +14,7 @@ import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { gerarDocumentoOcorrenciaPdf } from '@/lib/ocorrenciaDocumento'
 import { PageHeader } from '../../PageHeader'
 import { MinhasOcorrencias, STATUS_BADGE_CLASS, GRAVIDADE_BADGE_CLASS } from './_minhas/MinhasOcorrencias'
+import { useConfirmarTexto } from '../_ui/ui'
 
 function toDateInputValue(iso?: string | null): string {
   return iso ? iso.slice(0, 10) : ''
@@ -58,6 +59,7 @@ export default function ProLaboreOcorrenciasPage() {
 }
 
 function OcorrenciasConteudo() {
+  const confirmarTexto = useConfirmarTexto()
   const { usuario } = useProLaboreAuth()
   // Aba disponível pro dono e pro supervisor — vendedor comum não deve
   // enxergar ocorrências disciplinares/feedback da equipe.
@@ -243,7 +245,7 @@ function OcorrenciasConteudo() {
   }
 
   async function encerrar(o: Ocorrencia) {
-    if (!confirm('Encerrar esta ocorrência? Ela some das pendências, mas continua registrada no histórico.')) return
+    if (!(await confirmarTexto('Encerrar esta ocorrência? Ela some das pendências, mas continua registrada no histórico.'))) return
     const atualizada = await proLaboreApi.ocorrencias.editar(o.id, { status: 'ENCERRADA' })
     setSelecionada(atualizada)
     carregar()

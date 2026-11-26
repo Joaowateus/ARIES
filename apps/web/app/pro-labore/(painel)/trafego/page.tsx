@@ -28,6 +28,7 @@ import Criativos from './_componentes/Criativos'
 import DiasSemana from './_componentes/DiasSemana'
 import { ConjuntosConfigurados, DistribuicaoVerba, TreemapCampanhas } from './_componentes/Estrutura'
 import { moeda, tempoDesde } from './_componentes/formato'
+import { useAvisar, useConfirmarTexto } from '../_ui/ui'
 
 const SECOES = [
   ['tf-resumo', 'Resumo'],
@@ -57,6 +58,8 @@ function Secao({ id, eyebrow, titulo, nota, children }: { id: string; eyebrow: s
 }
 
 export default function ProLaboreTrafegoPage() {
+  const avisar = useAvisar()
+  const confirmarTexto = useConfirmarTexto()
   const { usuario } = useProLaboreAuth()
   const [conta, setConta] = useState<ContaTrafego | null | undefined>(undefined)
   const [trocando, setTrocando] = useState(false)
@@ -137,23 +140,23 @@ export default function ProLaboreTrafegoPage() {
       setConta(nova)
       setVersao(v => v + 1)
     } catch (e) {
-      alert((e as Error).message)
+      avisar((e as Error).message, 'erro')
     }
   }
 
   async function atualizarCustoTopo(valor: number) {
-    if (!confirm(`Usar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} como "custo por lead (topo da jornada)" no funil comercial do Dashboard?`)) return
+    if (!(await confirmarTexto(`Usar ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} como "custo por lead (topo da jornada)" no funil comercial do Dashboard?`))) return
     try {
       await proLaboreApi.parametros.atualizar({ custoPorLeadTopo: valor })
       setVersao(v => v + 1)
       setAviso('Custo por lead atualizado no funil comercial.')
     } catch (e) {
-      alert((e as Error).message)
+      avisar((e as Error).message, 'erro')
     }
   }
 
   async function desconectar() {
-    if (!confirm('Desconectar o Gerenciador de Anúncios? O histórico guardado aqui é apagado (os dados continuam na Meta).')) return
+    if (!(await confirmarTexto('Desconectar o Gerenciador de Anúncios? O histórico guardado aqui é apagado (os dados continuam na Meta).'))) return
     await proLaboreApi.trafego.desconectar()
     setConta(null)
     setAnalise(null)

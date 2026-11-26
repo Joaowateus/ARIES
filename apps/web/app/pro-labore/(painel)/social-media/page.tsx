@@ -25,6 +25,7 @@ import { fmtNum } from './_componentes/viz'
 import { BannerQualidade, Consistencia, FunilInstagram } from './_componentes/Consistencia'
 import { AvisoConexaoMeta } from '../_conexaoMeta/AvisoConexaoMeta'
 import { AvisosSocial, ConectarEmpresa, DiagnosticoEmpresa, HistoricoSincronizacoes, StatusSincronizacao } from './_componentes/ConexaoEmpresa'
+import { useConfirmarTexto } from '../_ui/ui'
 
 type Analise = Extract<AnaliseSocialMedia, { conectado: true }>
 
@@ -44,6 +45,7 @@ function Secao({ id, eyebrow, titulo, nota, children }: { id: string; eyebrow: s
 }
 
 export default function ProLaboreSocialMediaPage() {
+  const confirmarTexto = useConfirmarTexto()
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel === 'DONO'
 
@@ -141,7 +143,7 @@ export default function ProLaboreSocialMediaPage() {
   }
 
   async function desconectar() {
-    if (!confirm('Desconectar a conta do Instagram? Todo o histórico de publicações e métricas sincronizadas será apagado.')) return
+    if (!(await confirmarTexto('Desconectar a conta do Instagram? Todo o histórico de publicações e métricas sincronizadas será apagado.'))) return
     await proLaboreApi.socialMedia.desconectar()
     setConta(null)
     setCarregada(null)

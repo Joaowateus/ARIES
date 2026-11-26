@@ -16,7 +16,7 @@ export interface PedidoConfirmacao {
   /** Ação destrutiva: botão vermelho. */
   perigo?: boolean
   /** Pede um texto (ex.: motivo da devolução): o resultado vem em useConfirmar().texto. */
-  campo?: { rotulo: string; minimo?: number }
+  campo?: { rotulo: string; minimo?: number; /** Texto que já vem no campo (ex.: o nome atual, ao renomear). */ inicial?: string }
 }
 type Aviso = { id: number; texto: string; tom: 'ok' | 'erro' | 'info' }
 const UiCtx = createContext<{ confirmar: (p: PedidoConfirmacao) => Promise<boolean>; perguntar: (p: PedidoConfirmacao & { campo: NonNullable<PedidoConfirmacao['campo']> }) => Promise<string | null>; avisar: (texto: string, tom?: Aviso['tom']) => void } | null>(null)
@@ -31,6 +31,27 @@ export function usePerguntar() {
   const c = useContext(UiCtx)
   return c?.perguntar ?? (async (p: PedidoConfirmacao) => window.prompt(p.titulo))
 }
+// Pergunta escrita como texto (o jeito antigo do confirm/prompt): a primeira frase, até o "?", vira o
+// título; o resto, a explicação; o verbo do começo vira o botão, vermelho quando é destrutivo.
+const VERBO_PERIGO = /^(Excluir|Apagar|Remover|Desconectar|Revogar|Encerrar|Tirar|Cancelar|Recusar|Descartar)$/
+function lerPergunta(pergunta: string) {
+  const i = pergunta.indexOf('?')
+  const titulo = (i > 0 ? pergunta.slice(0, i + 1) : pergunta).trim()
+  const texto = i > 0 ? pergunta.slice(i + 1).trim() : ''
+  const verbo = titulo.match(/^([A-ZÁÉÍÓÚÂÊÔ][a-záéíóúâêôãõç]{3,})\b/)?.[1]
+  return { titulo, texto: texto || undefined, acao: verbo ?? 'Confirmar', perigo: !!verbo && VERBO_PERIGO.test(verbo) }
+}
+/** Como o confirm() do navegador, mas na tela: confirmarTexto('Excluir a pasta? Nada é apagado.'). */
+export function useConfirmarTexto() {
+  const confirmar = useConfirmar()
+  return useCallback((pergunta: string) => confirmar(lerPergunta(pergunta)), [confirmar])
+}
+/** Como o prompt() do navegador, mas na tela. inicial vazio = resposta opcional (devolve '' ou null se voltou). */
+export function usePerguntarTexto() {
+  const perguntar = usePerguntar()
+  return useCallback((pergunta: string, inicial = '') => perguntar({ ...lerPergunta(pergunta), perigo: false, campo: { rotulo: '', minimo: inicial === '' ? 0 : 1, inicial } }), [perguntar])
+}
+
 /** Aviso curto no canto da tela (some sozinho em 4 s). */
 export function useAvisar() {
   return useContext(UiCtx)?.avisar ?? (() => undefined)
@@ -42,7 +63,7 @@ export function AriesUi({ children }: { children: ReactNode }) {
   const [avisos, setAvisos] = useState<Aviso[]>([])
   const seq = useRef(0)
   const confirmar = useCallback((p: PedidoConfirmacao) => new Promise<boolean>(resolver => { setTexto(''); setPedido({ ...p, resolver: v => resolver(v) }) }), [])
-  const perguntar = useCallback((p: PedidoConfirmacao & { campo: NonNullable<PedidoConfirmacao['campo']> }) => new Promise<string | null>(resolver => { setTexto(''); setPedido({ ...p, resolver: (v, t) => resolver(v ? (t ?? '') : null) }) }), [])
+  const perguntar = useCallback((p: PedidoConfirmacao & { campo: NonNullable<PedidoConfirmacao['campo']> }) => new Promise<string | null>(resolver => { setTexto(p.campo.inicial ?? ''); setPedido({ ...p, resolver: (v, t) => resolver(v ? (t ?? '') : null) }) }), [])
   const avisar = useCallback((texto: string, tom: Aviso['tom'] = 'ok') => {
     const id = ++seq.current
     setAvisos(a => [...a.slice(-2), { id, texto, tom }])

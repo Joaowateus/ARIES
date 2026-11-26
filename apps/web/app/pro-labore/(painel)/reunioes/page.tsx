@@ -19,6 +19,7 @@ import CopiarParaAnotacoes from './_componentes/CopiarParaAnotacoes'
 import { mapaParaApresentacao } from './_componentes/ponteAnotacoes'
 import { FormDepartamento, IconeCadeado, IconePasta, MoverApresentacao, PermissoesEquipe, SenhaDepartamento } from './_componentes/Organizacao'
 import { caminhoAte, emOrdem, filhasDe, rotuloComNivel, totalComSubpastas } from './_componentes/arvorePastas'
+import { useAvisar, useConfirmarTexto, usePerguntarTexto } from '../_ui/ui'
 
 type Modelo = { id: string; rotulo: string; descricao: string; icone: string; ramos: Array<[string, string[]]> }
 
@@ -162,6 +163,9 @@ function ArvoreLateral({ pastas, dep, selecionada, irPara }: { pastas: PastaReun
 }
 
 function Biblioteca() {
+  const avisar = useAvisar()
+  const confirmarTexto = useConfirmarTexto()
+  const perguntarTexto = usePerguntarTexto()
   const { usuario } = useProLaboreAuth()
   const isDono = usuario?.papel === 'DONO'
   const router = useRouter()
@@ -235,22 +239,22 @@ function Biblioteca() {
   async function decidir(a: ApresentacaoResumo, decisao: 'APROVAR' | 'RECUSAR', perguntar = 'Recusar') {
     let motivo: string | undefined
     if (decisao === 'RECUSAR') {
-      const r = prompt(`${perguntar} "${a.titulo}", de ${a.autorNome ?? 'alguém da equipe'}? Se quiser, diga o motivo (a pessoa vê):`, '')
+      const r = (await perguntarTexto(`${perguntar} "${a.titulo}", de ${a.autorNome ?? 'alguém da equipe'}? Se quiser, diga o motivo (a pessoa vê):`, ''))
       if (r === null) return
       motivo = r.trim() || undefined
     }
     try {
       await proLaboreApi.apresentacoes.decidir(a.id, decisao, motivo)
       recarregar()
-    } catch (err) { alert((err as Error).message) }
+    } catch (err) { avisar((err as Error).message, 'erro') }
   }
   async function abrirCopia(a: ApresentacaoResumo) {
     try {
       setCopiando(await proLaboreApi.apresentacoes.obter(a.id))
-    } catch (err) { alert((err as Error).message) }
+    } catch (err) { avisar((err as Error).message, 'erro') }
   }
   async function excluir(a: ApresentacaoResumo) {
-    if (!confirm(`Excluir "${a.titulo}"? O mapa, as anotações e os lembretes somem pra todo mundo.`)) return
+    if (!(await confirmarTexto(`Excluir "${a.titulo}"? O mapa, as anotações e os lembretes somem pra todo mundo.`))) return
     await proLaboreApi.apresentacoes.excluir(a.id)
     recarregar()
   }
@@ -263,11 +267,11 @@ function Biblioteca() {
       setPainel(null)
       recarregar()
       irPara({ dep: sel.dep, pasta: p.id })
-    } catch (err) { alert((err as Error).message) }
+    } catch (err) { avisar((err as Error).message, 'erro') }
   }
   async function renomearPasta() {
     if (!pastaAtual) return
-    const nome = prompt('Novo nome da pasta', pastaAtual.nome)?.trim()
+    const nome = (await perguntarTexto('Novo nome da pasta', pastaAtual.nome))?.trim()
     if (!nome) return
     await proLaboreApi.reunioesOrg.renomearPasta(pastaAtual.id, nome)
     recarregar()
@@ -275,7 +279,7 @@ function Biblioteca() {
   async function excluirPasta() {
     if (!pastaAtual) return
     const acima = caminho.at(-2)?.nome ?? depAtual?.nome ?? 'Geral'
-    if (!confirm(`Excluir a pasta "${pastaAtual.nome}"? Nada é apagado — as subpastas e apresentações dela vão pra "${acima}".`)) return
+    if (!(await confirmarTexto(`Excluir a pasta "${pastaAtual.nome}"? Nada é apagado — as subpastas e apresentações dela vão pra "${acima}".`))) return
     await proLaboreApi.reunioesOrg.excluirPasta(pastaAtual.id)
     irPara({ dep: sel.dep, pasta: pastaAtual.paiId ?? null })
     recarregar()
@@ -287,16 +291,16 @@ function Biblioteca() {
       await proLaboreApi.reunioesOrg.moverPasta(pastaAtual.id, destinoPasta || null)
       setPainel(null)
       recarregar()
-    } catch (err) { alert((err as Error).message) }
+    } catch (err) { avisar((err as Error).message, 'erro') }
   }
   async function excluirDepartamento() {
     if (!depAtual) return
-    if (!confirm(`Excluir o departamento "${depAtual.nome}" e as pastas dele?`)) return
+    if (!(await confirmarTexto(`Excluir o departamento "${depAtual.nome}" e as pastas dele?`))) return
     try {
       await proLaboreApi.reunioesOrg.excluirDepartamento(depAtual.id)
       irPara({ dep: null, pasta: null })
       recarregar()
-    } catch (err) { alert((err as Error).message) }
+    } catch (err) { avisar((err as Error).message, 'erro') }
   }
 
   return (

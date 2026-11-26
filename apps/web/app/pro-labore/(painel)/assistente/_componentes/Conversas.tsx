@@ -11,6 +11,7 @@ import { BlocoPreAnalise } from './PreAnalise'
 import { EtiquetasLead } from './jornada'
 import { MidiaMensagem, ehRotuloDeMidia } from './MidiaMensagem'
 import { RespostasDoProcesso } from './Processo'
+import { useConfirmarTexto } from '../../_ui/ui'
 
 const ATUALIZAR_MS = 8000
 
@@ -46,6 +47,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, co
   conversaInicial?: string | null
   onMudou?: () => void
 }) {
+  const confirmarTexto = useConfirmarTexto()
   const [tipo, setTipo] = useState<TipoConversaAssistente>('LEAD')
   const [status, setStatus] = useState<StatusConversaAssistente | ''>(focoInicial ?? '')
   const [buscaDigitada, setBuscaDigitada] = useState('')
@@ -128,7 +130,7 @@ export function Conversas({ vendedorId, conectado, nomeVendedor, focoInicial, co
 
   async function executar(acao: AcaoConversaAssistente) {
     if (!conversa) return
-    if (acao === 'NAO_E_LEAD' && !confirm('Marcar como "não é lead"? A conversa é encerrada e o assistente nunca mais responde esse número.')) return
+    if (acao === 'NAO_E_LEAD' && !(await confirmarTexto('Marcar como "não é lead"? A conversa é encerrada e o assistente nunca mais responde esse número.'))) return
     setErro('')
     try {
       await proLaboreApi.assistente.acao(conversa.id, acao)
