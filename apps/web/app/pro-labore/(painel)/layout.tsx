@@ -18,6 +18,7 @@ import { telasApi, type PapelHoje, type VersaoTelas } from '@/lib/proLaboreApi'
 import { ABAS, GRUPOS, abaDaRota, abaPorChave, type AbaAries } from '@/lib/abasAries'
 import { TelaPadrao, TelasContext } from './_padrao/Padrao'
 import { AtalhoAries } from './_padrao/PergunteChat'
+import { AriesUi } from './_ui/ui'
 
 // `modulo`: chave do módulo nos acessos da equipe (lib/acessos.ts da API).
 // paraEquipe: aparece para toda a equipe mesmo sem o módulo (a página mostra a versão pessoal).
@@ -570,7 +571,7 @@ function PainelLayout({ children }: { children: React.ReactNode }) {
               <NavModulosContext.Provider value={modulosVisiveis}>
               <ParaHojeContext.Provider value={{ followsHoje: followsDia.hoje, followsAtrasados: followsDia.atrasados, ligacoesHoje: ligacoesDia.hoje, ligacoesAtrasadas: ligacoesDia.atrasadas }}>
               <TelasContext.Provider value={{ versao: nova ? 'NOVA' : 'ATUAL', usoId, registrarAcao: (acao: string) => { if (usoId) void telasApi.usoAcao(usoId, acao).catch(() => undefined) } }}>
-                {nova && abaAtual && !abaAtual.proprio && !pathname.startsWith('/pro-labore/aba/') ? <TelaPadrao aba={abaAtual}>{children}</TelaPadrao> : children}
+                <AriesUi>{nova && abaAtual && !abaAtual.proprio && !pathname.startsWith('/pro-labore/aba/') ? <TelaPadrao aba={abaAtual}>{children}</TelaPadrao> : children}</AriesUi>
                 {nova && <AtalhoAries />}
               </TelasContext.Provider>
               </ParaHojeContext.Provider>

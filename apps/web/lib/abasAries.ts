@@ -15,7 +15,8 @@ export interface AbaAries {
   proprio?: boolean
   /** Tela larga: números e Lente numa linha no topo, o trabalho ocupa a largura toda (ex.: CRM). */
   largo?: boolean
-  /** Cabeçalho de uma linha e Lente recolhida quando não há nada a dizer (piloto: Disparo, 26/11/2026). */
+  /** Cabeçalho de uma linha, números numa faixa e Lente recolhida quando não há nada a dizer. Padrão de todas
+   * as abas desde o redesign de 26/11/2026 (nasceu no Disparo); false volta à moldura antiga. */
   compacto?: boolean
   // Outras rotas que pertencem a esta aba.
   tambem?: string[]
