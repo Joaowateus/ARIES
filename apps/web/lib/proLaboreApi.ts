@@ -898,7 +898,7 @@ export const proLaboreApi = {
       request<{ status: 'CONECTADO' | 'SESSAO_CAIDA' | 'AGUARDANDO_QR'; mensagem: string; qrBase64?: string | null; pairingCode?: string | null }>('/pro-labore/assistente/reparar', { method: 'POST', body: JSON.stringify(data) }),
     saude: (vendedorId?: string) => request<{ viva: boolean | null }>(`/pro-labore/assistente/saude${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     reapontarAviso: (assistenteId: string) => request<{ ok: true }>(`/pro-labore/assistente/diagnostico/${assistenteId}/webhook`, { method: 'POST' }),
-    desligarDuplicadas: (assistenteId: string) => request<{ desligadas: string[]; mantidas: string[] }>(`/pro-labore/assistente/diagnostico/${assistenteId}/duplicadas`, { method: 'POST' }),
+    desligarDuplicadas: (assistenteId: string) => request<{ desligadas: string[]; presas?: string[]; mantidas: string[] }>(`/pro-labore/assistente/diagnostico/${assistenteId}/duplicadas`, { method: 'POST' }),
     conexao: (vendedorId?: string) =>
       request<{ status: StatusAssistente; aviso?: string }>(`/pro-labore/assistente/conexao${vendedorId ? `?vendedorId=${vendedorId}` : ''}`),
     desconectar: (vendedorId?: string) =>
@@ -4087,7 +4087,7 @@ export const centralApi = {
 }
 
 // Diagnóstico do WhatsApp (só o dono): por que o lead não entrou no CRM ou o robô não abordou.
-export interface ProblemaWhatsapp { gravidade: 'CRITICO' | 'ATENCAO' | 'INFO'; texto: string; acao: string | null; corrigirWebhook?: boolean; corrigirDuplicadas?: boolean }
+export interface ProblemaWhatsapp { gravidade: 'CRITICO' | 'ATENCAO' | 'INFO'; texto: string; acao: string | null; corrigirWebhook?: boolean; corrigirDuplicadas?: boolean; sessaoAntiga?: boolean }
 export interface EventoConexaoWhatsapp { em: string; estado: string; motivo: number | null; texto?: string }
 export interface DiagnosticoWhatsapp {
   servidor: { configurado: boolean; ambienteDeTeste: boolean }

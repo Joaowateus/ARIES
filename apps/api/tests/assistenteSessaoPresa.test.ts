@@ -122,3 +122,30 @@ test('sessão fechada (não presa): apaga de verdade e reaproveita o nome de sem
   assert.equal((await atual()).instancia, nome)
   assert.equal(r.corpo.qrBase64, `data:image/png;base64,QR-${nome}`)
 })
+
+test('diagnóstico: a sessão antiga que sobrou aparece como faxina (não como conflito); "Apagar sessão antiga" e a faxina automática apagam', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  const antiga = `aries-${loja.vendedor}`
+  const nova = `aries-${loja.vendedor}-nova`
+  inst.clear()
+  inst.set(antiga, { estado: 'open', morta: true })
+  inst.set(nova, { estado: 'open', morta: false })
+  await prisma.assistenteComercial.update({ where: { id: loja.assistente }, data: { instancia: nova, status: 'CONECTADO', numeroWhatsapp: '559180713982' } })
+  const { diagnosticarAssistentes } = await import('../src/lib/assistenteDiagnostico')
+  const d = (await diagnosticarAssistentes(loja.id, s => `https://x/${s}`)).assistentes.find(x => x.assistenteId === loja.assistente)!
+  const p = d.problemas.find(x => x.sessaoAntiga)
+  assert.ok(p, JSON.stringify(d.problemas))
+  assert.equal(p!.gravidade, 'ATENCAO')
+  assert.ok(!d.problemas.some(x => /Uma derruba a outra/.test(x.texto)), 'não acusa conflito')
+  // Ainda no celular: o servidor não solta (fica "presa") e a tela explica o que fazer.
+  const r1 = await api('POST', `/assistente/diagnostico/${loja.assistente}/duplicadas`)
+  assert.deepEqual(r1.corpo.presas, [antiga])
+  assert.ok(inst.has(nova), 'a conexão em uso nunca é tocada')
+  // Removeu o aparelho no celular: a faxina automática apaga.
+  inst.get(antiga)!.aparelhoRemovido = true
+  const { limparSobrasDeTodos } = await import('../src/lib/assistenteReparo')
+  await prisma.disparoTrava.deleteMany({ where: { chave: 'whatsapp:limpar-sobras' } })
+  const f = await limparSobrasDeTodos(8000)
+  assert.ok(f.sobrasApagadas >= 1, JSON.stringify(f))
+  assert.ok(!inst.has(antiga) && inst.has(nova))
+})

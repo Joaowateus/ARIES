@@ -20,9 +20,16 @@ export function DiagnosticoWhatsappCard() {
     try { setD(await proLaboreApi.assistente.diagnostico()) } catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível diagnosticar') } finally { setCarregando(false) }
   }, [])
   async function desligarDuplicadas(id: string) {
-    if (!window.confirm('Desligar as conexões que sobraram no servidor com este mesmo número? A conexão do ARIES deste vendedor fica; só as sobras são desligadas.')) return
+    if (!window.confirm('Apagar as conexões que sobraram no servidor com este mesmo número? A conexão em uso no ARIES fica; só as sobras são apagadas.')) return
     setMsg(null)
-    try { const r = await proLaboreApi.assistente.desligarDuplicadas(id); setMsg(r.desligadas.length ? `Desligadas: ${r.desligadas.join(', ')}. Se o card de conexão pedir, leia o QR de novo.` : 'Nenhuma sobra para desligar.'); await rodar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível desligar') }
+    try {
+      const r = await proLaboreApi.assistente.desligarDuplicadas(id)
+      const presas = r.presas ?? []
+      setMsg(presas.length
+        ? `${r.desligadas.length ? `Apagadas: ${r.desligadas.join(', ')}. ` : ''}Ainda presa: ${presas.join(', ')}. O servidor só solta a sessão antiga depois que ela é removida no celular: em WhatsApp › Aparelhos conectados, remova o aparelho antigo e clique de novo (ou espere: o ARIES tenta sozinho a cada 15 min).`
+        : r.desligadas.length ? `Apagadas: ${r.desligadas.join(', ')}. A conexão em uso continua.` : 'Nenhuma sobra para apagar.')
+      await rodar()
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Não foi possível desligar') }
   }
   async function reapontar(id: string) {
     setMsg(null)
@@ -70,7 +77,7 @@ export function DiagnosticoWhatsappCard() {
                         {p.acao && <div className="pl-hint">O que fazer: {p.acao}</div>}
                       </div>
                       {p.corrigirWebhook && <button type="button" className="pl-btn" onClick={() => void reapontar(a.assistenteId)}>Reapontar o aviso</button>}
-                      {p.corrigirDuplicadas && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void desligarDuplicadas(a.assistenteId)} data-desligar-duplicadas>Desligar conexões duplicadas</button>}
+                      {p.corrigirDuplicadas && <button type="button" className="pl-btn pl-btn-primary" onClick={() => void desligarDuplicadas(a.assistenteId)} data-desligar-duplicadas>{p.sessaoAntiga ? 'Apagar sessão antiga' : 'Desligar conexões duplicadas'}</button>}
                     </li>
                   ))}
                 </ul>
