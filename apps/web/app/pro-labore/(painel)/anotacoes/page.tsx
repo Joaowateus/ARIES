@@ -18,6 +18,7 @@ import EnviarParaReunioes from './EnviarParaReunioes'
 import {
   AcoesNavegador, Chave, FolhaArvore, NoArvore, Ordem, Trilha, VisaoPasta, caminhoAte, chaveDe, descendentes, formatarRelativo, partesDa,
 } from './Navegador'
+import { useAvisar, useConfirmarTexto } from '../_ui/ui'
 
 const EMOJIS_NOTA = ['📄', '📝', '💡', '🎯', '📌', '✅', '🔥', '📊', '🚀', '⭐', '🗂️', '📅', '💬', '🧠', '⚙️', '📈', '📚', '🧩']
 
@@ -338,6 +339,8 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar, onMover, on
   onMover: () => void
   onApresentar: () => void
 }) {
+  const avisarErro = useAvisar()
+  const confirmarTexto = useConfirmarTexto()
   const [titulo, setTitulo] = useState(mapa?.titulo ?? '')
   const [icone, setIcone] = useState(mapa?.icone ?? '')
   const [tema, setTema] = useState<TemaBoard>((mapa?.tema as TemaBoard) || TEMAS_BOARD[0].id)
@@ -406,7 +409,7 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar, onMover, on
       try {
         setVersoes(await proLaboreApi.mapasMentais.versoes.listar(mapa.id))
       } catch {
-        alert('Não foi possível carregar o histórico. Tente novamente.')
+        avisarErro('Não foi possível carregar o histórico. Tente novamente.', 'erro')
       } finally {
         setCarregandoVersoes(false)
       }
@@ -415,7 +418,7 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar, onMover, on
 
   async function restaurarVersao(versaoId: string) {
     if (!mapa) return
-    if (!confirm('Restaurar essa versão? O estado atual do board vira uma versão nova, então nada se perde.')) return
+    if (!(await confirmarTexto('Restaurar essa versão? O estado atual do board vira uma versão nova, então nada se perde.'))) return
     try {
       const atualizado = await proLaboreApi.mapasMentais.versoes.restaurar(mapa.id, versaoId)
       onAtualizado(atualizado)
@@ -423,7 +426,7 @@ function PaginaMapaMental({ mapa, onAtualizado, onExcluir, onVoltar, onMover, on
       setVersaoRestaurada(v => v + 1)
       setHistoricoAberto(false)
     } catch {
-      alert('Não foi possível restaurar essa versão. Tente novamente.')
+      avisarErro('Não foi possível restaurar essa versão. Tente novamente.', 'erro')
     }
   }
 
@@ -766,6 +769,8 @@ function pastaDaVisao(v: VisaoAnotacoes, ns: Nota[], ms: MapaMental[]): string |
 }
 
 function Anotacoes() {
+  const avisarErro = useAvisar()
+  const confirmarTexto = useConfirmarTexto()
   const router = useRouter()
   const params = useSearchParams()
   const visao = lerVisao(params)
@@ -821,9 +826,9 @@ function Anotacoes() {
     let cancelado = false
     proLaboreApi.mapasMentais.lixeira()
       .then(l => { if (!cancelado) setLixeira(l) })
-      .catch(() => { if (!cancelado) alert('Não foi possível carregar a lixeira. Tente novamente.') })
+      .catch(() => { if (!cancelado) avisarErro('Não foi possível carregar a lixeira. Tente novamente.', 'erro') })
     return () => { cancelado = true }
-  }, [visao.tipo])
+  }, [visao.tipo, avisarErro])
 
   // Ctrl/Cmd+K abre a paleta de comando de qualquer lugar dentro de
   // Anotações — inclusive com um mapa mental aberto em tela cheia.
@@ -897,7 +902,7 @@ function Anotacoes() {
     try {
       await proLaboreApi.anotacoes.mover(lote(mudam), destino)
     } catch (e) {
-      alert((e as Error).message)
+      avisarErro((e as Error).message, 'erro')
       return false
     }
     aplicarMovimento(mudam, destino)
@@ -930,11 +935,11 @@ function Anotacoes() {
       ].filter(Boolean)
       pergunta = `Excluir ${chaves.length} itens?\n\n• ${partes.join('\n• ')}`
     }
-    if (!confirm(pergunta)) return
+    if (!(await confirmarTexto(pergunta))) return
     try {
       await proLaboreApi.anotacoes.excluir(l)
     } catch (e) {
-      alert((e as Error).message)
+      avisarErro((e as Error).message, 'erro')
       return
     }
     // Mesmas regras do servidor: conteúdo das pastas sobe até a primeira
@@ -991,7 +996,7 @@ function Anotacoes() {
       if (total) avisar(total === 1 ? 'Cópia criada' : `${total} cópias criadas`)
       if (l.pastas.length) avisar(`${total ? `${total} ${total === 1 ? 'cópia criada' : 'cópias criadas'}. ` : ''}Pastas não são duplicadas.`)
     } catch (e) {
-      alert((e as Error).message)
+      avisarErro((e as Error).message, 'erro')
     }
   }
 
@@ -1008,7 +1013,7 @@ function Anotacoes() {
         await proLaboreApi.mapasMentais.atualizar(id, { titulo: nome })
       }
     } catch (e) {
-      alert((e as Error).message)
+      avisarErro((e as Error).message, 'erro')
     }
   }
 
@@ -1020,7 +1025,7 @@ function Anotacoes() {
       setNotas(prev => [nota, ...prev])
       navegar({ tipo: 'nota', id: nota.id })
     } catch {
-      alert('Não foi possível criar a página. Tente novamente.')
+      avisarErro('Não foi possível criar a página. Tente novamente.', 'erro')
     }
   }
 
@@ -1038,21 +1043,21 @@ function Anotacoes() {
       setMapas(prev => [mapa, ...prev])
       navegar({ tipo: 'mapa', id: mapa.id })
     } catch {
-      alert('Não foi possível criar o mapa mental. Tente novamente.')
+      avisarErro('Não foi possível criar o mapa mental. Tente novamente.', 'erro')
     }
   }
 
   // Página → mapa mental (sem IA): títulos viram ramos, listas viram filhos. Fica na mesma pasta; a página continua.
   async function mapaDaNota(pastaId: string | null, titulo: string, blocos: Bloco[]) {
     const { tree, total } = textoParaArvore(titulo || 'Sem título', blocos)
-    if (total < 2) { alert('Escreva ou cole o conteúdo na página antes: não há tópicos para o mapa.'); return }
+    if (total < 2) { avisarErro('Escreva ou cole o conteúdo na página antes: não há tópicos para o mapa.', 'erro'); return }
     try {
       const { objetos, conectores } = arvoreParaObjetosBoard(tree)
       const mapa = await proLaboreApi.mapasMentais.criar({ pastaId, titulo: `${titulo || 'Sem título'} (mapa)`, icone: '🧠', objetos, conectores, configuracao: { ...CONFIGURACAO_PADRAO, layout: 'mapaMental' as const } })
       setMapas(prev => [mapa, ...prev])
       navegar({ tipo: 'mapa', id: mapa.id })
     } catch (e) {
-      alert(`Não foi possível criar o mapa mental: ${(e as Error).message}`)
+      avisarErro(`Não foi possível criar o mapa mental: ${(e as Error).message}`, 'erro')
     }
   }
 
@@ -1062,7 +1067,7 @@ function Anotacoes() {
       setPastas(prev => [...prev, pasta])
       navegar({ tipo: 'pasta', id: pasta.id })
     } catch {
-      alert('Não foi possível criar a pasta. Tente novamente.')
+      avisarErro('Não foi possível criar a pasta. Tente novamente.', 'erro')
     }
   }
 
@@ -1083,17 +1088,17 @@ function Anotacoes() {
       setMapas(prev => [mapa, ...prev])
       avisar('Mapa mental restaurado')
     } catch {
-      alert('Não foi possível restaurar. Tente novamente.')
+      avisarErro('Não foi possível restaurar. Tente novamente.', 'erro')
     }
   }
 
   async function excluirMapaDefinitivo(id: string) {
-    if (!confirm('Excluir esse mapa mental em definitivo? Não dá pra desfazer.')) return
+    if (!(await confirmarTexto('Excluir esse mapa mental em definitivo? Não dá pra desfazer.'))) return
     try {
       await proLaboreApi.mapasMentais.excluirDefinitivo(id)
       setLixeira(prev => prev.filter(m => m.id !== id))
     } catch {
-      alert('Não foi possível excluir. Tente novamente.')
+      avisarErro('Não foi possível excluir. Tente novamente.', 'erro')
     }
   }
 
@@ -1183,7 +1188,7 @@ function Anotacoes() {
         <div className="pl-an-aviso" role="status">
           <span>{aviso.texto}</span>
           {aviso.desfazer && (
-            <button type="button" onClick={() => { const d = aviso.desfazer!; setAviso(null); void d().catch(e => alert((e as Error).message)) }}>Desfazer</button>
+            <button type="button" onClick={() => { const d = aviso.desfazer!; setAviso(null); void d().catch(e => avisarErro((e as Error).message, 'erro')) }}>Desfazer</button>
           )}
           <button type="button" className="fechar" aria-label="Fechar aviso" onClick={() => setAviso(null)}>×</button>
         </div>

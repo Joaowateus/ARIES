@@ -15,8 +15,12 @@ import PainelLateral from './PainelLateral'
 import CopiarParaAnotacoes from './CopiarParaAnotacoes'
 import { useTransmissao } from './useTransmissao'
 import { IconeCopiarAnotacoes, IconeEnquadrar, IconePainel, IconeTelaCheia, IconeVoltar, duracaoDesde, linkBiblioteca, tempoRelativo, useTelaCheia } from './comum'
+import { useAvisar, useConfirmarTexto, usePerguntarTexto } from '../../_ui/ui'
 
 export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }) {
+  const avisar = useAvisar()
+  const confirmarTexto = useConfirmarTexto()
+  const perguntarTexto = usePerguntarTexto()
   const cfgInicial: ConfiguracaoApresentacao = inicial.configuracao ?? { layout: 'mind', tema: 'meister', doisLados: true }
   const [titulo, setTitulo] = useState(inicial.titulo)
   const [descricao, setDescricao] = useState(inicial.descricao)
@@ -123,7 +127,7 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
   async function decidir(decisao: 'APROVAR' | 'RECUSAR') {
     let motivo: string | undefined
     if (decisao === 'RECUSAR') {
-      const r = prompt(`Recusar a apresentação de ${inicial.autorNome ?? 'quem montou'}? Se quiser, diga o motivo (a pessoa vê):`, '')
+      const r = (await perguntarTexto(`Recusar a apresentação de ${inicial.autorNome ?? 'quem montou'}? Se quiser, diga o motivo (a pessoa vê):`, ''))
       if (r === null) return
       motivo = r.trim() || undefined
     }
@@ -132,15 +136,15 @@ export default function Espectador({ inicial }: { inicial: ApresentacaoDetalhe }
       const d = await proLaboreApi.apresentacoes.decidir(inicial.id, decisao, motivo)
       setAprovacao(d.aprovacao)
     } catch (e) {
-      alert((e as Error).message)
+      avisar((e as Error).message, 'erro')
     } finally {
       setDecidindo(false)
     }
   }
 
   async function encerrarDeOutro() {
-    if (!confirm(`Encerrar a transmissão de ${inicial.autorNome ?? 'quem está apresentando'}?`)) return
-    try { await proLaboreApi.apresentacoes.definirAoVivo(inicial.id, false) } catch (e) { alert((e as Error).message) }
+    if (!(await confirmarTexto(`Encerrar a transmissão de ${inicial.autorNome ?? 'quem está apresentando'}?`))) return
+    try { await proLaboreApi.apresentacoes.definirAoVivo(inicial.id, false) } catch (e) { avisar((e as Error).message, 'erro') }
   }
 
   return (

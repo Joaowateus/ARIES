@@ -6,8 +6,10 @@ import { temAcesso, proLaboreApi, Vendedor, ParametroLiquidez, Ocorrencia, TIPO_
 import { formatMoeda } from '@/lib/format'
 import { useProLaboreAuth } from '@/lib/proLaboreAuth'
 import { PageHeader } from '../../PageHeader'
+import { Janela, MenuAcoes, useConfirmarTexto } from '../_ui/ui'
 
 export default function ProLaboreVendedoresPage() {
+  const confirmarTexto = useConfirmarTexto()
   const { usuario } = useProLaboreAuth()
   // Dono ou acesso com o módulo liberado (Acessos e permissões).
   const isDono = temAcesso(usuario, 'vendedores')
@@ -52,6 +54,8 @@ export default function ProLaboreVendedoresPage() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Redesign 26/11: o cadastro abre numa janela; as ações de cada pessoa ficam num menu ⋯.
+  const [novoAberto, setNovoAberto] = useState(false)
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
@@ -60,6 +64,7 @@ export default function ProLaboreVendedoresPage() {
       await proLaboreApi.vendedores.criar(nome, documento)
       setNome('')
       setDocumento('')
+      setNovoAberto(false)
       carregar()
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar vendedor')
@@ -78,13 +83,13 @@ export default function ProLaboreVendedoresPage() {
     const mensagem = novoPapel === 'SUPERVISOR'
       ? `Tornar ${v.nome} supervisor(a)? Ela passa a ver o painel e o CRM com o escopo da equipe inteira. É preciso deslogar e logar de novo pra valer.`
       : `Tirar o acesso de supervisor(a) de ${v.nome}? Ela volta a ver só a própria produção. É preciso deslogar e logar de novo pra valer.`
-    if (!confirm(mensagem)) return
+    if (!(await confirmarTexto(mensagem))) return
     await proLaboreApi.vendedores.editar(v.id, { papel: novoPapel })
     carregar()
   }
 
   async function remover(id: string) {
-    if (!confirm('Remover este vendedor? As vendas já lançadas continuam registradas, mas sem vendedor atribuído.')) return
+    if (!(await confirmarTexto('Remover este vendedor? As vendas já lançadas continuam registradas, mas sem vendedor atribuído.'))) return
     await proLaboreApi.vendedores.remover(id)
     carregar()
   }
@@ -118,7 +123,7 @@ export default function ProLaboreVendedoresPage() {
   }
 
   async function revogarAcesso(id: string) {
-    if (!confirm('Revogar o acesso deste vendedor? Ele não conseguirá mais fazer login.')) return
+    if (!(await confirmarTexto('Revogar o acesso deste vendedor? Ele não conseguirá mais fazer login.'))) return
     await proLaboreApi.vendedores.revogarAcesso(id)
     carregar()
   }
@@ -221,30 +226,37 @@ export default function ProLaboreVendedoresPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Equipe" title="Vendedores" subtitle="Quem faz parte da produção da sua operação — usado no ranking do dashboard" />
+      <PageHeader eyebrow="Equipe" title="Vendedores" subtitle="Quem faz parte da produção da sua operação — usado no ranking do dashboard" actions={<button type="button" className="pl-btn pl-btn-primary" onClick={() => { setErro(''); setNovoAberto(true) }} data-novo-vendedor>+ Novo vendedor</button>} />
 
-      <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
-        <div className="pl-card-title" style={{ marginBottom: 14 }}>Novo vendedor</div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div className="pl-field" style={{ flex: 1, minWidth: 220 }}>
+      {novoAberto && (
+      <Janela id="novo-vendedor" titulo="Novo vendedor" subtitulo="Quem faz parte da produção da operação (entra no ranking do dashboard)." fechar={() => setNovoAberto(false)}>
+      <form onSubmit={handleSubmit}>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div className="pl-field">
             <label>Nome</label>
-            <input className="pl-input" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Rafael Souza" required minLength={2} />
+            <input className="pl-input" autoFocus value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Rafael Souza" required minLength={2} />
           </div>
-          <div className="pl-field" style={{ flex: '0 1 230px', minWidth: 190 }}>
+          <div className="pl-field">
             <label htmlFor="vend-novo-doc">CPF ou CNPJ (opcional)</label>
             <input id="vend-novo-doc" className="pl-input" value={documento} onChange={e => setDocumento(e.target.value)} placeholder="000.000.000-00" inputMode="numeric" maxLength={20} />
           </div>
-          <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Adicionar'}</button>
         </div>
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 12 }}>{erro}</div>}
+        <div className="ar-janela-acoes">
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setNovoAberto(false)}>Cancelar</button>
+          <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Adicionar'}</button>
+        </div>
       </form>
+      </Janela>
+      )}
 
       {loading ? (
         <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
       ) : vendedores.length === 0 ? (
-        <div className="pl-empty pl-card">
-          <div className="pl-emoji">🧑‍💼</div>
-          Nenhum vendedor cadastrado ainda.
+        <div className="pl-card dp-vazio-grande">
+          <h3>Nenhum vendedor cadastrado ainda</h3>
+          <p className="pl-hint">Cadastre quem vende para acompanhar comissão, meta e ranking.</p>
+          <button type="button" className="pl-btn pl-btn-primary" onClick={() => setNovoAberto(true)}>+ Novo vendedor</button>
         </div>
       ) : (
         <div className="pl-table-wrap">
@@ -291,29 +303,19 @@ export default function ProLaboreVendedoresPage() {
                         : <span style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Sem login</span>}
                     </td>
                     <td className="pl-right pl-vd-acoes">
-                      <span className="pl-link-action" onClick={() => alternarPapel(v)} style={{ marginRight: 14 }}>
-                        {v.papel === 'SUPERVISOR' ? 'Tornar vendedor(a)' : 'Tornar supervisor(a)'}
+                      <span className="dp-linha ar-acoes-linha">
+                        <button type="button" className="pl-btn pl-btn-ghost" onClick={() => toggleOcorrencias(v)}>{ocorrenciasAbertoId === v.id ? 'Ocultar ocorrências' : 'Ocorrências'}</button>
+                        <MenuAcoes rotulo={`Ações de ${v.nome}`} itens={[
+                          { rotulo: v.papel === 'SUPERVISOR' ? 'Tornar vendedor(a)' : 'Tornar supervisor(a)', aoClicar: () => void alternarPapel(v) },
+                          { rotulo: v.documento ? 'Editar CPF/CNPJ' : 'Informar CPF/CNPJ', aoClicar: () => { if (editandoDocId === v.id) setEditandoDocId(null); else { setEditandoDocId(v.id); setDocValor(v.documento ?? ''); setDocErro('') } } },
+                          { rotulo: 'Editar comissão', aoClicar: () => (editandoTetoId === v.id ? fecharEdicaoTeto() : abrirEdicaoTeto(v)) },
+                          { rotulo: 'Editar meta mensal', aoClicar: () => (editandoMetaId === v.id ? fecharEdicaoMeta() : abrirEdicaoMeta(v)) },
+                          usuario?.papel === 'DONO' && { rotulo: v.email ? 'Trocar acesso' : 'Dar acesso', aoClicar: () => (concedendoId === v.id ? fecharConcessao() : abrirConcessao(v)) },
+                          usuario?.papel === 'DONO' && !!v.email && { rotulo: 'Revogar acesso', aoClicar: () => void revogarAcesso(v.id), perigo: true },
+                          { rotulo: v.ativo ? 'Desativar' : 'Ativar', aoClicar: () => void alternarAtivo(v) },
+                          { rotulo: 'Remover', aoClicar: () => void remover(v.id), perigo: true },
+                        ]} />
                       </span>
-                      <span className="pl-link-action" onClick={() => { if (editandoDocId === v.id) setEditandoDocId(null); else { setEditandoDocId(v.id); setDocValor(v.documento ?? ''); setDocErro('') } }} style={{ marginRight: 14 }}>
-                        {v.documento ? 'Editar CPF/CNPJ' : 'Informar CPF/CNPJ'}
-                      </span>
-                      <span className="pl-link-action" onClick={() => (editandoTetoId === v.id ? fecharEdicaoTeto() : abrirEdicaoTeto(v))} style={{ marginRight: 14 }}>
-                        Editar comissão
-                      </span>
-                      <span className="pl-link-action" onClick={() => (editandoMetaId === v.id ? fecharEdicaoMeta() : abrirEdicaoMeta(v))} style={{ marginRight: 14 }}>
-                        Editar meta mensal
-                      </span>
-                      <span className="pl-link-action" onClick={() => toggleOcorrencias(v)} style={{ marginRight: 14 }}>
-                        {ocorrenciasAbertoId === v.id ? 'Ocultar ocorrências' : 'Ver ocorrências'}
-                      </span>
-                      {usuario?.papel === 'DONO' && <>
-                        <span className="pl-link-action" onClick={() => (concedendoId === v.id ? fecharConcessao() : abrirConcessao(v))} style={{ marginRight: 14 }}>
-                          {v.email ? 'Trocar acesso' : 'Dar acesso'}
-                        </span>
-                        {v.email && <span className="pl-link-action" onClick={() => revogarAcesso(v.id)} style={{ marginRight: 14 }}>Revogar acesso</span>}
-                      </>}
-                      <span className="pl-link-action" onClick={() => alternarAtivo(v)} style={{ marginRight: 14 }}>{v.ativo ? 'Desativar' : 'Ativar'}</span>
-                      <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
                     </td>
                   </tr>
                   {editandoTetoId === v.id && (

@@ -24,6 +24,7 @@ import { BoardConector, BoardObjeto, MapaMental, NoMapa } from '@/lib/proLaboreA
 import MotorMapaMentalView from './motor-mapa-mental/MotorMapaMentalView'
 import { arvoreParaObjetosBoard, boardParaArvore } from './motor-mapa-mental/conversao'
 import type { Layout as MotorLayout } from './motor-mapa-mental/layoutMotor'
+import { useAvisar } from '../_ui/ui'
 
 // Temas visuais do canvas (fundo + padrão de pontilhado/grade) — catálogo
 // espelhado em TEMAS_BOARD no backend (proLabore.ts), que só valida o id.
@@ -2230,6 +2231,7 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
   configuracao?: ConfiguracaoBoard | null
   onMudarConfiguracao: (config: ConfiguracaoBoard) => void
 }) {
+  const avisar = useAvisar()
   const temaAtual = TEMAS_BOARD.find(t => t.id === tema) ?? TEMAS_BOARD[0]
   const config = configuracao ?? CONFIGURACAO_PADRAO
   // Callbacks de ação (onAdicionarFilho, onExcluir etc.) são criados com
@@ -3503,14 +3505,14 @@ function Canvas({ dadosIniciais, onChange, tema, configuracao, onMudarConfigurac
       a.download = 'board.png'
       a.click()
     } catch {
-      alert('Não foi possível exportar a imagem. Tente novamente.')
+      avisar('Não foi possível exportar a imagem. Tente novamente.', 'erro')
     }
   }
 
   const frames = grafo.nodes.filter(n => n.type === 'frame').sort((a, b) => a.position.x - b.position.x)
 
   function iniciarApresentacao() {
-    if (frames.length === 0) { alert('Crie ao menos um Frame (botão do modo Wireframe) pra ter o que apresentar.'); return }
+    if (frames.length === 0) { avisar('Crie ao menos um Frame (botão do modo Wireframe) pra ter o que apresentar.', 'erro'); return }
     setSlideAtual(0)
     setModoApresentacao(true)
   }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { proLaboreApi, type AssistenteComercial, type ConexaoAssistente } from '@/lib/proLaboreApi'
 import { fmtTelefone, iniciais, tempoRelativo } from './util'
+import { useConfirmarTexto } from '../../_ui/ui'
 
 const INTERVALO_STATUS_MS = 3000
 const RENOVAR_QR_MS = 45_000
@@ -15,6 +16,7 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
   isDono: boolean
   onAtualizar: () => void
 }) {
+  const confirmarTexto = useConfirmarTexto()
   const [codigo, setCodigo] = useState<ConexaoAssistente | null>(null)
   const [modoCodigo, setModoCodigo] = useState(false)
   const [numero, setNumero] = useState('')
@@ -37,7 +39,7 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
   }, [conectado, vendedorId, assistente?.conectadoEm])
 
   async function reparar(gerarQr = false) {
-    if (gerarQr && !confirm(`Gerar um QR Code novo para ${nomeVendedor}? A sessão antiga do WhatsApp é refeita; conversas, leads e roteiro continuam salvos. Tenha o celular de ${nomeVendedor} em mãos.`)) return
+    if (gerarQr && !(await confirmarTexto(`Gerar um QR Code novo para ${nomeVendedor}? A sessão antiga do WhatsApp é refeita; conversas, leads e roteiro continuam salvos. Tenha o celular de ${nomeVendedor} em mãos.`))) return
     setReparo({ fase: 'testando', mensagem: gerarQr ? 'Refazendo a sessão e gerando o QR Code…' : 'Testando a conexão e reiniciando a sessão (até 20 segundos)…' })
     setErro('')
     try {
@@ -100,7 +102,7 @@ export function Conexao({ assistente, vendedorId, nomeVendedor, servidorConfigur
   }, [exibindoCodigo, modoCodigo, vendedorId])
 
   async function desconectar() {
-    if (!confirm(`Desconectar o WhatsApp de ${nomeVendedor}? O assistente para de responder; conversas e roteiro continuam salvos.`)) return
+    if (!(await confirmarTexto(`Desconectar o WhatsApp de ${nomeVendedor}? O assistente para de responder; conversas e roteiro continuam salvos.`))) return
     setCarregando(true)
     setErro('')
     try {

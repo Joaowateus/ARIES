@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { proLaboreApi, type AnaliseCreditoBanco, type CreditoConversa, type StatusAnaliseCredito } from '@/lib/proLaboreApi'
 import { fmtReais, lerReais } from './util'
+import { useConfirmarTexto } from '../../_ui/ui'
 
 const STATUS: Record<StatusAnaliseCredito, string> = { A_ENVIAR: 'A enviar', EM_ANALISE: 'Em análise', APROVADA: 'Aprovada', RECUSADA: 'Recusada' }
 const quando = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -52,6 +53,7 @@ function ModalPreAnalise({ conversaId, credito, conectado, onAtualizar, onFechar
   onAtualizar: (c: CreditoConversa) => void
   onFechar: () => void
 }) {
+  const confirmarTexto = useConfirmarTexto()
   // Completo (CPF, nascimento e o texto para o portal) só sob pedido: cada abertura fica registrada.
   const [completo, setCompleto] = useState<CreditoConversa['ficha'] | null>(null)
   const [copiada, setCopiada] = useState(false)
@@ -93,7 +95,7 @@ function ModalPreAnalise({ conversaId, credito, conectado, onAtualizar, onFechar
               </dl>
               <div className="pl-si-ficha-acoes">
                 <button type="button" className="pl-btn pl-btn-ghost" onClick={copiar} data-copiar-ficha>{copiada ? 'Ficha copiada ✓' : 'Copiar ficha'}</button>
-                <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" disabled={ocupado} onClick={() => confirm('Apagar a ficha e as respostas dos bancos?') && rodar(() => proLaboreApi.assistente.apagarFicha(conversaId))} data-apagar-ficha>Apagar ficha</button>
+                <button type="button" className="pl-btn pl-btn-ghost pl-as-perigo" disabled={ocupado} onClick={() => void confirmarTexto('Apagar a ficha e as respostas dos bancos?').then(ok => { if (ok) rodar(() => proLaboreApi.assistente.apagarFicha(conversaId)) })} data-apagar-ficha>Apagar ficha</button>
               </div>
             </div>
             <div className="pl-as-subtitulo" style={{ marginTop: 14 }}>Resposta dos bancos</div>

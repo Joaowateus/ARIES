@@ -13,6 +13,7 @@ import {
 } from '@/lib/proLaboreApi'
 import { AcessosEquipe } from './AcessosEquipe'
 import { AssistenteAba, Botao, BotaoLink, Card, CardEsqueleto, Chip, Rotulo, Segmentado, SmApp, Toggle, haQuanto, useToast, type Tom } from '../../../sm/_ui'
+import { useConfirmarTexto } from '../../_ui/ui'
 
 const MODULOS: Record<SmModulo, { nome: string; nota: string }> = {
   analise: { nome: 'Social Media · análise', nota: 'Todos os indicadores da conta' },
@@ -190,6 +191,7 @@ function Acessos() {
 }
 
 function Responsavel({ dados, aoMudar }: { dados: SmAcessoGestor | null; aoMudar: () => void }) {
+  const confirmarTexto = useConfirmarTexto()
   const toast = useToast()
   const membro = dados?.membro ?? null
   const [editando, setEditando] = useState(false)
@@ -249,7 +251,7 @@ function Responsavel({ dados, aoMudar }: { dados: SmAcessoGestor | null; aoMudar
   }
 
   async function remover() {
-    if (!membro || !window.confirm(`Remover o acesso de ${membro.nome}? Para voltar, será preciso um convite novo.`)) return
+    if (!membro || !(await confirmarTexto(`Remover o acesso de ${membro.nome}? Para voltar, será preciso um convite novo.`))) return
     try {
       await proLaboreApi.sm.gestor.removerMembro()
       setConvite(null)

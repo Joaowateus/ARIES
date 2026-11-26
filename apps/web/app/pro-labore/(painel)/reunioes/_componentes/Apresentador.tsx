@@ -20,6 +20,7 @@ import Laser, { criarFonteLaser, type FonteLaser } from './Laser'
 import PainelLateral from './PainelLateral'
 import CopiarParaAnotacoes from './CopiarParaAnotacoes'
 import { IconeCopiarAnotacoes, IconeTelaCheia, IconeLaser, IconePainel, IconeLink, IconeVoltar, duracaoDesde, linkBiblioteca, useTelaCheia } from './comum'
+import { useAvisar, useConfirmarTexto } from '../../_ui/ui'
 
 type Salvamento = 'salvo' | 'pendente' | 'salvando' | 'erro'
 type Campos = Partial<{
@@ -39,6 +40,8 @@ const SINAL_VIDA_MS = 15_000
 const AMOSTRA_LASER_MS = 40
 
 export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe }) {
+  const avisar = useAvisar()
+  const confirmarTexto = useConfirmarTexto()
   const id = inicial.id
   const cfgInicial: ConfiguracaoApresentacao = inicial.configuracao ?? { layout: 'mind', tema: 'meister', doisLados: true }
   const [titulo, setTitulo] = useState(inicial.titulo)
@@ -178,7 +181,7 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
 
   // ---------- Ações ----------
   async function alternarAoVivo() {
-    if (aoVivo && !confirm('Encerrar a transmissão? A equipe continua vendo o conteúdo salvo, mas para de acompanhar ao vivo.')) return
+    if (aoVivo && !(await confirmarTexto('Encerrar a transmissão? A equipe continua vendo o conteúdo salvo, mas para de acompanhar ao vivo.'))) return
     setAlternandoAoVivo(true)
     try {
       if (timerRef.current) { clearTimeout(timerRef.current); await enviar() }
@@ -201,7 +204,7 @@ export default function Apresentador({ inicial }: { inicial: ApresentacaoDetalhe
       setAprovacao(d.aprovacao)
       setMotivoRecusa(d.aprovacaoMotivo)
     } catch (e) {
-      alert((e as Error).message)
+      avisar((e as Error).message, 'erro')
     } finally {
       setPedindo(false)
     }

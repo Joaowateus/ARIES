@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { proLaboreApi, type AcessoEquipe, type EscopoAcesso, type NivelAcesso, type PainelAcessos } from '@/lib/proLaboreApi'
 import { Botao, Card, CardEsqueleto, Chip, EstadoVazio, Rotulo, Segmentado, Toggle, useToast } from '../../../sm/_ui'
+import { useConfirmarTexto } from '../../_ui/ui'
 
 const NIVEIS: Record<NivelAcesso, { rotulo: string; tom: 'ok' | 'info' | 'bad' }> = {
   EDITAR: { rotulo: 'Ver e editar', tom: 'ok' },
@@ -106,6 +107,7 @@ function LinhaAcesso({ acesso: a, dados, aoEditar }: { acesso: AcessoEquipe; dad
 }
 
 function Editor({ dados, inicial, aoFechar, aoSalvar }: { dados: PainelAcessos; inicial: Rascunho; aoFechar: () => void; aoSalvar: (d: PainelAcessos, mensagem: string) => void }) {
+  const confirmarTexto = useConfirmarTexto()
   const toast = useToast()
   const [r, setR] = useState<Rascunho>(inicial)
   const [salvando, setSalvando] = useState(false)
@@ -220,7 +222,7 @@ function Editor({ dados, inicial, aoFechar, aoSalvar }: { dados: PainelAcessos; 
                 <Botao disabled={salvando} onClick={() => acao(() => proLaboreApi.acessos.editar(atual.id, { ativo: !atual.ativo }), atual.ativo ? `${atual.nome} não entra mais até você reativar.` : `${atual.nome} voltou a entrar.`)}>
                   {atual.ativo ? 'Desativar acesso' : 'Reativar acesso'}
                 </Botao>
-                <Botao variante="fantasma" disabled={salvando} onClick={() => { if (window.confirm(`Tirar o login de ${atual.nome}? ${atual.vende ? 'O cadastro continua em Vendedores.' : ''}`)) void acao(() => proLaboreApi.acessos.remover(atual.id), `Login de ${atual.nome} removido.`) }}>
+                <Botao variante="fantasma" disabled={salvando} onClick={() => void confirmarTexto(`Tirar o login de ${atual.nome}? ${atual.vende ? 'O cadastro continua em Vendedores.' : ''}`).then(ok => { if (ok) void acao(() => proLaboreApi.acessos.remover(atual.id), `Login de ${atual.nome} removido.`) })}>
                   Tirar o login
                 </Botao>
               </div>

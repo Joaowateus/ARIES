@@ -4,6 +4,7 @@
 // Com mais de uma versão (ex.: gestão e equipe), abre um menu para escolher.
 import { useEffect, useRef, useState } from 'react'
 import { baixarRelatorioPdf, type RelatorioPdf } from '@/lib/relatorioPdf'
+import { useAvisar } from '../_ui/ui'
 
 type Montar = () => Promise<RelatorioPdf> | RelatorioPdf
 export interface VersaoPdf { rotulo: string; descricao?: string; montar: Montar }
@@ -18,6 +19,7 @@ export function BotaoPdf({ montar, versoes, rotulo = 'Baixar PDF do dia', desabi
   rotulo?: string
   desabilitado?: boolean
 }) {
+  const avisar = useAvisar()
   const [gerando, setGerando] = useState(false)
   const [menu, setMenu] = useState(false)
   // Botão perto da borda esquerda (celular): o menu abre para a direita.
@@ -33,7 +35,7 @@ export function BotaoPdf({ montar, versoes, rotulo = 'Baixar PDF do dia', desabi
 
   async function gerar(fn: Montar) {
     setMenu(false); setGerando(true)
-    try { await baixarRelatorioPdf(await fn()) } catch (e) { alert(`Não deu para gerar o PDF: ${(e as Error).message}`) } finally { setGerando(false) }
+    try { await baixarRelatorioPdf(await fn()) } catch (e) { avisar(`Não deu para gerar o PDF: ${(e as Error).message}`, 'erro') } finally { setGerando(false) }
   }
 
   if (!versoes?.length) {
