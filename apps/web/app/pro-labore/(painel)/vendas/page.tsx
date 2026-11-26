@@ -11,6 +11,7 @@ import RegistrarPagamento, { abrirComprovante, valorPago } from './RegistrarPaga
 import { AvisoRepetida, parecidasDoErro } from './AvisoRepetida'
 import { FechamentoMes } from './FechamentoMes'
 import { SeletorMoto, nomeMotoVenda } from './SeletorMoto'
+import { Janela, MenuAcoes, useConfirmar } from '../_ui/ui'
 
 const MESES_MAP: Record<string, number> = {
   jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5, jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
@@ -68,6 +69,9 @@ export default function ProLaboreVendasPage() {
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
+  // Redesign 26/11: o cadastro abre numa janela (antes ocupava o topo da tela o tempo todo).
+  const [formAberto, setFormAberto] = useState(false)
+  const confirmar = useConfirmar()
 
   const [form, setForm] = useState({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '', motoId: '' })
 
@@ -148,6 +152,7 @@ export default function ProLaboreVendasPage() {
       }
       setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '', motoId: '' })
       setEditandoId(null)
+      setFormAberto(false)
       carregar()
     } catch (err: unknown) {
       const aviso = parecidasDoErro(err)
@@ -159,6 +164,8 @@ export default function ProLaboreVendasPage() {
   }
 
   function editar(v: Venda) {
+    setErro(''); setRepetida(null)
+    setFormAberto(true)
     setEditandoId(v.id)
     setForm({
       data: v.data.slice(0, 10),
@@ -173,6 +180,8 @@ export default function ProLaboreVendasPage() {
   }
 
   function cancelarEdicao() {
+    setFormAberto(false)
+    setErro(''); setRepetida(null)
     setEditandoId(null)
     setForm({ data: '', valorVenda: '', valorProLabore: '', vendedorId: '', valorComissao: '', observacao: '', placa: '', motoId: '' })
   }
@@ -183,7 +192,7 @@ export default function ProLaboreVendasPage() {
       v?.pagamentoComissao && `A comissão dela está no comprovante nº ${v.pagamentoComissao.numero}.`,
       v?.pagamentoProLabore && `O pró-labore dela está no recibo nº ${v.pagamentoProLabore.numero}.`,
     ].filter(Boolean).map(t => `\n\n${t} Ela sai dele.`).join('')
-    if (!confirm(`Remover esta venda?${aviso}`)) return
+    if (!(await confirmar({ titulo: 'Remover esta venda?', texto: aviso.trim() || undefined, acao: 'Remover', perigo: true }))) return
     await proLaboreApi.vendas.remover(id)
     if (editandoId === id) cancelarEdicao()
     carregar()
@@ -210,7 +219,7 @@ export default function ProLaboreVendasPage() {
     const pg = pagamentoDe(tipo, v)
     if (!pg) { setPagando({ tipo, vendas: [v] }); return }
     const quem = tipo === 'COMISSAO' ? `a comissão de ${v.vendedor?.nome ?? 'vendedor'}` : 'o pró-labore desta venda'
-    if (!confirm(`Desmarcar ${quem} como ${TEXTO[tipo].pago.toLowerCase()}?\n\nVolta pra "a pagar" e sai do ${TEXTO[tipo].doc.toLowerCase()} nº ${pg.numero}.`)) return
+    if (!(await confirmar({ titulo: `Desmarcar ${quem} como ${TEXTO[tipo].pago.toLowerCase()}?`, texto: `Volta pra "a pagar" e sai do ${TEXTO[tipo].doc.toLowerCase()} nº ${pg.numero}.`, acao: 'Desmarcar' }))) return
     setDesmarcando(`${tipo}:${v.id}`)
     try {
       await proLaboreApi.pagamentosVendas.desmarcar(tipo, [v.id])
@@ -230,7 +239,7 @@ export default function ProLaboreVendasPage() {
   async function apagarSelecionadas() {
     const qtd = selecionadas.size
     if (qtd === 0) return
-    if (!confirm(`Apagar ${qtd} venda${qtd > 1 ? 's' : ''} selecionada${qtd > 1 ? 's' : ''}? Essa ação não pode ser desfeita.`)) return
+    if (!(await confirmar({ titulo: `Apagar ${qtd} venda${qtd > 1 ? 's' : ''} selecionada${qtd > 1 ? 's' : ''}?`, texto: 'Essa ação não pode ser desfeita.', acao: 'Apagar', perigo: true }))) return
     setApagandoSelecao(true)
     try {
       for (const id of selecionadas) {
@@ -395,12 +404,10 @@ export default function ProLaboreVendasPage() {
       <PageHeader eyebrow="Gestão" title="Registro de vendas" subtitle={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele`} actions={<FechamentoDiario modulo="VENDAS" />} />
       {usuario?.papel === 'DONO' && <VendasAguardando onMudou={carregar} />}
 
-      {isDono && <FechamentoMes podeAlterar={usuario?.papel === 'DONO'} onMudou={setMesesFechados} />}
-
-      {podeEditar && <>
-      <form onSubmit={handleSubmit} className="pl-card" style={{ marginBottom: 20 }}>
-        <div className="pl-card-title" style={{ marginBottom: 14 }}>{editandoId ? 'Editar venda' : 'Nova venda'}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
+      {podeEditar && formAberto && (
+      <Janela id="venda" largura="larga" titulo={editandoId ? 'Editar venda' : 'Nova venda'} subtitulo={`Cada venda define seu pró-labore (teto: ${formatMoeda(tetoProLabore)}) e, quando tem vendedor, a comissão dele.`} fechar={cancelarEdicao}>
+      <form onSubmit={handleSubmit} data-form-venda>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
           <div className="pl-field">
             <label>Data da venda</label>
             <input type="date" className="pl-input" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} required disabled={!!editandoId} />
@@ -446,24 +453,16 @@ export default function ProLaboreVendasPage() {
         {erro && <div className="pl-alert pl-alert-error" style={{ marginTop: 14 }}>{erro}</div>}
         {repetida && <AvisoRepetida aviso={repetida} ocupado={salvando} onCancelar={() => setRepetida(null)} onConfirmar={() => void handleSubmit(null, true)} />}
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+        <div className="ar-janela-acoes">
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={cancelarEdicao}>Cancelar</button>
           <button type="submit" className="pl-btn pl-btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : editandoId ? 'Salvar alterações' : 'Registrar venda'}</button>
-          {editandoId && <button type="button" className="pl-btn pl-btn-ghost" onClick={cancelarEdicao}>Cancelar</button>}
         </div>
       </form>
+      </Janela>
+      )}
 
-      <div className="pl-card" style={{ marginBottom: 20 }}>
-        <div className="pl-card-head" style={{ marginBottom: importAberto ? 14 : 0 }}>
-          <div>
-            <div className="pl-card-title">Importação em lote</div>
-            <div className="pl-card-sub">Cole vendas copiadas de outra planilha/sistema (uma por linha: Mês, Vendedor, Valor, Status)</div>
-          </div>
-          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setImportAberto(a => !a)}>
-            {importAberto ? 'Fechar' : 'Importar em lote'}
-          </button>
-        </div>
-
-        {importAberto && (
+      {podeEditar && importAberto && (
+        <Janela id="importar-vendas" largura="larga" titulo="Importação em lote" subtitulo="Cole vendas copiadas de outra planilha ou sistema (uma por linha: Mês, Vendedor, Valor, Status)." fechar={() => setImportAberto(false)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="pl-import-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 140px 160px', gap: 14 }}>
               <div className="pl-field">
@@ -518,17 +517,31 @@ export default function ProLaboreVendasPage() {
               </div>
             )}
           </div>
-        )}
+        </Janela>
+      )}
+
+      <div className="dp-ferramentas ar-vendas-barra">
+        <div className="dp-chips-filtro" role="group" aria-label="Situação do pagamento">
+          {FILTROS.map(([k, r]) => <button key={k} type="button" aria-pressed={filtroPagamento === k} className={filtroPagamento === k ? 'on' : ''} onClick={() => setFiltroPagamento(k)}>{r}</button>)}
+        </div>
+        <select className="pl-select ar-select-curto" value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} aria-label="Filtrar por vendedor">
+          <option value="">Todos os vendedores</option>
+          <option value="__sem__">Sem vendedor definido</option>
+          {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+        </select>
+        {podeEditar && <span className="dp-ferramentas-fim dp-linha">
+          <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setImportAberto(true)} data-importar-lote>Importar em lote</button>
+          <button type="button" className="pl-btn pl-btn-primary" onClick={() => { cancelarEdicao(); setFormAberto(true) }} data-nova-venda>+ Nova venda</button>
+        </span>}
       </div>
-      </>}
 
       {loading ? (
         <div style={{ color: 'var(--pl-ink-muted)', fontSize: 13 }}>Carregando...</div>
       ) : vendas.length === 0 ? (
-        <div className="pl-empty pl-card">
-          <div className="pl-emoji">🏍️</div>
-          <h3 style={{ margin: 0, color: 'var(--pl-ink-1)', fontWeight: 600 }}>Nenhuma venda ainda</h3>
-          <p style={{ marginTop: 6 }}>Registre a primeira venda acima para começar a acompanhar seu pró-labore</p>
+        <div className="pl-card dp-vazio-grande">
+          <h3>Nenhuma venda ainda</h3>
+          <p className="pl-hint">Registre a primeira venda para acompanhar o pró-labore e as comissões.</p>
+          {podeEditar && <button type="button" className="pl-btn pl-btn-primary" onClick={() => { cancelarEdicao(); setFormAberto(true) }}>+ Nova venda</button>}
         </div>
       ) : (
         <div>
@@ -573,20 +586,10 @@ export default function ProLaboreVendasPage() {
             )}
           </div>
 
-          <div className="pl-cms-filtros">
-            <select className="pl-select pl-cms-vendedor" value={filtroPagamento} onChange={e => setFiltroPagamento(e.target.value as FiltroPagamento)} aria-label="Filtrar pela situação do pagamento">
-              {FILTROS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}
-            </select>
-            <select className="pl-select pl-cms-vendedor" value={filtroVendedor} onChange={e => setFiltroVendedor(e.target.value)} aria-label="Filtrar por vendedor">
-              <option value="">Todos os vendedores</option>
-              <option value="__sem__">Sem vendedor definido</option>
-              {vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
-            </select>
-          </div>
           {erroComissao && <div className="pl-alert pl-alert-error" style={{ marginBottom: 12 }}>{erroComissao}</div>}
 
           {selecionadas.size > 0 && (
-            <div className="pl-card" style={{ marginBottom: 12, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="dp-faixa-aviso ar-selecao" role="region" aria-label="Vendas selecionadas">
               <span style={{ fontSize: 13, fontWeight: 600 }}>{selecionadas.size} venda{selecionadas.size > 1 ? 's' : ''} selecionada{selecionadas.size > 1 ? 's' : ''}</span>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setSelecionadas(new Set())}>Limpar seleção</button>
@@ -600,7 +603,7 @@ export default function ProLaboreVendasPage() {
                     Marcar {selecionadasPagaveis} comiss{selecionadasPagaveis > 1 ? 'ões' : 'ão'} como paga{selecionadasPagaveis > 1 ? 's' : ''}
                   </button>
                 )}
-                <button type="button" className="pl-btn pl-btn-primary" style={{ background: 'var(--pl-critical)' }} disabled={apagandoSelecao} onClick={apagarSelecionadas}>
+                <button type="button" className="pl-btn pl-btn-perigo" disabled={apagandoSelecao} onClick={apagarSelecionadas}>
                   {apagandoSelecao ? 'Apagando...' : 'Apagar selecionadas'}
                 </button>
               </div>
@@ -648,8 +651,8 @@ export default function ProLaboreVendasPage() {
                     <td>{v.situacao === 'AGUARDANDO_CONFIRMACAO' && <span className="pl-chip" style={{ marginRight: 6 }} title="Só conta depois da confirmação do dono" data-chip-aguardando>aguardando confirmação</span>}{v.placa && <span className="pl-chip" style={{ marginRight: 6 }}>{v.placa}</span>}{v.observacao || (v.placa ? '' : '—')}</td>
                     <td className="pl-right" style={{ whiteSpace: 'nowrap' }}>
                       {mesesFechados.has(v.data.slice(0, 7)) ? <span className="pl-hint" title="Mês fechado: reabra em Fechamento do mês para mudar">Mês fechado</span> : <>
-                        <span className="pl-link-action" onClick={() => editar(v)} style={{ marginRight: 14 }}>Editar</span>
-                        <span className="pl-link-action pl-danger" onClick={() => remover(v.id)}>Remover</span>
+                        <span className="dp-linha ar-acoes-linha">{podeEditar && <button type="button" className="pl-btn pl-btn-ghost" onClick={() => editar(v)}>Editar</button>}
+                        {podeEditar && <MenuAcoes itens={[{ rotulo: 'Remover a venda', aoClicar: () => void remover(v.id), perigo: true }]} />}</span>
                       </>}
                     </td>
                   </tr>
@@ -659,6 +662,8 @@ export default function ProLaboreVendasPage() {
           </div>
         </div>
       )}
+
+      {isDono && <div style={{ marginTop: 20 }}><FechamentoMes podeAlterar={usuario?.papel === 'DONO'} onMudou={setMesesFechados} /></div>}
 
       {pagando && pagando.vendas.length > 0 && (
         <RegistrarPagamento tipo={pagando.tipo} vendas={pagando.vendas} nomeDono={usuario?.nome ?? ''} onFechar={() => setPagando(null)}

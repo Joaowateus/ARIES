@@ -11,7 +11,7 @@ const hoje = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const nome = (m: string) => `${MESES[Number(m.slice(5, 7)) - 1]}/${m.slice(0, 4)}`
 const LINK: Record<PontoConferencia['onde'], { href: string; rotulo: string }> = {
-  auditoria: { href: '/pro-labore/configuracoes#auditoria', rotulo: 'Corrigir na auditoria' },
+  auditoria: { href: '/pro-labore/configuracoes?secao=dados#auditoria', rotulo: 'Corrigir na auditoria' },
   vendas: { href: '/pro-labore/vendas', rotulo: 'Ver em Vendas' },
   crm: { href: '/pro-labore/leads', rotulo: 'Ver no CRM' },
 }
@@ -38,7 +38,7 @@ export function AvisoConferencia() {
               ))}
             </li>
           ))}
-          {meses.length > 4 && <li>e mais {meses.length - 4} {meses.length - 4 === 1 ? 'mês' : 'meses'} na <Link href="/pro-labore/configuracoes#auditoria" style={{ color: 'inherit', fontWeight: 600 }}>auditoria</Link></li>}
+          {meses.length > 4 && <li>e mais {meses.length - 4} {meses.length - 4 === 1 ? 'mês' : 'meses'} na <Link href="/pro-labore/configuracoes?secao=dados#auditoria" style={{ color: 'inherit', fontWeight: 600 }}>auditoria</Link></li>}
         </ul>
       </div>
       <button type="button" className="pl-btn pl-btn-ghost" style={{ padding: '5px 10px', fontSize: 12, flex: 'none' }} onClick={() => { try { localStorage.setItem(CHAVE, hoje()) } catch { /* sem armazenamento */ } setDispensado(true) }}>Lembrar amanhã</button>

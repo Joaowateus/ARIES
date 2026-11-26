@@ -406,12 +406,29 @@ export default function ProLaboreConfiguracoesPage() {
 }
 
 type GrupoConfig = { id: string; rotulo: string; descricao: string; corpo: ReactNode }
+const GRUPO_DA_ANCORA: Record<string, string> = { auditoria: 'dados', copia: 'dados', espaco: 'dados', detectores: 'aries', 'areas-onda4': 'aries', dicionario: 'aries', expediente: 'rotina', 'aceite-pdf02': 'telas', 'aceite-pdf03': 'telas', 'aceite-ajuste1': 'telas' }
 
 /** Índice à esquerda (no celular, no topo) e o grupo escolhido; o grupo fica no endereço (?secao=). */
 function IndiceConfig({ grupos }: { grupos: GrupoConfig[] }) {
   const params = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
+  // Links antigos com âncora (ex.: /configuracoes#auditoria) abrem o grupo da seção e rolam até ela.
+  const [ancora, setAncora] = useState<string | null>(null)
+  useEffect(() => {
+    const h = window.location.hash.slice(1)
+    if (!h) return
+    const g = GRUPO_DA_ANCORA[h]
+    if (g && !params.get('secao')) router.replace(`${pathname}?secao=${g}#${h}`, { scroll: false })
+    const t = setTimeout(() => setAncora(h), 0)
+    return () => clearTimeout(t)
+  }, [params, pathname, router])
+  useEffect(() => {
+    if (!ancora) return
+    let n = 0
+    const t = setInterval(() => { const el = document.getElementById(ancora); if (el || ++n > 20) { clearInterval(t); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }) } }, 150)
+    return () => clearInterval(t)
+  }, [ancora])
   const atual = grupos.find(g => g.id === params.get('secao')) ?? grupos[1] ?? grupos[0]
   const ir = (id: string) => router.replace(`${pathname}?secao=${id}`, { scroll: false })
   return (

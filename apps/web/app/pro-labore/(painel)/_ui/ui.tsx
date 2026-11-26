@@ -82,6 +82,33 @@ export function AriesUi({ children }: { children: ReactNode }) {
   )
 }
 
+// ---------- Janela (formulário ou detalhe por cima da tela) ----------
+
+/** Janela com título, corpo rolável e rodapé fixo; fecha no Esc, no X e clicando fora. */
+export function Janela({ titulo, subtitulo, fechar, children, rodape, largura = 'media', id }: { titulo: ReactNode; subtitulo?: ReactNode; fechar: () => void; children: ReactNode; rodape?: ReactNode; largura?: 'media' | 'larga'; id?: string }) {
+  const fecharRef = useRef(fechar)
+  useEffect(() => { fecharRef.current = fechar }, [fechar])
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') fecharRef.current() }
+    window.addEventListener('keydown', tecla)
+    const antes = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', tecla); document.body.style.overflow = antes }
+  }, [])
+  return (
+    <div className="dp-modal-fundo ar-janela-fundo" onMouseDown={e => { if (e.target === e.currentTarget) fechar() }}>
+      <div className={`ar-janela ${largura}`} role="dialog" aria-modal="true" aria-label={typeof titulo === 'string' ? titulo : undefined} data-janela={id}>
+        <header className="ar-janela-topo">
+          <div><h3>{titulo}</h3>{subtitulo && <p className="pl-hint">{subtitulo}</p>}</div>
+          <button type="button" className="ar-janela-x" onClick={fechar} aria-label="Fechar">×</button>
+        </header>
+        <div className="ar-janela-corpo">{children}</div>
+        {rodape && <footer className="ar-janela-rodape">{rodape}</footer>}
+      </div>
+    </div>
+  )
+}
+
 // ---------- Controles ----------
 
 /** Interruptor (liga/desliga) no lugar da caixa de seleção do navegador. */
