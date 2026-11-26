@@ -11,7 +11,7 @@ import { comentariosJaRespondidos, ultimasEntradasDm } from './instagram'
 
 // ---------- Definição ----------
 
-export const BASES = ['TODOS', 'LEADS', 'CLIENTES', 'CONTATARAM', 'EQUIPE', 'INSTAGRAM_DM', 'INSTAGRAM_COMENTARIOS'] as const
+export const BASES = ['TODOS', 'LEADS', 'CLIENTES', 'CONTATARAM', 'EQUIPE', 'INSTAGRAM_DM', 'INSTAGRAM_COMENTARIOS', 'CAMPANHA'] as const
 /** Bases do canal Instagram (as outras são do WhatsApp). */
 export const BASES_INSTAGRAM: readonly string[] = ['INSTAGRAM_DM', 'INSTAGRAM_COMENTARIOS']
 export type Base = typeof BASES[number]
@@ -24,6 +24,8 @@ export interface DefinicaoPublico {
   /** Seleção manual: incluir = contatos escolhidos um a um (somente eles, se apenasManual); excluir = telefones tirados da lista. */
   manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string | null }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada (números de qualquer pessoa, mesmo fora do CRM). */ numeros?: Array<{ telefone: string; nome?: string | null }>
     /** Quem colou declarou que essas pessoas aceitaram receber mensagens da loja (vale para promoção; vira autorização registrada). */ listaAutorizada?: boolean; listaAutorizadaPor?: string | null } | null
+  /** Base CAMPANHA: quem recebeu uma campanha de WhatsApp e respondeu (ou não respondeu). */
+  campanha?: { id: string; quem: 'RESPONDERAM' | 'NAO_RESPONDERAM' } | null
 }
 
 export const ETAPAS = ['LEAD', 'ABORDADO', 'LEVANTAMENTO', 'MQL', 'SQL', 'NEGOCIACAO', 'PROPOSTA', 'AGENDAMENTO', 'VISITA', 'VENDA'] as const
@@ -429,6 +431,25 @@ async function contatosDaLista(q: Leitor, lista: Array<{ telefone: string; nome?
   })
 }
 
+/**
+ * Quem recebeu uma campanha de WhatsApp (pelo menos uma mensagem aceita) e respondeu, ou não respondeu.
+ * Quem pediu para sair fica de fora dos dois. Só campanhas que a pessoa enxerga (gestão: da loja; os
+ * demais: as próprias), e os contatos passam pela carteira como a lista colada (lead de outro vendedor
+ * fica de fora para quem não é da gestão).
+ */
+async function lerDaCampanha(q: Leitor, ref: NonNullable<DefinicaoPublico['campanha']>, agora: Date): Promise<Contato[]> {
+  const camp = await prisma.disparoCampanha.findFirst({ where: { id: ref.id, usuarioId: q.usuarioId, canal: 'WHATSAPP', ...(ehGestao(q) ? {} : { criadoPorId: q.vendedorId ?? '__nenhum__' }) }, select: { id: true } })
+  if (!camp) return []
+  const ds = await prisma.disparoDestinatario.findMany({
+    where: { campanhaId: camp.id, NOT: { telefone: { startsWith: 'ig:' } }, mensagens: { some: { aceitaEm: { not: null } } }, respondeuEm: ref.quem === 'RESPONDERAM' ? { not: null } : null },
+    select: { id: true, telefone: true, nome: true }, orderBy: { criadoEm: 'asc' },
+  })
+  const sairam = ds.length ? new Set((await prisma.disparoEvento.findMany({ where: { campanhaId: camp.id, tipo: 'DESCADASTRO', destinatarioId: { in: ds.map(d => d.id) } }, select: { destinatarioId: true } })).map(e => e.destinatarioId)) : new Set<string | null>()
+  const vistos = new Set<string>()
+  const lista = ds.filter(d => !sairam.has(d.id) && !vistos.has(d.telefone) && vistos.add(d.telefone)).map(d => ({ telefone: d.telefone, nome: d.nome }))
+  return (await contatosDaLista(q, lista, agora)).map(c => ({ ...c, daLista: false }))
+}
+
 export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { finalidade?: Finalidade; config: ConfigLoja; conteudo?: Conteudo | null; remetenteNumero?: string | null }, agora = new Date()): Promise<Resultado> {
   const manual = d.manual ?? {}
   const porTipo = (t: 'LEAD' | 'CLIENTE' | 'CONVERSA') => (manual.incluir ?? []).filter(x => x.tipo === t).map(x => x.id)
@@ -444,6 +465,7 @@ export async function resolverPublico(q: Leitor, d: DefinicaoPublico, opcoes: { 
     if (d.base === 'EQUIPE') grupos.push(await lerEquipe(q))
     if (d.base === 'INSTAGRAM_DM') grupos.push(await lerInstagram(q, 'DM'))
     if (d.base === 'INSTAGRAM_COMENTARIOS') grupos.push(await lerInstagram(q, 'COMENTARIOS'))
+    if (d.base === 'CAMPANHA' && d.campanha) grupos.push(await lerDaCampanha(q, d.campanha, agora))
   }
   // Seleção manual (sempre entra, mesmo fora dos filtros).
   const manuais: Contato[] = [
