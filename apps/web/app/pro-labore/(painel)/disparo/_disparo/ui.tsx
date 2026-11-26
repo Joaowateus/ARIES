@@ -118,6 +118,34 @@ export function Hora({ valor, mudar, rotulo, id }: { valor: string; mudar: (v: s
   return <input id={id} className="pl-input dp-hora" inputMode="numeric" aria-label={rotulo} value={texto} maxLength={5} placeholder="00:00" onChange={e => setTexto(e.target.value)} onBlur={e => confirmar(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmar((e.target as HTMLInputElement).value) }} />
 }
 
+// ---------- Menu de ações (⋯) ----------
+
+export interface ItemMenu { rotulo: string; aoClicar: () => void; perigo?: boolean; desabilitado?: boolean }
+/** Ações menos usadas (e as destrutivas) num menu, para a ação principal ficar à vista. */
+export function MenuAcoes({ itens, rotulo = 'Mais ações' }: { itens: Array<ItemMenu | false | null | undefined>; rotulo?: string }) {
+  const [aberto, setAberto] = useState(false)
+  const caixa = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!aberto) return
+    const fora = (e: MouseEvent) => { if (!caixa.current?.contains(e.target as Node)) setAberto(false) }
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(false) }
+    document.addEventListener('mousedown', fora); window.addEventListener('keydown', tecla)
+    return () => { document.removeEventListener('mousedown', fora); window.removeEventListener('keydown', tecla) }
+  }, [aberto])
+  const lista = itens.filter(Boolean) as ItemMenu[]
+  if (!lista.length) return null
+  return (
+    <div className="dp-menu" ref={caixa}>
+      <button type="button" className="pl-btn" aria-haspopup="menu" aria-expanded={aberto} aria-label={rotulo} title={rotulo} onClick={() => setAberto(a => !a)} data-menu-acoes>⋯</button>
+      {aberto && (
+        <div className="dp-menu-lista" role="menu">
+          {lista.map(i => <button key={i.rotulo} type="button" role="menuitem" className={i.perigo ? 'perigo' : ''} disabled={i.desabilitado} onClick={() => { setAberto(false); i.aoClicar() }}>{i.rotulo}</button>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------- Datas ----------
 
 const FUSO = 'America/Sao_Paulo'

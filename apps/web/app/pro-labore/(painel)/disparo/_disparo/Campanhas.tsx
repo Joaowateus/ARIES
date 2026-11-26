@@ -4,10 +4,10 @@
 // campanha (atualiza sozinho a cada 5 s enquanto ela está ativa): números, destinatários, o histórico
 // de cada um (tentativas, eventos, falhas), decisões sobre envios sem confirmação e o resultado comercial.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type ItemCampanhaDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
+import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
 import { Assistente } from './Assistente'
-import { Quando, useAvisar, useConfirmar, usePerguntar } from './ui'
-import { Numero, Paginacao, Progresso, erroAmigavel, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useEscopo, useMeta } from './util'
+import { MenuAcoes, Quando, quandoTexto, useAvisar, useConfirmar, usePerguntar } from './ui'
+import { Paginacao, Progresso, erroAmigavel, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useEscopo, useMeta } from './util'
 
 const ATIVAS: StatusCampanhaDisparo[] = ['VALIDATING', 'QUEUED', 'RUNNING', 'SCHEDULED']
 const FILTROS: Array<{ rotulo: string; status?: string }> = [
@@ -19,16 +19,17 @@ export function Campanhas({ aberta, abrir, nova = false }: { aberta: string | nu
   const meta = useMeta()
   const [filtro, setFiltro] = useState(0)
   const [pagina, setPagina] = useState(0)
-  const [lista, setLista] = useState<{ total: number; porPagina: number; itens: ItemCampanhaDisparo[] } | null>(null)
+  const [lista, setLista] = useState<Awaited<ReturnType<typeof disparoApi.campanhas.listar>> | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [editando, setEditando] = useState<CampanhaDisparo | null | 'nova'>(nova ? 'nova' : null)
   // "+ Nova campanha" da barra do topo (?nova=1) abre o assistente.
   const [novaAntes, setNovaAntes] = useState(nova)
   if (nova !== novaAntes) { setNovaAntes(nova); if (nova) setEditando('nova') }
   const [marcadas, setMarcadas] = useState<string[]>([])
+  const [busca, setBusca] = useState('')
   const { de, setDe } = useEscopo()
-  const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina, de }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina, de])
-  useEffect(() => { if (!aberta && !editando) carregar() }, [carregar, aberta, editando])
+  const carregar = useCallback(() => { disparoApi.campanhas.listar({ status: FILTROS[filtro].status, pagina, de, busca: busca.trim() || undefined }).then(setLista).catch(e => setErro(erroDe(e))) }, [filtro, pagina, de, busca])
+  useEffect(() => { if (aberta || editando) return; const t = setTimeout(carregar, busca ? 300 : 0); return () => clearTimeout(t) }, [carregar, aberta, editando, busca])
   const pode = meta.nivel === 'EDITAR'
   // Gestão: campanhas da equipe esperando aprovação (aviso no topo da lista).
   const [aprovar, setAprovar] = useState(0)
@@ -44,46 +45,55 @@ export function Campanhas({ aberta, abrir, nova = false }: { aberta: string | nu
 
   if (editando) return <Assistente campanha={editando === 'nova' ? null : editando} fechar={() => { setEditando(null); if (nova) abrir(null) }} abrirMonitor={id => { setEditando(null); abrir(id) }} />
   if (aberta) return <Monitor id={aberta} voltar={() => abrir(null)} editar={c => setEditando(c)} abrir={abrir} />
+  const contagens = lista?.contagens ?? {}
+  const contar = (st?: string) => st ? st.split(',').reduce((a, x) => a + (contagens[x as StatusCampanhaDisparo] ?? 0), 0) : Object.entries(contagens).filter(([k]) => k !== 'ARCHIVED').reduce((a, [, v]) => a + (v ?? 0), 0)
   return (
-    <div data-disparo-campanhas>
-      <div className="dp-linha" style={{ justifyContent: 'space-between' }}>
-        <div className="cc-chips">{FILTROS.map((x, i) => <button key={x.rotulo} type="button" className={`pl-chip ${filtro === i ? 'active' : ''}`} onClick={() => { setFiltro(i); setPagina(0) }}>{x.rotulo}</button>)}</div>
-        <span />
+    <div data-disparo-campanhas className="dp-campanhas">
+      <div className="dp-filtros">
+        <div className="dp-chips-filtro" role="group" aria-label="Filtrar por situação">
+          {FILTROS.map((x, i) => <button key={x.rotulo} type="button" aria-pressed={filtro === i} className={filtro === i ? 'on' : ''} onClick={() => { setFiltro(i); setPagina(0) }}>{x.rotulo}{lista?.contagens && <small>{contar(x.status)}</small>}</button>)}
+        </div>
+        <input className="pl-input dp-busca" type="search" placeholder="Buscar campanha pelo nome" value={busca} onChange={e => { setBusca(e.target.value); setPagina(0) }} aria-label="Buscar campanha pelo nome" />
       </div>
       {erro && <div className="pl-alert pl-alert-error" role="alert">{erro}</div>}
       {aprovar > 0 && FILTROS[filtro].status !== 'NEEDS_REVIEW' && (
-        <div className="pl-alert dp-linha" role="status" style={{ justifyContent: 'space-between' }} data-aviso-aprovar>
+        <div className="dp-faixa-aviso" role="status" data-aviso-aprovar>
           <span><b>{aprovar} {aprovar === 1 ? 'campanha da equipe está' : 'campanhas da equipe estão'} esperando sua aprovação.</b> Nada é enviado antes disso.</span>
           <button type="button" className="pl-btn pl-btn-primary" onClick={() => { setDe('equipe'); setFiltro(FILTROS.findIndex(x => x.status === 'NEEDS_REVIEW')); setPagina(0) }}>Ver e aprovar</button>
         </div>
       )}
       {pode && marcadas.length > 0 && (
-        <div className="pl-alert dp-linha" role="status" style={{ justifyContent: 'space-between' }} data-barra-excluir>
+        <div className="dp-faixa-aviso selecao" role="status" data-barra-excluir>
           <span><b>{marcadas.length} selecionada(s).</b> Excluir tira da lista e dos relatórios; o que ainda ia sair é cancelado. Os registros ficam guardados.</span>
-          <span className="cc-chips">
-            <button type="button" className="pl-btn" onClick={() => setMarcadas([])}>Limpar seleção</button>
-            <button type="button" className="pl-btn pl-btn-primary" data-excluir-selecionadas onClick={() => void excluir(marcadas)}>Excluir {marcadas.length}</button>
+          <span className="dp-linha">
+            <button type="button" className="pl-btn pl-btn-ghost" onClick={() => setMarcadas([])}>Limpar seleção</button>
+            <button type="button" className="pl-btn pl-btn-perigo" data-excluir-selecionadas onClick={() => void excluir(marcadas)}>Excluir {marcadas.length}</button>
           </span>
         </div>
       )}
-      {!lista ? <p className="pl-hint" aria-busy="true">Carregando…</p> : !lista.itens.length ? (
-        <div className="pl-empty pl-card"><h3 style={{ margin: 0 }}>Nenhuma campanha aqui</h3><p>{pode ? 'Crie a primeira em “Nova campanha”.' : 'Seu acesso é só para acompanhar.'}</p></div>
+      {!lista ? <div className="pl-card" aria-busy="true">{[0, 1, 2, 3].map(i => <div key={i} className="dp-esq alto" />)}</div> : !lista.itens.length ? (
+        <div className="pl-card dp-vazio-grande"><h3>{busca ? 'Nenhuma campanha com esse nome' : 'Nenhuma campanha aqui'}</h3><p className="pl-hint">{pode ? 'Crie uma em “+ Nova campanha”, no topo.' : 'Seu acesso é só para acompanhar.'}</p></div>
       ) : (
-        <div className="pl-table-wrap">
+        <div className="pl-table-wrap dp-tabela-campanhas">
           <table className="pl-table">
-            <thead><tr>{pode && <th style={{ width: 32 }}><input type="checkbox" aria-label="Selecionar todas desta página" checked={lista.itens.length > 0 && lista.itens.every(c => marcadas.includes(c.id))} onChange={e => setMarcadas(e.target.checked ? [...new Set([...marcadas, ...lista.itens.map(c => c.id)])] : marcadas.filter(id => !lista.itens.some(c => c.id === id)))} /></th>}<th>Campanha</th><th>Situação</th><th>Número</th><th className="pl-right">Destinatários</th><th>Quando</th><th>Responsável</th></tr></thead>
+            <thead><tr>{pode && <th style={{ width: 36 }}><input type="checkbox" aria-label="Selecionar todas desta página" checked={lista.itens.length > 0 && lista.itens.every(c => marcadas.includes(c.id))} onChange={e => setMarcadas(e.target.checked ? [...new Set([...marcadas, ...lista.itens.map(c => c.id)])] : marcadas.filter(id => !lista.itens.some(c => c.id === id)))} /></th>}<th>Campanha</th><th>Situação</th><th style={{ minWidth: 150 }}>Progresso</th><th>Envia por</th><th>Quando</th><th>Responsável</th></tr></thead>
             <tbody>
-              {lista.itens.map(c => (
-                <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => abrir(c.id)} data-campanha={c.id}>
-                  {pode && <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Selecionar ${c.nome}`} checked={marcadas.includes(c.id)} onChange={e => setMarcadas(m => (e.target.checked ? [...m, c.id] : m.filter(x => x !== c.id)))} /></td>}
-                  <td><b>{c.nome}</b><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''}</div>{c.erro && <div className="pl-hint" style={{ color: 'var(--ar-estado-critico)' }}>{erroAmigavel(c.erro)}</div>}</td>
-                  <td><SeloStatus status={c.status} />{c.config?.continua && <span className="pl-status-badge" title="Estratégia contínua: quem entra no público entra sozinho" style={{ marginLeft: 4 }}>Contínua</span>}</td>
-                  <td>{c.canal === 'INSTAGRAM' ? 'Instagram (direct)' : c.assistente?.vendedor.nome ?? '—'}</td>
-                  <td className="pl-right">{c.totais ? n(c.totais.elegiveis) : '—'}</td>
-                  <td>{c.concluidaEm ? <Quando iso={c.concluidaEm} prefixo="terminou" /> : c.iniciadaEm ? <Quando iso={c.iniciadaEm} prefixo="começou" /> : c.agendadaPara ? <Quando iso={c.agendadaPara} prefixo="agendada" /> : '—'}</td>
-                  <td>{c.responsavelNome ?? c.criadoPorNome ?? '—'}</td>
-                </tr>
-              ))}
+              {lista.itens.map(c => {
+                const tot = c.totais?.elegiveis ?? 0
+                const pg = c.progresso ?? { enviadas: 0, falhas: 0, paradas: 0 }
+                const pr = (x: number) => `${tot ? Math.min(100, (x / tot) * 100) : 0}%`
+                return (
+                  <tr key={c.id} className={c.erro ? 'problema' : ''} style={{ cursor: 'pointer' }} onClick={() => abrir(c.id)} data-campanha={c.id}>
+                    {pode && <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Selecionar ${c.nome}`} checked={marcadas.includes(c.id)} onChange={e => setMarcadas(m => (e.target.checked ? [...m, c.id] : m.filter(x => x !== c.id)))} /></td>}
+                    <td className="dp-col-nome"><b>{c.nome}</b><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''}</div>{c.erro && <div className="dp-erro-linha" title={erroAmigavel(c.erro)}>{erroAmigavel(c.erro)}</div>}</td>
+                    <td><div className="dp-linha" style={{ gap: 4 }}><SeloStatus status={c.status} parada={!!c.erro} />{c.config?.continua && <span className="dp-selo tipo" title="Estratégia contínua: quem entra no público entra sozinho">Contínua</span>}</div></td>
+                    <td>{tot ? <><div className="dp-barra-prog"><i className="ok" style={{ width: pr(pg.enviadas) }} /><i className="falha" style={{ width: pr(pg.falhas) }} /><i className="parada" style={{ width: pr(pg.paradas) }} /></div><div className="dp-item-sub">{n(pg.enviadas)} de {n(tot)}{pg.falhas ? ` · ${n(pg.falhas)} falha(s)` : ''}</div></> : <span className="pl-hint">{c.totais ? 'ninguém para receber' : 'público não preparado'}</span>}</td>
+                    <td>{c.canal === 'INSTAGRAM' ? 'Instagram' : c.assistente?.vendedor.nome ?? '—'}</td>
+                    <td>{c.concluidaEm ? <Quando iso={c.concluidaEm} prefixo="terminou" /> : c.iniciadaEm ? <Quando iso={c.iniciadaEm} prefixo="começou" /> : c.agendadaPara ? <Quando iso={c.agendadaPara} prefixo="agendada" /> : <Quando iso={c.atualizadoEm} prefixo="editada" />}</td>
+                    <td>{c.responsavelNome ?? c.criadoPorNome ?? '—'}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           <Paginacao pagina={pagina} total={lista.total} porPagina={lista.porPagina} ir={setPagina} />
@@ -146,25 +156,36 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
   const st = c.status
   return (
     <div data-disparo-monitor={st}>
-      <div className="dp-linha" style={{ justifyContent: 'space-between' }}>
-        <div><button type="button" className="pl-btn" onClick={voltar}>← Campanhas</button> <b style={{ fontSize: 18, marginLeft: 8 }}>{c.nome}</b> <SeloStatus status={st} /></div>
+      <button type="button" className="pl-btn pl-btn-ghost dp-voltar" onClick={voltar}>← Campanhas</button>
+      <header className="dp-monitor-topo">
+        <div style={{ minWidth: 0 }}>
+          <h2 className="dp-monitor-nome">{c.nome} <SeloStatus status={st} parada={c.situacao?.motivo === 'SEM_CONEXAO'} />{c.config?.continua && <span className="dp-selo tipo">Contínua</span>}</h2>
+          <div className="dp-monitor-meta">
+            <span>{meta.finalidades[c.finalidade]}</span>
+            {c.objetivo && <span>{c.objetivo}</span>}
+            <span>{c.canal === 'INSTAGRAM' ? `direct do ${c.remetente?.vendedor ?? 'Instagram'}` : c.remetente ? <>WhatsApp de {c.remetente.vendedor} {c.remetente.numero ?? ''}{!c.remetente.conectado && <b className="dp-txt-crit"> · desconectado</b>}</> : 'sem número'}</span>
+            <span>criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''}</span>
+            <span>versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</span>
+          </div>
+        </div>
         {pode && (
-          <span className="cc-chips">
+          <div className="dp-monitor-acoes">
             {['DRAFT', 'NEEDS_REVIEW', 'READY', 'SCHEDULED'].includes(st) && <button type="button" className="pl-btn" onClick={() => editar(c)}>Editar</button>}
-            {st === 'DRAFT' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.validar(c.id), 'Público em preparação.')}>Preparar o público</button>}
-            {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.aprovar(c.id), 'Aprovada.')}>Aprovar</button>}
             {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void perguntar({ titulo: 'Devolver a campanha ao rascunho?', texto: 'Quem criou recebe o motivo e pode ajustar e mandar de novo.', acao: 'Devolver', campo: { rotulo: 'Por que devolver?', minimo: 3 } }).then(m => { if (m) void agir(() => disparoApi.campanhas.reprovar(c.id, m), 'Devolvida ao rascunho') })}>Devolver</button>}
-            {st === 'READY' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(async () => { const r = await disparoApi.campanhas.iniciar(c.id, c.agendadaPara); if (r.status === 'QUEUED') rodar() }, c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendada.' : 'Começou: a primeira mensagem sai em instantes', { titulo: c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar o agendamento?' : `Enviar para ${n(c.totais?.elegiveis)} contato(s)?`, texto: 'As mensagens saem no ritmo de proteção do número, dentro da janela de envio. Você pode pausar a qualquer momento.', acao: c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendar' : 'Começar o envio' })}>{c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar agendamento' : 'Iniciar agora'}</button>}
-            {(st === 'RUNNING' || st === 'QUEUED') && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.pausar(c.id), 'Pausada: nenhum envio novo até retomar.')}>Pausar</button>}
-            {st === 'PAUSED' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.retomar(c.id), 'Retomada.')}>Retomar</button>}
-            {!['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st) && <button type="button" className="pl-btn pl-btn-perigo" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.cancelar(c.id), 'Cancelada: o que não saiu foi cancelado', { titulo: 'Cancelar a campanha?', texto: 'O que ainda não foi enviado não sai mais. O que já saiu e os registros continuam.', acao: 'Cancelar a campanha', perigo: true })}>Cancelar</button>}
-            <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(async () => { const nova = await disparoApi.campanhas.duplicar(c.id); abrir(nova.id) }, 'Cópia criada.')}>Duplicar</button>
-            {['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'DRAFT'].includes(st) && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.arquivar(c.id), 'Arquivada.')}>Arquivar</button>}
-            <button type="button" className="pl-btn pl-btn-perigo" disabled={ocupado} data-excluir-campanha onClick={() => void confirmarUi({ titulo: `Excluir “${c.nome}”?`, texto: `${['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(st) ? 'Ela ainda está enviando ou agendada: o que não saiu será cancelado.\n\n' : ''}Ela some da lista e dos relatórios; os registros continuam guardados.`, acao: 'Excluir', perigo: true }).then(ok => { if (ok) void disparoApi.campanhas.excluir([c.id]).then(() => { avisar('Campanha excluída'); voltar() }).catch(e => setMsg(erroDe(e))) })}>Excluir</button>
-          </span>
+            {(st === 'RUNNING' || st === 'QUEUED') && <button type="button" className="pl-btn" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.pausar(c.id), 'Pausada: nenhum envio novo até retomar')}>Pausar</button>}
+            {st === 'DRAFT' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.validar(c.id), 'Público em preparação')}>Preparar o público</button>}
+            {st === 'NEEDS_REVIEW' && meta.gestao && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.aprovar(c.id), 'Aprovada')}>Aprovar</button>}
+            {st === 'READY' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(async () => { const r = await disparoApi.campanhas.iniciar(c.id, c.agendadaPara); if (r.status === 'QUEUED') rodar() }, c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendada' : 'Começou: a primeira mensagem sai em instantes', { titulo: c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar o agendamento?' : `Enviar para ${n(c.totais?.elegiveis)} contato(s)?`, texto: 'As mensagens saem no ritmo de proteção do número, dentro da janela de envio. Você pode pausar a qualquer momento.', acao: c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Agendar' : 'Começar o envio' })}>{c.agendadaPara && new Date(c.agendadaPara) > new Date() ? 'Confirmar agendamento' : 'Iniciar agora'}</button>}
+            {st === 'PAUSED' && <button type="button" className="pl-btn pl-btn-primary" disabled={ocupado} onClick={() => void agir(() => disparoApi.campanhas.retomar(c.id), 'Retomada')}>Retomar</button>}
+            <MenuAcoes itens={[
+              { rotulo: 'Duplicar', desabilitado: ocupado, aoClicar: () => void agir(async () => { const nova = await disparoApi.campanhas.duplicar(c.id); abrir(nova.id) }, 'Cópia criada') },
+              ['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'DRAFT'].includes(st) && { rotulo: 'Arquivar', desabilitado: ocupado, aoClicar: () => void agir(() => disparoApi.campanhas.arquivar(c.id), 'Arquivada') },
+              !['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'ARCHIVED'].includes(st) && { rotulo: 'Cancelar a campanha', perigo: true, desabilitado: ocupado, aoClicar: () => void agir(() => disparoApi.campanhas.cancelar(c.id), 'Cancelada: o que não saiu foi cancelado', { titulo: 'Cancelar a campanha?', texto: 'O que ainda não foi enviado não sai mais. O que já saiu e os registros continuam.', acao: 'Cancelar a campanha', perigo: true }) },
+              { rotulo: 'Excluir', perigo: true, desabilitado: ocupado, aoClicar: () => void confirmarUi({ titulo: `Excluir “${c.nome}”?`, texto: `${['SCHEDULED', 'QUEUED', 'RUNNING', 'PAUSED'].includes(st) ? 'Ela ainda está enviando ou agendada: o que não saiu será cancelado.\n\n' : ''}Ela some da lista e dos relatórios; os registros continuam guardados.`, acao: 'Excluir', perigo: true }).then(ok => { if (ok) void disparoApi.campanhas.excluir([c.id]).then(() => { avisar('Campanha excluída'); voltar() }).catch(e => setMsg(erroDe(e))) }) },
+            ]} />
+          </div>
         )}
-      </div>
-      <p className="pl-hint">{meta.finalidades[c.finalidade]}{c.objetivo ? ` · ${c.objetivo}` : ''} · {c.canal === 'INSTAGRAM' ? `envia pelo direct do ${c.remetente?.vendedor ?? 'Instagram'}` : c.remetente ? `envia pelo WhatsApp de ${c.remetente.vendedor} ${c.remetente.numero ?? ''}${c.remetente.conectado ? '' : ' (desconectado)'}` : 'sem número'} · criada por {c.criadoPorNome ?? '—'}{c.aprovadoPorNome ? ` · aprovada por ${c.aprovadoPorNome}` : ''} · versão {c.versao}{ativa ? ' · atualiza a cada 5 s' : ''}</p>
+      </header>
       {msg && <p className="pl-hint" role="status">{msg}</p>}
       {c.config?.continua && <div className="pl-alert" role="status" data-estrategia-continua><b>Estratégia contínua.</b> Quem passar a fazer parte do público entra sozinho (conferido a cada 10 min){c.config.pararAoSairDoPublico ? ', e quem sair do público (ex.: mudou de etapa) para de receber' : ''}{c.config.remetentePorVendedor ? '. Cada contato recebe pelo WhatsApp do próprio vendedor' : ''}. Ela fica ligada até você pausar ou cancelar.</div>}
       {c.situacao && <PainelAgora s={c.situacao} status={st} rodada={enviando ? rodada : null} />}
@@ -173,23 +194,31 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
 
       {r && r.elegiveis > 0 && !['DRAFT', 'VALIDATING', 'NEEDS_REVIEW', 'READY'].includes(st) && <Progresso total={r.elegiveis} enviadas={(r.destinatarios.CONCLUIDO ?? 0) + (r.destinatarios.RESPONDEU ?? 0)} falhas={r.destinatarios.FALHOU ?? 0} outras={r.destinatarios.INTERROMPIDO ?? 0} />}
       {r && (
-        <>
-          <section className="ar-agora" aria-label="Público">
-            <Numero rotulo="Selecionados" valor={n(r.selecionados)} />
-            <Numero rotulo="Elegíveis" valor={n(r.elegiveis)} />
-            <Numero rotulo="Excluídos" valor={n(r.excluidos)} detalhe={Object.entries(r.porMotivo).map(([m, q]) => `${meta.motivos[m] ?? m}: ${q}`).join(' · ').slice(0, 120)} />
-            <Numero rotulo="Pendentes / na fila" valor={`${n(r.pendentes)} / ${n(r.naFila)}`} detalhe={`${n(r.processadas)} processadas`} />
-            <Numero rotulo="Tempo" valor={duracao(r.tempoMs)} />
-          </section>
-          <section className="ar-agora" aria-label="Envio">
-            <Numero rotulo="Aceitas pelo WhatsApp" valor={n(r.aceitas)} />
-            <Numero rotulo="Entregues" valor={n(r.entregues)} detalhe={`taxa ${pct(r.taxaEntrega)}`} />
-            <Numero rotulo="Lidas" valor={n(r.lidas)} detalhe={`taxa ${pct(r.taxaLeitura)}`} />
-            <Numero rotulo="Respostas" valor={n(r.respostas)} detalhe={`taxa ${pct(r.taxaResposta)} · ${n(r.descadastros)} saíram`} />
-            <Numero rotulo="Falhas" valor={n(r.falhas)} detalhe={`${n(r.desconhecidas)} sem confirmação · ${n(r.puladas)} não enviadas por regra`} />
-          </section>
-          <p className="pl-hint">{r.origem}</p>
-        </>
+        <section className="pl-card dp-monitor-numeros" aria-label="Números da campanha">
+          <div className="dp-ph"><b>Mensagens</b><span title={r.origem}>destinatários desta versão · tempo de envio {duracao(r.tempoMs)}</span></div>
+          <div className="dp-funil">
+            {[
+              { rotulo: 'Elegíveis', v: r.elegiveis, t: null as number | null, sub: `${n(r.selecionados)} selecionados · ${n(r.excluidos)} excluídos` },
+              { rotulo: 'Aceitas', v: r.aceitas, t: r.elegiveis ? (r.aceitas / r.elegiveis) * 100 : null, sub: `${n(r.pendentes)} pendentes · ${n(r.naFila)} na fila` },
+              { rotulo: 'Entregues', v: r.entregues, t: r.taxaEntrega, sub: '' },
+              { rotulo: 'Lidas', v: r.lidas, t: r.taxaLeitura, sub: '' },
+              { rotulo: 'Respostas', v: r.respostas, t: r.taxaResposta, sub: r.descadastros ? `${n(r.descadastros)} pediram para sair` : '' },
+            ].map(f => (
+              <div key={f.rotulo} className="dp-funil-linha" title={f.sub || undefined}>
+                <span>{f.rotulo}</span>
+                <div className="dp-funil-trilha"><i style={{ width: `${(f.v / Math.max(1, r.elegiveis, r.aceitas)) * 100}%` }} /></div>
+                <span className="dp-funil-valor">{n(f.v)}{f.t != null ? ` · ${pct(f.t)}` : ''}</span>
+              </div>
+            ))}
+          </div>
+          <div className="dp-monitor-rodape">
+            <span className={r.falhas ? 'dp-txt-crit' : ''}><b>{n(r.falhas)}</b> falha(s)</span>
+            <span><b>{n(r.desconhecidas)}</b> sem confirmação</span>
+            <span><b>{n(r.puladas)}</b> não enviadas por regra</span>
+            {r.excluidos > 0 && <span title={Object.entries(r.porMotivo).map(([m, q]) => `${meta.motivos[m] ?? m}: ${q}`).join('\n')}><b>{n(r.excluidos)}</b> fora do público (passe o mouse para ver os motivos)</span>}
+          </div>
+          <p className="dp-nota">{r.origem}</p>
+        </section>
       )}
 
       <section className="pl-card" style={{ marginTop: 12 }}>
@@ -197,8 +226,8 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
           <div className="pl-card-title">Destinatários</div>
           <input className="pl-input" style={{ maxWidth: 240 }} placeholder="Buscar por nome ou final do telefone" value={busca} onChange={e => { setBusca(e.target.value); setPagina(0) }} />
         </div>
-        <div className="cc-chips">
-          {[['', 'Todos'], ['EM_ANDAMENTO', 'Em andamento'], ['CONCLUIDO', 'Concluídos'], ['RESPONDEU', 'Responderam'], ['FALHOU', 'Falhou'], ['INTERROMPIDO', 'Interrompidos'], ['EXCLUIDO', 'Excluídos']].map(([v, rot]) => <button key={v} type="button" className={`pl-chip ${filtro === v ? 'active' : ''}`} onClick={() => { setFiltro(v); setPagina(0) }}>{rot}</button>)}
+        <div className="dp-chips-filtro" role="group" aria-label="Filtrar destinatários">
+          {[['', 'Todos'], ['EM_ANDAMENTO', 'Em andamento'], ['CONCLUIDO', 'Concluídos'], ['RESPONDEU', 'Responderam'], ['FALHOU', 'Falhou'], ['INTERROMPIDO', 'Interrompidos'], ['EXCLUIDO', 'Excluídos']].map(([v, rot]) => <button key={v} type="button" aria-pressed={filtro === v} className={filtro === v ? 'on' : ''} onClick={() => { setFiltro(v); setPagina(0) }}>{rot}</button>)}
         </div>
         {dest && (
           <div className="pl-table-wrap" style={{ marginTop: 8 }}>
@@ -226,27 +255,22 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
 
       {comercial && (
         <section className="pl-card" style={{ marginTop: 12 }} data-disparo-comercial>
-          <div className="pl-card-title">Depois da campanha ({comercial.janelaDias} dias)</div>
-          <section className="ar-agora">
-            <Numero rotulo="Leads que receberam" valor={n(comercial.destinatariosComLead)} />
-            <Numero rotulo="Avançaram de etapa" valor={n(comercial.oportunidades)} />
-            <Numero rotulo="Reativados" valor={n(comercial.leadsReativados)} />
-            <Numero rotulo="Fichas · aprovações" valor={`${n(comercial.fichasDeCredito)} · ${n(comercial.aprovacoes)}`} />
-            <Numero rotulo="Visitas" valor={n(comercial.visitas)} />
-            <Numero rotulo="Vendas" valor={n(comercial.vendas)} detalhe={comercial.receita != null ? comercial.receita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : undefined} />
-          </section>
+          <div className="dp-ph"><b>Depois da campanha</b><span>{comercial.janelaDias} dias depois do início · correlação, não atribuição</span></div>
+          <div className="dp-mini-numeros">
+            {[['Leads que receberam', n(comercial.destinatariosComLead)], ['Avançaram de etapa', n(comercial.oportunidades)], ['Reativados', n(comercial.leadsReativados)], ['Fichas · aprovações', `${n(comercial.fichasDeCredito)} · ${n(comercial.aprovacoes)}`], ['Visitas', n(comercial.visitas)], ['Vendas', `${n(comercial.vendas)}${comercial.receita != null ? ` · ${comercial.receita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}`]].map(([r1, v]) => <div key={r1}><span>{r1}</span><b>{v}</b></div>)}
+          </div>
           <p className="pl-hint">{comercial.origem}</p>
         </section>
       )}
 
-      <div className="pl-grid-2b" style={{ marginTop: 12 }}>
-        <section className="pl-card"><div className="pl-card-title">Histórico da campanha</div>
-          <ul style={{ margin: 0, paddingLeft: 18 }} className="pl-hint">{eventos.map(e => <li key={e.id}>{dataHora(e.criadoEm)} · {e.descricao ?? e.tipo}{e.autorNome ? ` · ${e.autorNome}` : ''}</li>)}</ul>
-        </section>
-        <section className="pl-card"><div className="pl-card-title">Versões</div>
-          <ul style={{ margin: 0, paddingLeft: 18 }} className="pl-hint">{(c.versoes ?? []).map(v => <li key={v.versao}>v{v.versao} · {dataHora(v.criadoEm)} · {v.motivo ?? ''}{v.autorNome ? ` · ${v.autorNome}` : ''}</li>)}</ul>
-        </section>
-      </div>
+      <section className="pl-card" style={{ marginTop: 12 }} aria-label="Histórico da campanha">
+        <div className="dp-ph"><b>Histórico da campanha</b><span>{eventos.length} registro(s)</span></div>
+        <ul className="dp-linha-tempo">{eventos.map(e => <li key={e.id}><time title={new Date(e.criadoEm).toLocaleString('pt-BR')}>{quandoTexto(e.criadoEm)}</time><span>{e.descricao ?? e.tipo}{e.autorNome ? <span className="pl-hint"> · {e.autorNome}</span> : ''}</span></li>)}</ul>
+        <details className="dp-detalhes" style={{ marginTop: 12 }}>
+          <summary>Versões ({(c.versoes ?? []).length})</summary>
+          <ul className="pl-hint">{(c.versoes ?? []).map(v => <li key={v.versao}>v{v.versao} · {dataHora(v.criadoEm)} · {v.motivo ?? ''}{v.autorNome ? ` · ${v.autorNome}` : ''}</li>)}</ul>
+        </details>
+      </section>
       {detalhe && <DetalheDestinatario id={detalhe} fechar={() => setDetalhe(null)} pode={pode} aoMudar={() => void carregar()} />}
     </div>
   )
@@ -322,7 +346,7 @@ function PainelAgora({ s, status, rodada }: { s: SituacaoEnvioDisparo; status: S
   )
 }
 
-const relogio = (ms: number | null) => { if (ms == null || !Number.isFinite(ms)) return '—'; const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sg = t % 60; const p2 = (x: number) => String(x).padStart(2, '0'); return h ? `${h}:${p2(m)}:${p2(sg)}` : `${p2(m)}:${p2(sg)}` }
+const relogio = (ms: number | null) => { if (ms == null || !Number.isFinite(ms)) return '—'; const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sg = t % 60; const p2 = (x: number) => String(x).padStart(2, '0'); if (h >= 24) return `${Math.floor(h / 24)} d ${h % 24} h`; return h ? `${h} h ${p2(m)} min` : `${p2(m)}:${p2(sg)}` }
 
 /** Cronômetros ao vivo (atualizam a cada segundo): próxima mensagem, desde a última, tempo de envio e ritmo médio. */
 function Cronometros({ s, status, proximaRodada }: { s: SituacaoEnvioDisparo; status: StatusCampanhaDisparo; proximaRodada: number | null }) {
