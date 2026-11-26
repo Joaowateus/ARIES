@@ -218,17 +218,33 @@ interface MensagemTravada {
 }
 
 /** Trava uma mensagem pronta deste número remetente (outra rotina rodando ao mesmo tempo pula as travadas). */
+/**
+ * Revezamento entre as campanhas do mesmo número: a vez é da campanha que enviou há mais tempo (ou
+ * ainda não enviou). Antes, a fila andava pela mensagem mais antiga: uma campanha de 1 pessoa esperava
+ * todo o acúmulo de uma campanha grande do mesmo número terminar.
+ */
 async function travarProxima(assistenteId: string, agora: Date): Promise<MensagemTravada | null> {
-  const r = await prisma.$queryRaw<MensagemTravada[]>`
-    UPDATE pro_labore_disparo_mensagens SET status = 'ENVIANDO', "travadaEm" = ${agora}, "atualizadoEm" = ${agora}
-    WHERE id = (
-      SELECT m.id FROM pro_labore_disparo_mensagens m JOIN pro_labore_disparo_campanhas c ON c.id = m."campanhaId"
-      WHERE m."assistenteId" = ${assistenteId} AND m.status = 'AGENDADA' AND m."enviarApos" <= ${agora}
-        AND (m."proximaTentativaEm" IS NULL OR m."proximaTentativaEm" <= ${agora}) AND c.status = 'RUNNING'
-      ORDER BY m."enviarApos", m.passo LIMIT 1 FOR UPDATE OF m SKIP LOCKED)
-    AND status = 'AGENDADA'
-    RETURNING id, "campanhaId", "destinatarioId", passo, "assistenteId", tipo, "midiaId", tentativas, "travadaEm"`
-  return r[0] ?? null
+  const vez = await prisma.$queryRaw<Array<{ campanhaId: string }>>`
+    SELECT m."campanhaId"
+    FROM pro_labore_disparo_mensagens m JOIN pro_labore_disparo_campanhas c ON c.id = m."campanhaId"
+    WHERE m."assistenteId" = ${assistenteId} AND m.status = 'AGENDADA' AND m."enviarApos" <= ${agora}
+      AND (m."proximaTentativaEm" IS NULL OR m."proximaTentativaEm" <= ${agora}) AND c.status = 'RUNNING'
+    GROUP BY m."campanhaId"
+    ORDER BY (SELECT max(x."aceitaEm") FROM pro_labore_disparo_mensagens x WHERE x."campanhaId" = m."campanhaId" AND x."assistenteId" = ${assistenteId}) ASC NULLS FIRST, min(m."enviarApos") ASC
+    LIMIT 10`
+  for (const { campanhaId } of vez) {
+    const r = await prisma.$queryRaw<MensagemTravada[]>`
+      UPDATE pro_labore_disparo_mensagens SET status = 'ENVIANDO', "travadaEm" = ${agora}, "atualizadoEm" = ${agora}
+      WHERE id = (
+        SELECT m.id FROM pro_labore_disparo_mensagens m JOIN pro_labore_disparo_campanhas c ON c.id = m."campanhaId"
+        WHERE m."assistenteId" = ${assistenteId} AND m."campanhaId" = ${campanhaId} AND m.status = 'AGENDADA' AND m."enviarApos" <= ${agora}
+          AND (m."proximaTentativaEm" IS NULL OR m."proximaTentativaEm" <= ${agora}) AND c.status = 'RUNNING'
+        ORDER BY m."enviarApos", m.passo LIMIT 1 FOR UPDATE OF m SKIP LOCKED)
+      AND status = 'AGENDADA'
+      RETURNING id, "campanhaId", "destinatarioId", passo, "assistenteId", tipo, "midiaId", tentativas, "travadaEm"`
+    if (r[0]) return r[0]
+  }
+  return null
 }
 
 /** Motivo para não mandar agora (revalidado na hora de cada mensagem), ou null. */
@@ -952,9 +968,24 @@ export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): P
     prisma.disparoMensagem.count({ where: { assistenteId: c.assistenteId, aceitaEm: { gte: new Date(agora.getTime() - 60 * MIN) } } }),
     prisma.disparoMensagem.count({ where: { assistenteId: c.assistenteId, aceitaEm: { gte: new Date(agora.getTime() - 24 * 60 * MIN) } } }),
   ])
-  if (dia >= cfg.maxPorDia) return s('LIMITE_DIA', 'Limite do dia atingido', `${quem} já enviou ${dia} mensagens nas últimas 24 h (limite ${cfg.maxPorDia}). Continua sozinho quando o limite liberar.`)
-  const maxHora = ig ? Math.min(cfg.maxPorHora, MAX_POR_HORA_INSTAGRAM) : cfg.maxPorHora
-  if (hora >= maxHora) return s('LIMITE_HORA', 'Limite da hora atingido', `${quem} já enviou ${hora} mensagens na última hora (limite ${maxHora}). Continua sozinho em alguns minutos.`)
+  // O limite é do número (todas as campanhas dele juntas) e vale o menor entre as campanhas ativas, como no envio.
+  const ativasDoNumero = await prisma.disparoCampanha.findMany({ where: { status: 'RUNNING', mensagens: { some: { assistenteId: c.assistenteId, status: 'AGENDADA' } } }, select: { config: true } })
+  const cfgs = [cfg, ...ativasDoNumero.map(x => lerConfigEnvio(x.config, cfgLoja.envio))]
+  const maxDia = Math.min(...cfgs.map(x => x.maxPorDia))
+  const maxHora = Math.min(...cfgs.map(x => x.maxPorHora), ig ? MAX_POR_HORA_INSTAGRAM : Infinity)
+  const remetenteId = c.assistenteId
+  const ocupacao = async (desde: Date, excesso: number, janelaMs: number) => {
+    // Quando abre a próxima vaga: a mensagem que sai da janela e libera o limite.
+    const [sai] = await prisma.disparoMensagem.findMany({ where: { assistenteId: remetenteId, aceitaEm: { gte: desde } }, orderBy: { aceitaEm: 'asc' }, skip: excesso, take: 1, select: { aceitaEm: true } })
+    const porCampanha = await prisma.disparoMensagem.groupBy({ by: ['campanhaId'], where: { assistenteId: remetenteId, aceitaEm: { gte: desde } }, _count: { _all: true }, orderBy: { campanhaId: 'asc' } })
+    const desta = (porCampanha.find(x => x.campanhaId === campanhaId)?._count as { _all?: number } | undefined)?._all ?? 0
+    return { abre: sai?.aceitaEm ? new Date(sai.aceitaEm.getTime() + janelaMs) : null, campanhas: porCampanha.length, desta }
+  }
+  const hora1 = (d: Date) => d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+  const explicar = (o: { abre: Date | null; campanhas: number; desta: number }, total: number, limite: number, periodo: string) =>
+    `${quem} já enviou ${total} mensagens ${periodo}, somando ${o.campanhas === 1 ? 'a campanha' : `as ${o.campanhas} campanhas`} que usam ${ig ? 'esta conta' : 'este número'} (desta: ${o.desta}); o limite é ${limite}${limite < cfg.maxPorHora && periodo === 'na última hora' ? ' (o menor entre as campanhas ativas do número)' : ''}. ${o.abre ? `A próxima vaga abre às ${hora1(o.abre)}` : 'A próxima vaga abre em breve'} e as campanhas do número se revezam: esta não espera as outras terminarem. Para ir mais rápido, aumente o limite por hora em Configurações (até 400).`
+  if (dia >= maxDia) { const o = await ocupacao(new Date(agora.getTime() - 24 * 60 * MIN), dia - maxDia, 24 * 60 * MIN); return s('LIMITE_DIA', 'Limite do dia atingido', explicar(o, dia, maxDia, 'nas últimas 24 h'), o.abre) }
+  if (hora >= maxHora) { const o = await ocupacao(new Date(agora.getTime() - 60 * MIN), hora - maxHora, 60 * MIN); return s('LIMITE_HORA', 'Limite da hora atingido', explicar(o, hora, maxHora, 'na última hora'), o.abre) }
   const proximoPorRitmo = ultima?.aceitaEm ? new Date(ultima.aceitaEm.getTime() + cfg.intervaloSeg * 1000) : agora
   const prox = new Date(Math.max(proximoPorRitmo.getTime(), pendentes.enviarApos.getTime(), pendentes.proximaTentativaEm?.getTime() ?? 0, agora.getTime()))
   if (prox.getTime() - agora.getTime() > 1000) return s('INTERVALO', 'Enviando com intervalo', `Uma mensagem de cada vez, com pelo menos ${cfg.intervaloSeg} s entre elas, para proteger ${ig ? 'a conta' : 'o número'}.${ig ? ' Cada pessoa só recebe dentro da janela da Meta.' : ''}`, prox)
