@@ -85,6 +85,7 @@ const zDefinicao = z.object({
   base: z.enum(BASES), predefinido: z.string().max(40).nullable().optional(),
   filtros: z.object({ op: z.enum(['E', 'OU']), itens: z.array(zCond).max(30) }).nullable().optional(),
   manual: z.object({ incluir: z.array(z.object({ tipo: z.enum(['LEAD', 'CLIENTE', 'CONVERSA']), id: z.string().max(40), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), excluir: z.array(z.string().max(30)).max(50_000).optional(), numeros: z.array(z.object({ telefone: z.string().max(30), nome: z.string().max(160).nullable().optional() })).max(50_000).optional(), apenasManual: z.boolean().optional(), listaAutorizada: z.boolean().optional(), listaAutorizadaPor: z.string().max(160).nullable().optional() }).nullable().optional(),
+  campanha: z.object({ id: z.string().max(40), quem: z.enum(['RESPONDERAM', 'NAO_RESPONDERAM']) }).nullable().optional(),
 })
 const zPasso = z.object({ tipo: z.enum(TIPOS_PASSO), texto: z.string().max(4000).nullable().optional(), midiaId: z.string().max(40).nullable().optional(), esperarMin: z.number().int().min(0).max(60 * 24 * 30).optional() })
 const zConteudo = z.object({ passos: z.array(zPasso).min(1).max(10), fallbacks: z.record(z.string(), z.string().max(120)).optional(), rodapeSair: z.boolean().optional() })

@@ -4,11 +4,11 @@
 // (contagem, motivos de exclusão e a lista paginada no servidor — nunca milhares de contatos no navegador).
 // Redesign 26/11: os quatro caminhos em abas (Prontos · Filtros · Escolher · Colar lista) e interruptores.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { disparoApi, type CanalDisparo, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoPublicoDisparo, type FinalidadeDisparo, type GrupoDisparo, type PreviaPublicoDisparo } from '@/lib/proLaboreApi'
+import { disparoApi, type ItemCampanhaDisparo, type CanalDisparo, type CondicaoDisparo, type ConteudoDisparo, type DefinicaoPublicoDisparo, type FinalidadeDisparo, type GrupoDisparo, type PreviaPublicoDisparo } from '@/lib/proLaboreApi'
 import { Paginacao, erroDe, n, useMeta, AvisoAutorizacao } from './util'
 import { Interruptor } from './ui'
 
-type AbaPublico = 'prontos' | 'filtros' | 'escolher' | 'colar'
+type AbaPublico = 'prontos' | 'filtros' | 'escolher' | 'colar' | 'campanha'
 
 const BASES: Array<{ valor: DefinicaoPublicoDisparo['base']; rotulo: string }> = [
   { valor: 'TODOS', rotulo: 'Todos os contatos' }, { valor: 'LEADS', rotulo: 'Leads' }, { valor: 'CLIENTES', rotulo: 'Clientes' }, { valor: 'CONTATARAM', rotulo: 'Quem já escreveu no WhatsApp' }, { valor: 'EQUIPE', rotulo: 'Equipe (WhatsApp conectado)' },
@@ -129,7 +129,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
   const [verEscolhidos, setVerEscolhidos] = useState(false)
   const manual = definicao.manual ?? {}
   const filtros = definicao.filtros ?? { op: 'E', itens: [] }
-  const [aba, setAba] = useState<AbaPublico>(() => (manual.numeros?.length ? 'colar' : filtros.itens.length ? 'filtros' : manual.incluir?.length ? 'escolher' : 'prontos'))
+  const [aba, setAba] = useState<AbaPublico>(() => (definicao.base === 'CAMPANHA' ? 'campanha' : manual.numeros?.length ? 'colar' : filtros.itens.length ? 'filtros' : manual.incluir?.length ? 'escolher' : 'prontos'))
 
   const atualizar = useCallback(async (p = 0, exc = verExcluidos) => {
     const id = ++ultima.current
@@ -177,7 +177,7 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
       {!ig && <>
       <p className="pl-hint dp-publico-guia">Use um caminho ou combine: quem você escolhe à mão ou cola soma ao público pronto e aos filtros. A prévia abaixo mostra exatamente quem vai receber e quem fica de fora (com o motivo).</p>
       <div className="dp-subabas" role="tablist" aria-label="Como montar o público">
-        {([['prontos', 'Prontos', definicao.predefinido ? '●' : ''], ['filtros', 'Filtros', filtros.itens.length || ''], ['escolher', 'Escolher pessoas', (manual.incluir ?? []).length || ''], ['colar', 'Colar lista', (manual.numeros ?? []).length || '']] as Array<[AbaPublico, string, string | number]>).map(([k, r, q]) => (
+        {([['prontos', 'Prontos', definicao.predefinido ? '●' : ''], ['filtros', 'Filtros', filtros.itens.length || ''], ['escolher', 'Escolher pessoas', (manual.incluir ?? []).length || ''], ['colar', 'Colar lista', (manual.numeros ?? []).length || ''], ['campanha', 'De uma campanha', definicao.base === 'CAMPANHA' ? '●' : '']] as Array<[AbaPublico, string, string | number]>).map(([k, r, q]) => (
           <button key={k} type="button" role="tab" aria-selected={aba === k} className={aba === k ? 'on' : ''} onClick={() => setAba(k)} data-aba-publico={k}>{r}{q !== '' && <small>{q}</small>}</button>
         ))}
       </div>
@@ -193,11 +193,14 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
         </div>
       </div>
       )}
+      {aba === 'campanha' && <DeUmaCampanha definicao={definicao} mudar={mudar} />}
       {aba === 'filtros' && <>
+      {definicao.base === 'CAMPANHA' && <p className="pl-hint">Base: quem recebeu uma campanha (aba “De uma campanha”). Os filtros abaixo valem para quem está no CRM; número fora do CRM não tem esses dados e fica de fora quando há filtro.</p>}
       <div className="pl-field-grid">
         <div className="pl-field"><label htmlFor="dp-base">De onde vêm os contatos</label>
-          <select id="dp-base" className="pl-select" value={definicao.base} onChange={e => mudar({ ...definicao, base: e.target.value as DefinicaoPublicoDisparo['base'], predefinido: null })}>
+          <select id="dp-base" className="pl-select" value={definicao.base} onChange={e => mudar({ ...definicao, base: e.target.value as DefinicaoPublicoDisparo['base'], predefinido: null, campanha: e.target.value === 'CAMPANHA' ? definicao.campanha : null })}>
             {BASES.filter(b => meta.gestao || (b.valor !== 'CLIENTES' && b.valor !== 'EQUIPE')).map(b => <option key={b.valor} value={b.valor}>{b.rotulo}</option>)}
+            {definicao.base === 'CAMPANHA' && <option value="CAMPANHA">Quem recebeu uma campanha</option>}
           </select>
         </div>
       </div>
@@ -316,6 +319,50 @@ export function PublicoEditor({ definicao, mudar, finalidade, conteudo, assisten
           </>
         )}
       </section>
+    </div>
+  )
+}
+
+/** Quem recebeu uma campanha de WhatsApp e respondeu, ou não respondeu (para dar sequência a cada grupo). */
+function DeUmaCampanha({ definicao, mudar }: { definicao: DefinicaoPublicoDisparo; mudar: (d: DefinicaoPublicoDisparo) => void }) {
+  const meta = useMeta()
+  const [busca, setBusca] = useState('')
+  const [itens, setItens] = useState<ItemCampanhaDisparo[] | null>(null)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      disparoApi.campanhas.listar({ de: meta.gestao ? 'equipe' : undefined, busca: busca.trim() || undefined })
+        .then(r => setItens(r.itens.filter(c => (c.canal ?? 'WHATSAPP') === 'WHATSAPP' && !!c.iniciadaEm))).catch(() => setItens([]))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [busca, meta.gestao])
+  const ref = definicao.base === 'CAMPANHA' ? definicao.campanha : null
+  const escolher = (id: string, quem: 'RESPONDERAM' | 'NAO_RESPONDERAM') => mudar({ base: 'CAMPANHA', campanha: { id, quem }, predefinido: null, filtros: null, manual: definicao.manual })
+  return (
+    <div className="pl-field" data-publico-campanha>
+      <label htmlFor="dp-camp-busca">Quem recebeu uma campanha</label>
+      <p className="pl-hint" style={{ margin: '0 0 8px' }}>Separe quem respondeu de quem não respondeu e mande a mensagem certa para cada grupo. {meta.gestao ? 'Campanhas da loja toda.' : 'Só as suas campanhas.'} Quem pediu para sair fica de fora.</p>
+      <div className="dp-linha" style={{ marginBottom: 8 }}>
+        <span role="radiogroup" aria-label="Quem" className="dp-seg p">
+          {([['RESPONDERAM', 'Responderam'], ['NAO_RESPONDERAM', 'Não responderam']] as const).map(([v, r]) => <button key={v} type="button" role="radio" aria-checked={ref?.quem === v} className={ref?.quem === v ? 'on' : ''} disabled={!ref} onClick={() => ref && escolher(ref.id, v)}>{r}</button>)}
+        </span>
+        <input id="dp-camp-busca" className="pl-input dp-busca" type="search" placeholder="Buscar campanha" value={busca} onChange={e => setBusca(e.target.value)} />
+      </div>
+      {!itens ? <p className="pl-hint" aria-busy="true">Carregando…</p> : !itens.length ? <p className="pl-hint">Nenhuma campanha de WhatsApp que já começou a enviar.</p> : (
+        <ul className="ar-fila">
+          {itens.map(c => {
+            const on = ref?.id === c.id
+            return (
+              <li key={c.id} className="ar-fila-item">
+                <div><div className="ar-fila-titulo">{c.nome}</div><div className="pl-hint">{meta.finalidades[c.finalidade]}{c.iniciadaEm ? ` · começou ${new Date(c.iniciadaEm).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : ''}{c.criadoPorNome ? ` · ${c.criadoPorNome}` : ''}</div></div>
+                <span className="cc-chips">
+                  <button type="button" className={`pl-btn ${on && ref?.quem === 'RESPONDERAM' ? 'pl-btn-primary' : ''}`} onClick={() => escolher(c.id, 'RESPONDERAM')} data-campanha-quem="RESPONDERAM">Responderam{on && ref?.quem === 'RESPONDERAM' ? ' ✓' : ''}</button>
+                  <button type="button" className={`pl-btn ${on && ref?.quem === 'NAO_RESPONDERAM' ? 'pl-btn-primary' : ''}`} onClick={() => escolher(c.id, 'NAO_RESPONDERAM')} data-campanha-quem="NAO_RESPONDERAM">Não responderam{on && ref?.quem === 'NAO_RESPONDERAM' ? ' ✓' : ''}</button>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

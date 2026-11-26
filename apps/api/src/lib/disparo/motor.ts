@@ -252,6 +252,14 @@ async function motivoParaInterromper(m: MensagemTravada, c: { usuarioId: string;
   if (d.status === 'INTERROMPIDO' || d.status === 'FALHOU') return d.status
   if (c.cfg.pararAoResponder && d.respondeuEm) return 'RESPONDEU'
   if (ehRemetenteInstagram(m.assistenteId)) return motivoInstagram(m, c, d)
+  // Público "quem não respondeu à campanha X": respondeu lá depois, sai deste público.
+  if (c.cfg.pararAoSairDoPublico && c.publico) {
+    const ref = (c.publico as unknown as DefinicaoPublico).campanha
+    if ((c.publico as unknown as DefinicaoPublico).base === 'CAMPANHA' && ref?.quem === 'NAO_RESPONDERAM') {
+      const respondeu = await prisma.disparoDestinatario.findFirst({ where: { campanhaId: ref.id, telefone: d.telefone, respondeuEm: { not: null } }, select: { id: true } })
+      if (respondeu) return 'SAIU_DO_PUBLICO'
+    }
+  }
   // Saiu do público (ex.: o lead mudou de etapa no CRM): a sequência para. Conferido na hora de cada envio.
   if (c.cfg.pararAoSairDoPublico && d.leadId && c.publico) {
     const def = c.publico as unknown as DefinicaoPublico
@@ -983,7 +991,7 @@ export async function situacaoDoEnvio(campanhaId: string, agora = new Date()): P
   }
   const hora1 = (d: Date) => d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
   const explicar = (o: { abre: Date | null; campanhas: number; desta: number }, total: number, limite: number, periodo: string) =>
-    `${quem} já enviou ${total} mensagens ${periodo}, somando ${o.campanhas === 1 ? 'a campanha' : `as ${o.campanhas} campanhas`} que usam ${ig ? 'esta conta' : 'este número'} (desta: ${o.desta}); o limite é ${limite}${limite < cfg.maxPorHora && periodo === 'na última hora' ? ' (o menor entre as campanhas ativas do número)' : ''}. ${o.abre ? `A próxima vaga abre às ${hora1(o.abre)}` : 'A próxima vaga abre em breve'} e as campanhas do número se revezam: esta não espera as outras terminarem. Para ir mais rápido, aumente o limite por hora em Configurações (até 400).`
+    `${quem} já enviou ${total} mensagens ${periodo}, somando ${o.campanhas === 1 ? 'a campanha' : `as ${o.campanhas} campanhas`} que usam ${ig ? 'esta conta' : 'este número'} (desta: ${o.desta}); o limite é ${limite}${limite < cfg.maxPorHora && periodo === 'na última hora' ? ' (o menor entre as campanhas ativas do número)' : ''}. ${o.abre ? `A próxima vaga abre às ${hora1(o.abre)}` : 'A próxima vaga abre em breve'} e as campanhas do número se revezam: esta não espera as outras terminarem. ${periodo === 'na última hora' ? 'Para ir mais rápido, aumente o limite por hora em Configurações (até 400).' : 'Para enviar mais por dia, aumente o limite por dia em Configurações (até 3.000).'}`
   if (dia >= maxDia) { const o = await ocupacao(new Date(agora.getTime() - 24 * 60 * MIN), dia - maxDia, 24 * 60 * MIN); return s('LIMITE_DIA', 'Limite do dia atingido', explicar(o, dia, maxDia, 'nas últimas 24 h'), o.abre) }
   if (hora >= maxHora) { const o = await ocupacao(new Date(agora.getTime() - 60 * MIN), hora - maxHora, 60 * MIN); return s('LIMITE_HORA', 'Limite da hora atingido', explicar(o, hora, maxHora, 'na última hora'), o.abre) }
   const proximoPorRitmo = ultima?.aceitaEm ? new Date(ultima.aceitaEm.getTime() + cfg.intervaloSeg * 1000) : agora

@@ -4,7 +4,7 @@
 // campanha (atualiza sozinho a cada 5 s enquanto ela está ativa): números, destinatários, o histórico
 // de cada um (tentativas, eventos, falhas), decisões sobre envios sem confirmação e o resultado comercial.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { disparoApi, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
+import { disparoApi, type CampanhaDisparoEntrada, type CampanhaDisparo, type ComercialDisparo, type DestinatarioDisparo, type DetalheDestinatarioDisparo, type EventoDisparo, type SituacaoEnvioDisparo, type StatusCampanhaDisparo } from '@/lib/proLaboreApi'
 import { Assistente } from './Assistente'
 import { MenuAcoes, Quando, quandoTexto, useAvisar, useConfirmar, usePerguntar } from './ui'
 import { Paginacao, Progresso, erroAmigavel, ROTULO_DESTINATARIO, ROTULO_INTERRUPCAO, ROTULO_MENSAGEM, SeloStatus, dataHora, duracao, erroDe, n, pct, useEscopo, useMeta } from './util'
@@ -22,6 +22,8 @@ export function Campanhas({ aberta, abrir, nova = false }: { aberta: string | nu
   const [lista, setLista] = useState<Awaited<ReturnType<typeof disparoApi.campanhas.listar>> | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [editando, setEditando] = useState<CampanhaDisparo | null | 'nova'>(nova ? 'nova' : null)
+  // Campanha nova a partir de outra (ex.: só para quem respondeu / não respondeu).
+  const [preset, setPreset] = useState<Partial<CampanhaDisparoEntrada> | null>(null)
   // "+ Nova campanha" da barra do topo (?nova=1) abre o assistente.
   const [novaAntes, setNovaAntes] = useState(nova)
   if (nova !== novaAntes) { setNovaAntes(nova); if (nova) setEditando('nova') }
@@ -43,8 +45,9 @@ export function Campanhas({ aberta, abrir, nova = false }: { aberta: string | nu
     try { const r = await disparoApi.campanhas.excluir(ids); avisar(`${r.excluidas} campanha(s) excluída(s)${r.canceladas ? `, ${r.canceladas} cancelada(s) antes` : ''}`); setMarcadas([]); carregar() } catch (e) { setErro(erroDe(e)) }
   }
 
+  if (preset) return <Assistente campanha={null} preset={preset} fechar={() => setPreset(null)} abrirMonitor={id => { setPreset(null); abrir(id) }} />
   if (editando) return <Assistente campanha={editando === 'nova' ? null : editando} fechar={() => { setEditando(null); if (nova) abrir(null) }} abrirMonitor={id => { setEditando(null); abrir(id) }} />
-  if (aberta) return <Monitor id={aberta} voltar={() => abrir(null)} editar={c => setEditando(c)} abrir={abrir} />
+  if (aberta) return <Monitor id={aberta} voltar={() => abrir(null)} editar={c => setEditando(c)} abrir={abrir} novaCom={setPreset} />
   const contagens = lista?.contagens ?? {}
   const contar = (st?: string) => st ? st.split(',').reduce((a, x) => a + (contagens[x as StatusCampanhaDisparo] ?? 0), 0) : Object.entries(contagens).filter(([k]) => k !== 'ARCHIVED').reduce((a, [, v]) => a + (v ?? 0), 0)
   return (
@@ -103,7 +106,7 @@ export function Campanhas({ aberta, abrir, nova = false }: { aberta: string | nu
   )
 }
 
-function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void; editar: (c: CampanhaDisparo) => void; abrir: (id: string) => void }) {
+function Monitor({ id, voltar, editar, abrir, novaCom }: { id: string; voltar: () => void; editar: (c: CampanhaDisparo) => void; abrir: (id: string) => void; novaCom: (p: Partial<CampanhaDisparoEntrada>) => void }) {
   const meta = useMeta()
   const [c, setC] = useState<CampanhaDisparo | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -220,6 +223,8 @@ function Monitor({ id, voltar, editar, abrir }: { id: string; voltar: () => void
           <p className="dp-nota">{r.origem}</p>
         </section>
       )}
+
+      {c.iniciadaEm && (c.canal ?? 'WHATSAPP') === 'WHATSAPP' && <Separar c={c} pode={pode} novaCom={novaCom} verQuemRespondeu={() => { setFiltro('RESPONDEU'); setPagina(0) }} />}
 
       <section className="pl-card" style={{ marginTop: 12 }}>
         <div className="dp-linha" style={{ justifyContent: 'space-between' }}>
@@ -369,5 +374,48 @@ function Cronometros({ s, status, proximaRodada }: { s: SituacaoEnvioDisparo; st
       <div><span>Tempo de envio</span><b className="pl-mono">{ini != null ? relogio(fimRef - ini) : '—'}</b></div>
       <div><span>Ritmo médio</span><b className="pl-mono">{ritmo != null ? `${relogio(ritmo)} / msg` : '—'}</b>{t.intervaloSeg != null && <small className="pl-hint">mínimo {t.intervaloSeg} s · {t.enviadas} enviada(s)</small>}</div>
     </div>
+  )
+}
+
+/**
+ * Depois do envio: separar quem respondeu de quem não respondeu, cada grupo virando o público de uma
+ * campanha nova (base "contatos da campanha"). Os números são a prévia do servidor, com as mesmas
+ * regras do envio (autorização, carteira, quem pediu para sair).
+ */
+function Separar({ c, pode, novaCom, verQuemRespondeu }: { c: CampanhaDisparo; pode: boolean; novaCom: (p: Partial<CampanhaDisparoEntrada>) => void; verQuemRespondeu: () => void }) {
+  const [q, setQ] = useState<{ RESPONDERAM: number | null; NAO_RESPONDERAM: number | null }>({ RESPONDERAM: null, NAO_RESPONDERAM: null })
+  const contar = useCallback(() => {
+    for (const quem of ['RESPONDERAM', 'NAO_RESPONDERAM'] as const) {
+      disparoApi.publicos.previa({ definicao: { base: 'CAMPANHA', campanha: { id: c.id, quem } }, finalidade: c.finalidade, conteudo: null, assistenteId: c.assistenteId })
+        .then(r => setQ(x => ({ ...x, [quem]: r.elegiveis }))).catch(() => undefined)
+    }
+  }, [c.id, c.finalidade, c.assistenteId])
+  useEffect(() => { contar() }, [contar])
+  const nova = (quem: 'RESPONDERAM' | 'NAO_RESPONDERAM') => novaCom({
+    nome: `${c.nome} · ${quem === 'RESPONDERAM' ? 'quem respondeu' : 'quem não respondeu'}`.slice(0, 120),
+    objetivo: quem === 'RESPONDERAM' ? 'Dar sequência a quem respondeu' : 'Retomar quem não respondeu',
+    finalidade: c.finalidade, canal: 'WHATSAPP', assistenteId: c.assistenteId, publicoId: null,
+    publico: { base: 'CAMPANHA', campanha: { id: c.id, quem } },
+    // Quem não respondeu e responder à primeira depois sai da sequência nova.
+    config: quem === 'NAO_RESPONDERAM' ? { pararAoSairDoPublico: true } : {},
+  })
+  return (
+    <section className="pl-card dp-separar" style={{ marginTop: 12 }} data-separar-respostas>
+      <div className="dp-ph"><b>Separar quem respondeu</b><span>cada grupo pode virar uma campanha nova, com a mensagem certa para ele</span></div>
+      <div className="dp-separar-grupos">
+        {([['RESPONDERAM', 'Responderam', 'Dê sequência: condições, simulação, convite para a loja.'], ['NAO_RESPONDERAM', 'Não responderam', 'Receberam e não responderam. Tente outra abordagem, em outro dia ou horário.']] as const).map(([quem, titulo, dica]) => (
+          <div key={quem} className="dp-separar-grupo" data-grupo={quem}>
+            <span className="dp-config-rotulo">{titulo}</span>
+            <b>{q[quem] == null ? '…' : n(q[quem]!)}</b>
+            <small className="pl-hint">{dica}</small>
+            <div className="dp-linha">
+              {pode && <button type="button" className="pl-btn pl-btn-primary" disabled={!q[quem]} onClick={() => nova(quem)} data-nova-para={quem}>Criar campanha</button>}
+              {quem === 'RESPONDERAM' && <button type="button" className="pl-btn pl-btn-ghost" onClick={verQuemRespondeu}>Ver quem</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="pl-hint">Conta só quem recebeu esta campanha e ainda pode receber agora (quem pediu para sair fica de fora). Também dá para montar esses públicos em Públicos › Novo público › aba “De uma campanha”.</p>
+    </section>
   )
 }

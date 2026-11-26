@@ -75,7 +75,7 @@ export interface ConfigLoja {
   palavrasSair: string[]
 }
 export const CONFIG_PADRAO: ConfigLoja = {
-  envio: { janela: { inicio: '09:00', fim: '19:00', dias: [1, 2, 3, 4, 5, 6] }, intervaloSeg: 20, maxPorHora: 90, maxPorDia: 400, pararAoResponder: true, pararAoComprar: true, pararSeVendedorAssumir: true, maxTentativas: 4, continua: false, pararAoSairDoPublico: false, remetentePorVendedor: false },
+  envio: { janela: { inicio: '09:00', fim: '19:00', dias: [1, 2, 3, 4, 5, 6] }, intervaloSeg: 20, maxPorHora: 90, maxPorDia: 2000, pararAoResponder: true, pararAoComprar: true, pararSeVendedorAssumir: true, maxTentativas: 4, continua: false, pararAoSairDoPublico: false, remetentePorVendedor: false },
   baseMarketing: 'EXPLICITA',
   exigirAprovacao: false, // sem aprovação obrigatória (pedido do dono, 25/11/2026); o dono liga em Configurações
   rodapeSair: 'Para não receber mais mensagens como esta, responda SAIR.',

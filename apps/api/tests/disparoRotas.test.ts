@@ -391,3 +391,48 @@ test('Visão geral (painel): período anterior, envios por dia, pedem atenção 
   assert.deepEqual(await prisma.disparoCampanha.findUnique({ where: { id }, select: { atualizadoEm: true } }), antes)
   await prisma.disparoCampanha.update({ where: { id }, data: { status: 'CANCELLED' } })
 })
+
+test('público de uma campanha: quem respondeu e quem não respondeu; só quem recebeu, sem quem saiu; carteira e escopo', async t => {
+  if (!temBanco) return t.skip('sem banco de teste')
+  // Campanha da vendedora para a Lia (lead dela) e três números novos colados.
+  const numeros = [{ telefone: '91987300001', nome: 'Ana Respondeu' }, { telefone: '91987300002', nome: 'Beto Calado' }, { telefone: '91987300003', nome: 'Caio Saiu' }]
+  const c = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), nome: 'Primeira abordagem', publico: { base: 'LEADS', manual: { numeros } } })
+  assert.equal(c.status, 201, JSON.stringify(c.corpo))
+  const id = String(c.corpo.id)
+  await api('VEND', 'POST', `/disparo/campanhas/${id}/validar`)
+  await api('VEND', 'POST', `/disparo/campanhas/${id}/iniciar`, {})
+  const { rodarDisparo } = await import('../src/lib/disparo/motor')
+  await rodarDisparo(8000)
+  const ds = await prisma.disparoDestinatario.findMany({ where: { campanhaId: id }, include: { mensagens: true } })
+  const por = (tel: string) => ds.find(d => d.telefone === tel)!
+  assert.ok(ds.every(d => d.mensagens.some(m => m.aceitaEm)), 'todos receberam')
+  // Ana e Caio responderam; Caio pediu para sair; Lia e Beto não responderam.
+  await prisma.disparoDestinatario.updateMany({ where: { id: { in: [por('5591987300001').id, por('5591987300003').id] } }, data: { respondeuEm: new Date() } })
+  await prisma.disparoEvento.create({ data: { usuarioId: loja.id, campanhaId: id, destinatarioId: por('5591987300003').id, tipo: 'DESCADASTRO', descricao: 'SAIR' } })
+  const previa = (quem: string, como: 'VEND' | 'DONO' | 'SUP' = 'VEND') => api(como, 'POST', '/disparo/publicos/previa', { definicao: { base: 'CAMPANHA', campanha: { id, quem } }, finalidade: 'OPERACIONAL', conteudo: null })
+  const r = await previa('RESPONDERAM')
+  assert.equal(r.status, 200, JSON.stringify(r.corpo))
+  assert.equal(r.corpo.elegiveis, 1, 'só a Ana (o Caio saiu)')
+  const nr = await previa('NAO_RESPONDERAM')
+  assert.equal(nr.corpo.elegiveis, 2, 'Lia e Beto')
+  // O dono vê a campanha da loja; o supervisor também, mas a Lia é lead da vendedora (fica, gestão vê a loja).
+  assert.equal((await previa('NAO_RESPONDERAM', 'DONO')).corpo.elegiveis, 2)
+  // Campanha de outra pessoa: a vendedora não usa.
+  const doSup = await api('SUP', 'POST', '/disparo/campanhas', { ...campanha(loja.asSup), nome: 'Do supervisor', publico: { base: 'LEADS', manual: { apenasManual: true, numeros: [{ telefone: '91987300009' }] } } })
+  const idSup = String(doSup.corpo.id)
+  await prisma.disparoCampanha.update({ where: { id: idSup }, data: { iniciadaEm: new Date() } })
+  const alheia = await api('VEND', 'POST', '/disparo/publicos/previa', { definicao: { base: 'CAMPANHA', campanha: { id: idSup, quem: 'NAO_RESPONDERAM' } }, finalidade: 'OPERACIONAL', conteudo: null })
+  assert.equal(alheia.corpo.selecionados, 0)
+  // Campanha nova para quem não respondeu: quem responder à primeira depois sai da sequência.
+  const seg = await api('VEND', 'POST', '/disparo/campanhas', { ...campanha(loja.asVend), nome: 'Retomar quem não respondeu', publico: { base: 'CAMPANHA', campanha: { id, quem: 'NAO_RESPONDERAM' } }, config: { ...campanha(loja.asVend).config, pararAoSairDoPublico: true } })
+  assert.equal(seg.status, 201, JSON.stringify(seg.corpo))
+  const idSeg = String(seg.corpo.id)
+  await api('VEND', 'POST', `/disparo/campanhas/${idSeg}/validar`)
+  assert.equal(await prisma.disparoDestinatario.count({ where: { campanhaId: idSeg, status: 'ELEGIVEL' } }), 2)
+  await prisma.disparoDestinatario.updateMany({ where: { id: por('5591987300002').id }, data: { respondeuEm: new Date() } })
+  await api('VEND', 'POST', `/disparo/campanhas/${idSeg}/iniciar`, {})
+  await rodarDisparo(8000)
+  const beto = await prisma.disparoDestinatario.findFirst({ where: { campanhaId: idSeg, telefone: '5591987300002' }, include: { mensagens: true } })
+  assert.equal(beto?.mensagens.some(m => m.aceitaEm), false, 'Beto respondeu à primeira: não recebe a retomada')
+  assert.equal(beto?.interrompidoPor, 'SAIU_DO_PUBLICO')
+})

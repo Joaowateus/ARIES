@@ -4112,7 +4112,9 @@ export interface ConteudoDisparo { passos: PassoDisparo[]; fallbacks?: Record<st
 export interface CondicaoDisparo { campo: string; op: string; valor?: unknown }
 export interface GrupoDisparo { op: 'E' | 'OU'; itens: Array<CondicaoDisparo | GrupoDisparo> }
 export interface DefinicaoPublicoDisparo {
-  base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM' | 'EQUIPE' | 'INSTAGRAM_DM' | 'INSTAGRAM_COMENTARIOS'; predefinido?: string | null; filtros?: GrupoDisparo | null
+  base: 'TODOS' | 'LEADS' | 'CLIENTES' | 'CONTATARAM' | 'EQUIPE' | 'INSTAGRAM_DM' | 'INSTAGRAM_COMENTARIOS' | 'CAMPANHA'; predefinido?: string | null; filtros?: GrupoDisparo | null
+  /** Base CAMPANHA: quem recebeu uma campanha de WhatsApp e respondeu (ou não respondeu). */
+  campanha?: { id: string; quem: 'RESPONDERAM' | 'NAO_RESPONDERAM' } | null
   manual?: { incluir?: Array<{ tipo: 'LEAD' | 'CLIENTE' | 'CONVERSA'; id: string; nome?: string }>; excluir?: string[]; apenasManual?: boolean; /** Lista colada: números de qualquer pessoa, mesmo fora do CRM. */ numeros?: Array<{ telefone: string; nome?: string | null }>; /** Declaração de quem colou: as pessoas aceitaram receber mensagens (vale para promoção). */ listaAutorizada?: boolean; listaAutorizadaPor?: string | null } | null
 }
 export interface ConfigEnvioDisparo { janela: { inicio: string; fim: string; dias: number[] }; intervaloSeg: number; maxPorHora: number; maxPorDia: number; pararAoResponder: boolean; pararAoComprar: boolean; pararSeVendedorAssumir: boolean; maxTentativas: number; continua?: boolean; pararAoSairDoPublico?: boolean; remetentePorVendedor?: boolean }

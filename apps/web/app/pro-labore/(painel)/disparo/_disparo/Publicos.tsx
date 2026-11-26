@@ -11,7 +11,7 @@ import { Paginacao, dataHora, erroDe, n, useMeta } from './util'
 import { MenuAcoes, Quando, Segmentado, useAvisar, useConfirmar } from './ui'
 
 type Edicao = { id: string | null; nome: string; descricao: string; definicao: DefinicaoPublicoDisparo }
-const ROT_BASE: Record<string, string> = { TODOS: 'Todos os contatos', LEADS: 'Leads', CLIENTES: 'Clientes', CONTATARAM: 'Quem escreveu no WhatsApp', EQUIPE: 'Equipe', INSTAGRAM_DM: 'Direct do Instagram', INSTAGRAM_COMENTARIOS: 'Comentários do Instagram' }
+const ROT_BASE: Record<string, string> = { TODOS: 'Todos os contatos', LEADS: 'Leads', CLIENTES: 'Clientes', CONTATARAM: 'Quem escreveu no WhatsApp', EQUIPE: 'Equipe', INSTAGRAM_DM: 'Direct do Instagram', INSTAGRAM_COMENTARIOS: 'Comentários do Instagram', CAMPANHA: 'Quem recebeu uma campanha' }
 const contarCondicoes = (g: GrupoDisparo | null | undefined): number => (g?.itens ?? []).reduce((t, x) => t + ('itens' in x && Array.isArray(x.itens) ? contarCondicoes(x as GrupoDisparo) : 1), 0)
 
 /** Os critérios do público em poucas etiquetas (base, pronto, filtros e escolhidos à mão). */
@@ -21,7 +21,7 @@ function Criterios({ d }: { d: DefinicaoPublicoDisparo }) {
   const filtros = contarCondicoes(d.filtros)
   const pronto = d.predefinido ? meta.predefinidos.find(p => p.chave === d.predefinido)?.nome : null
   const itens = [
-    !m.apenasManual && (pronto ?? ROT_BASE[d.base] ?? d.base),
+    !m.apenasManual && (d.base === 'CAMPANHA' && d.campanha ? (d.campanha.quem === 'RESPONDERAM' ? 'Responderam a uma campanha' : 'Não responderam a uma campanha') : pronto ?? ROT_BASE[d.base] ?? d.base),
     !m.apenasManual && filtros > 0 && `${filtros} filtro${filtros > 1 ? 's' : ''}`,
     (m.incluir?.length ?? 0) > 0 && `${n(m.incluir!.length)} escolhido(s)`,
     (m.numeros?.length ?? 0) > 0 && `${n(m.numeros!.length)} da lista colada`,

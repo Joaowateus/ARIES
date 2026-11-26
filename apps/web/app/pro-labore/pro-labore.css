@@ -6238,3 +6238,11 @@ a.dp-tile:hover { border-color: var(--pl-border-strong); }
   .dp-bloco-topo { flex-wrap: wrap; }
   .dp-trilho-col { height: 80px; }
 }
+
+/* ===== Disparo · separar quem respondeu de quem não respondeu ===== */
+.dp-separar-grupos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 8px 0; }
+.dp-separar-grupo { border: 1px solid var(--pl-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.dp-separar-grupo .dp-config-rotulo { margin: 0; }
+.dp-separar-grupo > b { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--pl-ink-1); line-height: 1.1; }
+.dp-separar-grupo .dp-linha { margin-top: 6px; }
+@media (max-width: 640px) { .dp-separar-grupos { grid-template-columns: 1fr; } }
