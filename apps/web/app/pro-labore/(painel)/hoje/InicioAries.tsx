@@ -1,10 +1,9 @@
 'use client'
 
-// Tela inicial do ARIES (especificação de 17/11). Reproduz a composição da
-// referência — fundo de paisagem, barra de ícones, saudação, relógio, busca,
-// cartão superior direito, três cartões centrais, um cartão vertical, três
-// cartões inferiores e o elemento central de baixo — com o conteúdo do ARIES.
-// Posições e tamanhos fixos; nada de arrastar ou redimensionar.
+// Tela inicial do ARIES. Redesign de 27/11 (mesmas referências do Disparo): a ordem da tela segue a
+// prioridade — saudação, hora e busca numa linha; "Agora" (atrasados, follows, ligações e tarefas);
+// os números do mês com a variação; o que o ARIES viu; e, ao lado, atalhos, tarefas e notas.
+// O fundo de paisagem (ou a imagem da loja) continua, mais escuro, por trás. Mesmos dados e ações.
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -71,7 +70,7 @@ export function InicioAries({ embutida = false }: { embutida?: boolean } = {}) {
   const fundo = d?.fundo ? inicioApi.urlImagem(d.fundo) : null
 
   return (
-    <div className={`ia${embutida ? ' ia-embutida' : ''}`} data-inicio-aries>
+    <div className={`ia ix${embutida ? ' ia-embutida' : ''}`} data-inicio-aries>
       {fundo ? <div className="ia-fundo" style={{ backgroundImage: `url(${fundo})` }} data-fundo-proprio /> : <PaisagemNoite className="ia-fundo" />}
       <div className="ia-veu" aria-hidden />
 
@@ -83,35 +82,37 @@ export function InicioAries({ embutida = false }: { embutida?: boolean } = {}) {
         ))}
       </nav>}
 
-      <div className="ia-palco">
-        <div className="ia-saudacao" data-saudacao>{saud}{nome ? `, ${capital(nome.toLowerCase())}` : ''}</div>
-        <div className="ia-controles" role="group" aria-label="Aparência e configurações">
-          {d?.podeConfigurar && <button type="button" onClick={() => setConfigurando(true)} title="Configurar a tela inicial" aria-label="Configurar a tela inicial" data-configurar-inicio><Ico n="lapis" /></button>}
-          {tema && <button type="button" onClick={() => tema.setTema(tema.tema === 'dark' ? 'light' : 'dark')} title={tema.tema === 'dark' ? 'Usar o tema claro no sistema' : 'Usar o tema escuro no sistema'} aria-label="Trocar o tema"><Ico n={tema.tema === 'dark' ? 'sol' : 'lua'} /></button>}
-          <Link href="/pro-labore/configuracoes" title="Configurações" aria-label="Configurações"><Ico n="engrenagem" /></Link>
-        </div>
-
-        <header className="ia-centro">
-          <div className="ia-hora" data-relogio aria-live="off">{hora}</div>
-          <div className="ia-data" data-data>{data}</div>
+      <div className="ix-palco">
+        <header className="ix-topo">
+          <div className="ix-ola">
+            <h1 data-saudacao>{saud}{nome ? `, ${capital(nome.toLowerCase())}` : ''}</h1>
+            <p><time className="ix-hora" data-relogio aria-live="off">{hora}</time><span aria-hidden> · </span><span data-data>{data}</span></p>
+          </div>
           <Busca aoAbrir={href => router.push(href)} />
+          <div className="ia-controles ix-controles" role="group" aria-label="Aparência e configurações">
+            {d?.podeConfigurar && <button type="button" onClick={() => setConfigurando(true)} title="Configurar a tela inicial" aria-label="Configurar a tela inicial" data-configurar-inicio><Ico n="lapis" /></button>}
+            {/* Na moldura do sistema, o tema fica na barra do topo; fora dela (tela cheia), aqui. */}
+            {!embutida && tema && <button type="button" onClick={() => tema.setTema(tema.tema === 'dark' ? 'light' : 'dark')} title={tema.tema === 'dark' ? 'Usar o tema claro no sistema' : 'Usar o tema escuro no sistema'} aria-label="Trocar o tema"><Ico n={tema.tema === 'dark' ? 'sol' : 'lua'} /></button>}
+            <Link href="/pro-labore/configuracoes" title="Configurações" aria-label="Configurações"><Ico n="engrenagem" /></Link>
+          </div>
         </header>
 
-        <ParaHoje />
+        <Agora tarefas={d?.tarefas ?? null} />
 
-        {erro && <div className="ia-cartao ia-erro" role="alert">Não deu para carregar a tela agora: {erro}</div>}
+        {erro && <div className="ia-cartao ia-erro ix-erro" role="alert">Não deu para carregar a tela agora: {erro}</div>}
 
-        <Modulos />
-        <Atalhos ids={d ? (d.atalhos ?? ATALHOS_PADRAO) : []} />
-        <Tarefas lista={d?.tarefas ?? null} aoMudar={carregar} />
-        <Indicadores d={d} />
-        <div className="ia-baixo">
-          <Notas lista={d?.notas ?? null} aoMudar={carregar} />
-          <Insights itens={d?.insights ?? null} />
-          <Atividade itens={d?.atividade ?? null} agora={agora ?? Date.now()} aoAtualizar={carregar} />
+        <div className="ix-grade">
+          <div className="ix-principal">
+            <Indicadores d={d} />
+            <Insights itens={d?.insights ?? null} />
+            <Atividade itens={d?.atividade ?? null} agora={agora ?? Date.now()} aoAtualizar={carregar} />
+          </div>
+          <aside className="ix-lateral" aria-label="Atalhos, tarefas e notas">
+            <Atalhos ids={d ? (d.atalhos ?? ATALHOS_PADRAO) : []} />
+            <Tarefas lista={d?.tarefas ?? null} aoMudar={carregar} />
+            <Notas lista={d?.notas ?? null} aoMudar={carregar} />
+          </aside>
         </div>
-
-        <div className="ia-rodape" data-rodape-inicio><Ico n="brilho" /><span>ARIES</span></div>
       </div>
 
       {configurando && d && <ConfigurarInicio d={d} aoFechar={() => setConfigurando(false)} aoSalvar={carregar} />}
@@ -160,25 +161,6 @@ function Busca({ aoAbrir }: { aoAbrir: (href: string) => void }) {
   )
 }
 
-// ---------- Módulos ----------
-function Modulos() {
-  const MODULOS = useContext(NavModulosContext) ?? MODULOS_PADRAO
-  const [todos, setTodos] = useState(false)
-  const lista = MODULOS.filter(m => m.chave !== 'inicio')
-  return (
-    <section className={`ia-cartao ia-modulos${todos ? ' ia-todos' : ''}`} aria-label="Módulos" data-cartao-modulos>
-      <div className="ia-cartao-topo"><h2>Módulos</h2><button type="button" className="ia-pilula" onClick={() => setTodos(t => !t)} data-ver-todos>{todos ? 'Ver menos' : 'Ver todos'}</button></div>
-      <ul className="ia-linhas">
-        {(todos ? lista : lista.slice(0, 5)).map(m => (
-          <li key={m.chave}><Link href={m.href} className="ia-linha" data-modulo={m.chave}>
-            <span className="ia-linha-ico"><Ico n={m.chave} /></span><span className="ia-linha-nome">{m.nome}</span><span className="ia-linha-det">{m.rota}</span><Ico n="seta" className="ia-seta" />
-          </Link></li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
 // ---------- Acesso rápido ----------
 function Atalhos({ ids }: { ids: string[] }) {
   const lista = ids.filter(id => ATALHOS[id]).slice(0, 7)
@@ -208,7 +190,7 @@ function Tarefas({ lista, aoMudar }: { lista: TarefaInicio[] | null; aoMudar: ()
   const total = lista?.length ?? 0
   const fazer = async (p: Promise<unknown>) => { setMsg(null); try { await p; aoMudar() } catch (e) { setMsg(e instanceof Error ? e.message : 'Não deu certo') } }
   return (
-    <section className="ia-cartao ia-tarefas" aria-label="Tarefas da loja" data-cartao-tarefas>
+    <section className="ia-cartao ia-tarefas" id="ix-tarefas" aria-label="Tarefas da loja" data-cartao-tarefas>
       <div className="ia-cartao-topo"><h2>Tarefas</h2><button type="button" className="ia-pilula" onClick={() => setNovo('')} data-nova-tarefa><Ico n="mais" /> Nova</button></div>
       <ul className="ia-lista-tarefas">
         {novo != null && (
@@ -242,20 +224,21 @@ function Tarefas({ lista, aoMudar }: { lista: TarefaInicio[] | null; aoMudar: ()
 
 // ---------- Indicadores (cartão vertical) ----------
 const NOME_IND: Record<string, string> = { faturamento: 'Faturamento do mês', vendas: 'Motos vendidas', leads_novos: 'Leads recebidos', conversao_lead_venda: 'Conversão comercial', gasto_anuncio: 'Investimento em tráfego' }
+// Subir é bom em tudo, menos no investimento (gastar mais não é bom nem ruim por si): fica neutro.
+const tomVariacao = (chave: string, v: number) => (chave === 'gasto_anuncio' || v === 0 ? '' : v > 0 ? 'ok' : 'crit')
 function Indicadores({ d }: { d: InicioDados | null }) {
   return (
     <section className="ia-cartao ia-indicadores" aria-label="Indicadores do mês" data-cartao-indicadores>
-      <div className="ia-ind-topo"><h2>Indicadores</h2><span>{d?.escopo === 'PROPRIO' ? 'Os seus, no mês' : 'Da loja, no mês'}</span></div>
+      <div className="ia-cartao-topo ia-ind-topo"><h2>{d?.escopo === 'PROPRIO' ? 'Os seus números no mês' : 'A loja no mês'}</h2><Link href="/pro-labore/indicadores" className="ix-link">Abrir os indicadores</Link></div>
       <ul>
         {(d?.indicadores ?? Object.keys(NOME_IND).map(chave => ({ chave, valor: null, variacao: null, unidade: null }))).map(i => (
           <li key={i.chave} data-indicador={i.chave}>
             <span className="ia-ind-nome">{NOME_IND[i.chave] ?? i.chave}</span>
             <b className="ia-ind-valor">{'semAcesso' in i && i.semAcesso ? '—' : i.valor == null ? '—' : compacto(i.valor, i.unidade)}</b>
-            <span className="ia-ind-det">{'semAcesso' in i && i.semAcesso ? 'Fora do seu acesso' : i.valor == null ? (d ? 'Sem dados ainda' : 'Carregando…') : i.variacao == null ? 'sem comparação ainda' : `${i.variacao > 0 ? '+' : ''}${i.variacao.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% vs. mês anterior`}</span>
+            <span className="ia-ind-det">{'semAcesso' in i && i.semAcesso ? 'Fora do seu acesso' : i.valor == null ? (d ? 'Sem dados ainda' : 'Carregando…') : i.variacao == null ? 'sem comparação ainda' : <><i className={`ix-var ${tomVariacao(i.chave, i.variacao)}`}>{i.variacao > 0 ? '▲' : i.variacao < 0 ? '▼' : '='} {Math.abs(i.variacao).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</i> vs. mês anterior</>}</span>
           </li>
         ))}
       </ul>
-      <Link href="/pro-labore/indicadores" className="ia-ind-link">Abrir os indicadores</Link>
     </section>
   )
 }
@@ -296,50 +279,51 @@ function Notas({ lista, aoMudar }: { lista: NotaInicio[] | null; aoMudar: () => 
   )
 }
 
-// ---------- Para hoje (cartão superior direito) ----------
-// Mesmos números do aviso "Para hoje" do menu lateral (vêm do layout, sem chamada nova).
-function ParaHoje() {
+// ---------- Agora: o que pede ação hoje ----------
+// Os mesmos números do aviso "Para hoje" do menu lateral (vêm do layout, sem chamada nova) e as tarefas da loja.
+function Agora({ tarefas }: { tarefas: TarefaInicio[] | null }) {
   const p = useContext(ParaHojeContext)
-  if (!p) return (
-    <section className="ia-cartao ia-reservado" aria-label="Espaço reservado" data-cartao-reservado>
-      <Ico n="lua" className="ia-reservado-ico" />
-      <div><b>Em definição</b><span>Este espaço da tela inicial ainda vai receber a sua função.</span></div>
-    </section>
-  )
-  const follows = p.followsHoje + p.followsAtrasados
-  const ligacoes = p.ligacoesHoje + p.ligacoesAtrasadas
-  const atrasados = p.followsAtrasados + p.ligacoesAtrasadas
+  const abertas = tarefas?.filter(t => !t.feita).length ?? null
+  const atrasados = p ? p.followsAtrasados + p.ligacoesAtrasadas : null
+  const n = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR'))
   return (
-    <section className="ia-cartao ia-reservado ia-para-hoje" aria-label="Para hoje" data-cartao-reservado data-para-hoje>
-      <div className="ia-cartao-topo"><h2>Para hoje</h2></div>
-      <p className="ia-para-hoje-num">
-        <span>{follows} {follows === 1 ? 'follow' : 'follows'}</span><span aria-hidden> · </span><span>{ligacoes} {ligacoes === 1 ? 'ligação' : 'ligações'}</span>
-      </p>
-      {atrasados > 0 ? <p className="ia-para-hoje-atraso" data-para-hoje-atrasados>{atrasados} {atrasados === 1 ? 'atrasado' : 'atrasados'}</p> : <p className="ia-para-hoje-ok">Nada atrasado</p>}
-      <Link href="/pro-labore/atividades" className="ia-ind-link">Abrir atividades</Link>
+    <section className="ix-agora" aria-label="Agora" data-para-hoje>
+      <Link href="/pro-labore/atividades" className={`ix-agora-item${atrasados ? ' crit' : ''}`} data-para-hoje-atrasados>
+        <span>Atrasados</span><b>{n(atrasados)}</b><small>{atrasados ? 'follows e ligações vencidos' : p ? 'nada atrasado' : 'carregando…'}</small>
+      </Link>
+      <Link href="/pro-labore/atividades" className="ix-agora-item" data-agora-follows>
+        <span>Follows de hoje</span><b>{n(p?.followsHoje ?? null)}</b><small>{p ? `${n(p.followsAtrasados)} em atraso` : ''}</small>
+      </Link>
+      <Link href="/pro-labore/ligacoes" className="ix-agora-item" data-agora-ligacoes>
+        <span>Ligações de hoje</span><b>{n(p?.ligacoesHoje ?? null)}</b><small>{p ? `${n(p.ligacoesAtrasadas)} em atraso` : ''}</small>
+      </Link>
+      <a href="#ix-tarefas" className="ix-agora-item" data-agora-tarefas>
+        <span>Tarefas abertas</span><b>{n(abertas)}</b><small>{tarefas ? `${tarefas.length - (abertas ?? 0)} concluídas` : ''}</small>
+      </a>
     </section>
   )
 }
 
-// ---------- ARIES Insights ----------
+// ---------- O que o ARIES viu (Lente do Início) ----------
+const SELO_INSIGHT: Record<string, { rotulo: string; tom: string }> = { RISCO: { rotulo: 'Crítico', tom: 'crit' }, REC: { rotulo: 'Recomendação', tom: 'info' }, PAUTA: { rotulo: 'Pauta', tom: '' } }
+const FORCA: Record<string, string> = { HIPOTESE: 'hipótese', COMPROVADA: 'comprovado', PADRAO: 'padrão observado' }
 function Insights({ itens }: { itens: InicioDados['insights'] | null }) {
-  const [i, setI] = useState(0)
-  const atual = itens?.[i % Math.max(1, itens.length)] ?? null
   return (
-    <section className="ia-cartao ia-insights" aria-label="ARIES Insights" data-cartao-insights>
-      <Ico n="aspas" className="ia-aspas" />
-      {atual ? <>
-        {atual.tipo === 'RISCO' && <span className="ia-selo ia-selo-critico" data-selo-critico>Crítico</span>}
-        <p className="ia-insight-titulo">{atual.titulo}</p>
-        {atual.texto && <p className="ia-insight-texto">{atual.texto}</p>}
-        <div className="ia-insight-rodape">
-          <span>ARIES{atual.forca ? ` · ${atual.forca === 'HIPOTESE' ? 'hipótese' : atual.forca === 'COMPROVADA' ? 'comprovado' : 'padrão observado'}` : ''}</span>
-          <span className="ia-pagina">
-            {itens!.length > 1 && <><button type="button" aria-label="Insight anterior" onClick={() => setI(x => (x - 1 + itens!.length) % itens!.length)}><Ico n="esquerda" /></button><button type="button" aria-label="Próximo insight" onClick={() => setI(x => (x + 1) % itens!.length)}><Ico n="seta" /></button></>}
-            {atual.href && <Link href={atual.href}>Ver</Link>}
-          </span>
-        </div>
-      </> : <p className="ia-vazio">{itens ? 'Sem análises novas agora. Quando o ARIES encontrar um gargalo ou uma oportunidade, ela aparece aqui.' : 'Carregando…'}</p>}
+    <section className="ia-cartao ix-insights" aria-label="O que o ARIES viu" data-cartao-insights>
+      <div className="ia-cartao-topo"><h2><Ico n="brilho" /> O que o ARIES viu</h2><Link href="/pro-labore/recomendacoes" className="ix-link">Recomendações</Link></div>
+      {!itens ? <p className="ia-vazio">Carregando…</p> : !itens.length ? <p className="ia-vazio">Nada fora do normal agora. Quando o ARIES encontrar um gargalo ou uma oportunidade, aparece aqui.</p> : (
+        <ul className="ix-insights-lista">
+          {itens.slice(0, 4).map((it, k) => {
+            const selo = SELO_INSIGHT[it.tipo] ?? { rotulo: 'Atenção', tom: 'warn' }
+            const corpo = <>
+              <span className={`dp-selo ${selo.tom}`} data-selo-critico={it.tipo === 'RISCO' ? '' : undefined}>{selo.rotulo}</span>
+              <span className="ix-insight-corpo"><b>{it.titulo}</b>{it.texto && <small>{it.texto}</small>}</span>
+              <span className="ix-insight-meta">{it.forca ? FORCA[it.forca] ?? '' : ''}{it.href && <Ico n="seta" className="ia-seta" />}</span>
+            </>
+            return <li key={k}>{it.href ? <Link href={it.href} className="ix-insight">{corpo}</Link> : <div className="ix-insight">{corpo}</div>}</li>
+          })}
+        </ul>
+      )}
     </section>
   )
 }
@@ -350,7 +334,7 @@ function Atividade({ itens, agora, aoAtualizar }: { itens: InicioDados['atividad
     <section className="ia-cartao ia-atividade" aria-label="Atividade recente" data-cartao-atividade>
       <div className="ia-cartao-topo"><h2>Atividade recente</h2><button type="button" className="ia-pilula" onClick={aoAtualizar}>Atualizar</button></div>
       <ul className="ia-linhas">
-        {itens?.slice(0, 4).map(a => (
+        {itens?.slice(0, 6).map(a => (
           <li key={a.id}><Link href={a.href} className="ia-linha" data-atividade={a.modulo}>
             <span className="ia-linha-ico"><Ico n={ICONE_MODULO[a.modulo] ?? 'brilho'} /></span>
             <span className="ia-linha-nome">{a.texto}</span><span className="ia-linha-det">{a.modulo}</span><span className="ia-linha-tempo">{haQuanto(a.em, agora)}</span>
