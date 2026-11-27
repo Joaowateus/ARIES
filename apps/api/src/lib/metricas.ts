@@ -1047,6 +1047,14 @@ export interface Leitura {
 }
 
 /** Leitura completa de uma métrica: valor, comparação pelo mesmo intervalo, projeção e faixa. */
+/** Leads recebidos por dia no período (mesmo filtro de `leads_novos`), um número por dia, do primeiro ao último. */
+export async function leadsPorDia(e: Escopo, p: Periodo): Promise<number[]> {
+  const { ini, fim } = instantes(p)
+  const rs = await q<{ dia: string; n: bigint }>(Prisma.sql`SELECT to_char((l."criadoEm" - interval '3 hours'), 'YYYY-MM-DD') dia, count(*) n FROM pro_labore_leads l WHERE l."usuarioId" = ${e.usuarioId} AND l."criadoEm" >= ${ini} AND l."criadoEm" < ${fim}${vend(e)}${sus(e, Prisma.sql`l.id`, 'pro_labore_leads')} GROUP BY 1`)
+  const porDia = new Map(rs.map(r => [r.dia, num(r.n)]))
+  return Array.from({ length: diasDe(p) }, (_, i) => porDia.get(maisDias(p.inicio, i)) ?? 0)
+}
+
 export async function ler(chave: string, e: Escopo, p: Periodo, agora = new Date(), opcoes: { faixas?: boolean } = {}): Promise<Leitura> {
   const lista = await fichas(e.usuarioId)
   const ficha = lista.find(x => x.chave === chave)

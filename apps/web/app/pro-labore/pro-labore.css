@@ -6425,3 +6425,226 @@ a.ix-insight:hover { background: rgba(255, 255, 255, .07); }
 .ix .ia-notas { min-height: 160px; }
 @media (max-width: 640px) { .ix .ia-notas { min-height: 0; } .ix .ia-nota textarea { min-height: 90px; } }
 .ix-insight .dp-selo { justify-self: start; }
+
+/* =====================================================================
+   Início · modelo "Identidade" (aprovado em 27/11)
+   Vidro escuro (#0f0f0f a 62%) sobre a paisagem em cinza; destaque branco
+   (#f5f5f5) nas abas e botões; cores de estado só onde há estado.
+   ===================================================================== */
+.ia.iy {
+  --ia-acento: #f5f5f5; --ia-texto-2: #b3b3b3; --ia-texto-3: #999999; --ia-borda: rgba(102, 102, 102, .30);
+  --iy-ok: #4ade80; --iy-warn: #fbbf24; --iy-crit: #f87171; --iy-info: #60a5fa;
+  --iy-vidro: rgba(15, 15, 15, .62); --iy-borda: rgba(102, 102, 102, .30); --iy-in-borda: rgba(102, 102, 102, .28);
+  background: #090909; color: #f5f5f5;
+}
+.iy a { color: inherit; text-decoration: none; }
+.iy-paisagem { background: radial-gradient(38% 30% at 78% 4%, rgba(245, 245, 245, .10), transparent 70%), linear-gradient(180deg, #090909 0%, #101010 45%, #1a1a1a 78%, #090909 100%); overflow: hidden; }
+.iy-paisagem svg { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 440px; }
+.iy-serra-1 { fill: #161616; } .iy-serra-2 { fill: #111111; } .iy-serra-3 { fill: #0b0b0b; }
+.iy-lua { position: absolute; right: 30%; top: 14px; width: 44px; height: 44px; border-radius: 99px; box-shadow: inset -12px 8px 0 0 #bdbdbd; opacity: .55; }
+.iy .iy-veu { background: linear-gradient(180deg, rgba(9, 9, 9, .55), rgba(9, 9, 9, .82) 50%, rgba(9, 9, 9, .9)); }
+
+.iy-vd { background: var(--iy-vidro); border: 1px solid var(--iy-borda); backdrop-filter: blur(26px) saturate(120%); -webkit-backdrop-filter: blur(26px) saturate(120%); box-shadow: inset 0 1px 0 rgba(245, 245, 245, .06), 0 30px 60px -30px rgba(0, 0, 0, .95); }
+.iy-in { background: linear-gradient(180deg, rgba(102, 102, 102, .16), rgba(102, 102, 102, .06)); border: 1px solid var(--iy-in-borda); border-radius: 16px; }
+.iy-palco { position: relative; z-index: 1; box-sizing: border-box; max-width: 1400px; margin: 0 auto; padding: 26px 28px 24px; display: flex; flex-direction: column; gap: 16px; min-height: 100%; }
+.ia:not(.ia-embutida) .iy-palco { padding-left: calc(28px + 90px); min-height: 100vh; }
+.ia-embutida .iy-palco { padding-top: 66px; }
+.pl-app .pl-main:has(.iy.ia-embutida) .pl-topo-busca { display: none; }
+
+/* Botões redondos e abas em pílula */
+.iy-rb { width: 36px; height: 36px; flex: none; box-sizing: border-box; border-radius: 999px; border: 1px solid rgba(102, 102, 102, .45); background: rgba(245, 245, 245, .05); color: #f5f5f5; display: grid; place-items: center; cursor: pointer; padding: 0; font: 500 13px var(--hx-sans); }
+.iy-rb:hover { background: rgba(245, 245, 245, .12); }
+.iy-rb .ia-ico { width: 16px; height: 16px; }
+.iy-rb-p { width: 30px; height: 30px; }
+.iy-abas { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(9, 9, 9, .6); border: 1px solid rgba(102, 102, 102, .25); align-self: flex-start; max-width: 100%; overflow-x: auto; }
+.iy-pl { height: 32px; padding: 0 16px; border-radius: 999px; border: 0; font: 500 13px var(--hx-sans); cursor: pointer; color: #b3b3b3; background: transparent; white-space: nowrap; }
+.iy-pl:hover { color: #f5f5f5; }
+.iy-pl.on { background: #f5f5f5; color: #090909; }
+.iy-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.iy-mais { font-size: 12px; color: #d6d6d6; }
+.iy .ia-vazio { padding: 6px 2px; }
+
+/* Topo em pílula */
+.iy-topo { align-self: center; width: min(1120px, 100%); box-sizing: border-box; min-height: 58px; border-radius: 999px; padding: 0 10px 0 22px; display: flex; align-items: center; gap: 14px; position: relative; z-index: 4; }
+.iy-marca { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; letter-spacing: .3em; }
+.iy-marca-a { width: 26px; height: 26px; border-radius: 8px; background: #f5f5f5; color: #090909; display: grid; place-items: center; font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.iy-esp { flex: 1; }
+.iy .iy-busca { flex: 1 1 200px; max-width: 420px; width: auto; height: 36px; padding: 0 14px; gap: 8px; border-radius: 999px; background: rgba(9, 9, 9, .6); border-color: rgba(102, 102, 102, .35); backdrop-filter: none; }
+.iy .iy-busca > .ia-ico { width: 14px; height: 14px; color: #999; }
+.iy .iy-busca input { font-size: 13px; color: #f5f5f5; }
+.iy .iy-busca kbd { border: 0; padding: 0; font-weight: 400; color: #999; }
+.iy .ia-busca-lista { background: rgba(15, 15, 15, .96); min-width: 320px; }
+.iy-topo-num { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.iy-topo-num b { font-size: 24px; font-weight: 300; letter-spacing: -.01em; color: #fff; font-variant-numeric: tabular-nums; }
+.iy-topo-num small { font-size: 11px; color: #999; }
+.iy-avatar { width: 36px; height: 36px; flex: none; border-radius: 99px; display: grid; place-items: center; background: linear-gradient(135deg, #f5f5f5 0%, #666666 100%); color: #090909; font-size: 12px; font-weight: 700; }
+.iy-erro { align-self: center; width: min(1120px, 100%); box-sizing: border-box; padding: 10px 16px; border-radius: 14px; border: 1px solid rgba(248, 113, 113, .45); background: rgba(248, 113, 113, .08); color: #fecaca; font-size: 13px; }
+
+/* Linha principal: saúde · centro · ARIES */
+.iy-linha { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+
+.iy-saude { flex: 0 0 196px; box-sizing: border-box; border-radius: 28px; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+.iy-medidor { padding: 12px 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 150px; --iy-tom: #999999; }
+.iy-medidor:hover { border-color: rgba(245, 245, 245, .3); }
+.iy-medidor.ok { --iy-tom: var(--iy-ok); } .iy-medidor.warn { --iy-tom: var(--iy-warn); } .iy-medidor.crit { --iy-tom: var(--iy-crit); }
+.iy-anel { position: relative; width: 104px; height: 104px; }
+.iy-anel svg { width: 104px; height: 104px; transform: rotate(135deg); }
+.iy-anel circle { fill: none; stroke-width: 9; stroke-linecap: round; }
+.iy-anel-trilho { stroke: rgba(102, 102, 102, .35); }
+.iy-anel-valor { stroke: var(--iy-tom); }
+.iy-medidor:not(.ok):not(.warn):not(.crit) .iy-anel-valor { stroke: #d6d6d6; }
+.iy-anel-txt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0 12px; text-align: center; }
+.iy-anel-txt b { font-size: 15px; font-weight: 600; color: var(--iy-tom); max-width: 78px; line-height: 1.15; }
+.iy-medidor:not(.ok):not(.warn):not(.crit) .iy-anel-txt b { color: #f5f5f5; font-size: 13.5px; }
+.iy-anel-txt small { font-size: 11px; color: #b3b3b3; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.iy-medidor-nome { font-size: 12px; color: #d6d6d6; text-align: center; line-height: 1.3; }
+
+.iy-centro { container-type: inline-size; flex: 999 1 560px; min-width: 0; box-sizing: border-box; border-radius: 30px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.iy-grade4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.iy-cartao { padding: 12px 14px; display: flex; align-items: center; gap: 12px; color: inherit; text-align: left; font: inherit; cursor: pointer; min-width: 0; --iy-tom: #fff; }
+.iy-cartao:hover { border-color: rgba(245, 245, 245, .3); }
+.iy-cartao.crit { --iy-tom: var(--iy-crit); border-color: rgba(248, 113, 113, .45); background: rgba(248, 113, 113, .08); }
+.iy-cartao-ico { width: 38px; height: 38px; flex: none; border-radius: 99px; display: grid; place-items: center; background: rgba(245, 245, 245, .06); border: 1px solid rgba(102, 102, 102, .45); color: var(--iy-tom); }
+.iy-cartao-ico .ia-ico { width: 16px; height: 16px; }
+.iy-cartao-txt { display: flex; flex-direction: column; min-width: 0; }
+.iy-cartao-txt b { font-size: 22px; font-weight: 600; line-height: 1.15; color: var(--iy-tom); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iy-cartao-txt > span { font-size: 12px; color: #d6d6d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iy-cartao-txt small { font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iy-cartao.crit .iy-cartao-txt small { color: #f8a5a5; }
+.iy-var { font-style: normal; font-weight: 600; color: #999; }
+.iy-var.ok { color: var(--iy-ok); } .iy-var.crit { color: var(--iy-crit); }
+
+.iy-dest { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.iy-dest h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: #f5f5f5; }
+.iy-dest-mes { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.iy-dest-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.iy-dest-grade > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.iy-dest-grade b { font-size: 26px; font-weight: 300; color: #fff; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.iy-dest-grade span { font-size: 11.5px; color: #999; }
+.iy-dest-fat, .iy-dest-leads { padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-height: 176px; box-sizing: border-box; }
+.iy-dest-fat { background: linear-gradient(180deg, rgba(102, 102, 102, .32), rgba(9, 9, 9, .4)); }
+.iy-dest-fat:hover, .iy-dest-leads:hover { border-color: rgba(245, 245, 245, .3); }
+.iy-sub1 { font-size: 12px; color: #d6d6d6; }
+.iy-sub { font-size: 11.5px; color: #999; }
+.iy-ritmo { width: 100%; height: 66px; margin-top: auto; overflow: visible; }
+.iy-ritmo-meta { stroke: rgba(245, 245, 245, .30); stroke-dasharray: 4 5; fill: none; }
+.iy-ritmo-real { fill: none; stroke: #f5f5f5; stroke-width: 2.2; stroke-linecap: round; }
+.iy-ritmo-ponto { fill: #090909; stroke: #f5f5f5; stroke-width: 2.5; }
+.iy-dest-fat .iy-mais, .iy-dest-leads .iy-mais { margin-top: 6px; }
+.iy-dest-fat > .iy-sub:last-of-type:not(:has(+ svg)) { margin-bottom: auto; }
+.iy-barras { height: 66px; display: flex; align-items: flex-end; gap: 3px; margin-top: auto; }
+.iy-barras > span { flex: 1; min-width: 2px; border-radius: 3px; background: rgba(102, 102, 102, .75); }
+.iy-barras > span.hoje { background: #f5f5f5; }
+
+.iy-metas { padding: 14px 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 22px; }
+.iy-metas > .iy-mais { grid-column: 1 / -1; }
+.iy-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; --iy-tom: #fff; }
+.iy-meta.ok { --iy-tom: var(--iy-ok); } .iy-meta.warn { --iy-tom: var(--iy-warn); } .iy-meta.crit { --iy-tom: var(--iy-crit); }
+.iy-meta-nome { font-size: 12px; color: #b3b3b3; }
+.iy-meta b { font-size: 24px; font-weight: 300; letter-spacing: -.02em; color: var(--iy-tom); font-variant-numeric: tabular-nums; }
+.iy-meta small { font-size: 11.5px; color: #999; }
+.iy-meta-barra { height: 4px; border-radius: 99px; background: rgba(102, 102, 102, .35); margin-top: 6px; overflow: hidden; }
+.iy-meta-barra > span { display: block; height: 100%; border-radius: inherit; background: #f5f5f5; }
+
+.iy-fila { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; }
+.iy-fila-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(102, 102, 102, .22); min-width: 0; }
+.iy-fila-item:hover { background: rgba(245, 245, 245, .06); }
+.iy-ini { width: 30px; height: 30px; flex: none; border-radius: 99px; display: grid; place-items: center; background: rgba(245, 245, 245, .10); color: #f5f5f5; font-size: 11px; font-weight: 600; }
+.iy-ini .ia-ico { width: 14px; height: 14px; }
+.iy-fila-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.iy-fila-txt b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iy-fila-txt small { font-size: 11.5px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iy-fila-prazo { font-size: 11.5px; font-weight: 600; color: #d6d6d6; white-space: nowrap; }
+.iy-fila-prazo.crit { color: var(--iy-crit); }
+
+@container (max-width: 760px) {
+  .iy-cartao-ico { display: none; }
+  .iy-dest-grade b { font-size: 22px; }
+}
+@container (max-width: 520px) {
+  .iy-grade4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .iy-cartao-ico { display: grid; }
+}
+
+/* ARIES (à direita) */
+.iy-assist { flex: 0 1 300px; min-width: 260px; box-sizing: border-box; border-radius: 30px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.iy-assist-topo { display: flex; align-items: center; justify-content: space-between; }
+.iy-assist-acoes { display: flex; gap: 6px; }
+.iy-orbe { width: 46px; height: 46px; border-radius: 99px; background: radial-gradient(circle at 32% 28%, #ffffff 0%, #e6e6e6 22%, #8a8a8a 58%, #2a2a2a 88%, #090909 100%); box-shadow: 0 0 24px -4px rgba(245, 245, 245, .45); }
+.iy-assist-ola { margin: 0; font-size: 17px; font-weight: 600; color: #fff; letter-spacing: -.01em; }
+.iy-assist-sub { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: #b3b3b3; }
+.iy-pontos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.iy-pontos > li { --iy-tom: #d6d6d6; }
+.iy-pontos > li.crit { --iy-tom: var(--iy-crit); } .iy-pontos > li.info { --iy-tom: var(--iy-info); } .iy-pontos > li.warn { --iy-tom: var(--iy-warn); }
+.iy-ponto { width: 6px; height: 6px; flex: none; border-radius: 99px; background: var(--iy-tom); }
+.iy-ponto-cartao { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.iy-ponto-cartao.crit { border-color: rgba(248, 113, 113, .45); }
+.iy-selo { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--iy-tom); }
+.iy-ponto-cartao p { margin: 0; font-size: 13px; line-height: 1.4; color: #f5f5f5; overflow-wrap: anywhere; }
+.iy-ponto-cartao p b { font-weight: 600; }
+.iy-ponto-linha { padding: 12px; display: flex; gap: 10px; align-items: center; }
+.iy-ponto-txt { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; color: #d6d6d6; }
+.iy-decide { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.iy-bt-claro, .iy-bt-contorno { height: 32px; border-radius: 99px; font: 600 12.5px var(--hx-sans); cursor: pointer; display: inline-grid; place-items: center; padding: 0 14px; }
+.iy-bt-claro { border: 0; background: #f5f5f5; color: #090909; }
+.iy-bt-claro:hover { background: #fff; }
+.iy-bt-contorno { border: 1px solid rgba(102, 102, 102, .5); background: transparent; color: #f5f5f5; font-weight: 500; }
+.iy-bt-contorno:hover { background: rgba(245, 245, 245, .08); }
+.iy-bt-claro:disabled, .iy-bt-contorno:disabled { opacity: .55; cursor: progress; }
+.iy-bt-p { align-self: flex-start; height: 30px; font-size: 12px; background: rgba(245, 245, 245, .06); }
+.iy-pergunte { margin-top: auto; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 6px 0 14px; border-radius: 999px; background: rgba(9, 9, 9, .6); border: 1px solid rgba(102, 102, 102, .35); }
+.iy-pergunte input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #f5f5f5; font: 400 13px var(--hx-sans); }
+.iy-pergunte input::placeholder { color: #999; }
+.iy-pergunte button { width: 30px; height: 30px; border-radius: 99px; border: 0; background: #f5f5f5; color: #090909; display: grid; place-items: center; cursor: pointer; }
+
+/* Barra de atalhos (embaixo, fixa ao rolar) */
+.iy-dock { position: sticky; bottom: 18px; align-self: center; display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; z-index: 5; margin-top: 4px; }
+.iy-dock-item { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #d6d6d6; border: 0; background: transparent; cursor: pointer; padding: 0; }
+.iy-dock-item:hover { background: rgba(245, 245, 245, .10); color: #fff; }
+.iy-dock-item .ia-ico { width: 18px; height: 18px; }
+.iy-dock-sep { width: 1px; height: 22px; margin: 0 4px; background: rgba(102, 102, 102, .5); }
+
+/* Gaveta de tarefas e notas */
+.ia.iy.iy-camada { position: fixed; inset: 0; z-index: 120; background: transparent; overflow: visible; pointer-events: none; }
+.iy-camada > * { pointer-events: auto; }
+.iy-gaveta-fundo { position: fixed; inset: 0; z-index: 1; background: rgba(9, 9, 9, .45); display: flex; justify-content: flex-end; padding: 16px; }
+.iy-gaveta { width: min(420px, 100%); max-height: 100%; box-sizing: border-box; overflow-y: auto; border-radius: 26px; padding: 14px; display: flex; flex-direction: column; gap: 12px; background: rgba(15, 15, 15, .92); }
+.iy-gaveta-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.iy .iy-secao { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 4px 2px; }
+.iy .iy-secao.ia-notas textarea { min-height: 260px; }
+.iy .ia-tarefa.feita .ia-marca { background: #f5f5f5; border-color: #f5f5f5; color: #090909; }
+.iy .ia-barra > span { background: #f5f5f5; }
+
+.iy a:focus-visible, .iy button:focus-visible, .iy input:focus-visible { outline: 2px solid #f5f5f5; outline-offset: 2px; }
+
+@media (max-width: 1100px) {
+  .iy-assist { flex-basis: 100%; }
+}
+@media (max-width: 900px) {
+  .iy-grade4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .iy-dest { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .iy-dest-mes { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .iy-palco, .ia:not(.ia-embutida) .iy-palco { padding: 14px 10px 20px; gap: 12px; }
+  .ia-embutida .iy-palco { padding-top: 62px; }
+  .iy-topo { border-radius: 22px; padding: 8px 8px 8px 14px; flex-wrap: wrap; row-gap: 8px; }
+  .iy-marca > span:last-child { display: none; }
+  .iy .iy-busca { order: 5; flex-basis: 100%; max-width: none; }
+  .iy-topo-num { display: none; }
+  .iy-saude { flex-basis: 100%; flex-direction: row; overflow-x: auto; border-radius: 24px; padding: 10px; }
+  .iy-medidor { min-width: 132px; flex: 1 0 132px; }
+  .iy-anel, .iy-anel svg { width: 92px; height: 92px; }
+  .iy-centro { padding: 12px; border-radius: 24px; }
+  .iy-grade4 { gap: 8px; }
+  .iy-cartao { padding: 10px; gap: 8px; }
+  .iy-cartao-ico { width: 32px; height: 32px; }
+  .iy-dest, .iy-fila { grid-template-columns: minmax(0, 1fr); }
+  .iy-assist { border-radius: 24px; min-width: 0; }
+  .iy-dock { bottom: 10px; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
+  .iy-dock { gap: 2px; padding: 5px 8px; }
+  .iy-dock-item { width: 32px; height: 32px; flex: none; }
+  .iy-dock-sep { margin: 0 2px; }
+  .iy-lua { display: none; }
+  .iy-gaveta-fundo { padding: 8px; }
+}
