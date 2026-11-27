@@ -4009,8 +4009,12 @@ export interface IndicadorInicio { chave: string; valor: number | null; variacao
 export interface InicioDados {
   escopo: 'PROPRIO' | 'LOJA'; fundo: string | null; atalhos: string[] | null; podeConfigurar: boolean
   tarefas: TarefaInicio[]; notas: NotaInicio[]; indicadores: IndicadorInicio[]
-  insights: Array<{ tipo: string; forca: string | null; titulo: string; texto: string | null; href: string | null }>
+  insights: Array<{ id?: string | null; podeAceitar?: boolean; podeDescartar?: boolean; tipo: string; forca: string | null; titulo: string; texto: string | null; href: string | null }>
   atividade: Array<{ id: string; texto: string; modulo: string; em: string; href: string }>
+  /** Leads recebidos em cada dia do mês até hoje (null se não deu para contar). */
+  leadsPorDia?: number[] | null
+  /** Saúde da loja: previsão (contra a meta), vendas, conversão e atividades atrasadas, com a faixa da mesma leitura da Lente. */
+  saude?: Array<{ chave: string; valor: number | null; faixa: 'BOM' | 'ATENCAO' | 'CRITICO' | null; padrao: number | null; unidade: string | null; semAcesso?: boolean }>
 }
 export interface ResultadoBusca { id: string; origem: string; titulo: string; detalhe: string | null; href: string }
 export const inicioApi = {

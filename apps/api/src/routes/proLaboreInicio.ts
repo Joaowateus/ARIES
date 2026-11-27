@@ -12,8 +12,8 @@ import { prisma } from '../lib/prisma'
 import { requireProLaboreAuth } from '../middleware/authProLabore'
 import { nivelAtende } from '../lib/acessos'
 import { leadWhereBase } from '../lib/escopoLead'
-import { ler, mesCorrente, type Escopo } from '../lib/metricas'
-import { lenteDaAba } from '../lib/hoje'
+import { leadsPorDia, ler, mesCorrente, type Escopo } from '../lib/metricas'
+import { lenteDaAba, principalDe } from '../lib/hoje'
 import { NOME_ETAPA, type Etapa } from '../lib/etapasJornada'
 import { pessoaDe } from './proLaboreHoje'
 
@@ -38,13 +38,18 @@ router.get('/inicio', requireProLaboreAuth, async (req: Request, res: Response) 
   const veCifra = pessoal || ['DONO', 'SUPERVISOR', 'FINANCEIRO'].includes(pessoa.papel)
   const veTrafego = pessoa.papel === 'DONO' || pessoa.papel === 'TRAFEGO' || ve(req, 'trafego')
   const leitura = (chave: string, pode: boolean) => (pode ? ler(chave, e, mes, agora, { faixas: false }).then(l => ({ chave, valor: l.valor, variacao: l.variacao, unidade: l.unidade })).catch(() => ({ chave, valor: null, variacao: null, unidade: null })) : Promise.resolve({ chave, valor: null, variacao: null, unidade: null, semAcesso: true }))
-  const [parametros, tarefas, notas, indicadores, lente, atividade] = await Promise.all([
+  const [parametros, tarefas, notas, indicadores, lente, atividade, leadsDia, saude] = await Promise.all([
     prisma.parametroLiquidez.findUnique({ where: { usuarioId: u }, select: { inicioFundo: true, inicioAtalhos: true } }).catch(() => null),
     prisma.inicioTarefa.findMany({ where: { usuarioId: u, excluidaEm: null }, orderBy: [{ feita: 'asc' }, { criadoEm: 'asc' }], take: 50 }),
     prisma.inicioNota.findMany({ where: { usuarioId: u, excluidaEm: null }, orderBy: { atualizadoEm: 'desc' }, take: 20 }),
     Promise.all([leitura('faturamento', veCifra), leitura('vendas', true), leitura('leads_novos', true), leitura('conversao_lead_venda', true), leitura('gasto_anuncio', veTrafego)]),
     lenteDaAba(pessoa, 'hoje', agora).catch(() => null),
     atividadeRecente(req, agora),
+    leadsPorDia(e, mes).catch(() => null),
+    // Saúde da loja: a mesma leitura da Lente, do Hoje e do Daily (a previsão é lida contra a meta). Quem não vê a métrica recebe semAcesso.
+    Promise.all(['previsao_fechamento', 'vendas', 'conversao_lead_venda', 'atividades_atrasadas'].map(chave => principalDe(pessoa, chave, agora)
+      .then(l => (l ? { chave, valor: l.valor, faixa: l.faixa, padrao: l.padrao, unidade: l.unidade } : { chave, valor: null, faixa: null, padrao: null, unidade: null, semAcesso: true }))
+      .catch(() => ({ chave, valor: null, faixa: null, padrao: null, unidade: null })))),
   ])
   res.json({
     escopo: pessoal ? 'PROPRIO' : 'LOJA',
@@ -52,8 +57,8 @@ router.get('/inicio', requireProLaboreAuth, async (req: Request, res: Response) 
     atalhos: Array.isArray(parametros?.inicioAtalhos) ? parametros!.inicioAtalhos : null,
     podeConfigurar: pessoa.papel === 'DONO' || pessoa.papel === 'SUPERVISOR',
     tarefas, notas, indicadores,
-    insights: (lente?.itens ?? []).filter(i => i.tipo !== 'NUMERO').slice(0, 6).map(i => ({ tipo: i.tipo, forca: i.forca, titulo: i.achado, texto: i.evidencia ? i.evidencia.replace(/\[\[[^\]]+\]\]/g, '').replace(/\s+/g, ' ').trim() || null : null, href: i.acao?.href ?? (i.tipo === 'REC' ? '/pro-labore/recomendacoes' : null) })),
-    atividade,
+    insights: (lente?.itens ?? []).filter(i => i.tipo !== 'NUMERO').slice(0, 6).map(i => ({ id: i.id ?? null, podeAceitar: !!i.podeAceitar, podeDescartar: !!i.podeDescartar, tipo: i.tipo, forca: i.forca, titulo: i.achado, texto: i.evidencia ? i.evidencia.replace(/\[\[[^\]]+\]\]/g, '').replace(/\s+/g, ' ').trim() || null : null, href: i.acao?.href ?? (i.tipo === 'REC' ? '/pro-labore/recomendacoes' : null) })),
+    atividade, leadsPorDia: leadsDia, saude,
   })
 })
 

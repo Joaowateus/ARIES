@@ -365,7 +365,7 @@ export const ABA_LENTE: Record<string, { areas: string[]; alvos?: string[]; prin
   recomendacoes: { areas: ['ATENDIMENTO', 'FUNIL', 'ATIVIDADES', 'CREDITO', 'ANUNCIOS', 'RESULTADO', 'REATIVACAO', 'MARKETING', 'GESTAO', 'PESSOAS'], principal: 'previsao_fechamento' },
 }
 
-async function principalDe(pessoa: Pessoa, chave: string | null, agora: Date): Promise<Leitura | null> {
+export async function principalDe(pessoa: Pessoa, chave: string | null, agora: Date): Promise<Leitura | null> {
   if (!chave) return null
   const ficha = (await fichas(pessoa.usuarioId)).find(f => f.chave === chave)
   if (!ficha || !ficha.quemVe.includes(pessoa.papel)) return null
